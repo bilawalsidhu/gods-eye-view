@@ -901,10 +901,27 @@ export function createContractSuite(
               ),
             `a pickable: false sprite was picked (${JSON.stringify(onQuiet.picked?.id)})`,
           );
-          const onLine = await clickAt(at(20, 9));
+          const linePosition = at(20, 9);
+          const lineCameraBefore = cartesian3.clone(
+            engine.camera.pose().position,
+          );
+          const onLine = await clickAt(linePosition);
           ensure(
             onLine.picked?.id === 'line-1',
-            `a click on the line picked ${JSON.stringify(onLine.picked?.id)}`,
+            `a click on the line picked ${JSON.stringify(onLine.picked?.id)}; ${
+              onLine.picked?.id === 'line-1'
+                ? ''
+                : JSON.stringify({
+                    event: onLine.position,
+                    projectedNow: screen(linePosition),
+                    directNow: engine.picker.pick(onLine.position)?.id,
+                    drilled: (onLine.drilled ?? []).map(({ id }) => id),
+                    cameraMovedM: cartesian3.distance(
+                      lineCameraBefore,
+                      engine.camera.pose().position,
+                    ),
+                  })
+            }`,
           );
           const target = screen(a);
           const movesBefore = moves.length;

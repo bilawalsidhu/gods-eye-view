@@ -131,11 +131,11 @@ test('the Navara scene builds the engine on the app container and no viewer', as
   assert.equal(run.loads[0].search, '?engine=navara&look=photoreal');
   assert.ok(run.scene.operations.searchAndFlyTo);
   assert.equal(globalThis.window.__GOOGLE_MAPS_API_KEY__, 'google-test');
-  // Data layers are off: only the credits of what the shell itself uses
-  // (place search, its OSM data, keyless terrain) go to the engine's credits.
+  // Match the native static attribution policy for available data layers,
+  // even before a layer is enabled.
   assert.deepEqual(
     run.engine.fake.credits.map(({ html }) => html),
-    ['Search credit', 'OSM credit', 'Terrain credit'],
+    ['Flights credit', 'Search credit', 'OSM credit', 'Terrain credit'],
   );
 });
 
@@ -170,4 +170,27 @@ test('the Navara scene tears down the controller, then the globe', async (t) => 
   assert.equal(run.engine.isDestroyed(), true);
   assert.equal(isRenderGovernorInstalled(run.engine), false);
   assert.equal(view.__GOOGLE_MAPS_API_KEY__, undefined);
+});
+
+test('Navara keeps attribution for every available W1/W2 source and excludes unavailable data', async (t) => {
+  const keys = [
+    'opensky',
+    'adsblol',
+    'adsbdb',
+    'aisstream',
+    'celestrak',
+    'launch-library-2',
+    'usgs',
+    'photon-geocoder',
+    'openstreetmap',
+    'reearth-terrain',
+  ];
+  const run = await startScene({
+    credits: [...keys, 'firms'].map((key) => ({ key, html: `Credit ${key}` })),
+  });
+  t.after(run.teardown);
+  assert.deepEqual(
+    run.engine.fake.credits.map(({ html }) => html),
+    keys.map((key) => `Credit ${key}`),
+  );
 });

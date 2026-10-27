@@ -1072,6 +1072,18 @@ async function runNavara(page, url, consoleErrors) {
     await check(
       'navara: render on demand draws nothing while idle (S5)',
       async () => {
+        const forceUpdate = view.forceUpdate;
+        const idleRequests = [];
+        view.forceUpdate = function (...args) {
+          if (idleRequests.length < 8)
+            idleRequests.push(
+              new Error('idle request').stack.replace(
+                /https?:\/\/[^\s)]+/g,
+                (url) => new URL(url).pathname,
+              ),
+            );
+          return forceUpdate.apply(this, args);
+        };
         engine.render.setContinuous(false);
         engine.camera.setView({
           destination: cartesian3.fromDegrees(20, 10, 2e7),
@@ -1085,10 +1097,20 @@ async function runNavara(page, url, consoleErrors) {
           // Let loading finish, then count frames nobody asked for.
           for (let waited = 0; waited < 15000; waited += 500) {
             frames = 0;
+            idleRequests.length = 0;
             await sleep(1500);
             if (frames === 0) break;
           }
-          ensure(frames === 0, `${frames} frames in 1.5 s of idle`);
+          ensure(
+            frames === 0,
+            `${frames} frames in 1.5 s of idle; ${JSON.stringify({
+              continuous: engine.render.isContinuous(),
+              tilesLoaded: engine.surface.tilesLoaded(),
+              flightActive: engine.camera.flightActive(),
+              height: engine.camera.height(),
+              requests: idleRequests,
+            })}`,
+          );
           await waitFrames(1);
           ensure(frames >= 1, 'a requested frame was not drawn');
           engine.render.setContinuous(true);
@@ -1097,6 +1119,7 @@ async function runNavara(page, url, consoleErrors) {
           ensure(frames > 5, `only ${frames} frames in 0.5 s continuous`);
         } finally {
           engine.render.setContinuous(false);
+          view.forceUpdate = forceUpdate;
           remove();
         }
       },

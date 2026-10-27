@@ -1,0 +1,238 @@
+#!/usr/bin/env node
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import puppeteer from 'puppeteer';
+import sharp from 'sharp';
+import { watchW1Page } from './qa-browserEvidence.mjs';
+import { earthquakeFixture, W2_EPOCH_MS } from './fixtures/w2/earthquakes.mjs';
+const arg = (name) =>
+  process.argv.find((v) => v.startsWith(`--${name}=`))?.slice(name.length + 3);
+const base = arg('base-url');
+if (
+  !base ||
+  [4173, 4185, 4186, 4187, 4188, 4189].includes(Number(new URL(base).port))
+)
+  throw new Error('Supply unreserved --base-url');
+const preview = process.argv.includes('--preview'),
+  negative = process.argv.includes('--diagnostic-disable-mask');
+if (preview && negative) throw new Error('Negative shader probe is dev-only');
+const out = path.resolve(
+  arg('out') ?? 'qa-artifacts/w2/earthquakes-navara/forward-mesh.json',
+);
+await fs.mkdir(path.dirname(out), { recursive: true });
+const report = {
+  checks: [],
+  browserErrors: [],
+  negative,
+  driverSha256: crypto
+    .createHash('sha256')
+    .update(await fs.readFile(new URL(import.meta.url)))
+    .digest('hex'),
+};
+const check = (name, pass, detail) => {
+  report.checks.push({ name, pass: Boolean(pass), detail });
+  console.log(`${pass ? 'PASS' : 'FAIL'} ${name}`);
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const browser = await puppeteer.launch({
+  headless: true,
+  protocolTimeout: 180000,
+  args: ['--use-angle=metal'],
+});
+try {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1280, height: 800 });
+  watchW1Page(page, report, { name: 'main', baseUrl: base, preview });
+  if (!preview) {
+    await page.setRequestInterception(true);
+    page.on('request', async (request) => {
+      const pathname = new URL(request.url()).pathname;
+      const globe = pathname === '/src/globe/navara/index.js';
+      const shader =
+        negative && pathname === '/src/layers/earthquakes/render/navara.js';
+      if (!globe && !shader) {
+        await request.continue();
+        return;
+      }
+      try {
+        const response = await fetch(request.url());
+        if (!response.ok) throw new Error('Probe module request failed');
+        let body = await response.text();
+        const marker = globe
+          ? 'await view.init();'
+          : 'if(depth<surface-2e-7) return;';
+        if (body.split(marker).length !== 2)
+          throw new Error('Probe source anchor lost');
+        body = body.replace(
+          marker,
+          globe
+            ? marker +
+                ' globalThis.__gevW2NativeProbe?.({view,EffectDesc,NavaraEffect});'
+            : '/* diagnostic: forward mask removed */',
+        );
+        await request.respond({
+          status: 200,
+          contentType: 'text/javascript',
+          body,
+        });
+      } catch (error) {
+        report.browserErrors.push({ page: 'probe', message: error.message });
+        await request.abort();
+      }
+    });
+  }
+  await page.evaluateOnNewDocument((fixture) => {
+    window.__gevW2NativeProbe = (capabilities) => {
+      window.__w2Native = capabilities;
+    };
+    localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+    const fetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = new URL(
+        typeof input === 'string' ? input : (input.url ?? input),
+        location.href,
+      );
+      if (
+        url.hostname === 'earthquake.usgs.gov' &&
+        url.pathname.endsWith('/all_day.geojson')
+      )
+        return Promise.resolve(
+          new Response(JSON.stringify(fixture), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      return fetch(input, init);
+    };
+  }, earthquakeFixture());
+  const url = new URL(base);
+  url.searchParams.set('engine', 'navara');
+  await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 180000 });
+  await page.waitForFunction(
+    () => window.__godsEyeView?.layers && window.__w2Native,
+    { timeout: 180000 },
+  );
+  await page.evaluate(
+    () => window.__godsEyeView.styleManager.initialRestorePromise,
+  );
+  await page.waitForFunction(
+    () =>
+      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    { timeout: 180000 },
+  );
+  const scene = await page.evaluate(async (epoch) => {
+    const a = window.__godsEyeView,
+      geo = await import('/src/geo/index.js');
+    a.styleManager.orbitController.stop();
+    a.engine.camera.cancelFlight();
+    for (const [id] of a.dataManager.layers)
+      if (a.dataManager.isEnabled(id)) await a.layers.disable(id);
+    (await import('/src/time/clock.js')).appClock.freeze(epoch);
+    (await import('/src/data/detection.js')).setMode('OFF');
+    await a.layers.enable('earthquakes');
+    await a.mapStackController.setStack('photoreal');
+    a.engine.camera.setView({
+      destination: geo.cartesian3.fromDegrees(-122.4028, 37.7952, 1800),
+      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+    });
+    const canvas = a.engine.host.canvas;
+    const style = document.createElement('style');
+    style.textContent = '.w2-hidden{visibility:hidden!important}';
+    document.head.append(style);
+    for (const element of document.body.querySelectorAll('*'))
+      if (element !== canvas && !element.contains(canvas))
+        element.classList.add('w2-hidden');
+    let since = null;
+    const started = performance.now();
+    while (performance.now() - started < 90000) {
+      if (a.engine.surface.tilesLoaded()) since ??= performance.now();
+      else since = null;
+      if (since !== null && performance.now() - since > 2000) break;
+      a.engine.render.request('w2-forward-settle');
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return {
+      records: a.dataManager.layers
+        .get('earthquakes')
+        .module.getAnalystRecords().length,
+      photoreal: a.engine.maps.photorealActive(),
+      settled: a.engine.surface.tilesLoaded(),
+    };
+  }, W2_EPOCH_MS);
+  check(
+    'nonempty real photoreal earthquake scene',
+    scene.records === 15 && scene.photoreal && scene.settled,
+    scene,
+  );
+  await sleep(4000);
+  const before = await page.screenshot();
+  await page.evaluate(async () => {
+    const { createW2ForwardMeshProbe } =
+      await import('/src/bench/w2GroundProbe.js');
+    window.__w2Forward = await createW2ForwardMeshProbe(window.__w2Native);
+    window.__godsEyeView.engine.render.request('w2-forward-box');
+  });
+  await sleep(2500);
+  const on = await page.screenshot({ path: out.replace(/\.json$/, '-on.png') });
+  await page.evaluate(() => window.__godsEyeView.layers.disable('earthquakes'));
+  await sleep(1500);
+  const off = await page.screenshot({
+    path: out.replace(/\.json$/, '-off.png'),
+  });
+  const [a, b, c] = await Promise.all(
+    [on, off, before].map((x) => sharp(x).removeAlpha().raw().toBuffer()),
+  );
+  let maxDelta = 0,
+    contrast = 0;
+  for (let y = 384; y < 416; y++)
+    for (let x = 624; x < 656; x++)
+      for (let channel = 0; channel < 3; channel++) {
+        const i = (y * 1280 + x) * 3 + channel;
+        maxDelta = Math.max(maxDelta, Math.abs(a[i] - b[i]));
+        contrast = Math.max(contrast, Math.abs(b[i] - c[i]));
+      }
+  report.forward = { maxDelta, contrast };
+  check(
+    'a real opaque box covers the classified roof',
+    contrast > 16,
+    report.forward,
+  );
+  check(
+    'forward mesh pixels remain unclassified',
+    maxDelta <= 1,
+    report.forward,
+  );
+  await page.evaluate(() => {
+    window.__w2Forward.dispose();
+    window.__godsEyeView.engine.render.request('w2-probe-dispose');
+  });
+  await sleep(3000);
+  const idle = await page.evaluate(async () => {
+    let frames = 0;
+    const stop = window.__godsEyeView.engine.frames.postRender.addEventListener(
+      () => frames++,
+    );
+    await new Promise((r) => setTimeout(r, 2000));
+    stop();
+    return frames;
+  });
+  check(
+    'probe disposal and disabled layer settle to zero frames',
+    idle === 0,
+    idle,
+  );
+} catch (error) {
+  check('probe scenario completes', false, error.message);
+} finally {
+  await browser.close();
+}
+check(
+  'all observed pages have no runtime errors',
+  report.browserErrors.length === 0,
+  report.browserErrors,
+);
+if (negative) check('diagnostic shader is not acceptance', false);
+report.pass = report.checks.every((c) => c.pass);
+await fs.writeFile(out, JSON.stringify(report, null, 2) + '\n');
+process.exitCode = report.pass ? 0 : 1;

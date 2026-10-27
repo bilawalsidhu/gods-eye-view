@@ -1,6 +1,6 @@
 # Phase 3 W2 — execution report
 
-Status: in progress. This checkpoint establishes the native earthquake oracle and fixes a shared overlay lifecycle defect; none of the nine W2 layers is accepted on Navara yet. The execution sequence and later migration phases are in [the detailed plan](phase3-w2-plan.md).
+Status: W2 in progress. Earthquakes are accepted on both engines; FIRMS and the remaining seven layers are pending. The initial checkpoint established the native oracle and fixed a shared overlay lifecycle defect. The execution sequence and later migration phases are in [the detailed plan](phase3-w2-plan.md).
 
 ## Reviewed changes
 
@@ -20,7 +20,7 @@ Production, panel and QA builds, main composition, package/import boundaries, sc
 
 The initial capture encountered a Vite outdated-optimize-dependency 504 after an accidental duplicate dev-start attempt invalidated its cache; the failed result is retained. Subsequent clean captures passed 17/18 but failed strict idle, including after the independent arbiter fix. Runtime traces identified active Detection painting; isolating it via its public OFF mode closed the sample. These failures are retained, not relabelled as passing runs.
 
-Current raster checks establish actual native ground discs, not Navara ground classification or full W2 acceptance. Navara earthquake rendering, terrain/3D-tile classification, source failure/cancellation, cross-engine layer state and the remaining eight layers still require implementation and acceptance. No W2 performance conclusion is claimed at this checkpoint.
+The bootstrap checks established native ground discs only. W2-1b below records Navara acceptance; eight other layers and whole-wave acceptance are still pending.
 
 ## W2-1a — earthquake native renderer extraction
 
@@ -30,4 +30,39 @@ Three new semantic regressions cover exact coordinates/radii/depth palette/alpha
 
 Dev and QA-preview each pass 18/18 earthquake checks. Both compare equal to the pinned native baseline for all fifteen records, fixed epochs and projected controls. All eight native dev PNGs (four poses, on/off) are byte-identical to the pre-extraction baseline. Review resolved the renderer-owned destruction case and kept every existing no-callback/no-continuous-hold source assertion, extending its scan to the extracted renderer. Only newly added blocks were restyled after scoped format found two differences; old formatting was preserved.
 
-The configured outline fields remain in native entities. Cesium's installed GeometryUpdater explicitly disables outlines when onTerrain is true; Navara must match that actual image, not invent visible rings. Next: W2-1b, ground-disc classification on the real Navara visible terrain/3D-tile surface, with foreground mesh exclusion and horizon checks.
+The configured outline fields remain in native entities. Cesium's installed GeometryUpdater explicitly disables outlines when onTerrain is true; Navara must match that actual image, not invent visible rings. W2-1b below implements classification on the real Navara terrain/3D-tile surface, with foreground mesh exclusion and horizon checks.
+
+
+## W2-1b — Navara earthquakes
+
+Accepted for this layer. A lazy public SDK post-effect classifies the actual visible terrain/Google-tiles depth. A separate public surface-depth mask excludes custom forward meshes. It preserves native 48-vertex footprints, source order, three depth colors and encoded-sRGB alpha, with camera-relative float64 preparation. No SDK modifications or new private hooks are used. Native ground outlines remain absent.
+
+Initial GPU checks exposed real mismatches: hardware linear alpha produced brighter discs than native display-space blending, and a -12km volume floor excluded orbital terrain measured near -26km. Explicit display-space composition and the native conservative -100km floor resolve those cases. The screen-cell index retains every overlapping candidate; a 513-overlap regression proves it has no cell cap.
+
+Static camera data is cached, with invalidation on camera, projection or viewport changes. Its regression first observed 102 texture versions where only 2 were needed. Large discs now binary-search the radial boundary edge and check its neighbors; small/subpixel discs retain all 48 supporting planes. Native geometry oracles cover 25 world/magnitude cases including poles, date line and M10. Switching fast/full/fast in the same actual GPU scene yields exactly zero changed channels in all four poses. An actual source-fed antipodal M10 is present in the analyst records and adds zero visible pixels.
+
+Dev and QA-preview pass 25/25 native and 26/26 Navara checks: 15 analyst records, fixed epochs, five visible controls per pose, source failure/recovery, a cancelled late empty response, share restoration in both engine directions and ten toggle cycles. Enabled and disabled isolated samples each draw zero frames in two seconds. All three observed pages per capture have no runtime errors. Native's eight baseline on/off PNGs remain byte-identical. Earthquakes retain their existing noninteractive behavior; no selection/follow controls are invented.
+
+Five actual photoreal surface probes are painted, including a real roof. A real opaque 200m custom cube masks the effect: its 32x32 interior has max RGB delta 0, with contrast 139 proving geometry is present. Removing only the mask through QA interception produces delta 81 and a genuine failed verdict. Normal production output has no QA-probe markers; injection exists only in the instrumented QA build or dev request interception.
+
+Performance uses 500 parser-fed events, 1280x800/DPR1, minimal look, a discarded warmup and three fresh measured contexts per engine, three-second warmups and ten-second samples:
+
+| Scene | Native work p95 ms | Navara work p95 ms | Work ratio | Paced interval ratio |
+|---|---:|---:|---:|---:|
+| Global |6.0|0.8|0.133|0.979|
+| City |8.8|8.5|0.966|0.990|
+| Orbit |7.0|5.5|0.786|1.037|
+
+Both complete series pass the existing 1.1 ratios; paced long-frame counts above 33.4ms are zero for both engines. Earlier city failures (full 13.7 vs 8.7 ms and cache-only 13.2 ms) remain archived. These are observed engine pre/post-render work intervals, not GPU timer-query times. Default-look and combined-layer performance remain wave-closure tasks.
+
+Review found that Navara attribution still listed only shell providers after W1. Canonical credits for available W1 feeds and USGS are now included. A failing unit regression proved the missing credits, and the actual Navara UI contains the USGS credit. Unsupported future layers remain excluded.
+
+Final product checks: 7195/7196 ordinary tests pass with one Windows-only skip, 15/15 allocation checks, boundaries, 1575-file scoped formatting, production/panel/QA builds and main composition. Engine contracts pass 73/73 and 80/80. Dev and ordinary production shell pass on both engines, including cross-engine share checks. After diagnostic-only additions, 109 focused contract/fake-engine tests and boundaries/scoped format pass again. No production source changed after the frozen build/performance series.
+
+Limits: the Transamerica centre probe reads 195.91m native versus 212.05m Navara; painted surfaces establish draping, not two-metre roof-height parity. Some before/after Navara background pixels differ; the same-context fast/full shader comparison isolates the optimization and is exact. Earlier bare Navara runs intermittently failed S5 idle and a line click; repeats pass, failure logs/diagnostics are retained, and no cause or picking fix is claimed. Main composition has no phase3 byte-budget baseline, so no size-budget gate is claimed. FIRMS proceeds under [its detailed plan](phase3-w2-firms-plan.md); W2/W3/W4/UI/Rust/Cesium-removal work remains open.
+
+Reviewed lossy comparison images (193KB total; raw PNGs remain the pixel oracle):
+
+![Terrain comparison](images/phase3-w2-earthquakes-terrain.webp)
+
+![Photoreal roofs](images/phase3-w2-earthquakes-tiles.webp)

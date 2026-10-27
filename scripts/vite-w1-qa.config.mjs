@@ -18,6 +18,7 @@ const modules = [
   'src/voice/gevActions.js',
   'src/data/detection.js',
   'src/scopeMask.js',
+  'src/bench/w2GroundProbe.js',
 ];
 export default async (env) => {
   const config = await standalone(env);
@@ -31,6 +32,19 @@ export default async (env) => {
   config.build.rollupOptions.preserveEntrySignatures = 'strict';
   config.plugins.push({
     name: 'w1-qa-module-urls',
+    // QA-only public native capability capture; normal production has none.
+    transform(code, id) {
+      if (id.split('?')[0] !== path.join(root, 'src/globe/navara/index.js'))
+        return null;
+      const marker = 'await view.init();';
+      if (code.split(marker).length !== 2)
+        throw new Error('W2 native probe lost its initialised-view anchor');
+      return code.replace(
+        marker,
+        marker +
+          '\n globalThis.__gevW2NativeProbe?.({ view, EffectDesc, NavaraEffect });',
+      );
+    },
     configurePreviewServer(server) {
       const manifest = JSON.parse(
         fs.readFileSync(

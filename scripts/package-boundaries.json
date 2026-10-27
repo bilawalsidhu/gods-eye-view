@@ -2695,7 +2695,10 @@
       "src/celestialRing/render/cesium.js",
       "src/celestialRing/view.js",
       "src/layers/satellites/render/cesium.js",
-      "src/layers/earthquakes/render/cesium.js"
+      "src/layers/earthquakes/render/cesium.js",
+      "src/layers/earthquakes/render/navara.js",
+      "src/layers/earthquakes/render/navaraGeometry.js",
+      "src/layers/earthquakes/render/navaraGrid.js"
     ],
     "external": [
       "hls.js",

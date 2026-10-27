@@ -1,5 +1,5 @@
 {
-  "status": "W2 in progress; QA/bootstrap checkpoint only",
+  "status": "W2 in progress; earthquakes accepted on both engines; FIRMS next",
   "baseCommit": "bbc4b5a553fb0710ef5896ff750df8a349eac8be",
   "runtime": "Node 24.14.0; headless Puppeteer Metal; sequential GPU",
   "baseline": {
@@ -96,7 +96,7 @@
     {
       "name": "contract-cesium",
       "code": 0,
-      "seconds": 28.0,
+      "seconds": 28,
       "logSha256": "8906a6318d821521dc4701a47cb62d3951337d54b3013d68b55867e4919639b1"
     },
     {
@@ -128,7 +128,7 @@
     {
       "name": "build",
       "code": 0,
-      "seconds": 8.0,
+      "seconds": 8,
       "logSha256": "72876c5c93a524eafb5a236f5fef58e26964dbd1af290fd12977fcfc548db84c"
     },
     {
@@ -204,7 +204,7 @@
       {
         "name": "format",
         "code": 0,
-        "seconds": 8.0,
+        "seconds": 8,
         "logSha256": "4732f50ba8a27e95277703a11373acd20e0def126d9f1848d5101982c6c660cb"
       },
       {
@@ -330,5 +330,643 @@
       "GeometryUpdater suppresses ground ellipse outlines; preserve this actual behavior on Navara.",
       "Main composition passes; phase3 has no byte-budget baseline, so no size-budget claim."
     ]
+  },
+  "earthquakeNavara": {
+    "status": "W2-1b earthquakes accepted; remaining eight W2 layers pending",
+    "ordinaryUnit": {
+      "tests": 7196,
+      "pass": 7195,
+      "skip": 1,
+      "fail": 0
+    },
+    "allocationChecks": 15,
+    "cpuBuildGates": [
+      {
+        "name": "unit",
+        "code": 0,
+        "seconds": 87.7,
+        "logSha256": "ff14ff0f6cd68f2ab54daed52f4c9c7ee84c216ebb8bba4575a4cd34820a69aa"
+      },
+      {
+        "name": "boundaries",
+        "code": 0,
+        "seconds": 9.9,
+        "logSha256": "90a82ea838c40c7f69e8149c72e01247402226a7ab3035fba7c984a2e52bc225"
+      },
+      {
+        "name": "format",
+        "code": 0,
+        "seconds": 8.5,
+        "logSha256": "7ad0e33cdeefa53991c7cfc3cb736a5cc38a94b2c334bd7a8008ad37ce3374b2"
+      },
+      {
+        "name": "build",
+        "code": 0,
+        "seconds": 8.8,
+        "logSha256": "e268d487798d40acfcaa0f90693edac66b5ed3f2910cf33e03de29462b28daab"
+      },
+      {
+        "name": "panel",
+        "code": 0,
+        "seconds": 9,
+        "logSha256": "1c42c2ab6a23adfd4cc0c0efd7297084015321a32ce43355fac20df9ab6b309e"
+      },
+      {
+        "name": "qa-build",
+        "code": 0,
+        "seconds": 8,
+        "logSha256": "4ad6e083367256b6cf8c31d531c201e78b24c7ee0c9de0a0f1b0339864c316c5"
+      },
+      {
+        "name": "main",
+        "code": 0,
+        "seconds": 0.2,
+        "logSha256": "cde69409a663b72adff50fd61b7502e9a5a9f8ec2a324291e78f1188a540306c"
+      }
+    ],
+    "browserGates": [
+      {
+        "name": "nfinal-contract-cesium",
+        "code": 0,
+        "seconds": 26.7,
+        "logSha256": "2064583bd441a453e60c71727e61673b5594b3226eeec04166341558e4a55871"
+      },
+      {
+        "name": "nfinal-contract-navara",
+        "code": 0,
+        "seconds": 66.8,
+        "logSha256": "311762fab4043742810581ddaa18e38f7335526f6cbbba6b924609dc8368df50"
+      },
+      {
+        "name": "nfinal-shell-dev",
+        "code": 0,
+        "seconds": 192.8,
+        "logSha256": "fbf862934eee91db0c15bdc8245b494fea9756edf3f3ebce7352ed07160a9b34"
+      },
+      {
+        "name": "nfinal-shell-preview",
+        "code": 0,
+        "seconds": 186.8,
+        "logSha256": "d2e5ec59125aaeb0c59e579f40a82ee682949d9d31771aadfcb33d300412c292"
+      },
+      {
+        "name": "nfinal-quakes-cesium-dev",
+        "code": 0,
+        "seconds": 57.3,
+        "logSha256": "12eff53a1655f611657c65dc4f4d8161c8d0fc8fe1f5f0b7105d03204fe1e90e"
+      },
+      {
+        "name": "nfinal-quakes-navara-dev",
+        "code": 0,
+        "seconds": 59.7,
+        "logSha256": "f2bf157fbff841bc057ef47d1bc7a02fb8f41ea9adf55dc2bdc204f12b796068"
+      },
+      {
+        "name": "nfinal-quakes-cesium-preview",
+        "code": 0,
+        "seconds": 55.7,
+        "logSha256": "12eff53a1655f611657c65dc4f4d8161c8d0fc8fe1f5f0b7105d03204fe1e90e"
+      },
+      {
+        "name": "nfinal-quakes-navara-preview",
+        "code": 0,
+        "seconds": 58.3,
+        "logSha256": "f2bf157fbff841bc057ef47d1bc7a02fb8f41ea9adf55dc2bdc204f12b796068"
+      },
+      {
+        "name": "nfinal-forward-preview",
+        "code": 0,
+        "seconds": 22.5,
+        "logSha256": "59f5264c79aeff71c7bcbd060bbe1fb0105d82be4fdaeb32d91c0f3e308f8a97"
+      },
+      {
+        "name": "nfinal-perf-uncapped",
+        "code": 0,
+        "seconds": 411,
+        "logSha256": "40720c85b4ca35cb4d641a5ec1dc33d74ef46540c8f574e9348a934cf43dc68c"
+      },
+      {
+        "name": "nfinal-perf-paced",
+        "code": 0,
+        "seconds": 391.6,
+        "logSha256": "92b2151b8a947246fe3ce6b9c482f161e52636e705bde747ffcf476431ff081c"
+      }
+    ],
+    "captures": [
+      {
+        "name": "cesium-dev",
+        "path": "qa-artifacts/w2/earthquakes-navara/final/cesium-dev.json",
+        "sha256": "8caae5a06803b3e853ce9cb2b8ac8e7507b60a7904401ae673cf135e1eae2414",
+        "driverSha256": "0dd39eae12fbd6039748240605bf9b3c2a632c4a6d0d39b9eba1233a37255230",
+        "checks": 25,
+        "records": 15,
+        "runtimePages": [
+          "main",
+          "share-cesium",
+          "share-navara"
+        ],
+        "browserErrorCount": 0,
+        "enabledIdleFrames": 0,
+        "disabledIdleFrames": 0,
+        "poses": {
+          "global": {
+            "total": 15,
+            "onScreen": 15,
+            "controls": 5,
+            "changedPixels": 149
+          },
+          "city": {
+            "total": 15,
+            "onScreen": 5,
+            "controls": 5,
+            "changedPixels": 564548
+          },
+          "orbit": {
+            "total": 15,
+            "onScreen": 10,
+            "controls": 5,
+            "changedPixels": 2160
+          },
+          "terrain": {
+            "total": 15,
+            "onScreen": 5,
+            "controls": 5,
+            "changedPixels": 440553
+          }
+        },
+        "roofProbeHeightsM": [
+          -3.182081281194147,
+          -29.78208282491827,
+          195.91006112421178,
+          37.51284925245436,
+          47.601100136669075
+        ]
+      },
+      {
+        "name": "navara-dev",
+        "path": "qa-artifacts/w2/earthquakes-navara/final/navara-dev.json",
+        "sha256": "ed035ea9a2ce21bfff400ae0cf5d516da0010afa9198b77670dd6a2964faeaaf",
+        "driverSha256": "0dd39eae12fbd6039748240605bf9b3c2a632c4a6d0d39b9eba1233a37255230",
+        "checks": 26,
+        "records": 15,
+        "runtimePages": [
+          "main",
+          "share-navara",
+          "share-cesium"
+        ],
+        "browserErrorCount": 0,
+        "enabledIdleFrames": 0,
+        "disabledIdleFrames": 0,
+        "poses": {
+          "global": {
+            "total": 15,
+            "onScreen": 15,
+            "controls": 5,
+            "changedPixels": 139
+          },
+          "city": {
+            "total": 15,
+            "onScreen": 5,
+            "controls": 5,
+            "changedPixels": 564566
+          },
+          "orbit": {
+            "total": 15,
+            "onScreen": 10,
+            "controls": 5,
+            "changedPixels": 2090
+          },
+          "terrain": {
+            "total": 15,
+            "onScreen": 5,
+            "controls": 5,
+            "changedPixels": 440857
+          }
+        },
+        "roofProbeHeightsM": [
+          -3.7797926629187275,
+          -30.357506569838872,
+          212.04714216499107,
+          36.47344290488135,
+          46.829076565419676
+        ]
+      },
+      {
+        "name": "cesium-preview",
+        "path": "qa-artifacts/w2/earthquakes-navara/final/cesium-preview.json",
+        "sha256": "ed38620e330da3ecc9d722e5f5a5f19153d8e7de2cf26a0dcbfdb04a378e15c8",
+        "driverSha256": "0dd39eae12fbd6039748240605bf9b3c2a632c4a6d0d39b9eba1233a37255230",
+        "checks": 25,
+        "records": 15,
+        "runtimePages": [
+          "main",
+          "share-cesium",
+          "share-navara"
+        ],
+        "browserErrorCount": 0,
+        "enabledIdleFrames": 0,
+        "disabledIdleFrames": 0,
+        "poses": {
+          "global": {
+            "total": 15,
+            "onScreen": 15,
+            "controls": 5,
+            "changedPixels": 149
+          },
+          "city": {
+            "total": 15,
+            "onScreen": 5,
+            "controls": 5,
+            "changedPixels": 564548
+          },
+          "orbit": {
+            "total": 15,
+            "onScreen": 10,
+            "controls": 5,
+            "changedPixels": 2160
+          },
+          "terrain": {
+            "total": 15,
+            "onScreen": 5,
+            "controls": 5,
+            "changedPixels": 440553
+          }
+        },
+        "roofProbeHeightsM": [
+          -3.182081281194147,
+          -29.78208282491827,
+          195.91006112421178,
+          37.51284925245436,
+          47.601100136669075
+        ]
+      },
+      {
+        "name": "navara-preview",
+        "path": "qa-artifacts/w2/earthquakes-navara/final/navara-preview.json",
+        "sha256": "9d7f97e132bd86b04b1f5d1fe47cf1e5c31988922f9bc1b78ec2d290bfd59866",
+        "driverSha256": "0dd39eae12fbd6039748240605bf9b3c2a632c4a6d0d39b9eba1233a37255230",
+        "checks": 26,
+        "records": 15,
+        "runtimePages": [
+          "main",
+          "share-navara",
+          "share-cesium"
+        ],
+        "browserErrorCount": 0,
+        "enabledIdleFrames": 0,
+        "disabledIdleFrames": 0,
+        "poses": {
+          "global": {
+            "total": 15,
+            "onScreen": 15,
+            "controls": 5,
+            "changedPixels": 139
+          },
+          "city": {
+            "total": 15,
+            "onScreen": 5,
+            "controls": 5,
+            "changedPixels": 564566
+          },
+          "orbit": {
+            "total": 15,
+            "onScreen": 10,
+            "controls": 5,
+            "changedPixels": 2090
+          },
+          "terrain": {
+            "total": 15,
+            "onScreen": 5,
+            "controls": 5,
+            "changedPixels": 440857
+          }
+        },
+        "roofProbeHeightsM": [
+          -3.7797926629187275,
+          -30.357506569838872,
+          212.04714216499107,
+          36.47344290488135,
+          46.829076565419676
+        ]
+      }
+    ],
+    "forwardMesh": {
+      "path": "qa-artifacts/w2/earthquakes-navara/final/forward-preview.json",
+      "sha256": "384d7300309a83e16813a80c972a282929c33fdc5ecbbb9e89d76251d60e0752",
+      "driverSha256": "859d0d5c3c60e8eca33d94f71a5a2fb3bd1a21fd2e33b6d48796cbd35b4704b3",
+      "checks": 5,
+      "details": [
+        {
+          "name": "nonempty real photoreal earthquake scene",
+          "pass": true,
+          "detail": {
+            "records": 15,
+            "photoreal": true,
+            "settled": true
+          }
+        },
+        {
+          "name": "a real opaque box covers the classified roof",
+          "pass": true,
+          "detail": {
+            "maxDelta": 0,
+            "contrast": 139
+          }
+        },
+        {
+          "name": "forward mesh pixels remain unclassified",
+          "pass": true,
+          "detail": {
+            "maxDelta": 0,
+            "contrast": 139
+          }
+        },
+        {
+          "name": "probe disposal and disabled layer settle to zero frames",
+          "pass": true,
+          "detail": 0
+        },
+        {
+          "name": "all observed pages have no runtime errors",
+          "pass": true,
+          "detail": []
+        }
+      ]
+    },
+    "fastShaderEquivalenceAndHorizon": {
+      "path": "qa-artifacts/w2/earthquakes-navara/final/sector-equivalence.json",
+      "sha256": "60c395142c6053cf1c0e2434de2d416f83b7efd46e2d05099d0feb8f3ef8631d",
+      "driverSha256": "aa0f45e2d0ab49428f6d938dd35b9aab61c132fdf7ae3550c41cc1501cbc89fe",
+      "checks": 7,
+      "details": [
+        {
+          "name": "global: stable repeat and full 48-edge GPU equivalence",
+          "pass": true,
+          "detail": {
+            "repeatDifferentChannels": 0,
+            "differentChannels": 0,
+            "maxDelta": 0
+          }
+        },
+        {
+          "name": "city: stable repeat and full 48-edge GPU equivalence",
+          "pass": true,
+          "detail": {
+            "repeatDifferentChannels": 0,
+            "differentChannels": 0,
+            "maxDelta": 0
+          }
+        },
+        {
+          "name": "orbit: stable repeat and full 48-edge GPU equivalence",
+          "pass": true,
+          "detail": {
+            "repeatDifferentChannels": 0,
+            "differentChannels": 0,
+            "maxDelta": 0
+          }
+        },
+        {
+          "name": "terrain: stable repeat and full 48-edge GPU equivalence",
+          "pass": true,
+          "detail": {
+            "repeatDifferentChannels": 0,
+            "differentChannels": 0,
+            "maxDelta": 0
+          }
+        },
+        {
+          "name": "antipodal M10 is present in source and truly behind the horizon",
+          "pass": true,
+          "detail": {
+            "count": 16,
+            "retained": true,
+            "visible": false
+          }
+        },
+        {
+          "name": "antipodal ground disc cannot paint the visible hemisphere",
+          "pass": true,
+          "detail": {
+            "count": 16,
+            "retained": true,
+            "visible": false,
+            "differentChannels": 0
+          }
+        },
+        {
+          "name": "strict runtime observers",
+          "pass": true,
+          "detail": []
+        }
+      ]
+    },
+    "performance": {
+      "uncapped": {
+        "path": "qa-artifacts/w2/earthquakes-navara/final/perf-uncapped.json",
+        "sha256": "2c548a92107f4ef1da9966c08b2abfdad6b0cb5cb161a7612f54e0ebe9274fbe",
+        "driverSha256": "d1bf08d13457d6037839279e9d5691b4c1383176cd449a1c84e01883e22c729c",
+        "fixtureSha256": "3e04be7c1481418464ee164e082e12737670eb656068f96ab6345b1b1fd767ec",
+        "look": "minimal",
+        "population": 500,
+        "measuredContextsPerEngine": 3,
+        "warmContextsPerEngine": 1,
+        "measureMs": 10000,
+        "gates": {
+          "global": {
+            "metric": "workP95",
+            "native": 6,
+            "navara": 0.8000001907348633,
+            "ratio": 0.1333333651224772,
+            "longNative": 0,
+            "longNavara": 0,
+            "pass": true
+          },
+          "city": {
+            "metric": "workP95",
+            "native": 8.799999952316284,
+            "navara": 8.5,
+            "ratio": 0.9659090961429698,
+            "longNative": 1,
+            "longNavara": 0,
+            "pass": true
+          },
+          "orbit": {
+            "metric": "workP95",
+            "native": 7,
+            "navara": 5.5,
+            "ratio": 0.7857142857142857,
+            "longNative": 1,
+            "longNavara": 0,
+            "pass": true
+          }
+        },
+        "browserErrorCount": 0
+      },
+      "paced": {
+        "path": "qa-artifacts/w2/earthquakes-navara/final/perf-paced.json",
+        "sha256": "742eaa0d0a861e40c9d1482637b19982c8397f122aee8a115e01b715d7c26690",
+        "driverSha256": "d1bf08d13457d6037839279e9d5691b4c1383176cd449a1c84e01883e22c729c",
+        "fixtureSha256": "3e04be7c1481418464ee164e082e12737670eb656068f96ab6345b1b1fd767ec",
+        "look": "minimal",
+        "population": 500,
+        "measuredContextsPerEngine": 3,
+        "warmContextsPerEngine": 1,
+        "measureMs": 10000,
+        "gates": {
+          "global": {
+            "metric": "intervalP95",
+            "native": 18.90000009536743,
+            "navara": 18.5,
+            "ratio": 0.9788359738968745,
+            "longNative": 0,
+            "longNavara": 0,
+            "pass": true
+          },
+          "city": {
+            "metric": "intervalP95",
+            "native": 19.59999990463257,
+            "navara": 19.40000009536743,
+            "ratio": 0.9897959280490677,
+            "longNative": 0,
+            "longNavara": 0,
+            "pass": true
+          },
+          "orbit": {
+            "metric": "intervalP95",
+            "native": 18.700000047683716,
+            "navara": 19.399999856948853,
+            "ratio": 1.0374331447850367,
+            "longNative": 0,
+            "longNavara": 0,
+            "pass": true
+          }
+        },
+        "browserErrorCount": 0
+      }
+    },
+    "nativeRasterComparison": [
+      {
+        "pose": "global",
+        "state": "on",
+        "byteIdentical": true,
+        "sha256": "a20187331be604b7a9a11dbb5d79694383c48963a528ce4bb3c5e0af7dd24894"
+      },
+      {
+        "pose": "global",
+        "state": "off",
+        "byteIdentical": true,
+        "sha256": "35cfd3722726967a860830f7eb2570ca2c77cdb1e06a6692db5dcdb1975276cb"
+      },
+      {
+        "pose": "city",
+        "state": "on",
+        "byteIdentical": true,
+        "sha256": "ec7d5e02265a61b1d5429c2915f3e66d01ca36ce1e5dc99a5d05a0fd045b057d"
+      },
+      {
+        "pose": "city",
+        "state": "off",
+        "byteIdentical": true,
+        "sha256": "514a1f72ea252ece0ddbd332ca380a85c1c4e204181f27149884fa26f65a0c4a"
+      },
+      {
+        "pose": "orbit",
+        "state": "on",
+        "byteIdentical": true,
+        "sha256": "7d22dbba45c2c64a01713c6af00ec527f6d1ebee452cd38122a723d4d13843f7"
+      },
+      {
+        "pose": "orbit",
+        "state": "off",
+        "byteIdentical": true,
+        "sha256": "e54d0bc06ccbe7593e7fe876b929ed7c539dfe70407ec12b18710fddb12cda97"
+      },
+      {
+        "pose": "terrain",
+        "state": "on",
+        "byteIdentical": true,
+        "sha256": "6fd96b10af3c804fdb2d5fdfeb36a5fea20c55d849b016577e75d8855828552b"
+      },
+      {
+        "pose": "terrain",
+        "state": "off",
+        "byteIdentical": true,
+        "sha256": "415b051b7386bd6892c581f6aaecb23e42d73a09f85632442c98afaf93ff7962"
+      }
+    ],
+    "sourceIdentity": {
+      "src/layers/earthquakes/render/navara.js": "75e164aa3d63d84cbe0ec5bcc26dc49abd24f1c9ace44d10152a10cae91397df",
+      "src/layers/earthquakes/render/navaraGeometry.js": "477b8a2466deae3ffa4a8ce25abf7e93151e8b4a93ab067757071a850d55341c",
+      "src/layers/earthquakes/render/navaraGrid.js": "7febe1908e9c25f72f336eae5ad9a99815f3ef75080704d76e70224efd8c8022",
+      "src/globe/navara/index.js": "f72a5edeaa6a2cb33e631a71eb3d77ed0c1ee8bff5eb8ea4a01bd7ce5d91d5ad",
+      "src/app/navaraMode.js": "877415e07adb148be03eb78751f2cadf1d2a8251dd1ccf48c52803d44d5b3db8",
+      "src/bench/w2GroundProbe.js": "e992688ba62a7b15f0745a4ce7c1ef988b88d1b468b6fbe71f1595e03fcd7329",
+      "scripts/vite-w1-qa.config.mjs": "4018af34e8cd36a87db44957be56b1aecee2618d05b50833ee312af3746e99c8",
+      "scripts/qa-w2-layers.mjs": "0dd39eae12fbd6039748240605bf9b3c2a632c4a6d0d39b9eba1233a37255230",
+      "scripts/qa-globe-contract.mjs": "cb8ea4adf9417baecda0689ac10818f7554d06bd2126b1d5a56ef7eb7d02c395",
+      "src/globe/testing/contractSuite.mjs": "b3c606283795b8f9ca8f7e8ae044da2d30f93a2638740d234c0f248763aed7a6"
+    },
+    "postSeriesQaChecks": {
+      "format": {
+        "logSha256": "469229ca45f0e8d2698545daf374468ac925fb63c264d37ca67263e89dbc05a4"
+      },
+      "boundaries": {
+        "logSha256": "90a82ea838c40c7f69e8149c72e01247402226a7ab3035fba7c984a2e52bc225"
+      },
+      "contract-unit": {
+        "logSha256": "b34aa5d56a04a32f0f767b6e160a4d042ac550cb6b84ce5f11a6acbaf423a92b"
+      }
+    },
+    "notes": [
+      "Only earthquakes accepted; remaining eight layers and whole W2 closure pending.",
+      "Public SDK EffectDesc/MRT buffers only; SDK0.2.1 unchanged.",
+      "Negative foreground-mask probe fails:ROI81 vs positive0,contrast139.",
+      "Roof height195.91m native versus212.05m Navara; no2m roof-height parity claim.",
+      "Archived intermittent bare Navara S5 and line-pick failures; repeated contracts pass, causes unresolved; underlying picking unchanged since W1.",
+      "Old city performance13.7vs8.7ms/cache-only13.2ms failures retained; final3context medians pass.",
+      "Performance look minimal; default-look/combined-layer metrics remain wave closure.",
+      "Main composition passes; phase3 has no byte-budget baseline."
+    ],
+    "semanticComparisons": [
+      {
+        "left": "qa-artifacts/w2/baseline-isolated/earthquakes-cesium.json",
+        "right": "qa-artifacts/w2/earthquakes-navara/final/cesium-dev.json",
+        "pass": true,
+        "errors": []
+      },
+      {
+        "left": "qa-artifacts/w2/earthquakes-navara/final/cesium-dev.json",
+        "right": "qa-artifacts/w2/earthquakes-navara/final/navara-dev.json",
+        "pass": true,
+        "errors": []
+      },
+      {
+        "left": "qa-artifacts/w2/earthquakes-navara/final/cesium-dev.json",
+        "right": "qa-artifacts/w2/earthquakes-navara/final/cesium-preview.json",
+        "pass": true,
+        "errors": []
+      },
+      {
+        "left": "qa-artifacts/w2/earthquakes-navara/final/navara-dev.json",
+        "right": "qa-artifacts/w2/earthquakes-navara/final/navara-preview.json",
+        "pass": true,
+        "errors": []
+      }
+    ],
+    "normalProductionQaMarkerMatches": 0,
+    "reviewImages": [
+      {
+        "file": "docs/migration/images/phase3-w2-earthquakes-terrain.webp",
+        "bytes": 83062,
+        "sha256": "9dd33068d2f61bff2a5df1c510797a872dfa32820b86f6ff02444b8b7aacda3b"
+      },
+      {
+        "file": "docs/migration/images/phase3-w2-earthquakes-tiles.webp",
+        "bytes": 109550,
+        "sha256": "3c104d2cbb4ef473a399e1fd00792c66e78b69dbac7cfb7d196cb896bc4c6d08"
+      }
+    ],
+    "reviewImagesVisuallyChecked": true
   }
 }

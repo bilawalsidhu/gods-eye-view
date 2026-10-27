@@ -45,3 +45,39 @@ export function earthquakeFixture() {
     features,
   };
 }
+
+/** Dense regional and worldwide USGS-shaped load, separate from the oracle. */
+export function earthquakePerformanceFixture(count = 500) {
+  let seed = 17;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  return {
+    type: 'FeatureCollection',
+    features: Array.from({ length: count }, (_, i) => ({
+      type: 'Feature',
+      id: `perf-quake-${i}`,
+      properties: {
+        mag: 2.5 + (i % 7) * 0.5,
+        place: `Recorded performance event ${i}`,
+        time: W2_EPOCH_MS - i * 1000,
+      },
+      geometry: {
+        type: 'Point',
+        coordinates:
+          i < Math.min(100, count)
+            ? [
+                -122.42 + (random() - 0.5),
+                37.77 + (random() - 0.5),
+                [8, 70, 301][i % 3],
+              ]
+            : [
+                -180 + random() * 360,
+                -70 + random() * 140,
+                [8, 70, 301][i % 3],
+              ],
+      },
+    })),
+  };
+}

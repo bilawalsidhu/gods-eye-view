@@ -91,6 +91,7 @@ if (arg('compare')) {
     poses: {},
     geometryEpochMs: W2_EPOCH_MS,
     browserErrors: [],
+    driverSha256: sha(await fs.readFile(new URL(import.meta.url))),
   };
   const check = (name, pass, detail) => {
     report.checks.push({ name, pass: Boolean(pass), detail });
@@ -112,7 +113,7 @@ if (arg('compare')) {
         preview: process.argv.includes('--preview'),
       });
     observe(page, 'main');
-    await page.evaluateOnNewDocument((fixture) => {
+    const installFixture = (fixture) => {
       localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
       const fetch = window.fetch.bind(window);
       window.__w2Requests = 0;
@@ -126,6 +127,25 @@ if (arg('compare')) {
           url.pathname.endsWith('/all_day.geojson')
         ) {
           window.__w2Requests++;
+          if (window.__w2FailNext) {
+            window.__w2FailNext = false;
+            return Promise.resolve(new Response('', { status: 503 }));
+          }
+          if (window.__w2DelayNext) {
+            window.__w2DelayNext = false;
+            return new Promise((resolve) => {
+              window.__w2Release = () =>
+                resolve(
+                  new Response(
+                    JSON.stringify({ type: 'FeatureCollection', features: [] }),
+                    {
+                      status: 200,
+                      headers: { 'content-type': 'application/json' },
+                    },
+                  ),
+                );
+            });
+          }
           return Promise.resolve(
             new Response(JSON.stringify(fixture), {
               status: 200,
@@ -135,7 +155,8 @@ if (arg('compare')) {
         }
         return fetch(input, init);
       };
-    }, earthquakeFixture());
+    };
+    await page.evaluateOnNewDocument(installFixture, earthquakeFixture());
     const url = new URL(base);
     url.searchParams.set('engine', engine);
     await page.goto(url.href, {
@@ -180,6 +201,24 @@ if (arg('compare')) {
     );
     if (!available.available)
       throw new Error('Required W2 layer is unavailable');
+    if (engine === 'navara') {
+      const credit = await page.evaluate(() => {
+        const roots = [document];
+        while (roots.length) {
+          const root = roots.pop();
+          if (
+            (root.body ?? root).textContent?.includes(
+              'Data courtesy of the U.S. Geological Survey',
+            )
+          )
+            return true;
+          for (const element of root.querySelectorAll('*'))
+            if (element.shadowRoot) roots.push(element.shadowRoot);
+        }
+        return false;
+      });
+      check('USGS attribution reaches the Navara attribution UI', credit);
+    }
     await page.evaluate((id) => window.__godsEyeView.layers.enable(id), layer);
     await page.waitForFunction(
       (id) =>
@@ -219,6 +258,7 @@ if (arg('compare')) {
           element.classList.add('w2-raster-hidden');
     });
     for (const [name, [lon, lat, height, pitch]] of Object.entries(poses)) {
+      if (arg('diagnostic-pose') && arg('diagnostic-pose') !== name) continue;
       await page.evaluate(
         async (pose) => {
           const app = window.__godsEyeView,
@@ -276,9 +316,18 @@ if (arg('compare')) {
           return {
             total: all.length,
             onScreen: visible.length,
-            known: visible
-              .slice(0, 5)
-              .map(({ id, screen }) => ({ id, screen })),
+            known: visible.slice(0, 5).map(({ id, screen }) => {
+              const surface = e.picker.pickPosition(screen);
+              const place = surface && geo.cartographic.fromCartesian(surface);
+              return {
+                id,
+                screen,
+                surface: surface
+                  ? { x: surface.x, y: surface.y, z: surface.z }
+                  : null,
+                surfaceHeightM: place?.height ?? null,
+              };
+            }),
             camera: e.camera.pose(),
             engineEpochMs: e.clock.now(),
           };
@@ -323,11 +372,214 @@ if (arg('compare')) {
         layer,
       );
     }
+    if (!arg('diagnostic-pose')) {
+      const detail = await page.evaluate(async () => {
+        const app = window.__godsEyeView;
+        const geo = await import('/src/geo/index.js');
+        await app.mapStackController.setStack('photoreal');
+        app.engine.camera.setView({
+          destination: geo.cartesian3.fromDegrees(-122.4028, 37.7952, 1800),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        app.engine.render.request('w2-photoreal-ground');
+        const started = performance.now();
+        let since = null;
+        while (performance.now() - started < 90000) {
+          if (app.engine.surface.tilesLoaded()) since ??= performance.now();
+          else since = null;
+          if (since !== null && performance.now() - since > 2000) break;
+          app.engine.render.request('w2-detail-settle');
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        return {
+          photoreal: app.engine.maps.photorealActive(),
+          settled: app.engine.surface.tilesLoaded(),
+        };
+      });
+      await sleep(4000);
+      const probes = await page.evaluate(() => {
+        const e = window.__godsEyeView.engine;
+        return import('/src/geo/index.js').then((geo) =>
+          [
+            [320, 200],
+            [960, 200],
+            [640, 400],
+            [320, 600],
+            [960, 600],
+          ].map(([x, y]) => {
+            const point = e.picker.pickPosition({ x, y });
+            const place = point && geo.cartographic.fromCartesian(point);
+            return { x, y, heightM: place?.height ?? null };
+          }),
+        );
+      });
+      const detailOn = out.replace(/\.json$/, '-tiles-on.png');
+      const detailOff = out.replace(/\.json$/, '-tiles-off.png');
+      const on = await page.screenshot({ path: detailOn });
+      await page.evaluate(
+        (id) => window.__godsEyeView.layers.disable(id),
+        layer,
+      );
+      await sleep(1500);
+      const off = await page.screenshot({ path: detailOff });
+      const [onPixels, offPixels] = await Promise.all(
+        [on, off].map((buffer) => sharp(buffer).removeAlpha().raw().toBuffer()),
+      );
+      for (const probe of probes) {
+        const i = (probe.y * 1280 + probe.x) * 3;
+        probe.on = [...onPixels.subarray(i, i + 3)];
+        probe.off = [...offPixels.subarray(i, i + 3)];
+        probe.delta = Math.max(
+          ...probe.on.map((value, channel) =>
+            Math.abs(value - probe.off[channel]),
+          ),
+        );
+      }
+      report.groundDetail = {
+        ...detail,
+        probes,
+        onSha256: sha(on),
+        offSha256: sha(off),
+      };
+      check(
+        'photoreal ground probes include real building roofs',
+        detail.photoreal &&
+          detail.settled &&
+          probes.every((p) => Number.isFinite(p.heightM)) &&
+          probes.some((p) => p.heightM > 100),
+        report.groundDetail,
+      );
+      check(
+        'ground classification paints five visible Google-tile surfaces',
+        probes.every((p) => p.delta > 16),
+        probes,
+      );
+      await page.evaluate(
+        (id) => window.__godsEyeView.layers.enable(id),
+        layer,
+      );
+    }
     // Lifecycle/idle uses normal application chrome, not the raster-only DOM.
     await page.evaluate(() => {
       for (const element of document.querySelectorAll('.w2-raster-hidden'))
         element.classList.remove('w2-raster-hidden');
     });
+    const sourceLifecycle = await page.evaluate(async (id) => {
+      const app = window.__godsEyeView;
+      const module = app.dataManager.layers.get(id).module;
+      const before = JSON.stringify(module.getAnalystRecords());
+      window.__w2FailNext = true;
+      const failed = await module.update(app.viewer);
+      const retained = JSON.stringify(module.getAnalystRecords()) === before;
+      const error = module.getStats().error;
+      const recovered = await module.update(app.viewer);
+      window.__w2DelayNext = true;
+      const pending = module.update(app.viewer);
+      await app.layers.disable(id);
+      await app.layers.enable(id);
+      window.__w2Release();
+      const lateResult = await pending;
+      return {
+        failed,
+        retained,
+        error,
+        recovered,
+        lateResult,
+        current: module.getAnalystRecords().length,
+        recoveredError: module.getStats().error,
+      };
+    }, layer);
+    report.sourceLifecycle = sourceLifecycle;
+    check(
+      'failed refresh retains last good records and recovers',
+      sourceLifecycle.failed === false &&
+        sourceLifecycle.retained &&
+        sourceLifecycle.error?.includes('503') &&
+        sourceLifecycle.recovered &&
+        !sourceLifecycle.recoveredError,
+      sourceLifecycle,
+    );
+    check(
+      'cancelled late empty refresh cannot overwrite re-enabled data',
+      sourceLifecycle.lateResult === false && sourceLifecycle.current === 15,
+      sourceLifecycle,
+    );
+    if (!arg('diagnostic-pose')) {
+      await sleep(2500);
+      const hash = await page.evaluate(() => location.hash);
+      report.shares = {};
+      for (const opened of [
+        engine,
+        engine === 'cesium' ? 'navara' : 'cesium',
+      ]) {
+        const context = await browser.createBrowserContext();
+        try {
+          const shared = await context.newPage();
+          observe(shared, `share-${opened}`);
+          await shared.setViewport({ width: 1280, height: 800 });
+          await shared.evaluateOnNewDocument(
+            installFixture,
+            earthquakeFixture(),
+          );
+          const sharedUrl = new URL(base);
+          sharedUrl.searchParams.set('engine', opened);
+          sharedUrl.hash = hash;
+          await shared.goto(sharedUrl.href, {
+            waitUntil: 'domcontentloaded',
+            timeout: 180000,
+          });
+          const restored = await shared
+            .waitForFunction(
+              (id) => {
+                const app = window.__godsEyeView;
+                return (
+                  app?.dataManager?.isEnabled(id) &&
+                  app.dataManager.layers.get(id)?.module.getAnalystRecords()
+                    .length === 15
+                );
+              },
+              { timeout: 60000 },
+              layer,
+            )
+            .then(() => true)
+            .catch(() => false);
+          const actualEngine = await shared.evaluate(
+            () => window.__godsEyeView?.engine.kind,
+          );
+          report.shares[opened] = { restored, actualEngine };
+          check(
+            `share restores earthquake layer on ${opened}`,
+            restored && actualEngine === opened,
+          );
+        } finally {
+          await context.close();
+        }
+      }
+    }
+    if (!arg('diagnostic-pose')) {
+      report.detectionModeBeforeEnabledIdle = await page.evaluate(async () => {
+        const detection = await import('/src/data/detection.js');
+        const mode = detection.getMode();
+        detection.setMode('OFF');
+        return mode;
+      });
+      await sleep(3500);
+      report.enabledIdleFrames = await page.evaluate(async () => {
+        let frames = 0;
+        const stop =
+          window.__godsEyeView.engine.frames.postRender.addEventListener(
+            () => frames++,
+          );
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        stop();
+        return frames;
+      });
+      check(
+        'enabled static earthquake layer has zero frames in 2s',
+        report.enabledIdleFrames === 0,
+        report.enabledIdleFrames,
+      );
+    }
     const lifecycle = await page.evaluate(async (id) => {
       const a = window.__godsEyeView,
         module = a.dataManager.layers.get(id).module;
@@ -465,6 +717,12 @@ if (arg('compare')) {
     report.browserErrors.length === 0,
     report.browserErrors,
   );
+  if (arg('diagnostic-pose'))
+    check(
+      'diagnostic subset is not full acceptance',
+      false,
+      arg('diagnostic-pose'),
+    );
   report.pass = report.checks.length > 0 && report.checks.every((c) => c.pass);
   await fs.writeFile(out, JSON.stringify(report, null, 2) + '\n');
   console.log(
