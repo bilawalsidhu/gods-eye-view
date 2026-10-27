@@ -56,8 +56,9 @@ test('the default registry: every layer on Cesium, none yet on Navara', () => {
   }
 });
 
-test('the aircraft, vessels, satellites and launches have extracted Cesium renderers; the others still draw themselves', () => {
+test('the aircraft, vessels, satellites, launches and earthquakes have extracted Cesium renderers', () => {
   assert.deepEqual(Object.keys(CESIUM_LAYER_RENDERERS), [
+    'earthquakes',
     'rocket-launches',
     'satellites',
     'flights',

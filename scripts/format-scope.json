@@ -1182,5 +1182,7 @@
   "src/tooling/w1RuntimeEvidence.test.mjs",
   "scripts/qa-w2-layers.mjs",
   "scripts/fixtures/w2/earthquakes.mjs",
-  "src/tooling/w2QaComparison.test.mjs"
+  "src/tooling/w2QaComparison.test.mjs",
+  "src/layers/earthquakes/render/cesium.js",
+  "src/layers/earthquakes/render/cesium.test.mjs"
 ]
