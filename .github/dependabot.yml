@@ -1,21 +1,38 @@
 # Actions are pinned by commit SHA (see ci.yml), and a pin never moves on its
 # own. Dependabot bumps the SHA and its "# vX.Y.Z" comment together, so the
-# pins stay current without anyone remembering to look.
+# pins stay current without anyone remembering to look. npm rides along in
+# the same weekly PR, so there is one thing to review instead of many.
 version: 2
+
+multi-ecosystem-groups:
+  weekly:
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+
 updates:
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-    # One PR for all action bumps, so CI runs once instead of per action.
-    groups:
-      github-actions:
-        patterns:
-          - '*'
+    multi-ecosystem-group: weekly
+    patterns:
+      - '*'
     # Wait a week before adopting a new release, in case it gets pulled or
     # turns out to be compromised.
     cooldown:
       default-days: 7
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: ci
+
+  - package-ecosystem: npm
+    directory: /
+    multi-ecosystem-group: weekly
+    patterns:
+      - '*'
+    versioning-strategy: increase
+    cooldown:
+      default-days: 7
+    # Majors (vite, cesium, puppeteer) can break the app and need a real
+    # review, so they stay manual.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
