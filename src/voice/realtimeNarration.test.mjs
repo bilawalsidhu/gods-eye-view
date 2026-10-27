@@ -135,7 +135,7 @@ test('an old progress completion leaves the active in-band response alone', asyn
 });
 
 test('user speech stops an audible progress line: cancel and clear its audio', async () => {
-  const { controller, sent, event, progressLine } = controllerFixture();
+  const { sent, event, progressLine } = controllerFixture();
   await progressLine('resp_p');
   await event({ type: 'output_audio_buffer.started', response_id: 'resp_p' });
   sent.length = 0;

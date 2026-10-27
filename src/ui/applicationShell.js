@@ -3,6 +3,7 @@ import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
+import { initMobileShell } from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -34,6 +35,10 @@ import * as Cesium from 'cesium';
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
 import { ShellFeedback } from './shellFeedback.js';
+import {
+  applyShareFollowOffset,
+  readShareFollowSubject,
+} from './shareFollow.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
@@ -73,7 +78,13 @@ export class StyleManager extends ShellFacade {
    */
   constructor(
     viewer,
-    { mapStackController = null, placeSearch, services, requestServices } = {},
+    {
+      mapStackController = null,
+      placeSearch,
+      services,
+      requestServices,
+      initialShareCode = null,
+    } = {},
   ) {
     super();
     const {
@@ -124,6 +135,8 @@ export class StyleManager extends ShellFacade {
       readInitialShare: () => this._initialShareState,
       readScrollRestoreOwner: () => this._displayPortalScrollRestoreOwner,
       readDisplayScrollTop: () => this._standardDisplayScrollTop,
+      readSharedCollapsed: (panelId) =>
+        this._mobileShell?.sharedCollapsed(panelId),
     });
     this._feedback = new ShellFeedback({
       readLayers: () => this._dataManager?.getAll?.() || [],
@@ -144,6 +157,7 @@ export class StyleManager extends ShellFacade {
       },
       searchInput: this._locationSearch,
       interruptCameraMotion: services.interruptCameraMotion,
+      interruptGlobeRotation: services.interruptGlobeRotation,
       isCockpitActive: () => !!this.cockpitView?.active,
       clearLocation: () => this.clearSearchedLocation(),
       cancelShareSelection: () => this._shareRestoration.cancelSelection(),
@@ -161,6 +175,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
+      applyFollowOffset: (entity, offset) =>
+        applyShareFollowOffset(viewer, entity, offset),
     });
 
     this._visualSettings = new VisualSettings({
@@ -319,6 +335,7 @@ export class StyleManager extends ShellFacade {
         GLOBE_VIEW: services.GLOBE_VIEW,
         flyToGlobeView: services.flyToGlobeView,
         interruptCameraMotion: services.interruptCameraMotion,
+        interruptGlobeRotation: services.interruptGlobeRotation,
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
         satellitesLayer: services.satellitesLayer,
@@ -331,6 +348,7 @@ export class StyleManager extends ShellFacade {
         _poiRow: this._poiRow,
         _locationBarDivider: this._locationBarDivider,
         _locationSearch: this._locationSearch,
+        _locationSearchError: this._locationSearchError,
         _searchToggle: this._searchToggle,
         _resetGlobeBtn: this._resetGlobeBtn,
         _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
@@ -425,7 +443,12 @@ export class StyleManager extends ShellFacade {
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
       cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      // A host may open a share code without a `/share/<code>` address.
+      initialShareCode,
     });
+    this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
+      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+    );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
     );
@@ -587,6 +610,7 @@ export class StyleManager extends ShellFacade {
     this._initStreetLevelPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
+    this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
@@ -846,6 +870,48 @@ export class StyleManager extends ShellFacade {
     if (briefKicker) {
       this._setHeaderText(briefKicker, ` ${t('LIVE SIGNALS')}`);
     }
+  }
+
+  /**
+   * Phone layout: a bottom tab bar presenting one panel sheet at a time
+   * (src/ui/mobileShell.js). Inactive above 720px.
+   * @returns {void}
+   */
+  _initMobileShell() {
+    this._mobileShell = initMobileShell({
+      setPanelCollapsed: (panelId, collapsed, options) =>
+        this._panelChrome.setPanelCollapsed(panelId, collapsed, options),
+      onSheetsClosed: () => this._syncShareState(),
+      onTabOpened: (sheet) => {
+        void this._onMobileTabOpened(sheet);
+      },
+    });
+  }
+
+  /** Reveal a tracked aircraft through Contacts when its phone tab is opened. */
+  async _onMobileTabOpened(sheet) {
+    const context = this.getContextModeState();
+    if (
+      sheet !== 'context' ||
+      this._disposed ||
+      !context ||
+      context.mode ||
+      context.changing ||
+      context.entering ||
+      !this.getAircraftTrackingTarget()
+    )
+      return false;
+    try {
+      const result = await this.setContextMode('contacts');
+      if (result?.ok) return true;
+      if (result?.cancelled || this._disposed) return false;
+    } catch {
+      if (this._disposed) return false;
+    }
+    this._showToast(
+      t('Contacts could not complete the requested transition; try again'),
+    );
+    return false;
   }
 
   /**
@@ -1604,14 +1670,35 @@ export class StyleManager extends ShellFacade {
   // ── Share Button ─────────────────────────────
 
   /**
-   * Wires the share button click to copy the current share link to the clipboard.
+   * Wires the share button. By default it copies the current share link to the
+   * clipboard; a host may pass `services.shareLink(url)` to share it another way
+   * (a system share sheet, for example). It resolves to 'shared', 'copied',
+   * 'cancelled' (no toast) or false (failed).
    * @returns {void}
    */
   _initShareButton() {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
-      const success = await this.shareLinkManager.copyLink();
-      if (!this._disposed)
-        this._showToast(success ? t('Link copied!') : t('Copy failed'));
+      const share = this.services.shareLink;
+      let result;
+      if (typeof share === 'function') {
+        // A host's hook may return a plain value or throw; both are answers.
+        result = await Promise.resolve()
+          .then(() => {
+            const href = this.shareLinkManager.buildLink();
+            return href ? share(href) : false;
+          })
+          .catch(() => false);
+      } else {
+        result = (await this.shareLinkManager.copyLink()) ? 'copied' : false;
+      }
+      if (this._disposed || result === 'cancelled') return;
+      this._showToast(
+        result === 'shared'
+          ? t('Link shared')
+          : result === 'copied'
+            ? t('Link copied!')
+            : t('Copy failed'),
+      );
     });
   }
 
@@ -1707,6 +1794,7 @@ export class StyleManager extends ShellFacade {
     this._localePicker?.destroy();
     this._localePicker = null;
     this._recording.destroy();
+    this._mobileShell?.destroy();
     this._panelChrome.destroy();
     this._feedback.destroy();
 

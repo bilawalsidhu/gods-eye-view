@@ -5,7 +5,7 @@ import {
 } from './voiceCardPresentation.js';
 
 /** Hide an idle card this long after its last update. */
-export const VOICE_CARD_IDLE_MS = 14000;
+const VOICE_CARD_IDLE_MS = 14000;
 
 const ELEMENT_IDS = Object.freeze({
   card: 'gev-voice-card',
@@ -13,6 +13,7 @@ const ELEMENT_IDS = Object.freeze({
   dismiss: 'gev-voice-card-dismiss',
   user: 'gev-voice-card-user',
   userText: 'gev-voice-card-user-text',
+  userWho: 'gev-voice-card-user-who',
   pointer: 'gev-voice-card-pointer',
   pointerKind: 'gev-voice-card-pointer-kind',
   pointerText: 'gev-voice-card-pointer-text',
@@ -70,8 +71,9 @@ export class VoiceCardControls {
     idleMs = VOICE_CARD_IDLE_MS,
     setTimer = (fn, ms) => setTimeout(fn, ms),
     clearTimer = (id) => clearTimeout(id),
+    onRender,
   }) {
-    Object.assign(this, { idleMs, setTimer, clearTimer });
+    Object.assign(this, { idleMs, setTimer, clearTimer, onRender });
     this.elements = Object.fromEntries(
       Object.entries(ELEMENT_IDS).map(([key, id]) => [
         key,
@@ -79,6 +81,10 @@ export class VoiceCardControls {
       ]),
     );
     this.state = initialVoiceCardState();
+    this.enabled = true;
+    this.presented = true;
+    this.announcementRevision = 0;
+    this.consumedPresentationAnnouncement = -1;
     this.hideTimer = null;
     this.destroyed = false;
     this.listeners = new AbortController();
@@ -96,15 +102,51 @@ export class VoiceCardControls {
     if (this.destroyed || !this.elements.card) return;
     const next = reduceVoiceCard(this.state, event);
     if (next === this.state) return;
+    if (
+      next.announce !== this.state.announce ||
+      (next.announce &&
+        ((event.type === 'transcript' &&
+          event.role === 'assistant' &&
+          event.final) ||
+          (event.type === 'action-result' &&
+            next.result !== this.state.result) ||
+          (event.type === 'pointer' &&
+            next.pointer &&
+            next.pointer !== this.state.pointer)))
+    )
+      this.announcementRevision++;
     this.state = next;
     this.render();
     if (this.state.visible) this.scheduleIdle();
     else this.cancelIdle();
   }
 
+  /** A local submission allows future output after dismissal; keep its content. */
+  rearm() {
+    if (this.destroyed || !this.elements.card) return;
+    this.state = { ...this.state, dismissed: false };
+  }
+
   /** An annotation outline resolved or failed after its tool result. */
   outline(event) {
     this.handle({ type: 'outline', id: event?.id, status: event?.status });
+  }
+
+  /** Change presentation only; session events and the idle deadline continue. */
+  setEnabled(enabled) {
+    if (this.destroyed || !this.elements.card) return;
+    this.enabled = Boolean(enabled);
+    this.render();
+  }
+
+  /** View selection changes presentation without changing the saved preference. */
+  setPresented(presented) {
+    if (this.destroyed || !this.elements.card || this.presented === presented)
+      return;
+    if (!presented)
+      this.consumedPresentationAnnouncement = this.announcementRevision;
+    this.presented = presented;
+    this.render();
   }
 
   scheduleIdle() {
@@ -129,12 +171,13 @@ export class VoiceCardControls {
 
   render() {
     const el = this.elements;
-    const view = voiceCardView(this.state);
+    const view = this.snapshot();
     setHidden(el.card, !view.visible);
     el.card.dataset.busy = String(view.busy);
     setText(el.phase, view.phase);
     setHidden(el.user, !view.user.visible);
     setText(el.userText, view.user.text);
+    setText(el.userWho, view.user.label);
     setHidden(el.pointer, !view.pointer.visible);
     setText(el.pointerKind, view.pointer.kind);
     setText(el.pointerText, view.pointer.text);
@@ -186,11 +229,21 @@ export class VoiceCardControls {
       node.textContent = note;
     });
     setText(el.live, view.announce);
+    this.onRender?.();
   }
 
   /** Test/diagnostic view of what the card shows. */
   snapshot() {
-    return voiceCardView(this.state);
+    const view = voiceCardView(this.state);
+    return this.enabled && this.presented
+      ? {
+          ...view,
+          announce:
+            this.consumedPresentationAnnouncement === this.announcementRevision
+              ? ''
+              : view.announce,
+        }
+      : { ...view, visible: false, announce: '' };
   }
 
   /** Idempotent: removes listeners and the idle timer; markup stays owned by the control. */

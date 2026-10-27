@@ -115,6 +115,18 @@ function shownSources(source) {
   return source ? [{ label: sourceLabel(source) }] : [];
 }
 
+// Entity labels that layers register as English data (firms/, alpr/); keep in
+// step with the producers. Other names (callsigns, places) show as they came.
+const ENTITY_LABELS = new Set([msg('ALPR camera')]);
+const FIRE_LABEL = /^Fire · FRP (\S+) MW$/;
+
+/** An entity label as the card shows it, in the active language. */
+export function shownEntityLabel(label) {
+  if (ENTITY_LABELS.has(label)) return t(label);
+  const fire = FIRE_LABEL.exec(label ?? '');
+  return fire ? t('Fire · FRP {frp} MW', { frp: fire[1] }) : label;
+}
+
 /*
  * Tool errors stay English in the result (the model reads them). The card
  * translates the known ones; the English must match gevActions exactly.
@@ -592,7 +604,7 @@ function getEntityContext(result) {
     return {
       say: null,
       display: {
-        title,
+        title: spokenLabel(shownEntityLabel(title)),
         lines: [
           selected.layerName
             ? shownLayerName(selected.layerName, selected.layerId)
@@ -836,6 +848,7 @@ const STEP_TITLES = Object.freeze({
   zoom_to_globe: msg('Zoom out to globe'),
   show_data_layers_menu: msg('Open data layers'),
   set_panel_open: msg('Open or close a panel'),
+  set_voice_inactivity_timeout: msg('Voice inactivity timeout'),
   set_context_mode: msg('Change context mode'),
   control_cockpit: msg('Control cockpit'),
   set_visual_style: msg('Change visual style'),

@@ -21,6 +21,7 @@ import {
   shouldSendViewportImage,
   shouldStopVoiceAfterRadioTool,
   responseInstructionForToolResult,
+  isGlobeViewRefusal,
 } from './realtimeProtocol.js';
 
 const SOCKET_PATH =
@@ -182,6 +183,8 @@ export class GeminiSessionController {
     this.model = null;
     this.epoch = 0;
     this.turn = 0;
+    this.globeToolsBlocked = false;
+    this.globeResetFailed = false;
     this.inputGeneration = 0;
     this.turnAbort = new AbortController();
     this.disposed = false;
@@ -659,6 +662,8 @@ export class GeminiSessionController {
             return;
           if (!pushToTalk || activityCaptureId === metadata.captureId) return;
           this.captureOwner.admitted = true;
+          this.globeToolsBlocked = false;
+          this.globeResetFailed = false;
           if (
             !this.interrupt('push-to-talk', {
               keepPlayback: !this.pttPlaybackSuppressed,
@@ -1294,6 +1299,8 @@ export class GeminiSessionController {
           this.replyPending = false;
           if (!this.interrupt()) return;
         } else if (!this.retiredReplyPending && !this.interrupt()) return;
+        this.globeToolsBlocked = false;
+        this.globeResetFailed = false;
         // Local activity ownership is only for expiry liveness, not tools.
         // Assign after retiring observed output so its boundary cannot clear
         // a newer detected activity that has not received a reply yet.
@@ -1573,6 +1580,7 @@ export class GeminiSessionController {
         .then(async () => {
           if (!this.owns(epoch) || turn !== this.turn) return;
           if (this.cancelledCalls.has(call.id)) {
+            if (call.name === 'zoom_to_globe') this.globeResetFailed = true;
             if (this.tools.get(call.id) === action) this.tools.delete(call.id);
             this.pendingTools--;
             if (!this.pendingTools) {
@@ -1618,8 +1626,28 @@ export class GeminiSessionController {
       (authority !== 'playback' ||
         handoffEpoch === this.radio.radioHandoffEpoch);
     let result;
+    let skippedGlobeRotation = false;
+    let blockedGlobeTool = false;
     try {
       if (!actionCurrent()) throw cancelled();
+      // Live has no response-scoped tool_choice. Recheck here so queued siblings
+      // cannot reset after a rotation refusal.
+      if (this.globeToolsBlocked) {
+        blockedGlobeTool = true;
+        throw new Error(
+          'Wait for fresh user input before calling another tool.',
+        );
+      }
+      if (
+        this.globeResetFailed &&
+        call.name === 'move_camera' &&
+        String(args.motion || '').toLowerCase() === 'rotate_globe'
+      ) {
+        skippedGlobeRotation = true;
+        throw new Error(
+          'Not run: the Globe View reset/rotation sequence failed or was cancelled.',
+        );
+      }
       if (stronger)
         reservation = this.radio.reserveRadioToolHandoff({ abortScope });
       handoffEpoch = this.radio.radioHandoffEpoch;
@@ -1689,7 +1717,12 @@ export class GeminiSessionController {
     } catch (error) {
       result = {
         ok: false,
-        tool: call.name,
+        ...(skippedGlobeRotation
+          ? { action: call.name, reason: 'globe-reset-failed', skipped: true }
+          : {
+              tool: call.name,
+              ...(blockedGlobeTool ? { skipped: true } : {}),
+            }),
         ...(radioVisibility ? { layerId: 'radio' } : {}),
         error:
           error?.name === 'AbortError'
@@ -1716,6 +1749,11 @@ export class GeminiSessionController {
       this.noteRadioStrongerCommit(action, abortScope, turn);
     }
     if (!this.owns(epoch) || turn !== this.turn) return;
+    if (
+      call.name === 'zoom_to_globe' &&
+      (result?.ok !== true || result.cancelled)
+    )
+      this.globeResetFailed = true;
     const playbackObsolete =
       authority === 'playback' && handoffEpoch !== this.radio.radioHandoffEpoch;
     if (radioControl || radioVisibility) {
@@ -1744,6 +1782,8 @@ export class GeminiSessionController {
       this.stopAfterReply = true;
     // Native call cancellation suppresses its output, without canceling siblings.
     if (!this.cancelledCalls.has(call.id)) {
+      if (isGlobeViewRefusal(result) && !skippedGlobeRotation)
+        this.globeToolsBlocked = true;
       this.postToolOutput = false;
       this.modelComplete = false;
       this.replyPending = true;
@@ -1751,7 +1791,9 @@ export class GeminiSessionController {
       const mapEvents = mapSnapshot.map((text) => JSON.parse(text));
       const response = {
         ...(result ?? { ok: false, error: 'Command returned no result' }),
-        responseGuidance: responseInstructionForToolResult(result),
+        responseGuidance: blockedGlobeTool
+          ? 'That action did not run. Wait for fresh user input; do not claim any change or call another tool.'
+          : responseInstructionForToolResult(result),
       };
       this.send(
         {
@@ -1902,6 +1944,8 @@ export class GeminiSessionController {
       {
         onSent: () => {
           if (!owned() || this.typedIntent !== typedIntent) return;
+          this.globeToolsBlocked = false;
+          this.globeResetFailed = false;
           this.replyPending = true;
           this.bindTextIntent(typedIntent);
           if (!owned() || this.typedIntent !== typedIntent) return;
@@ -2455,6 +2499,8 @@ export class GeminiSessionController {
     this.cancelledCalls.clear();
     this.pendingMapEvents = [];
     this.userTurnPending = false;
+    this.globeToolsBlocked = false;
+    this.globeResetFailed = false;
     this.replyPending = false;
     this.unrequestedReply = false;
     this.automaticTurnOpen = false;

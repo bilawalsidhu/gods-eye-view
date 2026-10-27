@@ -1,0 +1,1 @@
+- Coalesce refreshes and cool down opensky failures (asturksever, #1269).

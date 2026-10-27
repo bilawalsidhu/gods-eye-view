@@ -91,7 +91,9 @@ export function layoutRightPanelRail({
   }
   // Normalize restored state and theme entry without overwriting saved panel
   // preferences. This marker is distinct from Tactical's space-based collapse.
-  if (hud.variant === 'cyber') {
+  // Phones present the rail as tab sheets that show several panels at once.
+  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  if (hud.variant === 'cyber' && !isMobile) {
     const expanded = panels.filter(
       (panel) => !panel.classList.contains('collapsed'),
     );
@@ -111,16 +113,19 @@ export function layoutRightPanelRail({
       onCollapse(panel);
     }
   }
-  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
   const hasExpandedPanel = panels.some(
     (panel) =>
       !panel.classList.contains('collapsed') &&
       (!isMobile || panel.id !== 'pp-toggles'),
   );
-  const exclusive = shouldHideCollapsedRightPanels({
-    hudVariant: hud.variant,
-    hasExpandedPanel,
-  });
+  // Phones present the rail as tab sheets (mobileShell.js), which choose what
+  // shows; hiding collapsed siblings would empty a sheet and its a11y tree.
+  const exclusive =
+    !isMobile &&
+    shouldHideCollapsedRightPanels({
+      hudVariant: hud.variant,
+      hasExpandedPanel,
+    });
   stack.classList.toggle('layout-exclusive', exclusive);
   for (const panel of panels) {
     if (exclusive && panel.classList.contains('collapsed'))
