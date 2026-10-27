@@ -592,7 +592,8 @@
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/ui/statusText.js"
     ],
     "external": []
   },
@@ -1298,7 +1299,9 @@
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/ui/layerNames.js",
+      "src/ui/statusText.js"
     ],
     "external": ["cesium"]
   },
