@@ -77,7 +77,7 @@ test('a relocated data directory is named, not the read-only checkout', () => {
   assert.match(warning, /\/data \(GEV_DATA_DIR\) is owned by 0:0/, 'names the data directory');
   assert.match(warning, /Mount a volume/, 'points at the volume, not at a checkout');
   assert.match(warning, /chown 1000:1000/, 'offers the plain chown');
-  assert.match(warning, /101000:101000 on a Proxmox host for an unprivileged LXC/, 'names the shifted ids an unprivileged LXC needs');
+  assert.doesNotMatch(warning, /Proxmox|LXC|101000/, 'no host-specific guidance');
   assert.match(warning, /add :Z to the bind mount on SELinux/, 'names the SELinux label');
   assert.doesNotMatch(warning, /checkout/);
 });

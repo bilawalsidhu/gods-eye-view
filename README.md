@@ -227,23 +227,6 @@ The image has its own health check (an HTTP request to the app root every 30 sec
 
 **Keys.** Provider Settings works in this image: keys you save land in `/data/.env`, so they survive `docker rm`, `docker pull` and recreating the container as long as you keep the `gev-data` volume. `--env-file` / `env_file` still works too, and a key supplied that way is shown as configured outside Provider Settings and stays read-only there, as everywhere else. Delete the volume (`docker volume rm gev-data`) to forget everything. If you bind-mount a host folder on `/data` instead of a named volume, make it writable by uid 1000 (`chown 1000:1000`).
 
-<details>
-<summary>Running on Proxmox</summary>
-
-Proxmox VE is Debian with AppArmor, and it can host Docker two ways.
-
-In a **VM**, install Docker in it as on any machine. If the guest is Fedora or RHEL, SELinux is on: a named volume is labelled for you, and a bind-mounted `/data` needs `:Z` (private to this container).
-
-In an **LXC container**, enable the `nesting` and `keyctl` features (Proxmox calls them out for Docker in an unprivileged container: `pct set <id> --features nesting=1,keyctl=1`). Prefer a named volume: it lives inside the container, so ownership just works. For a folder bind-mounted from the Proxmox host into an unprivileged LXC, ids are shifted by 100000, so the folder must be owned by `101000:101000` on the host to be `1000:1000` inside:
-
-```bash
-chown 101000:101000 /srv/gev-data   # on the Proxmox host
-```
-
-If `/data` is not writable the start log says so and names these fixes. Nothing in this image's flags is known to conflict with LXC; if Docker itself won't start there, check the features above.
-
-</details>
-
 Every platform image carries SLSA build provenance and an SBOM as attestations in the registry. Check them with `docker buildx imagetools inspect ghcr.io/bilawalsidhu/gods-eye-view:1.2.3 --format '{{ json .Provenance }}'` and the same with `.SBOM`.
 
 Pin a version tag for reproducible installs (`ghcr.io/bilawalsidhu/gods-eye-view:1.2.3`, or `:1.2` for patch updates only). To update, `docker pull` the image and recreate the container (`docker compose pull && docker compose up -d`).
