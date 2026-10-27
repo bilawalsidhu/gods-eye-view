@@ -65,11 +65,10 @@ check, not a JavaScript sandbox. Common voice controls cannot depend on a
 Realtime protocol implementation. Negative fixtures cover indirect helpers,
 self-package imports, symlinks and unreachable files.
 
-Source factories have dedicated exports for ALPR, bikeshare, CCTV, earthquakes,
-FIRMS, installations, launches, radio, satellites and traffic. They preserve the
-same factory implementations without loading layer rendering. ALPR/earthquake
-record normalization and CCTV source endpoint policy have plain owners separate
-from geometry/cards. Source exports do not start acquisition at import time.
+Source-only factories use dedicated `layers/<family>/source` exports where
+available, preserving the same factory implementation without loading rendering.
+Record normalization and endpoint policies have plain owners separate from
+geometry/cards. Source exports do not start acquisition at import time.
 
 Other layer `ingestion.js` files may still coordinate Cesium resources; the
 portable contract applies to the explicitly reviewed graphs above. Their layer
@@ -80,17 +79,13 @@ moves it. Do not label all ingestion modules platform-independent by filename.
 
 | Retained entry                                      | Owner and current reason                                                                                           |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `src/ui.js`                                         | UI facade; direct callers retain standalone StyleManager defaults. Normal assembly uses `src/ui/composition.js`    |
 | `src/data/manager.js`                               | Lifecycle/panel compatibility and existing tests; normal assembly constructs lifecycle and presentation separately |
 | `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources                                 |
-| `src/data/localGeojson.js`                          | Infrastructure compatibility factories; catalog imports services from `src/app/localGeojsonServices.js` directly   |
-| `src/app/sourceSlot.js`                             | Re-export for direct callers/tests; portable slot ownership is `src/sources/sourceSlot.js`                         |
 | `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances                         |
 | `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                                                    |
 
-The two exact standalone-import exceptions are `src/ui.js` to
-`src/standalone/catalog.js` and `server/providers/local.js` to
-`server/standalone/key-setup.js`. They do not authorize new compatibility
+The one exact standalone-import exception is `server/providers/local.js` to
+`server/standalone/key-setup.js`. It does not authorize new compatibility
 back-edges. Voice actions use plain `src/data/feedState.js`, not the manager
 facade. Settings filesystem hardening belongs in
 `server/standalone/key-setup-hardening.mjs`; its settings policy is unchanged.
@@ -238,7 +233,7 @@ DOM elements and callbacks; importing it creates no browser state. `destroy()`
 removes owned listeners and cancels pending work without changing saved state
 or moving focus. Call it before removing or replacing the controls.
 
-`src/ui.js` retains panel layout, persistence, share restoration and application
+`src/ui/applicationShell.js` retains panel layout, persistence, share restoration and application
 reactions to state changes. Map Source selection and Location draft cleanup are
 provided through callbacks. The component imports no globe, data, application
 or server modules. Package checks and scoped formatting cover this entry.
@@ -357,8 +352,8 @@ drag or final change. Feature adapters own data mapping and service subscription
 generic modules own DOM/listeners/timers and release them in `destroy()`.
 
 Keep persistence with panel chrome: collapse uses
-`godsEyeView.v6.panelCollapsed.<panelId>`, position uses
-`godsEyeView.v8.panelPos.<panelId>`, and share state uses the registered panel id.
+`godsEyeView.v6.panelCollapsed.<panelId>`, positions are
+not stored (`godsEyeView.v8.panelPos.<panelId>` stays reserved), and share state uses the registered panel id.
 Do not rename existing
 ids or reset persistence versions when adding a body. The WEATHER adapter is
 `src/ui/weatherPanel.js`; its observed-history selection remains transient.
@@ -374,6 +369,15 @@ Clearing permits reuse; destruction is final. Neither module imports the app,
 renderer, persistence or services. The facade retains panel visibility, share
 restore claims and render scheduling. Both controls are destroyed before the
 facade's asynchronous teardown can yield.
+
+## Ordinary action buttons
+
+`src/ui/actionButton.js` is a native, listener-free view helper used by Scene
+presentation and sharing-toolbar owners. It receives translated text and explicit
+presentation/accessibility properties. Feature controllers own action dispatch,
+state, persistence and cleanup. Static Scenes/CCTV templates use the same CSS
+surface and preserve IDs and layout hooks. The helper imports no application,
+renderer, storage or services; it belongs to the consuming package closures.
 
 ## Display controls
 
@@ -462,8 +466,8 @@ release listeners; pending action feedback is limited to its current owner.
 ## UI assembly and styles
 
 `ui/shell` assembles controls from supplied existing layer, navigation, terrain,
-rendering, HUD and share operations. `src/standalone/ui.js` provides the running
-application's instances; `src/ui.js` remains the compatibility entry. The shell
+rendering, HUD and share operations. `src/standalone/controls.js` provides the running
+application's instances. The shell
 imports no standalone bootstrap or concrete live layer implementation.
 Panel layout, position/drag, notices, recording and deferred UI work have separate
 owners with synchronous cleanup. Existing scene, share and HUD engines retain
@@ -594,6 +598,10 @@ state subscriptions retain their existing event contract.
   tracking handoff. It reads Cockpit admission and uses supplied tracking operations.
 - `ui/share-restoration` owns the initial restore transaction, layer coordinator,
   status notices and gesture/timer cleanup.
+- `share/view-codec` is the share-link codec (`decodeShareView`,
+  `encodeShareView`). It is pure (no DOM, no Cesium), so a host's server can
+  read a `/share/<code>` link, for example to describe it in link previews.
+  `share/link-path` reads and builds the `/share/<code>` address itself.
 - `ui/visual-settings` owns style preferences, detection overrides, display inputs
   and IR cleanup. Its engine services and panel operations are explicit.
 - `ui/panel-chrome` owns disclosure, docking, collapse preferences and temporary
@@ -630,9 +638,9 @@ explicit operations. Both exports exclude Cesium, DOM and application assembly.
 The snapshot renderer applies record changes; rendering owns a weak map of
 geometry and billboard resources used by cards, picking and trails.
 
-`gods-eye-view/sources/reference` constructs fresh earthquake and bundled cable
+`gods-eye-view/sources/reference` constructs fresh earthquake, GNSS integrity and bundled cable
 source instances independently of standalone setup. Individual sources remain
-available through `layers/earthquakes/source` and `layers/submarine-cables/source`.
+available through their `layers/<family>/source` exports, including `layers/gnss/source`.
 The latter retains the bundled dataset’s attribution and licensing requirements.
 
 ## Geocoding and feature-query providers
@@ -730,3 +738,32 @@ sources supply `{records, droppedCount, status, saturated}`; viewport filtering,
 exact-bound retry and rendering stay in the layer. Legacy cache saturation is
 decoded in the source. Source and geometry modules remain independent of Cesium,
 DOM and platform middleware.
+
+### Native form fields
+
+`src/ui/formField.js` constructs native numeric inputs without listeners or
+application state. Static selects and number inputs use the same `gev-field`
+surface, with explicit compact and inline densities. Feature owners retain
+option identity/order, bounds, parsing, draft values, input/change timing and
+teardown. CCTV effective-pose conversion and tuner/device operations remain
+feature responsibilities. A Vue replacement can reuse this contract and CSS;
+it replaces DOM construction, rather than adding a second state owner.
+
+The shared stylesheet owns field surfaces and disabled opacity; feature and theme
+palettes use `--gev-field-background`, `--gev-field-border-color`,
+`--gev-field-color` and `--gev-field-disabled-opacity`. Radio retains its own
+compact density and arrow space. CCTV owns calibration editor width in
+`cctv.css`; the shared inline density does not impose a feature-specific width.
+Cyber supplies a shared-field palette explicitly and keeps its legacy native
+field rules separate, so Radio's palette remains an intentional exception.
+
+### Read-only status badges
+
+`src/ui/statusBadge.js` constructs/updates ordinary badges without listeners,
+status inference or live-region policy. It consumes translated text and controlled
+visibility; appearance variants share CSS rather than mapping machine states to
+universal severity. CCTV owns frame/source and calibration rules and their data
+attributes, while Weather owns coverage labels. The keyed rail-card owner keeps
+node identity, header focus, disclosure and teardown. The shared adapter never
+creates another state store or announces all card updates. A Vue view can replace
+this adapter and retain these presentation inputs and styles.

@@ -15,6 +15,7 @@ import {
   FOCUS_EVIDENCE_DEV,
   FLEET_DR_INTERVAL_MS,
 } from './policy.js';
+import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 
 export function createQueries({
   flightState,
@@ -113,7 +114,7 @@ export function createQueries({
    * Build a public descriptor for one aircraft using its best current position
    * (dead-reckoned when history exists, billboard position otherwise).
    * @param {string} icao24 - ICAO 24-bit transponder address.
-   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
    *   Descriptor with a cloned position, or null if the aircraft is unknown.
    */
 
@@ -163,10 +164,23 @@ export function createQueries({
       onGround: info?.onGround === true,
       velocityMps: displayed.speedMps,
       track: displayed.trackDeg,
+      // Climb/descent rate, the one kinematic field `mapAnalystRecord` already
+      // published (as `verticalRateMps`) but this descriptor did not, so a
+      // consumer reading the tracked seam had to reach back into `_flightData`
+      // for it. Reported, never derived: `stickyNumber` in records.js keeps the
+      // last value across a blank poll, and an absent rate stays null rather
+      // than becoming a level-flight 0 the aircraft never transmitted.
+      verticalRateMps: Number.isFinite(info?.verticalRate)
+        ? info.verticalRate
+        : null,
       stale: Boolean(
         flightState.records.missingPolls.get(icao24) ||
         flightState.feed._backoff,
       ),
+      // This poll's transponder broadcast (not sticky; see records.js).
+      squawk: info?.squawk ?? null,
+      emergency: info?.emergency ? { ...info.emergency } : null,
+      emergencyBroadcast: emergencyBroadcastPhrase(info?.emergency),
       airline: info?.airline ?? null,
       // CLASS label follows the TR-3B conversion so every downstream card
       // (cockpit, Contacts, analyst) agrees with the triangle on screen.
@@ -219,7 +233,10 @@ export function createQueries({
    *   lon: number|null, altitudeM: number|null, speedMps: number|null,
    *   heading: number|null, verticalRateMps: number|null, onGround: boolean,
    *   military: boolean, aircraftClass: string|null, originCountry: string|null,
-   *   operator: string|null, routeOrigin: string|null, routeDestination: string|null}}
+   *   operator: string|null, squawk: string|null, emergency: boolean,
+   *   emergencyKind: string|null, emergencySource: 'squawk'|'ads-b'|null,
+   *   emergencyBroadcast: string|null, lastContactAtMs: number|null, routeOrigin: string|null,
+   *   routeDestination: string|null}}
    */
 
   function mapAnalystRecord(
@@ -253,6 +270,20 @@ export function createQueries({
       aircraftClass: tr3bAircraftClass(icao24, text(info?.klass)),
       originCountry: text(info?.originCountry),
       operator: text(info?.airline),
+      squawk: text(info?.squawk),
+      // True while this poll broadcast an emergency (7500/7600/7700 or the
+      // ADS-B status); priority statuses (lifeguard, minfuel) report the kind
+      // without the flag.
+      emergency: info?.emergency?.severity === 'emergency',
+      emergencyKind: text(info?.emergency?.kind),
+      // Provenance, so a summary can say "broadcasting squawk 7700" rather
+      // than "ADS-B reports general emergency" (or flatten both): 'squawk'
+      // when the Mode A code names the status, 'ads-b' for the readsb field.
+      emergencySource: text(info?.emergency?.source),
+      emergencyBroadcast: emergencyBroadcastPhrase(info?.emergency),
+      // Latest known general aircraft-message contact, retained if a poll
+      // has no time. This is not the receipt time of the current status.
+      lastContactAtMs: num(info?.lastContactEpochMs),
       routeOrigin: routeOk ? text(info?.route?.origin?.code) : null,
       routeDestination: routeOk ? text(info?.route?.destination?.code) : null,
     };
@@ -421,8 +452,8 @@ export function createQueries({
         const isTracked = icao24 === flightState._trackedIcao;
         // Keep planes rendered as a 3D model (billboard hidden) so the detection box
         // doesn't vanish on the 2D→3D handoff; bb.position stays current while hidden.
-        const model = flightState._models.get(icao24);
-        const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
+        const model = flightState._models.get(icao24) ?? null;
+        const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24, model);
         if (!isTracked && !bb.show && !modelOwnsVisual) continue;
         const info = flightState.records.data.get(icao24);
         let object = flightState._detectionObjects.get(icao24);
@@ -460,8 +491,19 @@ export function createQueries({
         object.position = pos;
         object.skipLabel = isTracked;
         // Card text only — declutter/cohort identity is `object.sourceId` (icao24).
-        const id = _contactLabel(icao24, info);
-        if (object.id !== id) object.id = id;
+        const callsign = info?.callsign;
+        const registration = info?.registration;
+        // Records and enrichment may change in place. Cache by field values,
+        // while keeping the live visual anchor above independent of text.
+        if (
+          object.id === undefined ||
+          object._labelCallsign !== callsign ||
+          object._labelRegistration !== registration
+        ) {
+          object.id = _contactLabel(icao24, info);
+          object._labelCallsign = callsign;
+          object._labelRegistration = registration;
+        }
         const altitude = info?.altitude;
         if (object._altitude !== altitude) {
           object._altitude = altitude;
@@ -549,7 +591,6 @@ export function createQueries({
       const maxRange =
         Number.isFinite(range) && range > 0 ? range : Number.POSITIVE_INFINITY;
 
-      const now = Cesium.JulianDate.now();
       const nearby = [];
 
       for (const [icao24, bb] of flightState._billboards) {
@@ -834,7 +875,7 @@ export function createQueries({
 
     /**
      * Describe the currently tracked aircraft at its dead-reckoned position.
-     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
      *   Tracked aircraft info, or null when nothing is tracked.
      */
     getTrackedInfo() {

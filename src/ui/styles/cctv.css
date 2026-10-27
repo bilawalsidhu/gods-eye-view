@@ -70,6 +70,18 @@
   margin-bottom: 0;
 }
 
+/* Spanish labels overflow the nowrap .scene-btn row of the fixed-width
+   panel; wrap the row under es only, English stays as is. */
+html[lang='es'] .cctv-controls {
+  flex-wrap: wrap;
+}
+
+/* A label longer than its button wraps inside it, not past the panel edge. */
+html:not([lang='en']) .cctv-controls .scene-btn {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 .cctv-calibration-block {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9px;
@@ -97,6 +109,10 @@
   gap: 5px;
 }
 
+.cctv-cal-input {
+  width: 58px;
+}
+
 .cctv-cal-value {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -117,26 +133,6 @@
   background: rgba(0, 212, 255, 0.08);
 }
 
-.cctv-cal-input {
-  width: 58px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.7px;
-  color: var(--text-primary);
-  background: rgba(0, 212, 255, 0.1);
-  border: 1px solid rgba(0, 212, 255, 0.5);
-  border-radius: 4px;
-  padding: 1px 3px;
-  outline: none;
-  -moz-appearance: textfield;
-}
-
-.cctv-cal-input::-webkit-outer-spin-button,
-.cctv-cal-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
 .cctv-calibration-actions {
   margin-top: 8px;
 }
@@ -150,23 +146,9 @@
 #cctv-camera-select {
   flex: 1;
   min-width: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 7px;
-  color: var(--text-primary);
-  padding: 6px 8px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  outline: none;
-}
-
-#cctv-camera-select:focus-visible {
-  outline: 2px solid var(--text-primary);
-  outline-offset: -3px;
-}
-
-#cctv-camera-select:disabled {
-  opacity: 0.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #cctv-enable-btn.active,
@@ -179,41 +161,32 @@
 }
 
 #cctv-quality-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   min-width: 90px;
-  padding: 6px 8px;
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  border-radius: 8px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1px;
-  color: #8fe7ff;
-  background: rgba(0, 212, 255, 0.08);
-  text-transform: uppercase;
+  --status-badge-border: rgba(0, 212, 255, 0.2);
+  --status-badge-color: #8fe7ff;
+  --status-badge-background: rgba(0, 212, 255, 0.08);
 }
 
 /* CAL badge states (cctv-v2 §3b, amended by LOCKED §9.2 — panel-only, no
    in-world tint). Three visually distinct states: calibrated / curated /
    raw-prior. */
 #cctv-quality-chip[data-cal-badge='calibrated'] {
-  color: #adffbf;
-  border-color: rgba(141, 255, 135, 0.42);
-  background: rgba(141, 255, 135, 0.12);
+  --status-badge-color: #adffbf;
+  --status-badge-border: rgba(141, 255, 135, 0.42);
+  --status-badge-background: rgba(141, 255, 135, 0.12);
 }
 
 #cctv-quality-chip[data-cal-badge='curated'] {
-  color: #ffe6a2;
-  border-color: rgba(255, 217, 122, 0.35);
-  background: rgba(255, 217, 122, 0.1);
+  --status-badge-color: #ffe6a2;
+  --status-badge-border: rgba(255, 217, 122, 0.35);
+  --status-badge-background: rgba(255, 217, 122, 0.1);
 }
 
 /* Unsaved live edits (save-gated persistence, viewshed design §3e). */
 #cctv-quality-chip[data-cal-badge='edited'] {
-  color: #ffd08a;
-  border-color: rgba(255, 176, 82, 0.5);
-  background: rgba(255, 176, 82, 0.14);
+  --status-badge-color: #ffd08a;
+  --status-badge-border: rgba(255, 176, 82, 0.5);
+  --status-badge-background: rgba(255, 176, 82, 0.14);
 }
 
 .cctv-frame-wrap {
@@ -260,12 +233,12 @@
   animation: cctv-frame-shimmer 1.4s linear infinite;
 }
 
-/* "Acquiring" caption only when no previous frame is showing underneath */
-.cctv-frame-wrap.loading:not(.has-frame)::before {
-  content: 'ACQUIRING FRAME';
+/* "Acquiring" caption only when no previous frame is showing underneath.
+   The text lives in the markup (data-i18n) so it is translated. */
+.cctv-frame-caption {
+  display: none;
   position: absolute;
   inset: 0;
-  display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
@@ -273,6 +246,10 @@
   letter-spacing: 2.2px;
   color: rgba(145, 237, 255, 0.62);
   pointer-events: none;
+}
+
+.cctv-frame-wrap.loading:not(.has-frame) .cctv-frame-caption {
+  display: flex;
 }
 
 @keyframes cctv-frame-shimmer {
@@ -327,26 +304,18 @@
 
 #cctv-source-badge {
   align-self: flex-start;
-  border: 1px solid rgba(0, 212, 255, 0.32);
-  border-radius: 999px;
-  background: rgba(0, 212, 255, 0.09);
-  color: #9defff;
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.3px;
-  padding: 4px 8px;
 }
 
 #cctv-source-badge[data-frame-state='loading'] {
-  color: #ffe59b;
-  border-color: rgba(255, 205, 92, 0.45);
-  background: rgba(255, 205, 92, 0.1);
+  --status-badge-color: #ffe59b;
+  --status-badge-border: rgba(255, 205, 92, 0.45);
+  --status-badge-background: rgba(255, 205, 92, 0.1);
 }
 
 #cctv-source-badge[data-frame-state='error'] {
-  color: #ffb0b0;
-  border-color: rgba(255, 102, 102, 0.5);
-  background: rgba(255, 72, 72, 0.11);
+  --status-badge-color: #ffb0b0;
+  --status-badge-border: rgba(255, 102, 102, 0.5);
+  --status-badge-background: rgba(255, 72, 72, 0.11);
 }
 
 .cctv-summary-label {
@@ -364,4 +333,33 @@
   line-height: 1.45;
   color: #a8f7ff;
   text-shadow: 0 0 10px rgba(0, 212, 255, 0.18);
+}
+
+/* Tighter calibration chips keep the seven values to two rows, so
+   SAVE / RESET stay in view. */
+html:not([lang='en']) .cctv-cal-readout {
+  gap: 4px;
+}
+
+html:not([lang='en']) .cctv-cal-value {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  padding: 4px;
+}
+
+html:not([lang='en']) #cctv-camera-select {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* The camera name gets its own row; PREV / NEXT share the row below it. */
+html:not([lang='en']) .cctv-controls:has(#cctv-camera-select) {
+  flex-wrap: wrap;
+}
+
+html:not([lang='en']) #cctv-camera-select {
+  flex: 1 1 100%;
+  order: -1;
 }

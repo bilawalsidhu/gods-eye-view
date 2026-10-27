@@ -4,9 +4,11 @@
  * the whole snapshot: a single degenerate polygon must never blank the layer.
  */
 
+import { msg } from '../../i18n/marker.js';
+
 const TYPE_LABELS = Object.freeze({
-  P: 'Prohibited',
-  R: 'Restricted',
+  P: msg('Prohibited'),
+  R: msg('Restricted'),
 });
 
 const finiteOrNull = (value) => (Number.isFinite(value) ? value : null);
@@ -44,6 +46,26 @@ function normalizePolygons(geometry) {
     result.push(rings);
   }
   return result;
+}
+
+/**
+ * One SUA altitude limit from its VAL/UOM/CODE triple, in aviation notation:
+ * `SFC`, `500 ft AGL`, `5,000 ft MSL`, `FL180` or `Unlimited`. The *_DESC
+ * fields are inclusion qualifiers (TI/TNI/ANI), not altitudes. Returns null
+ * when the triple does not describe a limit.
+ */
+export function droneAirspaceAltitude(value, uom, code) {
+  const unit = textOrNull(uom)?.toUpperCase() ?? null;
+  const reference = textOrNull(code)?.toUpperCase() ?? null;
+  if (reference === 'UNLTD') return 'Unlimited';
+  const number = Number(value);
+  if (value == null || value === '' || !Number.isFinite(number) || number < 0)
+    return null;
+  if (unit === 'FL' || reference === 'STD') return `FL${Math.round(number)}`;
+  const feet = `${Math.round(number).toLocaleString('en-US')} ft`;
+  if (reference === 'SFC') return number === 0 ? 'SFC' : `${feet} AGL`;
+  if (reference === 'MSL') return `${feet} MSL`;
+  return unit === 'FT' || unit == null ? feet : null;
 }
 
 /** Human label for a TYPE_CODE, or null when the code is not in the pack. */
@@ -84,8 +106,16 @@ export function normalizeDroneAirspaceSnapshot(geojson) {
       name: textOrNull(properties.NAME),
       typeCode,
       type,
-      lowerDesc: textOrNull(properties.LOWER_DESC),
-      upperDesc: textOrNull(properties.UPPER_DESC),
+      lowerAltitude: droneAirspaceAltitude(
+        properties.LOWER_VAL,
+        properties.LOWER_UOM,
+        properties.LOWER_CODE,
+      ),
+      upperAltitude: droneAirspaceAltitude(
+        properties.UPPER_VAL,
+        properties.UPPER_UOM,
+        properties.UPPER_CODE,
+      ),
       timesOfUse: textOrNull(properties.TIMESOFUSE),
       agency: textOrNull(properties.CONT_AGENT),
       city: textOrNull(properties.CITY),

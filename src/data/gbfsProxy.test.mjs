@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  GBFS_CLIENT_IDENTIFIER,
   GBFS_MAX_BODY_BYTES,
   fetchGbfsUpstream,
 } from '../../server/providers/gbfs.js';
@@ -54,6 +55,41 @@ test('GBFS upstream fetch passes a direct 200 through unchanged', async () => {
     contentType: 'application/json; charset=utf-8',
     body: STATION_BODY,
   });
+});
+
+test('GBFS upstream fetch names the app in the Client-Identifier header', async () => {
+  let observedHeaders = null;
+  await fetchGbfsUpstream(
+    'https://gbfs.urbansharing.com/oslobysykkel.no/station_status.json',
+    {
+      fetchImpl: async (_url, options) => {
+        observedHeaders = options.headers;
+        return new Response(STATION_BODY, { status: 200 });
+      },
+    },
+  );
+  assert.equal(GBFS_CLIENT_IDENTIFIER, 'gods-eye-view');
+  assert.equal(observedHeaders['Client-Identifier'], GBFS_CLIENT_IDENTIFIER);
+});
+
+test('GBFS upstream fetch adds ET-Client-Name for Entur and only for Entur', async () => {
+  const headersFor = async (url) => {
+    let observed = null;
+    await fetchGbfsUpstream(url, {
+      fetchImpl: async (_url, options) => {
+        observed = options.headers;
+        return new Response(STATION_BODY, { status: 200 });
+      },
+    });
+    return observed;
+  };
+  const entur = await headersFor(
+    'https://api.entur.io/mobility/v2/gbfs/v2/kolumbusbysykkel/station_status',
+  );
+  assert.equal(entur['ET-Client-Name'], 'gods-eye-view-bikeshare');
+  assert.equal(entur['Client-Identifier'], GBFS_CLIENT_IDENTIFIER);
+  const lyft = await headersFor(STATION_URL);
+  assert.equal(lyft['ET-Client-Name'], undefined);
 });
 
 test('GBFS upstream fetch forwards a non-redirect error status for the middleware to relay', async () => {
@@ -263,6 +299,64 @@ test('GBFS rejects redirects and caps bodies through both server hooks', async (
         if (status === 200) assert.equal(body, STATION_BODY);
         else assert.equal(typeof JSON.parse(body).error, 'string');
       }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('GBFS relays only JSON, re-serialized under a fixed type, through both server hooks', async () => {
+  const { gbfsProxy } = await import('../../server/providers/gbfs.js');
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const hook of ['configureServer', 'configurePreviewServer']) {
+      let handler;
+      gbfsProxy()[hook]({
+        middlewares: {
+          use(_path, callback) {
+            handler = callback;
+          },
+        },
+      });
+      const request = async (response) => {
+        globalThis.fetch = async () => response;
+        const res = {};
+        await handler(
+          { method: 'GET', url: '/' + encodeURIComponent(STATION_URL) },
+          {
+            writeHead(code, headers) {
+              Object.assign(res, { status: code, headers });
+            },
+            end(value) {
+              res.body = value;
+            },
+          },
+        );
+        return res;
+      };
+      for (const [contentType, body] of [
+        ['text/html', '<!doctype html><p>x</p>'],
+        ['application/json', '<!doctype html><p>x</p>'],
+        ['image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"/>'],
+        ['application/json', ''],
+      ]) {
+        const res = await request(
+          new Response(body, { headers: { 'Content-Type': contentType } }),
+        );
+        assert.equal(res.status, 502, `${hook}: ${contentType} ${body}`);
+        assert.equal(res.headers['Content-Type'], 'application/json');
+        assert.equal(typeof JSON.parse(res.body).error, 'string');
+        assert.doesNotMatch(res.body, /doctype|svg/);
+      }
+      const res = await request(
+        new Response(' { "data" : { "stations" : [] } } ', {
+          headers: { 'Content-Type': 'text/html; charset=iso-8859-1' },
+        }),
+      );
+      assert.equal(res.status, 200);
+      assert.equal(res.headers['Content-Type'], 'application/json; charset=utf-8');
+      assert.equal(res.headers['Cache-Control'], 'no-store');
+      assert.equal(res.body, STATION_BODY);
     }
   } finally {
     globalThis.fetch = originalFetch;

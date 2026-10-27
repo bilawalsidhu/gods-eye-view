@@ -32,8 +32,8 @@ test('a prohibited zone card names the type, altitudes and the disclaimer', () =
     name: 'P-56',
     typeCode: 'P',
     type: 'Prohibited',
-    lowerDesc: 'SFC',
-    upperDesc: 'TNI',
+    lowerAltitude: 'SFC',
+    upperAltitude: '18,000 ft MSL',
     timesOfUse: 'CONTINUOUS',
     agency: 'WASHINGTON CENTER',
     city: 'WASHINGTON',
@@ -42,7 +42,7 @@ test('a prohibited zone card names the type, altitudes and the disclaimer', () =
   assert.equal(card.id, 'drone-airspace-card:310');
   assert.equal(card.title, 'PROHIBITED · P-56');
   assert.deepEqual(card.details, [
-    'Prohibited · SFC – TNI · CONTINUOUS',
+    'Prohibited · SFC to 18,000 ft MSL · CONTINUOUS',
     'WASHINGTON, DC',
     'WASHINGTON CENTER',
     'Informational only · not for flight planning',
@@ -58,8 +58,8 @@ test('missing attributes degrade to available facts instead of placeholders', ()
     name: null,
     typeCode: 'R',
     type: 'Restricted',
-    lowerDesc: null,
-    upperDesc: null,
+    lowerAltitude: null,
+    upperAltitude: null,
     timesOfUse: null,
     agency: null,
     city: null,

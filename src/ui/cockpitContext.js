@@ -1,11 +1,25 @@
 /** Contact readouts and nearby-signal presentation for the Cockpit controller. */
 import * as Cesium from 'cesium';
+import { formatNumber, getLocale, t, tn } from '../i18n/index.js';
+import { unitLabel } from './unitLabels.js';
 import {
   bearingBetweenCoordinates,
   formatCockpitContextScope,
   relativeBearing,
   resolveCockpitContextReadout,
 } from '../cockpitMath.js';
+import { formatCockpitDistance } from './cockpitPresentation.js';
+
+/** The Context scope line in the active language (see cockpitMath.js). */
+const LOCALIZED_CONTEXT_SCOPE = Object.freeze({
+  window: ({ label, radiusKm }) =>
+    t('{label} · {radius} AIR/SEA WINDOW', {
+      label,
+      radius: `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${getLocale() === 'zh-CN' ? unitLabel('km') : unitLabel('km').toUpperCase()}`,
+    }),
+  installations: ({ scope, coverage }) =>
+    t('{scope} · INSTALLATIONS {coverage}', { scope, coverage }),
+});
 
 export function updateContext(info, heading) {
   if (!this.context) return;
@@ -20,8 +34,8 @@ export function updateContext(info, heading) {
     this.pushCockpitSignal(
       'context-status',
       'info',
-      'CONTEXT STANDBY',
-      'ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS',
+      t('CONTEXT STANDBY'),
+      t('ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS'),
     );
     return;
   }
@@ -36,6 +50,7 @@ export function updateContext(info, heading) {
       snapshot.subject.label || trackedId,
       snapshot.radiusM,
       installationCoverage,
+      LOCALIZED_CONTEXT_SCOPE,
     );
   }
   // Navigation stays wired in every state — the operator must always be able
@@ -52,8 +67,9 @@ export function updateContext(info, heading) {
     const enteringLost = this.context.dataset.state !== 'lost';
     this.context.dataset.state = 'lost';
     if (this.contextUncertainty) {
-      this.contextUncertainty.textContent =
-        'CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR';
+      this.contextUncertainty.textContent = t(
+        'CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR',
+      );
     }
     // The cue changes the footer's height; re-run layout once on the way in
     // rather than every frame the contact stays lost.
@@ -61,8 +77,10 @@ export function updateContext(info, heading) {
     this.pushCockpitSignal(
       'context-status',
       'warning',
-      `CONTACT LOST · ${snapshot.subject.label || snapshot.subject.id || 'SUBJECT'}`,
-      'SUBJECT LEFT ITS FEED · READOUT HOLDING LAST KNOWN',
+      t('CONTACT LOST · {subject}', {
+        subject: snapshot.subject.label || snapshot.subject.id || 'SUBJECT',
+      }),
+      t('SUBJECT LEFT ITS FEED · READOUT HOLDING LAST KNOWN'),
     );
     return;
   }
@@ -83,25 +101,30 @@ export function updateContext(info, heading) {
   const closestLabel = this.services.formatAwarenessLabel(closest);
   if (this.contextNearestLabel) {
     this.contextNearestLabel.textContent = closest
-      ? `${closest.cohort.label.toUpperCase()} · ${closestLabel}`
-      : 'NO AVAILABLE EXAMPLE';
+      ? t('{cohort} · {contact}', {
+          cohort: closest.cohort.label.toUpperCase(),
+          contact: closestLabel,
+        })
+      : t('NO AVAILABLE EXAMPLE');
     this.contextNearestLabel.setAttribute(
       'aria-label',
       closest && closestLabel === '—'
-        ? `${closest.cohort.label}, Unavailable`
+        ? t('{cohort}, Unavailable', {
+            cohort: closest.cohort.label,
+          })
         : this.contextNearestLabel.textContent,
     );
   }
   if (this.contextDistance) {
     const distanceM = closest?.distanceM;
     this.contextDistance.textContent = Number.isFinite(distanceM)
-      ? `${distanceM < 10000 ? (distanceM / 1000).toFixed(1) : Math.round(distanceM / 1000)} KM`
+      ? formatCockpitDistance(distanceM)
       : '—';
     this.contextDistance.setAttribute(
       'aria-label',
       Number.isFinite(distanceM)
         ? this.contextDistance.textContent
-        : 'Unavailable',
+        : t('Unavailable'),
     );
   }
 
@@ -133,15 +156,24 @@ export function updateContext(info, heading) {
     this.contextDirection.classList.toggle('unknown', relative === null);
   }
   if (this.contextBearing) {
-    if (relative === null) this.contextBearing.textContent = 'BRG —';
-    else if (Math.abs(relative) < 8) this.contextBearing.textContent = 'AHEAD';
-    else
-      this.contextBearing.textContent = `${relative < 0 ? 'L' : 'R'} ${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`;
+    if (relative === null) this.contextBearing.textContent = t('BRG —');
+    else if (Math.abs(relative) < 8)
+      this.contextBearing.textContent = t('AHEAD');
+    else {
+      this.contextBearing.textContent = t('{side} {angle}', {
+        side: relative < 0 ? t('L') : t('R'),
+        angle: `${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`,
+      });
+    }
   }
   if (this.contextUncertainty) {
     this.contextUncertainty.textContent = unknownCount
-      ? `${unknownCount} INPUT${unknownCount === 1 ? '' : 'S'} UNKNOWN · NOT AN ALL-CLEAR`
-      : 'AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR';
+      ? tn(
+          unknownCount,
+          '{count} INPUT UNKNOWN · NOT AN ALL-CLEAR',
+          '{count} INPUTS UNKNOWN · NOT AN ALL-CLEAR',
+        )
+      : t('AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR');
   }
   if (this.contextUpdated) {
     this.contextUpdated.textContent = Number.isFinite(snapshot.evaluatedAt)

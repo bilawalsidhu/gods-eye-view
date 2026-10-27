@@ -30,12 +30,14 @@
  * at finish, deliberately and in one place — see `finishSpec` in drawMode.js.
  */
 import * as Cesium from 'cesium';
+import { createSegmentedControl } from '../ui/segmentedControl.js';
 import { pickWorldFromScreen } from './annotationResolver.js';
 import {
   claimPointer,
   pointerOwner,
   releasePointer,
 } from '../data/inputOwnership.js';
+import { pointerOwnerName } from '../data/pointerOwnerNames.js';
 import {
   DRAW_SHAPES,
   MAX_VERTICES,
@@ -48,8 +50,9 @@ import {
   removeLastVertex,
 } from './drawMode.js';
 
+import { msg, registerUnsavedWork, t, translateKnown } from '../i18n/index.js';
 /** The id this tool claims the pointer under. */
-export const DRAW_POINTER_OWNER = 'draw';
+const DRAW_POINTER_OWNER = 'draw';
 const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
 
 const COLORS = ['primary', 'amber', 'cyan', 'green', 'red'];
@@ -100,6 +103,17 @@ export function initDrawTool({ viewer, annotations }) {
     target.addEventListener(type, listener, options);
     domListeners.push([target, type, listener, options]);
   };
+  // The board lives only in memory: switching language (a reload) asks first
+  // while it holds a lasting mark or a shape is half drawn.
+  const unregisterUnsavedWork = registerUnsavedWork(() => {
+    if (destroyed) return null;
+    const lasting = (annotations.list?.() || []).some(
+      (mark) => mark && mark.ttlMs == null && !mark.expiring,
+    );
+    return lasting || session?.vertices?.length > 0
+      ? msg('drawings on the map')
+      : null;
+  });
 
   const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
   // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
@@ -197,10 +211,13 @@ export function initDrawTool({ viewer, annotations }) {
     // a limit rather than the harmless tail of a double-click.
     if (reason === 'full')
       setHint(
-        `That shape already has ${MAX_VERTICES} points — finish it or press Backspace.`,
+        t(
+          'That shape already has {count} points — finish it or press Backspace.',
+          { count: MAX_VERTICES },
+        ),
       );
     else if (reason === 'invalid')
-      setHint('That point is off the globe — click on the world.');
+      setHint(t('That point is off the globe — click on the world.'));
   };
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
@@ -236,11 +253,15 @@ export function initDrawTool({ viewer, annotations }) {
         flyTo: false,
       });
       if (destroyed || attempt !== generation) return result;
-      if (result?.drawn === 0) setHint('That shape could not be placed.');
+      if (result?.drawn === 0) setHint(t('That shape could not be placed.'));
       return result;
     } catch (error) {
       if (destroyed || attempt !== generation) return null;
-      setHint(`Could not place the shape: ${error?.message || error}`);
+      setHint(
+        t('Could not place the shape: {error}', {
+          error: error?.message || error,
+        }),
+      );
       return null;
     }
   };
@@ -258,7 +279,7 @@ export function initDrawTool({ viewer, annotations }) {
     if (session) session = createDrawSession(shape);
     annotations.clear();
     syncPreview();
-    if (!destroyed && !active) setHint('Board cleared.');
+    if (!destroyed && !active) setHint(t('Board cleared.'));
   };
 
   // ---- keys: only while drawing, never while typing in another field ----
@@ -324,7 +345,11 @@ export function initDrawTool({ viewer, annotations }) {
         // Somebody else is using the pointer — possibly an older instance of
         // this same tool that has not finished tearing down. Say so instead of
         // half-starting.
-        setHint(`${pointerOwner()} is using the pointer — close it first.`);
+        setHint(
+          t('{owner} is using the pointer — close it first.', {
+            owner: translateKnown(pointerOwnerName(pointerOwner())),
+          }),
+        );
         return active;
       }
     }
@@ -408,22 +433,21 @@ export function initDrawTool({ viewer, annotations }) {
   const shapeButtons = [
     ...(modeRow?.querySelectorAll('.pp-mode-btn[data-shape]') || []),
   ];
-  for (const btn of shapeButtons) {
-    listen(btn, 'click', () => {
-      shape = normalizeShape(btn.dataset.shape);
-      for (const other of shapeButtons) {
-        const on = other === btn;
-        other.classList.toggle('active', on);
-        other.setAttribute('aria-checked', String(on));
-      }
+  const shapeControl = createSegmentedControl({
+    buttons: shapeButtons,
+    valueOf: (button) => button.dataset.shape,
+    listen,
+    onChange: (value) => {
+      shape = normalizeShape(value);
+      shapeControl.update(shape);
       if (active) {
         generation += 1;
         session = createDrawSession(shape);
         cursor = null;
         syncPreview();
       }
-    });
-  }
+    },
+  });
   listen(colorSelect, 'change', () => {
     color = COLORS.includes(colorSelect.value) ? colorSelect.value : 'primary';
     syncPreview();
@@ -502,6 +526,7 @@ export function initDrawTool({ viewer, annotations }) {
       generation += 1;
       if (active) setActive(false);
       destroyed = true;
+      unregisterUnsavedWork();
       releaseSceneHandler();
       releasePointer(lease);
       lease = null;

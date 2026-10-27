@@ -1,13 +1,12 @@
-import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
+import { shellMethod } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
-import { StyleManager } from './ui/applicationShell.js';
 import { createHoverDisclosure, collapsePanelOnEscape } from './ui/panelDisclosure.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { msg, t } from './i18n/index.js';
 
 // Exercise the installed event routes and central close method, without WebGL.
-const source = readShellSource();
 const markup = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const locationMarkup = markup.slice(markup.indexOf('<div id="location-bar"'), markup.indexOf('<div id="left-panel-stack"'));
 const locationToggleMarkup = locationMarkup.match(/<button\b([^>]*\bid="location-bar-toggle"[^>]*)>([\s\S]*?)<\/button>/);
@@ -107,9 +106,9 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   window.clearTimeout = (id) => timers.delete(id);
   window.performance = { now: () => now };
   document.defaultView = window;
-  const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame',
+  const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame', 't', 'msg',
     `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_syncPanelCollapseButton').toString()}});`)(
-    createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {},
+    createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {}, t, msg,
   );
   const saves = [];
   const claims = [];

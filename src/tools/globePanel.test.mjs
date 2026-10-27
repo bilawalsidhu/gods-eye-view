@@ -169,3 +169,20 @@ test('the package exports the panel resource and its runtime together', async ()
   assert.equal(panel.PANEL_BASE, '/panel/');
   assert.match(resource.text, /panelRuntime|function/);
 });
+
+test('the panel lets Street Level reach Google Street View from inside the embed', () => {
+  const { csp } = createGlobePanelResource({
+    runtime: panelRuntime,
+    panelKey: 'test-key',
+  })._meta.ui;
+  // The API script and lookups, panorama tiles, control images, contributed photos.
+  for (const url of [
+    'https://maps.googleapis.com/maps/api/js?key=k&v=weekly',
+    'https://streetviewpixels-pa.googleapis.com/v1/tile?panoid=p&x=0&y=0&zoom=1',
+    'https://maps.gstatic.com/mapfiles/api-3/images/cb_scout5_hdpi.png',
+    'https://lh3.ggpht.com/p/photo.jpg',
+  ]) {
+    assert.ok(allows(csp.connectDomains, url), `connect-src allows ${url}`);
+    assert.ok(allows(csp.resourceDomains, url), `img-src allows ${url}`);
+  }
+});

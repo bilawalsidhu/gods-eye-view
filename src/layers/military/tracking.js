@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
@@ -21,7 +22,6 @@ import {
   TRAIL_COLOR,
   BILLBOARD_SCALE,
   GROUND_SCALE,
-  MIL_ICON_COLOR,
   AMBER_TRANSPARENT,
   TRACKED_ICON_COLOR,
 } from './policy.js';
@@ -47,7 +47,7 @@ export function createTracking({
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
   const { applyTrackedCameraFrame } = services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
 
   function _emitAwarenessEvent(type, detail) {
     if (
@@ -125,6 +125,7 @@ export function createTracking({
         icao24,
         // Honesty cue: the contact is coasting on dead reckoning, so the
         // narrated position/velocity are last-known rather than live.
+        // i18n-ignore: voice-context data, English for the model
         status: described.stale ? 'stale (missed polls)' : 'live',
       },
     };
@@ -219,7 +220,7 @@ export function createTracking({
   function _buildTrackedLabel(info, icao24) {
     const stale =
       flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
-        ? ' · STALE'
+        ? ` · ${t('STALE')}`
         : '';
     const callsign =
       (parts.queries._toCleanText(info?.callsign) ||
@@ -229,12 +230,12 @@ export function createTracking({
     // what the Easter egg replaces the real type with.
     const type = tr3bTypeLabel(
       icao24,
-      parts.queries._toCleanText(info?.type) || 'Type unknown',
+      parts.queries._toCleanText(info?.type) || t('Type unknown'),
     );
     const registration =
-      parts.queries._toCleanText(info?.registration) || 'Reg unknown';
+      parts.queries._toCleanText(info?.registration) || t('Reg unknown');
     const operator =
-      parts.queries._toCleanText(info?.operator) || 'Operator unknown';
+      parts.queries._toCleanText(info?.operator) || t('Operator unknown');
     const altitude = parts.queries._formatAltitude(info?.altitudeFt);
     const speedKt = info?.speedMps ? Math.round(info.speedMps * 1.944) : null;
     const tail = speedKt ? `${altitude} · ${speedKt} kt` : altitude;
@@ -592,7 +593,7 @@ export function createTracking({
   }
 
   /**
-   * Fire-and-forget adsb.lol readsb trace backfill (PRD F2). Trace points are
+   * Fire-and-forget optional source history backfill (PRD F2). Trace points are
    * stride-thinned to the remaining vertex budget, then spliced strictly older
    * than the oldest seeded fix AHEAD of the locally accumulated fine segment,
    * capped at TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/
@@ -780,12 +781,16 @@ export function createTracking({
       bb.width = 20;
       bb.height = 20;
       // Ground-aware restore (a plane untracked while taxiing comes back at
-      // ground scale; tint is full amber on the ground and in the air).
+      // ground scale; the fleet tint is amber, or red while broadcasting an
+      // emergency, on the ground and in the air).
       bb.scale =
         BILLBOARD_SCALE *
         (CLASS_SCALE_2D[meta?.klass] || 1) *
         (meta?.onGround ? GROUND_SCALE : 1);
-      bb.color = MIL_ICON_COLOR;
+      bb.color = parts.rendering._fleetBillboardColor(
+        flightState._trackedIcao,
+        meta,
+      );
       bb.rotation = flightState._lastTrackedRotation;
     }
     flightState._lastCamPoseSig = ''; // force a fleet rotation pass on the next tick
@@ -1074,7 +1079,9 @@ export function createTracking({
       // first-person reference. Empty globe clicks are inert until the user
       // exits with C, Escape, or the dedicated button.
       if (document.body.classList.contains('cockpit-mode')) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = pickContact
+        ? pickContact(viewer.scene, click.position)
+        : viewer.scene.pick(click.position);
 
       if (picked) {
         // Clicking the tracked entity itself -- ignore (don't deselect)

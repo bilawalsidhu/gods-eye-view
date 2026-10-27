@@ -1,5 +1,7 @@
 /** Card model for one selected special-use airspace zone. Pure — no Cesium types. */
 
+import { t } from '../../i18n/index.js';
+
 export const DRONE_AIRSPACE_OVERLAY_SOURCE_ID = 'drone-airspace';
 
 /** Fill/line CSS color for a zone by TYPE_CODE. */
@@ -46,11 +48,11 @@ export function droneAirspaceAnchorDegrees(polygons) {
 }
 
 function altitudeLine(row) {
-  const lower = row.lowerDesc;
-  const upper = row.upperDesc;
-  if (lower && upper) return `${lower} – ${upper}`;
-  if (upper) return `up to ${upper}`;
-  if (lower) return `from ${lower}`;
+  const lower = row.lowerAltitude;
+  const upper = row.upperAltitude;
+  if (lower && upper) return t('{lower} to {upper}', { lower, upper });
+  if (upper) return t('Up to {upper}', { upper });
+  if (lower) return t('From {lower}', { lower });
   return null;
 }
 
@@ -66,7 +68,7 @@ function placeLine(row) {
  * @returns {Object} World-overlay entry without `position`.
  */
 export function buildDroneAirspaceCard(row) {
-  const facts = [row.type || row.typeCode].filter(Boolean);
+  const facts = [row.type ? t(row.type) : row.typeCode].filter(Boolean);
   const altitude = altitudeLine(row);
   if (altitude) facts.push(altitude);
   if (row.timesOfUse) facts.push(row.timesOfUse);
@@ -75,9 +77,10 @@ export function buildDroneAirspaceCard(row) {
   const place = placeLine(row);
   if (place) details.push(place);
   if (row.agency) details.push(row.agency);
-  details.push('Informational only · not for flight planning');
+  details.push(t('Informational only · not for flight planning'));
 
-  const title = `${(row.type || 'SUA').toUpperCase()} · ${row.name || 'Unnamed zone'}`;
+  const type = row.type ? t(row.type) : 'SUA';
+  const title = `${type.toUpperCase()} · ${row.name || t('Unnamed zone')}`;
   return {
     id: `drone-airspace-card:${row.stableId}`,
     selected: true,

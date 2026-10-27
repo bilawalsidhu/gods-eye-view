@@ -1,4 +1,7 @@
 /** Pure formatting and fixed presentation constants used by Cockpit components. */
+import { formatNumber, getLocale, t, msg } from '../i18n/index.js';
+import { formatQuantity } from './unitLabels.js';
+
 export const COCKPIT_HEADING_SLEW_DPS = 28;
 
 export const COCKPIT_FORWARD_OFFSET_M = 7;
@@ -44,20 +47,22 @@ export const COCKPIT_REGIONAL_REFRESH_DISTANCE_M = 25_000;
 export const COCKPIT_BRIEF_PAGES = [
   {
     id: 'signals',
-    kicker: 'LIVE SIGNALS',
-    subtitle: 'OBSERVED / MAPPED PINGS',
-    source: 'SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS',
+    kickerKey: msg('LIVE SIGNALS'),
+    subtitleKey: msg('OBSERVED / MAPPED PINGS'),
+    sourceKey: msg('SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS'),
   },
   {
     id: 'news',
-    kicker: 'REGIONAL NEWS',
-    subtitle: 'LATEST LOCATION-MATCHED REPORTING',
-    source: 'GOOGLE NEWS RSS · LOCATION QUERY · RECENT',
+    kickerKey: msg('REGIONAL NEWS'),
+    subtitleKey: msg('LATEST LOCATION-MATCHED REPORTING'),
+    sourceKey: msg('{source} · LOCATION QUERY · RECENT'),
+    sourceName: 'GOOGLE NEWS RSS', // i18n-ignore: provider name
   },
   {
     id: 'local',
-    kicker: 'LOCAL INFO',
-    subtitle: 'PLACE / CONDITIONS / POSITION',
+    kickerKey: msg('LOCAL INFO'),
+    subtitleKey: msg('PLACE / CONDITIONS / POSITION'),
+    // Attribution stays English.
     source: 'NATURAL EARTH · OPEN-METEO · UTC',
   },
 ];
@@ -80,18 +85,90 @@ export function isRenderedOnScreen(element) {
 
 export function formatCockpitBriefAge(value) {
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'TIME UNKNOWN';
+  if (!Number.isFinite(timestamp)) return t('TIME UNKNOWN');
   const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000));
-  if (minutes < 60) return `${minutes}M AGO`;
+  if (minutes < 60) return t('{count}M AGO', { count: minutes });
   const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours}H AGO` : `${Math.round(hours / 24)}D AGO`;
+  return hours < 48
+    ? t('{count}H AGO', { count: hours })
+    : t('{count}D AGO', { count: Math.round(hours / 24) });
+}
+
+/** Compass point codes in display order and the label shown for each. */
+const COMPASS_POINT_LABELS = Object.freeze({
+  N: msg('N'),
+  NE: msg('NE'),
+  E: msg('E'),
+  SE: msg('SE'),
+  S: msg('S'),
+  SW: msg('SW'),
+  W: msg('W'),
+  NW: msg('NW'),
+});
+
+/**
+ * The shown label for a compass point code (`N`, `SW`…): С, ЮЗ… in Russian.
+ * Anything else (a degree reading such as `030`) passes through unchanged.
+ */
+export function compassPointLabel(code) {
+  return Object.hasOwn(COMPASS_POINT_LABELS, code)
+    ? t(COMPASS_POINT_LABELS[code])
+    : code;
+}
+
+/** `30.203°N` in the active language: `30,203° с. ш.` in Russian. */
+export function formatCockpitCoordinate(value, positive, negative) {
+  const amount = formatNumber(Math.abs(value), {
+    useGrouping: false,
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+  const code = value >= 0 ? positive : negative;
+  // Not «30,203°С»: after a degree sign «С» reads as Celsius.
+  switch (code) {
+    case 'N':
+      return t('{value}°N', { value: amount });
+    case 'S':
+      return t('{value}°S', { value: amount });
+    case 'E':
+      return t('{value}°E', { value: amount });
+    case 'W':
+      return t('{value}°W', { value: amount });
+    default:
+      return `${amount}°${compassPointLabel(code)}`;
+  }
+}
+
+/**
+ * A contact distance such as `4.2 KM` / `44 KM` in the active language
+ * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond.
+ */
+export function formatCockpitDistance(distanceM) {
+  const digits = distanceM < 10000 ? 1 : 0;
+  const distance = formatQuantity(distanceM / 1000, 'km', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  return getLocale() === 'zh-CN' ? distance : distance.toUpperCase();
 }
 
 export function formatCockpitWindDirection(value) {
-  if (!Number.isFinite(value)) return 'DIR UNKNOWN';
-  const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  if (!Number.isFinite(value)) return t('DIR UNKNOWN');
+  const labels = Object.keys(COMPASS_POINT_LABELS);
   const normalized = ((value % 360) + 360) % 360;
-  return `${labels[Math.round(normalized / 45) % labels.length]} · ${Math.round(normalized)}°`;
+  // 359.5° and above is north. Modulo keeps that from printing 360°.
+  const degrees = Math.round(normalized) % 360;
+  return `${compassPointLabel(labels[Math.round(normalized / 45) % labels.length])} · ${degrees}°`;
+}
+
+// Digit grouping and decimal marks (`26,175`, `26 175`, `26.175`) take a
+// narrow cell; a full digit cell would open a gap in the middle of a number.
+const ROLL_SEPARATOR = /^[,.\u00a0\u202f]$/;
+
+function rollTokenClass(character) {
+  return ROLL_SEPARATOR.test(character)
+    ? 'cockpit-roll-token is-separator'
+    : 'cockpit-roll-token';
 }
 
 export function setCockpitRollingValue(
@@ -130,7 +207,7 @@ export function setCockpitRollingValue(
       element.replaceChildren(
         ...Array.from(nextText, (character) => {
           const token = document.createElement('span');
-          token.className = 'cockpit-roll-token';
+          token.className = rollTokenClass(character);
           token.setAttribute('aria-hidden', 'true');
           token.textContent = character;
           return token;
@@ -159,7 +236,7 @@ export function setCockpitRollingValue(
     const previousCharacter = from[index];
     const nextCharacter = to[index];
     const token = document.createElement('span');
-    token.className = 'cockpit-roll-token';
+    token.className = rollTokenClass(nextCharacter);
     token.setAttribute('aria-hidden', 'true');
 
     if (

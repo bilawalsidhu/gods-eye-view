@@ -17,10 +17,10 @@
  */
 
 import * as Cesium from 'cesium';
-import {
-  formatRouteDistance,
-  formatRouteDuration,
-} from '../../data/routeSteps.js';
+import { roadLabel } from '../../data/routeSteps.js';
+import { t, msg, formatNumber, translateKnown } from '../../i18n/index.js';
+import { pointerOwnerName } from '../../data/pointerOwnerNames.js';
+import { formatQuantity } from '../../ui/unitLabels.js';
 
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_ID = 'directions-step';
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -31,11 +31,41 @@ export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
 
 /** Travel modes, keyed by the `/api/route` profile name. */
 export const DIRECTIONS_MODES = Object.freeze({
-  car: Object.freeze({ chip: 'DRIVE', word: 'Drive', icon: '🚗' }),
-  foot: Object.freeze({ chip: 'WALK', word: 'Walk', icon: '🚶' }),
-  bike: Object.freeze({ chip: 'BIKE', word: 'Bike', icon: '🚲' }),
+  car: Object.freeze({ chip: msg('DRIVE'), word: msg('Drive'), icon: '🚗' }),
+  foot: Object.freeze({ chip: msg('WALK'), word: msg('Walk'), icon: '🚶' }),
+  bike: Object.freeze({ chip: msg('BIKE'), word: msg('Bike'), icon: '🚲' }),
 });
 export const DEFAULT_DIRECTIONS_MODE = 'car';
+
+/**
+ * The route proxy's refusal texts (server/providers/places/routes.js). They
+ * stay English on the wire and in the AI tools; the row shows them translated.
+ */
+const ROUTING_REFUSALS = new Set([
+  msg('rate limited'),
+  msg('routing service is rate limited'),
+  msg('route leg too long'),
+  msg('route too long'),
+]);
+
+/** A refusal text from the route proxy in the language; unknown ones as given. */
+export function presentRoutingRefusal(text) {
+  return ROUTING_REFUSALS.has(text) ? t(text) : text;
+}
+
+/** The row text for a failed route request (createDirectionsSource errors). */
+export function presentRoutingFailure(error) {
+  if (error?.status === 429) {
+    return error.refusal
+      ? t('{error} — try again in a moment', {
+          error: presentRoutingRefusal(error.refusal),
+        })
+      : t('Routing is rate limited — try again in a moment');
+  }
+  if (Number.isFinite(error?.status) && error.status > 0)
+    return t('Routing unavailable (HTTP {status})', { status: error.status });
+  return error?.message || t('Routing unavailable');
+}
 
 /** Route colour — the annotation palette's cyan, so voice routes and Directions match. */
 export const DIRECTIONS_ROUTE_COLOR = '#39d0ff';
@@ -67,6 +97,285 @@ export const STEP_ANCHOR_SLOW_RETRY_MS = 2000;
 export const STEP_ANCHOR_FAST_ATTEMPTS = 5;
 /** How often the row repaints the highlighted step while FLY is running (ms). */
 export const FLIGHT_PROGRESS_MS = 250;
+
+// ---------------------------------------------------------------------------
+// Display text in the page's language. The proxy's English `instruction` stays
+// the machine value; steps are phrased from their OSRM type/modifier/road.
+// ---------------------------------------------------------------------------
+
+/**
+ * Localized "850 m", "1.2 km", "21 km" (the rounding of `formatRouteDistance`
+ * in src/data/routeSteps.js); number and unit never break apart.
+ * @param {number} meters
+ * @returns {string}
+ */
+export function routeDistanceText(meters) {
+  if (!Number.isFinite(meters) || meters < 0) return '';
+  if (meters < 100) return formatQuantity(Math.round(meters), 'm');
+  const tens = Math.round(meters / 10) * 10;
+  if (tens < 1000) return formatQuantity(tens, 'm');
+  const km = meters / 1000;
+  return km < 10
+    ? formatQuantity(km, 'km', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })
+    : formatQuantity(Math.round(km), 'km');
+}
+
+/**
+ * Localized "40 s", "12 min", "1 h 5 min" (the rounding of
+ * `formatRouteDuration` in src/data/routeSteps.js); never broken apart.
+ * @param {number} seconds
+ * @returns {string}
+ */
+export function routeDurationText(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '';
+  const wholeSeconds = Math.round(seconds);
+  if (wholeSeconds < 60) return formatQuantity(wholeSeconds, 's');
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return formatQuantity(minutes, 'min');
+  const hours = formatQuantity(Math.floor(minutes / 60), 'h');
+  const rest = minutes % 60;
+  return rest ? `${hours}\u00a0${formatQuantity(rest, 'min')}` : hours;
+}
+
+/** "left", "slightly right", … as it reads inside a maneuver sentence. */
+function directionWord(modifier) {
+  switch (modifier) {
+    case 'left':
+      return t('left', { context: 'direction' });
+    case 'right':
+      return t('right', { context: 'direction' });
+    case 'slight left':
+      return t('slightly left', { context: 'direction' });
+    case 'slight right':
+      return t('slightly right', { context: 'direction' });
+    case 'sharp left':
+      return t('sharply left', { context: 'direction' });
+    case 'sharp right':
+      return t('sharply right', { context: 'direction' });
+    case 'straight':
+      return t('straight', { context: 'direction' });
+    case 'uturn':
+      return t('around', { context: 'direction' });
+    default:
+      return modifier;
+  }
+}
+
+/**
+ * The side to keep at a fork. English reuses the turn words; a language may
+ * need another form here ("держитесь левее", not "держитесь налево").
+ */
+function forkWord(modifier) {
+  switch (modifier) {
+    case 'left':
+      return t('left', { context: 'fork direction' });
+    case 'right':
+      return t('right', { context: 'fork direction' });
+    case 'slight left':
+      return t('slightly left', { context: 'fork direction' });
+    case 'slight right':
+      return t('slightly right', { context: 'fork direction' });
+    case 'sharp left':
+      return t('sharply left', { context: 'fork direction' });
+    case 'sharp right':
+      return t('sharply right', { context: 'fork direction' });
+    case 'straight':
+      return t('straight', { context: 'fork direction' });
+    default:
+      return directionWord(modifier);
+  }
+}
+
+/** The lane to use, as an adjective where a language needs one ("левую полосу"). */
+function laneWord(modifier) {
+  switch (modifier) {
+    case 'left':
+      return t('left', { context: 'lane direction' });
+    case 'right':
+      return t('right', { context: 'lane direction' });
+    case 'slight left':
+      return t('slightly left', { context: 'lane direction' });
+    case 'slight right':
+      return t('slightly right', { context: 'lane direction' });
+    case 'sharp left':
+      return t('sharply left', { context: 'lane direction' });
+    case 'sharp right':
+      return t('sharply right', { context: 'lane direction' });
+    case 'straight':
+      return t('straight', { context: 'lane direction' });
+    default:
+      return directionWord(modifier);
+  }
+}
+
+/** "1st", "2nd", … for a roundabout exit. */
+function exitOrdinal(exit) {
+  const number = formatNumber(exit);
+  switch (new Intl.PluralRules('en', { type: 'ordinal' }).select(exit)) {
+    case 'one':
+      return t('{number}st', { context: 'ordinal', number });
+    case 'two':
+      return t('{number}nd', { context: 'ordinal', number });
+    case 'few':
+      return t('{number}rd', { context: 'ordinal', number });
+    default:
+      return t('{number}th', { context: 'ordinal', number });
+  }
+}
+
+/**
+ * One maneuver in the page's language, from the step's OSRM type, modifier,
+ * exit and road. English matches `instructionFor` in src/data/routeSteps.js
+ * word for word. A step without a type (an older payload) keeps the proxy's
+ * English instruction.
+ * @param {{type?:string, modifier?:string|null, exit?:number|null, name?:string, ref?:string|null, instruction?:string}} step
+ * @returns {string}
+ */
+export function directionsInstruction(step) {
+  const type =
+    typeof step?.type === 'string' ? step.type.trim().toLowerCase() : '';
+  if (!type)
+    return typeof step?.instruction === 'string' ? step.instruction : '';
+  const modifier =
+    typeof step.modifier === 'string' ? step.modifier.trim().toLowerCase() : '';
+  const road = roadLabel(step);
+  const direction = directionWord(modifier);
+  const values = { road, direction };
+  switch (type) {
+    case 'depart':
+      return road ? t('Head out on {road}', values) : t('Head out');
+    case 'arrive':
+      if (modifier === 'left')
+        return t('Arrive at your destination, on the left');
+      if (modifier === 'right')
+        return t('Arrive at your destination, on the right');
+      return t('Arrive at your destination');
+    case 'turn':
+      if (modifier === 'uturn')
+        return road
+          ? t('Make a U-turn onto {road}', values)
+          : t('Make a U-turn');
+      if (modifier === 'straight')
+        return road
+          ? t('Continue straight onto {road}', values)
+          : t('Continue straight');
+      if (direction)
+        return road
+          ? t('Turn {direction} onto {road}', values)
+          : t('Turn {direction}', values);
+      return road
+        ? t('Turn onto {road}', values)
+        : t('Turn', { context: 'maneuver' });
+    case 'continue':
+      if (modifier === 'uturn')
+        return road
+          ? t('Make a U-turn onto {road}', values)
+          : t('Make a U-turn');
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Continue {direction} onto {road}', values)
+          : t('Continue {direction}', values);
+      return road
+        ? t('Continue straight onto {road}', values)
+        : t('Continue straight');
+    case 'end of road':
+      if (direction)
+        return road
+          ? t('At the end of the road, turn {direction} onto {road}', values)
+          : t('At the end of the road, turn {direction}', values);
+      return road
+        ? t('At the end of the road, continue onto {road}', values)
+        : t('At the end of the road, continue');
+    case 'fork':
+      if (direction) {
+        const fork = { road, direction: forkWord(modifier) };
+        return road
+          ? t('Keep {direction} at the fork onto {road}', fork)
+          : t('Keep {direction} at the fork', fork);
+      }
+      return road
+        ? t('Continue at the fork onto {road}', values)
+        : t('Continue at the fork');
+    case 'merge':
+      if (direction)
+        return road
+          ? t('Merge {direction} onto {road}', values)
+          : t('Merge {direction}', values);
+      return road
+        ? t('Merge onto {road}', values)
+        : t('Merge', { context: 'maneuver' });
+    case 'on ramp':
+      if (modifier === 'left' || modifier === 'right')
+        return road
+          ? t('Take the ramp on the {direction} onto {road}', values)
+          : t('Take the ramp on the {direction}', values);
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Take the ramp {direction} onto {road}', values)
+          : t('Take the ramp {direction}', values);
+      return road ? t('Take the ramp onto {road}', values) : t('Take the ramp');
+    case 'off ramp':
+      if (modifier === 'left' || modifier === 'right')
+        return road
+          ? t('Take the exit on the {direction} onto {road}', values)
+          : t('Take the exit on the {direction}', values);
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Take the exit {direction} onto {road}', values)
+          : t('Take the exit {direction}', values);
+      return road ? t('Take the exit onto {road}', values) : t('Take the exit');
+    case 'roundabout':
+    case 'rotary':
+      if (Number.isInteger(step.exit) && step.exit >= 1) {
+        const exit = exitOrdinal(step.exit);
+        return road
+          ? t('At the roundabout, take the {exit} exit onto {road}', {
+              exit,
+              road,
+            })
+          : t('At the roundabout, take the {exit} exit', { exit });
+      }
+      return road
+        ? t('Enter the roundabout onto {road}', values)
+        : t('Enter the roundabout');
+    case 'roundabout turn':
+      if (direction)
+        return road
+          ? t('At the roundabout, turn {direction} onto {road}', values)
+          : t('At the roundabout, turn {direction}', values);
+      return road
+        ? t('At the roundabout, continue onto {road}', values)
+        : t('At the roundabout, continue');
+    case 'exit roundabout':
+    case 'exit rotary':
+      return road
+        ? t('Exit the roundabout onto {road}', values)
+        : t('Exit the roundabout');
+    case 'use lane': {
+      const side = modifier.includes('left')
+        ? 'left'
+        : modifier.includes('right')
+          ? 'right'
+          : '';
+      if (side) {
+        const lane = { road, direction: laneWord(side) };
+        return road
+          ? t('Use the {direction} lane onto {road}', lane)
+          : t('Use the {direction} lane', lane);
+      }
+      return road
+        ? t('Continue onto {road}', values)
+        : t('Continue', { context: 'maneuver' });
+    }
+    default:
+      return road
+        ? t('Continue onto {road}', values)
+        : t('Continue', { context: 'maneuver' });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for tests)
@@ -107,32 +416,35 @@ export function directionsRowControls(state) {
   const routing = status === 'routing';
   const chips = Object.entries(DIRECTIONS_MODES).map(([id, spec]) => ({
     id: `mode-${id}`,
-    label: spec.chip,
+    label: t(spec.chip),
     active: mode === id,
     state: mode === id ? 'active' : 'idle',
-    title: `${spec.word} — reroute for ${spec.word.toLowerCase()}`,
+    title: t('{mode} — reroute for {modeLower}', {
+      mode: t(spec.word),
+      modeLower: t(spec.word).toLowerCase(),
+    }),
     params: { mode: id },
   }));
   chips.push({
     id: 'set-a',
-    label: armed === 'a' ? 'CLICK MAP' : a ? 'A ✓' : 'SET A',
+    label: armed === 'a' ? t('CLICK MAP') : a ? 'A ✓' : t('SET A'),
     active: armed === 'a',
     state: armed === 'a' ? 'active' : 'idle',
     title:
       armed === 'a'
-        ? 'Click a spot on the globe to place A (click again to cancel)'
-        : 'Then click the globe to place the start',
+        ? t('Click a spot on the globe to place A (click again to cancel)')
+        : t('Then click the globe to place the start'),
     params: { arm: armed === 'a' ? null : 'a' },
   });
   chips.push({
     id: 'set-b',
-    label: armed === 'b' ? 'CLICK MAP' : b ? 'B ✓' : 'SET B',
+    label: armed === 'b' ? t('CLICK MAP') : b ? 'B ✓' : t('SET B'),
     active: armed === 'b',
     state: armed === 'b' ? 'active' : 'idle',
     title:
       armed === 'b'
-        ? 'Click a spot on the globe to place B (click again to cancel)'
-        : 'Then click the globe to place the destination',
+        ? t('Click a spot on the globe to place B (click again to cancel)')
+        : t('Then click the globe to place the destination'),
     params: { arm: armed === 'b' ? null : 'b' },
   });
   chips.push({
@@ -140,26 +452,28 @@ export function directionsRowControls(state) {
     label: '⇄',
     disabled: !(a && b) || routing,
     state: 'idle',
-    title: 'Swap A and B',
+    title: t('Swap A and B'),
     params: { swap: true },
   });
   const flying = Number.isInteger(flightStep);
   chips.push({
     id: 'fly',
-    label: routing ? 'FLY ···' : flying ? 'FLYING' : 'FLY',
+    label: routing ? t('FLY ···') : flying ? t('FLYING') : t('FLY'),
     disabled: !route || routing,
     busy: routing || flying,
     active: flying,
     state: routing || flying ? 'loading' : 'idle',
-    title: route ? 'Fly the camera along the route' : 'Place A and B first',
+    title: route
+      ? t('Fly the camera along the route')
+      : t('Place A and B first'),
     params: { fly: true },
   });
   chips.push({
     id: 'clear',
-    label: 'CLEAR',
+    label: t('CLEAR', { context: 'action' }),
     disabled: !a && !b && !route,
     state: 'idle',
-    title: 'Remove the route and both markers',
+    title: t('Remove the route and both markers'),
     params: { clear: true },
   });
   return {
@@ -179,8 +493,8 @@ export function directionsRowControls(state) {
  */
 export const POINTER_TOOL_EXITS = Object.freeze({
   draw: Object.freeze({
-    name: 'Draw',
-    leave: 'press Escape twice to leave Draw',
+    name: msg('Draw'),
+    leave: msg('press Escape twice to leave Draw'),
   }),
 });
 
@@ -201,9 +515,16 @@ export function pointerBlockedMessage(owner, which) {
   if (!id || id === DIRECTIONS_POINTER_OWNER) return null;
   const endpoint = which === 'b' ? 'B' : 'A';
   const known = POINTER_TOOL_EXITS[id];
-  const name = known?.name || id;
-  const leave = known?.leave || `turn ${name} off`;
-  return `${name} is active — ${leave}, then set ${endpoint}`;
+  if (!known)
+    return t('{name} is active — turn {name} off, then set {endpoint}', {
+      name: translateKnown(pointerOwnerName(id)),
+      endpoint,
+    });
+  return t('{name} is active — {leave}, then set {endpoint}', {
+    name: t(known.name),
+    leave: t(known.leave),
+    endpoint,
+  });
 }
 
 /**
@@ -272,8 +593,8 @@ export function directionsStepList({
   const items = steps.map((step, index) => ({
     id: `step-${index}`,
     ordinal: index + 1,
-    lead: formatRouteDistance(step.distanceM) || '—',
-    text: step.instruction,
+    lead: routeDistanceText(step.distanceM) || '—',
+    text: directionsInstruction(step),
     active: index === active,
     current: Number.isInteger(flightStep) && index === flightStep,
     params: { step: index },
@@ -285,13 +606,15 @@ export function directionsStepList({
       id: 'step-truncated',
       ordinal: items.length + 1,
       lead: '',
-      text: `Only the first ${steps.length} turns of this route are shown`,
+      text: t('Only the first {count} turns of this route are shown', {
+        count: steps.length,
+      }),
       active: false,
       current: false,
       disabled: true,
     });
   }
-  return { ariaLabel: 'Turn-by-turn directions', items };
+  return { ariaLabel: t('Turn-by-turn directions'), items };
 }
 
 /**
@@ -331,12 +654,12 @@ export function directionsStats(state) {
     armed,
     pointerBlocked,
   } = state;
-  const source = 'OSM routing';
+  const source = 'OSM routing'; // English in layer state; the layer row translates it
   if (pointerBlocked) {
     return {
       count: route?.steps.length || 0,
       lastUpdate,
-      error: 'Another map tool is using clicks — close it, then SET A again',
+      error: t('Another map tool is using clicks — close it, then SET A again'),
       status: 'empty',
       source,
     };
@@ -347,7 +670,7 @@ export function directionsStats(state) {
       lastUpdate,
       error: null,
       loading: true,
-      loadingLabel: 'Routing…',
+      loadingLabel: t('Routing…'),
       source,
     };
   }
@@ -355,7 +678,7 @@ export function directionsStats(state) {
     return {
       count: 0,
       lastUpdate,
-      error: error || 'No route found',
+      error: error || t('No route found'),
       status: 'empty',
       source,
     };
@@ -364,10 +687,17 @@ export function directionsStats(state) {
   // set (not only while loading), so the route summary and the placement
   // guidance ride on it; `coverage` carries the same text for stats readers.
   if (route) {
-    const word = DIRECTIONS_MODES[mode]?.word || mode;
-    const summary =
-      `${formatRouteDistance(route.distanceM)} · ${formatRouteDuration(route.durationS)} · ${word}` +
-      (route.stepsTruncated ? ` · first ${route.steps.length} turns` : '');
+    const spec = DIRECTIONS_MODES[mode];
+    const word = spec ? t(spec.word) : mode;
+    const values = {
+      distance: routeDistanceText(route.distanceM),
+      duration: routeDurationText(route.durationS),
+      mode: word,
+      count: route.steps.length,
+    };
+    const summary = route.stepsTruncated
+      ? t('{distance} · {duration} · {mode} · first {count} turns', values)
+      : t('{distance} · {duration} · {mode}', values);
     return {
       count: route.steps.length,
       lastUpdate,
@@ -378,10 +708,13 @@ export function directionsStats(state) {
     };
   }
   let coverage;
-  if (armed) coverage = `Click the globe to place ${armed.toUpperCase()}`;
-  else if (a && !b) coverage = 'SET B, then click the globe';
-  else if (!a && b) coverage = 'SET A, then click the globe';
-  else coverage = 'SET A, then click the globe';
+  if (armed)
+    coverage = t('Click the globe to place {endpoint}', {
+      endpoint: armed.toUpperCase(),
+    });
+  else if (a && !b) coverage = t('SET B, then click the globe');
+  else if (!a && b) coverage = t('SET A, then click the globe');
+  else coverage = t('SET A, then click the globe');
   return {
     count: 0,
     lastUpdate,
@@ -403,14 +736,23 @@ export function directionsStepCopy(steps, index) {
   const step = steps[index];
   const details = [];
   const leg = [];
-  if (step.distanceM > 0) leg.push(formatRouteDistance(step.distanceM));
-  if (step.durationS > 0) leg.push(formatRouteDuration(step.durationS));
+  if (step.distanceM > 0) leg.push(routeDistanceText(step.distanceM));
+  if (step.durationS > 0) leg.push(routeDurationText(step.durationS));
+  const position = { step: index + 1, total: steps.length };
   details.push(
-    `Step ${index + 1} of ${steps.length}${leg.length ? ` · then ${leg.join(' · ')}` : ''}`,
+    leg.length
+      ? t('Step {step} of {total} · then {leg}', {
+          ...position,
+          leg: leg.join(' · '),
+        })
+      : t('Step {step} of {total}', position),
   );
   const next = steps[index + 1];
-  if (next) details.push(`Then: ${next.instruction}`);
-  return { title: step.instruction, details };
+  if (next)
+    details.push(
+      t('Then: {instruction}', { instruction: directionsInstruction(next) }),
+    );
+  return { title: directionsInstruction(step), details };
 }
 
 /**
@@ -617,32 +959,11 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function pickGround(screenPosition) {
-    const scene = _viewer?.scene;
-    let cartesian = null;
-    if (
-      scene?.pickPositionSupported &&
-      typeof scene.pickPosition === 'function'
-    ) {
-      try {
-        cartesian = scene.pickPosition(screenPosition);
-      } catch {
-        cartesian = null;
-      }
-    }
-    if (
-      !services.scenePick.isPickedWorldPosition(cartesian) &&
-      typeof _viewer?.camera?.pickEllipsoid === 'function'
-    ) {
-      try {
-        cartesian = _viewer.camera.pickEllipsoid(
-          screenPosition,
-          Cesium.Ellipsoid.WGS84,
-        );
-      } catch {
-        cartesian = null;
-      }
-    }
-    if (!services.scenePick.isPickedWorldPosition(cartesian)) return null;
+    const cartesian = services.scenePick.pickGroundPosition(
+      _viewer,
+      screenPosition,
+    );
+    if (!cartesian) return null;
     const carto = Cesium.Cartographic.fromCartesian(cartesian);
     if (!carto) return null;
     return {
@@ -840,10 +1161,12 @@ export function createDirectionsLayer({ services, source }) {
         _status = 'error';
         _error =
           payload?.error === 'no route found'
-            ? 'No route found between A and B'
+            ? t('No route found between A and B')
             : payload?.error
-              ? `Routing failed: ${payload.error}`
-              : 'No route found between A and B';
+              ? t('Routing failed: {error}', {
+                  error: presentRoutingRefusal(payload.error),
+                })
+              : t('No route found between A and B');
         return;
       }
       _route = route;
@@ -860,10 +1183,10 @@ export function createDirectionsLayer({ services, source }) {
       // happened instead.
       _error =
         error?.name === 'AbortError'
-          ? 'Routing timed out'
+          ? t('Routing timed out')
           : error?.name === 'TypeError'
-            ? 'Routing unavailable — no response from the routing service'
-            : error?.message || 'Routing unavailable';
+            ? t('Routing unavailable — no response from the routing service')
+            : presentRoutingFailure(error);
     } finally {
       clearTimeout(timer);
       if (_routeAbort === controller) _routeAbort = null;
@@ -1058,7 +1381,7 @@ export function createDirectionsLayer({ services, source }) {
       [
         {
           type: 'route',
-          label: 'Directions',
+          label: t('Directions'),
           path: _route.geometry.map(([lon, lat]) => ({ lon, lat, height: 0 })),
         },
       ],

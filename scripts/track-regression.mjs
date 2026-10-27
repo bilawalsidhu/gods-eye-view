@@ -94,6 +94,7 @@
 
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+import { arrivalRotationPassed } from '../src/tooling/trackArrivalObservation.mjs';
 import { classifyAircraft, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
 import { ensureGeoidReady, geoidHeight } from '../src/data/geoid.js';
 
@@ -443,7 +444,10 @@ async function main() {
         // for nearby names. Answer both with empty results: the entity-context
         // assertions are about the SELECTED contact, and a live lookup would
         // make the run non-hermetic (and bill the owner's Google quota).
-        if (url.hostname === 'maps.googleapis.com' && url.pathname.startsWith('/maps/api/geocode')) {
+        if (
+          isAppRequest &&
+          (url.pathname === '/api/google/reverse-geocode' || url.pathname === '/api/google/geocode')
+        ) {
           return Promise.resolve(jsonResponse({ status: 'ZERO_RESULTS', results: [] }));
         }
         if (isAppRequest && url.pathname === '/api/google/nearby-places') {
@@ -2692,16 +2696,17 @@ async function main() {
     //       reappear wearing its stale/creation-north nose for up to 1 s).
     // Staged deterministically: park the camera nadir over the synthetic
     // cluster, let rotations settle, TAMPER a billboard's rotation, then
-    // trigger each path with the camera idle. The idle-drift catch-up
-    // (ROTATION_REFRESH_MS = 1 s) can coincidentally mask a regression in a
-    // ~300 ms SwiftShader frame window, so a regression shows as an
-    // intermittent (not guaranteed) failure — never a false failure.
+    // trigger each path with the camera idle. The fleet runs every 80 ms,
+    // independently of rendered FPS. Observe the first completed settle and
+    // reveal frames within 500 ms of forcing moveEnd, before the 1 s idle
+    // rotation refresh can repair an incorrect first reveal.
     // ============================================================
     console.log('\nChange 4 — arrival rotation: moveEnd settle pass + horizon-reveal pass');
     const arrival = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
       const { screenProjectedRotation } = await import(`${window.__gevQaSourceBase || '/src'}/data/iconOrientation.js`);
+      const { observeArrivalRotation } = await import(`${window.__gevQaSourceBase || '/src'}/tooling/trackArrivalObservation.mjs`);
       // 3D models OFF for this phase: a model-handed-off billboard is hidden
       // and skips rotation updates entirely — the probes need live billboards
       // (this is also the app's default state the field report came from).
@@ -2763,39 +2768,29 @@ async function main() {
         const bb = findBB(id);
         if (!bb || !bb.show) return { error: `${id} missing/hidden` };
         const r0 = bb.rotation; // settled tamper origin; correctness uses a fresh projection below
-        // (a) settle pass: tamper, then raise moveEnd with the camera IDLE —
-        // the pose signature is unchanged, so only the moveEnd hook can fix
-        // this before the 1 s catch-up.
-        bb.rotation = r0 + 1.5;
-        v.camera.moveEnd.raiseEvent();
-        await nextFrames(2);
-        const afterMoveEnd = bb.rotation;
-        // A real-GPU fleet tick can land near the edge of the frame budget and
-        // advance the contact before the probe reads it. Compare with the
-        // production projection at the CURRENT position, not the now-stale r0.
-        const expectedMoveEnd = screenProjectedRotation(v.scene, bb.position, course, null);
-        // (b) reveal pass: tamper + hide — the next fleet tick must flip it
-        // visible AND correct the nose in that same tick (camera still idle,
-        // no moveEnd raised). Diagnostic fields (round 5): record WHICH frame
-        // the flip landed on (flipFrame; -1 = never within the extended
-        // window) and whether a 3D model owns this id — distinguishes "tick
-        // slow under load" from "occluder says hidden" from "model handoff".
-        bb.rotation = r0 + 1.5;
-        bb.show = false;
-        let flipFrame = -1;
-        for (let f = 1; f <= 6; f++) {
-          await nextFrames(1);
-          if (bb.show && flipFrame === -1) flipFrame = f;
-          if (f >= 2 && flipFrame !== -1) break;
-        }
-        const expectedReveal = screenProjectedRotation(v.scene, bb.position, course, null);
+        const observed = await observeArrivalRotation({
+          scene: v.scene,
+          startMoveEnd() {
+            // Only moveEnd can repair the tampered angle at the idle pose.
+            bb.rotation = r0 + 1.5;
+            v.camera.moveEnd.raiseEvent();
+          },
+          startReveal() {
+            // Hide immediately after the confirmed settle frame. The next
+            // eligible fleet tick must reveal AND re-aim in that same tick.
+            bb.rotation = r0 + 1.5;
+            bb.show = false;
+          },
+          read() {
+            return {
+              shown: bb.show,
+              rotationError: angDiff(bb.rotation,
+                screenProjectedRotation(v.scene, bb.position, course, null)),
+            };
+          },
+        });
         const hasModel = !!(window.__g3dFindModel && window.__g3dFindModel(id));
-        return {
-          r0,
-          dMoveEnd: angDiff(afterMoveEnd, expectedMoveEnd),
-          dReveal: angDiff(bb.rotation, expectedReveal),
-          shown: bb.show, flipFrame, hasModel,
-        };
+        return { r0, ...observed, hasModel };
       };
       const flightCourse = window.__SYNTH.flights.find((f) => f.icao === 'aaa002')?.track ?? 0;
       const militaryCourse = window.__SYNTH.military.find((m) => m.hex === 'bbb101')?.track ?? 0;
@@ -2804,22 +2799,13 @@ async function main() {
         military: await probe('bbb101', militaryCourse),
       };
     });
-    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? a.error
-      : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} hasModel=${a.hasModel}`);
+    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; elapsed=${Number(a.elapsedMs).toFixed(1)} ms`
+      : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} settle=${a.moveEndMs.toFixed(1)} ms reveal=${a.revealMs.toFixed(1)} ms total=${a.elapsedMs.toFixed(1)} ms hasModel=${a.hasModel}`);
     const TAMPER_DEG = 1.5 * 180 / Math.PI; // ≈ 86° — an uncorrected nose stays this far off
-    // Reveal budget re-pinned 2 → 4 frames (round 5): the diagnostic probe
-    // shows the military flip consistently lands on frame 2 — the exact edge
-    // of the old budget — so any load hiccup flaked it (flights lands frame
-    // 1). The regression this protects against is a reveal that waits for
-    // the 1 s idle catch-up (~30-60 frames) or never re-aims; 4 frames still
-    // catches that with a wide margin, with zero-headroom flakes gone.
-    const arrOk = (a) => !!a && !a.error && a.shown
-      && (a.flipFrame === -1 ? false : a.flipFrame <= 4)
-      && a.dMoveEnd * 180 / Math.PI < 10 && a.dReveal * 180 / Math.PI < 10;
-    record(`arrival: moveEnd + reveal both re-aim within 4 frames, flights (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
-      arrOk(arrival.flights), fmtArr(arrival.flights));
-    record(`arrival: moveEnd + reveal both re-aim within 4 frames, military (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
-      arrOk(arrival.military), fmtArr(arrival.military));
+    record(`arrival: moveEnd + first reveal both re-aim before idle refresh, flights (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
+      arrivalRotationPassed(arrival.flights), fmtArr(arrival.flights));
+    record(`arrival: moveEnd + first reveal both re-aim before idle refresh, military (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
+      arrivalRotationPassed(arrival.military), fmtArr(arrival.military));
 
     // ============================================================
     // DISPLAY FLOOR (2026-08-19): a grounded contact must never render below

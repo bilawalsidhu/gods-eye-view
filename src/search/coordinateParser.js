@@ -5,13 +5,18 @@
  * as 12, 34 flies the operator somewhere they did not ask for and looks like a
  * successful search. So every rule here is exact — a component is a decimal
  * number, optionally signed, optionally marked with one hemisphere letter, and
- * nothing else. Degrees/minutes/seconds and grid references are not handled;
+ * nothing else. Two-dimensional WGS84 geo URIs use their own strict grammar.
+ * Degrees/minutes/seconds and grid references are not handled;
  * they fall through to the geocoders, which is what happens today.
  */
 
 /** One decimal-degree component: an optional hemisphere letter on either side. */
 const COMPONENT =
   /^([NSEW])?\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*°?\s*([NSEW])?$/i;
+
+/** RFC 5870's 2D WGS84 subset; never discard altitude or uncertainty. */
+const GEO_URI =
+  /^geo:(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)(?:;crs=wgs84)?$/i;
 
 /** Hemisphere letters, by the axis each one can name. */
 const LATITUDE_LETTERS = new Set(['N', 'S']);
@@ -42,15 +47,37 @@ function readComponent(text) {
   };
 }
 
-/** Split on a comma, a semicolon, or whitespace — never on anything else. */
+/**
+ * Split on a comma, a semicolon, or whitespace — never on anything else.
+ * A hemisphere letter stays with the number it names, so `40.7 N 74.0 W`
+ * is two components. Splitting on the space before that letter used to
+ * leave three pieces and the search declined the coordinate.
+ */
 function splitComponents(query) {
   const text = String(query).trim();
   if (!text) return null;
-  const parts = /[,;]/.test(text)
-    ? text.split(/[,;]/)
-    : text.split(/\s+(?=[+-]?[.\d]|[NSEW]\s*[+-]?[.\d])/i);
-  const trimmed = parts.map((part) => part.trim()).filter(Boolean);
-  return trimmed.length === 2 ? trimmed : null;
+  if (/[,;]/.test(text)) {
+    const trimmed = text.split(/[,;]/).map((part) => part.trim());
+    return trimmed.length === 2 && trimmed.every(Boolean) ? trimmed : null;
+  }
+  const words = text.split(/\s+/);
+  // Each component has at most a number, a degree sign and one hemisphere.
+  if (words.length > 6) return null;
+  // Keep every character: extracting tokens would turn `1e3` or `1.2.3`
+  // into invented coordinates. A lone letter between numbers can name either
+  // component; require an unambiguous split rather than guessing its owner.
+  let result = null;
+  for (let boundary = words.length - 1; boundary > 0; boundary -= 1) {
+    const parts = [
+      words.slice(0, boundary).join(' '),
+      words.slice(boundary).join(' '),
+    ];
+    if (parts.every((part) => readComponent(part))) {
+      if (result) return null;
+      result = parts;
+    }
+  }
+  return result;
 }
 
 /** Present a parsed pair the way a coordinate is normally written. */
@@ -61,20 +88,25 @@ export function formatCoordinateLabel(lat, lon) {
 }
 
 /**
- * Parse a decimal-degree query, or return null.
+ * Parse a decimal-degree pair or a two-dimensional WGS84 geo URI, or return null.
  *
  * Both orders are accepted when the hemisphere letters say which is which
  * (`W 40, N 74` is longitude then latitude); with no letters the conventional
  * latitude-then-longitude order applies. Two letters naming the same axis, a
  * letter that fixes nothing, an out-of-range latitude or longitude, and any
  * trailing text all decline.
+ * Geo URIs accept only latitude/longitude and an optional `;crs=wgs84`;
+ * altitude, uncertainty, other parameters and query/fragment suffixes decline.
  *
  * @param {string} query
  * @returns {{ lat: number, lon: number, label: string } | null}
  */
 export function parseCoordinateQuery(query) {
   if (typeof query !== 'string') return null;
-  const parts = splitComponents(query);
+  const text = query.trim();
+  const parts = /^geo:/i.test(text)
+    ? GEO_URI.exec(text)?.slice(1, 3)
+    : splitComponents(text);
   if (!parts) return null;
 
   const first = readComponent(parts[0]);

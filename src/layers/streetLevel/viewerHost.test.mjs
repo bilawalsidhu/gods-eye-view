@@ -22,63 +22,68 @@ registerHooks({
     const source = url.includes('/library?')
       ? 'const lib = await globalThis.__gevMapillaryLibrary();\n' +
         'export const Viewer = lib.Viewer;\n' +
-        'export const RenderMode = lib.RenderMode;\n'
+        'export const RenderMode = lib.RenderMode;\n' +
+        'export const GraphDataProvider = lib.GraphDataProvider;\n'
       : 'export default {};\n';
     return { format: 'module', shortCircuit: true, source };
   },
 });
-const { createMapillaryViewer } =
+const { createMapillaryViewer, graphEndpointUrl } =
   await import('./providers/mapillary/viewer.js');
+const { createMapillarySource } =
+  await import('./providers/mapillary/source.js');
 
 /**
  * A viewer host over `adapter`. `marker` records where the position marker
- * was put (null once cleared), `followed` counts camera-follow updates and
- * `selected` every sequence the provider was asked to select.
+ * was put (null once cleared), `framing` counts framing calls and
+ * `selected` every sequence the layer was asked to select.
  */
 function harness(adapter) {
+  const selected = [];
   const state = {
     enabled: true,
     notify() {},
-    providers: new Map(),
-    street: { host: {}, renderMode: 'letterbox', follow: false },
+    street: { host: {}, renderMode: 'letterbox' },
+    sequence: { selectedId: null },
+    providers: new Map([
+      [
+        'mapillary',
+        {
+          def: { id: 'mapillary', name: 'Mapillary', label: 'MAPILLARY' },
+          instance: {
+            viewer: adapter,
+            selectSequence(id) {
+              selected.push(id);
+              state.sequence.selectedId = id;
+            },
+            sequenceStats: () => ({ selectedId: state.sequence.selectedId }),
+          },
+        },
+      ],
+    ]),
   };
-  const def = { id: 'mapillary', name: 'Mapillary', label: 'MAPILLARY' };
-  const selected = [];
-  let selectedId = null;
-  const instance = {
-    viewer: adapter,
-    selectSequence(id) {
-      selected.push(id);
-      selectedId = id;
-    },
-    sequenceStats: () => ({ selectedId }),
-  };
-  state.providers.set('mapillary', { def, instance });
   const framing = { begun: 0, started: 0, cancelled: 0 };
   const marker = [];
-  const followed = { count: 0 };
   const parts = {
     marker: {
       set: (position, bearing) =>
         marker.push(position && { position, bearing }),
       clear: () => marker.push(null),
     },
-    follow: {
-      followCamera: () => followed.count++,
-      beginFraming: () => ({ generation: ++framing.begun }),
-      lookAtPosition: (ticket) => ticket && framing.started++,
-      cancelFraming: () => framing.cancelled++,
+    framing: {
+      begin: () => ({ generation: ++framing.begun }),
+      frame: (ticket) => ticket && framing.started++,
+      cancel: () => framing.cancelled++,
     },
   };
   return {
     state,
     framing,
     marker,
-    followed,
     selected,
-    /** Esc on the map: the provider drops its selected sequence. */
+    /** Esc on the map: the selected sequence is dropped. */
     clearSequence() {
-      selectedId = null;
+      state.sequence.selectedId = null;
     },
     host: createViewerHost({ state, parts }),
   };
@@ -105,7 +110,6 @@ function fakeAdapter({ failMounts = 0, gate = null, openGate = null } = {}) {
     /** A pose event from the library, as MapillaryJS fires them. */
     emitPose(id, overrides = {}) {
       emit?.({
-        providerId: 'mapillary',
         imageId: id,
         sequenceId: `seq-${id}`,
         position: { lon: 1, lat: 2 },
@@ -168,52 +172,12 @@ test('unmounting while a mount is in flight does not leave it active', async () 
   host.unmount();
   await opening;
   assert.equal(adapter.calls.listeners, 0);
-  assert.equal(adapter.calls.unmount, 1);
+  assert.equal(adapter.calls.unmount, 2, 'layer off, then the late mount');
   assert.equal(state.street.open, false);
   // Not left active: the next open mounts again.
   await host.open('mapillary', 'b');
   assert.equal(adapter.calls.mount, 2);
   assert.equal(state.street.imageId, 'b');
-});
-
-test('a prewarmed viewer is released when the layer goes off, or at once if it went off mid-load', async () => {
-  const adapter = fakeAdapter();
-  let release = null;
-  adapter.prewarm = () =>
-    new Promise((resolve) => {
-      release = resolve;
-    });
-  const { state, host } = harness(adapter);
-  const entry = state.providers.get('mapillary');
-  entry.on = true;
-
-  // Warmed, then the layer is switched off: unmount releases the warm viewer.
-  const warming = host.prewarm([entry]);
-  release();
-  await warming;
-  assert.equal(adapter.calls.unmount, 0);
-  host.unmount();
-  assert.equal(adapter.calls.unmount, 1, 'the WebGL viewer is destroyed');
-
-  // Switched off while the library was still loading: released on arrival.
-  const late = host.prewarm([entry]);
-  state.enabled = false;
-  release();
-  await late;
-  assert.equal(adapter.calls.unmount, 2);
-});
-
-test('switching one provider off releases only its viewer', async () => {
-  const adapter = fakeAdapter();
-  adapter.prewarm = async () => {};
-  const { state, host } = harness(adapter);
-  const entry = state.providers.get('mapillary');
-  entry.on = true;
-  await host.prewarm([entry]);
-  host.unmount('panoramax');
-  assert.equal(adapter.calls.unmount, 0, 'another provider leaves it alone');
-  host.unmount('mapillary');
-  assert.equal(adapter.calls.unmount, 1);
 });
 
 test('a pose that arrives after the photo was closed does not bring it back', async () => {
@@ -238,44 +202,23 @@ function deferred() {
   return { promise, resolve };
 }
 
-test('switching the layer off and on during a cold first open keeps the shared viewer', async () => {
-  const gate = deferred();
-  const adapter = fakeAdapter({ gate });
-  const { state, host } = harness(adapter);
-  const first = host.open('mapillary', 'a'); // the library is still loading
-  host.unmount(); // layer off …
-  const second = host.open('mapillary', 'b'); // … on again, and a new click
-  gate.resolve();
-  await Promise.all([first, second]);
-  assert.equal(adapter.calls.unmount, 0, 'the outdated mount left it alone');
-  assert.equal(adapter.calls.listeners, 1);
-  assert.equal(state.street.error, null);
-  assert.equal(state.street.imageId, 'b');
-  await host.open('mapillary', 'c');
-  assert.equal(state.street.error, null, 'later opens are not stuck');
-  assert.equal(state.street.imageId, 'c');
-});
-
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-test('every pose the viewer reports moves the marker and the followed camera', async () => {
+test('every pose the viewer reports moves the marker; only the open frames the camera', async () => {
   const adapter = fakeAdapter();
-  const { state, host, marker, followed } = harness(adapter);
+  const { host, marker, framing } = harness(adapter);
   await host.open('mapillary', 'a');
   assert.deepEqual(marker, [{ position: { lon: 1, lat: 2 }, bearing: 90 }]);
-  assert.equal(followed.count, 1);
-  // The user walks on, with FOLLOW on: the globe camera goes along.
-  state.street.follow = true;
+  // The user walks on: the marker goes along, the globe camera stays.
   adapter.emitPose('b', { position: { lon: 3, lat: 4 }, bearing: 180 });
   assert.deepEqual(marker.at(-1), {
     position: { lon: 3, lat: 4 },
     bearing: 180,
   });
-  assert.equal(followed.count, 2);
   // Looking around in place is a pose too.
   adapter.emitPose('b', { position: { lon: 3, lat: 4 }, bearing: 270 });
   assert.equal(marker.at(-1).bearing, 270);
-  assert.equal(followed.count, 3);
+  assert.deepEqual([framing.begun, framing.started], [1, 1]);
 });
 
 test('a pose on another sequence selects it, but not while the image still loads', async () => {
@@ -405,7 +348,7 @@ function fakeLibrary() {
   }
   globalThis.__gevMapillaryLibrary = async () => {
     await gate.promise;
-    return { Viewer, RenderMode: {} };
+    return { Viewer, RenderMode: {}, GraphDataProvider: FakeGraphDataProvider };
   };
   return { gate, viewers };
 }
@@ -445,27 +388,17 @@ test('a Mapillary viewer unmounted mid-download is never built; the next mount b
   assert.equal(viewers.live, 0, 'nothing left holding a WebGL context');
 });
 
-test('a prewarm that gave up when the layer went off and on mid-download is followed by one that builds', async () => {
+test('two mounts on one host during the first download build one Mapillary viewer', async () => {
   const { gate, viewers } = fakeLibrary();
   const adapter = createMapillaryViewer({ source: { token: 't' } });
   const element = {};
-  const first = adapter.prewarm(element);
-  adapter.unmount(); // layer off while MapillaryJS downloads
-  const second = adapter.prewarm(element); // layer on again
+  const first = adapter.mount(element);
+  const second = adapter.mount(element);
   gate.resolve();
   await Promise.all([first, second]);
-  assert.equal(viewers.created, 1, 'the second prewarm built the viewer');
-  assert.equal(viewers.live, 1);
+  assert.equal(viewers.created, 1);
   adapter.unmount();
-});
-
-test('the Mapillary viewer leaves resizing to the panel, so a hidden one never asks for z=NaN', async () => {
-  const { gate, viewers } = fakeLibrary();
-  gate.resolve();
-  const adapter = createMapillaryViewer({ source: { token: 't' } });
-  await adapter.mount({});
-  assert.equal(viewers.instances[0].options.trackResize, false);
-  adapter.unmount();
+  assert.equal(viewers.live, 0, 'nothing left holding a WebGL context');
 });
 
 test('closing the photo stops sequence playback in the hidden viewer', async () => {
@@ -479,20 +412,6 @@ test('closing the photo stops sequence playback in the hidden viewer', async () 
   host.close();
   assert.equal(viewer.playback.stops, 1, 'playback stopped with the photo');
   assert.equal(viewers.live, 1, 'the viewer itself stays warm');
-});
-
-test('closing the photo or switching the layer off stops its framing flight', async () => {
-  const adapter = fakeAdapter();
-  const { framing, host } = harness(adapter);
-  await host.open('mapillary', 'a');
-  assert.equal(framing.started, 1, 'the open framed the photo');
-  host.close();
-  assert.equal(framing.cancelled, 1, 'closed: the globe stops flying to it');
-  await host.open('mapillary', 'b');
-  host.unmount('panoramax');
-  assert.equal(framing.cancelled, 1, 'another provider leaves it alone');
-  host.unmount();
-  assert.equal(framing.cancelled, 2, 'layer off: likewise');
 });
 
 /** The real Mapillary adapter, mounted on a ready library, and its poses. */
@@ -562,7 +481,7 @@ test('back-to-back Mapillary opens download only the newer image', async () => {
 test('a photo asks for the camera when it starts opening and frames with that ticket once loaded', async () => {
   const openGate = deferred();
   const adapter = fakeAdapter({ openGate });
-  const { state, host, framing } = harness(adapter);
+  const { host, framing } = harness(adapter);
   const opening = host.open('mapillary', 'a');
   assert.equal(framing.begun, 1, 'claimed before the download');
   await settle();
@@ -570,9 +489,131 @@ test('a photo asks for the camera when it starts opening and frames with that ti
   openGate.resolve();
   assert.equal(await opening, true);
   assert.equal(framing.started, 1);
+});
 
-  // FOLLOW owns the camera already: an open neither claims nor frames.
-  state.street.follow = true;
-  assert.equal(await host.open('mapillary', 'b'), true);
-  assert.deepEqual([framing.begun, framing.started], [1, 1]);
+/** The harness with a second provider, `google`, whose adapter has no render modes. */
+function twoProviders() {
+  const mapillary = fakeAdapter();
+  mapillary.prewarm = async () => {};
+  mapillary.setRenderMode = () => {};
+  const google = fakeAdapter();
+  google.prewarm = async () => {};
+  const h = harness(mapillary);
+  h.state.providers.set('google', {
+    def: { id: 'google', name: 'Google Street View', label: 'STREET VIEW' },
+    instance: { viewer: google },
+    on: true,
+  });
+  h.state.providers.get('mapillary').on = true;
+  return { ...h, mapillary, google };
+}
+
+test('the render modes follow the viewer that is open', async () => {
+  const { state, host } = twoProviders();
+  await host.open('mapillary', 'm-1');
+  assert.equal(state.street.renderModes, true);
+  await host.open('google', 'g-1');
+  assert.equal(state.street.renderModes, false, 'Google always fills');
+});
+
+test('a pose can date its image by month and name its place', async () => {
+  const { state, host, google } = twoProviders();
+  await host.open('google', 'g-1');
+  google.emitPose('g-1', {
+    providerId: 'google',
+    capturedAtPrecision: 'month',
+    title: '1014 10th St',
+    capturedAt: Date.UTC(2023, 0, 1),
+  });
+  assert.equal(state.street.capturedAtPrecision, 'month');
+  assert.equal(state.street.title, '1014 10th St');
+  host.close();
+  assert.deepEqual(
+    [state.street.capturedAtPrecision, state.street.title],
+    ['day', null],
+  );
+});
+
+test('FIT/FILL stays hidden for a second Street View panorama after a close', async () => {
+  const { state, host } = twoProviders();
+  await host.open('google', 'g-1');
+  assert.equal(state.street.renderModes, false);
+  host.close();
+  await host.open('google', 'g-2');
+  assert.equal(state.street.renderModes, false);
+});
+
+test('an adapter that can frame but says this image has no frame offers no FIT / FILL', async () => {
+  const adapter = fakeAdapter();
+  let frameable = false;
+  adapter.setRenderMode = () => {};
+  adapter.supportsRenderModes = () => frameable;
+  const { state, host } = harness(adapter);
+  await host.open('mapillary', 'pano-1');
+  assert.equal(state.street.imageId, 'pano-1', 'the pose arrived');
+  assert.equal(state.street.renderModes, false);
+  frameable = true;
+  await host.open('mapillary', 'flat-1');
+  assert.equal(state.street.renderModes, true, 'a flat image can be framed');
+});
+
+test('a pose’s licence reaches the caption state, and a closed viewer forgets it', async () => {
+  const { state, host, google } = twoProviders();
+  await host.open('google', 'g-1');
+  google.emitPose('g-1', { providerId: 'google', license: 'CC BY-SA 4.0' });
+  assert.equal(state.street.license, 'CC BY-SA 4.0');
+  google.emitPose('g-1', { providerId: 'google' });
+  assert.equal(state.street.license, null, 'none given: none shown');
+  google.emitPose('g-1', { providerId: 'google', license: 'CC0' });
+  host.close();
+  assert.equal(state.street.license, null);
+});
+
+/** MapillaryJS 4's Graph provider, recording what it was built with. */
+class FakeGraphDataProvider {
+  constructor(options = {}) {
+    this.options = options;
+  }
+}
+
+test('without a Graph endpoint the viewer gets the client token, as before', async () => {
+  const library = fakeLibrary();
+  library.gate.resolve();
+  const adapter = createMapillaryViewer({ source: { token: 't' } });
+  await adapter.mount({});
+  const [viewer] = library.viewers.instances;
+  assert.equal(viewer.options.accessToken, 't');
+  assert.equal(viewer.options.dataProvider, undefined);
+});
+
+test("with a Graph endpoint the viewer uses MapillaryJS's Graph provider there, without a token", async () => {
+  const library = fakeLibrary();
+  library.gate.resolve();
+  const source = createMapillarySource({
+    graphEndpoint: 'https://app.example/api/mapillary/graph',
+    fetchImpl: async () => {
+      throw new Error('the viewer does not use the source transport');
+    },
+  });
+  const adapter = createMapillaryViewer({ source });
+  await adapter.mount({});
+  const [viewer] = library.viewers.instances;
+  assert.equal(viewer.options.accessToken, undefined);
+  const provider = viewer.options.dataProvider;
+  assert.ok(provider instanceof FakeGraphDataProvider);
+  assert.deepEqual(provider.options, {
+    endpoint: 'https://app.example/api/mapillary/graph/',
+  });
+});
+
+test('a relative Graph endpoint resolves against the page, with one trailing slash', () => {
+  assert.equal(
+    graphEndpointUrl({ graphEndpoint: '/api/mapillary/graph' }),
+    'http://localhost/api/mapillary/graph/',
+  );
+  assert.equal(
+    graphEndpointUrl({ graphEndpoint: '/api/mapillary/graph//' }),
+    'http://localhost/api/mapillary/graph/',
+  );
+  assert.equal(graphEndpointUrl({ token: 't' }), '');
 });

@@ -3,6 +3,7 @@ import { orderWeatherImagery } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { createRasterTileProvider } from './rasterTiles.js';
 import { createWeatherShell } from './shellRendering.js';
+import { msg } from '../../i18n/index.js';
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import {
   acquireInfraredMosaic,
@@ -13,6 +14,8 @@ const GLOBAL_TILE_MAXIMUM_LEVEL = 3;
 // Six decoded 2048×1024 canvases (8 MiB each) bound the cache below 50 MiB.
 const MAX_MOSAICS = 6;
 const MAX_PREFETCH_TILES = 8;
+// How often a staged frame waiting out its quiet interval rechecks readiness.
+export const READY_WAKE_MS = 150;
 
 /** Globe imagery: own at most a displayed and a staging frame. Use native Cesium
  * tile scheduling, projection and texture disposal; the application clock is never touched. */
@@ -125,6 +128,7 @@ function createGlobeRendering({
     frame.offRender?.();
     frame.offCamera?.();
     clearTimeout(frame.timeout);
+    clearTimeout(frame.wake);
     for (const request of frame.requests) request.cancel?.();
     frame.requests.clear();
     frame.retries.clear();
@@ -200,7 +204,8 @@ function createGlobeRendering({
           await Promise.all(
             urls.map(async (url) => {
               const response = await fetchImpl(url, { signal });
-              if (!response.ok) throw new Error('Weather prefetch unavailable');
+              if (!response.ok)
+                throw new Error(msg('Weather prefetch unavailable'));
               await readResponseBytesCapped(response, 4 * 1024 * 1024 + 65_536);
             }),
           );
@@ -275,6 +280,8 @@ function createGlobeRendering({
         frame.offCamera?.();
         frame.offCamera = null;
         clearTimeout(frame.timeout);
+        clearTimeout(frame.wake);
+        frame.wake = null;
         frame.offAbort?.();
         if (ok) {
           lastError = null;
@@ -294,7 +301,9 @@ function createGlobeRendering({
             );
           }
         } else {
-          lastError = 'Weather tiles unavailable · previous frame retained';
+          lastError = msg(
+            'Weather tiles unavailable · previous frame retained',
+          );
           remove(frame);
         }
         frame.resolve(ok);
@@ -413,7 +422,7 @@ function createGlobeRendering({
             return;
           }
           frame.failed = true;
-          lastError = 'Some weather tiles unavailable';
+          lastError = msg('Some weather tiles unavailable');
           onChange();
         });
         // A shown, transparent layer lets Cesium request staging tiles while the last
@@ -446,8 +455,20 @@ function createGlobeRendering({
             if (++settled >= 2) finish(true);
             else viewer.scene.requestRender();
           } else settled = 0;
-          if (incoming === frame && frame.pending === 0 && frame.loaded > 0)
-            viewer.scene.requestRender();
+          // Waiting out the quiet interval needs another readiness check
+          // later, not a render every frame: wake on a timer so the render
+          // governor's frame cap still holds while a frame is staged.
+          if (
+            incoming === frame &&
+            frame.pending === 0 &&
+            frame.loaded > 0 &&
+            !frame.wake
+          )
+            frame.wake = setTimeout(() => {
+              frame.wake = null;
+              if (!frame.closed && incoming === frame)
+                viewer.scene.requestRender();
+            }, READY_WAKE_MS);
         });
         viewer.scene.requestRender();
         onChange();

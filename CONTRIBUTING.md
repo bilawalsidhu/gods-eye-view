@@ -54,8 +54,8 @@ head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run i
 Runnable gate entrypoints document what they assert and how to invoke them.
 Most need a dev server; some also need a specific provider key or port. Follow
 the entrypoint's header rather than assuming every matching file accepts the
-same arguments. Only a couple (`qa:map-source-tray`, `qa:transit`) have an
-`npm run` alias.
+same arguments. Four have an `npm run` alias: `qa:map-source-tray`,
+`qa:street-level`, `qa:street-level:fixtures` and `qa:transit`.
 
 If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
 for the feature: it names the gate for many of them, and it's the authoritative
@@ -63,12 +63,12 @@ runtime reference either way. `scripts/qa-l9-matrix.mjs` aggregates the broader
 release-candidate checks and selected harnesses; it does not replace the focused
 gate for the feature you changed.
 
-> **CI does not cover this for you.** The workflow runs the setup policy
+> **CI covers only two of these for you.** The workflow runs the setup policy
 > checks, the formatting and package-boundary checks, the unit suite and the
 > production build, plus a Windows onboarding job. It runs neither
-> `npm run test:track` nor any `qa-*.mjs` gate — both need a live dev server
-> and a browser. Include the applicable local run in your PR's validation
-> evidence.
+> `npm run test:track` nor any `qa-*.mjs` gate except the Street Level fixture
+> gate (`street-level-browser` job) — they need a live dev server and a
+> browser. Include the applicable local run in your PR's validation evidence.
 
 ## Share-link layer tokens
 
@@ -79,8 +79,8 @@ if its layer is later removed.
 
 New layers first use the remaining unreserved single-character digits (`0`
 through `9`), then the two-character base-36 namespace (`00` through `zz`). On the
-current published ledger, `0`, `1` and `2` are already owned, so the next
-choices are `3` through `9`, then `00`. After rebasing onto the latest `main`, run
+current published ledger, `0`, `1`, `2` and `3` are already owned, so the next
+choices are `4` through `9`, then `00`. After rebasing onto the latest `main`, run
 `npm run layer-token:next -- <layer-id>`, add that result to both the permanent
 JSON reservation ledger and registry entry, and keep the exact registered-layer
 count assertion up to date. The token is assigned against the merge-time base, not
@@ -98,7 +98,7 @@ remove only your still-unpublished layer's registry entry and ledger row so the
 local registry is valid again, then rerun `npm run layer-token:next -- <layer-id>`.
 For example, if PR A publishes `0` while PR B still provisionally uses `0`,
 PR B removes only its own provisional entry, reruns the helper, and receives
-`3`. Put `3` on PR B's registry entry and ledger row, update its pinned count
+`4`. Put `4` on PR B's registry entry and ledger row, update its pinned count
 and token tests, then rerun `npm run layer-token:check -- --base-ref origin/main`.
 An invalid duplicate ledger can fail during module import before the helper
 prints anything; never fix that by renaming or deleting PR A's published token.
@@ -108,7 +108,7 @@ prints anything; never fix that by renaming or deleting PR A's published token.
 The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs — never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
-- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
+- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template, and see [Adding a new layer](#adding-a-new-layer) for what the PR needs.
 - **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
 - **🐛 Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
@@ -116,7 +116,7 @@ The highest-leverage places to jump in:
 ## Architecture in one minute
 
 - **No framework.** Vanilla JS + [CesiumJS](https://cesium.com/platform/cesiumjs/) + [Vite](https://vitejs.dev/).
-- **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/ui.js` and `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
+- **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
 - Sources acquire records; renderers own Cesium resources. Import `gods-eye-view/layers/<family>/source` when only a source factory is needed. Common voice controls consume the session interface; protocol adapters own connection details.
 - **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
@@ -126,6 +126,7 @@ The highest-leverage places to jump in:
 - ES modules, **2-space indent, single quotes, semicolons.**
 - JSDoc on exported/public functions.
 - Match the surrounding code — comment density, naming, and idiom.
+- User-visible text goes through `t()`, `tn()` or `msg()`, or a `data-i18n*` attribute in markup, and `npm run i18n` must pass. See [docs/I18N.md](docs/I18N.md).
 - Prefer small, reviewable commits. Conventional-commit-style prefixes (`feat:`, `fix:`, `perf:`, `docs:`) are appreciated but not required.
 
 ## Formatting and reusable components
@@ -149,9 +150,36 @@ ownership and adoption process.
 
 1. Branch off `main`.
 2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
-3. If you change runtime behavior, update `docs/CURRENT-STATE.md` and `CHANGELOG.md` in the same PR.
+3. If you change runtime behavior, update `docs/CURRENT-STATE.md` in the same PR, and add your changelog entry as `changelog.d/<pr-number>-<slug>.md` instead of editing `CHANGELOG.md` — see [changelog.d/README.md](changelog.d/README.md). Distinct filenames don't conflict; a release assembles the directory into `CHANGELOG.md`. A documentation claim that needs a regression test should assert against `docs/CURRENT-STATE.md` or `README.md`, which a PR still edits directly.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
+6. If you add a new layer, fill in the new-layer section of the PR template. See [Adding a new layer](#adding-a-new-layer).
+
+## Adding a new layer
+
+A new layer changes what everyone sees on the globe, so maintainers need to see
+it working and know where its data comes from before reviewing the code. PRs
+that add a layer must include all four of these in the description. The PR
+template has a section for them.
+
+1. **Screenshots.** At least one of the layer on the globe, plus its info card
+   or panel if it has one.
+2. **A screen recording**, preferably 15 to 30 seconds: turn the layer on, move
+   around, and open a record. Drag an `.mp4` or `.mov` into the PR description.
+   GitHub accepts videos up to 10 MB on free accounts, so link to a larger file
+   instead of attaching it.
+3. **The proposed category.** Say which layer-panel group the layer belongs in.
+   The groups are defined in `PANEL_GROUPS` in `src/ui/layerPanel.js` (today:
+   Movement, Cameras, Infrastructure, Events, Weather and Utilities). A layer
+   that isn't listed there falls under "Other layers". If none of the groups
+   fits, propose a new one and explain why.
+4. **The data source and licence.** Name the provider and endpoint, link its
+   licence or terms, give the attribution shown in the app, and say whether it
+   needs a key and whether the data is fetched at runtime or bundled. Add the
+   same details to [DATA_SOURCES.md](DATA_SOURCES.md) and register the credit
+   in `src/data/dataCredits.js`.
+
+Maintainers may hold a layer PR until all four are there.
 
 ## Maintainers
 

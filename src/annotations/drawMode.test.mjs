@@ -330,3 +330,18 @@ test('longitude unwrapping is continuous and re-wraps to one canonical range', (
   assert.equal(wrapLongitude(180), -180);
   assert.equal(unwrapLongitudes([]).length, 0);
 });
+
+test('a line that rounds up to a kilometre reads 1.0 km, not 1000 m', () => {
+  const metresPerDegree = (6371.0088 * 1000 * Math.PI) / 180;
+  const lat = 999.6 / metresPerDegree;
+  const line = createDrawSession('line');
+  addVertex(line, { lon: 0, lat: 0 });
+  addVertex(line, { lon: 0, lat });
+  const metres = pathLengthM(line.vertices);
+  assert.ok(
+    metres >= 999.5 && metres < 1000,
+    `length should round to 1000 m, got ${metres}`,
+  );
+  assert.equal(formatMeasure(line), '1.0 km');
+  assert.match(drawHint(line), /^1\.0 km · /);
+});

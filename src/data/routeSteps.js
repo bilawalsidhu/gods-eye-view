@@ -54,6 +54,21 @@ function direction(modifier) {
   return DIRECTION_WORDS[key] || key;
 }
 
+/**
+ * "on the left" only fits a bare side. "slight left" is the adverb
+ * "slightly left", and "on the slightly left" is not an instruction.
+ * @param {string} prefix "Take the ramp" or "Take the exit".
+ * @param {string} modifier OSRM maneuver modifier.
+ * @param {string} onto " onto …", or "".
+ */
+function directedWay(prefix, modifier, onto) {
+  const dir = direction(modifier);
+  if (dir === 'left' || dir === 'right')
+    return `${prefix} on the ${dir}${onto}`;
+  if (dir && dir !== 'straight') return `${prefix} ${dir}${onto}`;
+  return `${prefix}${onto}`;
+}
+
 function ordinal(n) {
   if (!Number.isInteger(n) || n < 1) return null;
   const suffix =
@@ -103,13 +118,9 @@ export function instructionFor(step) {
     case 'merge':
       return dir ? `Merge ${dir}${onto}` : `Merge${onto}`;
     case 'on ramp':
-      return dir
-        ? `Take the ramp on the ${dir}${onto}`
-        : `Take the ramp${onto}`;
+      return directedWay('Take the ramp', modifier, onto);
     case 'off ramp':
-      return dir
-        ? `Take the exit on the ${dir}${onto}`
-        : `Take the exit${onto}`;
+      return directedWay('Take the exit', modifier, onto);
     case 'roundabout':
     case 'rotary': {
       const exit = ordinal(step?.exit);
@@ -124,8 +135,14 @@ export function instructionFor(step) {
     case 'exit roundabout':
     case 'exit rotary':
       return `Exit the roundabout${onto}`;
-    case 'use lane':
-      return dir ? `Use the ${dir} lane${onto}` : `Continue${onto}`;
+    case 'use lane': {
+      const lane = modifier.includes('left')
+        ? 'left'
+        : modifier.includes('right')
+          ? 'right'
+          : '';
+      return lane ? `Use the ${lane} lane${onto}` : `Continue${onto}`;
+    }
     case 'notification':
     default:
       return `Continue${onto}`;
@@ -185,9 +202,9 @@ export function normalizeOsrmSteps(route) {
         }
         continue;
       }
+      if (out.length >= ROUTE_STEPS_MAX) return { steps: out, truncated: true };
       step.instruction = instructionFor(step);
       out.push(step);
-      if (out.length >= ROUTE_STEPS_MAX) return { steps: out, truncated: true };
     }
   }
   return { steps: out, truncated: false };

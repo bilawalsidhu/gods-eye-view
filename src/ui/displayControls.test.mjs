@@ -158,3 +158,29 @@ test('optional controls are absent safely and subscriptions stay instance-owned'
   assert.deepEqual(calls, ['b']);
   two.destroy();
 });
+
+test('the native Scope checkbox reads checked state on change and disposes its listener', () => {
+  const scopeToggle = element();
+  scopeToggle.checked = true;
+  const scopeFeatherSlider = element('200');
+  const calls = [];
+  const controls = bindDisplayControls({
+    elements: { scopeToggle, scopeFeatherSlider },
+    actions: {
+      setScopeEnabled: (value) => calls.push(['enabled', value]),
+      setScopeFeather: (value) => calls.push(['feather', value]),
+    },
+  });
+  scopeToggle.checked = false;
+  scopeToggle.dispatchEvent(new Event('change'));
+  scopeToggle.checked = true;
+  scopeToggle.dispatchEvent(new Event('change'));
+  scopeFeatherSlider.dispatchEvent(new Event('input'));
+  controls.destroy();
+  scopeToggle.dispatchEvent(new Event('change'));
+  assert.deepEqual(calls, [
+    ['enabled', false],
+    ['enabled', true],
+    ['feather', 200],
+  ]);
+});

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { t } from '../i18n/index.js';
 
 function trackedTarget(viewer) {
   const entity = viewer.trackedEntity;
@@ -106,7 +107,7 @@ export function readCameraTargetFrame(viewer) {
 }
 
 /** Apply an orbit frame, then return the camera to Cesium's fixed-world frame. */
-export function setCameraTargetFrame(viewer, frame) {
+function setCameraTargetFrame(viewer, frame) {
   const camera = viewer?.camera;
   if (!camera || !frame?.target || !Number.isFinite(frame.range)) return false;
   try {
@@ -155,7 +156,7 @@ export function setCameraTargetFrame(viewer, frame) {
  *
  * @param {{pitch: number}|null} frame From {@link readCameraTargetFrame}.
  */
-export function frameIsTilted(frame) {
+function frameIsTilted(frame) {
   const pitch = Number(frame?.pitch);
   return Number.isFinite(pitch) ? pitch > OBLIQUE_THRESHOLD : false;
 }
@@ -288,8 +289,8 @@ export function bindCameraOrientationControls({
       tiltButton?.setAttribute(
         'aria-label',
         next.tilted
-          ? 'Return map to straight-down view'
-          : 'Tilt map to oblique view',
+          ? t('Return map to straight-down view')
+          : t('Tilt map to oblique view'),
       );
     }
     if (!applied || applied.heading !== next.heading) {
@@ -297,7 +298,9 @@ export function bindCameraOrientationControls({
       northButton?.style?.setProperty('--camera-heading', `${next.heading}deg`);
       northButton?.setAttribute(
         'aria-label',
-        `Reset map to north up. Current heading ${next.heading} degrees`,
+        t('Reset map to north up. Current heading {heading} degrees', {
+          heading: next.heading,
+        }),
       );
     }
     applied = next;
@@ -323,7 +326,7 @@ export function bindCameraOrientationControls({
         : false;
     });
     if (result) {
-      showToast?.(result.tilted ? 'Tilted view' : 'Straight-down view');
+      showToast?.(result.tilted ? t('Tilted view') : t('Straight-down view'));
       // The action reports the state it just commanded, so the button can
       // follow it without a second pick.
       tilted = result.tilted;
@@ -342,7 +345,7 @@ export function bindCameraOrientationControls({
         })
       );
     });
-    if (result) showToast?.('North up');
+    if (result) showToast?.(t('North up'));
     sync();
   });
 

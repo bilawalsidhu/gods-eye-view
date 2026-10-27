@@ -39,11 +39,21 @@ export function escapeXml(text) {
 /**
  * Coerce a value to a finite number, returning fallback if NaN/Infinity.
  *
+ * Absent, blank and boolean values take the fallback too: `Number` reads
+ * null, '' and false as 0, which would turn a missing coordinate, heading or
+ * elevation into a real zero.
+ *
  * @param {*} value
  * @param {number} [fallback=NaN]
  * @returns {number}
  */
 export function toFiniteNumber(value, fallback = NaN) {
+  if (
+    value == null ||
+    typeof value === 'boolean' ||
+    (typeof value === 'string' && !value.trim())
+  )
+    return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 }
@@ -54,7 +64,7 @@ export function toFiniteNumber(value, fallback = NaN) {
  * @param {string} text
  * @returns {string}
  */
-export function normalizeKey(text) {
+function normalizeKey(text) {
   return String(text || '')
     .trim()
     .toLowerCase()
@@ -70,7 +80,7 @@ export function normalizeKey(text) {
  * @param {string} value
  * @returns {{lat:number, lon:number}}
  */
-export function parsePointString(value) {
+function parsePointString(value) {
   const match = String(value || '').match(
     /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
   );
@@ -90,7 +100,7 @@ export function parsePointString(value) {
  * @param {string|object|null} value
  * @returns {{lat:number, lon:number}}
  */
-export function coerceLatLon(value) {
+function coerceLatLon(value) {
   if (!value) return { lat: NaN, lon: NaN };
 
   if (typeof value === 'string') {
@@ -367,6 +377,39 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** Florida statewide, Key West to Georgia state line, with slack at each edge */
+export function isLikelyFloridaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 24.3 &&
+    lat <= 31.1 &&
+    lon >= -87.7 &&
+    lon <= -79.8
+  );
+}
+
+/** New York City's five boroughs, with slack for the harbor and city line. */
+export function isLikelyNycCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 40.45 &&
+    lat <= 40.95 &&
+    lon >= -74.3 &&
+    lon <= -73.65
+  );
+}
+
+/** Hong Kong SAR extent, with slack for the outlying islands. */
+export function isLikelyHongKongCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 22.15 &&
+    lat <= 22.6 &&
+    lon >= 113.8 &&
+    lon <= 114.45
+  );
+}
+
 /** Mainland Norway, with slack for the coast and the Finnmark border. */
 export function isLikelyNorwayCoordinate(lat, lon) {
   return (
@@ -381,6 +424,44 @@ export function isLikelyNorwayCoordinate(lat, lon) {
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;
+}
+
+/** Catalonia bounding box (mainland is roughly 40.5..42.9 N, 0.15..3.4 E). */
+export function isLikelyCataloniaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 40.3 &&
+    lat <= 42.9 &&
+    lon >= 0.0 &&
+    lon <= 3.4
+  );
+}
+
+/**
+ * Decode numeric HTML character references, decimal ("&#237;") and hex
+ * ("&#xED;") alike, the entity form the Catalonia feed uses for accented
+ * place names, plus the handful of named entities XML/HTML text commonly
+ * carries. A reference that names no valid character (NUL, a surrogate, or
+ * anything past U+10FFFF) is left as written rather than thrown on, so one
+ * bad field cannot fail a whole catalog.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function decodeNumericEntities(text) {
+  return String(text || '')
+    .replace(/&#(?:x([0-9a-f]+)|(\d+));/gi, (match, hex, dec) => {
+      const code = hex ? Number.parseInt(hex, 16) : Number(dec);
+      const valid =
+        code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
+      return valid ? String.fromCodePoint(code) : match;
+    })
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
 }
 
 /**
@@ -551,5 +632,65 @@ export function normalizeSourceItem(item) {
     // badge can distinguish them from raw automated priors (e.g. Austin Open
     // Data, which never sets this field). Passed through as-is to the client.
     poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
+    // Optional hardware-model passthrough (additive, like poseSource): packs
+    // whose catalog publishes the camera's hardware model — King County's
+    // layer carries Manufacturer/Model per camera — pass it through so
+    // identified-hardware consumers can use it. Absent everywhere else.
+    model:
+      typeof item.model === 'string' && item.model.trim()
+        ? item.model.trim()
+        : undefined,
+    // Bare model strings collide across vendors (e.g. "3950"), so the
+    // publishing pack's manufacturer rides along for disambiguation.
+    manufacturer:
+      typeof item.manufacturer === 'string' && item.manufacturer.trim()
+        ? item.manufacturer.trim()
+        : undefined,
   };
+}
+
+/** City of Toronto bounding box (Steeles to the lake, Etobicoke to Scarborough). */
+export function isLikelyTorontoCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 43.55 &&
+    lat <= 43.9 &&
+    lon >= -79.7 &&
+    lon <= -79.1
+  );
+}
+
+/**
+ * A camera URL under a pinned directory, by parsed URL rather than string
+ * prefix: the same scheme and exact host as `prefix`, no credentials, the
+ * default port, and a normalized path inside the prefix's directory. Dot
+ * segments (including encoded ones) and backslashes are resolved before the
+ * path is compared, and an encoded slash or backslash is refused.
+ *
+ * @param {string} raw - Camera URL from a catalog or redirect.
+ * @param {string} prefix - Pinned origin and directory, ending in `/`.
+ * @returns {string|null} The normalized URL, or null when it is not pinned.
+ */
+export function pinnedCameraUrl(raw, prefix) {
+  let url;
+  let pin;
+  try {
+    url = new URL(String(raw ?? '').trim());
+    pin = new URL(prefix);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== pin.protocol ||
+    url.hostname !== pin.hostname ||
+    url.username ||
+    url.password ||
+    url.port ||
+    !url.pathname.startsWith(
+      pin.pathname.endsWith('/') ? pin.pathname : `${pin.pathname}/`,
+    ) ||
+    /%2f|%5c/i.test(url.pathname)
+  )
+    return null;
+  return url.href;
 }

@@ -4,6 +4,8 @@ import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
+import { loadLithuaniaSources } from './lithuania.js';
+import { loadTaiwanSources } from './taiwan.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -17,19 +19,32 @@ import {
   loadWarendorfSourcesFromCatalog,
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
+  loadCataloniaSourcesFromOpenData,
+  loadHkSourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadKingCountySourcesFromOpenData,
+  loadWsdotSourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
+  loadNycSourcesFromOpenData,
+  loadTorontoSourcesFromOpenData,
+  loadFloridaSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
+/** Env opt-in: only "1" enables. For packs whose feed access needs an
+ * operator agreement or whose terms are unconfirmed, so an unset flag never
+ * reaches the upstream. */
+const envOptIn = (name) => String(process.env[name] || '').trim() === '1';
 
 /**
  * Live open-data packs, in merge order. Adding a region is one entry here
- * plus its loader in sources.js; the catalog cap is shared across entries
- * round-robin (cap.js), so a new pack never silently evicts an older one.
+ * plus its loader (in sources.js or its own module); the catalog cap is
+ * shared across entries round-robin (cap.js), so a new pack never silently
+ * evicts an older one.
  * Each pack fails independently (allSettled) and is gated by its own env
- * kill switch.
+ * kill switch, or by an opt-in flag where access needs an agreement or the
+ * terms are unconfirmed.
  */
 const LIVE_PACKS = [
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
@@ -89,14 +104,66 @@ const LIVE_PACKS = [
     load: loadCalgarySourcesFromOpenData,
   },
   {
+    name: 'catalonia',
+    enabled: () => envEnabled('CCTV_CATALONIA_ENABLED'),
+    load: loadCataloniaSourcesFromOpenData,
+  },
+  {
+    name: 'hk',
+    enabled: () => envEnabled('CCTV_HK_ENABLED'),
+    load: loadHkSourcesFromOpenData,
+  },
+  {
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
   },
   {
+    name: 'kingcounty',
+    enabled: () => envEnabled('CCTV_KINGCOUNTY_ENABLED'),
+    load: loadKingCountySourcesFromOpenData,
+  },
+  {
+    name: 'wsdot',
+    enabled: () => envEnabled('CCTV_WSDOT_ENABLED'),
+    load: loadWsdotSourcesFromOpenData,
+  },
+  {
     name: 'vegvesen',
     enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
     load: loadVegvesenSourcesFromOpenData,
+  },
+  {
+    // NYC DOT requires a data-sharing agreement for this feed, so the pack is
+    // off unless the operator opts in (see DATA_SOURCES.md).
+    name: 'nyc',
+    enabled: () => envOptIn('CCTV_NYC_ENABLED'),
+    load: loadNycSourcesFromOpenData,
+  },
+  {
+    name: 'toronto',
+    enabled: () => envEnabled('CCTV_TORONTO_ENABLED'),
+    load: loadTorontoSourcesFromOpenData,
+  },
+  {
+    // Opt-in until the Via Lietuva open-data terms are confirmed to cover the
+    // camera photos (see DATA_SOURCES.md).
+    name: 'lithuania',
+    enabled: () => envOptIn('CCTV_LITHUANIA_ENABLED'),
+    load: loadLithuaniaSources,
+  },
+  {
+    // FL511's terms limit its content to individual, personal use (other use
+    // needs FDOT's written consent), so the pack is off unless the operator
+    // opts in (see DATA_SOURCES.md).
+    name: 'florida',
+    enabled: () => envOptIn('CCTV_FLORIDA_ENABLED'),
+    load: loadFloridaSourcesFromOpenData,
+  },
+  {
+    name: 'taiwan',
+    enabled: () => envEnabled('CCTV_TAIWAN_ENABLED'),
+    load: loadTaiwanSources,
   },
 ];
 /**
@@ -149,16 +216,19 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   /** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
    * callers so a post-TTL burst launches ONE refetch, not one per request. */
   let _cctvSourceInflight = null;
-  /** @type {Array<{pack: string, available: number, served: number}>} Packs
-   * that serve fewer cameras than they offer. */
-  let _cctvTrimmedPacks = [];
+  /** @type {WeakMap<Array<object>, Array<{pack: string, available: number, served: number}>>}
+   * Packs that serve fewer cameras than they offer, keyed by the source list
+   * they describe, so a request served the old list during a background
+   * refresh never pairs it with the new list's trim notes. */
+  const _cctvTrimmedPacks = new WeakMap();
 
   /**
    * Assemble and cache the merged CCTV source list.
    *
    * Merges every source pack (live open-data packs, local file, env
    * variable), deduplicates by ID, shares the catalog cap fairly across
-   * packs, and caches for CCTV_SOURCE_CACHE_MS.
+   * packs, and caches for CCTV_SOURCE_CACHE_MS. Past that, the cached list is
+   * returned while a background refresh replaces it; only a first load waits.
    *
    * @returns {Promise<Array<object>>} Deduplicated, capped source list.
    */
@@ -173,11 +243,31 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     // Single-flight: a burst of requests arriving past the TTL shares ONE refresh
     // instead of each launching the full multi-provider refetch. The `.finally`
     // clears the ref so the next post-TTL cycle starts fresh.
-    if (_cctvSourceInflight) return _cctvSourceInflight;
-    _cctvSourceInflight = refreshCctvSources().finally(() => {
-      _cctvSourceInflight = null;
-    });
-    return _cctvSourceInflight;
+    if (!_cctvSourceInflight) {
+      _cctvSourceInflight = refreshCctvSources().finally(() => {
+        _cctvSourceInflight = null;
+      });
+      // A background refresh has no caller waiting on it: report its failure
+      // here, once per refresh rather than once per request it serves. Keep
+      // the old catalog for another TTL, as an empty refresh does, so a refresh
+      // that keeps failing is retried once per TTL, not back to back.
+      if (_cctvSourceCache.length) {
+        _cctvSourceInflight.catch((error) => {
+          _cctvSourceCacheAt = Date.now();
+          console.warn(
+            '[CCTV] background catalog refresh failed; serving',
+            _cctvSourceCache.length,
+            'cameras from the last catalog:',
+            error?.message || error,
+          );
+        });
+      }
+    }
+    // With a catalog in hand, answer with it while the refresh runs: the
+    // refresh lasts as long as the slowest pack (Tarktee's DATEX feeds take up
+    // to its 30 s timeout), and every /api/cctv request would otherwise wait
+    // for it. Only the first load, with nothing to serve yet, waits.
+    return _cctvSourceCache.length ? _cctvSourceCache : _cctvSourceInflight;
   }
 
   /**
@@ -267,7 +357,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     }
     if (capped.length > 0 || _cctvSourceCache.length === 0) {
       _cctvSourceCache = capped;
-      _cctvTrimmedPacks = trimmedPacks;
+      _cctvTrimmedPacks.set(capped, trimmedPacks);
     } else {
       // Every source came back empty (all live packs timed out / upstream outage)
       // but a good catalog is already cached — serve it stale rather than blanking
@@ -281,7 +371,10 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     return _cctvSourceCache;
   }
 
-  /** Packs serving fewer cameras than they offer, as of the last refresh. */
-  getCctvSources.trimmedPacks = () => _cctvTrimmedPacks;
+  /** Packs serving fewer cameras than they offer in `sources` (by default the
+   * current catalog). Pass the list a request was served to keep the two in
+   * step while a background refresh swaps the catalog. */
+  getCctvSources.trimmedPacks = (sources = _cctvSourceCache) =>
+    _cctvTrimmedPacks.get(sources) ?? [];
   return getCctvSources;
 }

@@ -171,9 +171,12 @@
     .dock-tray-toggle,
     .dock-popover,
     .scene-btn,
+    .gev-action-button:not(.gev-action-button--compact),
     .context-mode-button,
     .map-stack-chip,
     .key-setup-chip,
+    .locale-picker-button,
+    .locale-picker-popup,
     .first-run-card
   ) {
   border-color: var(--glass-border);
@@ -504,11 +507,13 @@
     0 0 12px rgba(196, 84, 84, 0.14);
 }
 
+:root[data-ui-theme='cyber'] .gev-segmented,
 :root[data-ui-theme='cyber'] .pp-mode-seg {
   border-color: rgba(206, 222, 226, 0.24);
   border-radius: 1px;
 }
 
+:root[data-ui-theme='cyber'] .gev-segment[aria-checked='true'],
 :root[data-ui-theme='cyber'] .pp-mode-btn.active {
   background: var(--cyber-red);
   color: #f7f8f7;
@@ -539,10 +544,19 @@
   text-shadow: none;
 }
 
-:root[data-ui-theme='cyber'] :where(.pp-select, select, input, textarea) {
+:root[data-ui-theme='cyber']
+  :where(.pp-select, select, input, textarea):where(:not(.gev-field)) {
   border-color: rgba(206, 222, 226, 0.24);
   background-color: rgba(26, 35, 39, 0.96);
   color: var(--text-primary);
+}
+
+/* Shared fields consume theme palettes through their own surface rule.
+   Feature palettes (Radio) retain precedence without restyling native fields. */
+:root[data-ui-theme='cyber'] .gev-field {
+  --gev-field-border-color: rgba(206, 222, 226, 0.24);
+  --gev-field-background: rgba(26, 35, 39, 0.96);
+  --gev-field-color: var(--text-primary);
 }
 
 :root[data-ui-theme='cyber']
@@ -1834,9 +1848,11 @@
     display: none;
   }
 
+  /* Sits above the language picker row in the bottom-right corner
+     (locale-picker.css: 0.9rem inset + one ~2rem button + a gap). */
   #intel-hud[data-variant='cyber'] .hud-bottom-right {
     right: 28px;
-    bottom: 28px;
+    bottom: 3.5rem;
   }
 }
 
@@ -2268,6 +2284,12 @@
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-aircraft-meta {
   color: rgba(205, 225, 226, 0.48);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-aircraft-meta.emergency {
+  color: var(--cyber-red-bright);
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-vision-controls {
@@ -2727,6 +2749,9 @@
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-position-readout {
   right: 30px;
+  /* Clears the language picker row it shares the corner with, as in the
+     other themes (locale-picker.css). */
+  bottom: 3.5rem;
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-help {

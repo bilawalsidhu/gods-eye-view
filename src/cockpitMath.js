@@ -6,6 +6,15 @@ export function normalizeHeading(value) {
   return ((value % 360) + 360) % 360;
 }
 
+/**
+ * Three-digit heading readout, 000–359.
+ * Rounding 359.5° and above lands on north (000), not 360.
+ */
+export function formatHeadingReadout(degrees) {
+  if (!Number.isFinite(degrees)) return '---';
+  return String(Math.round(normalizeHeading(degrees)) % 360).padStart(3, '0');
+}
+
 /** Advance a displayed heading along the shortest arc without exceeding a slew rate. */
 export function slewHeading(current, target, maxStepDeg) {
   const from = normalizeHeading(current);
@@ -83,11 +92,65 @@ export function cockpitAltitudeDisplayFt(altitudeM, onGround) {
   return Number.isFinite(altitudeM) ? altitudeM * 3.28084 : null;
 }
 
-/** Format the cockpit Context scope without overstating installation coverage. */
+/** The English emergency line; see formatCockpitEmergency. */
+const ENGLISH_EMERGENCY = Object.freeze({
+  squawk: ({ squawk, label }) => `SQUAWK ${squawk} · ${label}`,
+  adsb: ({ priority, label }) =>
+    `ADS-B ${priority ? 'PRIORITY' : 'EMERGENCY'} · ${label}`,
+});
+
+/**
+ * HUD wording for a tracked aircraft's transponder emergency, or null.
+ * States what was broadcast, never a conclusion about the flight: the Mode A
+ * code when it names the status, else the ADS-B field it came from (an
+ * unrelated squawk is dropped).
+ * The cockpit passes its own formatter so the page shows it in the active
+ * language; this module stays i18n-free.
+ * @param {{label?: string, squawk?: string|null,
+ *   source?: string, severity?: string}|null|undefined} emergency
+ * @param {{squawk: Function, adsb: Function}} [format] Builds the line from
+ *   `{ name, label, squawk }` and `{ name, label, priority }`, where
+ *   `label` is the upper-cased `name`.
+ * @returns {string|null}
+ */
+export function formatCockpitEmergency(emergency, format = ENGLISH_EMERGENCY) {
+  const label = String(emergency?.label || '')
+    .trim()
+    .toUpperCase();
+  if (!label) return null;
+  const name = String(emergency.label).trim();
+  if (emergency.source === 'squawk' && emergency.squawk)
+    return format.squawk({ name, label, squawk: emergency.squawk });
+  return format.adsb({
+    name,
+    label,
+    priority: emergency.severity === 'priority',
+  });
+}
+
+/** The English Context scope line; see formatCockpitContextScope. */
+const ENGLISH_CONTEXT_SCOPE = Object.freeze({
+  window: ({ label, radiusKm }) =>
+    `${label} · ${radiusKm ?? '—'} KM AIR/SEA WINDOW`,
+  installations: ({ scope, coverage }) =>
+    `${scope} · INSTALLATIONS ${coverage}`,
+});
+
+/**
+ * Format the cockpit Context scope without overstating installation coverage.
+ * @param {string|number} subjectLabel
+ * @param {number} radiusM
+ * @param {string|null} [installationCoverage]
+ * @param {{window: Function, installations: Function}} [format] Builds the
+ *   line from `{ label, radiusKm }` (radiusKm is null when unknown) and
+ *   `{ scope, coverage }`.
+ * @returns {string}
+ */
 export function formatCockpitContextScope(
   subjectLabel,
   radiusM,
   installationCoverage = null,
+  format = ENGLISH_CONTEXT_SCOPE,
 ) {
   const normalizedLabel =
     typeof subjectLabel === 'string'
@@ -97,12 +160,12 @@ export function formatCockpitContextScope(
         : '—';
   const radiusKm =
     Number.isFinite(radiusM) && radiusM >= 0
-      ? String(Math.round(radiusM / 1000))
-      : '—';
+      ? Math.round(radiusM / 1000)
+      : null;
   const coverage =
     typeof installationCoverage === 'string' ? installationCoverage.trim() : '';
-  const base = `${normalizedLabel} · ${radiusKm} KM AIR/SEA WINDOW`;
-  return coverage ? `${base} · INSTALLATIONS ${coverage}` : base;
+  const base = format.window({ label: normalizedLabel, radiusKm });
+  return coverage ? format.installations({ scope: base, coverage }) : base;
 }
 
 /** Return seven 30-degree compass divisions centered on a heading. */

@@ -293,11 +293,26 @@
   height: 18px;
   font-weight: 700;
 }
+/* Outside A / B there is one chip (SHOW): in a translation it takes the
+   whole row, so a long label is not cut to a stub. English keeps the
+   reserved B half. */
+html:not([lang='en'])
+  .recent-imagery-readout:not([data-mode='ab'])
+  .ri-card-chips
+  .ri-chip[data-slot='a'] {
+  grid-column: 1 / -1;
+}
+html:not([lang='en'])
+  .recent-imagery-readout:not([data-mode='ab'])
+  .ri-card-chips
+  .ri-chip[data-slot='b'] {
+  display: none;
+}
 
-/* 4. The selection bar: mode, then two rows that are always there. */
+/* 4. The selection bar: 24px mode buttons plus borders, then two stable rows. */
 .recent-imagery-readout .ri-selection {
   display: grid;
-  grid-template-rows: 20px 20px 20px;
+  grid-template-rows: 26px 20px 20px;
   row-gap: 4px;
   padding: 5px;
   border: 1px solid var(--weather-card-border);
@@ -306,7 +321,6 @@
 .recent-imagery-readout .ri-mode {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
 }
 .recent-imagery-readout .ri-selection .data-toggle-chip {
   height: 20px;
@@ -347,6 +361,28 @@
   color: var(--text-secondary);
   font-style: italic;
 }
+/* The slot rows share the bar's columns (subgrid), so the tag column fits
+   the longest tag and both rows align; a long slot line (date · source ·
+   resolution · state) takes a second line instead of losing the state. */
+html:not([lang='en']) .recent-imagery-readout .ri-selection {
+  grid-template-columns: minmax(44px, max-content) minmax(0, 1fr) 22px;
+  column-gap: 6px;
+}
+html:not([lang='en']) .recent-imagery-readout .ri-mode {
+  grid-column: 1 / -1;
+}
+html:not([lang='en']) .recent-imagery-readout .ri-slot {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  height: auto;
+  min-height: 20px;
+}
+html:not([lang='en']) .recent-imagery-readout .ri-slot-tag {
+  padding: 0 3px;
+}
+html:not([lang='en']) .recent-imagery-readout .ri-slot-value {
+  white-space: normal;
+}
 .recent-imagery-readout .ri-unpin {
   width: 22px;
   padding: 0;
@@ -371,22 +407,29 @@
   letter-spacing: 1px;
   white-space: nowrap;
 }
+/* In a translation a label longer than its 76px column widens it to the
+   label's longest word, and the value wraps under the label. */
+html:not([lang='en']) .recent-imagery-readout .ri-controls {
+  grid-template-columns:
+    minmax(76px, min-content) minmax(0, 1fr) minmax(40px, max-content)
+    128px;
+}
+html:not([lang='en']) .recent-imagery-readout .ri-opacity-label {
+  flex-wrap: wrap;
+  align-content: center;
+  row-gap: 0;
+  line-height: 10px;
+}
 .recent-imagery-readout .ri-opacity-value {
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-}
-.recent-imagery-readout .ri-opacity {
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  accent-color: var(--accent);
-}
-.recent-imagery-readout .ri-opacity:disabled {
-  opacity: 0.35;
 }
 .recent-imagery-readout .ri-swap {
   width: 40px;
   padding: 0 2px;
+}
+html:not([lang='en']) .recent-imagery-readout .ri-swap {
+  width: auto;
+  min-width: 40px;
 }
 .recent-imagery-readout .ri-exports .rail-card-actions {
   display: grid;

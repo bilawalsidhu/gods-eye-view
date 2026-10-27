@@ -13,7 +13,9 @@ import {
   compassDivisions,
   formatAltitudeRulerTick,
   formatCockpitContextScope,
+  formatCockpitEmergency,
   formatCompassDivision,
+  formatHeadingReadout,
   formatSpeedRulerTick,
   normalizeHeading,
   relativeBearing,
@@ -152,6 +154,14 @@ test('compass divisions remain ordered across north', () => {
 test('compass labels use cardinals where exact and degrees elsewhere', () => {
   assert.equal(formatCompassDivision(270), 'W');
   assert.equal(formatCompassDivision(30), '030');
+});
+
+test('a heading that rounds to north reads 000, not 360', () => {
+  assert.equal(formatHeadingReadout(359.6), '000');
+  assert.equal(formatHeadingReadout(359.4), '359');
+  assert.equal(formatHeadingReadout(0), '000');
+  assert.equal(formatHeadingReadout(10.2), '010');
+  assert.equal(formatHeadingReadout(Number.NaN), '---');
 });
 
 test('great-circle bearing resolves cardinal directions', () => {
@@ -363,4 +373,22 @@ test('tracked-identity resolution falls back to layer precedence', () => {
   assert.equal(resolveTrackedAircraftInfo({ military, trackedId: '' }).layerId, 'military');
   assert.equal(resolveTrackedAircraftInfo({ trackedId: 'flights:aaa077' }), null);
   assert.equal(resolveTrackedAircraftInfo(), null);
+});
+
+test('cockpit emergency wording states the broadcast code, not a conclusion', () => {
+  assert.equal(
+    formatCockpitEmergency({ label: 'General emergency', squawk: '7700', source: 'squawk', severity: 'emergency' }),
+    'SQUAWK 7700 · GENERAL EMERGENCY',
+  );
+  assert.equal(
+    formatCockpitEmergency({ label: 'Downed aircraft', squawk: '1200', source: 'ads-b', severity: 'emergency' }),
+    'ADS-B EMERGENCY · DOWNED AIRCRAFT',
+    'an unrelated squawk is not quoted beside an ADS-B status',
+  );
+  assert.equal(
+    formatCockpitEmergency({ label: 'Minimum fuel', squawk: null, source: 'ads-b', severity: 'priority' }),
+    'ADS-B PRIORITY · MINIMUM FUEL',
+  );
+  assert.equal(formatCockpitEmergency(null), null);
+  assert.equal(formatCockpitEmergency({ label: '' }), null);
 });

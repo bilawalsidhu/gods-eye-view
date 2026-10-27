@@ -21,6 +21,7 @@ import {
   placementVariants,
 } from './worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
+import { t } from '../i18n/index.js';
 
 /**
  * @module worldOverlay
@@ -1154,11 +1155,7 @@ export function isOverlayPointVisible(
  * Return true when a rectangle intersects any cached UI exclusion box.
  * `count` lets pooled buffers expose a live prefix without truncating.
  */
-export function overlayRectIntersectsAny(
-  rect,
-  exclusions,
-  count = exclusions.length,
-) {
+function overlayRectIntersectsAny(rect, exclusions, count = exclusions.length) {
   for (let i = 0; i < count; i++) {
     const other = exclusions[i];
     if (
@@ -1176,7 +1173,7 @@ export function overlayRectIntersectsAny(
  * Like `overlayRectIntersectsAny`, but only against exclusions that composite
  * BELOW the host — the ones a placement may never overlap at any cost.
  */
-export function overlayRectIntersectsAnyHard(
+function overlayRectIntersectsAnyHard(
   rect,
   exclusions,
   count = exclusions.length,
@@ -1269,7 +1266,7 @@ function ensureOverlayDom() {
     _accessibilityRoot.id = ACCESSIBILITY_ROOT_ID;
     _accessibilityRoot.className = 'world-overlay-accessibility';
     _accessibilityRoot.setAttribute('role', 'region');
-    _accessibilityRoot.setAttribute('aria-label', 'Visible map targets');
+    _accessibilityRoot.setAttribute('aria-label', t('Visible map targets'));
     document.body.appendChild(_accessibilityRoot);
   }
   _accessibilityList = document.getElementById(ACCESSIBILITY_LIST_ID);
@@ -2419,7 +2416,9 @@ function syncAccessibleActions() {
       if (!activate) return;
       const accepted = activate();
       if (accepted !== false && _accessibilityStatus) {
-        _accessibilityStatus.textContent = `Focusing ${item.label}`;
+        _accessibilityStatus.textContent = t('Focusing {label}', {
+          label: item.label,
+        });
       }
     });
     _accessibilityList.appendChild(button);

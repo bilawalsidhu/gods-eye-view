@@ -1,4 +1,27 @@
 /** Scene panel elements and text-only project presentation. */
+import { formatNumber, msg, t } from '../i18n/index.js';
+import { createActionButton } from './actionButton.js';
+
+// Labels for what a shot stores; anything else shows as stored. Style names
+// match STYLE_STATUS_LABELS in visualPresets.js, which this package cannot
+// import (it pulls in the shaders).
+const STYLE_LABELS = Object.freeze({
+  normal: msg('NORMAL'),
+  retro: msg('CRT'),
+  surveillance: msg('NVG'),
+  thermal: msg('FLIR'),
+  anime: msg('ANIME'),
+  noir: msg('NOIR'),
+  snow: msg('SNOW'),
+});
+
+const DETECTION_MODE_LABELS = Object.freeze({
+  OFF: msg('OFF'),
+  SPARSE: msg('SPARSE'),
+  BALANCED: msg('BALANCED'),
+  DENSE: msg('DENSE'),
+});
+
 export function sceneElements(root = document) {
   const ids = {
     panel: 'scene-panel',
@@ -47,11 +70,16 @@ export function renderSceneShots(
   if (!scene || scene.shots.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'scene-shot-empty';
-    empty.textContent = 'No shots yet. Use CAPTURE SHOT to save current look.';
+    empty.textContent = t(
+      'No shots yet. Use CAPTURE SHOT to save current look.',
+    );
     element.appendChild(empty);
     return;
   }
   for (const shot of scene.shots) {
+    // Built-in titles arrive localized as displayTitle; the stored title
+    // stays English, so a rename happens only when the shown text changes.
+    const shownTitle = shot.displayTitle || shot.title;
     const row = document.createElement('div');
     row.className = 'scene-shot-row';
     row.dataset.sceneShotId = shot.id;
@@ -60,23 +88,23 @@ export function renderSceneShots(
     top.className = 'scene-shot-top';
     const label = document.createElement('div');
     label.className = 'scene-shot-label';
-    label.textContent = shot.title;
-    label.title = 'Double-click to rename';
+    label.textContent = shownTitle;
+    label.title = t('Double-click to rename');
     listen(label, 'click', () => select(shot.id));
     listen(label, 'dblclick', () => {
       if (label.children.length) return;
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'scene-shot-rename';
-      input.setAttribute('aria-label', 'Shot name');
-      input.value = shot.title;
+      input.setAttribute('aria-label', t('Shot name'));
+      input.value = shownTitle;
       let finished = false;
       const finish = (save) => {
         if (finished) return;
         finished = true;
         const title = input.value.trim();
-        label.textContent = shot.title;
-        if (save && title && title !== shot.title)
+        label.textContent = shownTitle;
+        if (save && title && title !== shownTitle)
           rename(scene.id, shot.id, title);
       };
       listen(input, 'keydown', (event) => {
@@ -94,13 +122,18 @@ export function renderSceneShots(
     });
     const actions = document.createElement('div');
     actions.className = 'scene-shot-actions';
-    const loadButton = document.createElement('button');
-    loadButton.className = 'scene-shot-btn';
-    loadButton.textContent = 'LOAD';
+    const loadButton = createActionButton({
+      label: t('LOAD'),
+      className: 'scene-shot-btn',
+      size: 'compact',
+    });
     listen(loadButton, 'click', () => load(scene.id, shot.id));
-    const deleteButton = document.createElement('button');
-    deleteButton.className = 'scene-shot-btn scene-shot-danger';
-    deleteButton.textContent = 'DEL';
+    const deleteButton = createActionButton({
+      label: t('DEL'),
+      className: 'scene-shot-btn scene-shot-danger',
+      size: 'compact',
+      variant: 'danger',
+    });
     listen(deleteButton, 'click', () => remove(scene.id, shot.id));
     actions.appendChild(loadButton);
     actions.appendChild(deleteButton);
@@ -110,7 +143,23 @@ export function renderSceneShots(
     meta.className = 'scene-shot-meta';
     const mode = shot.visual?.detection?.mode || 'OFF';
     const style = shot.visual?.style || 'normal';
-    meta.textContent = `${style.toUpperCase()} · ${mode} · ${shot.durationSec.toFixed(1)}s + ${shot.holdSec.toFixed(1)}s`;
+    const styleLabel = STYLE_LABELS[style]
+      ? t(STYLE_LABELS[style])
+      : style.toUpperCase();
+    const modeLabel = DETECTION_MODE_LABELS[mode]
+      ? t(DETECTION_MODE_LABELS[mode])
+      : mode;
+    const seconds = (value) =>
+      formatNumber(value, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      });
+    // English keeps its compact "4.0s + 0.9s"; other languages space the unit.
+    const timing = t('{duration}s + {hold}s', {
+      duration: seconds(shot.durationSec),
+      hold: seconds(shot.holdSec),
+    });
+    meta.textContent = `${styleLabel} · ${modeLabel} · ${timing}`;
     row.appendChild(top);
     row.appendChild(meta);
     element.appendChild(row);

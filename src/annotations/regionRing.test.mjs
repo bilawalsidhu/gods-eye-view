@@ -44,16 +44,123 @@ test('region ring: Natural Earth names resolve without a geocoder', async () => 
   for (const name of ['Gulf of Mexico', 'the Alps']) {
     const region = await resolveRegionRingForQuery(name);
     assert.ok(region?.ring?.length >= 3, `${name} resolves to a ring`);
+    assert.equal(region.source, 'natural-earth');
     assert.equal(region.error, undefined);
   }
+});
+
+test('region ring: duplicate natural names need a containing geocoded anchor', async () => {
+  const { resolveRegionRingForQuery } = createAnnotationResolver({
+    featureSource: featureSource(),
+  });
+  const miss = geocoderFor(null);
+  assert.equal(
+    await resolveRegionRingForQuery('Cordillera Oriental', undefined, miss),
+    null,
+  );
+  assert.deepEqual(miss.calls, ['Cordillera Oriental']);
+
+  const inside = geocoderFor({
+    lat: 5,
+    lng: -73,
+    label: 'Cordillera Oriental',
+    name: 'Cordillera Oriental',
+    types: ['natural_feature'],
+  });
+  const region = await resolveRegionRingForQuery(
+    'Cordillera Oriental',
+    undefined,
+    inside,
+  );
+  assert.equal(region?.source, 'natural-earth');
+  assert.equal(region.name, 'Cordillera Oriental');
+  assert.ok(region.ring.length >= 8);
+  assert.deepEqual(inside.calls, ['Cordillera Oriental']);
+});
+
+test('region ring: outside and overlapping geocoded natural anchors stay unresolved', async () => {
+  const { resolveRegionRingForQuery } = createAnnotationResolver({
+    featureSource: featureSource(),
+  });
+  for (const [name, lat, lng] of [
+    ['Cordillera Oriental', 30.27, -97.74],
+    ['Canadian Shield', 45.6336, -74.86493],
+  ]) {
+    const geocoder = geocoderFor({
+      lat,
+      lng,
+      label: name,
+      name,
+      types: ['natural_feature'],
+    });
+    assert.equal(
+      await resolveRegionRingForQuery(name, undefined, geocoder),
+      null,
+    );
+    assert.deepEqual(geocoder.calls, [name]);
+  }
+});
+
+test('region ring: geocoded administrative scope wins over duplicate natural geography', async () => {
+  const lookups = [];
+  const { resolveRegionRingForQuery } = createAnnotationResolver({
+    featureSource: featureSource({
+      getAdministrativeAreas: async (point) => {
+        lookups.push(point);
+        return [];
+      },
+    }),
+  });
+  const geo = geocoderFor({
+    lat: 5,
+    lng: -73,
+    label: 'Cordillera Oriental',
+    name: 'Cordillera Oriental',
+    types: ['locality'],
+  });
+  const resolved = await resolveRegionRingForQuery(
+    'Cordillera Oriental',
+    undefined,
+    geo,
+  );
+  assert.equal(
+    resolved,
+    null,
+    'an unavailable city boundary is not a natural-region outline',
+  );
+  assert.deepEqual(lookups, [{ lat: 5, lon: -73 }]);
+  assert.deepEqual(geo.calls, ['Cordillera Oriental']);
+});
+
+test('region ring: cancellation during bundled lookup and geocode never returns a region', async () => {
+  const { resolveRegionRingForQuery } = createAnnotationResolver({
+    featureSource: featureSource(),
+  });
+  const controller = new AbortController();
+  const pending = resolveRegionRingForQuery('the Alps', controller.signal);
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+
+  const later = new AbortController();
+  await assert.rejects(
+    resolveRegionRingForQuery('Cordillera Oriental', later.signal, {
+      async geocode() {
+        later.abort();
+        return { place: null };
+      },
+    }),
+    { name: 'AbortError' },
+  );
 });
 
 test('region ring: a slow admin-boundary lookup returns region-timeout within the budget', async () => {
   let adminSignal;
   let release;
+  let lookupStarted;
   const { resolveRegionRingForQuery } = createAnnotationResolver({
     featureSource: featureSource({
       getAdministrativeAreas(_point, { signal }) {
+        lookupStarted = Date.now();
         adminSignal = signal;
         return new Promise((resolve) => {
           release = resolve;
@@ -61,7 +168,6 @@ test('region ring: a slow admin-boundary lookup returns region-timeout within th
       },
     }),
   });
-  const started = Date.now();
   const region = await resolveRegionRingForQuery(
     'Atlantis',
     undefined,
@@ -73,8 +179,10 @@ test('region ring: a slow admin-boundary lookup returns region-timeout within th
     ring: null,
     error: 'region-timeout',
   });
+  // Timed from the boundary lookup, so the bundled pack scans before it do not
+  // count. Under the 3 s default budget, so an ignored budgetMs still fails.
   assert.ok(
-    Date.now() - started < 1000,
+    Date.now() - lookupStarted < 2_000,
     'returns at the budget, not the lookup',
   );
   // The lookup is left running so it can fill the boundary cache.
@@ -116,6 +224,7 @@ test('region ring: bundled states and counties resolve without a geocoder', asyn
   ]) {
     const region = await resolveRegionRingForQuery(query, undefined, geocoder);
     assert.equal(region?.name, name, query);
+    assert.equal(region.source, 'bundled-admin');
     assert.ok(region.ring.length >= 8, `${query} has a real ring`);
   }
   assert.deepEqual(geocoder.calls, [], 'no geocoding');

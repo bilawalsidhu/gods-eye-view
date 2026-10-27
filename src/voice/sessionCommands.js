@@ -1,7 +1,9 @@
-import { createVoiceControl } from './control.js';
+import { createVoiceControl, voiceStatusLabel } from './control.js';
 import { createVoiceSession } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
+import { VOICE_PROVIDERS } from './providerCapabilities.js';
+import { msg, registerUnsavedWork, t } from '../i18n/index.js';
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
@@ -24,19 +26,34 @@ export function createVoiceCommands({
   signal,
   debugSink,
   createControl = createVoiceControl,
+  resetExisting = true,
+  disposeRunner = true,
+  provider,
+  supportedProviders,
+  onProviderChange,
+  onSessionEvent,
   createCard = (options) => new VoiceCardControls(options),
   pointer = null,
   referents = null,
   createReticle = createDefaultReticle,
+  panelHost = null,
+  nativePanelProvider = null,
 }) {
-  window.__gevVoiceCommands?.stop?.({ removeUi: true });
-  const ui = createControl({ reset: true });
+  if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
+  const ui = createControl({
+    reset: true,
+    ...(panelHost ? { panel: true } : {}),
+  });
+  let actionObserver;
+  let panelMount;
   const session = createVoiceSession({
     runner,
     signal,
-    createAdapter: (hooks) =>
-      createSession({
+    createAdapter: (hooks) => {
+      if (panelHost) actionObserver = panelHost.observeActions(hooks);
+      return createSession({
         ...hooks,
+        ...(actionObserver ? { runAction: actionObserver.runAction } : {}),
         runner,
         ui,
         dataManager,
@@ -45,41 +62,96 @@ export function createVoiceCommands({
         createController,
         pointer,
         radioLayer: dataManager?.layers?.get('radio')?.module || null,
-      }),
+      });
+    },
   });
   const adapter = session.adapter;
   const capabilities = adapter.capabilities || {};
+  const providerHandler = () => onProviderChange?.(ui.providerSelect.value);
+  if (ui.providerSelect && onProviderChange) {
+    if (supportedProviders && ui.providerSelect.replaceChildren) {
+      const doc = ui.providerSelect.ownerDocument;
+      ui.providerSelect.replaceChildren(
+        ...supportedProviders.map((name) => {
+          const option = doc.createElement('option');
+          option.value = name;
+          option.textContent = VOICE_PROVIDERS[name].label;
+          return option;
+        }),
+      );
+    }
+    ui.providerSelect.value = provider;
+    ui.providerSelect.title = [
+      t('Changing provider reconnects voice if it is on.'),
+      capabilities.advisoryLimit,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    ui.providerSelect.addEventListener('change', providerHandler);
+    ui.root.dataset.provider = provider;
+  }
+  const hasProviderChoice = Boolean(
+    onProviderChange && supportedProviders?.length > 1,
+  );
+  if (ui.providerField) ui.providerField.hidden = !hasProviderChoice;
+  ui.root.dataset.providerChoice = String(hasProviderChoice);
   if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
   if (!capabilities.pushToTalk) {
-    ui.button.setAttribute('aria-label', 'Toggle voice control');
-    if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';
+    ui.button.setAttribute('aria-label', t('Toggle voice control'));
+    if (ui.helpDetail)
+      ui.helpDetail.textContent = t('Activate to toggle voice');
   }
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
   controls.session = session;
+  controls.ui = ui;
   const updateStatus = session.subscribe((event) => {
     if (event.type !== 'state') return;
     ui.root.dataset.status = event.state;
-    ui.status.textContent =
-      event.state === 'idle' ? 'OFF' : event.state.toUpperCase();
+    // States are machine values; only the label is translated.
+    ui.status.textContent = voiceStatusLabel(event.state);
+    // The portable session reports 'Voice off' in English: show the idle
+    // label instead. Other details are provider messages, shown as they come.
+    const idle = event.state === 'idle';
+    const detail = event.detail === 'Voice off' ? '' : event.detail;
     ui.detail.textContent =
-      event.detail || (event.state === 'idle' ? 'Voice off' : 'Voice active');
+      detail || (idle ? t('Voice off') : t('Voice active'));
     ui.button.setAttribute('aria-pressed', String(session.isActive()));
     if (ui.errorDetail)
       ui.errorDetail.textContent =
         event.state === 'error'
-          ? event.detail || 'Voice could not be started.'
+          ? event.detail || t('Voice could not be started.')
           : '';
     if (event.state === 'error') ui.root.classList?.remove('error-dismissed');
   });
   // Captions, plan and result card nested in the control; it only reads
   // provider-neutral session events.
-  const card = ui.card ? createCard({ root: ui.root }) : null;
-  const updateCard = card
-    ? session.subscribe((event) => card.handle(event))
+  const card = ui.card
+    ? createCard({
+        root: ui.root,
+        ...(panelHost ? { onRender: () => panelMount?.panel.sync() } : {}),
+      })
     : null;
+  panelMount = panelHost?.mount({
+    ui,
+    card,
+    session,
+    observer: actionObserver,
+    nativeProvider: nativePanelProvider,
+  });
+  const updatePanel = panelMount ? session.subscribe(panelMount.handle) : null;
+  const updateCard =
+    card && !panelMount
+      ? session.subscribe((event) => card.handle(event))
+      : null;
   controls.voiceCard = card;
+  if (panelMount) {
+    controls.voicePanel = panelMount.panel;
+    controls.captureVoicePanelOperation = panelMount.captureOperation;
+    controls.getVoicePanelState = panelMount.snapshot;
+    controls.getVoicePreferences = panelHost.snapshot;
+  }
   // Point-and-ask: the reticle follows turn events; pointer and referents are
   // session-scoped, so a session that ends forgets both.
   const reticle = pointer ? createReticle(pointer) : null;
@@ -95,42 +167,50 @@ export function createVoiceCommands({
   });
   controls.pointer = pointer;
   controls.referents = referents;
+  // Forward last: a host observer may synchronously replace or stop this mount.
+  const forwardEvents = onSessionEvent
+    ? session.subscribe(onSessionEvent)
+    : null;
   const annotationUnsubscribe = annotations?.onOutlineEvent?.((event) => {
     card?.outline(event);
     session.sendMapEvent({ type: 'map_annotation_outline', ...event });
   });
+  // A reload (the language switch) ends the conversation: ask first.
+  const unregisterUnsavedWork = registerUnsavedWork(() =>
+    session.isActive() ? msg('the active voice session') : null,
+  );
   const buttonHandler = () => {
     if (adapter.ignoreButtonClick?.()) return;
-    if (session.isActive()) session.stop();
-    else void session.start({ pushToTalk: false });
+    if (session.isActive()) {
+      const ticket = panelMount?.stopTicket();
+      session.stop();
+      panelMount?.closeAfterStop(ticket);
+    } else void session.start({ pushToTalk: false });
   };
   ui.button.addEventListener('click', buttonHandler);
-  session.signal.addEventListener(
-    'abort',
-    () => {
-      ui.button.removeEventListener('click', buttonHandler);
-      annotationUnsubscribe?.();
-      updateStatus();
-      updateCard?.();
-      updatePointer();
-      reticle?.destroy();
-      card?.destroy();
-      runner.dispose?.();
-      ui.root.remove();
-    },
-    { once: true },
-  );
-  if (session.disposed) {
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     ui.button.removeEventListener('click', buttonHandler);
+    ui.providerSelect?.removeEventListener('change', providerHandler);
+    unregisterUnsavedWork();
     annotationUnsubscribe?.();
     updateStatus();
     updateCard?.();
+    updatePanel?.();
+    panelMount?.destroy();
+    actionObserver?.dispose();
     updatePointer();
+    forwardEvents?.();
     reticle?.destroy();
     card?.destroy();
-    runner.dispose?.();
+    if (disposeRunner) runner.dispose?.();
     ui.root.remove();
-  } else adapter.bindControls?.();
+  };
+  session.signal.addEventListener('abort', cleanup, { once: true });
+  if (session.disposed) cleanup();
+  else adapter.bindControls?.();
   window.__gevVoiceCommands = controls;
   return controls;
 }

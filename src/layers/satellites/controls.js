@@ -4,6 +4,7 @@ import {
   satelliteClassLegend,
 } from '../../data/satelliteClass.js';
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { ISS_NORAD, POINT_STYLES } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
@@ -493,19 +494,27 @@ export function createControls({ state: layerState, services, parts, source }) {
       const active =
         layerState._params.catalog === 'dense' &&
         layerState._denseStatus === 'ready';
-      let title =
-        'Add the full Starlink broadband shell (thousands of extra points)';
-      if (loading) title = 'Loading the Starlink shell…';
+      let title = t(
+        'Add the full Starlink broadband shell (thousands of extra points)',
+      );
+      if (loading) title = t('Loading the Starlink shell…');
       else if (failed)
-        title = `Starlink ${layerState._denseError || 'load failed'} — click to retry`;
+        title = t('Starlink {detail} — click to retry', {
+          detail: layerState._denseError || t('load failed'),
+        });
       else if (active)
-        title =
-          'Showing the full Starlink shell — click for the core catalog only';
+        title = t(
+          'Showing the full Starlink shell — click for the core catalog only',
+        );
       return {
         chips: [
           {
             id: 'catalog',
-            label: loading ? 'DENSE ···' : failed ? 'DENSE ✕' : 'DENSE',
+            label: loading
+              ? t('DENSE ···')
+              : failed
+                ? t('DENSE ✕')
+                : t('DENSE'),
             active,
             busy: loading,
             disabled: loading,
@@ -536,16 +545,19 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     getStats() {
+      const stale = Boolean(layerState._coreStale || layerState._denseStale);
       return {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
-        stale: false,
+        stale,
         status:
           layerState._lastError === 'CelesTrak unreachable'
             ? 'unavailable'
             : layerState._lastError
               ? 'degraded'
-              : 'nominal',
+              : stale
+                ? 'stale'
+                : 'nominal',
         error: layerState._lastError,
       };
     },

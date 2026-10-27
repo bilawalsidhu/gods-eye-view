@@ -12,8 +12,9 @@ import {
 } from './dataCredits.js';
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import { INCIDENT_OVERVIEW_PLACES } from './bhoteKoshiIncidentPlaces.js';
+import { t, msg, getLocale } from '../i18n/index.js';
 
-export const BHOTE_KOSHI_LOCATOR_LAYER_ID = 'bhote-koshi-locator';
+const BHOTE_KOSHI_LOCATOR_LAYER_ID = 'bhote-koshi-locator';
 export const BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID =
   'bhote-koshi-locator-callout';
 export const NEPAL_CONTEXT_PRESENTATION = 'nepal-context';
@@ -34,7 +35,6 @@ const BORDER_START_DELAY_MS = 700;
 const INCIDENT_CALLOUT_GAP_MS = 200;
 const CALLOUT_REVEAL_DURATION_MS = 1200;
 const CALLOUT_PULSE_DURATION_MS = 1800;
-const CALLOUT_DOT_SIZE_PX = 7;
 const CALLOUT_RING_MIN_SIZE_PX = 16;
 const CALLOUT_RING_SIZE_RANGE_PX = 14;
 const CITY_CALLOUT_START_DELAY_MS = 350;
@@ -51,23 +51,42 @@ const TRIGGER_ORBIT_DURATION_SEC = 2.8;
 const TRIGGER_SOURCE_URL =
   'https://earthquake.usgs.gov/earthquakes/eventpage/us7000tbwb/executive';
 
+// Descriptive pin titles translate at display (same entries as the event
+// panel); place names stay Latin, anything else shows as authored.
+const PLACE_TITLE_TEXT = new Map(
+  [
+    msg('Collapse viewpoint'),
+    msg('Dammed lake'),
+    msg('Second landslide'),
+    msg('Border gate'),
+    msg('Dandagaun viewpoint'),
+    msg('Bidur bridge'),
+    msg('Devighat bridge'),
+  ].map((text) => [text.toUpperCase(), text]),
+);
+
+function placeTitle(title) {
+  const text = PLACE_TITLE_TEXT.get(title);
+  return text ? t(text).toLocaleUpperCase(getLocale()) : title;
+}
+
 const INCIDENT = Object.freeze({
   lat: 28.3632333,
   lon: 85.4423639,
   heightM: 5200,
-  title: 'BHOTE KOSHI FLOOD INCIDENT',
-  subtitle: 'NEPAL · 26 AUG 2026',
+  title: msg('BHOTE KOSHI FLOOD INCIDENT'),
+  subtitle: msg('NEPAL · 26 AUG 2026'),
 });
 const TRIGGER_RECORD = Object.freeze({
   lat: 28.271,
   lon: 85.515,
   heightM: 4200,
-  title: 'USGS INITIAL REPORT',
+  title: msg('USGS INITIAL REPORT'),
   details: Object.freeze([
-    '26 AUG 2026 · 08:37 NPT',
-    '28.2710° N · 85.5150° E',
-    'INITIAL M4.4 · RECLASSIFIED M5.2 LANDSLIDE',
-    'USGS EVENT us7000tbwb · OPEN SOURCE',
+    msg('26 AUG 2026 · 08:37 NPT'),
+    msg('28.2710° N · 85.5150° E'),
+    msg('INITIAL M4.4 · RECLASSIFIED M5.2 LANDSLIDE'),
+    msg('USGS EVENT us7000tbwb · OPEN SOURCE'),
   ]),
 });
 const TRIGGER_APPROACH_CAMERA = Object.freeze({
@@ -90,11 +109,13 @@ const NEPAL = Object.freeze({
   lat: 28.3949,
   lon: 84.124,
   heightM: 6800,
+  // i18n-ignore: country name, shown as is
   title: 'NEPAL',
 });
 const NEARBY_CITIES = Object.freeze([
   Object.freeze({
     id: 'kathmandu',
+    // i18n-ignore: city name
     title: 'KATHMANDU',
     lat: 27.7017,
     lon: 85.3206,
@@ -103,6 +124,7 @@ const NEARBY_CITIES = Object.freeze([
   }),
   Object.freeze({
     id: 'bhaktapur',
+    // i18n-ignore: city name
     title: 'BHAKTAPUR',
     lat: 27.673,
     lon: 85.43,
@@ -111,6 +133,7 @@ const NEARBY_CITIES = Object.freeze([
   }),
   Object.freeze({
     id: 'dhulikhel',
+    // i18n-ignore: city name
     title: 'DHULIKHEL',
     lat: 27.6221,
     lon: 85.5428,
@@ -394,8 +417,8 @@ export function createBhoteKoshiLocatorLayer({
         position,
         variant: 'card',
         paintLane: 'thumbnail',
-        title: subject.title,
-        details: [subject.subtitle],
+        title: t(subject.title),
+        details: [t(subject.subtitle)],
         accent: INCIDENT_ACCENT,
         sourceAlpha: () => presentation().alpha,
         presentationScale: () => presentation().scale,
@@ -536,8 +559,8 @@ export function createBhoteKoshiLocatorLayer({
       position,
       variant: 'card',
       paintLane: 'thumbnail',
-      title: TRIGGER_RECORD.title,
-      details: [...TRIGGER_RECORD.details],
+      title: t(TRIGGER_RECORD.title),
+      details: TRIGGER_RECORD.details.map((line) => t(line)),
       accent: INCIDENT_ACCENT,
       sourceAlpha: () => presentation().alpha,
       presentationScale: () => presentation().scale,
@@ -549,8 +572,9 @@ export function createBhoteKoshiLocatorLayer({
       protected: true,
       active: true,
       interactive: true,
-      accessibilityLabel:
+      accessibilityLabel: t(
         'Open the USGS initial report for the 26 August 2026 Nepal landslide',
+      ),
       activate: () => {
         const opened = window.open(
           TRIGGER_SOURCE_URL,
@@ -815,7 +839,7 @@ export function createBhoteKoshiLocatorLayer({
         position,
         variant: 'label',
         paintLane: 'ambient-label',
-        title: `${String(index + 1).padStart(2, '0')} · ${place.title}`,
+        title: `${String(index + 1).padStart(2, '0')} · ${placeTitle(place.title)}`,
         details: [],
         accent: INCIDENT_ACCENT,
         sourceAlpha: progress,
@@ -1121,57 +1145,67 @@ export function createBhoteKoshiLocatorLayer({
         chips: [
           {
             id: 'nepal-context',
+            // i18n-ignore: country name
             label: 'NEPAL',
             active: _presentation === NEPAL_CONTEXT_PRESENTATION,
-            title:
+            title: t(
               'Show the Nepal context callout without a border or country fill',
+            ),
             params: { presentation: NEPAL_CONTEXT_PRESENTATION },
           },
           {
             id: 'bhote-koshi-regional',
+            // i18n-ignore: river name (Bhote Koshi)
             label: 'BHOTE',
             active: _presentation === BHOTE_KOSHI_REGIONAL_PRESENTATION,
-            title:
+            title: t(
               'Introduce Nepal, draw its border, then reveal the Bhote Koshi incident',
+            ),
             params: { presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION },
           },
           {
             id: 'bhote-koshi-city-context',
-            label: 'CITIES',
+            label: t('CITIES'),
             active: _presentation === BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION,
-            title:
+            title: t(
               'Keep the regional incident context and introduce nearby city labels',
+            ),
             params: { presentation: BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION },
           },
           {
             id: 'bhote-koshi-incident-places',
-            label: 'PLACES',
+            label: t('PLACES'),
             active: _presentation === BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION,
-            title:
+            title: t(
               'Introduce the reconstruction scene key places from trigger to downstream',
+            ),
             params: { presentation: BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION },
           },
           {
             id: 'bhote-koshi-flood-path',
-            label: 'PATH',
+            label: t('PATH'),
             active: _presentation === BHOTE_KOSHI_FLOOD_PATH_PRESENTATION,
-            title:
+            title: t(
               'Animate the sourced cyan river-centerline route to Trishuli Bazaar',
+            ),
             params: { presentation: BHOTE_KOSHI_FLOOD_PATH_PRESENTATION },
           },
           {
             id: 'bhote-koshi-path-overview',
-            label: 'OVERVIEW',
+            label: t('OVERVIEW'),
             active: _presentation === BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION,
-            title: 'Keep the completed flood path and location labels visible',
+            title: t(
+              'Keep the completed flood path and location labels visible',
+            ),
             params: { presentation: BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION },
           },
           {
             id: 'bhote-koshi-trigger-record',
-            label: 'RECORD',
+            label: t('RECORD'),
             active: _presentation === BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
-            title:
+            title: t(
               'Reveal the trigger record while making a slow camera approach',
+            ),
             params: {
               presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
               preview: true,
@@ -1213,6 +1247,3 @@ export function createBhoteKoshiLocatorLayer({
     },
   };
 }
-
-const bhoteKoshiLocatorLayer = createBhoteKoshiLocatorLayer();
-export default bhoteKoshiLocatorLayer;

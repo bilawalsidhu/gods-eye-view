@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import https from 'node:https';
+import { Readable } from 'node:stream';
 import test from 'node:test';
+import { fetchPinnedRadioResponse } from '../../server/providers/radio/transport.js';
 import {
   createRadioProxyMiddleware,
   isPublicRadioAddress,
@@ -7,7 +11,14 @@ import {
   publicRadioStation,
   publicRadioHttpsUrl,
 } from '../../vite.config.js';
-import { rankRadioStationsForRequest } from './radio.js';
+import {
+  getRadioAcceptedCatalogSnapshot,
+  getRadioUIState,
+  radioLayer,
+  rankRadioStationsForRequest,
+} from './radio.js';
+import { RADIO_REJECTED_STATION_COUNT_MAX as SERVER_REJECTED_MAX } from '../../server/providers/radio/constants.js';
+import { RADIO_REJECTED_STATION_COUNT_MAX as CLIENT_REJECTED_MAX } from '../layers/radio/policy.js';
 
 const UUID = '12345678-1234-4234-8234-123456789abc';
 const publicLookup = async () => [{ address: '93.184.216.34', family: 4 }];
@@ -468,4 +479,123 @@ test('proxy rejects any hostname resolution containing a forbidden address befor
     assert.equal((await invoke(middleware, '/stations')).status, 503);
   }
   assert.equal(fetchCount, 0);
+});
+
+// Answer every pinned request with `status`, invoking the response callback
+// asynchronously as `https.request` does, outside the caller's promise.
+// The returned promise rejects on an uncaught exception, so a regression fails
+// the race at once instead of leaving the fetch pending.
+function mockMirrorStatus(t, status, statusMessage = '') {
+  let crash;
+  const crashed = new Promise((_resolve, reject) => (crash = reject));
+  const onUncaught = (error) =>
+    crash(new Error(`uncaught exception: ${error.message}`));
+  process.on('uncaughtException', onUncaught);
+  t.after(() => process.off('uncaughtException', onUncaught));
+  t.mock.method(https, 'request', (_url, _options, callback) => {
+    const request = new EventEmitter();
+    request.end = () =>
+      setImmediate(() =>
+        callback(
+          Object.assign(Readable.from([]), {
+            statusCode: status,
+            statusMessage,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      );
+    return request;
+  });
+  return crashed;
+}
+
+function fetchMirror() {
+  return fetchPinnedRadioResponse(
+    new URL('https://de1.api.radio-browser.info/json/servers'),
+    { headers: {} },
+    [{ address: '93.184.216.34', family: 4 }],
+  );
+}
+
+for (const status of [204, 205, 304]) {
+  test(`a mirror answering null-body status ${status} resolves with a null body instead of crashing`, async (t) => {
+    const crashed = mockMirrorStatus(t, status);
+    const response = await Promise.race([fetchMirror(), crashed]);
+    assert.equal(response.status, status);
+    assert.equal(response.body, null);
+  });
+}
+
+for (const status of [600, 999]) {
+  test(`a mirror answering out-of-range status ${status} rejects instead of crashing`, async (t) => {
+    const crashed = mockMirrorStatus(t, status);
+    await assert.rejects(
+      Promise.race([fetchMirror(), crashed]),
+      new RegExp(`unsupported status ${status}`),
+    );
+  });
+}
+
+test('a mirror answering an invalid reason phrase rejects instead of crashing', async (t) => {
+  const crashed = mockMirrorStatus(t, 200, 'OK\x7f');
+  await assert.rejects(Promise.race([fetchMirror(), crashed]), TypeError);
+});
+
+
+test('case expansion is capped after tag normalization in the portable and server station path', () => {
+  const row = normalizeRadioBrowserStation(station({tags: 'İ'.repeat(80) + ', NEWS__RADIO ,news-radio'}));
+  assert.equal(row.tags[0].length, 80);
+  assert.equal(row.tags[0], 'i\u0307'.repeat(40));
+  assert.deepEqual(row.tags.slice(1), ['news radio']);
+});
+
+test('server structural rejections reach the client diagnostic without discarding a healthy generation', async () => {
+  const originalFetch = globalThis.fetch;
+  const middleware = createProxy({
+    now: () => Date.now(),
+    fetchImpl: async (url) => {
+      if (String(url).includes('/json/servers')) return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+      const rows = healthyRowsForQuery(url);
+      if (queryTag(url)) return responseJson(rows);
+      // 400 valid broad rows, one row missing its required name, and one
+      // schema-valid row that normalization filters by policy (not counted).
+      const { name: _name, ...nameless } = station({ stationuuid: '50000000-0000-4000-8000-000000000001' });
+      return responseJson([...rows, nameless, station({ stationuuid: '50000000-0000-4000-8000-000000000002', lastcheckok: 0 })]);
+    },
+  });
+  const response = await invoke(middleware, '/stations');
+  assert.equal(response.status, 200);
+  const body = JSON.parse(response.body);
+  assert.equal(body.degraded, false);
+  assert.equal(body.degradedReason, null);
+  assert.equal(body.acceptedGeneration, 1);
+  assert.equal(body.rejectedStationCount, 1);
+  assert.equal(SERVER_REJECTED_MAX, CLIENT_REJECTED_MAX);
+
+  const viewer = {
+    camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
+    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
+    dataSources: { add() {}, remove() {} },
+    entities: { add(entity) { return entity; }, remove() {} },
+  };
+  radioLayer.destroy();
+  try {
+    globalThis.fetch = async () => new Response(response.body, {
+      status: response.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    radioLayer.init(viewer);
+    radioLayer.enable();
+    await radioLayer.update();
+    const state = getRadioUIState();
+    assert.equal(state.stationCount, body.stations.length);
+    assert.equal(state.rejectedStationCount, 1);
+    assert.equal(state.degraded, true);
+    assert.equal(state.stale, false);
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 1);
+    assert.equal(getRadioAcceptedCatalogSnapshot().instance, body.catalogInstance);
+  } finally {
+    globalThis.fetch = originalFetch;
+    radioLayer.destroy();
+  }
 });

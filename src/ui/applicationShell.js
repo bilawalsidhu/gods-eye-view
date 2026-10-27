@@ -3,6 +3,7 @@ import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
+import { initMobileShell } from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -34,8 +35,22 @@ import * as Cesium from 'cesium';
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
 import { ShellFeedback } from './shellFeedback.js';
+import {
+  applyShareFollowOffset,
+  readShareFollowSubject,
+} from './shareFollow.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
+
+import {
+  describeUnsavedWork,
+  getLocale,
+  msg,
+  persistLocaleAndReload,
+  registerUnsavedWork,
+  t,
+} from '../i18n/index.js';
+import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -43,8 +58,7 @@ import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
  * Responsibilities:
  * - Visual controls and presets backed by the VisualEffects controller.
  * - Bloom and sharpen post-processing toggle/intensity control.
- * - Draggable/collapsible panel system with localStorage persistence,
- *   z-order stacking, and viewport-clamped positioning.
+ * - Collapsible rail panels with their collapsed state kept in localStorage.
  * - CCTV panel: camera selection, coverage toggle, projection, calibration
  *   sliders, auto-hop, and summary typewriter effect.
  * - Location bar with city/POI preset pills, QWERTY key navigation,
@@ -64,7 +78,13 @@ export class StyleManager extends ShellFacade {
    */
   constructor(
     viewer,
-    { mapStackController = null, placeSearch, services, requestServices } = {},
+    {
+      mapStackController = null,
+      placeSearch,
+      services,
+      requestServices,
+      initialShareCode = null,
+    } = {},
   ) {
     super();
     const {
@@ -105,7 +125,6 @@ export class StyleManager extends ShellFacade {
         _setRadioDisclosure: (...args) => this._setRadioDisclosure(...args),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
-        _onPanelResized: (...args) => this._onPanelResized(...args),
         _syncContextRadioLauncherState: (...args) =>
           this._syncContextRadioLauncherState(...args),
         _showToast: (...args) => this._showToast(...args),
@@ -116,6 +135,8 @@ export class StyleManager extends ShellFacade {
       readInitialShare: () => this._initialShareState,
       readScrollRestoreOwner: () => this._displayPortalScrollRestoreOwner,
       readDisplayScrollTop: () => this._standardDisplayScrollTop,
+      readSharedCollapsed: (panelId) =>
+        this._mobileShell?.sharedCollapsed(panelId),
     });
     this._feedback = new ShellFeedback({
       readLayers: () => this._dataManager?.getAll?.() || [],
@@ -136,6 +157,7 @@ export class StyleManager extends ShellFacade {
       },
       searchInput: this._locationSearch,
       interruptCameraMotion: services.interruptCameraMotion,
+      interruptGlobeRotation: services.interruptGlobeRotation,
       isCockpitActive: () => !!this.cockpitView?.active,
       clearLocation: () => this.clearSearchedLocation(),
       cancelShareSelection: () => this._shareRestoration.cancelSelection(),
@@ -153,6 +175,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
+      applyFollowOffset: (entity, offset) =>
+        applyShareFollowOffset(viewer, entity, offset),
     });
 
     this._visualSettings = new VisualSettings({
@@ -265,6 +289,7 @@ export class StyleManager extends ShellFacade {
         _contextControls: this._contextControls,
         _cctvControls: this._cctvControls,
         _radioControls: this._radioControls,
+        _streetLevelControls: this._streetLevelControls,
       }),
       operations: {
         _updateTrafficSyncChip: (...args) =>
@@ -310,6 +335,7 @@ export class StyleManager extends ShellFacade {
         GLOBE_VIEW: services.GLOBE_VIEW,
         flyToGlobeView: services.flyToGlobeView,
         interruptCameraMotion: services.interruptCameraMotion,
+        interruptGlobeRotation: services.interruptGlobeRotation,
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
         satellitesLayer: services.satellitesLayer,
@@ -322,6 +348,7 @@ export class StyleManager extends ShellFacade {
         _poiRow: this._poiRow,
         _locationBarDivider: this._locationBarDivider,
         _locationSearch: this._locationSearch,
+        _locationSearchError: this._locationSearchError,
         _searchToggle: this._searchToggle,
         _resetGlobeBtn: this._resetGlobeBtn,
         _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
@@ -416,7 +443,12 @@ export class StyleManager extends ShellFacade {
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
       cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      // A host may open a share code without a `/share/<code>` address.
+      initialShareCode,
     });
+    this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
+      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+    );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
     );
@@ -566,7 +598,11 @@ export class StyleManager extends ShellFacade {
     });
     this._initUI();
     this._initMapStackControl();
+    // Headers first: panel chrome builds its toggle labels from them.
+    this._applyRuntimeStaticHeaderText();
     this._initPanelChrome();
+    this._initLocaleSelector();
+    this._sizeDisplayLabelColumn();
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
@@ -574,6 +610,7 @@ export class StyleManager extends ShellFacade {
     this._initStreetLevelPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
+    this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
@@ -701,6 +738,183 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
+   * Mounts the language picker (src/ui/localePicker.js). A choice reloads the
+   * page; _confirmLocaleReload asks first when that would lose work.
+   * @returns {void}
+   */
+  _initLocaleSelector() {
+    // Work this shell can see that a reload drops. Other modules register
+    // their own (registerUnsavedWork in src/i18n/index.js).
+    this._unsavedWorkChecks = [
+      registerUnsavedWork(() =>
+        this.services?.cctvLayer
+          ?.getUIState?.()
+          ?.cameras?.some((camera) => camera.calDirty)
+          ? msg('unsaved CCTV calibration')
+          : null,
+      ),
+      registerUnsavedWork(() =>
+        this.cockpitView?.active ? msg('the open cockpit') : null,
+      ),
+    ];
+    const root = globalThis.document?.getElementById?.('locale-picker');
+    if (!root) return;
+    this._localePicker = mountLocalePicker({
+      root,
+      current: getLocale(),
+      onSelect: (locale) => this._chooseLocale(locale),
+    });
+  }
+
+  /**
+   * Switch to `locale`: nothing for the active language, otherwise store it
+   * and reload once _confirmLocaleReload agrees.
+   * @param {string} locale
+   * @returns {'unchanged'|'declined'|'switched'}
+   */
+  _chooseLocale(locale) {
+    return applyLocaleChoice(locale, {
+      current: getLocale(),
+      confirmSwitch: () => this._confirmLocaleReload(),
+      switchLocale: (next) => persistLocaleAndReload(next),
+    });
+  }
+
+  /**
+   * Switching language reloads the page. While that would lose work the page
+   * cannot restore, ask first.
+   * @returns {boolean} true to switch.
+   */
+  _confirmLocaleReload() {
+    const lost = describeUnsavedWork();
+    if (!lost.length || typeof globalThis.confirm !== 'function') return true;
+    return globalThis.confirm(
+      t(
+        'Switching language reloads the page. This will be lost: {items}. Switch anyway?',
+        { items: lost.join(', ') },
+      ),
+    );
+  }
+
+  /**
+   * Sizes one Display-panel label column to the longest label in the active
+   * language, so slider tracks line up. Counts characters (labels are
+   * monospace and often hidden); CSS turns the count into a width.
+   * @returns {void}
+   */
+  _sizeDisplayLabelColumn() {
+    const labels = document.querySelectorAll(
+      '#pp-toggles .pp-slider-row > .pp-slider-mini-label',
+    );
+    let longest = 0;
+    for (const label of labels) {
+      longest = Math.max(longest, label.textContent.trim().length);
+    }
+    if (longest > 0) {
+      document.documentElement.style.setProperty(
+        '--pp-label-chars',
+        String(longest),
+      );
+    }
+  }
+
+  /**
+   * Rewrites a header's last text node, keeping the leading icon span that a
+   * textContent write would destroy.
+   * @param {Element|null} element
+   * @param {string} text
+   * @returns {void}
+   */
+  _setHeaderText(element, text) {
+    if (!element) return;
+    const textNode = Array.from(element.childNodes)
+      .reverse()
+      .find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim(),
+      );
+    if (textNode) textNode.nodeValue = text;
+    else element.textContent = text;
+  }
+
+  /**
+   * Translates at boot the header texts that share their element with an
+   * icon or a <br> (data-i18n-runtime in the templates).
+   * @returns {void}
+   */
+  _applyRuntimeStaticHeaderText() {
+    this._setHeaderText(
+      document.querySelector('#control-panel .panel-title'),
+      t('VISUAL PRESETS'),
+    );
+    this._setHeaderText(
+      document.querySelector('#location-bar .location-toolbar-label'),
+      t('LOCATION'),
+    );
+    // One span holds both mode descriptions around a <br>; keep the <br>.
+    const standbyDescription = document.querySelector(
+      '#context-mode-standby span',
+    );
+    if (standbyDescription) {
+      standbyDescription.replaceChildren(
+        document.createTextNode(
+          t('CONTACTS — nearest planes · vessels · sites'),
+        ),
+        document.createElement('br'),
+        document.createTextNode(
+          t('SPACE MISSIONS — launches & orbital assets'),
+        ),
+      );
+    }
+    // Leading space after the live dot, as showBriefPage writes it.
+    const briefKicker = document.querySelector('#cockpit-brief-kicker');
+    if (briefKicker) {
+      this._setHeaderText(briefKicker, ` ${t('LIVE SIGNALS')}`);
+    }
+  }
+
+  /**
+   * Phone layout: a bottom tab bar presenting one panel sheet at a time
+   * (src/ui/mobileShell.js). Inactive above 720px.
+   * @returns {void}
+   */
+  _initMobileShell() {
+    this._mobileShell = initMobileShell({
+      setPanelCollapsed: (panelId, collapsed, options) =>
+        this._panelChrome.setPanelCollapsed(panelId, collapsed, options),
+      onSheetsClosed: () => this._syncShareState(),
+      onTabOpened: (sheet) => {
+        void this._onMobileTabOpened(sheet);
+      },
+    });
+  }
+
+  /** Reveal a tracked aircraft through Contacts when its phone tab is opened. */
+  async _onMobileTabOpened(sheet) {
+    const context = this.getContextModeState();
+    if (
+      sheet !== 'context' ||
+      this._disposed ||
+      !context ||
+      context.mode ||
+      context.changing ||
+      context.entering ||
+      !this.getAircraftTrackingTarget()
+    )
+      return false;
+    try {
+      const result = await this.setContextMode('contacts');
+      if (result?.ok) return true;
+      if (result?.cancelled || this._disposed) return false;
+    } catch {
+      if (this._disposed) return false;
+    }
+    this._showToast(
+      t('Contacts could not complete the requested transition; try again'),
+    );
+    return false;
+  }
+
+  /**
    * Renders the owner-approved map stack chip row from the matching controller
    * entries. Cesium ion/Bing chips remain keyboard-focusable but unavailable,
    * with an accessible explanation, until a CESIUM_ION_TOKEN is configured.
@@ -708,6 +922,7 @@ export class StyleManager extends ShellFacade {
    */
   _initMapStackControl() {
     if (!this.mapStackController) return;
+
     this._mapSourceControls?.destroy();
     this._mapSourceControls = createMapSourceControls({
       container: this._mapStackChips,
@@ -939,13 +1154,11 @@ export class StyleManager extends ShellFacade {
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
     if (!this._streetLevelPanel || !streetLevelLayer) return;
-    // Photo framing and FOLLOW release tracking like any explicit flight.
+    // Photo framing yields to newer navigation and releases tracking like
+    // any deferred flight.
     streetLevelLayer.attachNavigation?.({
-      run: (noun, move) => this._runExplicitNavigation(noun, move),
       begin: (noun) => this._beginDeferredNavigation(noun),
       reassert: (generation) => this._reassertNavigationHandoff(generation),
-      subscribeHandoff: (listener) =>
-        this._navigation.subscribeCameraHandoff(listener),
     });
     this._streetLevelControls = new StreetLevelControls({
       root: this._streetLevelPanel,
@@ -960,7 +1173,6 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
-        dockPanel: () => this._panelChrome.dockPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1029,7 +1241,7 @@ export class StyleManager extends ShellFacade {
     const { cctvLayer } = this.services;
     if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
-      this._showToast('CCTV layer unavailable');
+      this._showToast(t('CCTV layer unavailable'));
       return false;
     }
     const enabled = this._dataManager.isEnabled('cctv');
@@ -1056,19 +1268,6 @@ export class StyleManager extends ShellFacade {
     });
     return true;
   }
-
-  /**
-   * Makes a panel draggable via its handle element. Implements:
-   * - Z-order promotion: each pointerdown increments the global z-counter
-   *   so the clicked panel floats above siblings.
-   * - Viewport clamping: drag moves are clamped to a 6px inset from all edges.
-   * - Right-rail pinning: pp-toggles panel is re-anchored right after drag.
-   * - CCTV viewport sync: cctv-panel recalculates scroll height after drag.
-   * @param {string} panelId - DOM id of the panel.
-   * @param {HTMLElement} panelEl - The panel DOM element.
-   * @param {HTMLElement} handleEl - The drag handle element within the panel.
-   * @returns {void}
-   */
 
   /**
    * Programmatically collapses or expands a panel, persists the state,
@@ -1471,14 +1670,35 @@ export class StyleManager extends ShellFacade {
   // ── Share Button ─────────────────────────────
 
   /**
-   * Wires the share button click to copy the current share link to the clipboard.
+   * Wires the share button. By default it copies the current share link to the
+   * clipboard; a host may pass `services.shareLink(url)` to share it another way
+   * (a system share sheet, for example). It resolves to 'shared', 'copied',
+   * 'cancelled' (no toast) or false (failed).
    * @returns {void}
    */
   _initShareButton() {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
-      const success = await this.shareLinkManager.copyLink();
-      if (!this._disposed)
-        this._showToast(success ? 'Link copied!' : 'Copy failed');
+      const share = this.services.shareLink;
+      let result;
+      if (typeof share === 'function') {
+        // A host's hook may return a plain value or throw; both are answers.
+        result = await Promise.resolve()
+          .then(() => {
+            const href = this.shareLinkManager.buildLink();
+            return href ? share(href) : false;
+          })
+          .catch(() => false);
+      } else {
+        result = (await this.shareLinkManager.copyLink()) ? 'copied' : false;
+      }
+      if (this._disposed || result === 'cancelled') return;
+      this._showToast(
+        result === 'shared'
+          ? t('Link shared')
+          : result === 'copied'
+            ? t('Link copied!')
+            : t('Copy failed'),
+      );
     });
   }
 
@@ -1514,13 +1734,6 @@ export class StyleManager extends ShellFacade {
       this._setCockpitDisclosure?.('display', !open);
     });
     this._initCockpitDisplayPortal();
-  }
-
-  /** A portable panel was resized or docked: refit any viewport inside it. */
-  _onPanelResized(panelId) {
-    if (panelId === 'cctv-panel') this._syncCctvPanelViewport();
-    if (panelId === 'street-level-panel')
-      this._streetLevelControls?.onPanelResized();
   }
 
   /**
@@ -1576,7 +1789,12 @@ export class StyleManager extends ShellFacade {
     this._shareState.destroy();
     this._locationNavigation.destroy();
     this._lifetime.destroy();
+    for (const unregister of this._unsavedWorkChecks?.splice(0) ?? [])
+      unregister();
+    this._localePicker?.destroy();
+    this._localePicker = null;
     this._recording.destroy();
+    this._mobileShell?.destroy();
     this._panelChrome.destroy();
     this._feedback.destroy();
 

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { msg, t } from '../../i18n/index.js';
 import {
   DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
   droneAirspaceAnchorDegrees,
@@ -137,7 +138,7 @@ export function createDroneAirspaceLayer({
 
   const layer = {
     id: 'drone-airspace',
-    name: 'Drone Restrictions',
+    name: 'Prohibited & Restricted Airspace',
     icon: '🚫',
     source: 'FAA SUA',
     updateInterval: 3600000,
@@ -248,7 +249,8 @@ export function createDroneAirspaceLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:DroneAirspace] Fetch error:', e);
-        _lastError = e?.message || 'Drone airspace source unavailable';
+        _lastError =
+          e?.message || msg('Restricted airspace source unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -294,8 +296,8 @@ export function createDroneAirspaceLayer({
 
     getRowControls() {
       const bands = [
-        { label: 'Prohibited (P)', color: droneAirspaceAccent('P') },
-        { label: 'Restricted (R)', color: droneAirspaceAccent('R') },
+        { label: t('Prohibited (P)'), color: droneAirspaceAccent('P') },
+        { label: t('Restricted (R)'), color: droneAirspaceAccent('R') },
       ];
       return {
         chips: [],
@@ -306,8 +308,9 @@ export function createDroneAirspaceLayer({
           ).length,
           ...(index === 0
             ? {
-                blurb:
-                  'FAA special-use airspace. Informational only — not a substitute for official UAS flight-planning tools (B4UFLY / LAANC).',
+                blurb: t(
+                  'FAA prohibited and restricted special-use airspace only, not the UAS Facility Map or UAS flight restrictions. Informational only — not a substitute for official UAS flight-planning tools (B4UFLY / LAANC).',
+                ),
               }
             : {}),
         })),

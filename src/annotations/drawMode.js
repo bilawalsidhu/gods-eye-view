@@ -1,3 +1,5 @@
+import { t, tn } from '../i18n/index.js';
+
 /**
  * Manual whiteboard drawing: the pure half.
  *
@@ -18,6 +20,8 @@
  * `drawTool.js`.
  */
 
+import { greatCircleMeters } from '../geoDistance.js';
+
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
 /**
@@ -27,10 +31,10 @@ export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
  */
 export const MAX_VERTICES = 512;
 /** Two clicks closer than this are one vertex: a double-click to finish must not add a stray point. */
-export const MIN_VERTEX_SEPARATION_M = 0.5;
+const MIN_VERTEX_SEPARATION_M = 0.5;
 /** A line shorter than this, or an area thinner than this, is a mis-click rather than a shape. */
-export const MIN_PATH_LENGTH_M = 1;
-export const MIN_AREA_M2 = 1;
+const MIN_PATH_LENGTH_M = 1;
+const MIN_AREA_M2 = 1;
 
 /** @param {string} shape @returns {'area'|'line'|'pin'} */
 export function normalizeShape(shape) {
@@ -46,15 +50,8 @@ export function createDrawSession(shape = 'area') {
 }
 
 /** Great-circle distance in metres between two {lon, lat} points. */
-export function greatCircleM(a, b) {
-  const R = 6371000;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(Math.min(1, h)));
+function greatCircleM(a, b) {
+  return greatCircleMeters(a, b);
 }
 
 /**
@@ -211,9 +208,10 @@ export function formatMeasure(session) {
   if (!session) return '';
   if (session.shape === 'line') {
     const m = pathLengthM(session.vertices);
-    return m >= 1000
-      ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`
-      : `${Math.round(m)} m`;
+    // Round before the kilometre cut. 999.6 m was printed as "1000 m".
+    const whole = Math.round(m);
+    if (whole < 1000) return `${whole} m`;
+    return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
   }
   if (session.shape === 'area') {
     const m2 = ringAreaM2(session.vertices);
@@ -284,20 +282,26 @@ export function closeRing(pairs) {
 
 /** One line of guidance for the person drawing, by state. */
 export function drawHint(session) {
-  if (!session) return 'Pick a shape, then click the map.';
+  if (!session) return t('Pick a shape, then click the map.');
   const n = session.vertices.length;
   if (session.shape === 'pin')
     return n
-      ? 'Enter to place the pin, Esc to cancel.'
-      : 'Click where the pin goes.';
+      ? t('Enter to place the pin, Esc to cancel.')
+      : t('Click where the pin goes.');
   const need = MIN_VERTICES[session.shape] - n;
-  if (need > 0) return `Click ${need} more point${need === 1 ? '' : 's'}.`;
+  if (need > 0)
+    return tn(need, 'Click {count} more point.', 'Click {count} more points.');
   if (finishReason(session) === 'degenerate') {
     return session.shape === 'area'
-      ? 'Those points are in a line — move one off it to enclose an area.'
-      : 'That line has no length — click somewhere further away.';
+      ? t('Those points are in a line — move one off it to enclose an area.')
+      : t('That line has no length — click somewhere further away.');
   }
   const full =
-    n >= MAX_VERTICES ? ` · ${MAX_VERTICES}-point limit reached` : '';
-  return `${formatMeasure(session)} · double-click or Enter to finish, Backspace undoes, Esc cancels.${full}`;
+    n >= MAX_VERTICES
+      ? t(' · {max}-point limit reached', { max: MAX_VERTICES })
+      : '';
+  return t(
+    '{measure} · double-click or Enter to finish, Backspace undoes, Esc cancels.{full}',
+    { measure: formatMeasure(session), full },
+  );
 }

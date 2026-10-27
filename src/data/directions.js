@@ -24,7 +24,7 @@ import * as input from './inputOwnership.js';
 import { createDirectionsLayer } from '../layers/directions/index.js';
 
 /** The shared scene owners every Directions instance runs on. */
-export const directionsServices = Object.freeze({
+const directionsServices = Object.freeze({
   credits,
   render,
   sprites,
@@ -49,15 +49,11 @@ export {
   DIRECTIONS_MODES,
   DIRECTIONS_POINTER_OWNER,
   DIRECTIONS_ROUTE_COLOR,
-  DIRECTIONS_STEP_OVERLAY_SOURCE_ID,
-  DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS,
-  FLIGHT_PROGRESS_MS,
   POINTER_TOOL_EXITS,
   STEP_ANCHOR_DEADLINE_MS,
   STEP_ANCHOR_FAST_ATTEMPTS,
   STEP_ANCHOR_RETRY_MS,
   STEP_ANCHOR_SLOW_RETRY_MS,
-  createDirectionsLayer,
   createDirectionsStepOverlayEntry,
   directionsRequestUrl,
   directionsRowControls,

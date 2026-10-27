@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import { formatNumber, t } from '../../i18n/index.js';
+import { unitLabel } from '../../ui/unitLabels.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
 import {
@@ -45,7 +47,7 @@ export function createTracking({
   const { isMilitaryLayerActive, isMilitaryIcao } = services.militaryRegistry;
   const { trackedLabelModelFromText, refreshTrackedReadout } = services.readout;
   const { applyTrackedCameraFrame } = services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
   const flightsLayer = layer;
 
   function _emitAwarenessEvent(type, detail) {
@@ -130,6 +132,7 @@ export function createTracking({
         icao24,
         // Honesty cue: the contact is coasting on dead reckoning, so the
         // narrated position/velocity are last-known rather than live.
+        // i18n-ignore: voice-context data, English for the model
         status: described.stale ? 'stale (missed polls)' : 'live',
       },
     };
@@ -751,11 +754,18 @@ export function createTracking({
     // the tail number rather than raw hex.
     const cs = parts.queries._contactLabel(icao24, info);
     const altFt = Math.round((info.altitude || 0) * 3.28084);
-    const fl = altFt >= 18000 ? `FL${Math.round(altFt / 100)}` : `${altFt} ft`;
-    const spd = info.velocity ? `${Math.round(info.velocity * 1.944)} kts` : '';
+    // Flight levels are an aviation code; feet and knots read in the active
+    // language ("0 фт · 1 уз").
+    const quantity = (value, unit) =>
+      `${formatNumber(value, { useGrouping: false })} ${unitLabel(unit)}`;
+    const fl =
+      altFt >= 18000 ? `FL${Math.round(altFt / 100)}` : quantity(altFt, 'ft');
+    const spd = info.velocity
+      ? quantity(Math.round(info.velocity * 1.944), 'kts')
+      : '';
     const stale =
       flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
-        ? 'STALE'
+        ? t('STALE')
         : '';
     const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
     // Converted contacts report their class as TR-3B and nothing else — the
@@ -1164,7 +1174,9 @@ export function createTracking({
       // first-person reference. A globe click must not fall through to the
       // normal empty-space deselection path; cockpit has explicit exit controls.
       if (document.body.classList.contains('cockpit-mode')) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = pickContact
+        ? pickContact(viewer.scene, click.position)
+        : viewer.scene.pick(click.position);
 
       if (picked) {
         // Clicking the tracked entity itself — ignore (don't deselect)

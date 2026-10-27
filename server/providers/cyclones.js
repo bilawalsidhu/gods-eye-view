@@ -4,6 +4,8 @@ const STATUS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 const GIS =
   'https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer';
 const HOUR = 3600_000;
+// Data, not UI copy: src/layers/cyclones/index.js keeps the same English in
+// msg() and translates it when shown (likewise 'Cyclone data unavailable').
 const COVERAGE =
   'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.';
 const LAYERS = [
@@ -41,6 +43,14 @@ function number(value, min, max) {
   const n = Number(value);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 }
+// CurrentStorms.json reports movementSpeed in miles per hour (intensity is in
+// knots); convert so `speedKt` means what it says.
+function knotsFromMph(mph) {
+  return mph === null ? null : Math.round(mph * 0.868976);
+}
+// NHC stamps an advisory with its nominal time (e.g. 03:00Z) and publishes it
+// up to about half an hour before; allow that, but not a clock far ahead.
+const EARLY_ADVISORY_MS = 90 * 60_000;
 function iso(value, now) {
   if (
     typeof value !== 'string' ||
@@ -50,7 +60,7 @@ function iso(value, now) {
   const n = Date.parse(value);
   if (
     !Number.isFinite(n) ||
-    n > now + 5 * 60_000 ||
+    n > now + EARLY_ADVISORY_MS ||
     now - n > 12 * HOUR ||
     new Date(n).toISOString().replace('.000Z', 'Z') !==
       value.replace('.000Z', 'Z')
@@ -115,7 +125,7 @@ export function parseCycloneStatus(payload, now = Date.now()) {
       pressureHpa: number(raw.pressure, 800, 1100),
       movement: {
         directionDegrees: number(raw.movementDir, 0, 360),
-        speedKt: number(raw.movementSpeed, 0, 200),
+        speedKt: knotsFromMph(number(raw.movementSpeed, 0, 200)),
       },
       advisoryUrl: officialLink(forecast.url),
       outlookUrl: raw.id.startsWith('al')

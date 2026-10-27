@@ -52,6 +52,19 @@ test('hemisphere letters fix the axis, in either order', () => {
     label: '40.0000° N, 74.0000° W',
   });
   assert.deepEqual(parseCoordinateQuery('40° N, 74° W')?.lat, 40);
+  // Written the way a coordinate is usually pasted, with no comma.
+  assert.deepEqual(parseCoordinateQuery('40.7128 N 74.0060 W'), {
+    lat: 40.7128,
+    lon: -74.006,
+    label: '40.7128° N, 74.0060° W',
+  });
+  assert.deepEqual(parseCoordinateQuery('40.7128° N 74.0060° W')?.lon, -74.006);
+  assert.deepEqual(parseCoordinateQuery('N 40.7128 W 74.0060'), {
+    lat: 40.7128,
+    lon: -74.006,
+    label: '40.7128° N, 74.0060° W',
+  });
+  assert.deepEqual(parseCoordinateQuery('74.0060 W 40.7128 N')?.lat, 40.7128);
   // One letter is enough: it fixes its own axis, the other takes what is left.
   assert.deepEqual(parseCoordinateQuery('40 N, -74')?.lon, -74);
   assert.deepEqual(parseCoordinateQuery('-74, 40 N'), {
@@ -66,6 +79,21 @@ test('malformed and ambiguous coordinates are refused, never guessed', () => {
     // The reviewer's case: trailing text must not be discarded.
     '12junk, 34oops',
     '12junk,34',
+    '12junk 34',
+    '1e3 5',
+    '1e3',
+    '1E3',
+    '1e-3',
+    '1.2.3',
+    '12-34',
+    '40 NW 74',
+    '40 N 74',
+    '40 W 74',
+    '40 E 74',
+    '°40 74',
+    '40°° 74',
+    '40 74°°',
+    '40 26 46 N 79 58 56 W',
     '43.1731, -79.0384x',
     'abc, def',
     'Paris',
@@ -131,4 +159,90 @@ test('the label reads the way a coordinate is written', () => {
 test('the poles and the dateline are inside the accepted range', () => {
   assert.deepEqual(parseCoordinateQuery('90, 180')?.lat, 90);
   assert.deepEqual(parseCoordinateQuery('-90, -180')?.lon, -180);
+});
+
+test('two-dimensional WGS84 geo URIs resolve to the same decimal coordinate', () => {
+  for (const query of [
+    'geo:39.7392,-104.9903',
+    'geo:39.7392,-104.9903;crs=wgs84',
+    '  GEO:39.7392,-104.9903;CRS=WGS84  ',
+  ]) {
+    assert.deepEqual(parseCoordinateQuery(query), {
+      lat: 39.7392,
+      lon: -104.9903,
+      label: '39.7392° N, 104.9903° W',
+    });
+  }
+  for (const [query, decimal] of [
+    ['geo:0,0', '0,0'],
+    ['geo:-33.8568,151.2153', '-33.8568,151.2153'],
+    ['geo:90,180', '90,180'],
+    ['geo:-90,-180;crs=wgs84', '-90,-180'],
+    ['geo:09,007', '9,7'],
+    ['geo:-0,-0', '-0,-0'],
+  ]) {
+    assert.deepEqual(
+      parseCoordinateQuery(query),
+      parseCoordinateQuery(decimal),
+    );
+  }
+});
+
+test('malformed or unsupported geo URIs are refused without losing their meaning', () => {
+  for (const query of [
+    'geo:',
+    'geo:39.7392',
+    'geo:,104.9903',
+    'geo:39.7392,,104.9903',
+    'geo:39.7392,-104.9903,',
+    'geo:91,0',
+    'geo:-90.1,0',
+    'geo:0,181',
+    'geo:0,-180.1',
+    'geo:000,0',
+    'geo:0,0000',
+    'geo:+39.7392,-104.9903',
+    'geo:.5,-.25',
+    'geo:1e1,2',
+    'geo:NaN,0',
+    'geo:Infinity,0',
+    'geo:39.7392, -104.9903',
+    'geo:39.7392;-104.9903',
+    'geo:39.7392N,104.9903W',
+    'geo:39.7392,-104.9903,1600',
+    'geo:39.7392,-104.9903;u=10',
+    'geo:39.7392,-104.9903;crs=unknown',
+    'geo:39.7392,-104.9903;crs=wgs84;crs=wgs84',
+    'geo:39.7392,-104.9903;crs=wgs84;u=0',
+    'geo:39.7392,-104.9903;custom=value',
+    'geo:0,0?q=39.7392,-104.9903(Denver)',
+    'geo:39.7392,-104.9903#Denver',
+    'geo:39.7392,-104.9903 trailing text',
+    'geo://39.7392,-104.9903',
+    'https://example.com/geo:39.7392,-104.9903',
+  ]) {
+    assert.equal(parseCoordinateQuery(query), null, query);
+  }
+});
+
+test('whitespace boundaries preserve degree signs and hemisphere ownership', () => {
+  for (const query of ['40 ° 74', '40° 74', '40 N, 74', 'N 40 74']) {
+    assert.equal(parseCoordinateQuery(query)?.lat, 40, query);
+    assert.equal(parseCoordinateQuery(query)?.lon, 74, query);
+  }
+  for (const query of ['40 ° N 74 ° W', 'N 40 ° W 74 °', '40\tN\n74\tW']) {
+    assert.equal(parseCoordinateQuery(query)?.lat, 40, query);
+    assert.equal(parseCoordinateQuery(query)?.lon, -74, query);
+  }
+});
+
+test('a signed plain component leaves a spaced letter with the other component', () => {
+  assert.deepEqual(
+    parseCoordinateQuery('-40 N 74'),
+    parseCoordinateQuery('-40, N 74'),
+  );
+  assert.deepEqual(
+    parseCoordinateQuery('40 N -74'),
+    parseCoordinateQuery('40 N, -74'),
+  );
 });

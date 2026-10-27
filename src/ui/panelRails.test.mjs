@@ -21,7 +21,7 @@ test('Display uses an inner scroll body only in Cyber', () => {
 });
 
 test('Cyber restores one expanded owner, keeps launchers, and restores other theme preferences', () => {
-  for (const mobile of [false, true]) {
+  for (const mobile of [false]) {
     const f = fixture('right', {
       mobile,
       hud: { visible: true, variant: 'cyber' },
@@ -48,6 +48,22 @@ test('Cyber restores one expanded owner, keeps launchers, and restores other the
     );
     assert.equal(f.second.classList.contains('collapsed'), false);
   }
+});
+
+test('Cyber keeps no accordion on phones, where the rail is presented as tab sheets', () => {
+  // A sheet (for example Cameras: CCTV with Street Level) shows several of the
+  // rail's panels at once; the accordion would collapse all but one.
+  const f = fixture('right', {
+    mobile: true,
+    hud: { visible: true, variant: 'cyber' },
+  });
+  f.expand(f.first, 250);
+  f.expand(f.second, 250);
+  f.options.preferredPanelId = f.second.id;
+  f.run();
+  assert.equal(f.first.classList.contains('collapsed'), false);
+  assert.equal(f.first.classList.contains('cyber-accordion-collapsed'), false);
+  assert.equal(f.second.classList.contains('collapsed'), false);
 });
 
 test('Cyber restored accordion prefers keyboard focus when no explicit owner exists', () => {
@@ -113,10 +129,7 @@ function element(
     getBoundingClientRect() {
       return this.rect;
     },
-    matches: (selector) =>
-      selector === '[data-panel-id]' ||
-      (selector === '[data-panel-id]:not(.panel-floating)' &&
-        !classes.has('panel-floating')),
+    matches: (selector) => selector === '[data-panel-id]',
     contains(target) {
       return (
         target === this || this.children.some((child) => child.contains(target))
@@ -322,28 +335,6 @@ test('right layout retains Display allocation during measurement and caps restor
     ),
     false,
     'stable allocation must not churn the style attribute',
-  );
-});
-
-test('right rail neither measures nor allocates a panel floating out of it', () => {
-  const f = fixture('right');
-  f.expand(f.first, 900);
-  f.expand(f.second, 300);
-  f.first.classList.add('panel-floating');
-  f.first.style.setProperty('--right-panel-allocated-height', '500px');
-  f.first.writes.length = 0;
-  f.run();
-  assert.equal(f.stack.dataset.expandedCount, '1');
-  assert.deepEqual(
-    f.first.writes,
-    [],
-    'a floating panel keeps whatever inline style it left the rail with',
-  );
-  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
-  assert.equal(f.first.classList.contains('layout-auto-collapsed'), false);
-  assert.ok(
-    f.second.style.getPropertyValue('--right-panel-allocated-height'),
-    'the docked panel still receives its allocation',
   );
 });
 
@@ -702,6 +693,51 @@ test('narrow-screen rails pin every hosted panel glow inside its panel box', () 
       `${rail} scrolls at ≤720px but does not pin its panel glows (inset: 0)`,
     );
   }
+});
+
+test('right layout ignores a CSS-hidden expanded panel when deciding exclusivity', () => {
+  const f = fixture('right');
+  const weather = element('weather-panel', { height: 300 });
+  weather.computed.display = 'none';
+  f.stack.children.push(weather);
+  weather.parentElement = f.stack;
+
+  f.run();
+
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  assert.equal(f.stack.dataset.expandedCount, '0');
+  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
+  assert.equal(f.second.getAttribute('aria-hidden'), undefined);
+  assert.equal(
+    weather.style.getPropertyValue('--right-panel-allocated-height'),
+    '',
+  );
+});
+
+test('right layout still restores panels that exclusive presentation hides', () => {
+  const f = fixture('right');
+  // Model layers.css: an exclusive rail hides its collapsed panels.
+  f.options.windowRef.getComputedStyle = (node) => ({
+    ...node.computed,
+    display:
+      f.stack.classList.contains('layout-exclusive') &&
+      node.classList.contains('collapsed')
+        ? 'none'
+        : node.computed.display,
+  });
+  f.expand(f.first, 250);
+  f.second.classList.add('layout-auto-collapsed');
+  f.stack.classList.add('layout-exclusive');
+
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-exclusive'), true);
+  assert.equal(f.second.getAttribute('aria-hidden'), 'true');
+
+  f.options.hud.visible = false;
+  f.run();
+  assert.equal(f.second.classList.contains('collapsed'), false);
+  assert.equal(f.second.classList.contains('layout-auto-collapsed'), false);
+  assert.deepEqual(f.collapsed, ['second']);
 });
 
 test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', () => {

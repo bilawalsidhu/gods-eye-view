@@ -1,5 +1,7 @@
 import { twoline2satrec } from 'satellite.js';
 import * as Cesium from 'cesium';
+import { msg } from '../../i18n/index.js';
+import { noradIdFromSatnum } from '../../sources/tle.js';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
 
 export function createIngestion({
@@ -34,7 +36,12 @@ export function createIngestion({
               if (!res.ok) return { ...groupDef, entries: [], ok: false };
               const entries = parts.orbits.parseTLE(res.text);
               updateSignal.throwIfAborted();
-              return { ...groupDef, entries, ok: entries.length > 0 };
+              return {
+                ...groupDef,
+                entries,
+                ok: entries.length > 0,
+                stale: Boolean(res.stale),
+              };
             } catch (error) {
               if (updateSignal.aborted || error?.name === 'AbortError')
                 throw error;
@@ -59,7 +66,8 @@ export function createIngestion({
         // the chip still read "just now". Keep the existing (stale) catalog on
         // screen and surface the outage instead — do NOT stamp _lastUpdate.
         if (results.every((r) => !r.ok)) {
-          layerState._lastError = 'CelesTrak unreachable';
+          // English data (stats reach the voice tools); the panel translates it.
+          layerState._lastError = msg('CelesTrak unreachable');
           console.warn(
             '[Data:Satellites] All CelesTrak groups failed — keeping existing catalog, surfacing outage',
           );
@@ -70,6 +78,7 @@ export function createIngestion({
         // At least one group loaded — proceed with a fresh rebuild, but keep the
         // partial outage visible at the layer control instead of presenting the
         // reduced catalog as a fully healthy refresh.
+        // i18n-ignore: English data; the panel shows it through FEED_ERROR_PATTERNS (ui/statusText.js)
         layerState._lastError = failed.length
           ? `${failed.length} CelesTrak group${failed.length === 1 ? '' : 's'} unavailable`
           : null;
@@ -87,6 +96,7 @@ export function createIngestion({
         // catalog or those labels stay stale for the life of the session.
         layerState._detectionObjects.clear();
         layerState._denseIds = [];
+        layerState._denseStale = false;
         layerState._denseCursor = 0;
         layerState._denseLoadController?.abort();
         layerState._denseLoadController = null;
@@ -98,17 +108,19 @@ export function createIngestion({
         // Process all TLE entries in CATALOG_GROUPS order
         const allEntries = [];
         for (const r of results) {
-          for (const e of r.entries) allEntries.push({ ...e, group: r.tag });
+          for (const e of r.entries)
+            allEntries.push({ ...e, group: r.tag, stale: r.stale });
         }
 
         // Deduplicate by NORAD ID — first (most specific) group tag wins
         const seen = new Set();
+        let coreStale = false;
 
         for (const entry of allEntries) {
           const satrec = twoline2satrec(entry.line1, entry.line2);
           if (!satrec || satrec.error !== 0) continue;
 
-          const noradId = Number(satrec.satnum);
+          const noradId = noradIdFromSatnum(satrec.satnum);
           if (seen.has(noradId)) continue;
           seen.add(noradId);
 
@@ -118,6 +130,8 @@ export function createIngestion({
             satrec,
             group: entry.group,
           });
+
+          coreStale ||= entry.stale;
 
           // Propagate initial position
           const pos = parts.orbits.propagatePosition(satrec, now);
@@ -153,6 +167,7 @@ export function createIngestion({
           parts.labels._syncIssOverlay();
         }
 
+        layerState._coreStale = coreStale;
         layerState._count = layerState._points.size;
         layerState._catalogRevision++;
         layerState._lastUpdate = Date.now();

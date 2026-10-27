@@ -1,4 +1,8 @@
+import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
+import { syncScopeControls } from './displayControls.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { syncSegmentedControl } from './segmentedControl.js';
+import { t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
   VisualEffects,
@@ -8,7 +12,6 @@ import {
   MILITARY_DETECTION_PRESET,
 } from './effects.js';
 import { createStyleParameters } from './visualInput.js';
-import * as Cesium from 'cesium';
 import {
   BLOOM_SCALE_VERSION,
   clampBloomIntensity,
@@ -72,13 +75,24 @@ export class VisualSettings {
       panelState,
       styleParams,
     } = state || {};
-    // Ignore the retired 'ai-edit' style from older share links.
-    if (style && style !== 'normal' && style !== 'ai-edit') {
+    // Ignore the retired 'ai-edit' style from older share links. Normal is
+    // the start-up style, but a share opened later in the tab must still leave
+    // a filtered style for it.
+    if (
+      style &&
+      style !== 'ai-edit' &&
+      (style !== 'normal' || this.activeStyle !== 'normal')
+    ) {
+      const alreadyActive = style === this.activeStyle;
       this.setStyle(style, {
         applyPreset: true,
         revealParameters: false,
         restore: true,
       });
+      // setStyle leaves an already-active style untouched; the incoming share
+      // still starts from that preset before its own parameters apply.
+      if (alreadyActive && style !== 'normal')
+        this._applyStylePresetDefaults(style);
     }
     if (styleParams && style && this.stages[style] && STYLES[style]?.uniforms) {
       for (const [uniformName, uniformValue] of Object.entries(styleParams)) {
@@ -135,11 +149,10 @@ export class VisualSettings {
     }
     if (typeof scopeEnabled === 'boolean') {
       setScopeMaskEnabled(scopeEnabled);
-      this._scopeBtn?.classList.toggle('active', scopeEnabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeEnabled));
+      syncScopeControls(this._scopeBtn, this._scopeFeatherSlider, scopeEnabled);
     }
     if (typeof scopeFeatherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(scopeFeatherPct)));
+      const pct = clampScopeFeatherPct(scopeFeatherPct);
       this._scopeFeatherSlider.value = String(pct);
       if (this._scopeFeatherValue)
         this._scopeFeatherValue.textContent = `${pct}%`;
@@ -556,11 +569,9 @@ export class VisualSettings {
     const normalized = normalizeAllocationStrategy(raw);
     this._detectionAllocationPreference = normalized;
     setDetectionTuning({ allocationStrategy: normalized });
-    for (const button of this._detectionAllocationBtns) {
-      const active = button.dataset.allocation === normalized;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-checked', String(active));
-    }
+    syncSegmentedControl(this._detectionAllocationBtns, normalized, {
+      valueOf: (button) => button.dataset.allocation,
+    });
     if (persist) {
       try {
         localStorage.setItem(DETECTION_ALLOCATION_STORAGE_KEY, normalized);
@@ -671,7 +682,7 @@ export class VisualSettings {
     const settings = applyCyberSonarSettings(readCyberSonarSettings());
     this._cyberSonarBtn.classList.toggle('active', enabled);
     this._cyberSonarBtn.setAttribute('aria-pressed', String(enabled));
-    this._cyberSonarBtn.textContent = enabled ? 'ON' : 'OFF';
+    this._cyberSonarBtn.textContent = enabled ? t('ON') : t('OFF');
     for (const [input, output, value, suffix] of [
       [this._cyberSonarRings, this._cyberSonarRingsValue, settings.rings, ''],
       [this._cyberSonarRange, this._cyberSonarRangeValue, settings.range, '%'],
@@ -1190,8 +1201,8 @@ export class VisualSettings {
       this._celestialBtn.disabled = !styleSupported;
       this._celestialBtn.setAttribute('aria-disabled', String(!styleSupported));
       this._celestialBtn.title = styleSupported
-        ? 'Celestial ring — reveal the full globe'
-        : 'Celestial ring — available in Normal style';
+        ? t('Celestial ring — reveal the full globe')
+        : t('Celestial ring — available in Normal style');
     }
     let cameraFocused = false;
     if (nextEnabled && focus) {
@@ -1303,11 +1314,14 @@ export class VisualSettings {
     const scopeState = state.scope || {};
     if (typeof scopeState.enabled === 'boolean') {
       setScopeMaskEnabled(scopeState.enabled);
-      this._scopeBtn?.classList.toggle('active', scopeState.enabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeState.enabled));
+      syncScopeControls(
+        this._scopeBtn,
+        this._scopeFeatherSlider,
+        scopeState.enabled,
+      );
     }
     if (typeof scopeState.featherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(scopeState.featherPct)));
+      const pct = clampScopeFeatherPct(scopeState.featherPct);
       this._scopeFeatherSlider.value = String(pct);
       if (this._scopeFeatherValue)
         this._scopeFeatherValue.textContent = `${pct}%`;
@@ -1538,6 +1552,11 @@ export class VisualSettings {
       preserveCyberRestore = false,
     } = {},
   ) {
+    if (
+      typeof styleName !== 'string' ||
+      (styleName !== 'normal' && !Object.hasOwn(STYLES, styleName))
+    )
+      return;
     const { setDetectionStyle } = this.services;
     if (!restore) this.shareLinkManager?.claimRestoreLane?.('visual');
     if (this.hud.getVariant() === 'cyber') {
@@ -1594,9 +1613,9 @@ export class VisualSettings {
     });
 
     // Update style indicator
-    const displayNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
-    this._styleIndicator.textContent =
-      displayNames[styleName] || styleName.toUpperCase();
+    this._styleIndicator.textContent = STYLE_STATUS_LABELS[styleName]
+      ? t(STYLE_STATUS_LABELS[styleName])
+      : styleName.toUpperCase();
     this._updateStyleMiniStatus(styleName);
 
     // Update parameter sliders
@@ -1628,9 +1647,9 @@ export class VisualSettings {
 
   _updateStyleMiniStatus(styleName = this.activeStyle) {
     if (!this._styleMiniValue) return;
-    this._styleMiniValue.textContent =
-      STYLE_STATUS_LABELS[styleName] ||
-      String(styleName || 'normal').toUpperCase();
+    this._styleMiniValue.textContent = STYLE_STATUS_LABELS[styleName]
+      ? t(STYLE_STATUS_LABELS[styleName])
+      : String(styleName || 'normal').toUpperCase();
   }
 
   _updateHudButtonState() {
@@ -1648,21 +1667,23 @@ export class VisualSettings {
     btn.setAttribute(
       'aria-label',
       enabled
-        ? `Detection overlay: ${String(modeLabel).toLowerCase()}`
-        : 'Detection overlay: off',
+        ? t('Detection overlay: {mode}', {
+            mode: String(modeLabel).toLowerCase(),
+          })
+        : t('Detection overlay: off'),
     );
     btn.classList.remove('active', 'god', 'panoptic');
     if (modeLabel === 'SPARSE') {
-      btn.querySelector('.pp-label').textContent = 'SPARSE';
+      btn.querySelector('.pp-label').textContent = t('SPARSE');
       btn.classList.add('active');
     } else if (modeLabel === 'BALANCED') {
-      btn.querySelector('.pp-label').textContent = 'BALANCED';
+      btn.querySelector('.pp-label').textContent = t('BALANCED');
       btn.classList.add('active');
     } else if (modeLabel === 'DENSE') {
-      btn.querySelector('.pp-label').textContent = 'DENSE';
+      btn.querySelector('.pp-label').textContent = t('DENSE');
       btn.classList.add('active', 'panoptic');
     } else {
-      btn.querySelector('.pp-label').textContent = 'DETECT';
+      btn.querySelector('.pp-label').textContent = t('DETECT');
     }
 
     if (this._detectionSliderRow) {

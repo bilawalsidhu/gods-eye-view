@@ -35,7 +35,13 @@ export function parseTerrainPoints(raw) {
     if (parts.length !== 2) return null;
     const lon = Number(parts[0]);
     const lat = Number(parts[1]);
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+    if (
+      !Number.isFinite(lon) ||
+      !Number.isFinite(lat) ||
+      Math.abs(lon) > 180 ||
+      Math.abs(lat) > 90
+    )
+      return null;
     points.push([lon, lat]);
   }
   return points;
@@ -227,6 +233,9 @@ export async function resolveTerrainHeightRequest({
       for (let i = 0; i < missing.length; i += 1) {
         const result = fetched[i];
         if (validTerrainResult(result)) {
+          // Re-insert rather than overwrite: a Map keeps an existing key in
+          // its old position, and the proxy evicts from the front.
+          cache.delete(missing[i].key);
           cache.set(missing[i].key, { at: fetchedAt, result });
           cacheChanged = true;
         } else if (absentTerrainDatum(result)) {
