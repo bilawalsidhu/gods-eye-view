@@ -223,7 +223,7 @@ The image has its own health check (an HTTP request to the app root every 30 sec
 
 **Keys.** Provider Settings works in this image: keys you save land in `/data/.env`, so they survive `docker rm`, `docker pull` and recreating the container as long as you keep the `gev-data` volume. `--env-file` / `env_file` still works too, and a key supplied that way is shown as configured outside Provider Settings and stays read-only there, as everywhere else. Delete the volume (`docker volume rm gev-data`) to forget everything. If you bind-mount a host folder on `/data` instead of a named volume, make it writable by uid 1000 (`chown 1000:1000`).
 
-Each release is signed with [cosign](https://github.com/sigstore/cosign) (keyless) and carries build provenance and an SBOM. Check one with `gh attestation verify oci://ghcr.io/bilawalsidhu/gods-eye-view:1.2.3 --repo bilawalsidhu/gods-eye-view`.
+Every platform image carries SLSA build provenance and an SBOM as attestations in the registry. Check them with `docker buildx imagetools inspect ghcr.io/bilawalsidhu/gods-eye-view:1.2.3 --format '{{ json .Provenance }}'` and the same with `.SBOM`.
 
 Pin a version tag for reproducible installs (`ghcr.io/bilawalsidhu/gods-eye-view:1.2.3`, or `:1.2` for patch updates only). To update, `docker pull` the image and recreate the container (`docker compose pull && docker compose up -d`).
 

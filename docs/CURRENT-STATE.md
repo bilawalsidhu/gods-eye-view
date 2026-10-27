@@ -6289,10 +6289,11 @@ Releases publish a multi-arch image (`linux/amd64`, `linux/arm64`) to
 architecture is built on a native runner, so `npm ci` fetches that
 architecture's esbuild and sharp binaries, and a merge job tags the combined
 manifest (`X.Y.Z`, `X.Y`, the commit SHA, and `latest` for stable releases only).
-The manifest carries build provenance, an SBOM and a keyless cosign signature,
-and the release notes gain a "Container image" section with the digest and an
-informational Trivy count. Pull requests build, smoke-test and scan the image on
-both architectures in `ci.yml` without pushing; the scan never fails the build.
+Each platform image carries SLSA provenance and an SBOM pushed by
+build-push-action, and the merge job fails if `imagetools create` drops either.
+The release notes gain a "Release Artifacts" section naming the image tags and
+architectures; an informational Trivy count goes in the job summary. Pull requests build,
+smoke-test and scan the image on both architectures in `ci.yml` without pushing; the scan never fails the build.
 
 The Dockerfile has two targets. `dev` (what `compose.yaml` builds) keeps git and
 the bind-mounted checkout. `runtime` (the default, and what is published) runs as
