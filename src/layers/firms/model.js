@@ -14,6 +14,13 @@ import {
   LABEL_MIN_SEP_PX,
 } from './policy.js';
 
+// Unknown intensity is outside the measured FRP ramp, including measured zero.
+const UNKNOWN_FRP_STOP = Object.freeze({
+  name: 'unknown',
+  color: Cesium.Color.fromCssColorString('#94a3b8'),
+});
+const UNKNOWN_FRP_ACCENT = '148, 163, 184';
+
 export function createModel({
   layerState,
   services,
@@ -121,6 +128,7 @@ export function createModel({
   }
 
   function heatColor(value, alpha) {
+    if (!Number.isFinite(value)) return UNKNOWN_FRP_STOP.color.withAlpha(alpha);
     if (value > 0.72) return Cesium.Color.RED.withAlpha(alpha);
     if (value > 0.42) return Cesium.Color.ORANGE.withAlpha(alpha);
     return Cesium.Color.YELLOW.withAlpha(alpha);
@@ -134,6 +142,7 @@ export function createModel({
    */
 
   function detectionColorStop(fire) {
+    if (!Number.isFinite(fire?.frp)) return UNKNOWN_FRP_STOP;
     const heat = Math.min(
       1,
       Math.sqrt(Math.max(0, fire.frp) / 150) * 0.85 + fire.confidence * 0.15,
@@ -354,7 +363,9 @@ export function createModel({
       // Host-side horizon test uses this instead of the render anchor.
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
-      accent: accentForSeverity(detectionColorStop(fire).name),
+      accent: Number.isFinite(fire.frp)
+        ? accentForSeverity(detectionColorStop(fire).name)
+        : UNKNOWN_FRP_ACCENT,
       title:
         fire.provider === 'conae-goes'
           ? t('THERMAL DETECTION · {frp}', { frp: frpLabel(fire.frp) })
@@ -402,7 +413,9 @@ export function createModel({
       position: candidate.position,
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
-      accent: accentForSeverity(detectionColorStop(fire).name),
+      accent: Number.isFinite(fire.frp)
+        ? accentForSeverity(detectionColorStop(fire).name)
+        : UNKNOWN_FRP_ACCENT,
       title: t('▲ {frp}', { frp: frpLabel(fire.frp) }),
       details: [meta.join(' · ')],
       selected: false,
@@ -489,6 +502,7 @@ export function createModel({
    */
 
   function cellAccent(normalized) {
+    if (!Number.isFinite(normalized)) return UNKNOWN_FRP_ACCENT;
     if (normalized > 0.72) return accentForSeverity('red');
     if (normalized > 0.42) return accentForSeverity('orange');
     return accentForSeverity('yellow');
@@ -517,12 +531,13 @@ export function createModel({
   }
 
   function detectionLabel(fire) {
+    // FIRMS context/tool labels are English data; speech.js translates at paint.
+    if (fire.provider !== 'conae-goes')
+      return `Fire · FRP ${formatFrpMw(fire.frp)} MW`;
     const frp = Number.isFinite(fire.frp)
       ? t('FRP {value}', { value: frpLabel(fire.frp) })
       : frpLabel(fire.frp);
-    return fire.provider === 'conae-goes'
-      ? t('Thermal detection · {frp}', { frp })
-      : t('Fire · {frp}', { frp });
+    return t('Thermal detection · {frp}', { frp });
   }
 
   /** formatFrp for a card, with the locale's decimal separator ("4,9"). */

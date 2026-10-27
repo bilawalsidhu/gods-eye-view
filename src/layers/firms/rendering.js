@@ -25,12 +25,20 @@ export function createRendering({
    */
 
   function renderCurrentLod(force = false) {
-    if (
-      !layerState._dataSource ||
-      !layerState._fires.length ||
-      !layerState._viewer
-    )
-      return false;
+    if (!layerState._dataSource || !layerState._viewer) return false;
+    // A restrictive filter or an empty refresh must remove the previous scene.
+    if (!layerState._fires.length) {
+      layerState._dataSource.entities.removeAll();
+      layerState._billboards?.removeAll();
+      layerState._pickIndexById.clear();
+      layerState._fireByCardId.clear();
+      layerState._cullPositions.length = 0;
+      layerState._labelCandidates = [];
+      layerState._cellCount = 0;
+      components.cards.rebuildAmbientLabels();
+      components.selection.refreshContextRegistrations([]);
+      return true;
+    }
     const lodIndex = components.viewport.selectLodIndex(
       components.viewport.cameraHeight(),
     );
@@ -147,7 +155,8 @@ export function createRendering({
       const score = components.model.heatScore(cell);
       const normalized = Math.min(1, Math.sqrt(score / maxScore));
       const alpha = 0.16 + normalized * 0.5;
-      const color = components.model.heatColor(normalized, alpha);
+      const colorValue = Number.isFinite(cell.maxFrp) ? normalized : null;
+      const color = components.model.heatColor(colorValue, alpha);
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
       const position = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0);
@@ -179,7 +188,7 @@ export function createRendering({
         cullPosition: components.model.cellCullPosition(centerLon, centerLat),
         fire: null,
         cell,
-        accent: components.model.cellAccent(normalized),
+        accent: components.model.cellAccent(colorValue),
       });
     }
 

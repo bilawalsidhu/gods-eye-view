@@ -3025,7 +3025,6 @@
   "PARTIAL · {sources} unavailable": "ЧАСТИЧНО · {sources} недоступен",
   "FIRE · {frp}": "ПОЖАР · {frp}",
   "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · тепловая аномалия, лесной пожар не подтверждён",
-  "Fire · {frp}": "Пожар · {frp}",
   "FRP {value}": "FRP {value}",
   "{count} DETECTIONS": {
     "one": "{count} ОБНАРУЖЕНИЕ",
@@ -3035,5 +3034,6 @@
   },
   "confidence not published": "достоверность не опубликована",
   "THERMAL DETECTION": "ТЕПЛОВАЯ АНОМАЛИЯ",
-  "FRP n/a": "FRP н/д"
+  "FRP n/a": "FRP н/д",
+  "Fire · FRP {frp} MW": "Пожар · FRP {frp} МВт"
 }

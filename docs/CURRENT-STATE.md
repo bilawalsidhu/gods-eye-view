@@ -6241,3 +6241,18 @@ when their footprints touch or contain one another, never across a seam toleranc
   controller with fixture ports, plus default/Cyber and narrow translated layouts.
 
 The CONAE GOES thermal detections, mixed-source counts and partial-source warnings support English, Spanish, Russian and Simplified Chinese (`zh-CN`). Provider and station names remain unchanged; numbers and dates follow the selected UI locale.
+
+CONAE observations with unpublished FRP use a neutral gray sprite/card/cell
+accent, outside the measured intensity scale (including measured zero). An
+empty snapshot clears existing sprites, heat cells, overlay cards, pick indexes
+and context registrations. FIRMS context labels retain the English data contract
+used by voice tools; the presentation layer translates them.
+
+The optional joint gates `scripts/qa-conae-intensity.mjs` and
+`scripts/qa-conae-intensity-browser.mjs` require a **temporary integration** of
+PR #1426 with this CONAE branch. They are not baseline unit tests and do not
+publish #1426's unmerged features. The joint policy retains unknown CONAE FRP
+and confidence as null: default 0 MW / All includes them; a positive FRP floor
+excludes unpublished FRP, and Nominal+/High excludes unpublished confidence.
+Unknown confidence is not a low rating, nor is unknown FRP a zero measurement.
+These satellite observations do not establish confirmed wildfire incidents.

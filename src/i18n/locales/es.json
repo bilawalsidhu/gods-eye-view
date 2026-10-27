@@ -2958,7 +2958,6 @@
   "PARTIAL · {sources} unavailable": "PARCIAL · {sources} no disponible",
   "FIRE · {frp}": "INCENDIO · {frp}",
   "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · anomalía térmica, incendio forestal no confirmado",
-  "Fire · {frp}": "Incendio · {frp}",
   "FRP {value}": "FRP {value}",
   "{count} DETECTIONS": {
     "one": "{count} DETECCIÓN",
@@ -2967,5 +2966,6 @@
   },
   "confidence not published": "confianza no publicada",
   "THERMAL DETECTION": "DETECCIÓN TÉRMICA",
-  "FRP n/a": "FRP n/d"
+  "FRP n/a": "FRP n/d",
+  "Fire · FRP {frp} MW": "Incendio · FRP {frp} MW"
 }

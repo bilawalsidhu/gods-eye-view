@@ -2829,7 +2829,7 @@
   "{value} MW": "{value} MW",
   "FRP {value}": "FRP {value}",
   "Thermal detection · {frp}": "热异常探测 · {frp}",
-  "Fire · {frp}": "火点 · {frp}",
   "THERMAL DETECTION": "热异常探测",
-  "PARTIAL · {sources} unavailable": "部分可用 · {sources} 不可用"
+  "PARTIAL · {sources} unavailable": "部分可用 · {sources} 不可用",
+  "Fire · FRP {frp} MW": "火点 · FRP {frp} MW"
 }

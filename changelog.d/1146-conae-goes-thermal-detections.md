@@ -9,3 +9,9 @@
   (radianx, #1146).
 
 Includes Simplified Chinese UI copy and locale regressions, preserving source attribution, interpolation and locale-specific number/date formatting.
+
+Unpublished FRP now has a neutral gray visual instead of implying measured
+low intensity. Empty refresh/filter results remove previous render resources
+and context registrations. FIRMS context labels retain their English tool-data
+contract and localized display. Adds unit regressions and optional mixed-source
+intensity/share-link integration gates for temporarily combining PR #1426.

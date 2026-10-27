@@ -152,7 +152,6 @@ test('keyless CONAE ingestion exposes partial provider failures and correct sele
   assert.match(context.label, /Thermal detection/);
 });
 
-
 test('mixed FIRMS/CONAE timestamps remain honest across consumers', () => {
   const [untimed, goes] = adaptFirmsRecords([
     {
@@ -173,10 +172,7 @@ test('mixed FIRMS/CONAE timestamps remain honest across consumers', () => {
   assert.notEqual(fireDetectionKey(untimed), fireDetectionKey(goes));
 
   const selectedCard = model.buildSelectedFireCard(untimed, NOW);
-  const ambientCard = model.buildFireCard(
-    { fire: untimed, position: {} },
-    NOW,
-  );
+  const ambientCard = model.buildFireCard({ fire: untimed, position: {} }, NOW);
   const cellCard = model.buildCellCard(
     { cell: { count: 1, maxFrp: 8, newestAcqMs: 0 }, position: {} },
     NOW,
@@ -293,3 +289,18 @@ for (const locale of ['es', 'ru', 'zh-CN']) {
     }
   });
 }
+
+test('unpublished FRP has a neutral color, distinct from measured zero in sprites, cells and cards', () => {
+  const [unknown, zero] = adaptFirmsRecords([
+    { ...raw, frp: null },
+    { ...raw, frp: 0 },
+  ]);
+  assert.equal(model.detectionColorStop(unknown).name, 'unknown');
+  assert.notEqual(model.detectionColorStop(zero).name, 'unknown');
+  const card = model.buildSelectedFireCard(unknown, NOW);
+  assert.equal(card.accent, '148, 163, 184');
+  assert.match(card.title, /FRP n\/a/);
+  assert.equal(model.cellAccent(null), card.accent);
+  assert.equal(model.heatColor(null, 0.5).alpha, 0.5);
+  assert.notDeepEqual(model.heatColor(null, 0.5), model.heatColor(0, 0.5));
+});
