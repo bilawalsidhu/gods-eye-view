@@ -80,7 +80,11 @@ export function createRendering({
           now,
         );
         if (entry.entity?.label)
-          entry.entity.label.text = observationLabel(entry.contact, ageSec, freshness);
+          entry.entity.label.text = observationLabel(
+            entry.contact,
+            ageSec,
+            freshness,
+          );
         keep.push(entry);
       }
       if (keep.length)
