@@ -108,7 +108,7 @@ test('compaction drops silent vehicles, keeps fixed stations and dedupes hazards
     ],
     messageKind: 'roadworks',
     messageLabel: 'Roadworks',
-    originatingStationId: 9,
+    originatingStationId: 1,
     sequenceNumber: 3,
     speedLimit: 60,
   };
@@ -336,6 +336,40 @@ test('hazards come from public stations only, never from a private car', async (
   const { hazards } = compactCitsState(merged, box, { now: NOW });
   assert.equal(hazards.length, 1);
   assert.deepEqual(hazards[0].position, [15.45, 47.05]);
+});
+
+test('a re-broadcast DENM is dropped when its originator is not a known public station', async () => {
+  const { compactCitsState } =
+    await import('../../../server/providers/cits/tiles.js');
+  const denm = (originatingStationId, lon) => ({
+    eventPosition: [lon, 47.05],
+    messageKind: 'traffic_condition',
+    messageLabel: 'Stationary vehicle',
+    originatingStationId,
+    sequenceNumber: 1,
+  });
+  const merged = {
+    points: new Map([
+      [
+        'rsu',
+        point('rsu', 'rsu', 15.44, 47.05, {
+          stationId: 5,
+          denmEvents: [
+            // The originating car has already left the mirror.
+            { key: 'gone', denmData: denm(77, 15.42) },
+            { key: 'trailer', denmData: denm(6, 15.46) },
+            { key: 'own', denmData: { ...denm(null, 15.45) } },
+          ],
+        }),
+      ],
+      ['trailer', point('trailer', 'trailer', 15.46, 47.05, { stationId: 6 })],
+    ]),
+  };
+  const { hazards } = compactCitsState(merged, box, { now: NOW });
+  assert.deepEqual(
+    hazards.map((hazard) => hazard.position[0]).sort(),
+    [15.45, 15.46],
+  );
 });
 
 test('station kinds match case-insensitively; unknown kinds stay anonymous', async () => {

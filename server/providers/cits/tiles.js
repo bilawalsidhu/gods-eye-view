@@ -343,8 +343,9 @@ function compactDenm(denm) {
  * as a stable id. Every other station gets an id drawn from a key made for
  * this response alone and is listed in random order, so two responses cannot
  * be joined into a vehicle's track by id or position in the list. DENM hazards
- * are only taken from public stations: a hazard sent by a private car would
- * sit at that car's own position.
+ * are only taken from public stations, and a re-broadcast only when its
+ * originator is a public station in the mirror: a hazard sent by a private
+ * car would sit at that car's own position.
  */
 export function compactCitsState(
   merged,
@@ -359,16 +360,14 @@ export function compactCitsState(
   const anonymous = [];
   const hazards = new Map();
   const responseKey = randomBytes(32);
-  // Station ids of private vehicles, so a DENM they originated is dropped
-  // even when a roadside unit re-broadcasts it.
-  const privateStations = new Set();
+  // Station ids of public stations in the mirror. A re-broadcast DENM is
+  // kept only when its originator is one of them: an originator the mirror
+  // does not know may be a private car that has already left the view.
+  const publicStations = new Set();
   for (const feature of merged.points.values()) {
     const p = feature?.properties || {};
-    if (
-      !CITS_PUBLIC_KINDS.has(citsNormalizeKind(p.kind)) &&
-      p.stationId != null
-    )
-      privateStations.add(String(p.stationId));
+    if (CITS_PUBLIC_KINDS.has(citsNormalizeKind(p.kind)) && p.stationId != null)
+      publicStations.add(String(p.stationId));
   }
   for (const [id, feature] of merged.points) {
     const coordinates = feature?.geometry?.coordinates;
@@ -394,7 +393,7 @@ export function compactCitsState(
     for (const [key, data] of denms) {
       if (
         data?.originatingStationId != null &&
-        privateStations.has(String(data.originatingStationId))
+        !publicStations.has(String(data.originatingStationId))
       )
         continue;
       const hazard = compactDenm(data);

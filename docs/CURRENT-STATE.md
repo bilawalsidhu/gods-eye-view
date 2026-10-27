@@ -1259,7 +1259,8 @@ and report age under an id drawn from a key made for that response alone, in
 random order, so responses cannot be joined into a track by id. The browser
 pools these dots by slot and moves them without gliding; they are never
 selectable, bracketed or handed to detection. DENM hazards come only from
-public stations, never from a private vehicle or a warning it originated.
+public stations; a re-broadcast counts only when its originator is a public
+station the relay knows, so a warning a private car originated never shows.
 Vehicle tracks are neither returned nor kept. `CITS_OTM_FULL_STREAM=1` enables the
 `mode=full` mirror of `/ws_ext`; otherwise it answers 403 and the layer hides
 its bandwidth chips. Errors are snake_case codes (`method_not_allowed`,
