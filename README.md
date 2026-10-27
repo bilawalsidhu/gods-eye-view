@@ -169,6 +169,8 @@ Every release is published to the GitHub Container Registry as one multi-arch im
 | `linux/arm64` | Apple Silicon Macs (native under Docker Desktop, no Rosetta), Raspberry Pi 4/5 on a 64-bit OS, AWS Graviton |
 
 ```bash
+# To keep the data in a host folder instead, swap the volume for
+# -v /srv/gev-data:/data:Z  (the folder must belong to 1000:1000; :Z is for SELinux hosts and ignored elsewhere)
 docker run -d --name gods-eye-view \
   --init --read-only --cap-drop ALL \
   --security-opt no-new-privileges:true \
@@ -213,6 +215,8 @@ services:
       - /app/node_modules/.vite-temp:uid=1000,gid=1000
     volumes:
       - gev-data:/data
+      # or a host folder owned by 1000:1000; add :Z on SELinux hosts:
+      # - /srv/gev-data:/data:Z
     restart: unless-stopped
 
 volumes:
@@ -222,6 +226,23 @@ volumes:
 The image has its own health check (an HTTP request to the app root every 30 seconds), so `docker ps` shows `healthy` once it is up.
 
 **Keys.** Provider Settings works in this image: keys you save land in `/data/.env`, so they survive `docker rm`, `docker pull` and recreating the container as long as you keep the `gev-data` volume. `--env-file` / `env_file` still works too, and a key supplied that way is shown as configured outside Provider Settings and stays read-only there, as everywhere else. Delete the volume (`docker volume rm gev-data`) to forget everything. If you bind-mount a host folder on `/data` instead of a named volume, make it writable by uid 1000 (`chown 1000:1000`).
+
+<details>
+<summary>Running on Proxmox</summary>
+
+Proxmox VE is Debian with AppArmor, and it can host Docker two ways.
+
+In a **VM**, install Docker in it as on any machine. If the guest is Fedora or RHEL, SELinux is on: a named volume is labelled for you, and a bind-mounted `/data` needs `:Z` (private to this container).
+
+In an **LXC container**, enable the `nesting` and `keyctl` features (Proxmox calls them out for Docker in an unprivileged container: `pct set <id> --features nesting=1,keyctl=1`). Prefer a named volume: it lives inside the container, so ownership just works. For a folder bind-mounted from the Proxmox host into an unprivileged LXC, ids are shifted by 100000, so the folder must be owned by `101000:101000` on the host to be `1000:1000` inside:
+
+```bash
+chown 101000:101000 /srv/gev-data   # on the Proxmox host
+```
+
+If `/data` is not writable the start log says so and names these fixes. Nothing in this image's flags is known to conflict with LXC; if Docker itself won't start there, check the features above.
+
+</details>
 
 Every platform image carries SLSA build provenance and an SBOM as attestations in the registry. Check them with `docker buildx imagetools inspect ghcr.io/bilawalsidhu/gods-eye-view:1.2.3 --format '{{ json .Provenance }}'` and the same with `.SBOM`.
 
