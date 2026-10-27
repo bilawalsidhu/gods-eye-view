@@ -47,3 +47,23 @@ test('landscape sheets pin glows inside the scroll box and reserve space above M
     /--mobile-rail-under-dock-max-height: min\(38dvh, calc\(100dvh - var\(--mobile-tab-space\) - var\(--mobile-top-inset\) - 90px - var\(--mobile-dock-sheet-max-height\)\)\)/,
   );
 });
+
+test('phone landscape collapses voice to a corner mic with the chooser beside it', () => {
+  const landscape = css.slice(css.indexOf('Phone landscape has no height'));
+  assert.match(
+    landscape,
+    /#gev-voice-control\[data-status='error'\] \{[^}]*width: 3\.4rem;[^}]*height: 3\.4rem;[^}]*border-radius: 50%/,
+  );
+  assert.match(
+    landscape,
+    /\.gev-voice-visualizer, [^{]*\.gev-voice-readout, [^{]*\.gev-mic-label \{ display: none;/,
+  );
+  assert.match(
+    landscape,
+    /> \.gev-voice-provider-field:not\(\[hidden\]\) \{[^}]*right: calc\(100% \+ 8px\);[^}]*bottom: 50%;[^}]*translate: 0 50%/,
+  );
+  assert.match(
+    landscape,
+    /\.gev-voice-error-tray \{[^}]*right: 0;[^}]*left: auto;[^}]*transform: none/,
+  );
+});

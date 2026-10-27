@@ -493,6 +493,88 @@ body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
   z-index: 166;
 }
 
+/* Phone landscape has no height to spare for the voice bar: it collapses to
+   the mic in the bottom-right corner, the provider chooser (and its gear)
+   sits beside it as a pill, and its trays open above it, right-aligned. */
+@media (max-height: 520px) {
+  body.mobile-shell #command-dock {
+    align-items: flex-end;
+  }
+
+  body.mobile-shell:not([data-mobile-sheet]) #command-dock > #gev-voice-control,
+  body.mobile-shell:not([data-mobile-sheet])
+    #command-dock
+    > #gev-voice-control[data-status='error'] {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    place-items: center;
+    align-self: flex-end;
+    width: 3.4rem;
+    height: 3.4rem;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-heading,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-visualizer,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-readout,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-help-tray,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-mic-label {
+    display: none;
+  }
+
+  body.mobile-shell #command-dock > #gev-voice-control #gev-voice-button {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+  }
+
+  body.mobile-shell
+    #command-dock
+    > #gev-voice-control[data-provider-choice='true']
+    > .gev-voice-provider-field:not([hidden]) {
+    right: calc(100% + 8px);
+    bottom: 50%;
+    left: auto;
+    width: 10.5rem;
+    translate: 0 50%;
+  }
+
+  body.mobile-shell
+    #command-dock
+    > #gev-voice-control[data-provider-choice='true']
+    > .gev-voice-settings-button {
+    right: calc(100% + 14px);
+    bottom: 50%;
+    translate: 0 50%;
+  }
+
+  body.mobile-shell #command-dock > #gev-voice-control > .gev-voice-card,
+  body.mobile-shell #command-dock > #gev-voice-control > .gev-voice-panel,
+  body.mobile-shell
+    #command-dock
+    > #gev-voice-control[data-status]
+    .gev-voice-error-tray {
+    right: 0;
+    bottom: calc(100% + 0.7rem);
+    left: auto;
+    width: min(22rem, calc(100vw - var(--mobile-left-inset) - 20px - 3.4rem));
+    max-height: calc(
+      100dvh - var(--mobile-top-inset) - var(--mobile-tab-space) - 11rem
+    );
+    transform: none;
+    transform-origin: bottom right;
+  }
+
+  /* The dock no longer crosses the middle, so the credit drops to the bar. */
+  body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
+    #cesium-credits {
+    bottom: calc(var(--mobile-tab-space) + 8px) !important;
+  }
+}
+
 /* The view switcher clears the tab bar and the voice bar, opposite the credit. */
 body.mobile-shell:not(.cockpit-mode) #view-switcher {
   right: calc(var(--mobile-right-inset) + 12px);
