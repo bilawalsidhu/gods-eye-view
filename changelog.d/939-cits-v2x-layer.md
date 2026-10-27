@@ -6,7 +6,7 @@
   no station address, card or track. Clicking a tram, bus, light or hazard
   opens one selected card on the globe. Chips in the layer row set how far
   vehicles, lights, labels and brackets stay visible, and a kind list with
-  live counts picks what is shown. Keyless; share token `5`; attribution
+  live counts picks what is shown. Keyless; share token `6`; attribution
   "OpenTrafficMap". The local `/api/cits` relay subscribes only the map tiles
   in view, rate-limits each client and closes when idle; the operator can opt
   into the full stream with `CITS_OTM_FULL_STREAM=1`, and

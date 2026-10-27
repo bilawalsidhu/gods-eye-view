@@ -478,6 +478,12 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   bottom: calc(2vh + 5.4rem);
 }
 
+:root[data-scope-mask='off']
+  #intel-hud[data-variant='minimal']
+  .hud-bottom-left {
+  bottom: calc(2vh + 6.5rem);
+}
+
 #intel-hud[data-variant='minimal'] .hud-bottom-bar {
   bottom: calc(2vh + 9rem);
 }

@@ -58,6 +58,20 @@ const layers = [
     noQuery: 'navigation-integrity cells; no countable analyst records',
   },
   {
+    id: 's2-ghostmaps',
+    aliases: [
+      's2 ghostmaps',
+      'ghost maps',
+      'ghostmaps',
+      's2 underground',
+      's2 intel',
+      'intel picture',
+      'common intelligence picture',
+    ],
+    context: false,
+    noQuery: 'published third-party intel placemarks; not analyst records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -305,12 +319,6 @@ const layers = [
     },
   },
   {
-    id: 'cits',
-    aliases: ['c-its', 'v2x', 'c-its live', 'opentrafficmap'],
-    context: false,
-    noQuery: 'live V2X stations; private vehicles stay anonymous dots',
-  },
-  {
     id: 'cctv',
     aliases: ['traffic cameras', 'cameras', 'webcams'],
     context: false,
@@ -416,6 +424,9 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  // Kept off so the Realtime prompt stays under its size budget; private
+  // vehicles are anonymous dots, so there are no analyst records either.
+  cits: 'live V2X stations; toggled from the Data Layers panel',
 });
 
 const TYPE_NAMES = Object.freeze({
@@ -517,6 +528,8 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  // The brand is already the layer id; all spoken aliases remain accepted.
+  's2-ghostmaps',
 ]);
 
 /**
@@ -531,7 +544,7 @@ export function voiceLayerAliasHint() {
       entry.toggle && entry.aliases.length && !SELF_EVIDENT_IDS.has(entry.id),
   )
     .map((entry) => `${entry.aliases.slice(0, 2).join('/')}→${entry.id}`)
-    .join('; ');
+    .join(';');
 }
 
 /** Field names that already carry their unit (altitudeM, speedKts, …). */

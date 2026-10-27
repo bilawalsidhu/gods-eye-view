@@ -8,6 +8,8 @@ import {
   terrainPointKey,
   validTerrainResult,
 } from '../../src/data/terrainHeightsProxy.js';
+import { makeRateLimiter, clientKey } from './common/rate-limit.js';
+import { admitSameSiteKeyless } from './common/same-site.js';
 
 /**
  * Re:Earth terrain point-height proxy: batched lon/lat → ellipsoidal height
@@ -18,13 +20,33 @@ import {
  * cache and serve-stale shape. Cache entries and stale fallback are keyed per
  * 5dp point, so reordered and partially overlapping batches reuse prior work.
  * Only missing/stale points go upstream; the response is rebuilt in exact
- * request order. Larger requests are chunked sequentially, and one failing
- * chunk does not discard the chunks that resolved.
+ * request order. Each request is bounded to one 64-point upstream chunk;
+ * larger client workloads are split by the browser terrain service.
+ *
+ * Bounds, because every distinct 5dp point is its own key: coordinates must be
+ * in WGS-84 range (rejected at parse), the point cache has an entry ceiling
+ * with oldest-first eviction, an over-large cache file is not read back, and
+ * the route carries an always-on per-client limiter. The route also refuses
+ * cross-site browser requests, so another web page cannot use the visitor's
+ * browser to fill the cache or spend the visitor's own rate-limit quota.
+ * Reverse-proxied same-origin requests are admitted: terrain is keyless and
+ * needed for rendering, and a 403 would send every chunk to the geoid fallback.
  */
-export function terrainHeightsProxy() {
+export function terrainHeightsProxy(options = {}) {
+  // Destructured in the body, not the signature: `proxyErrorResponses.test.mjs`
+  // extracts these proxies by slicing to the first closing brace in column
+  // zero, so a multi-line parameter list would cut the function in half.
+  // Overridable so the ceilings can be exercised as behaviour rather than
+  // asserted as constants; production constructs this with no arguments.
+  const {
+    cacheMaxEntries = 50_000,
+    cacheMaxDiskBytes = 24 * 1024 * 1024,
+    cachePath,
+  } = options;
   const TTL_MS = 30 * 24 * 3600_000;
-  const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
-  const CACHE_PATH = path.join(CACHE_DIR, 'terrain-heights.json');
+  const CACHE_PATH =
+    cachePath || path.join(process.cwd(), '.gev-cache', 'terrain-heights.json');
+  const CACHE_DIR = path.dirname(CACHE_PATH);
   // Sized against measured upstream latency, not the documented page cap.
   // Re:Earth serves 87-186 ms/point depending on load (observed 2026-09-12,
   // a 2x swing within one hour). 256 points therefore costs 22-48 s and blows
@@ -33,10 +55,59 @@ export function terrainHeightsProxy() {
   // 2026-08-21). 64 points costs 5.6-12 s, inside the timeout at both ends of
   // that range.
   const UPSTREAM_CHUNK = 64;
-  const MAX_POINTS = 2000;
+  const MAX_POINTS = UPSTREAM_CHUNK;
+  /**
+   * Entry ceiling for the point cache, and with it the file written from it.
+   *
+   * Every distinct 5dp point is a separate key, so without a ceiling the map
+   * — and the JSON dumped from it verbatim — grow for as long as a caller
+   * supplies new coordinates. Measured against real use rather than guessed:
+   * this checkout's `.gev-cache/terrain-heights.json` held 6,189 entries in
+   * 1.0 MB after ordinary sessions, i.e. ~168 bytes/entry. 50,000 entries is
+   * eight times that working set and ~8 MB on disk, comfortably inside the
+   * 24 MB ceiling `rocketLaunchesProxy` already applies to its own cache file.
+   */
+  const CACHE_MAX_ENTRIES = cacheMaxEntries;
+  /** Refuse to load a cache file larger than this (mirrors rocketLaunchesProxy). */
+  const CACHE_MAX_DISK_BYTES = cacheMaxDiskBytes;
+  /**
+   * Requests/min/client. Terrain is keyless and free, so this guards the point
+   * cache and the upstream community service rather than a bill. Sized from
+   * measurement: across a full `npm run test:track` run — the heaviest
+   * exercise this app has — the route served 10 requests, peaking at 8/min.
+   * 90/min is an order of magnitude above that, and the band `/api/overpass`
+   * and `/api/military-installations` already use.
+   */
+  const RATE_PER_MIN = 90;
+  const allow = makeRateLimiter({
+    windowMs: 60_000,
+    max: RATE_PER_MIN,
+    globalMax: RATE_PER_MIN * 3,
+  });
 
   /** @type {Map<string, {at:number, result:object}>} keyed by canonical 5dp lon/lat. */
   const mem = new Map();
+
+  /**
+   * Drop the oldest entries until the map is back inside its ceiling.
+   * The map is kept in fetch-time order (sorted once on load, and the resolver
+   * re-inserts every point it refetches), so the oldest are at the front and
+   * no write sorts the map. Terrain does not move, so evicting an old point
+   * costs one refetch, never a wrong answer.
+   */
+  function evictOverflow() {
+    for (const key of mem.keys()) {
+      if (mem.size <= CACHE_MAX_ENTRIES) return;
+      mem.delete(key);
+    }
+  }
+
+  /** Put the map in fetch-time order; a file is not guaranteed to be. */
+  function orderByAge() {
+    const byAge = [...mem.entries()].sort((a, b) => a[1].at - b[1].at);
+    mem.clear();
+    for (const [key, entry] of byAge) mem.set(key, entry);
+  }
   /** @type {Map<string, Promise<Array<object>>>} single-flight per missing-point subset. */
   const inflight = new Map();
   let diskLoaded = false;
@@ -47,6 +118,21 @@ export function terrainHeightsProxy() {
     if (diskLoaded) return;
     diskLoaded = true;
     try {
+      // A cache file past the ceiling is not read back into memory: loading it
+      // would reinstate exactly the unbounded map the ceiling exists to stop.
+      // The next flush rewrites a bounded one.
+      //
+      // "Cannot measure it" is not "too large": if stat is unavailable, fall
+      // through and let readFile decide, so an absent file behaves exactly as
+      // it did before this guard existed.
+      let sizeBytes = null;
+      try {
+        sizeBytes = (await fsp.stat(CACHE_PATH)).size;
+      } catch {
+        sizeBytes = null;
+      }
+      if (sizeBytes !== null && sizeBytes > CACHE_MAX_DISK_BYTES)
+        throw new Error('cache file too large');
       const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
       const pointEntries =
         parsed?.version === 2 &&
@@ -87,6 +173,8 @@ export function terrainHeightsProxy() {
         }
         diskDirty = mem.size > 0;
       }
+      orderByAge();
+      evictOverflow();
     } catch {
       /* no disk cache yet */
     }
@@ -157,13 +245,25 @@ export function terrainHeightsProxy() {
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/terrain/heights', async (req, res) => {
+      // Refuse cross-site browser requests (an <img> or fetch from another
+      // site) before the limiter, cache or upstream see them. Same-origin app
+      // requests, non-browser loopback callers (MCP panel_request) and the app
+      // served behind a reverse proxy pass.
+      if (admitSameSiteKeyless(req, res)) return;
       const send = (status, bodyObj) => {
         if (res.headersSent) return;
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(bodyObj));
       };
       try {
-        await loadDiskOnce();
+        if (!allow(clientKey(req))) {
+          res.writeHead(429, {
+            'Content-Type': 'application/json',
+            'Retry-After': '10',
+          });
+          res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+          return;
+        }
         const parsedUrl = new URL(req.url || '', 'http://internal');
         const rawPoints = parsedUrl.searchParams.get('points');
         const points = parseTerrainPoints(rawPoints);
@@ -175,19 +275,23 @@ export function terrainHeightsProxy() {
           return;
         }
         if (points.length > MAX_POINTS) {
-          send(500, {
+          send(413, {
             error: `too many points (${points.length}); max ${MAX_POINTS} per request`,
           });
           return;
         }
 
+        await loadDiskOnce();
         const outcome = await resolveTerrainHeightRequest({
           points,
           cache: mem,
           fetchMissing: fetchMissingSingleFlight,
           ttlMs: TTL_MS,
         });
-        if (outcome.cacheChanged) diskDirty = true;
+        if (outcome.cacheChanged) {
+          evictOverflow();
+          diskDirty = true;
+        }
         if (outcome.upstreamError) {
           console.warn(
             '[terrain-heights-proxy] refresh incomplete' +

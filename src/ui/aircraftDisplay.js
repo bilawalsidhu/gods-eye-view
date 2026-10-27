@@ -1,3 +1,5 @@
+import { syncSegmentedControl } from './segmentedControl.js';
+
 /** Own the shared aircraft display preference and its controls. */
 export class AircraftDisplay {
   constructor({ elements, readDataManager, layout }) {
@@ -28,12 +30,9 @@ export class AircraftDisplay {
     this._models3dMode = options.models3dMode === 'all' ? 'all' : 'proximity';
     this._syncModels3dButtonState();
     this._models3dModeRow?.classList.toggle('visible', this._models3dEnabled);
-    for (const button of this._models3dModeBtns || []) {
-      if (!button) continue;
-      const active = button.dataset.mode === this._models3dMode;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-checked', String(active));
-    }
+    syncSegmentedControl(this._models3dModeBtns, this._models3dMode, {
+      valueOf: (button) => button.dataset.mode,
+    });
     this._layoutRightPanels();
   }
 
@@ -59,12 +58,9 @@ export class AircraftDisplay {
     const normalized = mode === 'all' ? 'all' : 'proximity';
     this._models3dMode = normalized;
     this._setModels3dParams({ models3dMode: normalized });
-    for (const button of this._models3dModeBtns) {
-      if (!button) continue;
-      const active = button.dataset.mode === normalized;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-checked', String(active));
-    }
+    syncSegmentedControl(this._models3dModeBtns, normalized, {
+      valueOf: (button) => button.dataset.mode,
+    });
     this._syncModels3dButtonState();
   }
 
@@ -74,7 +70,6 @@ export class AircraftDisplay {
     // a screen reader without this. It matters more now that the button ships
     // ACTIVE from markup (default-on, 2026-08-22): the very first thing assistive
     // tech reported was an unpressed-looking control over an armed layer.
-    // Mirrors #scope-toggle, which has always carried aria-pressed.
     this._models3dBtn?.setAttribute(
       'aria-pressed',
       String(this._models3dEnabled),
