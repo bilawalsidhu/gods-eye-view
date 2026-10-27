@@ -951,6 +951,14 @@ export function registerWorldOverlayPaintLane(laneId, painter, options = {}) {
   };
 }
 
+// Removed entries cannot paint an exit fade: their source no longer owns
+// them. Release the arbiter identity too, so later layout changes cannot
+// wake the idle renderer for an invisible minimum-lifetime/fade state.
+function forgetOverlayEntry(entry) {
+  _records.delete(entry._overlayKey);
+  _domains.get(entry.collisionGroup)?.arbiter.remove(entry._overlayKey);
+}
+
 /**
  * Replace all entries owned by a source atomically.
  * @param {string} sourceId
@@ -968,7 +976,7 @@ export function setOverlayEntries(sourceId, entries, options = {}) {
   const next = new Map();
   for (const entry of normalized) next.set(entry.id, entry);
   for (const entry of source.entries.values()) {
-    if (!next.has(entry.id)) _records.delete(entry._overlayKey);
+    if (!next.has(entry.id)) forgetOverlayEntry(entry);
     const replacement = next.get(entry.id);
     if (replacement && isProtected(entry) !== isProtected(replacement))
       getOrCreateDomain(entry.collisionGroup).arbiter.remove(entry._overlayKey);
@@ -1005,9 +1013,10 @@ export function removeOverlayEntry(sourceId, entryId) {
   const source = _sources.get(assertSourceId(sourceId));
   if (!source) return false;
   const id = String(entryId);
-  const removed = source.entries.delete(id);
-  if (!removed) return false;
-  _records.delete(entryKey(source.id, id));
+  const entry = source.entries.get(id);
+  if (!entry) return false;
+  source.entries.delete(id);
+  forgetOverlayEntry(entry);
   rebuildSourceCohorts(source);
   updateEntryDiagnostics();
   invalidateHost();
@@ -1023,8 +1032,7 @@ export function clearOverlaySource(sourceId) {
   if (_destroyed) return false;
   const source = _sources.get(assertSourceId(sourceId));
   if (!source) return false;
-  for (const entry of source.entries.values())
-    _records.delete(entry._overlayKey);
+  for (const entry of source.entries.values()) forgetOverlayEntry(entry);
   source.entries.clear();
   source.cohortDomainIds.length = 0;
   source.cohortLists.length = 0;

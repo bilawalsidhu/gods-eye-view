@@ -1,0 +1,182 @@
+{
+  "status": "W2 in progress; QA/bootstrap checkpoint only",
+  "baseCommit": "bbc4b5a553fb0710ef5896ff750df8a349eac8be",
+  "runtime": "Node 24.14.0; headless Puppeteer Metal; sequential GPU",
+  "baseline": {
+    "path": "qa-artifacts/w2/baseline-isolated/earthquakes-cesium.json",
+    "sha256": "4d161e68b770c32cb61fe636a5f50cd5401190db2015ecfb623c49d3920f4a05",
+    "pass": true,
+    "checks": 18,
+    "records": 15,
+    "epochMs": 1792152000000,
+    "idleFrames": 0,
+    "browserErrorCount": 0,
+    "detectionModeBeforeIdle": "DENSE",
+    "poses": {
+      "global": {
+        "total": 15,
+        "onScreen": 15,
+        "controls": 5,
+        "changedPixels": 149,
+        "onSha256": "a20187331be604b7a9a11dbb5d79694383c48963a528ce4bb3c5e0af7dd24894",
+        "offSha256": "35cfd3722726967a860830f7eb2570ca2c77cdb1e06a6692db5dcdb1975276cb"
+      },
+      "city": {
+        "total": 15,
+        "onScreen": 5,
+        "controls": 5,
+        "changedPixels": 564548,
+        "onSha256": "ec7d5e02265a61b1d5429c2915f3e66d01ca36ce1e5dc99a5d05a0fd045b057d",
+        "offSha256": "514a1f72ea252ece0ddbd332ca380a85c1c4e204181f27149884fa26f65a0c4a"
+      },
+      "orbit": {
+        "total": 15,
+        "onScreen": 10,
+        "controls": 5,
+        "changedPixels": 2160,
+        "onSha256": "7d22dbba45c2c64a01713c6af00ec527f6d1ebee452cd38122a723d4d13843f7",
+        "offSha256": "e54d0bc06ccbe7593e7fe876b929ed7c539dfe70407ec12b18710fddb12cda97"
+      },
+      "terrain": {
+        "total": 15,
+        "onScreen": 5,
+        "controls": 5,
+        "changedPixels": 440553,
+        "onSha256": "6fd96b10af3c804fdb2d5fdfeb36a5fea20c55d849b016577e75d8855828552b",
+        "offSha256": "415b051b7386bd6892c581f6aaecb23e42d73a09f85632442c98afaf93ff7962"
+      }
+    }
+  },
+  "qaPreview": {
+    "path": "qa-artifacts/w2/checkpoint0/earthquakes-preview.json",
+    "sha256": "51fd4a4ec1cee01f457205d17702528f5bba09a4f7e60a342b485f919c9da0b5",
+    "pass": true,
+    "checks": 18,
+    "records": 15,
+    "epochMs": 1792152000000,
+    "idleFrames": 0,
+    "browserErrorCount": 0,
+    "detectionModeBeforeIdle": "DENSE",
+    "poses": {
+      "global": {
+        "total": 15,
+        "onScreen": 15,
+        "controls": 5,
+        "changedPixels": 149,
+        "onSha256": "a20187331be604b7a9a11dbb5d79694383c48963a528ce4bb3c5e0af7dd24894",
+        "offSha256": "35cfd3722726967a860830f7eb2570ca2c77cdb1e06a6692db5dcdb1975276cb"
+      },
+      "city": {
+        "total": 15,
+        "onScreen": 5,
+        "controls": 5,
+        "changedPixels": 564548,
+        "onSha256": "ec7d5e02265a61b1d5429c2915f3e66d01ca36ce1e5dc99a5d05a0fd045b057d",
+        "offSha256": "514a1f72ea252ece0ddbd332ca380a85c1c4e204181f27149884fa26f65a0c4a"
+      },
+      "orbit": {
+        "total": 15,
+        "onScreen": 10,
+        "controls": 5,
+        "changedPixels": 2160,
+        "onSha256": "7d22dbba45c2c64a01713c6af00ec527f6d1ebee452cd38122a723d4d13843f7",
+        "offSha256": "e54d0bc06ccbe7593e7fe876b929ed7c539dfe70407ec12b18710fddb12cda97"
+      },
+      "terrain": {
+        "total": 15,
+        "onScreen": 5,
+        "controls": 5,
+        "changedPixels": 440553,
+        "onSha256": "6fd96b10af3c804fdb2d5fdfeb36a5fea20c55d849b016577e75d8855828552b",
+        "offSha256": "415b051b7386bd6892c581f6aaecb23e42d73a09f85632442c98afaf93ff7962"
+      }
+    }
+  },
+  "browserGates": [
+    {
+      "name": "contract-cesium",
+      "code": 0,
+      "seconds": 28.0,
+      "logSha256": "8906a6318d821521dc4701a47cb62d3951337d54b3013d68b55867e4919639b1"
+    },
+    {
+      "name": "contract-navara",
+      "code": 0,
+      "seconds": 129.4,
+      "logSha256": "1e525ce0f98cb9724aa54c4fe83f4ad3e2e8538a68ff512eaf15a674a4fc605a"
+    },
+    {
+      "name": "shell-dev",
+      "code": 0,
+      "seconds": 186.6,
+      "logSha256": "67dca6fe2ed14d5204f46d4963d5e6c149d7c91bcfddec6890f5ab997b509e30"
+    },
+    {
+      "name": "shell-preview",
+      "code": 0,
+      "seconds": 180.4,
+      "logSha256": "73061f759b465be5e3e874332178426a3080b66f0872488e5189124f81423e91"
+    },
+    {
+      "name": "quakes-preview",
+      "code": 0,
+      "seconds": 32.9,
+      "logSha256": "ed135c747f577a55806876c320a086c5806215c012552fefc22e24d3d1e95c96"
+    }
+  ],
+  "cpuBuildGates": [
+    {
+      "name": "build",
+      "code": 0,
+      "seconds": 8.0,
+      "logSha256": "72876c5c93a524eafb5a236f5fef58e26964dbd1af290fd12977fcfc548db84c"
+    },
+    {
+      "name": "panel",
+      "code": 0,
+      "seconds": 9.2,
+      "logSha256": "09d4a27532efd6f104e8539c86f2fd0d1a86212e9d21031aba4469e10a4911f0"
+    },
+    {
+      "name": "qa-build",
+      "code": 0,
+      "seconds": 7.6,
+      "logSha256": "b1791bb5be6e58e503a828a96b77dcb23d9a0eecb3d2908579bc4db76e683cb7"
+    },
+    {
+      "name": "main",
+      "code": 0,
+      "seconds": 0.2,
+      "logSha256": "8cb61d47cc3b2e680eff75f94152f3b601242da1acbbf77d6d360357aa65a940"
+    },
+    {
+      "name": "unit",
+      "code": 0,
+      "seconds": 84.2,
+      "logSha256": "42b9f2dc1fc08999cd04d5068586361522e1e3dfcceab5e96197443404e66db6"
+    },
+    {
+      "name": "boundaries",
+      "code": 0,
+      "seconds": 9.7,
+      "logSha256": "b34da6ed204cd0d53e335dcad53e383a0587824b2855a42b1b3bd72caba4d54e"
+    },
+    {
+      "name": "format",
+      "code": 0,
+      "seconds": 8.5,
+      "logSha256": "d609c9f4d455fa4effa76d78a1f3af2467a6ec92d29cb59b02c4d419f8da5d0c"
+    }
+  ],
+  "ordinaryUnit": {
+    "tests": 7184,
+    "pass": 7183,
+    "skip": 1,
+    "fail": 0
+  },
+  "allocationChecks": 15,
+  "baselinePreviewComparison": {
+    "pass": true,
+    "errors": []
+  }
+}

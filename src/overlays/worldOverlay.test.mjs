@@ -2378,3 +2378,92 @@ test('the host takes a globe engine and refuses a bare viewer', async () => {
   assert.equal(engine.frames.postRender.numberOfListeners, 1);
   env.cleanup();
 });
+
+// Source deletion is final: invisible candidates must not retain minimum-life
+// or fade state which wakes a dormant scene on a later UI/layout invalidation.
+for (const [name, remove] of [
+  ["clear", () => clearOverlaySource("deleted-static")],
+  ["remove", () => removeOverlayEntry("deleted-static", "event")],
+  ["replace-empty", () => setOverlayEntries("deleted-static", [])],
+]) {
+  test(`removed static labels stay dormant after ${name}`, () => {
+    const env = installMockEnvironment();
+    try {
+      initWorldOverlay(env.engine);
+      setOverlayEntries(
+        "deleted-static",
+        [
+          selectedEntry("event", {
+            selected: false,
+            protected: false,
+            variant: "card",
+            collisionGroup: "deleted-static",
+            priority: 100,
+            verticalOnly: true,
+          }),
+        ],
+        { collisionCapacity: 1, maxVisible: 1 },
+      );
+      env.advanceTime(600);
+      env.postRender.raise();
+      env.advanceTime(600);
+      env.postRender.raise();
+      assert.ok(getWorldOverlayDiagnostics().selectedCount > 0);
+      remove();
+      env.postRender.raise();
+      env.viewer.scene.requestRenderCount = 0;
+      for (let i = 0; i < 16; i++) {
+        env.advanceTime(250);
+        for (const observer of env.resizeObservers) observer.callback();
+        env.postRender.raise();
+      }
+      assert.equal(getWorldOverlayDiagnostics().paintedCount, 0);
+      assert.equal(
+        env.viewer.scene.requestRenderCount,
+        0,
+        "removed source must not retain fades/minimum lifetimes and wake idle",
+      );
+    } finally {
+      env.cleanup();
+    }
+  });
+}
+
+test("clearing one static source preserves another source in the same label domain", () => {
+  const env = installMockEnvironment();
+  try {
+    initWorldOverlay(env.engine);
+    for (const [source, x] of [
+      ["left", -0.5],
+      ["right", 0.5],
+    ])
+      setOverlayEntries(
+        source,
+        [
+          selectedEntry("event", {
+            position: new Cesium.Cartesian3(x, 0, 0),
+            selected: false,
+            protected: false,
+            collisionGroup: "ambient-card",
+            verticalOnly: true,
+          }),
+        ],
+        { collisionCapacity: 1, maxVisible: 1 },
+      );
+    env.advanceTime(100);
+    env.postRender.raise();
+    env.advanceTime(600);
+    env.postRender.raise();
+    assert.deepEqual(getWorldOverlayDiagnostics().paintedBySource, {
+      left: 1,
+      right: 1,
+    });
+    clearOverlaySource("left");
+    env.postRender.raise();
+    assert.deepEqual(getWorldOverlayDiagnostics().paintedBySource, {
+      right: 1,
+    });
+  } finally {
+    env.cleanup();
+  }
+});
