@@ -1179,5 +1179,8 @@
   "src/globe/navara/movers/frameCamera.test.mjs",
   "src/layers/localAdsb/qaDrawn.js",
   "src/layers/localAdsb/qaDrawn.test.mjs",
-  "src/tooling/w1RuntimeEvidence.test.mjs"
+  "src/tooling/w1RuntimeEvidence.test.mjs",
+  "scripts/qa-w2-layers.mjs",
+  "scripts/fixtures/w2/earthquakes.mjs",
+  "src/tooling/w2QaComparison.test.mjs"
 ]
