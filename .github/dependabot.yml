@@ -1,0 +1,21 @@
+# Actions are pinned by commit SHA (see ci.yml), and a pin never moves on its
+# own. Dependabot bumps the SHA and its "# vX.Y.Z" comment together, so the
+# pins stay current without anyone remembering to look.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # One PR for all action bumps, so CI runs once instead of per action.
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    # Wait a week before adopting a new release, in case it gets pulled or
+    # turns out to be compromised.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
