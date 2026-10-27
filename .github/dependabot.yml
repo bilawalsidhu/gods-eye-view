@@ -6,7 +6,7 @@
 version: 2
 
 multi-ecosystem-groups:
-  weekly:
+  dependencies:
     schedule:
       interval: weekly
     open-pull-requests-limit: 2
@@ -16,7 +16,7 @@ multi-ecosystem-groups:
 updates:
   - package-ecosystem: github-actions
     directory: /
-    multi-ecosystem-group: weekly
+    multi-ecosystem-group: dependencies
     patterns:
       - '*'
     # Wait a week before adopting a new release, in case it gets pulled or
@@ -26,7 +26,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /
-    multi-ecosystem-group: weekly
+    multi-ecosystem-group: dependencies
     patterns:
       - '*'
     versioning-strategy: increase
@@ -41,7 +41,7 @@ updates:
 
   - package-ecosystem: docker
     directory: /
-    multi-ecosystem-group: weekly
+    multi-ecosystem-group: dependencies
     patterns:
       - '*'
     cooldown:
