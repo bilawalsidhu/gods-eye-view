@@ -1,3 +1,4 @@
+import { createEarthquakesCesiumRenderer } from './render/cesium.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEarthquakesLayer } from './index.js';
@@ -17,6 +18,9 @@ function harness(source) {
   };
   const layer = createEarthquakesLayer({
     source,
+    renderer: {
+      create: ({ viewer }) => createEarthquakesCesiumRenderer(null, { viewer }),
+    },
     overlayHost: {
       setEntries(...args) {
         events.push(args);

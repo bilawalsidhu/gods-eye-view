@@ -34,6 +34,7 @@ const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
 // engine in their renderers: cesium only in render/cesium*.js, three and
 // Navara only in render/navara*.js. The list grows with each moved layer.
 const RENDERED_LAYER_DIRS = [
+  'src/layers/earthquakes/',
   'src/layers/flights/',
   'src/layers/military/',
   'src/layers/localAdsb/',

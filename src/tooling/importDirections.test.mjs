@@ -341,7 +341,7 @@ test('layers moved onto renderers keep each engine in its render file', (t) => {
     "export const load = () => import('../layers/flights/render/navara.js');",
   );
   // A layer not moved yet still imports cesium anywhere (until its *a task).
-  write('src/layers/earthquakes/rendering.js', "import 'cesium';");
+  write('src/layers/wind/rendering.js', "import 'cesium';");
   assert.doesNotThrow(() => checkImportDirections(root));
 
   write('src/layers/flights/tracking.js', "import 'cesium';");

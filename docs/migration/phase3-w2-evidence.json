@@ -178,5 +178,157 @@
   "baselinePreviewComparison": {
     "pass": true,
     "errors": []
+  },
+  "earthquakeNativeExtraction": {
+    "status": "accepted; Navara implementation next",
+    "ordinaryUnit": {
+      "tests": 7187,
+      "pass": 7186,
+      "skip": 1,
+      "fail": 0
+    },
+    "allocationChecks": 15,
+    "cpuBuildGates": [
+      {
+        "name": "unit",
+        "code": 0,
+        "seconds": 83.6,
+        "logSha256": "05ab69bc89e2789a5c4468b978f968af7bbdf8db67dbf4d98e7b89e25a67202e"
+      },
+      {
+        "name": "boundaries",
+        "code": 0,
+        "seconds": 9.6,
+        "logSha256": "2df113baf2cd03fb5f7256b24c8ac72330fae16dee10c75ed44468bed8bad916"
+      },
+      {
+        "name": "format",
+        "code": 0,
+        "seconds": 8.0,
+        "logSha256": "4732f50ba8a27e95277703a11373acd20e0def126d9f1848d5101982c6c660cb"
+      },
+      {
+        "name": "build",
+        "code": 0,
+        "seconds": 8.4,
+        "logSha256": "7c121c664cefcd4f1b60bfdaa01bff99d057a9212f29e6812641e5a157be52ff"
+      },
+      {
+        "name": "panel",
+        "code": 0,
+        "seconds": 9.1,
+        "logSha256": "9ced46006997bc4b9ff8a3ebfdd432c8c51652841d7896612110d052becd9f6a"
+      },
+      {
+        "name": "qa-build",
+        "code": 0,
+        "seconds": 7.5,
+        "logSha256": "901df89a0625e3facb2b3433c9cd928e4909a30e9a481bdda8063e385e8d79b9"
+      },
+      {
+        "name": "main",
+        "code": 0,
+        "seconds": 0.3,
+        "logSha256": "3da695a28e9d498c87cfbc0b919dd9980832ae331335a9b6ea7c8cdcc694718b"
+      }
+    ],
+    "browserGates": [
+      {
+        "name": "extraction-native-dev",
+        "code": 0,
+        "seconds": 34.6,
+        "logSha256": "ed135c747f577a55806876c320a086c5806215c012552fefc22e24d3d1e95c96"
+      },
+      {
+        "name": "extraction-native-preview",
+        "code": 0,
+        "seconds": 32.7,
+        "logSha256": "ed135c747f577a55806876c320a086c5806215c012552fefc22e24d3d1e95c96"
+      }
+    ],
+    "captures": [
+      {
+        "name": "native-dev",
+        "sha256": "474806d0c97cd9f73f25face1ba4f6c6998d37494196ee00285ac96c634f72f5",
+        "checks": 18,
+        "records": 15,
+        "idleFrames": 0,
+        "browserErrorCount": 0
+      },
+      {
+        "name": "native-preview",
+        "sha256": "292162d655ea28a6ec0064c7e4bfe423ab19fb4c86135b8bbc3f337dcb0b6d57",
+        "checks": 18,
+        "records": 15,
+        "idleFrames": 0,
+        "browserErrorCount": 0
+      }
+    ],
+    "semanticComparison": {
+      "dev": true,
+      "qaPreview": true
+    },
+    "nativeRasterComparison": [
+      {
+        "pose": "global",
+        "state": "on",
+        "identical": true,
+        "changedChannels": 0,
+        "maxDelta": 0
+      },
+      {
+        "pose": "global",
+        "state": "off",
+        "identical": true,
+        "changedChannels": 0,
+        "maxDelta": 0
+      },
+      {
+        "pose": "city",
+        "state": "on",
+        "identical": true,
+        "changedChannels": 0,
+        "maxDelta": 0
+      },
+      {
+        "pose": "city",
+        "state": "off",
+        "identical": true,
+        "changedChannels": 0,
+        "maxDelta": 0
+      },
+      {
+        "pose": "orbit",
+        "state": "on",
+        "identical": true,
+        "changedChannels": 0,
+        "maxDelta": 0
+      },
+      {
+        "pose": "orbit",
+        "state": "off",
+        "identical": true,
+        "changedChannels": 0,
+        "maxDelta": 0
+      },
+      {
+        "pose": "terrain",
+        "state": "on",
+        "identical": true,
+        "changedChannels": 0,
+        "maxDelta": 0
+      },
+      {
+        "pose": "terrain",
+        "state": "off",
+        "identical": true,
+        "changedChannels": 0,
+        "maxDelta": 0
+      }
+    ],
+    "notes": [
+      "GeometryUpdater suppresses ground ellipse outlines; preserve this actual behavior on Navara.",
+      "Main composition passes; phase3 has no byte-budget baseline, so no size-budget claim."
+    ]
   }
 }

@@ -1074,9 +1074,26 @@
       "src/layers/earthquakes/index.js",
       "src/layers/earthquakes/model.js",
       "src/layers/earthquakes/source.js",
-      "src/layers/earthquakes/records.js"
+      "src/layers/earthquakes/records.js",
+      "src/geo/boundingSphere.js",
+      "src/geo/cartesian2.js",
+      "src/geo/cartesian3.js",
+      "src/geo/cartographic.js",
+      "src/geo/check.js",
+      "src/geo/debug.js",
+      "src/geo/developerError.js",
+      "src/geo/ellipsoid.js",
+      "src/geo/ellipsoidGeodesic.js",
+      "src/geo/index.js",
+      "src/geo/math.js",
+      "src/geo/matrix3.js",
+      "src/geo/matrix4.js",
+      "src/geo/quaternion.js",
+      "src/geo/scaleToGeodeticSurface.js",
+      "src/geo/transforms.js",
+      "src/layers/shared/color.js"
     ],
-    "external": ["cesium"]
+    "external": []
   },
   "recent-imagery": {
     "exports": ["./layers/recent-imagery"],
@@ -2677,7 +2694,8 @@
       "src/layers/shared/render/engineView.js",
       "src/celestialRing/render/cesium.js",
       "src/celestialRing/view.js",
-      "src/layers/satellites/render/cesium.js"
+      "src/layers/satellites/render/cesium.js",
+      "src/layers/earthquakes/render/cesium.js"
     ],
     "external": [
       "hls.js",
@@ -3269,7 +3287,8 @@
       "src/celestialRing/render/cesium.js",
       "src/celestialRing/view.js",
       "src/layers/shared/render/engineView.js",
-      "src/layers/satellites/render/cesium.js"
+      "src/layers/satellites/render/cesium.js",
+      "src/layers/earthquakes/render/cesium.js"
     ],
     "external": [
       "hls.js",
