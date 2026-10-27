@@ -77,7 +77,7 @@ export function simplifyRing(ring, tolM) {
   return out.length >= 4 ? out : ring;
 }
 
-export function douglasPeucker(points, tol) {
+function douglasPeucker(points, tol) {
   const n = points.length;
   if (n < 3) return points.slice();
   // Iterative, index-based (no per-call array slicing / recursion), so a large
@@ -113,7 +113,7 @@ export function douglasPeucker(points, tol) {
   return out;
 }
 
-export function perpDistance(p, a, b) {
+function perpDistance(p, a, b) {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const len2 = dx * dx + dy * dy;
@@ -149,7 +149,7 @@ export function stitchRing(ways) {
   return endpointGapM(largest) <= allow ? largest : [];
 }
 
-export function largestByArea(components) {
+function largestByArea(components) {
   let best = components[0];
   let bestArea = approximateAreaM2(best);
   for (let i = 1; i < components.length; i += 1) {
@@ -162,7 +162,7 @@ export function largestByArea(components) {
   return best;
 }
 
-export function ringSpanM(chain) {
+function ringSpanM(chain) {
   let minLat = Infinity;
   let maxLat = -Infinity;
   let minLon = Infinity;
@@ -176,7 +176,7 @@ export function ringSpanM(chain) {
   return approximateDistanceM(minLat, minLon, maxLat, maxLon);
 }
 
-export function buildRingComponents(ways) {
+function buildRingComponents(ways) {
   const same = (a, b) =>
     Math.abs(a.lon - b.lon) < 1e-7 && Math.abs(a.lat - b.lat) < 1e-7;
   const remaining = ways.map((w) => w.slice());
@@ -207,7 +207,7 @@ export function buildRingComponents(ways) {
   return components;
 }
 
-export function endpointGapM(chain) {
+function endpointGapM(chain) {
   if (!chain || chain.length < 2) return Infinity;
   const a = chain[0];
   const b = chain[chain.length - 1];
@@ -250,10 +250,13 @@ export function approximateAreaM2(coords) {
   return Math.abs(area) / 2;
 }
 
+/** Local equirectangular distance in metres, the short way round 180°. */
 export function approximateDistanceM(latA, lonA, latB, lonB) {
   const latScale = 111_320;
   const lonScale = latScale * Math.cos(((latA + latB) / 2) * (Math.PI / 180));
-  return Math.hypot((latB - latA) * latScale, (lonB - lonA) * lonScale);
+  let dLon = lonB - lonA;
+  dLon -= 360 * Math.round(dLon / 360);
+  return Math.hypot((latB - latA) * latScale, dLon * lonScale);
 }
 
 export function pointInPolygon(lon, lat, coords) {

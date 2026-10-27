@@ -4,6 +4,7 @@ import {
   satelliteShortName,
   fireDetectionKey,
   accentForSeverity,
+  formatFrpMw,
 } from '../../data/firmsLabels.js';
 import {
   VIEW_PADDING,
@@ -480,14 +481,15 @@ export function createModel({
   }
 
   function formatFrp(frp) {
-    return frp >= 10 ? frp.toFixed(0) : frp.toFixed(1);
+    return formatFrpMw(frp);
   }
 
   /** formatFrp for a card, with the locale's decimal separator ("4,9"). */
 
   function formatFrpLabel(frp) {
-    const digits = frp >= 10 ? 0 : 1;
-    return formatNumber(frp, {
+    const text = formatFrpMw(frp);
+    const digits = text.includes('.') ? 1 : 0;
+    return formatNumber(Number(text), {
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
       useGrouping: false,
@@ -591,6 +593,7 @@ export function createModel({
     formatLatLon,
     formatFrp,
     formatAge,
+    formatAgeLabel,
     formatAgoMinutes,
     confidenceBucket,
   };

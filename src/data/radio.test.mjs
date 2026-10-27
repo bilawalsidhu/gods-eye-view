@@ -712,6 +712,58 @@ test('unusable directory responses preserve warm client state atomically', async
       assert.equal(getRadioUIState().stale, true);
       assert.equal(getRadioUIState().degraded, true);
     }
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      stations: [replacement, { id: 'malformed' }], stale: false, degraded: false,
+      acceptedGeneration: 2, catalogInstance: 'qa-instance-a', updatedAt: now,
+    }));
+    await radioLayer.update();
+    assert.equal(getRadioUIState().stationCount, 1);
+    assert.equal(getRadioUIState().rejectedStationCount, 1);
+    assert.equal(getRadioUIState().degraded, true);
+    assert.equal(getRadioUIState().stale, false);
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 2);
+    assert.equal(getRadioAcceptedCatalogSnapshot().stations[0].id, replacement.id);
+    // Server-side structural rejections are combined with client rejections
+    // after admission; the healthy generation is still accepted.
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      stations: [replacement, { id: 'malformed' }], stale: false, degraded: false,
+      acceptedGeneration: 3, catalogInstance: 'qa-instance-a', updatedAt: now,
+      rejectedStationCount: 2,
+    }));
+    await radioLayer.update();
+    assert.equal(getRadioUIState().rejectedStationCount, 3);
+    assert.equal(getRadioUIState().degraded, true);
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 3);
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      stations: [replacement], stale: false, degraded: false,
+      acceptedGeneration: 4, catalogInstance: 'qa-instance-a', updatedAt: now,
+      rejectedStationCount: 10_000,
+    }));
+    await radioLayer.update();
+    assert.equal(getRadioUIState().rejectedStationCount, 10_000);
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 4);
+    for (const rejectedStationCount of [-1, 1.5, '2', null, 10_001]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({
+        stations: [replacement], stale: false, degraded: false,
+        acceptedGeneration: 5, catalogInstance: 'qa-instance-a', updatedAt: now,
+        rejectedStationCount,
+      }));
+      await radioLayer.update();
+      assert.equal(getRadioAcceptedCatalogSnapshot().generation, 4);
+      assert.equal(getRadioUIState().stale, true);
+    }
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      stations: [{ id: 'malformed' }], stale: false, degraded: false,
+      acceptedGeneration: 5, catalogInstance: 'qa-instance-a', updatedAt: now,
+    }));
+    await radioLayer.update();
+    assert.equal(getRadioAcceptedCatalogSnapshot().generation, 4);
+    assert.equal(getRadioUIState().stale, true);
+    assert.equal(getRadioUIState().rejectedStationCount, 10_000);
+    radioLayer.destroy();
+    radioLayer.init(viewer);
+    assert.equal(getRadioUIState().rejectedStationCount, 0);
+    assert.equal(getRadioUIState().degraded, false);
   } finally {
     globalThis.fetch = originalFetch;
     radioLayer.destroy();
@@ -1779,7 +1831,6 @@ test('voice playback confirmation waits for playing and requires a hard duck', a
 });
 
 test('voice playback confirmation accepts fallback buffering but times out safely', async () => {
-  let listener = () => {};
   const state = {
     audioState: 'loading',
     playingStationId: 'fallback',
@@ -1789,9 +1840,8 @@ test('voice playback confirmation accepts fallback buffering but times out safel
   const confirmed = await confirmRadioPlayback({
     startPlayback: async () => false,
     subscribe: (next) => {
-      listener = next;
       next(state);
-      return () => { listener = () => {}; };
+      return () => {};
     },
     getState: () => state,
     timeoutMs: 10,

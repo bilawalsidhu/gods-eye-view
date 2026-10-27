@@ -148,6 +148,36 @@ export class LayerStateCoordinator {
     return this.restorePromise;
   }
 
+  /**
+   * Replace the running layer state with a share opened later in this tab
+   * (hash navigation). Every in-flight restore and pending shared Follow is
+   * superseded; the new state restores through the same passive share origin
+   * as start-up, so recipient-local preferences are never written. A share
+   * without a layer payload restores the defaults, as a reload of it would.
+   */
+  applyShareLayerState({
+    shareLayerState = null,
+    shareCreatedAtMs = null,
+  } = {}) {
+    if (this._destroyed) return Promise.resolve([]);
+    for (const controller of this._restoreControllers.values())
+      controller.abort('superseded-by-share-navigation');
+    this._revokePendingTrackingWatch('superseded-by-share-navigation');
+    const selected = shareLayerState
+      ? normalizeLayerState(shareLayerState)
+      : null;
+    this._source = selected ? 'share' : 'legacy-share';
+    this._shareCreatedAtMs =
+      selected && Number.isFinite(shareCreatedAtMs) ? shareCreatedAtMs : null;
+    this._durableState = selected || createDefaultLayerState();
+    this.shareLinkManager?.onLayerStateChange?.();
+    this._notifyDurableState();
+    this.restorePromise = this._restoreSelectedState(
+      LAYER_RESTORE_ORIGINS.share,
+    );
+    return this.restorePromise;
+  }
+
   get source() {
     return this._source;
   }
@@ -220,6 +250,30 @@ export class LayerStateCoordinator {
       this._revokePendingTrackingWatch('owner-layer-disabled');
     }
     if (!isExplicitLayerStateOrigin(change.origin)) return;
+    if (change.type === 'selection-cleared') {
+      // Only layers a newer request turned back on survive Clear All. Any
+      // other saved layer would reappear from the share link or a reload.
+      const stillEnabled = new Set(change.enabledLayerIds || []);
+      const dropped = this._durableState.enabledLayerIds.filter(
+        (id) => !stillEnabled.has(id),
+      );
+      if (dropped.length === 0) return;
+      for (const layerId of dropped) {
+        this._restoreControllers
+          .get(layerId)
+          ?.abort('superseded-by-explicit-visibility');
+      }
+      if (dropped.some((id) => SHARE_TRACKING_RESTORE_POLICIES[id])) {
+        this._revokePendingTrackingWatch('superseded-by-explicit-visibility');
+      }
+      this._commitExplicit({
+        ...this._durableState,
+        enabledLayerIds: this._durableState.enabledLayerIds.filter((id) =>
+          stillEnabled.has(id),
+        ),
+      });
+      return;
+    }
     if (change.type === 'visibility') {
       this._restoreControllers
         .get(change.layerId)
@@ -312,15 +366,19 @@ export class LayerStateCoordinator {
   }
 
   async _restoreSelectedState(origin) {
+    // One controller set per run: a superseded run must not clear the newer
+    // run's controllers when it settles.
+    const controllers = new Map();
     for (const entry of LAYER_STATE_REGISTRY) {
-      this._restoreControllers.set(entry.id, new AbortController());
+      controllers.set(entry.id, new AbortController());
     }
+    this._restoreControllers = controllers;
     try {
       await this._waitForRestoreGate();
       const enabled = new Set(this._durableState.enabledLayerIds);
       const settled = await Promise.allSettled(
         LAYER_STATE_REGISTRY.map(async (entry) => {
-          const controller = this._restoreControllers.get(entry.id);
+          const controller = controllers.get(entry.id);
           const targetEnabled = enabled.has(entry.id);
           const options = layerOptionsForRestore(this._durableState, entry.id);
           if (origin === LAYER_RESTORE_ORIGINS.share && options) {
@@ -370,7 +428,7 @@ export class LayerStateCoordinator {
             }));
         }),
       );
-      this.lastRestoreResults = settled.map((result, index) => {
+      const results = settled.map((result, index) => {
         if (result.status === 'fulfilled') return result.value;
         const entry = LAYER_STATE_REGISTRY[index];
         return {
@@ -387,9 +445,13 @@ export class LayerStateCoordinator {
           succeeded: false,
         };
       });
-      return this.lastRestoreResults.map((result) => ({ ...result }));
+      // A run superseded by a newer share keeps the newer run's results.
+      if (this._restoreControllers === controllers)
+        this.lastRestoreResults = results;
+      return results.map((result) => ({ ...result }));
     } finally {
-      this._restoreControllers.clear();
+      if (this._restoreControllers === controllers)
+        this._restoreControllers.clear();
       this._notifyDurableState();
     }
   }

@@ -20,8 +20,8 @@ import { admitSameSiteKeyless } from './common/same-site.js';
  * cache and serve-stale shape. Cache entries and stale fallback are keyed per
  * 5dp point, so reordered and partially overlapping batches reuse prior work.
  * Only missing/stale points go upstream; the response is rebuilt in exact
- * request order. Larger requests are chunked sequentially, and one failing
- * chunk does not discard the chunks that resolved.
+ * request order. Each request is bounded to one 64-point upstream chunk;
+ * larger client workloads are split by the browser terrain service.
  *
  * Bounds, because every distinct 5dp point is its own key: coordinates must be
  * in WGS-84 range (rejected at parse), the point cache has an entry ceiling
@@ -55,7 +55,7 @@ export function terrainHeightsProxy(options = {}) {
   // 2026-08-21). 64 points costs 5.6-12 s, inside the timeout at both ends of
   // that range.
   const UPSTREAM_CHUNK = 64;
-  const MAX_POINTS = 2000;
+  const MAX_POINTS = UPSTREAM_CHUNK;
   /**
    * Entry ceiling for the point cache, and with it the file written from it.
    *
@@ -90,15 +90,23 @@ export function terrainHeightsProxy(options = {}) {
 
   /**
    * Drop the oldest entries until the map is back inside its ceiling.
-   * Oldest-first by fetch time, the same shape `trackBackfillProxies` uses.
-   * Terrain does not move, so evicting an old point costs one refetch, never
-   * a wrong answer.
+   * The map is kept in fetch-time order (sorted once on load, and the resolver
+   * re-inserts every point it refetches), so the oldest are at the front and
+   * no write sorts the map. Terrain does not move, so evicting an old point
+   * costs one refetch, never a wrong answer.
    */
   function evictOverflow() {
-    if (mem.size <= CACHE_MAX_ENTRIES) return;
+    for (const key of mem.keys()) {
+      if (mem.size <= CACHE_MAX_ENTRIES) return;
+      mem.delete(key);
+    }
+  }
+
+  /** Put the map in fetch-time order; a file is not guaranteed to be. */
+  function orderByAge() {
     const byAge = [...mem.entries()].sort((a, b) => a[1].at - b[1].at);
-    for (let i = 0; i < byAge.length && mem.size > CACHE_MAX_ENTRIES; i += 1)
-      mem.delete(byAge[i][0]);
+    mem.clear();
+    for (const [key, entry] of byAge) mem.set(key, entry);
   }
   /** @type {Map<string, Promise<Array<object>>>} single-flight per missing-point subset. */
   const inflight = new Map();
@@ -165,6 +173,7 @@ export function terrainHeightsProxy(options = {}) {
         }
         diskDirty = mem.size > 0;
       }
+      orderByAge();
       evictOverflow();
     } catch {
       /* no disk cache yet */
@@ -255,7 +264,6 @@ export function terrainHeightsProxy(options = {}) {
           res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
           return;
         }
-        await loadDiskOnce();
         const parsedUrl = new URL(req.url || '', 'http://internal');
         const rawPoints = parsedUrl.searchParams.get('points');
         const points = parseTerrainPoints(rawPoints);
@@ -267,12 +275,13 @@ export function terrainHeightsProxy(options = {}) {
           return;
         }
         if (points.length > MAX_POINTS) {
-          send(500, {
+          send(413, {
             error: `too many points (${points.length}); max ${MAX_POINTS} per request`,
           });
           return;
         }
 
+        await loadDiskOnce();
         const outcome = await resolveTerrainHeightRequest({
           points,
           cache: mem,
