@@ -1194,5 +1194,12 @@
   "src/bench/w2GroundProbe.js",
   "scripts/qa-w2-ground-mesh.mjs",
   "scripts/qa-w2-ground-perf.mjs",
-  "scripts/qa-w2-ground-equivalence.mjs"
+  "scripts/qa-w2-ground-equivalence.mjs",
+  "src/layers/firms/render/cesium.js",
+  "src/layers/firms/render/cesium.test.mjs",
+  "src/layers/firms/rectangle.js",
+  "src/layers/firms/rectangle.test.mjs",
+  "src/layers/firms/viewport.test.mjs",
+  "scripts/qa-w2-firms.mjs",
+  "scripts/fixtures/w2/firms.mjs"
 ]

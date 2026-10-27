@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 
 export function createFirmsState({ services, config }) {
@@ -8,7 +7,7 @@ export function createFirmsState({ services, config }) {
 
   layerState.glowSpriteCache = new Map();
 
-  layerState.scratchViewRect = new Cesium.Rectangle();
+  layerState.scratchViewRect = { west: 0, south: 0, east: 0, north: 0 };
 
   layerState.scratchCenterA = geo.cartographic.create();
 
@@ -19,6 +18,8 @@ export function createFirmsState({ services, config }) {
   layerState._viewer = null;
 
   layerState._dataSource = null;
+
+  layerState._renderer = null;
 
   layerState._billboards = null;
 

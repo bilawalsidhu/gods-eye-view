@@ -1,5 +1,8 @@
 import { FIRMS_AMBIENT_COHORT_LIMIT } from '../../data/firmsLabels.js';
-import * as Cesium from 'cesium';
+import { constantRgba } from '../shared/color.js';
+const FIRE_RED = constantRgba(1, 0, 0);
+const FIRE_ORANGE = constantRgba(1, 165 / 255, 0);
+const FIRE_YELLOW = constantRgba(1, 1, 0);
 
 /** Client poll interval; the proxy's 30 min TTL is what guards upstream quota. */
 
@@ -91,7 +94,7 @@ export const CULL_LIFT_M = 12;
 /** Color stops shared by cell heat fills and detection glow sprites. */
 
 export const DETECTION_COLOR_STOPS = [
-  { name: 'red', color: Cesium.Color.RED },
-  { name: 'orange', color: Cesium.Color.ORANGE },
-  { name: 'yellow', color: Cesium.Color.YELLOW },
+  { name: 'red', color: FIRE_RED },
+  { name: 'orange', color: FIRE_ORANGE },
+  { name: 'yellow', color: FIRE_YELLOW },
 ];

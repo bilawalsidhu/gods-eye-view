@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
+import { cloneRectangle } from './rectangle.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import { LOD_LEVELS, CONTEXT_TOP_N } from './policy.js';
 
 export function createRendering({
@@ -11,7 +11,6 @@ export function createRendering({
   feed,
 }) {
   const { warmFireAnchorFloors } = services.anchors;
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
   const { overlayHost } = config;
 
   /**
@@ -44,9 +43,7 @@ export function createRendering({
       return false;
     layerState._currentLodIndex = lodIndex;
     layerState._currentLodId = lod.id;
-    layerState._lastViewRect = viewRect
-      ? Cesium.Rectangle.clone(viewRect)
-      : null;
+    layerState._lastViewRect = viewRect ? cloneRectangle(viewRect) : null;
     const bounds = viewRect
       ? components.model.paddedDegreeBounds(viewRect)
       : null;
@@ -130,7 +127,7 @@ export function createRendering({
 
   function renderCells(cells, lod, bounds) {
     ensureDetectionCollections();
-    layerState._dataSource.entities.removeAll();
+    layerState._renderer.clearCells();
     if (layerState._billboards) layerState._billboards.removeAll();
     layerState._pickIndexById.clear();
     layerState._cullPositions.length = 0;
@@ -147,19 +144,14 @@ export function createRendering({
       const color = components.model.heatColor(normalized, alpha);
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
-      const position = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0);
+      const position = geo.cartesian3.fromDegrees(centerLon, centerLat, 0);
 
-      layerState._dataSource.entities.add({
-        rectangle: {
-          coordinates: Cesium.Rectangle.fromDegrees(
-            cell.lonCell,
-            cell.latCell,
-            cell.lonCell + lod.gridDegrees,
-            cell.latCell + lod.gridDegrees,
-          ),
-          material: new Cesium.ColorMaterialProperty(color),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        },
+      layerState._renderer.addCell({
+        west: cell.lonCell,
+        south: cell.latCell,
+        east: cell.lonCell + lod.gridDegrees,
+        north: cell.latCell + lod.gridDegrees,
+        color,
         position,
         properties: {
           count: cell.count,
@@ -203,7 +195,7 @@ export function createRendering({
 
   function renderDetections(lod, bounds) {
     ensureDetectionCollections();
-    layerState._dataSource.entities.removeAll();
+    layerState._renderer.clearCells();
     if (!layerState._billboards) return;
     layerState._billboards.removeAll();
     layerState._pickIndexById.clear();
@@ -237,16 +229,13 @@ export function createRendering({
       const pickId = `firms-${fire.index}`;
       layerState._pickIndexById.set(pickId, fire);
       layerState._cullPositions.push(cullPosition);
-      layerState._billboards.add({
+      layerState._renderer.addSprite({
         id: pickId,
         position,
         image: components.model.glowSprite(
           components.model.detectionColorStop(fire),
           components.model.sizeBucket(coreSize),
         ),
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       });
       // FRP-sorted walk: candidate order doubles as label priority.
       layerState._labelCandidates.push({
@@ -283,27 +272,12 @@ export function createRendering({
 
   function ensureDetectionCollections() {
     if (!layerState._viewer || layerState._billboards) return;
-    layerState._billboards = new Cesium.BillboardCollection({
-      scene: layerState._viewer.scene,
-      blendOption: Cesium.BlendOption.TRANSLUCENT,
-    });
-    layerState._billboards.show = layerState._enabled;
-    layerState._viewer.scene.primitives.add(layerState._billboards);
-    registerSpriteCollection('firms', layerState._billboards);
-    restoreSpriteOrder(layerState._viewer);
+    layerState._billboards = layerState._renderer.ensureSprites();
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, layerState._enabled);
   }
 
   function removeDetectionCollections(viewer) {
-    const scene = viewer?.scene || layerState._viewer?.scene;
-    if (scene && !scene.isDestroyed?.()) {
-      try {
-        if (layerState._billboards)
-          scene.primitives.remove(layerState._billboards);
-      } catch {
-        /* already torn down */
-      }
-    }
+    layerState._renderer?.removeSprites();
     layerState._billboards = null;
     overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
@@ -319,11 +293,12 @@ export function createRendering({
    */
 
   function fireHorizonOccluder() {
+    if (layerState._renderer) return layerState._renderer.horizon();
     const camera = layerState._viewer?.camera?.positionWC
       ? layerState._viewer.camera
       : layerState._viewer?.scene?.camera;
     if (!camera?.positionWC) return null;
-    return horizonOccluder(camera);
+    return config.horizonOccluder(camera);
   }
 
   /**

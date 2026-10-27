@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 
 export function createLifecycle({
@@ -9,25 +8,31 @@ export function createLifecycle({
   feed,
 }) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
-  const { restoreSpriteOrderOnEnable } = services.sprites;
   const { clearSelectedEntityContextForLayer } = services.context;
   const { id, overlayHost } = config;
 
   const methods = {
-    init(viewer) {
+    init(viewer, { engine = null } = {}) {
       if (layerState._destroyed) return;
-      layerState._viewer = viewer;
-      layerState._dataSource = new Cesium.CustomDataSource(id);
-      layerState._dataSource.show = false;
-      viewer.dataSources.add(layerState._dataSource);
+      if (layerState._renderer) return;
+      layerState._renderer = config.renderer.create({
+        viewer,
+        engine,
+        id,
+        services,
+        screenSpaceEventHandlerFactory: config.screenSpaceEventHandlerFactory,
+      });
+      layerState._viewer = layerState._renderer.view;
+      layerState._dataSource = layerState._renderer.dataSource;
+      layerState._renderer.setVisible(false);
     },
 
     async enable(viewer) {
       if (layerState._destroyed) return;
       layerState._enabled = true;
-      layerState._viewer = viewer;
       if (!layerState._dataSource) this.init(viewer);
-      if (layerState._dataSource) layerState._dataSource.show = true;
+      const renderer = layerState._renderer;
+      layerState._viewer = layerState._renderer.view;
       if (layerState._billboards) {
         // The camera can have moved anywhere while the layer was off: moveEnd
         // was not being listened to, and the preRender watcher is inert while
@@ -37,8 +42,8 @@ export function createLifecycle({
         // new location flashes far-side fires through the planet (and keeps
         // near-side ones hidden) until the fetch resolves.
         components.rendering.refreshHorizonCulling();
-        layerState._billboards.show = true;
       }
+      layerState._renderer.setVisible(true);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, true);
       components.viewport.installLodWatcher();
       components.viewport.installMoveEndWatcher();
@@ -51,9 +56,9 @@ export function createLifecycle({
       if (
         layerState._enabled &&
         !layerState._destroyed &&
-        layerState._viewer === viewer
+        layerState._renderer === renderer
       )
-        restoreSpriteOrderOnEnable('firms', viewer);
+        renderer.onEnable();
     },
 
     disable() {
@@ -62,8 +67,7 @@ export function createLifecycle({
       layerState._loading = false;
       layerState._enabled = false;
       components.selection.clearFireSelection();
-      if (layerState._dataSource) layerState._dataSource.show = false;
-      if (layerState._billboards) layerState._billboards.show = false;
+      layerState._renderer?.setVisible(false);
       overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
       clearSelectedEntityContextForLayer(id);
@@ -84,11 +88,11 @@ export function createLifecycle({
       components.viewport.removeMoveEndWatcher();
       components.selection.removeClickHandler();
       unregisterPickOwner(id);
-      if (layerState._dataSource && viewer) {
-        viewer.dataSources.remove(layerState._dataSource, true);
-      }
-      layerState._dataSource = null;
       components.rendering.removeDetectionCollections(viewer);
+      layerState._renderer?.destroy();
+      layerState._renderer = null;
+      layerState._viewer = null;
+      layerState._dataSource = null;
       components.selection.clearContextRegistrations();
       clearSelectedEntityContextForLayer(id);
       layerState._fires = [];

@@ -1113,8 +1113,6 @@
     "modules": [
       "src/data/firmsAdapt.js",
       "src/data/firmsLabels.js",
-      "src/data/iconOrientation.js",
-      "src/data/render/cesiumProjection.js",
       "src/layers/firms/anchors.js",
       "src/layers/firms/cards.js",
       "src/layers/firms/index.js",
@@ -1145,10 +1143,10 @@
       "src/geo/check.js",
       "src/geo/debug.js",
       "src/geo/developerError.js",
-      "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/layers/firms/rectangle.js",
+      "src/layers/shared/color.js"
     ],
-    "external": ["cesium"]
+    "external": []
   },
   "satellites-layer": {
     "exports": ["./layers/satellites"],
@@ -2698,7 +2696,9 @@
       "src/layers/earthquakes/render/cesium.js",
       "src/layers/earthquakes/render/navara.js",
       "src/layers/earthquakes/render/navaraGeometry.js",
-      "src/layers/earthquakes/render/navaraGrid.js"
+      "src/layers/earthquakes/render/navaraGrid.js",
+      "src/layers/firms/rectangle.js",
+      "src/layers/firms/render/cesium.js"
     ],
     "external": [
       "hls.js",
@@ -3291,7 +3291,9 @@
       "src/celestialRing/view.js",
       "src/layers/shared/render/engineView.js",
       "src/layers/satellites/render/cesium.js",
-      "src/layers/earthquakes/render/cesium.js"
+      "src/layers/earthquakes/render/cesium.js",
+      "src/layers/firms/rectangle.js",
+      "src/layers/firms/render/cesium.js"
     ],
     "external": [
       "hls.js",
