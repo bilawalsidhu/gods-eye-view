@@ -41,15 +41,18 @@ export function navaraModeNotice(availability) {
   });
 }
 
-/**
- * Data credits for what the shell uses without data layers: place search,
- * its OpenStreetMap data and the keyless terrain. Navara lists every credit
- * in one attribution card, so layer credits would only crowd it.
- */
-const SHELL_CREDIT_KEYS = new Set([
+/** Static attribution for the shell and the layers available on Navara. */
+const NAVARA_CREDIT_KEYS = new Set([
   'photon-geocoder',
   'openstreetmap',
   'reearth-terrain',
+  'opensky',
+  'adsblol',
+  'adsbdb',
+  'aisstream',
+  'celestrak',
+  'launch-library-2',
+  'usgs',
 ]);
 
 /**
@@ -58,6 +61,15 @@ const SHELL_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    earthquakes: async () => {
+      const { createEarthquakesNavaraRenderer } =
+        await import('../layers/earthquakes/render/navara.js');
+      return (engine, options) =>
+        createEarthquakesNavaraRenderer(engine, {
+          ...options,
+          ...navaraViews.get(engine),
+        });
+    },
     'rocket-launches': async () => {
       const { createLaunchesNavaraRenderer } =
         await import('../layers/launches/render/navara.js');
@@ -124,7 +136,12 @@ export async function createNavaraScene({
   });
   defer(() => globe.destroy());
   const { engine } = globe;
-  navaraViews.set(engine, { view: globe.view, MeshDesc: globe.MeshDesc });
+  navaraViews.set(engine, {
+    view: globe.view,
+    MeshDesc: globe.MeshDesc,
+    EffectDesc: globe.EffectDesc,
+    NavaraEffect: globe.NavaraEffect,
+  });
   defer(() => navaraViews.delete(engine));
   // The layers drawn on Navara (their render/navara.js), before the catalog
   // asks the registry which layers this engine shows.
@@ -155,7 +172,7 @@ export async function createNavaraScene({
   // Navara's attribution card.
   registerDataCredits(
     engine,
-    (credits ?? DATA_CREDITS).filter(({ key }) => SHELL_CREDIT_KEYS.has(key)),
+    (credits ?? DATA_CREDITS).filter(({ key }) => NAVARA_CREDIT_KEYS.has(key)),
   );
   return {
     viewer: null,

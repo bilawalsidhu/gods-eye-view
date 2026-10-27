@@ -1184,5 +1184,15 @@
   "scripts/fixtures/w2/earthquakes.mjs",
   "src/tooling/w2QaComparison.test.mjs",
   "src/layers/earthquakes/render/cesium.js",
-  "src/layers/earthquakes/render/cesium.test.mjs"
+  "src/layers/earthquakes/render/cesium.test.mjs",
+  "src/layers/earthquakes/render/navara.js",
+  "src/layers/earthquakes/render/navaraGeometry.js",
+  "src/layers/earthquakes/render/navaraGeometry.test.mjs",
+  "src/layers/earthquakes/render/navaraGrid.js",
+  "src/layers/earthquakes/render/navaraGrid.test.mjs",
+  "src/layers/earthquakes/render/navara.test.mjs",
+  "src/bench/w2GroundProbe.js",
+  "scripts/qa-w2-ground-mesh.mjs",
+  "scripts/qa-w2-ground-perf.mjs",
+  "scripts/qa-w2-ground-equivalence.mjs"
 ]
