@@ -12,6 +12,20 @@ const browser = await puppeteer.launch({
   args: ['--no-sandbox', '--enable-unsafe-swiftshader'],
 });
 const results = [];
+// Main renders the provider picker inside the store-backed Voice Settings
+// panel. Open it through its owner, not by unhiding or rewriting DOM state.
+const showProvider = async (page) => {
+  const result = await page.evaluate(() =>
+    window.__gevVoiceCommands.captureVoicePanelOperation().show('settings', true),
+  );
+  assert.equal(result.ok, true);
+  await page.waitForSelector('#gev-voice-provider', { visible: true });
+  await page.focus('#gev-voice-provider');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+};
+const hideProvider = (page) => page.evaluate(() =>
+  window.__gevVoiceCommands.captureVoicePanelOperation().show('settings', false),
+);
 try {
   for (const [width, height] of [
     [844, 390],
@@ -38,8 +52,7 @@ try {
         '0',
     );
     await new Promise((resolve) => setTimeout(resolve, 3000));
-    await page.focus('#gev-voice-provider');
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await showProvider(page);
     await page.screenshot({
       path: new URL(`${phase}-${width}x${height}.png`, directory).pathname,
     });
@@ -67,6 +80,7 @@ try {
         tab: box('#mobile-tab-bar'),
         voice: box('#gev-voice-control'),
         provider: box('.gev-voice-provider-field'),
+        voicePanel: box('#gev-voice-panel'),
         hud: [...document.querySelectorAll('#intel-hud > div')].map((el) => ({
           class: el.className,
           display: getComputedStyle(el).display,
@@ -91,10 +105,25 @@ try {
             state.provider.y >= 0 &&
             state.provider.right <= width + 1,
         );
+        if (height <= 520) {
+          assert.ok(
+            state.voice.width <= 56 && state.voice.right >= width - 60,
+            'landscape voice collapses to the corner mic',
+          );
+        }
         assert.ok(
-          Math.abs(state.voice.y - state.provider.bottom) <= 14,
-          'picker is adjacent to voice',
+          state.voicePanel.y >= 0 &&
+            state.voicePanel.bottom <= state.voice.y &&
+            state.provider.x >= state.voicePanel.x &&
+            state.provider.right <= state.voicePanel.right,
+          'provider picker stays inside the panel above the mic',
         );
+        if (height <= 520)
+          assert.ok(
+            Math.abs(state.voicePanel.right - state.voice.right) <= 2,
+            'Voice Settings is right-aligned with the corner mic, not the globe',
+          );
+        await hideProvider(page);
         for (const sheet of [
           'layers',
           'cameras',
@@ -238,7 +267,7 @@ try {
       document.body.style.setProperty('--mobile-right-inset', '44px');
       document.body.style.setProperty('--mobile-bottom-inset', '21px');
     });
-    await page.focus('#gev-voice-provider');
+    await showProvider(page);
     const touch = await page.evaluate(() => {
       const voice = document
         .getElementById('gev-voice-control')
@@ -246,27 +275,27 @@ try {
       const picker = document
         .querySelector('.gev-voice-provider-field')
         .getBoundingClientRect();
-      const gear = document
-        .querySelector('.gev-voice-settings-button')
-        .getBoundingClientRect();
+      const panel = document.getElementById('gev-voice-panel').getBoundingClientRect();
       return {
-        gap: voice.top - picker.bottom,
+        gap: voice.top - panel.bottom,
+        panelRight: panel.right,
+        voiceRight: voice.right,
         pickerLeft: picker.left,
         pickerRight: picker.right,
-        gearHeight: gear.height,
         tabHeight: document
           .getElementById('mobile-tab-bar')
           .getBoundingClientRect().height,
       };
     });
-    assert.ok(touch.gap >= 7 && touch.gap <= 9);
+    assert.ok(touch.gap >= 15 && touch.gap <= 17);
+    assert.ok(Math.abs(touch.panelRight - touch.voiceRight) <= 2);
     assert.ok(touch.pickerLeft >= 44 && touch.pickerRight <= 800);
-    assert.equal(touch.gearHeight, 44);
     assert.equal(touch.tabHeight, 69);
     results.push({ touchAndSimulatedNotches: touch });
     await page.screenshot({
       path: new URL('after-844x390-touch-notches.png', directory).pathname,
     });
+    await hideProvider(page);
     await page.click('.mobile-tab[data-mobile-sheet="more"]');
     const padding = await page.$eval('#right-context-rail', (el) => ({
       left: parseFloat(getComputedStyle(el).paddingLeft),
