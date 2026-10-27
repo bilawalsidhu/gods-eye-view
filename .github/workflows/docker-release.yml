@@ -129,7 +129,7 @@ jobs:
       image: ${{ steps.ref.outputs.image }}
       version: ${{ steps.ref.outputs.version }}
       digest: ${{ steps.ref.outputs.digest }}
-      scan: ${{ steps.scan.outputs.summary }}
+      latest: ${{ steps.ref.outputs.latest }}
     steps:
       - name: Prepare
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
@@ -188,13 +188,19 @@ jobs:
         id: ref
         env:
           VERSION: ${{ steps.meta.outputs.version }}
+          META_JSON: ${{ steps.meta.outputs.json }}
         run: |
           docker buildx imagetools inspect "${IMAGE}:${VERSION}"
+          # Whether this run actually moved `latest`, so the release notes
+          # only advertise a tag that exists.
+          latest=false
+          if jq -e --arg t "${IMAGE}:latest" '.tags | index($t)' <<< "$META_JSON" > /dev/null; then latest=true; fi
           digest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" --format '{{json .Manifest}}' | jq -r .digest)"
           {
             echo "image=${IMAGE}"
             echo "version=${VERSION}"
             echo "digest=${digest}"
+            echo "latest=${latest}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Scan the published image (informational)
@@ -208,7 +214,6 @@ jobs:
           DIGEST: ${{ steps.ref.outputs.digest }}
         run: |
           mkdir -p "${RUNNER_TEMP}/trivy-cache" "${RUNNER_TEMP}/scan"
-          summary=''
           {
             echo '### Vulnerability scan (informational, not blocking)'
             echo
@@ -223,9 +228,7 @@ jobs:
               --format json --output "/work/${report}" "${IMAGE}@${DIGEST}"
             count() { jq "[.Results[]?.Vulnerabilities[]? | select(.Severity == \"$1\")] | length" "${RUNNER_TEMP}/${report}"; }
             echo "| ${platform} | $(count CRITICAL) | $(count HIGH) | $(count MEDIUM) | $(count LOW) |" >> "$GITHUB_STEP_SUMMARY"
-            summary="${summary:+${summary}; }${platform#linux/}: $(count CRITICAL) critical, $(count HIGH) high"
           done
-          echo "summary=${summary}" >> "$GITHUB_OUTPUT"
 
   attest:
     name: Sign and attest
@@ -275,14 +278,12 @@ jobs:
       GH_REPO: ${{ github.repository }}
       IMAGE: ${{ needs.merge.outputs.image }}
       VERSION: ${{ needs.merge.outputs.version }}
-      DIGEST: ${{ needs.merge.outputs.digest }}
-      SCAN: ${{ needs.merge.outputs.scan }}
+      LATEST: ${{ needs.merge.outputs.latest }}
     steps:
-      - name: Append container image section
+      - name: Append release artifacts section
         run: |
           start='<!-- gev-container-image:start -->'
           end='<!-- gev-container-image:end -->'
-          readme="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}#prebuilt-image"
 
           # Drop a section from an earlier run, so a re-run refreshes it
           # instead of appending a second copy.
@@ -293,22 +294,27 @@ jobs:
                 index($0, e) { skip = 0 }
               ' > body.md
 
-          {
-            echo
-            echo "$start"
-            echo "## Container image"
-            echo
-            echo '```bash'
-            echo "docker pull ${IMAGE}:${VERSION}"
-            echo '```'
-            echo
-            echo "- Version tag: \`${VERSION}\` (also \`${IMAGE}:latest\` for stable releases)"
-            echo "- Platforms: \`linux/amd64\` and \`linux/arm64\` (including Apple Silicon, Raspberry Pi 4/5 and AWS Graviton)"
-            echo "- Manifest digest: \`${DIGEST}\`"
-            echo "- Signed (cosign, keyless) with build provenance and an SBOM attached"
-            if [ -n "$SCAN" ]; then echo "- Vulnerability scan (Trivy, informational): ${SCAN}"; fi
-            echo "- Run it: see the [Docker section of the README](${readme})"
-            echo "$end"
-          } >> body.md
+          latest_line=''
+          if [ "$LATEST" = true ]; then
+            latest_line="* **Docker Image (latest):** \`${IMAGE}:latest\`"
+          fi
+
+          cat >> body.md <<EOF
+
+          ${start}
+
+          ---
+
+          ### <img width="20" height="20" src="https://img.icons8.com/office/30/cloud.png" alt="cloud"/> Release Artifacts
+          This release has generated the following multi-arch artifacts.
+
+          ${latest_line}
+          * **Docker Image (versioned):** \`${IMAGE}:${VERSION}\`
+
+          #### <img width="20" height="20" src="https://img.icons8.com/fluency/48/docker.png" alt="docker"/> Supported Architectures
+          * <img width="20" height="20" src="https://img.icons8.com/color/48/linux--v1.png" alt="linux--v1"/> \`linux/amd64\` (standard 64-bit Linux servers)
+          * <img width="20" height="20" src="https://img.icons8.com/color/48/mac-logo.png" alt="mac-logo"/> \`linux/arm64\` (Apple Silicon, AWS Graviton, etc.)
+          ${end}
+          EOF
 
           gh release edit "$RELEASE_TAG" --notes-file body.md
