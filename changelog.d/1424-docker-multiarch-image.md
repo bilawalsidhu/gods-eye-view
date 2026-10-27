@@ -1,5 +1,6 @@
-- Publish a hardened, signed multi-arch (linux/amd64, linux/arm64) Docker image
-  to GHCR on each release, built on native runners, and build, smoke-test and
+- Publish a hardened multi-arch (linux/amd64, linux/arm64) Docker image
+  to GHCR on each release, built on native runners with provenance and SBOM
+  attestations, and build, smoke-test and
   scan it on both architectures in CI. Compose keeps building the `dev` target
   (damianperera, #1424).
 - Add `GEV_DATA_DIR`, which moves the `.env` that Provider Settings saves, plus
