@@ -8,7 +8,7 @@ multi-ecosystem-groups:
   weekly:
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     commit-message:
       prefix: chore(deps)
 
