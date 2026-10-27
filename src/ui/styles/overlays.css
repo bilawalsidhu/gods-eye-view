@@ -371,3 +371,134 @@
 #intel-hud[data-variant='minimal'] .hud-summary-wrap {
   max-width: 280px;
 }
+
+/* Scope OFF adds text-sized backing; Scope ON retains the original HUD. */
+.hud-readout {
+  display: contents;
+}
+
+:root[data-scope-mask='off']
+  #intel-hud:is(
+    [data-variant='minimal'],
+    [data-variant='operator'],
+    [data-variant='tactical']
+  )
+  .hud-readout,
+:root[data-scope-mask='off']:not([data-ui-theme='cyber']) .scene-text-holdout {
+  background: rgba(0, 0, 0, 0.7);
+  box-shadow: none;
+  border-radius: 2px;
+  padding-block: 0;
+  padding-inline: 6px;
+  margin-block: 0;
+  margin-inline: -6px;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: content-box;
+  white-space: nowrap;
+}
+
+:root[data-scope-mask='off']
+  #intel-hud:is(
+    [data-variant='minimal'],
+    [data-variant='operator'],
+    [data-variant='tactical']
+  )
+  .hud-readout {
+  display: block;
+  width: max-content;
+  min-width: 0;
+  box-sizing: content-box;
+  white-space: nowrap;
+}
+
+:root[data-scope-mask='off']
+  #intel-hud:is(
+    [data-variant='minimal'],
+    [data-variant='operator'],
+    [data-variant='tactical']
+  )
+  :is(.hud-top-right, .hud-bottom-right)
+  .hud-readout,
+:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
+  #style-indicator
+  .scene-text-holdout {
+  margin-inline-start: auto;
+}
+
+/* Preserve glyph opacity without dimming the vertical backplates. */
+:root[data-scope-mask='off']
+  #intel-hud:is([data-variant='operator'], [data-variant='tactical'])
+  .hud-edge {
+  opacity: 1;
+}
+
+:root[data-scope-mask='off']
+  #intel-hud:is([data-variant='operator'], [data-variant='tactical'])
+  .hud-edge
+  .hud-readout
+  > * {
+  opacity: 0.5;
+}
+
+:root[data-scope-mask='off'] #intel-hud[data-variant='operator'] .hud-corner,
+:root[data-scope-mask='off']
+  #intel-hud:is([data-variant='minimal'], [data-variant='operator'])
+  :is(.hud-top-bar, .hud-bottom-bar) {
+  background: transparent;
+}
+
+:root[data-scope-mask='off']
+  #intel-hud:is([data-variant='minimal'], [data-variant='operator'])
+  :is(.hud-top-bar, .hud-bottom-bar) {
+  width: fit-content;
+  max-width: calc(100vw - 120px);
+  gap: 24px;
+}
+
+:root[data-scope-mask='off']
+  #intel-hud:is([data-variant='minimal'], [data-variant='operator'])
+  :is(.hud-top-bar, .hud-bottom-bar)
+  .hud-readout {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
+  #title-bar
+  h1::before {
+  content: '';
+  position: absolute;
+  inset: -0.12em -6px;
+  z-index: -1;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
+  :is(#title-bar .subtitle, #style-indicator .indicator-label) {
+  color: var(--text-secondary);
+}
+
+:root[data-scope-mask='off']:not([data-ui-theme='cyber']) #title-bar .subtitle {
+  margin-top: 8px;
+}
+
+:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
+  #style-indicator
+  .indicator-value {
+  margin-top: 4px;
+}
+
+:root[data-scope-mask='off']
+  #intel-hud[data-variant='minimal']
+  .hud-readout:has(> :is(.hud-classification, .hud-system)) {
+  display: none;
+}
+
+:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
+  #title-bar
+  .frame-rate-readout {
+  margin-top: 6px;
+}

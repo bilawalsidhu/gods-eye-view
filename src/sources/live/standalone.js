@@ -1,5 +1,4 @@
 import {
-  epoch,
   finite,
   httpError,
   LiveSourceError,
@@ -32,9 +31,7 @@ function openSkyError(response) {
     const reasons = {
       oauth_invalid_or_missing: 'OpenSky OAuth client missing/invalid',
       oauth_invalid_credentials: 'OpenSky OAuth rejected credentials',
-      basic_invalid_credentials: 'OpenSky username/password rejected',
-      missing_basic_creds: 'OpenSky auth missing',
-      missing_oauth_and_basic_creds: 'OpenSky auth missing',
+      missing_oauth_creds: 'OpenSky auth missing',
       auth_required: 'OpenSky auth required',
       forced_anonymous: 'OpenSky auth required',
     };
@@ -159,26 +156,8 @@ export function createMilitarySource({
         status: response.status,
       };
     },
-    async getTrack(reference, { signal } = {}) {
-      const { response, payload } = await readResponse(
-        fetchImpl,
-        '/api/military/track?hex=' + encodeURIComponent(reference),
-        { signal },
-        'Military aircraft',
-      );
-      if (!response.ok) throw httpError(response, 'Military aircraft');
-      const baseTimeMs = epoch(payload?.timestamp, 1000);
-      return {
-        records:
-          baseTimeMs == null
-            ? []
-            : normalizeAircraftTrack(payload?.trace, {
-                baseTimeMs,
-                readsb: true,
-              }),
-        complete: false,
-      };
-    },
+    // ADSB.lol does not expose a supported live-history endpoint. Omitting
+    // optional getTrack keeps the tracking layer on its accumulated trail.
   };
 }
 

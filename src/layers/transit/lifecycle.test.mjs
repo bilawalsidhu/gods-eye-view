@@ -6,7 +6,6 @@ import {
   FEED_EVICT_AFTER_MS,
   FEED_STALE_AFTER_MS,
   MISSED_POLLS_TO_DROP,
-  SELECTED_CARD_REFRESH_MS,
   TRANSIT_POLL_MS,
   VEHICLE_MAX_FIX_AGE_MS,
 } from './policy.js';
@@ -1407,7 +1406,6 @@ test('the selected card lands where the vehicle stopped, not short of it', async
   // segment ends left it a few metres behind, and then the render hold was
   // released with no frame scheduled to close the gap.
   const app = harness(t);
-  const start = Date.now();
   app.serve('mbta', () => ({
     status: 200,
     body: snapshot('mbta', 'MBTA', [vehicle('b', 42.36, -71.06, reported())], {
@@ -3576,7 +3574,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
     source: {},
     parts: {
       flow: { ensureFlowStatus: noop },
-      animation: { animate: noop, clearDots: noop },
+      animation: { animate: noop, clearDots: noop, syncRenderDemand: noop },
       viewport: { onCameraChanged: noop },
       ingestion: { cancelActiveFetch: noop },
     },

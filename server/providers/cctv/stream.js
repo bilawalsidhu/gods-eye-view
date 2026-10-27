@@ -70,7 +70,7 @@ export async function fetchHlsBytes(
   }
 }
 
-export function sameOriginHlsUrl(value, base) {
+function sameOriginHlsUrl(value, base) {
   const url = new URL(value, base);
   if (
     !['https:', 'http:'].includes(url.protocol) ||
