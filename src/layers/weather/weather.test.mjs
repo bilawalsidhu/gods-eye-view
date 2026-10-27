@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWeatherRendering } from './rendering.js';
+import { createWeatherRendering, READY_WAKE_MS } from './rendering.js';
 import { createWeatherLayer } from './index.js';
 import { createWeatherClock } from './clock.js';
 import * as Cesium from 'cesium';
@@ -240,6 +240,50 @@ test('a ready weather frame does not wait for unrelated terrain, but requires su
   assert.equal(h.rendering.getDiagnostics().loadedTiles, 2);
   assert.equal(h.rendering.getDiagnostics().frameLoadMs, 701);
   h.rendering.clear();
+});
+
+test('a staged frame waiting out its quiet interval wakes on a timer, not every render', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let now = 0;
+  const h = renderingHarness({ now: () => now });
+  h.viewer.scene.globe.tilesLoaded = false;
+  const loaded = h.rendering.setFrame(snapshot, times[0]);
+  const tile = deferred();
+  h.providers[0].response = tile;
+  const request = h.providers[0].requestImage(0, 0, 0, {});
+  tile.resolve({});
+  await request;
+  const before = h.renders();
+  for (let i = 0; i < 10; i++) h.postRender.emit();
+  assert.equal(
+    h.renders(),
+    before,
+    'renders while waiting do not request further renders',
+  );
+  t.mock.timers.tick(READY_WAKE_MS - 1);
+  assert.equal(h.renders(), before);
+  t.mock.timers.tick(1);
+  assert.equal(h.renders(), before + 1, 'one wake per interval');
+  now = 200;
+  h.postRender.emit();
+  h.postRender.emit();
+  assert.equal(await loaded, true);
+  const settledRenders = h.renders();
+  t.mock.timers.tick(READY_WAKE_MS * 4);
+  assert.equal(h.renders(), settledRenders, 'commit clears the wake timer');
+
+  const abandoned = h.rendering.setFrame(snapshot, times[1]);
+  const second = deferred();
+  h.providers.at(-1).response = second;
+  const secondRequest = h.providers.at(-1).requestImage(0, 0, 0, {});
+  second.resolve({});
+  await secondRequest;
+  h.postRender.emit();
+  h.rendering.clear();
+  assert.equal(await abandoned, false);
+  const clearedRenders = h.renders();
+  t.mock.timers.tick(READY_WAKE_MS * 4);
+  assert.equal(h.renders(), clearedRenders, 'clear cancels the wake timer');
 });
 
 test('camera movement drops abandoned deferred tiles but still waits for admitted requests', async () => {

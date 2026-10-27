@@ -86,6 +86,7 @@ function fixture() {
     onCity: (id) => calls.push(['city', id]),
     onPoi: (id, index) => calls.push(['poi', id, index]),
     onSearch: (query) => calls.push(['search', query]),
+    onSearchEdit: () => calls.push(['edit']),
     onReset: () => calls.push(['reset']),
     doc,
     requestFrame: (fn) => {
@@ -146,4 +147,14 @@ test('location and POI keys route once while form controls retain typing', () =>
   f.doc.fire('keydown', { key: 'Q', target: { matches: () => true } });
   f.elements.resetButtons[1].fire('click');
   assert.deepEqual(f.calls, [['poi', 'a', 1], ['reset']]);
+});
+test('typing clears a failed search error and closing the emptied field drops it too', () => {
+  const f = fixture();
+  f.elements.search.value = 'Pariss';
+  f.elements.search.fire('blur');
+  assert.deepEqual(f.calls, [], 'leaving a kept query keeps its error');
+  f.elements.search.fire('input');
+  f.elements.search.value = '';
+  f.elements.search.fire('blur');
+  assert.deepEqual(f.calls, [['edit'], ['edit']]);
 });

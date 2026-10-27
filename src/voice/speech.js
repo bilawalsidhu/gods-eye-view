@@ -848,6 +848,7 @@ const STEP_TITLES = Object.freeze({
   zoom_to_globe: msg('Zoom out to globe'),
   show_data_layers_menu: msg('Open data layers'),
   set_panel_open: msg('Open or close a panel'),
+  set_voice_inactivity_timeout: msg('Voice inactivity timeout'),
   set_context_mode: msg('Change context mode'),
   control_cockpit: msg('Control cockpit'),
   set_visual_style: msg('Change visual style'),

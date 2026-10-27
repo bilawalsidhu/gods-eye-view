@@ -5,7 +5,7 @@ import { snowShader } from '../styles/snow.js';
 import { nightVisionShader } from '../styles/surveillance.js';
 import { thermalShader } from '../styles/thermal.js';
 import { BLOOM_INTENSITY_DEFAULT } from '../bloom.js';
-import { msg } from '../i18n/index.js';
+import { msg } from '../i18n/marker.js';
 
 /** Duration (ms) for shader intensity crossfade between style presets. */
 export const TRANSITION_DURATION_MS = 500;

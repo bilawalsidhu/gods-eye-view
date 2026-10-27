@@ -282,28 +282,28 @@ export class IntelHUD {
       <div class="hud-sonar" aria-hidden="true"></div>
 
       <div class="hud-top-bar">
-        <span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span>
-        <span class="hud-top-bar-center">${this._missionId}</span>
-        <span class="hud-top-bar-right">PAGE 1/1</span>
+        <span class="hud-readout"><span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span></span>
+        <span class="hud-readout"><span class="hud-top-bar-center">${this._missionId}</span></span>
+        <span class="hud-readout"><span class="hud-top-bar-right">PAGE 1/1</span></span>
       </div>
 
       <div class="hud-corner hud-top-left">
         <div class="hud-bracket">┌</div>
         <div class="hud-content">
-          <div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div>
-          <div class="hud-system">${this._missionId}  ${this._sensorId}</div>
-          <div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div>
+          <div class="hud-readout"><div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div></div>
+          <div class="hud-readout"><div class="hud-system">${this._missionId}  ${this._sensorId}</div></div>
+          <div class="hud-readout"><div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div></div>
           <div class="hud-summary-wrap">
-            <div class="hud-summary-label">${t('SUMMARY')}</div>
-            <div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div>
+            <div class="hud-readout"><div class="hud-summary-label">${t('SUMMARY')}</div></div>
+            <div class="hud-readout"><div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div></div>
           </div>
         </div>
       </div>
 
       <div class="hud-corner hud-top-right">
         <div class="hud-content" style="text-align:right">
-          <div class="hud-rec"><span id="hud-rec-dot">●</span> ${t('REC')}  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
-          <div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div>
+          <div class="hud-readout"><div class="hud-rec"><span id="hud-rec-dot">●</span> ${t('REC')}  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div></div>
+          <div class="hud-readout"><div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div></div>
         </div>
         <div class="hud-bracket">┐</div>
       </div>
@@ -311,33 +311,33 @@ export class IntelHUD {
       <div class="hud-corner hud-bottom-left">
         <div class="hud-bracket">└</div>
         <div class="hud-content">
-          <div id="hud-mgrs">MGRS: ---</div>
-          <div id="hud-latlon">--°--'--"N ---°--'--"W</div>
+          <div class="hud-readout"><div id="hud-mgrs">MGRS: ---</div></div>
+          <div class="hud-readout"><div id="hud-latlon">--°--'--"N ---°--'--"W</div></div>
         </div>
       </div>
 
       <div class="hud-corner hud-bottom-right">
         <div class="hud-content" style="text-align:right">
-          <div id="hud-gsd">GSD: --m  NIIRS: --</div>
-          <div id="hud-alt">ALT: --m   SUN: --° EL</div>
-          <div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div>
+          <div class="hud-readout"><div id="hud-gsd">GSD: --m  NIIRS: --</div></div>
+          <div class="hud-readout"><div id="hud-alt">ALT: --m   SUN: --° EL</div></div>
+          <div class="hud-readout"><div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div></div>
         </div>
         <div class="hud-bracket">┘</div>
       </div>
 
       <div class="hud-edge hud-left-edge">
-        <div id="hud-coll">COLL: --:--:--Z</div>
-        <div id="hud-ona">ONA: --°</div>
+        <div class="hud-readout"><div id="hud-coll">COLL: --:--:--Z</div></div>
+        <div class="hud-readout"><div id="hud-ona">ONA: --°</div></div>
       </div>
 
       <div class="hud-edge hud-right-edge">
-        <div>BAND: PAN</div>
-        <div>BITS: 11</div>
-        <div>LVL: 1A</div>
+        <div class="hud-readout"><div>BAND: PAN</div></div>
+        <div class="hud-readout"><div>BITS: 11</div></div>
+        <div class="hud-readout"><div>LVL: 1A</div></div>
       </div>
 
       <div class="hud-bottom-bar">
-        <span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span>
+        <span class="hud-readout"><span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span></span>
       </div>
     `;
     this._el.dataset.variant = this._variant;
@@ -574,11 +574,12 @@ export class IntelHUD {
    * @returns {string} Formatted DMS string, e.g. `"38°53'23.10"N"`.
    */
   _toDMS(decimal, type) {
-    const abs = Math.abs(decimal);
-    const deg = Math.floor(abs);
-    const minFloat = (abs - deg) * 60;
-    const min = Math.floor(minFloat);
-    const sec = ((minFloat - min) * 60).toFixed(2);
+    // Round once, in hundredths of a second, so a value that rounds up to
+    // 60.00" carries into the minutes and degrees instead of printing 60.
+    const hundredths = Math.round(Math.abs(decimal) * 360000);
+    const deg = Math.floor(hundredths / 360000);
+    const min = Math.floor(hundredths / 6000) % 60;
+    const sec = ((hundredths % 6000) / 100).toFixed(2);
 
     let dir;
     if (type === 'lat') dir = decimal >= 0 ? 'N' : 'S';

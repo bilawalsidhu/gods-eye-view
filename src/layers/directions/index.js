@@ -308,16 +308,24 @@ export function directionsInstruction(step) {
         ? t('Merge onto {road}', values)
         : t('Merge', { context: 'maneuver' });
     case 'on ramp':
-      if (direction)
+      if (modifier === 'left' || modifier === 'right')
         return road
           ? t('Take the ramp on the {direction} onto {road}', values)
           : t('Take the ramp on the {direction}', values);
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Take the ramp {direction} onto {road}', values)
+          : t('Take the ramp {direction}', values);
       return road ? t('Take the ramp onto {road}', values) : t('Take the ramp');
     case 'off ramp':
-      if (direction)
+      if (modifier === 'left' || modifier === 'right')
         return road
           ? t('Take the exit on the {direction} onto {road}', values)
           : t('Take the exit on the {direction}', values);
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Take the exit {direction} onto {road}', values)
+          : t('Take the exit {direction}', values);
       return road ? t('Take the exit onto {road}', values) : t('Take the exit');
     case 'roundabout':
     case 'rotary':
@@ -346,9 +354,14 @@ export function directionsInstruction(step) {
       return road
         ? t('Exit the roundabout onto {road}', values)
         : t('Exit the roundabout');
-    case 'use lane':
-      if (direction) {
-        const lane = { road, direction: laneWord(modifier) };
+    case 'use lane': {
+      const side = modifier.includes('left')
+        ? 'left'
+        : modifier.includes('right')
+          ? 'right'
+          : '';
+      if (side) {
+        const lane = { road, direction: laneWord(side) };
         return road
           ? t('Use the {direction} lane onto {road}', lane)
           : t('Use the {direction} lane', lane);
@@ -356,6 +369,7 @@ export function directionsInstruction(step) {
       return road
         ? t('Continue onto {road}', values)
         : t('Continue', { context: 'maneuver' });
+    }
     default:
       return road
         ? t('Continue onto {road}', values)

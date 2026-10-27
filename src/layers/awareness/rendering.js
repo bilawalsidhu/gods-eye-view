@@ -11,6 +11,7 @@ import {
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
 import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
+import { formatAwarenessDirection } from './presentation.js';
 
 export function createRendering({
   state: layerState,
@@ -225,12 +226,12 @@ export function createRendering({
           : null;
       const bearingText = Number.isFinite(bearing)
         ? t('BRG {value}°', {
-            value: String(Math.round(bearing)).padStart(3, '0'),
+            value: formatAwarenessDirection(bearing),
           })
         : t('BRG —');
       const courseText = Number.isFinite(item.track)
         ? ` · ${t('CRS {value}°', {
-            value: String(Math.round(item.track)).padStart(3, '0'),
+            value: formatAwarenessDirection(item.track),
           })}`
         : '';
       marker._label.textContent = `${label} · ${formatAwarenessDistance(item.distanceM)}\n${bearingText}${courseText}`;
