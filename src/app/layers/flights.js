@@ -1,4 +1,5 @@
 import { createCivilFlightLayer } from '../../layers/flights/index.js';
+import { registerDynamicCredit } from '../../data/dataCredits.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as trails from '../../data/trailRenderer.js';
@@ -25,6 +26,7 @@ export function createApplicationFlights({
     source,
     resolveAsset,
     services: {
+      credits: { registerDynamicCredit },
       picking,
       sprites,
       trails,

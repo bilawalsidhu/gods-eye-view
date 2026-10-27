@@ -1,5 +1,12 @@
 # Changelog
 
+- Add optional FlightAware AeroAPI historical flight tracks (issue #446): with
+  `FLIGHTAWARE_AEROAPI_KEY` configured, tracking an aircraft now backfills up
+  to 10 days of observed history into its trail when the keyless OpenSky/adsb.lol
+  history is empty, via a server-side `/api/aeroapi` proxy that keeps the key
+  off the browser, allowlists the two read paths and their query parameters,
+  caches responses for 5 minutes, and registers the required FlightAware
+  attribution when the data is shown. Without the key, behavior is unchanged.
 - The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
   civil and military layers, so a consumer reading `getTrackedInfo()` no longer
   has to reach past it into the raw poll record for climb/descent. Reported,
