@@ -406,9 +406,11 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
     'vessel focus helper',
   );
   assert.match(vesselFocus, /requestWorldFocus\(\{/);
+  assert.match(firms, /const clickType\s*=\s*layerState\._renderer\?\.clickType\s*\?\?\s*config\.leftClickEventType/);
+  assert.match(firms, /FIRMS_LEFT_CLICK = Cesium\.ScreenSpaceEventType\.LEFT_CLICK/);
   const fireClick = body(
     firms,
-    /_clickHandler\.setInputAction\(\(click\) => \{([\s\S]*?)\n    \}, Cesium\.ScreenSpaceEventType\.LEFT_CLICK\);/,
+    /_clickHandler\.setInputAction\(\(click\) => \{([\s\S]*?)\n    \}, clickType\);/,
     'fire click',
   );
   ordered(fireClick, [

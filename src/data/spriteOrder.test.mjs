@@ -1,4 +1,3 @@
-import { createRendering as createFirmsRendering } from '../layers/firms/rendering.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -124,10 +123,23 @@ test('flights, AIS, and FIRMS enable paths are wired through the shared sprite r
     /spriteLayer: 'flights'/,
   );
   assert.match(aisLiveVesselsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('ais', activeViewer\)/);
-  assert.match(firmsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('firms', viewer\)/);
   assert.match(
-    createFirmsRendering.toString(),
-    /registerSpriteCollection\('firms', layerState\._billboards\);\s*restoreSpriteOrder\(layerState\._viewer\);/,
+    firmsLayer.enable.toString(),
+    /renderer\.onEnable\(\)/,
+  );
+  assert.match(
+    readFileSync(
+      new URL('../layers/firms/render/cesium.js', import.meta.url),
+      'utf8',
+    ),
+    /restoreSpriteOrderOnEnable\('firms', viewer\)/,
+  );
+  assert.match(
+    readFileSync(
+      new URL('../layers/firms/render/cesium.js', import.meta.url),
+      'utf8',
+    ),
+    /registerSpriteCollection\('firms', sprites\);\s*spriteServices\.restoreSpriteOrder\(viewer\);/,
     'lazy FIRMS registration must restore order immediately',
   );
 });

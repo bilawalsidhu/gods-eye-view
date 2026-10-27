@@ -30,6 +30,7 @@
  */
 
 import puppeteer from 'puppeteer';
+import { redact } from './qa-browserEvidence.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,6 +47,11 @@ const getOpt = (name, dflt) => {
 const APP_URL = getOpt('--url', 'http://localhost:4420');
 const HEADFUL = argv.includes('--headful');
 const FIXTURES = argv.includes('--fixtures');
+const ANGLE = getOpt('--angle', 'swiftshader');
+const OUT = getOpt('--out', null);
+if (!['metal', 'swiftshader'].includes(ANGLE)) throw new Error('Unknown ANGLE backend');
+const runtimeErrors = [];
+const expectedSourceErrors = [];
 
 const CHROME_EXECUTABLE_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -247,7 +253,7 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     ...(findChromeExecutable() ? { executablePath: findChromeExecutable() } : {}),
     args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
+      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', `--use-angle=${ANGLE}`,
       '--disable-dev-shm-usage', '--disable-web-security',
       '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
       '--window-size=1440,900',
@@ -261,6 +267,19 @@ async function main() {
 
     await page.setRequestInterception(true);
     let interceptMode = FIXTURES ? 'fixture' : 'live';
+    page.on('pageerror', error => runtimeErrors.push(redact(error.message)));
+    page.on('error', error => runtimeErrors.push(redact(error.message)));
+    page.on('console', message => {
+      if (message.type() !== 'error') return;
+      let expected = false;
+      try {
+        const url = new URL(message.location()?.url);
+        expected = interceptMode === 'keyless' && url.origin === new URL(APP_URL).origin
+          && url.pathname === '/api/firms' && /^Failed to load resource:.*\b503\b/.test(message.text());
+      } catch { /* an unknown location is never waived */ }
+      if (expected) expectedSourceErrors.push('/api/firms: intentional keyless fixture503');
+      else runtimeErrors.push(redact(message.text()));
+    });
     const stableStalePayload = stalePayload();
     page.on('request', (req) => {
       const url = req.url();
@@ -509,12 +528,21 @@ async function main() {
     await browser.close();
   }
 
+  record('RUNTIME: no unexpected browser errors', runtimeErrors.length === 0,
+    runtimeErrors.length ? JSON.stringify(runtimeErrors) : `expected source errors=${expectedSourceErrors.length}`);
+  if (runtimeErrors.length) exitCode = 1;
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
   console.log('\n' + '─'.repeat(60));
   console.log(`  RESULT: ${pass} passed, ${fail} failed`);
   console.log(`  Shots : ${SHOTS_DIR}/firms-*.png`);
   console.log('─'.repeat(60) + '\n');
+  if (OUT) {
+    const file = path.resolve(OUT);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ pass:exitCode === 0 && fail === 0, fixture:FIXTURES, angle:ANGLE,
+      results, browserErrors:runtimeErrors, expectedSourceErrors }, null, 2) + '\n');
+  }
   process.exit(exitCode || (fail > 0 ? 1 : 0));
 }
 

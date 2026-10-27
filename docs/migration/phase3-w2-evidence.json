@@ -1,5 +1,5 @@
 {
-  "status": "W2 in progress; earthquakes accepted on both engines; FIRMS next",
+  "status": "W2 in progress; earthquakes accepted on Navara; FIRMS native extraction accepted, Navara next",
   "baseCommit": "bbc4b5a553fb0710ef5896ff750df8a349eac8be",
   "runtime": "Node 24.14.0; headless Puppeteer Metal; sequential GPU",
   "baseline": {
@@ -968,5 +968,472 @@
       }
     ],
     "reviewImagesVisuallyChecked": true
+  },
+  "firmsNativeExtraction": {
+    "status": "W2-2a native FIRMS extraction accepted; Navara implementation pending",
+    "ordinaryUnit": {
+      "tests": 7203,
+      "pass": 7202,
+      "skip": 1,
+      "fail": 0
+    },
+    "allocationChecks": 15,
+    "cpuBuildGates": [
+      {
+        "name": "unit",
+        "code": 0,
+        "seconds": 88.2,
+        "logSha256": "8748d3d02fb019503611d27e5fd85370371d68ba1382392ad3bf8e5b0dc45256"
+      },
+      {
+        "name": "boundaries",
+        "code": 0,
+        "seconds": 9.7,
+        "logSha256": "f88fc193b098623921d3950bbbe7e9de532f3380e609ee8c034ec7ad4d82ea7e"
+      },
+      {
+        "name": "format",
+        "code": 0,
+        "seconds": 8.7,
+        "logSha256": "3bfd4af06ed4dfaf7219a34d3e08e91243942016113205d4363cbd052da4685c"
+      },
+      {
+        "name": "build",
+        "code": 0,
+        "seconds": 8.2,
+        "logSha256": "e6fe34004541bb21e546406167dc83f10f4ba128895a9a0bd57c5a9f79afa5b6"
+      },
+      {
+        "name": "panel",
+        "code": 0,
+        "seconds": 9.5,
+        "logSha256": "771836ee517ed44b079db5b103e222dd1d264b17e0ba9f7080543de2ba6dba12"
+      },
+      {
+        "name": "qa-build",
+        "code": 0,
+        "seconds": 9.0,
+        "logSha256": "14e4128e125485ea03a1cd04422bac79575f26fad9e5544031b6cc26954cb247"
+      },
+      {
+        "name": "main",
+        "code": 0,
+        "seconds": 0.3,
+        "logSha256": "2f2ec2910875287e3554eea05960c5124a6a7840bdbbcbfd3ce4ba16a68bc786"
+      }
+    ],
+    "browserGates": [
+      {
+        "name": "firms-dev",
+        "code": 0,
+        "seconds": 57.2,
+        "logSha256": "e5a848e52f0b20f390a0fa7ae3e1e319c346bbdfc642f3c981457cf282d01ab9"
+      },
+      {
+        "name": "firms-preview",
+        "code": 0,
+        "seconds": 55.9,
+        "logSha256": "e5a848e52f0b20f390a0fa7ae3e1e319c346bbdfc642f3c981457cf282d01ab9"
+      },
+      {
+        "name": "firms-legacy",
+        "code": 0,
+        "seconds": 24.0,
+        "logSha256": "19dadb8d65314622ed3ea6b4e999ee6fab6d5f5af8b9c5c5f6ff8d18632f8f93"
+      },
+      {
+        "name": "quakes-native-regression",
+        "code": 0,
+        "seconds": 56.0,
+        "logSha256": "12eff53a1655f611657c65dc4f4d8161c8d0fc8fe1f5f0b7105d03204fe1e90e"
+      },
+      {
+        "name": "contract-cesium",
+        "code": 0,
+        "seconds": 25.8,
+        "logSha256": "922eefb5a759fd3b4fb50e01aff986465cdb939a3c8ae7f27c77b9a814357448"
+      },
+      {
+        "name": "contract-navara",
+        "code": 0,
+        "seconds": 59.5,
+        "logSha256": "72ff9da899234395bcf7f523c4bf63f8f7dc8f1cc7fa7b7e395dce0a0060c5e6"
+      },
+      {
+        "name": "shell-dev",
+        "code": 0,
+        "seconds": 188.3,
+        "logSha256": "e569e1d5aaf5ada01f6c5786ba17af75055dd4d96f75ded31412675e0914d429"
+      },
+      {
+        "name": "shell-preview",
+        "code": 0,
+        "seconds": 183.1,
+        "logSha256": "780cc22ea8d420a8a432c031a258d88de0be76ba47c82246b9b26dc14463ad25"
+      }
+    ],
+    "captures": [
+      {
+        "name": "baseline",
+        "path": "qa-artifacts/w2/firms/native-baseline-isolated.json",
+        "sha256": "ee714be7030bf0998b5ffd9359c517f479c00ff7fd9075025b4cd08abb949f32",
+        "driverSha256": "2645cb2366e85c9cb945974102d9e96cadd7bea91e032975d8ff9ae93bf9a1ad",
+        "fixtureSha256": "00094eb44e1cb1dc8a98368ef7bc62faab6df8bff407a449a4434927a443b402",
+        "checks": 36,
+        "records": 371,
+        "epochMs": 1792152000000,
+        "sourceReceiptMs": 1792151880000,
+        "enabledIdleFrames": 0,
+        "disabledIdleFrames": 0,
+        "hudSummaryFixture": true,
+        "poses": {
+          "global": {
+            "controls": 5,
+            "onScreen": 367,
+            "rendered": 18,
+            "changedPixels": 2166
+          },
+          "regional": {
+            "controls": 5,
+            "onScreen": 242,
+            "rendered": 12,
+            "changedPixels": 6860
+          },
+          "local": {
+            "controls": 5,
+            "onScreen": 121,
+            "rendered": 121,
+            "changedPixels": 28770
+          },
+          "close": {
+            "controls": 5,
+            "onScreen": 55,
+            "rendered": 99,
+            "changedPixels": 80906
+          },
+          "terrain": {
+            "controls": 5,
+            "onScreen": 75,
+            "rendered": 110,
+            "changedPixels": 125805
+          }
+        }
+      },
+      {
+        "name": "dev",
+        "path": "qa-artifacts/w2/firms/native-extraction/final/cesium-dev.json",
+        "sha256": "8259ef5e126b01edc794283a6d9a00d353609769fe3f1cff70897fa37ed64852",
+        "driverSha256": "c138c18107563f55165ba010391f14e19170f93f92992079d43dd4b387d4e071",
+        "fixtureSha256": "00094eb44e1cb1dc8a98368ef7bc62faab6df8bff407a449a4434927a443b402",
+        "checks": 36,
+        "records": 371,
+        "epochMs": 1792152000000,
+        "sourceReceiptMs": 1792151880000,
+        "enabledIdleFrames": 0,
+        "disabledIdleFrames": 0,
+        "hudSummaryFixture": true,
+        "poses": {
+          "global": {
+            "controls": 5,
+            "onScreen": 367,
+            "rendered": 18,
+            "changedPixels": 2166
+          },
+          "regional": {
+            "controls": 5,
+            "onScreen": 242,
+            "rendered": 12,
+            "changedPixels": 6860
+          },
+          "local": {
+            "controls": 5,
+            "onScreen": 121,
+            "rendered": 121,
+            "changedPixels": 28770
+          },
+          "close": {
+            "controls": 5,
+            "onScreen": 55,
+            "rendered": 99,
+            "changedPixels": 80906
+          },
+          "terrain": {
+            "controls": 5,
+            "onScreen": 75,
+            "rendered": 110,
+            "changedPixels": 125805
+          }
+        }
+      },
+      {
+        "name": "qaPreview",
+        "path": "qa-artifacts/w2/firms/native-extraction/final/cesium-preview.json",
+        "sha256": "5233d19e697246c96b61eb0c5f4139e09ec734f28b8c208a43206a2a966e8e62",
+        "driverSha256": "c138c18107563f55165ba010391f14e19170f93f92992079d43dd4b387d4e071",
+        "fixtureSha256": "00094eb44e1cb1dc8a98368ef7bc62faab6df8bff407a449a4434927a443b402",
+        "checks": 36,
+        "records": 371,
+        "epochMs": 1792152000000,
+        "sourceReceiptMs": 1792151880000,
+        "enabledIdleFrames": 0,
+        "disabledIdleFrames": 0,
+        "hudSummaryFixture": true,
+        "poses": {
+          "global": {
+            "controls": 5,
+            "onScreen": 367,
+            "rendered": 18,
+            "changedPixels": 2166
+          },
+          "regional": {
+            "controls": 5,
+            "onScreen": 242,
+            "rendered": 12,
+            "changedPixels": 6860
+          },
+          "local": {
+            "controls": 5,
+            "onScreen": 121,
+            "rendered": 121,
+            "changedPixels": 28770
+          },
+          "close": {
+            "controls": 5,
+            "onScreen": 55,
+            "rendered": 99,
+            "changedPixels": 80906
+          },
+          "terrain": {
+            "controls": 5,
+            "onScreen": 75,
+            "rendered": 110,
+            "changedPixels": 125805
+          }
+        }
+      }
+    ],
+    "legacy": {
+      "path": "qa-artifacts/w2/firms/native-extraction/final/legacy-firms.json",
+      "sha256": "bd25a0edec66f62aa78815ade0700ff3028d18cbbf736af311bea489e603e68d",
+      "checks": 9,
+      "angle": "metal",
+      "fixture": true,
+      "unexpectedErrorCount": 0,
+      "expectedSourceErrors": [
+        "/api/firms: intentional keyless fixture503",
+        "/api/firms: intentional keyless fixture503"
+      ]
+    },
+    "nativeComparison": {
+      "semantic": {
+        "pass": true,
+        "errors": []
+      },
+      "pngs": [
+        {
+          "pose": "global",
+          "state": "on",
+          "byteIdentical": true,
+          "beforeSha256": "8aa327fdd09775e7e7b40257bdbbc1ba1db7dd410f0d2be8cfe213734cc89d67",
+          "afterSha256": "8aa327fdd09775e7e7b40257bdbbc1ba1db7dd410f0d2be8cfe213734cc89d67"
+        },
+        {
+          "pose": "global",
+          "state": "off",
+          "byteIdentical": true,
+          "beforeSha256": "f8f343dd8123bcecbd0916aa5cb149ff325d6e4f907a35e7ea66f3bc423c26b1",
+          "afterSha256": "f8f343dd8123bcecbd0916aa5cb149ff325d6e4f907a35e7ea66f3bc423c26b1"
+        },
+        {
+          "pose": "regional",
+          "state": "on",
+          "byteIdentical": true,
+          "beforeSha256": "3803b357acff363794a09a473d592bb51d22e6d5289914b52c210d38c200917e",
+          "afterSha256": "3803b357acff363794a09a473d592bb51d22e6d5289914b52c210d38c200917e"
+        },
+        {
+          "pose": "regional",
+          "state": "off",
+          "byteIdentical": true,
+          "beforeSha256": "768165677983ffd2d3910e440a50e4705c1c8250d211e07dc39bf8510b916b6f",
+          "afterSha256": "768165677983ffd2d3910e440a50e4705c1c8250d211e07dc39bf8510b916b6f"
+        },
+        {
+          "pose": "local",
+          "state": "on",
+          "byteIdentical": true,
+          "beforeSha256": "8dd211edae4c6afae405ba06129741a8fc6eeb3b5c9407028500d98f009812ea",
+          "afterSha256": "8dd211edae4c6afae405ba06129741a8fc6eeb3b5c9407028500d98f009812ea"
+        },
+        {
+          "pose": "local",
+          "state": "off",
+          "byteIdentical": true,
+          "beforeSha256": "fd46fc83051faafc63f6efa0908c73ffd48f8fc6becade7abbe39f6a4aedd33c",
+          "afterSha256": "fd46fc83051faafc63f6efa0908c73ffd48f8fc6becade7abbe39f6a4aedd33c"
+        },
+        {
+          "pose": "close",
+          "state": "on",
+          "byteIdentical": true,
+          "beforeSha256": "78a75c9c9ab556559f8a6477b76dd36083716a5b3661f063040d25c07a5d55f1",
+          "afterSha256": "78a75c9c9ab556559f8a6477b76dd36083716a5b3661f063040d25c07a5d55f1"
+        },
+        {
+          "pose": "close",
+          "state": "off",
+          "byteIdentical": true,
+          "beforeSha256": "e0afc9f3fa4989caad4ac85dd16c42508db6e9536a980bd7cf9aafc94556a6b8",
+          "afterSha256": "e0afc9f3fa4989caad4ac85dd16c42508db6e9536a980bd7cf9aafc94556a6b8"
+        },
+        {
+          "pose": "terrain",
+          "state": "on",
+          "byteIdentical": true,
+          "beforeSha256": "78ff1176a4efa98d4ef2a9bda3cbb156395eb4782715d2006f2d018fe66f2ee9",
+          "afterSha256": "78ff1176a4efa98d4ef2a9bda3cbb156395eb4782715d2006f2d018fe66f2ee9"
+        },
+        {
+          "pose": "terrain",
+          "state": "off",
+          "byteIdentical": true,
+          "beforeSha256": "8fd5c62015a99502c09191d591fdf14b37a785670e054223acb94d35cb61c4ff",
+          "afterSha256": "8fd5c62015a99502c09191d591fdf14b37a785670e054223acb94d35cb61c4ff"
+        }
+      ]
+    },
+    "previewComparison": {
+      "semantic": [
+        {
+          "left": "qa-artifacts/w2/firms/native-baseline-isolated.json",
+          "right": "qa-artifacts/w2/firms/native-extraction/final/cesium-preview.json",
+          "pass": true,
+          "errors": []
+        },
+        {
+          "left": "qa-artifacts/w2/firms/native-extraction/final/cesium-dev.json",
+          "right": "qa-artifacts/w2/firms/native-extraction/final/cesium-preview.json",
+          "pass": true,
+          "errors": []
+        }
+      ],
+      "pngs": [
+        {
+          "pose": "global",
+          "state": "on",
+          "byteIdentical": true,
+          "sha256": "8aa327fdd09775e7e7b40257bdbbc1ba1db7dd410f0d2be8cfe213734cc89d67"
+        },
+        {
+          "pose": "global",
+          "state": "off",
+          "byteIdentical": true,
+          "sha256": "f8f343dd8123bcecbd0916aa5cb149ff325d6e4f907a35e7ea66f3bc423c26b1"
+        },
+        {
+          "pose": "regional",
+          "state": "on",
+          "byteIdentical": true,
+          "sha256": "3803b357acff363794a09a473d592bb51d22e6d5289914b52c210d38c200917e"
+        },
+        {
+          "pose": "regional",
+          "state": "off",
+          "byteIdentical": true,
+          "sha256": "768165677983ffd2d3910e440a50e4705c1c8250d211e07dc39bf8510b916b6f"
+        },
+        {
+          "pose": "local",
+          "state": "on",
+          "byteIdentical": true,
+          "sha256": "8dd211edae4c6afae405ba06129741a8fc6eeb3b5c9407028500d98f009812ea"
+        },
+        {
+          "pose": "local",
+          "state": "off",
+          "byteIdentical": true,
+          "sha256": "fd46fc83051faafc63f6efa0908c73ffd48f8fc6becade7abbe39f6a4aedd33c"
+        },
+        {
+          "pose": "close",
+          "state": "on",
+          "byteIdentical": true,
+          "sha256": "78a75c9c9ab556559f8a6477b76dd36083716a5b3661f063040d25c07a5d55f1"
+        },
+        {
+          "pose": "close",
+          "state": "off",
+          "byteIdentical": true,
+          "sha256": "e0afc9f3fa4989caad4ac85dd16c42508db6e9536a980bd7cf9aafc94556a6b8"
+        },
+        {
+          "pose": "terrain",
+          "state": "on",
+          "byteIdentical": true,
+          "sha256": "78ff1176a4efa98d4ef2a9bda3cbb156395eb4782715d2006f2d018fe66f2ee9"
+        },
+        {
+          "pose": "terrain",
+          "state": "off",
+          "byteIdentical": true,
+          "sha256": "8fd5c62015a99502c09191d591fdf14b37a785670e054223acb94d35cb61c4ff"
+        }
+      ]
+    },
+    "earthquakeRegression": {
+      "checks": 25,
+      "records": 15,
+      "sha256": "9462134aa715a14498cd96546065bed8247e82e5f6cbcc38bdb72327fbef6a07"
+    },
+    "comparatorSensitivity": {
+      "path": "qa-artifacts/w2/firms/comparator/results.json",
+      "sha256": "3873ceee87b5e44fae820a243d33d3ed119b268fe89fbe1478c107ecd9068ed0",
+      "cases": 20,
+      "positive": 1,
+      "negative": 19,
+      "driverSha256": "c138c18107563f55165ba010391f14e19170f93f92992079d43dd4b387d4e071"
+    },
+    "sourceIdentity": {
+      "src/layers/firms/anchors.js": "8f2117d4c319be85a84c842caa5c8728672bece90a4a7161d8eaeaf37abc2c2d",
+      "src/layers/firms/cards.js": "b3c7436555669aaffece9c8b9c9336dc8bff86fa8dcc6e6cd424f374d4dd9a30",
+      "src/layers/firms/index.js": "b588d2d56f0fc55d19fd2aff2614580bc0ffce2ffddf46dd28de5050960f8a13",
+      "src/layers/firms/ingestion.js": "2e7bc59112e2cfb0362e54777f30e8d36fce55e49c566636aa49b5e13e8959bc",
+      "src/layers/firms/lifecycle.js": "7747de5a8b6dbcf1b084f1d17c761f1eab2e417d59a07ae5b27fd12017b0bca9",
+      "src/layers/firms/model.js": "ae21b40c08ee8e9d8b50171666fdf5ed918fc183ae0de50320b11392fd70c26d",
+      "src/layers/firms/policy.js": "278382a00e2c6dde720b477451a93971f03882a4b92e72de5ad1d90e9405446f",
+      "src/layers/firms/queries.js": "ec5e49172e5e579d4eed9d9f564bd9cc5a0a5df2aad1487696c212d5d87b9830",
+      "src/layers/firms/rectangle.js": "ae7da66cbd08356a0853a0e122a2b45c57b7e30f459836a62c343bbaa6a90c7d",
+      "src/layers/firms/render/cesium.js": "f9a1a2a8764a26c2d2ef48724c560b86024a77f396084121dd8595a3ce5c4aa8",
+      "src/layers/firms/rendering.js": "2c013231492df77aaa8e859056d3f74d27b2e24c705caf6766466d6d58791c6a",
+      "src/layers/firms/selection.js": "daaccf4323593a31cddbd64f42973e0c5b26122a95e2069844b63732633141f1",
+      "src/layers/firms/source.js": "5754af5fba35a0c395883fda32961fad2dfb06473708a39c9cb4ac96366f3ce3",
+      "src/layers/firms/state.js": "5067ea9c997c724873a5f3343b3321eeec743a76cf94f8fa1667c431cf5c6f87",
+      "src/layers/firms/viewport.js": "1d4c6894590ebca5abb05053a890fe4f8756b3246b20cbf522ecff8f1946a586",
+      "src/app/layers/firms.js": "6e419c8ed5cc70a5d444c18b0eae1e8f94fd2eef7cb138b4ddbe2f134a8f93c6",
+      "src/app/layers/renderers.js": "a929e424813936ab1cf1b4f6bc04b124d146239d4759006f50bb7a1597cbe7ca",
+      "scripts/qa-w2-firms.mjs": "c138c18107563f55165ba010391f14e19170f93f92992079d43dd4b387d4e071",
+      "scripts/qa-firms.mjs": "eb767ec67d62f304edaaff1ce101e7704e4fc55ad1ea73758042292ac2801802",
+      "scripts/fixtures/w2/firms.mjs": "7c8d9b9e8fc165e1596a5205ca16d910dd2899e0f31bb245fcc945a1d9959865"
+    },
+    "review": {
+      "newOrdinaryTests": 7,
+      "focusedTestsPassed": 116,
+      "cameraHandoffTestsPassed": 15,
+      "timerRedFail": 3,
+      "timerRedPass": 1,
+      "timerGreenPass": 4,
+      "nativeImagesVisuallyChecked": [
+        "close glows",
+        "regional cells"
+      ],
+      "notes": [
+        "Timer ownership bug proven independently of HUD animation.",
+        "Initial idle failures retained; actual HUD typewriter changes chrome geometry. QA fixes response/waits, application observers unchanged.",
+        "Native resources belong to the original scene and unregister their sprite identity.",
+        "FIRMS portable package external dependencies empty; native SDK only in owned render/cesium.js.",
+        "Node ordinary tests7203 include one Windows-only skip; manual comparator cases are separate.",
+        "No FIRMS Navara or whole W2 acceptance claimed."
+      ]
+    }
   }
 }

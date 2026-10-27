@@ -2,7 +2,6 @@ import {
   FIRMS_OVERLAY_SOURCE_ID,
   fireDetectionKey,
 } from '../../data/firmsLabels.js';
-import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { CONTEXT_TOP_N } from './policy.js';
 
@@ -32,13 +31,17 @@ export function createSelection({
 
   function installClickHandler() {
     if (layerState._clickHandler || !layerState._viewer) return;
-    layerState._clickHandler = screenSpaceEventHandlerFactory(
-      layerState._viewer,
-    );
+    layerState._clickHandler = layerState._renderer
+      ? layerState._renderer.createInputHandler()
+      : screenSpaceEventHandlerFactory(layerState._viewer);
+    const clickType =
+      layerState._renderer?.clickType ?? config.leftClickEventType;
     layerState._clickHandler.setInputAction((click) => {
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree()) return;
-      const picked = layerState._viewer.scene.pick(click.position);
+      const picked = layerState._renderer
+        ? layerState._renderer.pick(click.position, click)
+        : layerState._viewer.scene.pick(click.position);
       const fire = pickedFire(picked);
       if (fire) {
         selectAndFocusFire(fire);
@@ -63,7 +66,7 @@ export function createSelection({
         return;
       }
       clearFireSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }, clickType);
   }
 
   function removeClickHandler() {

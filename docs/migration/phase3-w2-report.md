@@ -66,3 +66,20 @@ Reviewed lossy comparison images (193KB total; raw PNGs remain the pixel oracle)
 ![Terrain comparison](images/phase3-w2-earthquakes-terrain.webp)
 
 ![Photoreal roofs](images/phase3-w2-earthquakes-tiles.webp)
+
+
+## W2-2a — FIRMS native renderer extraction
+
+Accepted on Cesium; the FIRMS Navara renderer is next. The portable layer retains source normalization, viewport/LOD policy, aggregation, DEM anchors, cards, analyst/context records and stable selection. The injected native renderer owns rectangles, translucent billboards, projection, horizon/picking/input and the original scene's disposal. Native collection teardown now unregisters its sprite identity. The portable fire-layer package has no external engine dependency; the import-direction guard enforces the new ownership.
+
+The deterministic proxy fixture contains 371 valid detections and two invalid coordinate records, VIIRS/MODIS confidence, UTC acquisition clocks, a separate source receipt clock, three regions and pole/date-line cases. Five poses cover global/regional heat cells and local/close/terrain glows. The explicit DEM fixture is anchor test data, not live elevation accuracy evidence.
+
+The initial 34/35 capture failed enabled idle. Traces showed Detection OFF and no render holds, with requests from chrome resize observers. DOM evidence identified the HUD summary typewriter widening its corner. That is legitimate UI animation; application observers were preserved. QA now supplies a fixed provenance-aware summary and waits for actual frame/text quiescence before the unchanged strict zero-frame sample. All failed captures remain retained.
+
+Independently, the existing FIRMS settle timeout survived disable/destroy and duplicated requests after repeated moveEnd events. Three regressions failed on that code, while the active-layer final-frame control passed. The timer is now owned, cancelled on watcher removal and coalesced. All four tests pass. New geometry/color/sprite-policy, date-line/pole rectangle arithmetic and original-owner disposal checks bring the ordinary suite to 7203 tests: 7202 pass and one Windows-only test skips; all 15 allocation checks pass.
+
+Native dev and QA-preview each pass 36/36: real parser and receipt clocks, five visible controls per pose, actual nonempty ground/sprite pixels, real pointer selection, one UI-owned focus transfer, canvas-painted selected card with one accessible action, source-order-independent selection, source failure/keyless/stale/recovery/cancellation, ten toggles and zero frames in both enabled/disabled two-second samples. Dev and preview both match the native baseline semantically, including exact rectangle geometry/colors/metadata. All ten on/off PNGs per build are byte-identical to the baseline. Close glows and regional cells were visually reviewed.
+
+The strict comparator accepts the real baseline and rejects 19 independently corrupted captures, including missing observers, late errors, empty data/rasters, wrong clocks/controls/geometry and broken selection/idle. These sensitivity probes are separate from the Node unit count. Legacy FIRMS runs on explicitly selected headless Metal and passes 9/9 with no unexpected browser errors. Two exact intentional keyless-source 503 messages are classified, with all other errors retained.
+
+Boundaries, scoped format (1582 files), production/panel/QA builds and main composition pass. The first full suite exposed an old camera-handoff source guard tied to a literal native event enum; the updated guard checks the injected event and actual native LEFT_CLICK owner, preserving sibling-pick/card ordering and the no-layer-camera-flight rule. Both engine contracts and dev/ordinary-preview shell regressions pass; native earthquakes retain 25/25 checks. No byte-budget baseline or live FIRMS provider acceptance is claimed. Next: actual Navara cells/glows, alpha/ground/pick/focus/share/lifecycle/performance proof and review under the detailed FIRMS plan.

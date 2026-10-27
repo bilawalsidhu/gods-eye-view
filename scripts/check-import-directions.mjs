@@ -35,6 +35,7 @@ const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
 // Navara only in render/navara*.js. The list grows with each moved layer.
 const RENDERED_LAYER_DIRS = [
   'src/layers/earthquakes/',
+  'src/layers/firms/',
   'src/layers/flights/',
   'src/layers/military/',
   'src/layers/localAdsb/',

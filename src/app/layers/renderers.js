@@ -1,3 +1,4 @@
+import { createFirmsCesiumRenderer } from '../../layers/firms/render/cesium.js';
 import { createEarthquakesCesiumRenderer } from '../../layers/earthquakes/render/cesium.js';
 import { createLaunchesCesiumRenderer } from '../../layers/launches/render/cesium.js';
 // Which engine draws which layer: the layer renderer registry (plan, "layer
@@ -91,6 +92,7 @@ export const layerAvailableOn = (layerId, engineKind) =>
 /** Cesium renderers extracted from their layers (render/cesium.js). */
 export const CESIUM_LAYER_RENDERERS = Object.freeze({
   earthquakes: createEarthquakesCesiumRenderer,
+  'local-firms': createFirmsCesiumRenderer,
   'rocket-launches': createLaunchesCesiumRenderer,
   satellites: createSatellitesCesiumRenderer,
   flights: createFlightsCesiumRenderer,
