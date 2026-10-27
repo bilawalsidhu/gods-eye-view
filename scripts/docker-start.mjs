@@ -20,8 +20,6 @@ import { dataDir } from '../server/providers/common/data-dir.js';
 const MODULE_PATH = fileURLToPath(import.meta.url);
 const ROOT = realpathSync(path.resolve(path.dirname(MODULE_PATH), '..'));
 const ROUTE_TABLE = '/proc/net/route';
-// Proxmox (and LXC generally) maps an unprivileged container's ids to this offset on the host.
-const UNPRIVILEGED_LXC_OFFSET = 100000;
 
 /**
  * Extract the IPv4 default gateway from Linux `/proc/net/route` text. The
@@ -79,8 +77,7 @@ export function unwritableRootWarning({ root, writable, owner, runAs, kind = 'ch
     return (
       `[Docker] ${root} (GEV_DATA_DIR) is owned by ${owner.uid}:${owner.gid} but the container runs as ` +
       `${runAs.uid}:${runAs.gid}, so saving keys and caching will fail. Mount a volume there ` +
-      `that ${runAs.uid}:${runAs.gid} can write: chown ${runAs.uid}:${runAs.gid} a bind-mounted folder ` +
-      `(${UNPRIVILEGED_LXC_OFFSET + runAs.uid}:${UNPRIVILEGED_LXC_OFFSET + runAs.gid} on a Proxmox host for an unprivileged LXC), ` +
+      `that ${runAs.uid}:${runAs.gid} can write: chown ${runAs.uid}:${runAs.gid} a bind-mounted folder, ` +
       `add :Z to the bind mount on SELinux hosts, or run as ${owner.uid}:${owner.gid}`
     );
   }
