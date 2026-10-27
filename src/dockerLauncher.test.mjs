@@ -89,6 +89,15 @@ test('the hardened image keeps everything it writes under GEV_DATA_DIR', () => {
   assert.match(dockerfile, /^USER 1000:1000$/m);
 });
 
+test('every Dockerfile stage names the same digest-pinned base image', () => {
+  const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
+  const images = [...dockerfile.matchAll(/^FROM (\S+) AS \S+$/gm)].map((m) => m[1]);
+  assert.equal(images.length, 3, 'dev, deps and runtime stages');
+  assert.match(images[0], /^node:\d+\.\d+\.\d+-slim@sha256:[0-9a-f]{64}$/);
+  assert.equal(new Set(images).size, 1, 'all FROM lines use one image');
+  assert.doesNotMatch(dockerfile, /^ARG NODE_IMAGE/m, 'each FROM line names the base image itself');
+});
+
 test('the Docker install path keeps its loopback-only, launcher-owned contract', () => {
   const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
   assert.match(dockerfile, /^CMD \["node", "scripts\/docker-start\.mjs"\]$/m, 'the launcher is the container entry point');

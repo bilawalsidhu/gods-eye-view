@@ -4,12 +4,11 @@
 # proxies (ADS-B, AIS, Overpass, OpenAI Realtime, ...) as middleware, so there
 # is nothing else to containerise. See compose.yaml for the usual entry point.
 # Same Node as CI (package.json engines, .github/workflows), pinned by digest.
-ARG NODE_IMAGE=node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
 
 # Two targets. `dev` (below) is what compose.yaml builds: git for the test
 # suite, and the checkout bind-mounted over /app. `runtime` (last in this file)
 # is the hardened image that releases publish; it is also the default target.
-FROM ${NODE_IMAGE} AS dev
+FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS dev
 
 # Puppeteer is only used by the QA scripts; skip its ~150MB Chromium download.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
@@ -61,7 +60,7 @@ CMD ["node", "scripts/docker-start.mjs"]
 # (read-only root, no capabilities, --init); nothing here depends on them, they
 # are defence in depth.
 
-FROM ${NODE_IMAGE} AS deps
+FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS deps
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -69,7 +68,7 @@ COPY package.json package-lock.json ./
 # The dev server needs the devDependencies (vite), so nothing is omitted.
 RUN npm ci && npm cache clean --force && rm -rf /root/.npm
 
-FROM ${NODE_IMAGE} AS runtime
+FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS runtime
 WORKDIR /app
 # Code and dependencies: root-owned, world-readable, not group/world-writable.
 COPY --from=deps --chmod=u=rwX,go=rX /app/node_modules ./node_modules
