@@ -9,12 +9,16 @@
 // pass costs nothing while no geometry is visible. Models retain scene
 // depth; their lit display colour is resolved here so HDR effects and MSAA
 // cannot spread a tint into neighbouring pixels.
+// FIRMS opts into a separate native-stage overlay before sharpening/AA.
+// Only that stage owns an encoded-RGBA8 blend target; W1 stays in place.
 
 import { EffectDesc, Pass as NavaraPass } from '@navaramap/three';
 import { GevOverlayPass } from './overlayPass.js';
 import { RGBADepthPacking, Scene } from 'three';
 
 export const OVERLAY_EFFECT_KEY = 'gevOverlay';
+const PRE_SHARPEN_KEY = 'gevPreSharpenOverlay';
+const registeredViews = new WeakMap();
 
 class GevOverlayEffectDesc extends EffectDesc {
   static key = OVERLAY_EFFECT_KEY;
@@ -24,7 +28,7 @@ class GevOverlayEffectDesc extends EffectDesc {
 
   constructor(view, ctx, config) {
     super(view, ctx, config);
-    this.overlay = config[OVERLAY_EFFECT_KEY].overlay;
+    this.overlay = config[this.constructor.key].overlay;
     this.overlay.attach(ctx);
   }
 
@@ -49,14 +53,35 @@ class GevOverlayEffectDesc extends EffectDesc {
   }
 }
 
+class GevPreSharpenOverlayEffectDesc extends GevOverlayEffectDesc {
+  static key = PRE_SHARPEN_KEY;
+  static insertAfter = ['toneMapping'];
+  static insertBefore = [
+    'gevSharpen',
+    'smaa',
+    'fxaa',
+    OVERLAY_EFFECT_KEY,
+    'final',
+  ];
+}
+
 /**
  * The overlay of one view: add(object, onFrame) puts a three object in the
  * overlay scene (onFrame runs each drawn frame before it draws);
  * registerPickable/unregisterPickable reach Navara's pick pass.
  * @param {object} view an initialised ThreeView
  */
-export function createNavaraOverlay(view) {
-  view.registerEffect(OVERLAY_EFFECT_KEY, GevOverlayEffectDesc);
+export function createNavaraOverlay(view, { beforeSharpen = false } = {}) {
+  const key = beforeSharpen ? PRE_SHARPEN_KEY : OVERLAY_EFFECT_KEY;
+  let registered = registeredViews.get(view);
+  if (!registered) registeredViews.set(view, (registered = new Set()));
+  if (!registered.has(key)) {
+    view.registerEffect(
+      key,
+      beforeSharpen ? GevPreSharpenOverlayEffectDesc : GevOverlayEffectDesc,
+    );
+    registered.add(key);
+  }
   const scene = new Scene();
   const frameHooks = new Map();
   const lights = new Map();
@@ -64,9 +89,11 @@ export function createNavaraOverlay(view) {
   const pendingPicks = new Map();
   const overlay = {
     scene,
+    displayBlend: beforeSharpen,
     modelTints: new Set(),
     uniforms: {
       uGevModelExposure: { value: 1 },
+      uGevDisplayBlend: { value: 0 },
       tGevSceneDepth: { value: null },
       uGevResolution: { value: [0, 0] },
     },
@@ -119,7 +146,7 @@ export function createNavaraOverlay(view) {
     },
   };
   const handle = view.addEffect({
-    [OVERLAY_EFFECT_KEY]: { overlay },
+    [key]: { overlay },
     visible: true,
   });
   return {

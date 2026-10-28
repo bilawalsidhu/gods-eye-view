@@ -323,6 +323,10 @@
  *   colorBlend?: { mode: 'mix'|'replace', amount: number }, unlit?: boolean }} [model]
  *   A glTF drawn per instance in metres, at least minimumPixelSize px.
  * @property {boolean} [pickable]
+ * @property {boolean} [sharpen] Sprites/points: include the glyph in the
+ *   sharpen/AA stage after tone mapping, for translucent fields such as FIRMS.
+ *   Navara defaults to the later display stage used by W1; Cesium retains its
+ *   native billboard stage. Does not enable sharpening or change its amount.
  *
  * @typedef {object} MoverFields
  *   One instance; omitted fields keep their value (defaults: white, scale 1,

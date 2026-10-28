@@ -25,6 +25,7 @@ test('the Navara mode registers the aircraft layers’ and vessels’ renderers,
     'satellites',
     'ais-live-vessels',
     'earthquakes',
+    'local-firms',
   ])
     assert.equal(layerAvailableOn(id, 'navara'), true, id);
   assert.deepEqual(
@@ -39,6 +40,7 @@ test('the Navara mode registers the aircraft layers’ and vessels’ renderers,
       'satellites',
       'rocket-launches',
       'ais-live-vessels',
+      'local-firms',
     ],
   );
   assert.equal(layerAvailableOn('satellites', 'navara'), true);

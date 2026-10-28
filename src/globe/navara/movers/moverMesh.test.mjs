@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ShaderLib, UniformsUtils } from 'three';
+import {
+  ShaderLib,
+  UniformsUtils,
+  FrontSide,
+  NoColorSpace,
+  SRGBColorSpace,
+} from 'three';
 import { createMoverStore, normalizeMoverSetOptions } from '../../movers.js';
 import { createMoverMesh, patchMoverShader } from './moverMesh.js';
 
@@ -27,6 +33,16 @@ test('the shader patch sizes the quad in pixels and colours it per instance', ()
   const shader = patchMoverShader(basicShader(), { uGevSizePx: { value: 9 } });
   assert.equal(shader.uniforms.uGevSizePx.value, 9);
   assert.match(shader.vertexShader, /attribute vec4 gevStyle;/);
+  assert.match(shader.vertexShader, /gevCorner\.x \* gevStyle\.z/);
+  assert.doesNotMatch(
+    shader.vertexShader,
+    /cos\(gevStyle\.x\)|sin\(gevStyle\.x\)/,
+  );
+  assert.ok(
+    shader.vertexShader.indexOf('float gevDistance = length(mvCenter.xyz);') <
+      shader.vertexShader.indexOf('if (uGevHasScaleByDistance > 0.5)'),
+    'depth testing uses the distance outside the optional scaling block',
+  );
   assert.match(
     shader.vertexShader,
     /uGevFootprint \* max\(-mvCenter\.z, 0\.0\)/,
@@ -89,6 +105,13 @@ test('update sets the pixel footprint and moves the origin to a far camera', () 
   };
   assert.equal(mover.update(camera), false, 'close: the origin stays');
   assert.ok(Math.abs(mover.uniforms.uGevFootprint.value - 2 / 800) < 1e-12);
+  const matrixVersion = mover.mesh.instanceMatrix.version;
+  assert.equal(
+    mover.update(camera),
+    false,
+    'unchanged camera reuses its snapshot',
+  );
+  assert.equal(mover.mesh.instanceMatrix.version, matrixVersion);
   camera.cameraPosition = { x: 6_378_137 + 5_000, y: 0, z: 0 };
   assert.equal(mover.update(camera), true);
   assert.equal(mover.origin().x, 6_378_137 + 5_000);
@@ -108,9 +131,20 @@ test('points have no atlas and draw a disc', () => {
   const mover = createMoverMesh(options, createMoverStore(options));
   assert.equal(mover.mesh.material.map, null);
   assert.equal(mover.mesh.material.depthTest, false);
+  assert.equal(mover.mesh.material.side, FrontSide);
   assert.equal(mover.uniforms.uGevDepthMode.value, 0, "'always': no test");
   assert.equal(mover.uniforms.uGevOutlinePx.value, 1);
   mover.dispose();
+});
+
+test('always-visible movers omit scene-depth sampling from the shader', () => {
+  const shader = patchMoverShader(basicShader(), {}, { alwaysVisible: true });
+  assert.match(shader.vertexShader, /#define GEV_ALWAYS_VISIBLE/);
+  assert.match(
+    shader.vertexShader,
+    /#ifndef GEV_ALWAYS_VISIBLE\nvGevDepthFree =[^\n]+\n#endif/,
+  );
+  assert.doesNotMatch(shader.fragmentShader, /gevOverlayHidden\(\)\) discard/);
 });
 
 test('an origin move uploads every instance even when a commit follows in the same frame', () => {
@@ -143,4 +177,51 @@ test('an origin move uploads every instance even when a commit follows in the sa
     for (let i = start; i < start + count; i++) covered.add(i);
   for (let i = 0; i < 4 * 16; i++)
     assert.ok(covered.has(i), `instance float ${i} is uploaded`);
+});
+
+test('sprites share the live display-blend uniform of their overlay target', () => {
+  const flag = { value: 0 };
+  const mover = createMoverMesh(
+    spriteOptions,
+    createMoverStore(spriteOptions),
+    {
+      overlayUniforms: {
+        tGevSceneDepth: { value: null },
+        uGevResolution: { value: [1280, 800] },
+        uGevDisplayBlend: flag,
+      },
+    },
+  );
+  const shader = basicShader();
+  mover.mesh.material.onBeforeCompile(shader);
+  assert.equal(shader.uniforms.uGevDisplayBlend, flag);
+  flag.value = 1;
+  assert.equal(shader.uniforms.uGevDisplayBlend.value, 1);
+  assert.match(
+    shader.fragmentShader,
+    /gl_FragColor=gevOverlayDisplayColor\(gl_FragColor\)/,
+  );
+  mover.dispose();
+});
+
+test('native-stage glow atlas filters encoded colors and keeps the native faint-edge cutoff', () => {
+  const options = { ...spriteOptions, sharpen: true };
+  const glow = createMoverMesh(options, createMoverStore(options));
+  const ordinary = createMoverMesh(
+    spriteOptions,
+    createMoverStore(spriteOptions),
+  );
+  assert.equal(glow.mesh.material.map.colorSpace, NoColorSpace);
+  assert.equal(glow.mesh.material.alphaTest, 0.005);
+  assert.equal(ordinary.mesh.material.map.colorSpace, SRGBColorSpace);
+  assert.equal(ordinary.mesh.material.alphaTest, 0.02);
+  assert.notEqual(
+    glow.mesh.material.customProgramCacheKey(),
+    ordinary.mesh.material.customProgramCacheKey(),
+  );
+  const shader = basicShader();
+  glow.mesh.material.onBeforeCompile(shader);
+  assert.match(shader.fragmentShader, /diffuseColor.rgb = sRGBTransferEOTF/);
+  glow.dispose();
+  ordinary.dispose();
 });

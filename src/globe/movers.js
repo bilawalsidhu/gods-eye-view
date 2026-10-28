@@ -66,7 +66,7 @@ function atlasOf(atlas) {
 /**
  * The createSet options with defaults filled in, or a TypeError.
  * @returns {{ id: string, kind: string, capacity: number, order: number,
- *   depthTest: 'normal'|'always'|{ disableWithinM: number }, pickable: boolean,
+ *   depthTest: 'normal'|'always'|{ disableWithinM: number }, pickable: boolean, sharpen: boolean,
  *   cellKeys: string[], sprite: object | null, point: object | null,
  *   model: object | null }}
  */
@@ -80,6 +80,10 @@ export function normalizeMoverSetOptions(options) {
     fail(`capacity must be a positive integer: ${capacity}`);
   const order = options.order ?? 0;
   if (!isFiniteNumber(order)) fail(`order must be a number: ${order}`);
+  if (options.sharpen !== undefined && typeof options.sharpen !== 'boolean')
+    fail('sharpen must be a boolean');
+  if (options.sharpen && kind === 'model')
+    fail('sharpen applies to sprites and points');
   const normalized = {
     id,
     kind,
@@ -87,6 +91,7 @@ export function normalizeMoverSetOptions(options) {
     order,
     depthTest: depthTestOf(options.depthTest),
     pickable: options.pickable === true,
+    sharpen: options.sharpen === true,
     cellKeys: [],
     sprite: null,
     point: null,

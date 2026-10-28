@@ -42,7 +42,7 @@ export function originFor(cameraPosition, origin, cameraHeight) {
 /**
  * Writes instances [from, to) of a mover store into the upload arrays:
  * `matrices` (identity with the offset from `origin` as translation),
- * `style` (rotation, scale or 0 when hidden, two spare lanes), `colors`
+ * `style` (rotation, scale or 0 when hidden, and cached cosine/sine), `colors`
  * (rgba) and `uvs` (the instance's atlas rect, from `uvRects`).
  */
 export function packInstances(store, from, to, origin, uvRects, out) {
@@ -50,27 +50,15 @@ export function packInstances(store, from, to, origin, uvRects, out) {
   const { matrices, style, colors: colorOut, uvs } = out;
   for (let index = from; index < to; index++) {
     const m = index * 16;
-    matrices[m] = 1;
-    matrices[m + 1] = 0;
-    matrices[m + 2] = 0;
-    matrices[m + 3] = 0;
-    matrices[m + 4] = 0;
-    matrices[m + 5] = 1;
-    matrices[m + 6] = 0;
-    matrices[m + 7] = 0;
-    matrices[m + 8] = 0;
-    matrices[m + 9] = 0;
-    matrices[m + 10] = 1;
-    matrices[m + 11] = 0;
     matrices[m + 12] = positions[index * 3] - origin.x;
     matrices[m + 13] = positions[index * 3 + 1] - origin.y;
     matrices[m + 14] = positions[index * 3 + 2] - origin.z;
-    matrices[m + 15] = 1;
     const s = index * 4;
-    style[s] = rotations[index];
+    const rotation = rotations[index];
+    style[s] = rotation;
     style[s + 1] = shows[index] === 1 ? scales[index] : 0;
-    style[s + 2] = 0;
-    style[s + 3] = 0;
+    style[s + 2] = Math.cos(rotation);
+    style[s + 3] = Math.sin(rotation);
     colorOut[s] = colors[s];
     colorOut[s + 1] = colors[s + 1];
     colorOut[s + 2] = colors[s + 2];

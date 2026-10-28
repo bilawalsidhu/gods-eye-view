@@ -98,6 +98,7 @@ export function createLifecycle({
       layerState._fires = [];
       layerState._firesByFrp = [];
       layerState._cellCacheByGrid.clear();
+      layerState.glowSpriteCache.clear();
       layerState._count = 0;
       layerState._cellCount = 0;
       layerState._lastUpdate = null;

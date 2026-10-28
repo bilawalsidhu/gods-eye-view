@@ -2,15 +2,13 @@
 // Navara post-effect. Native ground colour blends in display space; doing
 // it explicitly preserves translucent colours and overlap order.
 import { Effect, EffectAttribute } from 'postprocessing';
+import { Uniform } from 'three';
 import {
-  DataTexture,
-  FloatType,
-  RGBAFormat,
-  NearestFilter,
-  Matrix4,
-  Uniform,
-  RGBADepthPacking,
-} from 'three';
+  createGroundTexture as texture,
+  createGroundStorage as storage,
+  groundSurfaceUniforms,
+  updateGroundSurface,
+} from '../../shared/render/navaraGroundSurface.js';
 import * as geo from '../../../geo/index.js';
 import {
   DISC_EDGES,
@@ -103,19 +101,6 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
   outputColor=vec4(toLinear(color),inputColor.a);
 }
 `;
-function texture(data, width, height) {
-  const t = new DataTexture(data, width, height, RGBAFormat, FloatType);
-  t.minFilter = NearestFilter;
-  t.magFilter = NearestFilter;
-  t.needsUpdate = true;
-  return t;
-}
-function storage(texels) {
-  const width = Math.min(1024, Math.max(1, texels));
-  const height = Math.max(1, Math.ceil(texels / width));
-  const data = new Float32Array(width * height * 4);
-  return { data, width, height, texture: texture(data, width, height) };
-}
 function buildState(discs) {
   const frames = discs.map(discFrame);
   const edges = storage(discs.length * DISC_EDGES);
@@ -225,8 +210,7 @@ function groundEffectClass(EffectDesc, NavaraEffect) {
         // Keep a separate pass: inputColor is the already tone-mapped frame.
         attributes: EffectAttribute.CONVOLUTION,
         uniforms: new Map([
-          ['tAllDepth', new Uniform(null)],
-          ['tSurfaceDepth', new Uniform(null)],
+          ...groundSurfaceUniforms(),
           ['tEdges', new Uniform(null)],
           ['tFrames', new Uniform(null)],
           ['tGrid', new Uniform(null)],
@@ -234,8 +218,6 @@ function groundEffectClass(EffectDesc, NavaraEffect) {
           ['uEdgeSize', new Uniform([1, 1])],
           ['uFrameSize', new Uniform([1, 1])],
           ['uCandidateSize', new Uniform([1, 1])],
-          ['uInverseProjection', new Uniform(new Matrix4())],
-          ['uLogDepthFC', new Uniform(1)],
         ]),
       });
       return new NavaraEffect(this.view.camera.raw, this.effect);
@@ -245,14 +227,9 @@ function groundEffectClass(EffectDesc, NavaraEffect) {
         camera = this.view.camera.raw,
         mrt = this.find('mrt');
       if (!this.effect || !camera || !state) return;
-      if (mrt?.depthBufferPacking !== RGBADepthPacking)
-        throw new Error(
-          'Earthquake classification requires packed scene depth',
-        );
+      updateGroundSurface(this.effect, camera, this.ctx, mrt);
       state.update(camera, this.ctx);
       const u = this.effect.uniforms;
-      u.get('tAllDepth').value = mrt.depthBuffer;
-      u.get('tSurfaceDepth').value = this.ctx.getRenderTarget().depthTexture;
       u.get('tEdges').value = state.edges.texture;
       u.get('uEdgeSize').value = [state.edges.width, state.edges.height];
       u.get('tFrames').value = state.packed.texture;
@@ -263,8 +240,6 @@ function groundEffectClass(EffectDesc, NavaraEffect) {
         state.candidates.width,
         state.candidates.height,
       ];
-      u.get('uInverseProjection').value.copy(camera.projectionMatrixInverse);
-      u.get('uLogDepthFC').value = 2 / Math.log2(camera.far + 1);
     }
     onDestroy() {
       this.effect?.dispose();

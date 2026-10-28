@@ -61,6 +61,12 @@ test('instances pack as offsets from the origin, style, colour and uv', () => {
     colors: new Float32Array(12),
     uvs: new Float32Array(12),
   };
+  for (let index = 0; index < 3; index++) {
+    out.matrices[index * 16] = 1;
+    out.matrices[index * 16 + 5] = 1;
+    out.matrices[index * 16 + 10] = 1;
+    out.matrices[index * 16 + 15] = 1;
+  }
   const uvRects = atlasUvRects(options.sprite.atlas.cells, options.cellKeys);
   packInstances(store, 0, 2, { x: 1000, y: 2000, z: 3000 }, uvRects, out);
   // Identity matrix with the offset as translation.
@@ -69,9 +75,11 @@ test('instances pack as offsets from the origin, style, colour and uv', () => {
     [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.5, 0, 0, 1],
   );
   assert.deepEqual([...out.matrices.subarray(28, 31)], [1, 1, 1]);
-  // rotation, scale (0 when hidden), and two spare lanes.
-  assert.deepEqual([...out.style.subarray(0, 4)], [1, 2, 0, 0]);
-  assert.deepEqual([...out.style.subarray(4, 8)], [0, 0, 0, 0]);
+  // rotation, scale (0 when hidden), and cached cosine/sine.
+  assert.deepEqual([...out.style.subarray(0, 2)], [1, 2]);
+  assert.ok(Math.abs(out.style[2] - Math.cos(1)) < 1e-7);
+  assert.ok(Math.abs(out.style[3] - Math.sin(1)) < 1e-7);
+  assert.deepEqual([...out.style.subarray(4, 8)], [0, 0, 1, 0]);
   assert.deepEqual([...out.colors.subarray(4, 8)], [1, 0, 0, 0.5]);
   assert.deepEqual([...out.uvs.subarray(0, 4)], [0, 0, 1, 1]);
   assert.deepEqual([...out.uvs.subarray(4, 8)], [0, 0.5, 0.5, 1]);
