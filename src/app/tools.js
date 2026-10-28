@@ -5,6 +5,7 @@ import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { mountAgentConsole } from '../agent/agentConsole.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
@@ -200,6 +201,25 @@ export function createApplicationTools({
       delete window.__gevVoiceCommands;
   });
   debug.voiceCommands = voiceCommands;
+  // GEV COMMAND: the typed transport over the same action runner voice uses,
+  // and the same one installViews drives below. It owns one dialog and holds
+  // no app state, so it mounts last and tears down first.
+  const agentConsole = mountAgentConsole({
+    runAction: (name, args, options = {}) =>
+      voiceCommands.runner(name, args, {
+        ...options,
+        signal: options.signal
+          ? AbortSignal.any([signal, options.signal])
+          : signal,
+      }),
+  });
+  if (agentConsole) {
+    debug.agentConsole = agentConsole;
+    defer(() => {
+      if (debug.agentConsole === agentConsole) delete debug.agentConsole;
+      agentConsole.destroy();
+    });
+  }
   defer(
     installViews({
       shell: styleManager,
@@ -209,5 +229,5 @@ export function createApplicationTools({
       signal,
     }),
   );
-  return { sceneDirector, annotations, voiceCommands };
+  return { sceneDirector, annotations, voiceCommands, agentConsole };
 }

@@ -112,6 +112,130 @@ The custom switch field is bounded to 256 characters;
 provider registration rejects compositions that cannot fit rather than truncating
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
+## ChatGPT plan usage in GEV COMMAND - October 23, 2026
+
+The `chatgpt` provider adds the official Sign in with ChatGPT open-source flow
+inside the existing GEV COMMAND console. It is a follow-on to darrendignam's
+PR #976; it does not add another console, action runner, voice session or HUD
+Summary provider. API-key OpenAI/OpenRouter and local Ollama retain their
+existing transports. See [ChatGPT commands](CHATGPT-COMMAND.md).
+
+Only loopback clients with a local Host and the existing same-site request gate
+may list ChatGPT accounts, authorize, fetch models or spend this plan's allowance.
+GEV registers its own public OAuth client with PKCE, state and nonce; verifies
+ID-token signature/issuer/audience/expiry/identity with `jose`; and requires the
+plan-use scopes. Its private, atomically written account store is independent of
+Codex. A file lock serializes rotating refresh tokens across processes.
+Windows reads verify the existing file and directory DACLs without repairing
+them; missing ACL tools, unexpected owners or unsafe permissions refuse use.
+New directories, locks and temporary files are hardened before use, and updates
+recheck permissions after awaiting refresh. Descriptor/path identity checks reject
+replaced files or locks, and a replaced lock is not deleted by its former holder.
+Existing Windows directories with inherited ACLs require explicit recovery;
+native Windows execution remains a release gate. See the storage review and
+recovery instructions in [ChatGPT commands](CHATGPT-COMMAND.md).
+Credentials and identity registrations remain separate for accounts/workspaces,
+even when their email matches. Logout attempts remote revocation, cancels
+requests, removes local tokens and retains the registration for reauthorization.
+
+The account's `/v1/models` catalog supplies visible choices in server order.
+`/v1/responses` uses `store:false`, `stream:true`, the shared manual in
+`instructions`, and GEV function tools in a namespace. Full bounded history and
+opaque encrypted reasoning are replayed without `previous_response_id`.
+Only `response.completed` produces a tool turn; partial, failed, interrupted,
+oversized and quota-limited responses never dispatch tools for that response.
+There is no automatic API-key fallback. The console shows plan limits, not a
+zero-dollar estimate, and explains that commands/tool results go to OpenAI.
+
+Account changes clear the console conversation and refresh models. Each command
+pins the account binding across every tool round; an old tab receives a conflict
+rather than sending its history to another account. STOP aborts the request,
+propagates browser disconnect to upstream inference, and preserves #976's
+queued-action cancellation checks. Already completed actions are not undone.
+
+Deterministic authentication, transport and UI regressions live in
+`server/providers/agent/chatgpt/*.test.mjs` and
+`src/agent/chatgptControls.test.mjs`. `node scripts/qa-agent-chatgpt.mjs`
+checks the actual template/controller/styles with fixture responses in four
+languages and two viewport sizes. A real eligible-account sign-in, refresh,
+revocation and model tool round trip remain required before release; fixtures
+are not evidence of account entitlement or live service availability.
+
+## GEV COMMAND - the typed agent - October 8, 2026
+
+A second transport for the agent voice already drives. The **GEV COMMAND** chip
+above POWER UP opens a non-modal dialog that takes typed commands and runs the
+same 30 app actions through the same `voiceCommands.runner` the view installer
+uses, over any OpenAI-compatible `/v1/chat/completions` endpoint: OpenAI,
+OpenRouter, or a local Ollama. Voice is unchanged; the two transports share the
+operating manual, the tool schemas and the action runner.
+
+The typed manual is voice's manual. `server/providers/agent/instructions.js`
+reads the directive list from `server/providers/openai/instructions.js` and
+rewrites only the four channel lines; each rewrite is matched by its opening
+words and the match is asserted, so rewording a voice directive fails a test
+rather than leaving a spoken instruction in the typed prompt.
+
+Credentials, the manual, the tool list and the model decision stay server-side.
+`GET /api/agent/config`, `GET /api/agent/models` and `POST /api/agent/command`
+refuse cross-site browser requests and share a per-IP throttle
+(`GEV_RATELIMIT_AGENT_PER_MIN`, default 240 requests, one command costing up
+to 8; exactly `0` disables it). A
+requested model id that is malformed, over-long or outside
+`GEV_AGENT_MODELS`/`GEV_AGENT_MODELS_<PROVIDER>` degrades to the configured
+default instead of reaching the upstream, and that default is itself held to
+the allowlist, so omitting `model` cannot step outside it. The response echoes
+`X-GEV-Agent-Model` plus `X-GEV-Agent-Model-Fallback` when it did. A client
+`system` message is discarded. Nothing is requested until the console is opened.
+
+The browser owns the transcript and resends it, so the server stays stateless.
+The request body is capped at 512 KB and the console trims its own history to
+448 KB first, never splitting an assistant tool call from its results. A tool
+result over 6,000 characters is bounded by shedding its largest non-essential
+fields, so what the model reads is always valid JSON rather than a prefix cut
+mid-object. A command stops after 8 tool rounds; a completion waits 120 s on a
+hosted provider and 300 s on a local one, which pays for a cold model load.
+
+Ollama's compatible endpoint does not accept `tool_choice`, so a malformed tool
+call is caught and handed back with its own validation error, twice, without
+that exchange reaching the browser. The model picker withholds models that
+report no `tools` capability or a context window under twice the measured
+prompt prefix (near 25,000 tokens today), and hides
+OpenAI's non-chat families (speech, transcription, embedding, image,
+moderation). Each offered model carries a per-command cost estimate derived
+from the real instruction string and the real tool schemas, so the figure
+cannot go stale when a directive is edited or a tool is added.
+
+Two failures that return HTTP 200 with a plausible answer are reported as
+warnings in the transcript, with their remedy: a tool prefix truncated by a
+runtime context window smaller than `/api/show` reports (detected from the
+returned prompt token count), and a reasoning model that spent its whole output
+budget thinking and returned nothing. They are warnings, not refusals, because
+the prefix size is a character heuristic measured against another provider's
+tokenizer.
+
+The console is a `dialog[data-panel-surface]` (see
+[the panel surface contract](panel-surfaces.md)) and takes the shared
+clean-UI, recording, Cockpit and scene concealment. It owns its own geometry
+and dismissal, with Escape and Tab from the shared `createSurfaceKeyboard`, so
+Escape still closes it when a disabled input leaves nothing inside it focused.
+
+The chip and the window sit bottom-left; POWER UP keeps the right corner. The
+window drags by its header, resizes from every edge through the app's existing
+`.panel-resize-edge` / `.panel-resize-grip` handles and `resizeBox` geometry,
+and persists under `godsEyeView.agent.console.box.v1`. A double press on the
+header forgets it, detected from `pointerdown` because the drag's
+`preventDefault()` suppresses `dblclick`. A remembered window from a larger
+screen is clamped on open, and a shrinking viewport re-clamps without
+overwriting the saved preference. The default placement clears the left rail
+above and the map attribution below, which is a licence condition rather than a
+layout preference. It is not a rail panel, so `PanelPositionControls` - which
+owns lifting a panel out of a rail and docking it back - does not apply.
+Gate: `node scripts/qa-agent-console.mjs --url http://localhost:4173`
+(`--offline` checks the chrome and endpoints without a configured provider).
+OpenRouter joins the Provider Settings registry, so its key is pasteable in
+POWER UP like every other server-side credential rather than being `.env`-only.
+See [the typed agent](TEXT-AGENT.md).
 
 ## God's Eye View in conversations — October 2, 2026
 
@@ -6344,3 +6468,15 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+COMMAND's panel-only confirmation reads the final state of a mounted right-rail
+tab shell after all actions, so opening CCTV followed by Context reports Context
+as the owner. Round results carry an explicit state observation for mixed-tool
+requests. Street Level is an addressable shared panel target. This does not
+install or replace the tab shell: #1425 is tested as a temporary integration
+only. See `docs/CHATGPT-COMMAND.md` for revisions, regressions and validation.
+
+Traditional Chinese in the temporary COMMAND integration includes ChatGPT account,
+model, plan-limit and console copy. The catalog retains all original #1430
+translations; zh-TW still selects zh-Hant and zh-CN remains Simplified Chinese.
+See [integration evidence](TRADITIONAL-CHINESE-COMMAND.md) for scope and limits.

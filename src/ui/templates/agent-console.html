@@ -1,0 +1,38 @@
+  <!-- GEV COMMAND - the typed transport for the same agent voice drives. The
+       chip opens a non-modal dialog so the globe stays interactive while a
+       command runs; src/agent/agentConsole.js owns everything inside it. -->
+  <button id="agent-console-chip" type="button" hidden aria-haspopup="dialog" aria-controls="agent-console" aria-expanded="false" title="Type commands to the GEV agent" data-i18n-title>
+    <span class="agent-console-chip-caret" aria-hidden="true">&gt;_</span>
+    <span translate="no">GEV COMMAND</span>
+  </button>
+  <dialog id="agent-console" data-panel-surface aria-labelledby="agent-console-title">
+    <header data-panel-header>
+      <h2 id="agent-console-title" class="panel-title panel-surface-title" translate="no">GEV COMMAND</h2>
+      <div class="agent-console-selects">
+        <label class="agent-console-field">
+          <span data-i18n>PROVIDER</span>
+          <select id="agent-provider" class="panel-surface-control"></select>
+        </label>
+        <label class="agent-console-field">
+          <span data-i18n>MODEL</span>
+          <select id="agent-model" class="panel-surface-control"></select>
+        </label>
+        <span id="agent-cost" class="agent-console-cost" title="Estimated cost per command" data-i18n-title>n/a</span>
+      </div>
+      <button id="agent-console-close" class="panel-surface-control agent-console-close" type="button" aria-label="Close GEV Command" data-i18n-aria-label>×</button>
+    </header>
+    <div id="agent-chatgpt" class="agent-chatgpt" hidden>
+      <label><span data-i18n>ChatGPT account</span> <select id="agent-chatgpt-account" class="panel-surface-control"></select></label>
+      <button id="agent-chatgpt-login" type="button" class="panel-surface-control" data-i18n>Continue with ChatGPT</button>
+      <button id="agent-chatgpt-logout" type="button" class="panel-surface-control" data-i18n>Sign out / cancel sign-in</button>
+      <p id="agent-chatgpt-status" role="status" data-i18n-runtime></p>
+      <p><span data-i18n>Uses your ChatGPT plan limits. Commands and tool results are sent to OpenAI.</span> <a href="https://chatgpt.com/#settings" target="_blank" rel="noopener noreferrer" data-i18n>ChatGPT Settings</a></p>
+    </div>
+    <ol id="agent-transcript" data-panel-body data-rail-scroller aria-label="Command transcript" data-i18n-aria-label></ol>
+    <form id="agent-form" class="agent-console-form">
+      <input id="agent-input" class="panel-surface-control" type="text" autocomplete="off" spellcheck="false" placeholder="zoom out to full planet view" data-i18n-placeholder aria-label="Typed command" data-i18n-aria-label />
+      <button id="agent-send" class="panel-surface-control" type="submit" data-i18n>SEND</button>
+      <button id="agent-stop" class="panel-surface-control" type="button" disabled data-i18n>STOP</button>
+    </form>
+    <p id="agent-status" class="agent-console-status" role="status" aria-live="polite" data-i18n-runtime>READY</p>
+  </dialog>

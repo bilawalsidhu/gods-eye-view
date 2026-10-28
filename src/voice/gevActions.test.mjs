@@ -158,6 +158,22 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
   };
 }
 
+test('camera zoom keeps the rotation-interruption import when display-text changes merge', async () => {
+  // PR #1280 replaces the top-level import in gevActions. A missing
+  // interruptGlobeRotation binding would throw a ReferenceError before the
+  // existing argument validation below can run.
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const runner = createGevActionRunner({
+    viewer, styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  await assert.rejects(
+    runner('adjust_camera_zoom', { direction: 'sideways' }),
+    /adjust_camera_zoom direction must be/,
+  );
+});
+
 test('zoom to globe adopts the shared visible reset route and returns its result', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = {

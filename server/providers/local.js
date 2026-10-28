@@ -20,6 +20,7 @@ import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
 import { openAiRealtimeProxy } from './openai.js';
 import { geminiLiveProxy } from './gemini.js';
+import { typedAgentProxy } from './agent.js';
 import { googlePlacesContextProxy } from './places.js';
 import { mapillaryProxy } from './mapillary.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
@@ -58,6 +59,7 @@ function localProviderPlugins({ realtime, gemini } = {}) {
     trackBackfillProxies(),
     openAiRealtimeProxy({ realtime }),
     ...(gemini ? [geminiLiveProxy({ realtime: gemini })] : []),
+    typedAgentProxy(),
     googlePlacesContextProxy(),
     windProxy(),
     weatherProxy(),
@@ -102,6 +104,7 @@ export { resolveOverpassPreflight } from './overpass/cache.js';
 export { overpassPayloadIsData } from './overpass/transport.js';
 export { fetchOverpassPayload } from './overpass/transport.js';
 export { openAiRealtimeProxy } from './openai.js';
+export { typedAgentProxy } from './agent.js';
 export { MILITARY_INSTALLATION_ELEMENT_CAP } from './military-installations/constants.js';
 export { quantizeMilitaryInstallationBox } from './military-installations/query.js';
 export { militaryInstallationCacheKey } from './military-installations/query.js';

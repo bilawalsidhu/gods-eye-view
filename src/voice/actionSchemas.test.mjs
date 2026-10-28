@@ -45,7 +45,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // S2 GhostMaps extends the generated layer enums.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
-    '9ee82c4214499280c208c93751b19d7b724c81b7727a2d0c6dab0184749fbe15',
+    '01eb522d619c9a838a0e8f23b3417321867e8aedd2e0c98e942bfee565df637d',
   );
 });
 
@@ -134,6 +134,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
   panels.enum = panels.enum.filter(
     (id) =>
       ![
+        'street-level-panel',
         'weather-panel',
         'recent-imagery-panel',
         'voice-settings',
@@ -253,4 +254,11 @@ test('direct voice timeout schema accepts None and exact integers, rejects malfo
     assert.equal(validateArgs(tool.parameters, { minutes }).length, 0);
   for (const minutes of [-1, 61, 1.5, '5'])
     assert.ok(validateArgs(tool.parameters, { minutes }).length > 0);
+});
+
+test('Street Level is an addressable panel in the shared command schema', () => {
+  const panels = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'set_panel_open',
+  ).parameters.properties.panelId.enum;
+  assert.ok(panels.includes('street-level-panel'));
 });
