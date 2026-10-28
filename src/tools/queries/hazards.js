@@ -5,6 +5,24 @@ import { defineTool, ToolError } from '../catalog.js';
 import { AREA_SCHEMA, areaContains, resolveArea } from '../area.js';
 import { LIMIT_SCHEMA, capRows, countNoun, isoTime } from '../results.js';
 
+function acquiredMsUtc(acqDate, acqTime) {
+  if (typeof acqDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(acqDate))
+    return NaN;
+  const timeText = String(acqTime ?? '').trim();
+  if (!/^\d{1,4}$/.test(timeText)) return NaN;
+  const hhmm = timeText.padStart(4, '0');
+  const hours = Number(hhmm.slice(0, 2));
+  const minutes = Number(hhmm.slice(2, 4));
+  if (hours > 23 || minutes > 59) return NaN;
+  const timestamp = Date.parse(
+    `${acqDate}T${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)}:00.000Z`,
+  );
+  return Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === acqDate
+    ? timestamp
+    : NaN;
+}
+
 export const getEarthquakes = defineTool({
   name: 'get_earthquakes',
   title: 'Recent earthquakes',
@@ -114,8 +132,7 @@ export const getActiveFires = defineTool({
           lon: fire.lon,
           frp_mw: fire.frp ?? null,
           confidence: fire.confidence ?? null,
-          acquired:
-            [fire.acqDate, fire.acqTime].filter(Boolean).join(' ') || null,
+          acquired: isoTime(acquiredMsUtc(fire.acqDate, fire.acqTime)),
           satellite: fire.satellite ?? null,
           day_night: fire.daynight ?? null,
         })),

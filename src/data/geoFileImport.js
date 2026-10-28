@@ -1134,7 +1134,8 @@ export function repairKmlRootNamespaces(value, what = 'KML') {
   return text.slice(0, start) + root + text.slice(end);
 }
 
-function parseXml(text, what) {
+/** Parse KML or GPX with the shared namespace repairs and XML validation. */
+export function parseXml(text, what) {
   // Match the namespace repairs Cesium applies to ordinary exported KML.
   if (what !== 'GPX') text = repairKmlRootNamespaces(text, what);
   const doc = new DOMParser().parseFromString(
@@ -1150,7 +1151,8 @@ function parseXml(text, what) {
   return doc;
 }
 
-function decodeXml(bytes) {
+/** Decode XML bytes, honouring a UTF-16 byte-order mark. */
+export function decodeXml(bytes) {
   const encoding =
     bytes[0] === 0xff && bytes[1] === 0xfe
       ? 'utf-16le'

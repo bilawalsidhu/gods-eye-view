@@ -224,6 +224,20 @@ export class IntelHUD {
     // session, so this flips once — and both altitude readouts have to move
     // together when it does (see the repaint in _updateCameraData).
     this._geoidCorrectionApplied = false;
+    // A summary built for one view must not land on the next: a request in
+    // flight when the camera starts moving is aborted and nothing it ends
+    // with paints (the revision moves), a reply still typing stops, and the
+    // summary is marked dirty so the next periodic tick asks about the view
+    // the camera has moved to.
+    this._onCameraMoveStart = () => {
+      this._markSummaryDirty();
+      if (this._summaryRequest || this._summaryTypingInterval) {
+        // Cancelled requests and partially typed replies are not reusable answers.
+        this._lastSummarySignature = null;
+      }
+      this._summaryRequest?.abort();
+      this._stopSummaryTyping();
+    };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
       // The 250 ms telemetry timer and 15 s semantic-summary timer must not
@@ -249,6 +263,7 @@ export class IntelHUD {
     this._passNum = 100 + Math.floor(Math.random() * 200);
 
     this._buildDOM();
+    this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
     this._startTimers();
   }
@@ -267,28 +282,28 @@ export class IntelHUD {
       <div class="hud-sonar" aria-hidden="true"></div>
 
       <div class="hud-top-bar">
-        <span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span>
-        <span class="hud-top-bar-center">${this._missionId}</span>
-        <span class="hud-top-bar-right">PAGE 1/1</span>
+        <span class="hud-readout"><span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span></span>
+        <span class="hud-readout"><span class="hud-top-bar-center">${this._missionId}</span></span>
+        <span class="hud-readout"><span class="hud-top-bar-right">PAGE 1/1</span></span>
       </div>
 
       <div class="hud-corner hud-top-left">
         <div class="hud-bracket">┌</div>
         <div class="hud-content">
-          <div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div>
-          <div class="hud-system">${this._missionId}  ${this._sensorId}</div>
-          <div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div>
+          <div class="hud-readout"><div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div></div>
+          <div class="hud-readout"><div class="hud-system">${this._missionId}  ${this._sensorId}</div></div>
+          <div class="hud-readout"><div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div></div>
           <div class="hud-summary-wrap">
-            <div class="hud-summary-label">${t('SUMMARY')}</div>
-            <div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div>
+            <div class="hud-readout"><div class="hud-summary-label">${t('SUMMARY')}</div></div>
+            <div class="hud-readout"><div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div></div>
           </div>
         </div>
       </div>
 
       <div class="hud-corner hud-top-right">
         <div class="hud-content" style="text-align:right">
-          <div class="hud-rec"><span id="hud-rec-dot">●</span> ${t('REC')}  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
-          <div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div>
+          <div class="hud-readout"><div class="hud-rec"><span id="hud-rec-dot">●</span> ${t('REC')}  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div></div>
+          <div class="hud-readout"><div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div></div>
         </div>
         <div class="hud-bracket">┐</div>
       </div>
@@ -296,33 +311,33 @@ export class IntelHUD {
       <div class="hud-corner hud-bottom-left">
         <div class="hud-bracket">└</div>
         <div class="hud-content">
-          <div id="hud-mgrs">MGRS: ---</div>
-          <div id="hud-latlon">--°--'--"N ---°--'--"W</div>
+          <div class="hud-readout"><div id="hud-mgrs">MGRS: ---</div></div>
+          <div class="hud-readout"><div id="hud-latlon">--°--'--"N ---°--'--"W</div></div>
         </div>
       </div>
 
       <div class="hud-corner hud-bottom-right">
         <div class="hud-content" style="text-align:right">
-          <div id="hud-gsd">GSD: --m  NIIRS: --</div>
-          <div id="hud-alt">ALT: --m   SUN: --° EL</div>
-          <div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div>
+          <div class="hud-readout"><div id="hud-gsd">GSD: --m  NIIRS: --</div></div>
+          <div class="hud-readout"><div id="hud-alt">ALT: --m   SUN: --° EL</div></div>
+          <div class="hud-readout"><div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div></div>
         </div>
         <div class="hud-bracket">┘</div>
       </div>
 
       <div class="hud-edge hud-left-edge">
-        <div id="hud-coll">COLL: --:--:--Z</div>
-        <div id="hud-ona">ONA: --°</div>
+        <div class="hud-readout"><div id="hud-coll">COLL: --:--:--Z</div></div>
+        <div class="hud-readout"><div id="hud-ona">ONA: --°</div></div>
       </div>
 
       <div class="hud-edge hud-right-edge">
-        <div>BAND: PAN</div>
-        <div>BITS: 11</div>
-        <div>LVL: 1A</div>
+        <div class="hud-readout"><div>BAND: PAN</div></div>
+        <div class="hud-readout"><div>BITS: 11</div></div>
+        <div class="hud-readout"><div>LVL: 1A</div></div>
       </div>
 
       <div class="hud-bottom-bar">
-        <span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span>
+        <span class="hud-readout"><span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span></span>
       </div>
     `;
     this._el.dataset.variant = this._variant;
@@ -559,11 +574,12 @@ export class IntelHUD {
    * @returns {string} Formatted DMS string, e.g. `"38°53'23.10"N"`.
    */
   _toDMS(decimal, type) {
-    const abs = Math.abs(decimal);
-    const deg = Math.floor(abs);
-    const minFloat = (abs - deg) * 60;
-    const min = Math.floor(minFloat);
-    const sec = ((minFloat - min) * 60).toFixed(2);
+    // Round once, in hundredths of a second, so a value that rounds up to
+    // 60.00" carries into the minutes and degrees instead of printing 60.
+    const hundredths = Math.round(Math.abs(decimal) * 360000);
+    const deg = Math.floor(hundredths / 360000);
+    const min = Math.floor(hundredths / 6000) % 60;
+    const sec = ((hundredths % 6000) / 100).toFixed(2);
 
     let dir;
     if (type === 'lat') dir = decimal >= 0 ? 'N' : 'S';
@@ -766,6 +782,12 @@ export class IntelHUD {
     return provenance ? `${line} | ${provenance}` : line;
   }
 
+  /** Stop a summary still typing out, leaving what it has typed so far. */
+  _stopSummaryTyping() {
+    clearInterval(this._summaryTypingInterval);
+    this._summaryTypingInterval = null;
+  }
+
   /**
    * Animate the summary text into the DOM using a typewriter effect
    * (2 characters every 24ms).
@@ -816,8 +838,10 @@ export class IntelHUD {
     } catch (error) {
       console.warn('[HUD] summary context unavailable:', error);
       // Left dirty on purpose: the next periodic tick retries instead of
-      // sticking on the fallback line for the rest of the session.
-      this._setSummaryText(fallbackText, animate);
+      // sticking on the fallback line for the rest of the session. The
+      // fallback was composed for this view; a moved camera keeps its own.
+      if (revision === this._summaryRevision)
+        this._setSummaryText(fallbackText, animate);
       return;
     }
     if (revision !== this._summaryRevision) return;
@@ -832,7 +856,11 @@ export class IntelHUD {
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 5000);
     this._summaryRequest = controller;
     try {
       this.summaryPolicy.onRequest?.();
@@ -855,17 +883,24 @@ export class IntelHUD {
         animate,
       );
     } catch (error) {
-      if (error?.name !== 'AbortError') {
+      // The 5 s timeout is a failure like any other; a move's abort (or
+      // destroy's) is not.
+      const moved = revision !== this._summaryRevision;
+      if (error?.name !== 'AbortError' || timedOut) {
         console.warn('[HUD] AI summary unavailable:', error);
         // Invalidate the committed signature so the next periodic tick
         // retries instead of sticking on the fallback line forever.
         this._lastSummarySignature = null;
         this._summaryDirty = true;
       }
-      this._setSummaryText(fallbackText, animate);
+      if (!moved) this._setSummaryText(fallbackText, animate);
     } finally {
       window.clearTimeout(timeout);
       if (this._summaryRequest === controller) this._summaryRequest = null;
+      // A request whose answer was dropped (aborted by a move, or a reply
+      // that came back after one) committed a signature it never painted;
+      // forget it, or the next tick over the same place would skip asking.
+      if (revision !== this._summaryRevision) this._lastSummarySignature = null;
     }
   }
 
@@ -874,6 +909,8 @@ export class IntelHUD {
       this._typeSummary(text);
       return;
     }
+    // A plain paint replaces any reply still typing.
+    this._stopSummaryTyping();
     const el = document.getElementById('hud-summary');
     if (el) el.textContent = text;
   }
@@ -1044,6 +1081,7 @@ export class IntelHUD {
     clearInterval(this._timestampInterval);
     clearInterval(this._summaryInterval);
     clearInterval(this._summaryTypingInterval);
+    this.viewer.camera.moveStart.removeEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
     this._dataManagerUnsubscribe?.();
     this._summaryRequest?.abort();

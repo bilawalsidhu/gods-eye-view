@@ -16,7 +16,8 @@ export function hudQuantity(value, unit, digits = 0) {
     maximumFractionDigits: digits,
   });
   const label = unitLabel(unit);
-  if (getLocale() === 'zh-CN') return label ? `${number} ${label}` : number;
+  if (getLocale().startsWith('zh-'))
+    return label ? `${number} ${label}` : number;
   return `${number}${label.toUpperCase()}`;
 }
 
