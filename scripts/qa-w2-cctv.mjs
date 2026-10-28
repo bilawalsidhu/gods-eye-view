@@ -9,6 +9,7 @@ import sharp from 'sharp';
 import { installCctvFixture } from './fixtures/w2/cctv.mjs';
 import { watchW1Page, redact } from './qa-browserEvidence.mjs';
 import { computeFrustumGeometry } from '../src/data/cctv.js';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 
 const args = process.argv.slice(2);
 const option = (name) =>
@@ -17,6 +18,7 @@ const url = option('--url');
 const output = option('--report');
 if (!url || !output)
   throw new Error('Explicit --url and --report are required');
+const mapPolicy = { allowPaidMaps: args.includes('--allow-paid-maps') };
 if (
   ['4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
     new URL(url).port,
@@ -280,6 +282,7 @@ try {
     args: ['--use-angle=metal', '--enable-gpu'],
   });
   page = await browser.newPage();
+  await blockPaidQaMaps(page, mapPolicy);
   report.browser = await browser.version();
   await page.setViewport({ width: 1440, height: 900 });
   watchW1Page(page, report, {

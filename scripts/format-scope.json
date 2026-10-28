@@ -1241,5 +1241,8 @@
   "scripts/qa-w2-firms-perf.mjs",
   "scripts/qa-w2-firms-ground.mjs",
   "scripts/qa-w2-radio.mjs",
-  "scripts/fixtures/w2/radio.mjs"
+  "scripts/fixtures/w2/radio.mjs",
+  "scripts/qa-map-policy.mjs",
+  "scripts/qa-map-policy.test.mjs",
+  "scripts/qa-map-startup.mjs"
 ]
