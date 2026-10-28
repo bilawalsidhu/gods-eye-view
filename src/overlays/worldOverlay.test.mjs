@@ -1,4 +1,4 @@
-import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
+import { createNamedMarkers } from '../layers/installations/render/cesium/namedMarkers.js';
 import { expandApplicationHtml } from '../../build/application-html.js';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';

@@ -1,7 +1,7 @@
-import { createLifecycle } from '../lifecycle.js';
-import { createNamedMarkers } from '../namedMarkers.js';
-import { createRendering } from '../rendering.js';
-import { createSelection } from '../selection.js';
+import { createLifecycle } from './cesium/lifecycle.js';
+import { createNamedMarkers } from './cesium/namedMarkers.js';
+import { createRendering } from './cesium/rendering.js';
+import { createSelection } from './cesium/selection.js';
 
 /** Compose the existing Cesium-owned scene, input and entity adapters. */
 export function createInstallationsCesiumRenderer(context) {

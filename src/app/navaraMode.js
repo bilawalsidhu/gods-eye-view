@@ -62,6 +62,15 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    'military-installations': async () => {
+      const { createInstallationsNavaraRenderer } =
+        await import('../layers/installations/render/navara.js');
+      return (engine, options) =>
+        createInstallationsNavaraRenderer(engine, {
+          ...options,
+          ...navaraViews.get(engine),
+        });
+    },
     'local-firms': async () => {
       const { createFirmsNavaraRenderer } =
         await import('../layers/firms/render/navara.js');
@@ -151,6 +160,8 @@ export async function createNavaraScene({
     MeshDesc: globe.MeshDesc,
     EffectDesc: globe.EffectDesc,
     NavaraEffect: globe.NavaraEffect,
+    DrapedMesh: globe.DrapedMesh,
+    setupMaterialForDrape: globe.setupMaterialForDrape,
   });
   defer(() => navaraViews.delete(engine));
   // The layers drawn on Navara (their render/navara.js), before the catalog

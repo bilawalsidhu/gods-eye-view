@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
-import { LAYER_ID } from './policy.js';
+import { isPointerFree } from '../../../../data/inputOwnership.js';
+import { LAYER_ID } from '../../policy.js';
 
 export function createSelection({
   state: layerState,

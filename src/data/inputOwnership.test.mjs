@@ -121,7 +121,7 @@ test('every scene click handler consults ownership before it picks', () => {
     ['src/layers/bikeshare/selection.js', 'viewer.scene.pick(click.position)'],
     ['src/layers/firms/selection.js', 'scene.pick(click.position)'],
     [
-      'src/layers/installations/selection.js',
+      'src/layers/installations/render/cesium/selection.js',
       'viewer.scene.pick(click.position)',
     ],
     ['src/layers/launches/render/cesium.js', 'drillPick(movement.position'],

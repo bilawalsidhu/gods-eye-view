@@ -276,13 +276,18 @@ test('tracking layers write gevLabelModel and expose only their cached display p
     'flights.js',
     'militaryFlights.js',
     'satellites.js',
-    'militaryInstallations.js',
   ].map(async (name) => [name, readLayerSource(new URL(`./${name}`, import.meta.url))]));
   const sources = Object.fromEntries(files);
   for (const [name, source] of files) {
     assert.ok(source.includes('.gevLabelModel ='), `${name} writes the explicit model directly`);
     assert.ok(source.includes('.gevDisplayPosition ='), `${name} exposes a display-position cache`);
   }
+  const installations = await readFile(
+    new URL('../layers/installations/render/cesium/rendering.js', import.meta.url),
+    'utf8',
+  );
+  assert.ok(installations.includes('entity.gevLabelModel ='));
+  assert.ok(installations.includes('entity.gevDisplayPosition = () => displayPosition'));
   assert.match(sources['flights.js'], /gevDisplayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
   assert.match(sources['militaryFlights.js'], /gevDisplayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
   assert.ok(sources['satellites.js'].includes('gevDisplayPosition = _trackedDisplayCached'));

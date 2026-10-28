@@ -72,7 +72,8 @@ export function createIngestion({
   }
 
   async function loadInstallations() {
-    if (!layerState.enabled || !layerState.viewer) return;
+    if (!layerState.enabled || (!layerState.viewer && !layerState.engine))
+      return;
     const { box, coverage } = parts.viewport.loadArea(layerState.viewer);
     // Guidance, not a fault: the layer chose not to query because the view is
     // unbounded (a global view, or Cockpit looking at the horizon). Keep it out

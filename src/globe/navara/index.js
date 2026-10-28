@@ -6,6 +6,8 @@ import ThreeView, {
   MeshDesc,
   EffectDesc,
   Effect as NavaraEffect,
+  DrapedMesh,
+  setupMaterialForDrape,
 } from '@navaramap/three';
 import * as geo from '../../geo/index.js';
 import { DefaultPlugin } from '@navaramap/three-default-plugin';
@@ -193,6 +195,8 @@ export async function createNavaraGlobe({
     MeshDesc,
     EffectDesc,
     NavaraEffect,
+    DrapedMesh,
+    setupMaterialForDrape,
     destroy() {
       if (destroyed) return;
       destroyed = true;

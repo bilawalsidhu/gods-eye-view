@@ -188,7 +188,7 @@ test('distinct named bases separated by one seam quantization step retain separa
 test('named A+B to B to A+B preserves canonical identity, parent title and selection', async () => {
   const C = await import('cesium');
   const { createRendering } =
-    await import('../layers/installations/rendering.js');
+    await import('../layers/installations/render/cesium/rendering.js');
   const aliases = new Map();
   const named = (n, footprint, areaM2) =>
     record(String(n * 10 + 2), footprint, {
@@ -260,7 +260,7 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
 test('cold names reconcile selection through enrichment, identical groups at another zoom and wide-point handoff', async () => {
   const C = await import('cesium');
   const { createRendering } =
-    await import('../layers/installations/rendering.js');
+    await import('../layers/installations/render/cesium/rendering.js');
   const { retainNamedHandoff } =
     await import('../layers/installations/ingestion.js');
   const aliases = new Map();

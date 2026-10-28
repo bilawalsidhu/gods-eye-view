@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from 'cesium';
-import { createRendering } from './rendering.js';
-import { createLifecycle } from './lifecycle.js';
+import { createRendering } from './render/cesium/rendering.js';
+import { createLifecycle } from './render/cesium/lifecycle.js';
 
 function harness() {
   const ring = [[-97, 30], [-96.99, 30], [-96.99, 30.01], [-97, 30]];

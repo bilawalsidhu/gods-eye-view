@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createViewport } from './viewport.js';
-import { createLifecycle } from './lifecycle.js';
+import { createLifecycle } from './render/cesium/lifecycle.js';
 
 test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and recover from wide views', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -156,6 +156,49 @@ test('an aborting real ingestion cannot clear the next scheduled view key', asyn
   await flush();
   assert.equal(state.loading, false);
   assert.equal(state.cameraLoadKey, nextKey);
+});
+
+test('Navara installation ingestion loads from its engine camera without a viewer', async () => {
+  const { createIngestion } = await import('./ingestion.js');
+  const rectangle = Cesium.Rectangle.fromDegrees(-123, 37, -122, 38);
+  const state = {
+    enabled: true,
+    viewer: null,
+    engine: { camera: { viewRectangle: () => rectangle } },
+    records: [],
+    recordById: new Map(),
+    coverage: { kind: 'viewport' },
+  };
+  const requests = [];
+  const parts = {
+    model: { installationWithinViewport: () => true },
+    rendering: { renderRecords() {}, warmInstallationFloors() {} },
+    namedMarkers: { sync() {} },
+  };
+  const context = {
+    state,
+    parts,
+    services: {
+      render: { governorRequestRender() {} },
+      ground: { resolveGroundFloorCellsBounded: async () => {} },
+    },
+    source: {
+      async getMappedSites(box) {
+        requests.push(box);
+        return { records: [], status: 'ready', wide: false, saturated: false };
+      },
+    },
+  };
+  parts.viewport = createViewport(context);
+  const ingestion = createIngestion(context);
+
+  await ingestion.loadInstallations();
+
+  assert.equal(requests.length, 1);
+  assert.ok(Math.abs(requests[0].west + 123) < 1e-10);
+  assert.ok(Math.abs(requests[0].south - 37) < 1e-10);
+  assert.equal(state.loading, false);
+  assert.ok(state.lastUpdate);
 });
 
 test('wide views refresh screen decluttering when the globe rectangle stays unchanged', (t) => {

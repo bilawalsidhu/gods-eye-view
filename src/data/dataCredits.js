@@ -34,8 +34,13 @@ export const OPENMAPTILES_CREDIT = {
   key: 'openfreemap',
   html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
 };
+export const GOOGLE_PLACES_CREDIT = {
+  key: 'google-maps-places',
+  html: 'Google Maps Places: <a href="https://developers.google.com/maps/documentation/places/web-service/policies" target="_blank" rel="noopener">Google Maps</a>',
+};
 
 const osmDisplays = new WeakMap();
+const googlePlacesDisplays = new WeakMap();
 const viewerCredits = new WeakMap();
 
 /**
@@ -111,6 +116,36 @@ export function hideOsmCredit(target, owner) {
   const state = osmDisplays.get(target);
   if (!state?.owners.delete(owner)) return false;
   updateOsmDisplay(creditsOf(target), state);
+  return true;
+}
+
+/** Keep Places attribution visible only while a layer displays Places results. */
+export function showGooglePlacesCredit(target, owner) {
+  const credits = creditsOf(target);
+  if (!credits || !owner) return false;
+  let state = googlePlacesDisplays.get(target);
+  if (!state) {
+    state = { owners: new Set(), remove: null };
+    googlePlacesDisplays.set(target, state);
+  }
+  if (state.owners.has(owner)) return false;
+  state.owners.add(owner);
+  state.remove ||= credits.addStatic(GOOGLE_PLACES_CREDIT.html, {
+    onScreen: true,
+  });
+  credits.request();
+  return true;
+}
+
+/** Release this layer's Places attribution when it stops displaying results. */
+export function hideGooglePlacesCredit(target, owner) {
+  const state = googlePlacesDisplays.get(target);
+  if (!state?.owners.delete(owner)) return false;
+  if (!state.owners.size) {
+    state.remove?.();
+    state.remove = null;
+  }
+  creditsOf(target)?.request();
   return true;
 }
 
