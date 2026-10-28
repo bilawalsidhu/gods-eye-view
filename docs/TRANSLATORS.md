@@ -1,6 +1,6 @@
 # Translating God's Eye View
 
-Shipped languages: **English** (source and fallback), **Spanish** (`es`), **Russian** (`ru`), **Simplified Chinese** (`zh-CN`) and **Traditional Chinese** (`zh-Hant`).
+Shipped languages: **English** (source and fallback), **Arabic** (`ar`), **Spanish** (`es`), **Russian** (`ru`), **Simplified Chinese** (`zh-CN`) and **Traditional Chinese** (`zh-Hant`).
 
 ## How it works
 
@@ -44,7 +44,7 @@ Edit `src/i18n/locales/<code>.json` and run `npm run i18n`. To see your change, 
 
 1. Create `src/i18n/locales/<code>.json`, fill it from `npm run i18n -- --missing <code>` (start from `{}`), and translate every entry.
 2. Import it in `src/i18n/index.js` and add it to `CATALOGS`.
-3. Add the code to `LOCALES` and its own-language name to `LOCALE_NAMES` in `src/i18n/locale.js`. Right-to-left languages also go in `RTL_LOCALES`.
+3. Add the code to `LOCALES` and its own-language name to `LOCALE_NAMES` in `src/i18n/locale.js`. Right-to-left languages also go in `RTL_LOCALES`; the chrome mirrors through logical CSS properties (`inset-inline-*`, `margin-inline-*`), and `src/ui/styles/rtl.css` holds what those cannot express (see the Arabic notes). If the language should keep Western digits, map it in `INTL_TAGS` in `locale.js`.
 4. Add `src/i18n/locales/<code>.json` next to `ru.json` in `scripts/package-boundaries.json`.
 5. Write `docs/translations/<code>.md`: glossary, plural forms, units and style (copy the structure of `ru.md`).
 6. Run `npm run i18n` and `npm test`, then check the panels in the app at narrow widths.
@@ -63,4 +63,4 @@ These are contracts, not copy: layer ids and registry keys, status enums and oth
 
 ## Language notes
 
-Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Spanish](./translations/es.md), [Russian](./translations/ru.md), [Simplified Chinese](./translations/zh-CN.md), [Traditional Chinese](./translations/zh-Hant.md). Read it before translating, and add a term there when you settle on one.
+Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Arabic](./translations/ar.md), [Spanish](./translations/es.md), [Russian](./translations/ru.md), [Simplified Chinese](./translations/zh-CN.md), [Traditional Chinese](./translations/zh-Hant.md). Read it before translating, and add a term there when you settle on one.
