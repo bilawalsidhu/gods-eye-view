@@ -47,6 +47,30 @@ function fixture(t) {
   return { controls, requests };
 }
 
+test('settled CCTV sync chip does not mutate occluder attributes on polling', (t) => {
+  const { controls } = fixture(t);
+  const chip = element();
+  const remove = chip.classList.remove;
+  let mutations = 0;
+  chip.classList.remove = (...values) => {
+    mutations++;
+    remove(...values);
+  };
+  controls._cctvSyncChip = chip;
+  controls._cctvSyncLabel = element();
+  controls._cctvSyncProgress = element();
+  const settled = { active: false, total: 25, loaded: 25 };
+  controls._updateCctvSyncChip(settled, true);
+  controls._updateCctvSyncChip(settled, true);
+  assert.equal(mutations, 0, 'unchanged class writes wake world-overlay');
+  chip.classList.add('visible');
+  controls._updateCctvSyncChip(settled, false);
+  assert.equal(chip.classList.contains('visible'), false);
+  assert.equal(mutations, 1, 'a real visibility transition must still apply');
+  controls._updateCctvSyncChip(settled, false);
+  assert.equal(mutations, 1);
+});
+
 test('a late image completion cannot replace a newer camera preview', (t) => {
   const { controls, requests } = fixture(t);
   controls._queueCctvFrame('first.jpg', 'a', true);

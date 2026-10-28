@@ -19,7 +19,9 @@ export function createIngestion({
      * tick ever samples anything again.
      */
     async update() {
-      if (!layerState._enabled) return;
+      if (!layerState._enabled) return { changed: false };
+      let changed = false;
+      const previousActiveId = layerState._activeCameraId;
       const now = Date.now();
       layerState._lastUpdate = now;
       if (
@@ -35,12 +37,19 @@ export function createIngestion({
         const unresolved = layerState._records.filter(
           (record) => !parts.ground.isGroundResolved(record),
         );
-        if (unresolved.length)
+        if (unresolved.length) {
           parts.geometryQueue.enqueueGeometryRefresh(unresolved);
+          changed = true;
+        }
       }
       await parts.health.syncHealthState();
       parts.navigation.maybeAutoHop(now);
       parts.presentation.notifyListeners();
+      // Health and frame URL notifications update the panel directly. Media
+      // requests its own frames; only actual scene changes need a tick frame.
+      return {
+        changed: changed || previousActiveId !== layerState._activeCameraId,
+      };
     },
   };
 

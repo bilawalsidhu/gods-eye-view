@@ -453,9 +453,6 @@ export function createLifecycle({
         layerState._clickHandler.destroy();
         layerState._clickHandler = null;
       }
-      if (teardownViewer?.scene?.screenSpaceCameraController) {
-        teardownViewer.scene.screenSpaceCameraController.enableInputs = true;
-      }
       parts.projection.stopProjectionLoop();
       parts.geometryQueue.stopGeometryLoadQueue();
       parts.cards.teardownAmbientCards();

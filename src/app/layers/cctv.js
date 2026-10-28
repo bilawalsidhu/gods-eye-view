@@ -1,3 +1,4 @@
+import { createCesiumCctvGizmoRenderer } from '../../layers/cctv/render/cesiumGizmo.js';
 import { createCctvLayer } from '../../layers/cctv/index.js';
 import * as credits from '../../data/dataCredits.js';
 import * as sprites from '../../data/spriteOrder.js';
@@ -14,6 +15,7 @@ export function createApplicationCctv({ surface, source }) {
   return createCctvLayer({
     source,
     services: {
+      createGizmoRenderer: createCesiumCctvGizmoRenderer,
       credits,
       sprites,
       activation,

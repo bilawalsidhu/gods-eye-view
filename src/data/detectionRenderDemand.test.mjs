@@ -352,7 +352,7 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
     'and from the shared policy so the two cannot drift');
 });
 
-test('a layer whose detectable set changed dirties the solve', async () => {
+test('a layer whose detectable set changed dirties the solve', async (t) => {
   // Detection PULLS candidates per paint but re-solves on a private 125 ms
   // throttle. A poll tick that replaces contact A with contact B requests one
   // frame; without this, that frame could be spent on a paint which declined to
@@ -375,6 +375,10 @@ test('a layer whose detectable set changed dirties the solve', async () => {
     requestRender: (reason) => reactions.push(['render', reason]),
     invalidateDetection: (reason) => reactions.push(['detection', reason]),
   });
+  t.after(async () => {
+    presentation.destroy();
+    await manager.destroyAll();
+  });
   let result = true;
   manager.register({ id: 'fixture', name: 'Fixture', updateInterval: 0,
     init() {}, enable() {}, disable() {}, destroy() {},
@@ -387,6 +391,17 @@ test('a layer whose detectable set changed dirties the solve', async () => {
   await manager.refreshLayer('fixture');
   assert.deepEqual(reactions, [['render', 'layer-tick:fixture'], ['detection', 'layer-tick:fixture']]);
   reactions.length = 0;
+  result = { changed: false };
+  assert.equal(await manager.refreshLayer('fixture'), true);
+  assert.deepEqual(reactions, [], 'an explicit unchanged scene still completes refresh without waking rendering');
+  result = { changed: true };
+  assert.equal(await manager.refreshLayer('fixture'), true);
+  assert.deepEqual(reactions, [['render', 'layer-tick:fixture'], ['detection', 'layer-tick:fixture']]);
+  reactions.length = 0;
+  result = undefined;
+  assert.equal(await manager.refreshLayer('fixture'), true);
+  assert.deepEqual(reactions, [['render', 'layer-tick:fixture'], ['detection', 'layer-tick:fixture']], 'legacy void updates retain their render and detection request');
+  reactions.length = 0;
   result = false;
   await manager.refreshLayer('fixture');
   assert.deepEqual(reactions, [['render', 'layer-tick:fixture'], ['detection', 'layer-tick:fixture']], 'partial/rejected updates still invalidate detection');
@@ -397,8 +412,6 @@ test('a layer whose detectable set changed dirties the solve', async () => {
   result = true;
   await manager.setEnabled('fixture', false);
   assert.deepEqual(reactions, [['render', 'layer-visibility'], ['detection', 'layer-visibility']]);
-  presentation.destroy();
-  await manager.destroyAll();
 });
 
 test('the render-governor gate covers the parked case, with teeth on the painter', async () => {

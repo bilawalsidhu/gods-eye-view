@@ -306,7 +306,7 @@ export function createCalibration({
         ? record
         : null;
     layerState._gizmo = createCalibrationGizmo({
-      viewer: layerState._viewer,
+      renderer: services.createGizmoRenderer(layerState._viewer),
       getActiveRecord: () =>
         layerState._enabled && layerState._calibrationMode
           ? parts.selection.getActiveRecord()
