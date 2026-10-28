@@ -170,3 +170,42 @@ test('a status the server never answers falls back to the bundled token once the
   assert.deepEqual(await status, { configured: false });
   assert.equal(instance.coverageStats().keyRequired, true);
 });
+
+/** A graph image record at a point. */
+const imageAt = (id, lon, lat, extra = {}) => ({
+  id,
+  is_pano: false,
+  captured_at: 10,
+  geometry: { type: 'Point', coordinates: [lon, lat] },
+  ...extra,
+});
+
+test('nearestImage opens the closest image that passes the filter, not the first the API returned', async () => {
+  const requests = [];
+  const answer = [
+    imageAt('far', 2.0004, 1), // ~45 m east
+    imageAt('near-pano', 2.00002, 1, { is_pano: true }), // ~2 m, a panorama
+    imageAt('near', 2.00005, 1), // ~5 m east
+    imageAt('mid', 2, 1.0002), // ~22 m north
+  ];
+  const source = fakeMapillarySource({
+    nearestImages: async (query, options) => {
+      requests.push({ query, options });
+      return answer;
+    },
+  });
+  const { signal } = new AbortController();
+  const flat = createMapillaryProvider({ source }).create(
+    fakeContext({ pano: 'flat', sinceMs: null }),
+  );
+  assert.equal(await flat.nearestImage({ lat: 1, lon: 2 }, { signal }), 'near');
+  assert.equal(requests[0].options.signal, signal, 'the core can abort it');
+  assert.equal(requests[0].query.radius, 50);
+  assert.deepEqual([requests[0].query.lat, requests[0].query.lon], [1, 2]);
+  const any = createMapillaryProvider({ source }).create(fakeContext());
+  assert.equal(await any.nearestImage({ lat: 1, lon: 2 }), 'near-pano');
+  const tooOld = createMapillaryProvider({ source }).create(
+    fakeContext({ pano: 'all', sinceMs: 100 }),
+  );
+  assert.equal(await tooOld.nearestImage({ lat: 1, lon: 2 }), null);
+});
