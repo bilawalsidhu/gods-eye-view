@@ -190,10 +190,13 @@ test('consumer build includes only infrastructure code and resolves assets under
   const output = result.output;
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
+  // rolldown lists every module in the entry's graph, including
+  // localGeojsonCore's inputOwnership helper.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
+    'inputOwnership.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
   ]);

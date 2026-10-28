@@ -389,7 +389,9 @@ test('every API response carries the API policy and nosniff on real dev and prev
         // The router keeps dot segments in an absolute-form target's path.
         ['http://elsewhere.example/api/../x', 404],
         ['http://elsewhere.example/API/%2e%2e/x', 404],
-        ['/api/fixture/ok', 403, policy, { host: 'elsewhere.example' }],
+        // Vite 8's native Host gate refuses the request before any
+        // middleware, including ours, so its refusal has no API headers.
+        ['/api/fixture/ok', 403, null, { host: 'elsewhere.example' }],
         // A route's own policy is added to the API policy, never replaces it.
         ['/api/fixture/own-policy', 200, `${policy}, frame-ancestors 'none'`],
         ['/api/fixture/own-policy-head', 200, `${policy}, default-src *`],
@@ -397,8 +399,17 @@ test('every API response carries the API policy and nosniff on real dev and prev
         const res = await rawGet(port, target, headers);
         const label = `${mode} ${target} ${JSON.stringify(headers || {})}`;
         assert.equal(res.status, status, label);
-        assert.equal(res.headers['content-security-policy'], csp, label);
-        assert.equal(res.headers['x-content-type-options'], 'nosniff', label);
+        if (csp === null) {
+          assert.equal(
+            res.headers['content-security-policy'],
+            undefined,
+            label,
+          );
+          assert.equal(res.headers['x-content-type-options'], undefined, label);
+        } else {
+          assert.equal(res.headers['content-security-policy'], csp, label);
+          assert.equal(res.headers['x-content-type-options'], 'nosniff', label);
+        }
       }
       // The app document and other paths keep the server's own headers.
       for (const target of ['/', '/apiary', '/src/api/x.js'])
