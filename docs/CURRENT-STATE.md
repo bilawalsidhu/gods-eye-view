@@ -3857,7 +3857,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 
 ### Interface localization (October 2026)
 
-Shipped locales: **en** (source and fallback), **es**, **ru** and **zh-CN**. The code lives in
+Shipped locales: **en** (source and fallback), **es**, **ru**, **zh-CN** and **zh-Hant**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
 
@@ -3868,8 +3868,8 @@ Shipped locales: **en** (source and fallback), **es**, **ru** and **zh-CN**. The
   value). English has no catalog; every other locale is
   `src/i18n/locales/<code>.json`, and a missing entry falls back to English.
 - **Locale choice.** `?lang=` → stored choice (`gev:locale:v1`) →
-  `navigator.languages` → English. Chinese tags map to `zh-CN`; tags containing
-  `Hant`, `TW`, `HK` or `MO` are skipped. `?lang=` is not stored, and share links drop
+  `navigator.languages` → English. Chinese tags default to `zh-CN`; Traditional Chinese tags
+  select `zh-Hant`. Explicit `Hans` selects `zh-CN` regardless of region. `?lang=` is not stored, and share links drop
   it, so a recipient keeps their own language. The globe picker in the
   bottom-right corner (`src/ui/localePicker.js`) stores the choice, drops
   `?lang=` (keeps it only when storage is blocked) and reloads. It asks first
@@ -4030,6 +4030,8 @@ reports it (`keyAlternatives`), and the panel's KEY REQUIRED, its coverage
 line and the layer row's tooltip say to light it. The
 viewer sits under the header with EXPAND, FIT/FILL and close above the
 image. SINCE is a stepped slider whose readout names the cut-off date.
+The viewer caption's bearing wraps after rounding to whole degrees, so a view
+facing 359.5° or more reads `0°` rather than `360°`.
 
 MapillaryJS loads on the first photo. Opening one frames it with a single
 camera flight through the application's deferred navigation (`begin` /
@@ -5392,6 +5394,14 @@ cancels the previous lookup; disposing its controls cancels the active lookup. P
 candidates, and an unbiased retry for name mismatches. Invalid or wrapped bounds returned by providers
 are omitted rather than framing the wrong part of the globe.
 
+A location search that finds nothing, or fails, leaves the field open with the
+query still in it, focused and selected, so it can be corrected and resubmitted
+without reopening search. The miss is shown under the field as a persistent
+`role="alert"` message ("Location not found." or "Search failed." with what to
+do next) referenced by the input's `aria-describedby`, with `aria-invalid` set;
+it is not a toast. Typing, a new search, or closing the emptied field clears it.
+A search that arrives still clears and closes the field.
+
 For request viewport bias, Photon unwraps antimeridian-crossing longitude bounds
 before computing their midpoint, then wraps that midpoint back into ±180 degrees.
 Malformed viewport bounds add no proximity bias. Nominatim omits a crossing
@@ -6465,3 +6475,8 @@ as the owner. Round results carry an explicit state observation for mixed-tool
 requests. Street Level is an addressable shared panel target. This does not
 install or replace the tab shell: #1425 is tested as a temporary integration
 only. See `docs/CHATGPT-COMMAND.md` for revisions, regressions and validation.
+
+Traditional Chinese in the temporary COMMAND integration includes ChatGPT account,
+model, plan-limit and console copy. The catalog retains all original #1430
+translations; zh-TW still selects zh-Hant and zh-CN remains Simplified Chinese.
+See [integration evidence](TRADITIONAL-CHINESE-COMMAND.md) for scope and limits.

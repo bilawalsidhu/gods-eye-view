@@ -8,14 +8,15 @@ export const LOCALE_STORAGE_KEY = 'gev:locale:v1';
 export const DEFAULT_LOCALE = 'en';
 
 /** Shipped locales; order does not matter. Adding one: docs/TRANSLATORS.md. */
-export const LOCALES = Object.freeze(['en', 'es', 'ru', 'zh-CN']);
+export const LOCALES = Object.freeze(['en', 'es', 'ru', 'zh-CN', 'zh-Hant']);
 
 /** Each locale named in its own language, for the selector. */
 export const LOCALE_NAMES = Object.freeze({
   en: 'English',
   es: 'Español',
   ru: 'Русский',
-  'zh-CN': '简体中文',
+  'zh-CN': '中文（简体）',
+  'zh-Hant': '中文（繁體）',
 });
 
 /** Right-to-left locales. */
@@ -23,17 +24,19 @@ const RTL_LOCALES = Object.freeze([]);
 
 /**
  * Map any language tag to a shipped locale: 'ru-RU' and 'RU' → 'ru',
- * 'zh', 'zh-CN' and 'zh-Hans-SG' → 'zh-CN'.
+ * 'zh', 'zh-CN' and 'zh-Hans-SG' → 'zh-CN';
+ * 'zh-Hant', 'zh-TW', 'zh-HK' and 'zh-MO' → 'zh-Hant'.
  * @returns {string|null}
  */
 export function normalizeLocale(candidate) {
   if (typeof candidate !== 'string') return null;
   const [primary, ...rest] = candidate.trim().toLowerCase().split(/[-_]/);
-  // Traditional Chinese readers are not given Simplified: no zh-TW yet.
-  if (primary === 'zh')
+  if (primary === 'zh') {
+    if (rest.includes('hans')) return 'zh-CN';
     return rest.some((part) => ['hant', 'tw', 'hk', 'mo'].includes(part))
-      ? null
+      ? 'zh-Hant'
       : 'zh-CN';
+  }
   return LOCALES.includes(primary) ? primary : null;
 }
 

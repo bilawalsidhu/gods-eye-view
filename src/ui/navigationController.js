@@ -119,10 +119,17 @@ export class NavigationController {
     return this._navigationGeneration;
   }
 
-  _settleLocationSearchUi(generation) {
+  /** A search that found nothing keeps its query and focus so it can be corrected. */
+  _settleLocationSearchUi(generation, { keepQuery = false } = {}) {
     if (this._activeLocationSearchGeneration !== generation) return;
     this._activeLocationSearchGeneration = null;
-    this.searchInput?.classList.remove('searching', 'expanded');
+    this.searchInput?.classList.remove('searching');
+    if (keepQuery) {
+      this.searchInput?.focus();
+      this.searchInput?.select?.();
+      return;
+    }
+    this.searchInput?.classList.remove('expanded');
     if (this.searchInput) this.searchInput.value = '';
     this.searchInput?.blur();
   }

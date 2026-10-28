@@ -22,7 +22,10 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><link rel="styles
 <script type="module">
 import { mountAgentConsole } from '/src/agent/agentConsole.js';
 import { setLocale, applyDocumentTranslations } from '/src/i18n/index.js';
-setLocale(new URL(location.href).searchParams.get('lang') || 'en');
+import { resolveLocale, applyDocumentLanguage } from '/src/i18n/locale.js';
+const locale = resolveLocale();
+setLocale(locale);
+applyDocumentLanguage(document, locale);
 applyDocumentTranslations(document);
 let active = 'account-one', binding = 'binding-one';
 let pending = false;
@@ -35,7 +38,8 @@ const fetchImpl = async (url, init = {}) => {
   if (url === '/api/agent/chatgpt/status') return Response.json(state());
   if (url.startsWith('/api/agent/models')) return Response.json({ binding, models: [{ id: 'fixture-model', label: 'Fixture model', costPerCommandUsd: null }] });
   if (url === '/api/agent/chatgpt/select') { active = body.account; binding = 'binding-two'; return Response.json(state()); }
-  if (url === '/api/agent/chatgpt/logout') { active = null; binding = 'signed-out'; return Response.json({ ...state(), revoked: true }); }
+  if (url === '/api/agent/chatgpt/login') { pending = true; return Response.json({ path: '/api/agent/chatgpt/authorize?ticket=fixture-ticket' }); }
+  if (url === '/api/agent/chatgpt/logout') { pending = false; active = null; binding = 'signed-out'; return Response.json({ ...state(), revoked: true }); }
   if (url === '/api/agent/command') {
     window.fixture.requests.push(body);
     if (body.messages.at(-1)?.content === 'wait') return new Promise((_, reject) => init.signal.addEventListener('abort', () => { window.fixture.aborted = true; reject(new DOMException('Stopped', 'AbortError')); }, { once: true }));
@@ -91,7 +95,7 @@ try {
   });
   const artifactDir = path.join(root, 'qa-artifacts/agent-chatgpt');
   await fs.mkdir(artifactDir, { recursive: true });
-  for (const locale of ['en', 'es', 'ru', 'zh-CN'])
+  for (const locale of ['en', 'es', 'ru', 'zh-CN', 'zh-Hant', 'zh-TW'])
     for (const width of [1280, 800]) {
       const page = await browser.newPage();
       const errors = [];
@@ -103,6 +107,35 @@ try {
       await page.waitForFunction(
         () => document.getElementById('agent-model').value === 'fixture-model',
       );
+      if (locale === 'zh-Hant' || locale === 'zh-TW' || locale === 'zh-CN') {
+        const traditional = locale !== 'zh-CN';
+        assert.deepEqual(
+          await page.evaluate(() => ({
+            login: document.getElementById('agent-chatgpt-login').textContent,
+            cost: document.getElementById('agent-cost').textContent,
+            send: document.getElementById('agent-send').textContent,
+            close: document
+              .getElementById('agent-console-close')
+              .getAttribute('aria-label'),
+            placeholder: document.getElementById('agent-input').placeholder,
+          })),
+          traditional
+            ? {
+                login: '使用 ChatGPT 繼續',
+                cost: 'ChatGPT 方案用量限制',
+                send: '傳送',
+                close: '關閉 GEV Command',
+                placeholder: '縮小至完整地球視圖',
+              }
+            : {
+                login: '使用 ChatGPT 继续',
+                cost: 'ChatGPT 套餐限额',
+                send: '发送',
+                close: '关闭 GEV Command',
+                placeholder: '缩小到整个地球视图',
+              },
+        );
+      }
       await page.type('#agent-input', 'zoom out');
       await page.click('#agent-send');
       await page.waitForFunction(
@@ -191,9 +224,36 @@ try {
           document.getElementById('agent-model').options.length === 0 &&
           document.getElementById('agent-send').disabled,
       );
+      await page.evaluate(() => {
+        window.open = () => ({ location: {}, close() {} });
+      });
+      await page.click('#agent-chatgpt-login');
+      await page.waitForFunction(
+        () => document.getElementById('agent-chatgpt-login').disabled,
+      );
+      if (locale === 'zh-Hant' || locale === 'zh-TW' || locale === 'zh-CN') {
+        await page.waitForFunction(
+          () =>
+            document
+              .getElementById('agent-chatgpt-status')
+              .textContent.includes('瀏覽器') ||
+            document
+              .getElementById('agent-chatgpt-status')
+              .textContent.includes('浏览器'),
+        );
+        assert.deepEqual(
+          await page.evaluate(() => ({
+            lang: document.documentElement.lang,
+            status: document.getElementById('agent-chatgpt-status').textContent,
+          })),
+          locale === 'zh-CN'
+            ? { lang: 'zh-CN', status: '请在浏览器中完成登录。' }
+            : { lang: 'zh-Hant', status: '請在瀏覽器中完成登入。' },
+        );
+      }
       await page.close();
       console.log(
-        `PASS ${locale} ${width}×800: tool round trip, account isolation, STOP, logout, layout`,
+        `PASS ${locale} ${width}×800: tool round trip, account isolation, STOP, logout, sign-in copy, layout`,
       );
     }
 } finally {

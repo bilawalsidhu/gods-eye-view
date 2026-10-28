@@ -23,3 +23,8 @@
   that state for panel-only confirmations, including independent mobile expansion.
   Street Level becomes an addressable shared panel target. Shell exclusivity,
   keyboard behavior, share links and preference ownership remain with the UI.
+
+- Reconcile COMMAND and ChatGPT copy with #1430 Traditional Chinese, preserving
+  all original contributor translations and locale behavior. Include the seven
+  newer upstream messages in the existing COMMAND catalogs and exercise both
+  Chinese scripts and the zh-TW alias in the browser gate (#1331).
