@@ -40,6 +40,20 @@ html:lang(ar) {
     'Inter', 'Noto Sans Arabic', -apple-system, BlinkMacSystemFont,
     'Geeza Pro', Tahoma, sans-serif;
 }
+/* The Global Context lines and their buttons set ui-monospace through the
+   `font` shorthand; route them through the Arabic-aware stack too. */
+html:lang(ar)
+  :is(
+    #military-awareness-panel,
+    .military-awareness-controls button,
+    .military-awareness-standby button,
+    .military-awareness-compass-label,
+    .military-awareness-compass-heading,
+    .military-awareness-direction-label,
+    .tr3b-toggle
+  ) {
+  font-family: var(--font-mono);
+}
 html:lang(ar) :is(#intel-hud, #cockpit-hud) {
   --font-mono:
     'JetBrains Mono', 'SF Mono', 'Fira Code', 'Noto Sans Arabic', 'Geeza Pro',
