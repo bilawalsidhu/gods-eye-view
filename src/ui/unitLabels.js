@@ -35,15 +35,19 @@ export function formatQuantity(value, unit, options) {
 
 /**
  * A legend stop such as "0.1", "-40" or "300+" in the active language.
- * Anything that is not a plain number is shown as given.
+ * Anything that is not a plain number is shown as given. In right-to-left
+ * text the stop is isolated, so its sign stays where it is written ("300+",
+ * "-40") instead of moving to the other side of the number.
  */
 export function formatScaleLabel(label) {
   const match = /^(-?\d+(?:\.\d+)?)(\+?)$/.exec(String(label ?? ''));
   if (!match) return String(label ?? '');
   const decimals = match[1].split('.')[1]?.length || 0;
-  return `${formatNumber(Number(match[1]), {
-    useGrouping: false,
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })}${match[2]}`;
+  return isolate(
+    `${formatNumber(Number(match[1]), {
+      useGrouping: false,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    })}${match[2]}`,
+  );
 }

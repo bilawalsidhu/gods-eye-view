@@ -133,7 +133,7 @@
   min-height: 3.55rem;
   padding: 0.6rem 0.7rem;
   color: rgba(225, 244, 248, 0.92);
-  text-align: left;
+  text-align: start;
   background: rgba(29, 69, 81, 0.18);
   border: 1px solid rgba(100, 200, 220, 0.18);
   border-radius: 0.42rem;

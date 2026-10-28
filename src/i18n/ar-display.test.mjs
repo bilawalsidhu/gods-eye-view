@@ -18,7 +18,7 @@ import {
 import { hudQuantity, LOCALIZED_LOCALITY } from '../hudLocalityFormat.js';
 import { formatCockpitDistance } from '../ui/cockpitPresentation.js';
 import { READOUT_WORDS } from '../layers/recentImagery/display.js';
-import { formatQuantity } from '../ui/unitLabels.js';
+import { formatQuantity, formatScaleLabel } from '../ui/unitLabels.js';
 
 test('Arabic resolves from URL, saved preference and browser language', () => {
   assert.equal(
@@ -127,6 +127,22 @@ test('Arabic uses all six plural forms and spaced HUD units', () => {
         }),
       ),
       '\u2068Austin\u2069 · \u2068HDG \u206868°\u2069\u2069 · \u2068FOV \u206844°\u2069\u2069',
+    );
+    // A legend's open bound keeps its plus on the written side: 300+.
+    assert.deepEqual(['300+', '0.1'].map(formatScaleLabel), [
+      '\u2068300+\u2069',
+      '\u20680.1\u2069',
+    ]);
+    // Counted minutes agree with the number (3–10 plural, 11+ singular).
+    assert.deepEqual(
+      [3, 15].map((n) =>
+        formatNumber(n, {
+          style: 'unit',
+          unit: 'minute',
+          unitDisplay: 'long',
+        }),
+      ),
+      ['3 دقائق', '15 دقيقة'],
     );
     setLocale('ru');
     assert.equal(keepCodesWithValues('HDG 68°'), 'HDG 68°');

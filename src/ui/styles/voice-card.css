@@ -288,7 +288,7 @@
   content: counter(gev-referent);
   display: inline-block;
   min-width: 0.9rem;
-  margin-right: 0.3rem;
+  margin-inline-end: 0.3rem;
   color: rgba(54, 220, 255, 0.72);
   font-family: var(--font-mono);
   font-size: 0.52rem;

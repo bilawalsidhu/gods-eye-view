@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { formatNumber, t } from '../i18n/index.js';
 
 // The assistant's name on its card. i18n-ignore: product name
 const ASSISTANT_NAME = 'GEV';
@@ -27,6 +27,10 @@ export function voiceStatusLabel(status) {
 }
 
 /** Build the voice control independently of its connection backend. */
+/** "5 minutes" in the UI language, with the count's plural form ("15 دقيقة"). */
+const minutesLabel = (count) =>
+  formatNumber(count, { style: 'unit', unit: 'minute', unitDisplay: 'long' });
+
 export function createVoiceControl({ reset = false, panel = false } = {}) {
   let root = document.getElementById('gev-voice-control');
   if (root && reset) {
@@ -118,7 +122,7 @@ export function createVoiceControl({ reset = false, panel = false } = {}) {
             <label class="gev-voice-preference gev-voice-setting-title" for="gev-voice-timeout-select">${t('Voice inactivity timeout')}</label>
             <div class="gev-voice-timeout-controls">
             <select id="gev-voice-timeout-select" aria-describedby="gev-voice-timeout-note gev-voice-timeout-status">
-              <option value="3">3 ${t('Minutes')}</option><option value="5" selected>5 ${t('Minutes')}</option><option value="10">10 ${t('Minutes')}</option><option value="15">15 ${t('Minutes')}</option>
+              <option value="3">${minutesLabel(3)}</option><option value="5" selected>${minutesLabel(5)}</option><option value="10">${minutesLabel(10)}</option><option value="15">${minutesLabel(15)}</option>
               <option value="custom">${t('Custom')}</option><option value="0">${t('None')}</option>
             </select>
             <label class="gev-voice-timeout-unit" for="gev-voice-timeout-input">${t('Minutes')}</label>

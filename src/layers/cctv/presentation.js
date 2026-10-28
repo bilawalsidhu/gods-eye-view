@@ -1,5 +1,5 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
-import { t } from '../../i18n/index.js';
+import { t, translateKnown } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -7,6 +7,22 @@ import {
   specFovCapabilityToken,
   isDatasheetFov,
 } from './modelSpecs.js';
+
+/** The translated name of a camera view band (street, city, regional, global). */
+function viewBandLabel(band) {
+  switch (band) {
+    case 'street':
+      return t('STREET', { context: 'view band' });
+    case 'city':
+      return t('CITY', { context: 'view band' });
+    case 'regional':
+      return t('REGIONAL', { context: 'view band' });
+    case 'global':
+      return t('GLOBAL', { context: 'view band' });
+    default:
+      return String(band).toUpperCase();
+  }
+}
 
 export function createPresentation({
   state: layerState,
@@ -73,16 +89,16 @@ export function createPresentation({
       layerState._showProjection ? t('PROJ MONITOR') : t('PROJ OFF'),
       layerState._coverageMode === 'viewshed' ? t('VIEWSHED') : null,
       t('CAL {value}', {
-        value: calBadge.replace('-', ' ').toUpperCase(),
+        value: translateKnown(calBadge.replace('-', ' ').toUpperCase()),
       }),
-      health?.sourceKind
-        ? t('SRC {value}', {
-            value: String(health.sourceKind).toUpperCase(),
-          })
-        : t('SRC {value}', {
-            value: String(active.camera.feedType || 'image').toUpperCase(),
-          }),
-      t('{value} CONTEXT', { value: viewBand.toUpperCase() }),
+      t('SRC {value}', {
+        value: translateKnown(
+          String(
+            health?.sourceKind || active.camera.feedType || 'image',
+          ).toUpperCase(),
+        ),
+      }),
+      t('{value} CONTEXT', { value: viewBandLabel(viewBand) }),
       // Identified hardware: append the model's datasheet specs + attribution.
       active.camera.spec
         ? t('{spec} · SPECS: CCTV-DATABASE.COM', {
