@@ -55,6 +55,7 @@ export function createIngestion({
     if (!entry) return;
     try {
       entry.controller?.abort();
+      endLoading();
     } catch {
       // no-op
     }
@@ -97,6 +98,7 @@ export function createIngestion({
         const payload = await fetchGbfsJson(city.stationInformationUrl, {
           signal: controller.signal,
         });
+        controller.signal.throwIfAborted();
         const stationMap = parts.model.parseStationInformation(payload);
         if (stationMap.size === 0) {
           throw new Error(`No station information for ${city.city}`);
@@ -104,7 +106,7 @@ export function createIngestion({
         layerState._stationInfoCache.set(cityId, stationMap);
         return stationMap;
       } finally {
-        endLoading();
+        if (!controller.signal.aborted) endLoading();
       }
     })().finally(() => {
       // Clean up in-flight entry only if it is still ours (not replaced by a newer request)
@@ -141,6 +143,7 @@ export function createIngestion({
         const payload = await fetchGbfsJson(city.stationStatusUrl, {
           signal: controller.signal,
         });
+        controller.signal.throwIfAborted();
         const statusMap = parts.model.parseStationStatus(payload);
         layerState._statusCache.set(cityId, {
           statusMap,
@@ -148,7 +151,7 @@ export function createIngestion({
         });
         return statusMap;
       } finally {
-        endLoading();
+        if (!controller.signal.aborted) endLoading();
       }
     })().finally(() => {
       const current = layerState._inFlightStatus.get(cityId);
@@ -184,6 +187,11 @@ export function createIngestion({
             parts.rendering.applyStatusToPoints(cityId, statusMap);
           } catch (error) {
             if (error?.name === 'AbortError') return;
+            if (
+              !layerState._enabled ||
+              generation !== layerState._proximityGeneration
+            )
+              return;
             console.warn(
               `[Data:Bikeshare] ${cityId} status update error:`,
               error,

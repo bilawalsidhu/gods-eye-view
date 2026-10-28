@@ -62,6 +62,9 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    bikeshare: async () =>
+      (await import('../layers/bikeshare/render/navara.js'))
+        .createBikeshareNavaraRenderer,
     'military-installations': async () => {
       const { createInstallationsNavaraRenderer } =
         await import('../layers/installations/render/navara.js');

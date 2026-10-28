@@ -39,6 +39,7 @@ uniform float uGevSizePx;
 uniform float uGevFootprint;
 uniform vec4 uGevScaleByDistance;
 uniform float uGevHasScaleByDistance;
+uniform vec4 uGevTranslucencyByDistance;
 uniform float uGevDisableWithinM;
 uniform float uGevOutlinePx;
 uniform float uGevPixelRatio;
@@ -46,6 +47,7 @@ varying vec4 vGevColor;
 varying vec2 vGevLocal;
 varying float vGevOutline;
 varying float vGevPixelDistance;
+varying float vGevTranslucency;
 ${OVERLAY_DEPTH_VERTEX}
 `;
 
@@ -54,6 +56,13 @@ vec4 mvCenter = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
 float gevScale = gevStyle.y;
 float gevDistanceScale = 1.0;
 float gevDistance = length(mvCenter.xyz);
+float gevAlphaNearSq = uGevTranslucencyByDistance.x * uGevTranslucencyByDistance.x;
+float gevAlphaFarSq = uGevTranslucencyByDistance.z * uGevTranslucencyByDistance.z;
+float gevAlphaT = pow(clamp(
+  (gevDistance * gevDistance - gevAlphaNearSq) / max(gevAlphaFarSq - gevAlphaNearSq, 1e-6),
+  0.0, 1.0
+), 0.2);
+vGevTranslucency = mix(uGevTranslucencyByDistance.y, uGevTranslucencyByDistance.w, gevAlphaT);
 if (uGevHasScaleByDistance > 0.5) {
   // Cesium's czm_nearFarScalar: over the squared distance, eased by ^0.2.
   float gevNearSq = uGevScaleByDistance.x * uGevScaleByDistance.x;
@@ -107,6 +116,7 @@ varying vec4 vGevColor;
 varying vec2 vGevLocal;
 varying float vGevOutline;
 varying float vGevPixelDistance;
+varying float vGevTranslucency;
 ${OVERLAY_DEPTH_FRAGMENT}
 `;
 
@@ -126,7 +136,7 @@ float gevWholeAlpha = 1.0 - smoothstep(gevMaxDistance, 0.5, gevDistanceToCenter)
 float gevInner = 1.0 - vGevOutline;
 float gevInnerAlpha = 1.0 - smoothstep(gevMaxDistance * gevInner, 0.5 * gevInner, gevDistanceToCenter);
 diffuseColor *= sRGBTransferEOTF(mix(uGevOutlineColor, vGevColor, gevInnerAlpha));
-diffuseColor.a *= gevWholeAlpha;
+diffuseColor.a *= gevWholeAlpha * vGevTranslucency;
 if (diffuseColor.a < 0.005) discard;
 `
     : /* glsl */ `
@@ -251,6 +261,9 @@ export function createMoverMesh(
     uGevFootprint: { value: 0 },
     uGevScaleByDistance: { value: sbd ? [...sbd] : [0, 1, 1, 1] },
     uGevHasScaleByDistance: { value: sbd ? 1 : 0 },
+    uGevTranslucencyByDistance: {
+      value: style.translucencyByDistance ?? [0, 1, 1, 1],
+    },
     uGevDisableWithinM: {
       value: typeof depthTest === 'object' ? depthTest.disableWithinM : -1,
     },

@@ -29,6 +29,38 @@ const basicShader = () => ({
   fragmentShader: ShaderLib.basic.fragmentShader,
 });
 
+test('point translucency applies to fill and outline and defaults to no fade', () => {
+  const options = normalizeMoverSetOptions({
+    id: 'stations',
+    kind: 'point',
+    capacity: 1,
+    point: { sizePx: 8, translucencyByDistance: [200, 1, 180000, 0.15] },
+  });
+  const mover = createMoverMesh(options, createMoverStore(options));
+  assert.deepEqual(
+    mover.uniforms.uGevTranslucencyByDistance.value,
+    [200, 1, 180000, 0.15],
+  );
+  const shader = patchMoverShader(basicShader(), mover.uniforms, {
+    point: true,
+  });
+  assert.match(shader.fragmentShader, /gevWholeAlpha \* vGevTranslucency/);
+  assert.match(
+    shader.vertexShader,
+    /gevDistance \* gevDistance - gevAlphaNearSq/,
+  );
+  mover.dispose();
+  const ordinary = createMoverMesh(
+    spriteOptions,
+    createMoverStore(spriteOptions),
+  );
+  assert.deepEqual(
+    ordinary.uniforms.uGevTranslucencyByDistance.value,
+    [0, 1, 1, 1],
+  );
+  ordinary.dispose();
+});
+
 test('the shader patch sizes the quad in pixels and colours it per instance', () => {
   const shader = patchMoverShader(basicShader(), { uGevSizePx: { value: 9 } });
   assert.equal(shader.uniforms.uGevSizePx.value, 9);

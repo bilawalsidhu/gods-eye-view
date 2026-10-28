@@ -34,6 +34,7 @@ const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
 // engine in their renderers: cesium only in render/cesium*.js, three and
 // Navara only in render/navara*.js. The list grows with each moved layer.
 const RENDERED_LAYER_DIRS = [
+  'src/layers/bikeshare/',
   'src/layers/earthquakes/',
   'src/layers/firms/',
   'src/layers/flights/',
@@ -63,7 +64,8 @@ const renderedLayer = (file) =>
   file === 'src/celestialRing.js' ||
   file.startsWith('src/celestialRing/') ||
   RENDERED_LAYER_DIRS.some((dir) => file.startsWith(dir));
-const cesiumLayerRenderer = (file) => /\/render\/cesium[^/]*\.js$/.test(file);
+const cesiumLayerRenderer = (file) =>
+  /\/render\/cesium(?:[^/]*|\/[^/]+)\.js$/.test(file);
 const navaraLayerRenderer = (file) => /\/render\/navara[^/]*\.js$/.test(file);
 const renderer = (file) =>
   /^src\/(?:ui|app|standalone|overlays)\//.test(file) ||

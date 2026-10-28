@@ -1,10 +1,10 @@
 import * as Cesium from 'cesium';
-import { GBFS_CITY_REGISTRY } from './registry.js';
-import { BIKESHARE_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
+import { GBFS_CITY_REGISTRY } from '../../registry.js';
+import { BIKESHARE_SELECTED_OVERLAY_SOURCE_ID } from '../../policy.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
+} from '../../../../data/cameraSensitivity.js';
 
 export function createLifecycle({
   state: layerState,
@@ -12,7 +12,11 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
+  const {
+    registerSpriteCollection,
+    unregisterSpriteCollection,
+    restoreSpriteOrder,
+  } = services.sprites;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
   const methods = {
@@ -74,6 +78,8 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer - Cesium viewer instance.
      */
     enable(viewer) {
+      if (layerState._enabled) return;
+      viewer = layerState._viewer;
       layerState._enabled = true;
       layerState._error = null;
       layerState._pointCollection.show = true;
@@ -106,6 +112,8 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer - Cesium viewer instance.
      */
     disable(viewer) {
+      viewer = layerState._viewer;
+      if (!viewer) return;
       layerState._enabled = false;
       layerState._proximityGeneration++;
       layerState._altitudeGateEnabled = false;
@@ -143,6 +151,10 @@ export function createLifecycle({
 
     /** Permanently release primitives, handlers, and the selected host source. */
     destroy(viewer) {
+      viewer = layerState._viewer;
+      if (!viewer) return;
+      clearTimeout(layerState._cameraDebounceTimer);
+      layerState._cameraDebounceTimer = null;
       if (layerState._enabled) this.disable(viewer);
       else {
         parts.selection._clearSelection();
@@ -166,10 +178,13 @@ export function createLifecycle({
       }
       parts.ingestion.abortAllInFlight();
       if (layerState._pointCollection) {
+        unregisterSpriteCollection?.('bikeshare', layerState._pointCollection);
         viewer.scene.primitives.remove(layerState._pointCollection);
         layerState._pointCollection = null;
       }
       layerState._viewer = null;
+      layerState._stationInfoCache.clear();
+      layerState._statusCache.clear();
     },
   };
 
