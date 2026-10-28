@@ -74,6 +74,7 @@
 
 import puppeteer from 'puppeteer';
 import { watchW1Page, redact } from './qa-browserEvidence.mjs';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { installCctvFixture } from './fixtures/w2/cctv.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -97,6 +98,7 @@ const explicitUrl = getOpt('--url', process.env.QA_BASE_URL);
 const output = getOpt('--out');
 if (!explicitUrl || !output)
   throw new Error('Explicit --url and --out are required');
+const mapPolicy = { allowPaidMaps: getFlag('--allow-paid-maps') };
 const CCTV_URL = new URL(explicitUrl);
 if (
   ['4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
@@ -401,6 +403,7 @@ async function main() {
 
   try {
     const page = await browser.newPage();
+    await blockPaidQaMaps(page, mapPolicy);
     await page.setViewport({ width: 1280, height: 800 });
     watchW1Page(page, evidence, {
       name: 'cctv-legacy',
