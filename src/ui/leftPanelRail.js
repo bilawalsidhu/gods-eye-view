@@ -50,8 +50,12 @@ export function layoutLeftPanelRail({
   // The existing narrow-screen composition has its own full-width stack.
   // Keep this desktop lane engine from fighting those dedicated rules.
   if (windowRef.matchMedia('(max-width: 720px)').matches) {
-    stack.classList.remove('layout-focus');
-    stack.classList.remove('layout-tail');
+    if (stack.classList.contains('layout-focus')) {
+      stack.classList.remove('layout-focus');
+    }
+    if (stack.classList.contains('layout-tail')) {
+      stack.classList.remove('layout-tail');
+    }
     stack.style.removeProperty('--left-stack-safe-top');
     stack.style.removeProperty('--left-stack-safe-bottom');
     stack.style.removeProperty('--left-stack-centered-height');

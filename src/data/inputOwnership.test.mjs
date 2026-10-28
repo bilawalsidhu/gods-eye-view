@@ -117,7 +117,10 @@ test('every scene click handler consults ownership before it picks', () => {
     ['src/data/trackingClickGesture.js', 'onClick(click, gesture);'],
     ['src/data/localGeojsonCore.js', 'viewer.scene.pick(click.position)'],
     ['src/data/cctvGizmo.js', 'pickGizmoPart(event.position)'],
-    ['src/layers/alpr/presentation.js', 'viewer.scene.pick(click.position)'],
+    [
+      'src/layers/alpr/render/cesiumPresentation.js',
+      'viewer.scene.pick(click.position)',
+    ],
     [
       'src/layers/bikeshare/render/cesium/selection.js',
       'viewer.scene.pick(click.position)',

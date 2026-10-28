@@ -1,3 +1,5 @@
+import { createAlprCesiumRenderer } from '../../layers/alpr/render/cesium.js';
+import { rendererFor } from './renderers.js';
 import * as credits from '../../data/dataCredits.js';
 import { createAlprCamerasLayer } from '../../layers/alpr/index.js';
 import * as render from '../../renderGovernor.js';
@@ -8,10 +10,18 @@ import { keyholeLabelAlphaFromGeometry } from '../../celestialRing.js';
 import { refreshTrackedReadout } from '../../data/trackedReadout.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
-export function createApplicationAlpr({ surface, source }) {
+export function createApplicationAlpr({
+  surface,
+  source,
+  rendererFactory = ({ engine, ...context }) =>
+    engine?.kind === 'navara'
+      ? rendererFor('alpr-cameras', engine, context)
+      : createAlprCesiumRenderer(context),
+}) {
   const { groundFloor } = surface;
   return createAlprCamerasLayer({
     source,
+    rendererFactory,
     services: {
       credits,
       render,
