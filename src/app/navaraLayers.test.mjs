@@ -10,7 +10,7 @@ import {
   rendererFor,
 } from './layers/renderers.js';
 
-test('the Navara mode registers the aircraft layers’ and vessels’ renderers, once', async () => {
+test('the Navara mode registers migrated renderers once', async () => {
   assert.equal(layerAvailableOn('military', 'navara'), false);
   await Promise.all([
     registerNavaraLayerRenderers(),
@@ -26,6 +26,7 @@ test('the Navara mode registers the aircraft layers’ and vessels’ renderers,
     'ais-live-vessels',
     'earthquakes',
     'local-firms',
+    'military-installations',
   ])
     assert.equal(layerAvailableOn(id, 'navara'), true, id);
   assert.deepEqual(
@@ -40,6 +41,7 @@ test('the Navara mode registers the aircraft layers’ and vessels’ renderers,
       'satellites',
       'rocket-launches',
       'ais-live-vessels',
+      'military-installations',
       'local-firms',
     ],
   );

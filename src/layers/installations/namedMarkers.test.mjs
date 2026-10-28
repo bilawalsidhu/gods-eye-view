@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from 'cesium';
-import { createNamedMarkers } from './namedMarkers.js';
-import { createLifecycle } from './lifecycle.js';
+import { createNamedMarkers } from './render/cesium/namedMarkers.js';
+import { createLifecycle } from './render/cesium/lifecycle.js';
 import { createLocalInfrastructureOverlayEntry } from '../../data/localGeojsonCore.js';
 
 function setup(t) {
@@ -181,5 +181,19 @@ test('Contacts can select a point outside the normal title cap or an unnamed pol
     assert.equal(h.labels.filter(e => e.selected).length, 1);
     assert.equal(h.labels.length, 512);
   }
+  h.lifecycle.destroy(h.state.viewer);
+});
+
+test('selected markers without an explicit namedArea flag stay hidden safely', (t) => {
+  const h = setup(t);
+  const record = {
+    id: 'google:places-qa-01',
+    name: 'Candidate',
+    latitude: 0,
+    longitude: 0,
+  };
+  h.state.selectedId = record.id;
+  assert.doesNotThrow(() => h.markers.sync([record]));
+  h.markers.visit((_id, point) => assert.equal(point.show, false));
   h.lifecycle.destroy(h.state.viewer);
 });

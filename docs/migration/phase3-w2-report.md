@@ -2,6 +2,14 @@
 
 Status: W2 in progress. Earthquakes are accepted on both engines; FIRMS and the remaining seven layers are pending. The initial checkpoint established the native oracle and fixed a shared overlay lifecycle defect. The execution sequence and later migration phases are in [the detailed plan](phase3-w2-plan.md).
 
+## W2 military installations — implementation checkpoint
+
+The Cesium renderer is extracted behind the layer's renderer port and the Navara renderer now owns bounded point cohorts, ordinary surface outlines, selected fills, pick ownership, and Places/OSM attribution. Shared ingestion, selection identity, source status, and context metadata remain engine-neutral. Two review fixes cover Cesium polyline material construction and boolean marker visibility. The full-suite failure after extraction was a stale source-path assertion; it now reads the extracted renderer while retaining the display-cache contract. Installations intentionally do not create a tracked readout card on selection.
+
+Final production-style headless preview: Cesium 12/12 checks and Navara 7/7. Cesium outline/selected-fill raster deltas: 1,468/2,157 pixels. Navara: 3,419/1,416. Both use a local imagery fixture, canonical picked ID, Places attribution, and report zero unexpected browser errors. Full `npm test`: 7,239 passed, 1 skipped, 0 failed. Boundaries, scoped format (1,603 files), production build, panel build, QA-preview build, main-chunk composition, and `git diff --check` pass. No main-chunk baseline exists, so the size budget is not checked.
+
+FIRMS remains independently blocked on the unchanged uncapped close ratio 1.136 versus the 1.10 limit; installations acceptance does not close W2. Next W2 layers: bikeshare, radio, ALPR, CCTV, transit, recent imagery, then the combined wave gates.
+
 ## Reviewed changes
 
 Removing a source entry previously removed its projection record but retained its collision arbiter identity. A later layout invalidation could then schedule frames for a label that no longer existed. Clear, individual remove and replace-empty now release that identity. Three regressions first failed on the old implementation (two unexpected render requests each), then passed. A fourth test proves another source in the same collision domain still paints. Existing live-source fade and collision policies are unchanged.
@@ -133,3 +141,11 @@ The current full-resolution/HalfFloat/exact-sRGB implementation was rebuilt into
 The exact-sRGB full-resolution cache still has the prior three-context uncapped result: global0.946, regional0.982, local0.773, close1.136 (5.0/4.4ms; limit1.10). Degree-eight transfer polynomials passed pixels but a full three-context run worsened close to1.159; degree-seven also passed pixels but did not improve the one-context close ratio (1.114), so both were reverted to exact sRGB. A three-vertex fullscreen composite passed glow pixels but produced no measurable close improvement (one-context1.136) and was reverted to the original fullscreen quad. A final QA-preview composite-control sample observed 4,779 cache hits,4 redraws,0 unavailable frames; toggling display-space blending off measured 5.4ms versus5.2ms with it enabled, so this single-context result does not isolate or justify a new optimization. All fixture populations, color tolerances, and the1.10 gate are unchanged. FIRMS remains pending its uncapped close gate; no acceptance is claimed.
 
 Local checkpoint commit: `35283237 feat(firms): add Navara renderer checkpoint`. The next W2 layer plan is [military installations](phase3-w2-installations-plan.md). FIRMS' performance gate remains a wave-closure requirement while independent W2 renderer work continues.
+
+## 2026-10-28 — military installations native preview checkpoint
+
+The Cesium extraction and Navara renderer pass the headless instrumented production-style preview using the same Overpass fixture. Cesium passes 12/12 checks, including loaded ground tiles, visible OSM and Places attribution, a pickable native entity, canonical selection, 1,468 changed outline pixels and 2,157 changed selected-footprint pixels. Navara passes 7/7 checks, including 3,419 outline pixels and 1,416 selected-footprint pixels. Both have zero unexpected browser errors. Artifacts and JSON reports remain in `/private/tmp/installations-cesium-acceptance.json`, `/private/tmp/installations-navara-acceptance.json`, and their matching PNGs.
+
+The QA Cesium fixture serves the package's exact `approximateTerrainHeights.json` and uses a local 256×256 single-image provider, avoiding network credentials. The selected-fill capture waits until the ground primitives are ready and a post-render frame completes. A dev-server run did not complete Cesium worker tasks; the built preview does, so native rendering acceptance is based on the preview run.
+
+Focused installation tests pass 51/51. Package/import boundaries, scoped format (1,603 source files), production build, panel build and QA-preview build pass. `check:main-chunk` passes composition but reports no size baseline, so the budget was not checked. A full `npm test` run under the restricted sandbox hit loopback `EPERM` in local-server tests and remained idle; it was stopped and rerun with loopback permission. That rerun is still pending. FIRMS remains open at uncapped close ratio 1.136 versus 1.10; therefore W2 is not closed.

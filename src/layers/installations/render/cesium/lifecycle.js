@@ -1,10 +1,10 @@
 import * as Cesium from 'cesium';
-import { LAYER_ID } from './policy.js';
-import { engineFromViewer } from '../../globe/cesium/engineFromViewer.js';
+import { LAYER_ID } from '../../policy.js';
+import { engineFromViewer } from '../../../../globe/cesium/engineFromViewer.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
+} from '../../../../data/cameraSensitivity.js';
 
 export function createLifecycle({
   state: layerState,
@@ -23,7 +23,7 @@ export function createLifecycle({
       layerState.dataSource = new Cesium.CustomDataSource(
         'military-installations',
       );
-      viewer.dataSources.add(layerState.dataSource);
+      const added = viewer.dataSources.add(layerState.dataSource);
       const camera = engine?.camera ?? viewer.camera;
       const cameraChanged = () => {
         if (!layerState.contextAnchor) parts.viewport.scheduleLoad();
@@ -32,6 +32,7 @@ export function createLifecycle({
       layerState.changedRemove =
         camera.changed?.addEventListener(cameraChanged);
       parts.selection.installInteraction(viewer);
+      return added;
     },
 
     enable() {
@@ -64,6 +65,7 @@ export function createLifecycle({
     disable() {
       layerState.enabled = false;
       services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
+      services.credits?.hideGooglePlacesCredit?.(layerState.viewer, LAYER_ID);
       parts.namedMarkers?.hide();
       releaseCameraSensitivity(layerState.viewer?.camera, LAYER_ID);
       layerState.contextAnchor = null;

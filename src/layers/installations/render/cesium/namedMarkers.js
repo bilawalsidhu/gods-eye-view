@@ -2,9 +2,9 @@ import * as Cesium from 'cesium';
 import {
   MILITARY_LABEL_CAP,
   MILITARY_POINT_CAP,
-} from '../../data/militaryNames.js';
-import { LAYER_ID, COLOR_BY_CLASS } from './policy.js';
-import { createInfrastructureOverlayEntry } from '../../data/infrastructureOverlayEntry.js';
+} from '../../../../data/militaryNames.js';
+import { LAYER_ID, COLOR_BY_CLASS } from '../../policy.js';
+import { createInfrastructureOverlayEntry } from '../../../../data/infrastructureOverlayEntry.js';
 
 /** Bounded point markers; the shared overlay owns text projection and decluttering. */
 export function createNamedMarkers({ state, services, parts, overlayHost }) {
@@ -34,7 +34,9 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
     for (let index = 0; index < ordered.length; index++) {
       const marker = ordered[index];
       const point = marker.point;
-      point.show = marker.named && occluder.isPointVisible(point.position);
+      point.show = Boolean(
+        marker.named && occluder.isPointVisible(point.position),
+      );
       if (!point.show) continue;
       const projected = Cesium.SceneTransforms.worldToWindowCoordinates(
         viewer.scene,

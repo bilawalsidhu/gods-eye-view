@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from './policy.js';
+import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from '../../policy.js';
 
 export function createRendering({
   state: layerState,
@@ -154,6 +154,16 @@ export function createRendering({
     return selected ? [...rendered, selected] : rendered;
   }
 
+  function syncPlacesCredit(records) {
+    const usesPlaces = records.some((record) =>
+      record.sources?.some((source) => source.name === 'Google Maps Places'),
+    );
+    if (usesPlaces)
+      services.credits?.showGooglePlacesCredit?.(layerState.viewer, LAYER_ID);
+    else
+      services.credits?.hideGooglePlacesCredit?.(layerState.viewer, LAYER_ID);
+  }
+
   function renderRecords({ claimSelection = false } = {}) {
     // Context navigation can select another layer without a canvas click.
     // A delayed floor/data repaint must not steal that newer selection back.
@@ -194,6 +204,7 @@ export function createRendering({
         ),
       });
     else services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
+    syncPlacesCredit(layerState.records);
     const records = renderableRecords();
     const keys = new Map(
       records.map((record) => [record.id, renderKey(record)]),
@@ -257,7 +268,7 @@ export function createRendering({
               Cesium.Cartesian3.fromDegrees(lon, lat),
             ),
             width: 2,
-            material: color.withAlpha(0.85),
+            material: new Cesium.ColorMaterialProperty(color.withAlpha(0.85)),
             clampToGround: true,
             classificationType: Cesium.ClassificationType.BOTH,
           },
