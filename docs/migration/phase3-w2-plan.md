@@ -26,6 +26,8 @@ User authorization: finish W2, then the remaining roadmap (W3, W4, phase4, phase
 
 Order follows rendering dependencies, not raw catalog order. Actual catalog order/serialization tokens remain unchanged. Do not claim nine layers complete by enabling factories before each passes its contract. World-overlay host, engine.movers/lines and engine.camera are reused; introduce a shared helper only after a second consumer demonstrates the same need.
 
+FIRMS correctness and preview acceptance are complete, but its uncapped close work ratio remains 1.136 against the unchanged 1.10 limit. Its implementation checkpoint is `35283237`, not an acceptance commit. Continue independent W2 layer work while carrying this performance gate; W2 cannot close until FIRMS and combined W2 performance pass. The next layer's renderer-specific baseline and acceptance plan is [military installations](phase3-w2-installations-plan.md).
+
 ## Tasks and review checkpoints
 
 ### W2-0 — pin baseline, QA and existing SDK capabilities
