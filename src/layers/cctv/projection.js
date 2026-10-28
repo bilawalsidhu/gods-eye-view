@@ -7,6 +7,7 @@ import {
   PLANE_OUTLINE_COLOR,
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
+  PROJECTION_TEXTURE_SWAP_MS,
 } from './policy.js';
 
 export function createProjection({
@@ -15,7 +16,12 @@ export function createProjection({
   parts,
   source,
 }) {
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const {
+    holdContinuousRender,
+    releaseContinuousRender,
+    governorRequestRender,
+  } = services.render;
+  let loopRevision = 0;
 
   /**
    * Build the protected label associated with one active monitor plane.
@@ -352,14 +358,15 @@ export function createProjection({
   function startProjectionLoop() {
     if (layerState._projectionRaf) return;
     if (!parts.model.projectionLoopIsNeeded()) return;
-    // The armed projection loop uploads video textures / runs focus fades per
-    // frame — the scene must render continuously while it runs. Released when
-    // the tick self-stops. (perf wave 2)
-    holdContinuousRender('cctv-projection');
+    clearTimeout(layerState._projectionTimer);
+    layerState._projectionTimer = 0;
+    const revision = ++loopRevision;
 
     const tick = () => {
+      if (revision !== loopRevision) return;
+      layerState._projectionRaf = 0;
+      layerState._projectionTimer = 0;
       if (!layerState._viewer || !parts.model.projectionLoopIsNeeded()) {
-        layerState._projectionRaf = 0;
         releaseContinuousRender('cctv-projection');
         return;
       }
@@ -371,11 +378,29 @@ export function createProjection({
         ensureProjectionRuntime(active);
         if (active.projection && !active.projection.video) {
           parts.frames.drawProjectionFrame(active);
-          parts.frames.refreshProjectionTextures(active);
+          if (parts.frames.refreshProjectionTextures(active))
+            governorRequestRender('cctv-projection-image');
         }
       }
 
-      layerState._projectionRaf = requestAnimationFrame(tick);
+      const continuous =
+        (layerState._showProjection && active?.projection?.video) ||
+        services.focus.focusPassIsNeeded(
+          services.focus.getFocusTarget(),
+          layerState._activeFocusStyleCount,
+        );
+      if (continuous) {
+        holdContinuousRender('cctv-projection');
+        layerState._projectionRaf = requestAnimationFrame(tick);
+      } else {
+        // Stills retain the existing fetch/texture cadence without rendering
+        // unchanged pixels at display refresh rate.
+        releaseContinuousRender('cctv-projection');
+        layerState._projectionTimer = setTimeout(
+          tick,
+          PROJECTION_TEXTURE_SWAP_MS,
+        );
+      }
     };
 
     layerState._projectionRaf = requestAnimationFrame(tick);
@@ -384,6 +409,9 @@ export function createProjection({
   /** Cancels the projection animation loop. */
 
   function stopProjectionLoop() {
+    loopRevision++;
+    clearTimeout(layerState._projectionTimer);
+    layerState._projectionTimer = 0;
     if (layerState._projectionRaf) {
       cancelAnimationFrame(layerState._projectionRaf);
       layerState._projectionRaf = 0;
