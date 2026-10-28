@@ -113,6 +113,9 @@ test('Pinokio menu resolves the nested install marker and exposes each lifecycle
     runtime.url = url;
     const items = await menu(kernel, info);
     assert.equal(items.filter((item) => item.default).length, 1);
+    const ready = installed && running === 'start.js' && Boolean(url);
+    assert.equal(items[0].popout, ready ? true : undefined);
+    assert.ok(items.slice(1).every((item) => item.popout === undefined));
     return items.map(({ text, href, default: isDefault = false }) => ({ text, href, default: isDefault }));
   };
 

@@ -1,3 +1,4 @@
+import { interruptGlobeRotation } from '../cameraVerbs.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -73,8 +74,17 @@ const PANEL_ALIASES = new Map([
   ['styles', 'control-panel'],
   ['filters', 'control-panel'],
   ['visual styles', 'control-panel'],
+  ['visual preset', 'control-panel'],
+  ['visual presets', 'control-panel'],
+  ['provider settings', 'provider-settings'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
+  ['voice settings', 'voice-settings'],
+  ['voice-settings', 'voice-settings'],
+  ['voice preview', 'voice-preview'],
+  ['voice-preview', 'voice-preview'],
+  ['voice control', 'voice-preview'],
+  ['voice controls', 'voice-preview'],
   ['radio', 'radio-panel'],
   ['internet radio', 'radio-panel'],
   ['radio stations', 'radio-panel'],
@@ -109,6 +119,7 @@ const PANEL_IDS = new Set([
   'pp-toggles',
   'weather-panel',
   'recent-imagery-panel',
+  'provider-settings',
 ]);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
@@ -242,6 +253,7 @@ export function createGevActionRunner({
   searchNavigation = searchAndFlyTo,
   speechBuilders = null,
   deixis = null,
+  readVoicePanelOperation = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -262,9 +274,86 @@ export function createGevActionRunner({
       }),
     ));
   installViewTargetPrewarm(viewer);
-  initCameraVerbs(viewer, getViewTargetCartesian);
+  initCameraVerbs(viewer, getViewTargetCartesian, {
+    isCockpitActive: () => Boolean(styleManager?.getCockpitState?.()?.active),
+  });
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.
+  const voiceUnavailable = (action) => ({
+    ok: false,
+    action,
+    applied: false,
+    unavailable: true,
+    error: 'Voice panel controls are unavailable in this host.',
+    say: 'Voice panel controls are unavailable in this host.',
+  });
+  async function showVoicePanel(
+    view,
+    open,
+    options,
+    operation = readVoicePanelOperation?.(),
+  ) {
+    const current = () =>
+      !options.signal?.aborted &&
+      (!options.isCurrent || options.isCurrent()) &&
+      operation?.isCurrent();
+    if (!operation) return voiceUnavailable('set_panel_open');
+    if (!current())
+      return {
+        ok: false,
+        action: 'set_panel_open',
+        applied: false,
+        cancelled: true,
+      };
+    let exit = null;
+    if (open) {
+      if (typeof styleManager?.getCockpitState !== 'function')
+        return voiceUnavailable('set_panel_open');
+      if (styleManager.getCockpitState()?.active) {
+        if (typeof styleManager.controlCockpit !== 'function')
+          return voiceUnavailable('set_panel_open');
+        exit = await styleManager.controlCockpit('exit');
+        if (styleManager.getCockpitState()?.active)
+          return {
+            ok: false,
+            action: 'set_panel_open',
+            applied: false,
+            exit,
+            error: exit?.error || 'Cockpit did not exit.',
+          };
+      }
+    }
+    if (!current())
+      return {
+        ok: false,
+        action: 'set_panel_open',
+        applied: false,
+        cancelled: true,
+        exit,
+        cockpitExited: Boolean(exit && !styleManager.getCockpitState()?.active),
+        say:
+          exit && !styleManager.getCockpitState()?.active
+            ? 'Cockpit exited; the voice panel was left as you last set it.'
+            : 'The voice panel was left as you last set it.',
+      };
+    const result = operation.show(view, open);
+    return {
+      ...result,
+      action: 'set_panel_open',
+      panelId: view === 'settings' ? 'voice-settings' : 'voice-preview',
+      exit,
+      state: styleManager?.getCockpitState?.() ?? null,
+      say: !result.ok
+        ? 'The voice panel was not changed.'
+        : result.settingsOpen
+          ? 'Voice Settings is open.'
+          : result.panelOpen
+            ? result.previewEnabled
+              ? 'Voice Preview is open.'
+              : 'Voice control is open; Preview remains off.'
+            : 'The voice panel is closed.',
+    };
+  }
   const runGevAction = async function runGevAction(
     name,
     rawArgs = {},
@@ -298,6 +387,7 @@ export function createGevActionRunner({
     // Zoom during an active orbit adjusts the orbit RADIUS (spiral in/out) —
     // a straight camera move would be snapped back by the per-frame lookAt.
     if (name === 'adjust_camera_zoom') {
+      interruptGlobeRotation('voice-zoom-intent');
       const zoomOut = String(args.direction || '').toLowerCase() === 'out';
       const amt = String(args.amount || 'medium').toLowerCase();
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
@@ -635,6 +725,25 @@ export function createGevActionRunner({
       return { ok: true, action: 'set_visual_style', style };
     }
 
+    if (name === 'set_voice_inactivity_timeout') {
+      const operation = readVoicePanelOperation?.();
+      if (!operation) return voiceUnavailable(name);
+      if (!current() || !operation.isCurrent())
+        return { ok: false, action: name, applied: false, cancelled: true };
+      const result = operation.setMinutes(args.minutes);
+      const duration =
+        result.minutes === 0 ? 'disabled' : `${result.minutes} minutes`;
+      return {
+        ...result,
+        action: name,
+        say: !result.applied
+          ? 'Voice inactivity was not changed.'
+          : result.persisted
+            ? `Voice inactivity is ${duration}, saved in this browser.`
+            : `Voice inactivity is ${duration} for now, but could not be saved in this browser.`,
+      };
+    }
+
     if (name === 'set_panel_open') {
       const panelId = normalizePanelId(args.panelId || args.panel);
       if (!panelId)
@@ -642,6 +751,70 @@ export function createGevActionRunner({
           `Unknown panel: ${args.panelId || args.panel || 'missing'}`,
         );
       const open = args.open !== false;
+      if (panelId === 'voice-settings' || panelId === 'voice-preview')
+        return showVoicePanel(
+          panelId === 'voice-settings' ? 'settings' : 'preview',
+          open,
+          runOptions,
+        );
+      if (panelId === 'provider-settings') {
+        if (!current())
+          return {
+            ok: false,
+            action: name,
+            panelId,
+            applied: false,
+            cancelled: true,
+          };
+        const doc = globalThis.document;
+        const panel = doc?.getElementById?.('key-setup');
+        const button = open
+          ? doc?.getElementById?.('key-setup-chip')
+          : panel?.querySelector?.('[data-key-setup-close]');
+        const concealed =
+          open &&
+          [
+            'ui-clean-view',
+            'recording-mode',
+            'cockpit-mode',
+            'scene-playback-mode',
+          ].some((mode) => doc?.body?.classList?.contains(mode));
+        if (
+          concealed ||
+          panel?.dataset?.ready !== 'true' ||
+          typeof button?.click !== 'function'
+        ) {
+          const error = concealed
+            ? 'Provider Settings is hidden in the current view. Leave that view before opening it.'
+            : 'Provider Settings is unavailable in this runtime.';
+          return {
+            ok: false,
+            action: name,
+            panelId,
+            applied: false,
+            unavailable: true,
+            error,
+            say: error,
+          };
+        }
+        button.click();
+        // Opening unhides immediately; closing removes visible before its fade ends.
+        const applied = open
+          ? !panel.hidden
+          : !panel.classList.contains('visible');
+        const say = applied
+          ? `Provider Settings is ${open ? 'open' : 'closed'}.`
+          : 'Provider Settings did not change.';
+        return {
+          ok: applied,
+          action: name,
+          panelId,
+          applied,
+          open: applied ? open : !panel.hidden,
+          say,
+          ...(!applied ? { error: say } : {}),
+        };
+      }
       setPanelOpen(styleManager, panelId, open);
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
@@ -728,6 +901,25 @@ export function createGevActionRunner({
           ok: false,
           action: 'control_cockpit',
           error: `Unknown cockpit action: ${args.action || args.command || 'missing'}`,
+        };
+      }
+      if (args.voicePanel !== undefined) {
+        if (
+          action !== 'exit' ||
+          !['preview', 'settings'].includes(args.voicePanel)
+        )
+          return {
+            ok: false,
+            action: 'control_cockpit',
+            applied: false,
+            error: 'Voice panel reveal requires exit and a valid view.',
+          };
+        const result = await showVoicePanel(args.voicePanel, true, runOptions);
+        return {
+          ...result,
+          action: 'control_cockpit',
+          cockpitAction: 'exit',
+          voicePanel: args.voicePanel,
         };
       }
       const inferred = normalizeCockpitNavigationHints(rawAction);
@@ -4369,46 +4561,6 @@ function dominantValue(values) {
   };
 }
 
-function summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
-  const now = Cesium.JulianDate.now();
-  if (entity.__gevContextId) {
-    const store = window.__gevContextStore;
-    const record = store?.entities?.get(entity.__gevContextId);
-    if (record) return summarizeContextRecord(record, { includeProperties });
-  }
-  const props = propertyObject(entity);
-  const layerId = entity.__localLayerId || props.layerId || null;
-  const tags = props.tags || {};
-  const label = cleanText(
-    props.name ||
-      tags.name ||
-      tags['name:en'] ||
-      tags.official_name ||
-      tags.operator ||
-      props.operator ||
-      entity.name ||
-      layerTitle(layerId),
-  );
-  const position =
-    entity.__localBaseCartesian ||
-    entity.position?.getValue?.(now) ||
-    polygonCenter(entity, now);
-  const carto = position ? Cesium.Cartographic.fromCartesian(position) : null;
-  return {
-    id: String(entity.id || ''),
-    name: label || layerTitle(layerId),
-    layerId,
-    layerName: layerTitle(layerId),
-    latitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.latitude).toFixed(6))
-      : null,
-    longitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.longitude).toFixed(6))
-      : null,
-    properties: includeProperties ? compactProperties(props) : undefined,
-  };
-}
-
 function summarizeContextRecord(record, { includeProperties = false } = {}) {
   return {
     id: String(record.id || ''),
@@ -4425,31 +4577,6 @@ function summarizeContextRecord(record, { includeProperties = false } = {}) {
       : undefined,
     active: isContextRecordActive(record),
   };
-}
-
-function polygonCenter(entity, now) {
-  const hierarchy = entity.polygon?.hierarchy?.getValue?.(now);
-  const positions = hierarchy?.positions;
-  if (!positions?.length) return null;
-  return Cesium.BoundingSphere.fromPoints(positions).center;
-}
-
-function propertyObject(entity) {
-  const raw = entity?.properties?.getValue?.(Cesium.JulianDate.now()) || {};
-  return unwrapProperties(raw);
-}
-
-function unwrapProperties(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(unwrapProperties);
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    out[key] =
-      entry && typeof entry.getValue === 'function'
-        ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
-        : unwrapProperties(entry);
-  }
-  return out;
 }
 
 function compactProperties(props) {

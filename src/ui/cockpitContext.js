@@ -15,7 +15,7 @@ const LOCALIZED_CONTEXT_SCOPE = Object.freeze({
   window: ({ label, radiusKm }) =>
     t('{label} · {radius} AIR/SEA WINDOW', {
       label,
-      radius: `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${getLocale() === 'zh-CN' ? unitLabel('km') : unitLabel('km').toUpperCase()}`,
+      radius: `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${getLocale().startsWith('zh-') ? unitLabel('km') : unitLabel('km').toUpperCase()}`,
     }),
   installations: ({ scope, coverage }) =>
     t('{scope} · INSTALLATIONS {coverage}', { scope, coverage }),

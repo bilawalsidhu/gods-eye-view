@@ -131,3 +131,61 @@ browser startup (`Target closed`). Neither is a browser pass. No socket policy,
 assertion or threshold was weakened. Live playback/codec acceptance on this
 combined tree remains unverified; previous PR browser evidence belongs to its
 original tree.
+
+## v0.3.0 main integration — 2026-10-28
+
+The updated branch contains upstream main
+`e608fee7935b21251ca8f601003d7d47c813797d`, including release PR #1439
+(`72eb3fdc739991a1286b7f1251de908e9744bb2a`). Both `package.json` and
+`package-lock.json` retain upstream version `0.3.0`. The published v0.3.0
+changelog is unchanged. Pending #1165 and #1267 fragments remain in
+`changelog.d/` for a subsequent release; they must not be presented as features
+already shipped in v0.3.0 or assembled again into that release.
+
+The prior #1165 head `c702de826af72bd1d03c50669e01fb29dc6c7131` and current
+#1267 head `0f268efb7190d7a8322cff3f255a07267a35ec70` are retained as ancestry.
+The latter adds only a main merge to the three original asturksever commits
+listed above. No original commit was rewritten or reattributed, and no write
+was made to #1267's branch. Conflicts in `docs/CURRENT-STATE.md` preserve both
+new main behavior and the peer-owned TS/fMP4/init contract. Upstream's removal
+of unused `toFiniteNumber` and unneeded `sameOriginHlsUrl` export are retained.
+No relay algorithm, admission check or resource budget was relaxed.
+
+The direct-peer ownership model still shares identity and quotas behind a NAT;
+it does not distinguish authenticated users. The 24 MiB limit includes retained
+init files and media, not process RSS or separately bounded in-flight buffers.
+Only expired media 404s older than the newest pair are recoverable; init errors,
+newest-pair errors, oversized responses and origin/redirect failures stay strict.
+
+#1267 remains open and unmerged. Its security changes are included here, but
+its independent review/landing remains the recommended prerequisite. The
+regional PRs #1145, #1161 and #1163 still depend on this shared relay; this update
+does not synchronize or merge those branches. #1161 and #1163 additionally
+retain their separate #1162 prerequisite.
+
+### Validation of the updated tree
+
+Linux, Node 24.22.1, locked dependencies installed with `npm ci`.
+
+| Check | Result |
+| --- | --- |
+| Focused `node --test` selection of all CCTV test files, including admission and route security | 561 passed, zero failures/skips |
+| `GEV_REQUIRE_ALLOCATION_GATE=1 taskset -c 0-3 npm test` | Passed: 8,903 ordinary tests plus all 15 serialized allocation probes (8,918 passed total), 2 ordinary skips, zero failures |
+| `npm run build` | Passed; Vite reports the existing large-chunk advisory |
+| `npm run format:check` | Passed, 1,522 source files |
+| `npm run check:boundaries` | Passed |
+| `npm run i18n` | Passed; all four non-English catalogs complete |
+| `npm run layer-token:check -- --base-ref upstream/main` | Passed; 32 published tokens, no new allocation |
+| `npm run changelog:check` | Passed; pending fragments remain pending |
+| `npm run doctor -- --json` | Passed |
+| `git diff --check` | Passed |
+| `node scripts/qa-cctv-v2.mjs --url http://127.0.0.1:4173` | Blocked before assertions; exit 3, Chromium `Target closed` |
+| `npm run test:track -- --url http://127.0.0.1:4173` | Blocked before assertions; exit 2, Chromium process-singleton `socket() failed: Operation not permitted` |
+
+Both browser attempts used a reachable local Vite server and the installed
+Puppeteer-pinned Chrome 152.0.7977.75. No socket restrictions, assertions or
+thresholds were changed. These are not browser passes; live HLS/fMP4 playback,
+codec acceptance, native-GPU rendering and hosted CI remain separate gates.
+Prior browser evidence does not validate this updated tree. Node 26 and Windows
+were not executed locally. The ordinary suite skips the Docker Compose contract
+because Compose is absent and the Windows-native DACL check because this is Linux.

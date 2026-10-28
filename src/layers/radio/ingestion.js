@@ -2,6 +2,7 @@ import { msg } from '../../i18n/index.js';
 import {
   RADIO_DIRECTORY_STALE_MS,
   RADIO_DIRECTORY_FUTURE_SKEW_MS,
+  RADIO_REJECTED_STATION_COUNT_MAX,
 } from './policy.js';
 
 // Directory errors stay English in layer state and stats; the layer row and
@@ -64,17 +65,24 @@ export function createIngestion({
           typeof body.degraded !== 'boolean'
         )
           throw new Error('Radio directory freshness metadata was malformed');
+        // Rows the server skipped as structurally malformed. Older envelopes
+        // omit the field; a present value must be a bounded count.
+        const serverRejectedStationCount =
+          body.rejectedStationCount === undefined
+            ? 0
+            : body.rejectedStationCount;
+        if (
+          !Number.isSafeInteger(serverRejectedStationCount) ||
+          serverRejectedStationCount < 0 ||
+          serverRejectedStationCount > RADIO_REJECTED_STATION_COUNT_MAX
+        )
+          throw new Error('Radio directory diagnostic metadata was malformed');
         const rows = body.stations;
         const acceptedRows = rows.filter(
           parts.catalogModel.isValidRadioDirectoryStation,
         );
         if (!acceptedRows.length)
           throw new Error('Radio directory returned no usable stations');
-        if (acceptedRows.length !== rows.length) {
-          throw new Error(
-            'Radio directory response contained malformed stations',
-          );
-        }
         const acceptedGeneration = body.acceptedGeneration;
         if (
           acceptedGeneration !== null &&
@@ -147,7 +155,15 @@ export function createIngestion({
           }
           if (!repeatingAcceptedGeneration) layerState._updatedAt = updatedAt;
         }
-        layerState._degraded = body.degraded;
+        // Combine server-side structural rejections with rows this client
+        // refused. The count is diagnostic: it marks coverage degraded but does
+        // not undo the generation admitted above.
+        layerState._rejectedStationCount = Math.min(
+          RADIO_REJECTED_STATION_COUNT_MAX,
+          serverRejectedStationCount + rows.length - acceptedRows.length,
+        );
+        layerState._degraded =
+          body.degraded || layerState._rejectedStationCount > 0;
         layerState._stale = body.stale;
         layerState._error = preservingWarmCatalog
           ? ERROR_REFRESH_DEGRADED

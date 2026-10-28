@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { getTransitFeed } from '../data/transitFeeds.js';
 import {
   chooseLiveCities,
   selectStyle,
@@ -101,6 +102,18 @@ test('live visual cities follow local operating hours in summer and winter', () 
     const cities = chooseLiveCities(now);
     assert.ok(cities.length >= 1);
     for (const city of cities) {
+      const feed = getTransitFeed(city.feedId);
+      assert.ok(feed, `${city.id} has a registered feed`);
+      const distanceKm =
+        111.32 *
+        Math.hypot(
+          feed.center.lat - city.lat,
+          (feed.center.lon - city.lon) * Math.cos((city.lat * Math.PI) / 180),
+        );
+      assert.ok(
+        distanceKm < feed.loadRadiusKm,
+        `${city.id} is inside its feed's admission region`,
+      );
       const local = Number(
         new Intl.DateTimeFormat('en', {
           timeZone: city.zone,

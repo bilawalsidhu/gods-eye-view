@@ -11,5 +11,6 @@
   (radianx, #1165).
 - Reconcile asturksever's socket-owned HLS admission from #1267 with the
   fMP4/HD relay, protecting init files and media without increasing either
-  lease or memory budgets. Cover shared-peer recovery, expiry, disconnects,
+  lease or memory budgets. Preserve these checks when integrating v0.3.0 main.
+  Cover shared-peer recovery, expiry, disconnects,
   pending downloads and exact-limit HD caches (radianx, #1165; asturksever, #1267).

@@ -1,5 +1,4 @@
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
-import { StyleManager } from './ui/applicationShell.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -95,11 +94,13 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
     /stamp: \(\) =>\s*this\._stampNavigation\(\{\s*cancelPendingSelection,\s*clearSearchedLocation: false,?\s*\}\)/,
   );
 
-  const reassert = ui.indexOf('  _reassertNavigationHandoff(generation) {');
+  const reassert = ui.indexOf(
+    "  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool' } = {}) {",
+  );
   assert.ok(reassert > 0, '_reassertNavigationHandoff is missing');
   assert.match(
     ui.slice(reassert, reassert + 900),
-    /release: \(\) => \{[\s\S]{0,320}?this\.clearLocation\(\);[\s\S]{0,200}?this\._releaseFollowCamera\(\)/,
+    /release: \(\) => \{[\s\S]{0,320}?this\.clearLocation\(\);[\s\S]{0,200}?this\._releaseFollowCamera\(\{ trackingOrigin \}\)/,
   );
 
   // …and the policy only reaches `release` after its authority checks pass.
