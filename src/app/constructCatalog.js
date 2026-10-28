@@ -28,6 +28,7 @@ import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
+import { createApplicationWorldNews } from './layers/worldNews.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -128,6 +129,7 @@ export function createApplicationCatalog({
           source: sources['gnss-integrity'],
         }),
         createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
+        createApplicationWorldNews({ source: sources['world-news'] }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
           surface,

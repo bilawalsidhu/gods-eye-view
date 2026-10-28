@@ -175,7 +175,11 @@ export function createTrackedOverlayEntry(entity) {
     edgeFade: 'keyhole',
     horizonCull: true,
     terrainOcclusion: false,
-    interactive: false,
+    // Opt-in per layer: only an interactive entry registers a hit rect, so a
+    // card that has nothing to activate keeps letting clicks fall through to
+    // the globe. A layer opts in by setting `interactive` on its label model
+    // (World News does, to open the headline it is showing).
+    interactive: model.interactive === true,
   };
 }
 
@@ -219,7 +223,11 @@ export function getActiveTrackedReadoutId() {
 }
 
 /** Static-context layers whose click selection publishes the readout card. */
-const READOUT_CONTEXT_LAYERS = new Set(['alpr-cameras', 'local-adsb']);
+const READOUT_CONTEXT_LAYERS = new Set([
+  'alpr-cameras',
+  'local-adsb',
+  'world-news',
+]);
 
 /**
  * Initialize the model bridge and selection listeners. No render listener is

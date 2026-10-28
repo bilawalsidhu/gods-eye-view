@@ -2863,5 +2863,116 @@
   "{count} placemarks": {
     "other": "{count} 个地标"
   },
-  "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 发布这些 KMZ 产品。新上传的内容会在数秒内被检测到，并自动替换旧版本。点击标记查看报告。"
+  "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 发布这些 KMZ 产品。新上传的内容会在数秒内被检测到，并自动替换旧版本。点击标记查看报告。",
+  "Place-tagged headlines pinned on the globe": "带地点标记的新闻标题，标注在地球上",
+  "LOCAL DAILY CAP REACHED": "已达本地每日上限",
+  "PROVIDER QUOTA EXHAUSTED · resets 00:00 UTC": "服务商配额已用尽 · 00:00 UTC 重置",
+  "RATE LIMITED": "请求受限",
+  "INVALID KEY": "密钥无效",
+  "UPSTREAM UNAVAILABLE": "上游不可用",
+  "VIEW FETCHES SPENT · resets hourly": "视图请求已用尽 · 每小时重置",
+  "VIEW FETCHING OFF": "视图请求已关闭",
+  "Negative tone": "负面情绪",
+  "Neutral tone": "中性情绪",
+  "Positive tone": "正面情绪",
+  "Pins sit at the place named in the headline, not where the article was published. Tone is the provider's sentiment score for the article text.": "标记位于标题中提到的地点，而不是文章的发布地点。情绪是服务商对文章正文的情感评分。",
+  "whole earth": "全球",
+  "within {radius} km of {lat}, {lon}": "{lat}, {lon} 周边 {radius} km 内",
+  "{count} latest headlines place-tagged": {
+    "other": "{count} 条最新标题带地点标记"
+  },
+  "{count} headlines {region} place-tagged": {
+    "other": "{region}有 {count} 条标题带地点标记"
+  },
+  "World News unavailable": "World News 不可用",
+  "LOCAL DAILY CAP REACHED {spent}/{limit} points": "已达本地每日上限 {spent}/{limit} 点",
+  "provider quota still has {left}": "服务商配额还剩 {left}",
+  "raise {setting}": "请调高 {setting}",
+  "1 request ≈ {cost} points of today's budget ({spent}/{limit} used)": {
+    "other": "1 次请求 ≈ 今日预算 {cost} 点（已用 {spent}/{limit}）"
+  },
+  "1 request ≈ {cost} points (estimate) of today's budget ({spent}/{limit} used)": {
+    "other": "1 次请求 ≈ 今日预算 {cost} 点（估算，已用 {spent}/{limit}）"
+  },
+  "Add a World News API key to load headlines": "添加 World News API 密钥以加载标题",
+  "A view is a single page — fetch the worldwide feed to page further": "视图只有一页——获取全球数据源才能继续翻页",
+  "No extra pages left this hour": "本小时已无额外页数",
+  "Fetch one more page of headlines ({count} left this hour)": {
+    "other": "再获取一页标题（本小时还剩 {count} 页）"
+  },
+  "Add a World News API key to fetch headlines": "添加 World News API 密钥以获取标题",
+  "Zoom in to a city first — a news circle is capped at {radius} km across the ground, and this view is wider": "请先放大到城市——新闻范围在地面上最大 {radius} km，而当前视图更宽",
+  "Fetch the headlines {region} ({count} left this hour)": {
+    "other": "获取 {region}的标题（本小时还剩 {count} 次）"
+  },
+  "Fetch the headlines {region}": "获取 {region}的标题",
+  "Add the latest worldwide headlines to the map": "将最新全球标题添加到地图",
+  "No headline pins to clear": "没有可清除的标题标记",
+  "Remove all {count} headline pins from the map. The layer is live, so the next refresh adds the headlines {region} again.": {
+    "other": "从地图上移除全部 {count} 个标题标记。该图层为实时图层，下次刷新会重新添加 {region}的标题。"
+  },
+  "Remove all {count} headline pins from the map. The layer is live, so the next refresh adds the worldwide feed again.": {
+    "other": "从地图上移除全部 {count} 个标题标记。该图层为实时图层，下次刷新会重新添加全球数据源。"
+  },
+  "OPEN ARTICLE": "打开文章",
+  "Open this headline at {domain} in a new tab": "在新标签页中打开 {domain} 上的这条标题",
+  "Open this headline at its publisher in a new tab": "在新标签页中打开发布方的这条标题",
+  "Select a headline pin to open its article": "选择一个标题标记以打开文章",
+  "LOAD MORE": "加载更多",
+  "NEWS IN VIEW": "视野内新闻",
+  "GLOBAL FEED": "全球数据源",
+  "CLEAR PINS": "清除标记",
+  "PREV STORY": "上一条",
+  "Show the previous of {count} stories at {place}": {
+    "other": "显示 {place} 的 {count} 条新闻中的上一条"
+  },
+  "NEXT STORY": "下一条",
+  "Show the next of {count} stories at {place}": {
+    "other": "显示 {place} 的 {count} 条新闻中的下一条"
+  },
+  "No tone score": "无情绪评分",
+  "cached {age}": "缓存于 {age}前",
+  "{rows} of {count} latest headlines place-tagged": {
+    "other": "{count} 条最新标题中 {rows} 条带地点标记"
+  },
+  "updated {ago}": "更新于 {ago}",
+  "{count} pinned": {
+    "other": "已标记 {count} 个"
+  },
+  "No place-tagged headlines {region}": "{region}没有带地点标记的标题",
+  "No place-tagged headlines in the latest batch": "最新一批中没有带地点标记的标题",
+  "TONE NEGATIVE": "情绪：负面",
+  "TONE NEUTRAL": "情绪：中性",
+  "TONE POSITIVE": "情绪：正面",
+  "TONE UNKNOWN": "情绪：未知",
+  "unknown source": "未知来源",
+  "{domain} (+{count} outlets)": {
+    "other": "{domain}（另有 {count} 家媒体）"
+  },
+  "Unnamed place": "未命名地点",
+  "{source} · {age} ago": "{source} · {age}前",
+  "{place} · {index}/{count} stories here · click the pin for the next": {
+    "other": "{place} · 此处第 {index}/{count} 条新闻 · 点击标记查看下一条"
+  },
+  "Click this card to open · {source}": "点击此卡片打开 · {source}",
+  "Source: {source}": "来源：{source}",
+  "Headline place": "标题地点",
+  "World News key rejected": "World News 密钥被拒绝",
+  "World News quota exhausted": "World News 配额已用尽",
+  "daily news budget exhausted": "每日新闻预算已用尽",
+  "World News rate-limited": "World News 请求受限",
+  "extra pages exhausted": "额外页数已用尽",
+  "this view is not a valid news circle": "当前视图不是有效的新闻范围",
+  "view fetching is off on this server": "此服务器已关闭视图请求",
+  "view fetches exhausted this hour": "本小时视图请求已用尽",
+  "Malformed news snapshot": "新闻快照格式错误",
+  "World News": "全球新闻",
+  "World News HTTP {status}": "World News 返回 HTTP {status}",
+  "from {count} views": {
+    "other": "{count} 个视图中"
+  },
+  "from the worldwide feed and {count} views": {
+    "other": "全球数据源和 {count} 个视图中"
+  },
+  "{tone} ({score})": "{tone}（{score}）"
 }

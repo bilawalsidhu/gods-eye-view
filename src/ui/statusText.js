@@ -64,6 +64,10 @@ const FEED_ERROR_PATTERNS = [
     ([, status]) => t('GNSS feed unavailable (HTTP {status})', { status }),
   ],
   [
+    /^World News HTTP (\d{3})$/,
+    ([, status]) => t('World News HTTP {status}', { status }),
+  ],
+  [
     /^(\d+) CelesTrak groups? unavailable$/,
     ([, groups]) =>
       tn(

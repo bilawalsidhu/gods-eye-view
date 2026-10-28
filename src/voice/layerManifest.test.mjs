@@ -9,6 +9,7 @@ import {
   VOICE_TOGGLE_LAYER_IDS,
   VOICE_CONTEXT_LAYER_IDS,
   VOICE_QUERY_LAYER_IDS,
+  voiceLayer,
   voiceLayerAliasMap,
 } from './layerManifest.js';
 
@@ -76,6 +77,16 @@ test('tool enums are generated from the manifest', () => {
   assert.deepEqual(Object.keys(ANALYST_LAYERS), [...VOICE_QUERY_LAYER_IDS]);
   const panels = tool('set_panel_open').parameters.properties.panelId.enum;
   assert.ok(panels.includes('weather-panel') && panels.includes('recent-imagery-panel'));
+});
+
+test('World News stays voice-off while the Realtime prompt has no room for it', () => {
+  assert.ok(Object.hasOwn(VOICE_OFF_LAYERS, 'world-news'));
+  assert.equal(voiceLayer('world-news'), null);
+  for (const name of ['set_layer_visibility', 'show_data_layers_menu', 'get_entity_context'])
+    assert.ok(!tool(name).parameters.properties.layerId.enum.includes('world-news'), name);
+  const aliases = voiceLayerAliasMap();
+  for (const phrase of ['world-news', 'world news', 'headlines', 'news headlines'])
+    assert.notEqual(aliases.get(phrase), 'world-news', phrase);
 });
 
 test('spoken aliases resolve to real layers, keep every legacy phrase and never collide', () => {
