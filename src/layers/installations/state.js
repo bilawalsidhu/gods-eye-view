@@ -9,6 +9,7 @@ export function createState({ services }) {
 
   Object.assign(state, {
     viewer: null,
+    engine: null,
     dataSource: null,
     enabled: false,
     records: [],

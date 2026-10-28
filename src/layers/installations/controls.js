@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { installationFeedback } from '../../data/installationFeedback.js';
 import {
@@ -39,7 +38,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * only area that answers "what is near this contact". The window moves
      * only after the subject travels ANCHOR_REFRESH_M, and cached tiles make
      * that cheap. Passing null returns the layer to viewport loading.
-     * @param {Cesium.Cartesian3|{latitude:number, longitude:number}|null} position
+     * @param {object|{latitude:number, longitude:number}|null} position
      *   Subject position.
      * @returns {boolean} Whether a new load was scheduled.
      */
@@ -145,19 +144,19 @@ export function createControls({ state: layerState, services, parts, source }) {
      */
     focusById(id) {
       const record = layerState.recordById.get(String(id));
-      if (!record || !layerState.viewer) return false;
+      if (!record || !layerState.engine?.camera?.flyToSphere) return false;
       // No camera flight without a real selection: a flight plus a stale subject
       // reads as success to Context navigation and strands NEXT on this item.
       if (!parts.selection.selectRecord(record.id)) return false;
-      layerState.viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          geo.cartesian3.fromDegrees(
+      layerState.engine.camera.flyToSphere(
+        {
+          center: geo.cartesian3.fromDegrees(
             record.longitude,
             record.latitude,
             parts.rendering.installationSurfaceHeightM(record),
           ),
-          18000,
-        ),
+          radius: 18000,
+        },
         { duration: 1.4 },
       );
       return true;

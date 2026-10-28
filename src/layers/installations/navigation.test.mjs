@@ -189,3 +189,45 @@ test('wide views refresh screen decluttering when the globe rectangle stays unch
   t.mock.timers.tick(200);
   assert.equal(loads, 2, 'a different continent needs fresh projected labels');
 });
+
+test('the engine camera drives installation viewport requests without a viewer', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const rectangle = {
+    west: Cesium.Math.toRadians(179),
+    south: Cesium.Math.toRadians(-12),
+    east: Cesium.Math.toRadians(-178),
+    north: Cesium.Math.toRadians(16),
+  };
+  const state = {
+    enabled: true,
+    viewer: null,
+    engine: {
+      camera: {
+        viewRectangle: () => rectangle,
+        pose: () => ({
+          position: { x: 1, y: 2, z: 3 },
+          direction: { x: -1, y: 0, z: 0 },
+        }),
+      },
+    },
+  };
+  const loads = [];
+  const parts = {
+    ingestion: {
+      loadInstallations() {
+        loads.push(parts.viewport.loadArea(null));
+      },
+    },
+  };
+  parts.viewport = createViewport({ state, parts, services: {}, source: {} });
+
+  parts.viewport.scheduleLoad();
+  t.mock.timers.tick(200);
+
+  assert.equal(loads.length, 1);
+  assert.ok(Math.abs(loads[0].box.south + 12) < 1e-10);
+  assert.equal(loads[0].box.west, 179);
+  assert.equal(loads[0].box.north, 16);
+  assert.equal(loads[0].box.east, -178);
+  assert.equal(loads[0].coverage.kind, 'viewport');
+});
