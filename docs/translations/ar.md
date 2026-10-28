@@ -8,11 +8,11 @@ Translation sources: abiyeenzo (#915).
 
 - Modern Standard Arabic, neutral across regions. Address the user with plain imperatives: «انقر»، «فعّل»، «أعد المحاولة».
 - Arabic has no letter case: an UPPERCASE English HUD label becomes the same short Arabic label. Keep labels as short as the English: «مباشر»، «متقادم»، «متوقف».
-- Status words in progress use «جارٍ …» («جارٍ التحميل»، «جارٍ الضبط»، «… جارٍ تشغيل اللقطة»), so a status chip never reads as the command next to it («ضبط» is the TUNE button); finished actions use the passive («تم الحفظ»، «أُلغي التحميل»). Data that refreshes itself «يُحدَّث» (يتحدّث means "speaks"). A sentence about a `{placeholder}` whose gender and number vary stays impersonal: «{layers}: تم التفعيل للتو».
+- Status words in progress use «جارٍ …» («جارٍ التحميل»، «جارٍ الضبط»، «… جارٍ تشغيل اللقطة»), so a status chip never reads as the command next to it («ضبط» is the TUNE button); finished actions use the passive («تم الحفظ»، «أُلغي التحميل»). Data that refreshes itself «يُحدَّث» (يتحدّث means "speaks"). A sentence about a `{placeholder}` whose gender and number vary (tool, layer and cohort names, call signs, vessel names) stays impersonal: «{layers}: تم التفعيل للتو»، ««{name}» قيد الاستخدام»، «{id}: لا بيانات واردة الآن»، «لم يعد {name} ضمن البيانات المحمّلة».
 - A label followed by its value takes a colon, so it does not read as a sentence: «الصوت: نشط»، «السياق: {value}»، «الاحتواء: {percent}%». A named mode or control quoted in a sentence takes «»: «يظهر في وضع «كثيف» فقط».
 - Arabic punctuation in Arabic text: ، ؛ ؟ and «» for quotes. Keep `·` as the HUD separator, `—` with spaces, and `…`.
 - Arrows that show a sequence point the way Arabic reads: «الإشارات ← الأخبار ← المحلي», «{origin} ← {destination}».
-- Product names, provider names and codes stay in Latin letters: Google, Cesium ion, CelesTrak, NOAA, FIRMS, AIS, ADS-B, GNSS, CCTV, HUD, CRT, NVG, FLIR, WHOT/BHOT, Ironbow, Street View, Mapillary. Aviation and camera abbreviations stay Latin too: HDG, FOV, BRG, CRS, GS, TRK, V/S, SQUAWK. Local place names from the Bhote Koshi scene (Rasuwagadhi, Bidur, Timure…) stay Latin; well-known cities and countries are written in Arabic (أوستن، طوكيو، نيبال).
+- Product names, provider names and codes stay in Latin letters: Google, Cesium ion, CelesTrak, NOAA, FIRMS, AIS, ADS-B, GNSS, CCTV, HUD, CRT, NVG, FLIR, WHOT/BHOT, Ironbow, Street View, Mapillary. Aviation and camera abbreviations stay Latin too: HDG, FOV, BRG, CRS, GS, TRK, V/S, SQUAWK. Local place names from the Bhote Koshi scene (Rasuwagadhi, Bidur, Timure…) stay Latin, and a site known by two names takes one Arabic noun in front: «جسر Mailung / Upper Trishuli»; well-known cities and countries are written in Arabic (أوستن، طوكيو، نيبال).
 - Months are the international names used across the Arab world: يناير، فبراير … أغسطس.
 
 ## Digits and direction
@@ -84,6 +84,7 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | Recent Imagery                             | الصور الحديثة                                              |
 | Global Context / Context                   | السياق العالمي / السياق                                    |
 | radio station / tuner / gain               | محطة / موالف / الكسب                                       |
+| VOLUME (slider) / VOICE                    | مستوى الصوت / الصوت                                        |
 | decoder (SDR)                              | مفكّك                                                      |
 | transit / bike share                       | النقل العام / الدراجات المشتركة                            |
 | Previous / Next                            | السابق / التالي                                            |
@@ -96,6 +97,9 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | parameters / ellipsoid                     | المعلمات / المجسّم الإهليلجي                               |
 | scene cloud                                | غيوم المشهد                                                |
 | box (Recent Imagery area) / pin            | منطقة / تثبيت                                              |
+| width (box size) / view (current camera)   | اتساع / العرض الحالي (عرض alone reads as display)          |
+| N/A                                        | غير متاح (no abbreviation)                                 |
+| METRO (view band) / REGIONAL               | حضري (not حاضرة) / إقليمي                                  |
 | THIS (voice pointer)                       | هذا                                                        |
 | outline / mark (map annotation)            | مخطط / علامة، تعليم                                        |
 | share (a view or link)                     | مشاركة                                                     |
