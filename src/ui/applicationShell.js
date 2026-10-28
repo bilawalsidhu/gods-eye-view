@@ -35,6 +35,10 @@ import * as Cesium from 'cesium';
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
 import { ShellFeedback } from './shellFeedback.js';
+import {
+  applyShareFollowOffset,
+  readShareFollowSubject,
+} from './shareFollow.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
@@ -74,7 +78,13 @@ export class StyleManager extends ShellFacade {
    */
   constructor(
     viewer,
-    { mapStackController = null, placeSearch, services, requestServices } = {},
+    {
+      mapStackController = null,
+      placeSearch,
+      services,
+      requestServices,
+      initialShareCode = null,
+    } = {},
   ) {
     super();
     const {
@@ -165,6 +175,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
+      applyFollowOffset: (entity, offset) =>
+        applyShareFollowOffset(viewer, entity, offset),
     });
 
     this._visualSettings = new VisualSettings({
@@ -336,6 +348,7 @@ export class StyleManager extends ShellFacade {
         _poiRow: this._poiRow,
         _locationBarDivider: this._locationBarDivider,
         _locationSearch: this._locationSearch,
+        _locationSearchError: this._locationSearchError,
         _searchToggle: this._searchToggle,
         _resetGlobeBtn: this._resetGlobeBtn,
         _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
@@ -430,7 +443,12 @@ export class StyleManager extends ShellFacade {
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
       cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      // A host may open a share code without a `/share/<code>` address.
+      initialShareCode,
     });
+    this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
+      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+    );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
     );
@@ -1652,14 +1670,35 @@ export class StyleManager extends ShellFacade {
   // ── Share Button ─────────────────────────────
 
   /**
-   * Wires the share button click to copy the current share link to the clipboard.
+   * Wires the share button. By default it copies the current share link to the
+   * clipboard; a host may pass `services.shareLink(url)` to share it another way
+   * (a system share sheet, for example). It resolves to 'shared', 'copied',
+   * 'cancelled' (no toast) or false (failed).
    * @returns {void}
    */
   _initShareButton() {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
-      const success = await this.shareLinkManager.copyLink();
-      if (!this._disposed)
-        this._showToast(success ? t('Link copied!') : t('Copy failed'));
+      const share = this.services.shareLink;
+      let result;
+      if (typeof share === 'function') {
+        // A host's hook may return a plain value or throw; both are answers.
+        result = await Promise.resolve()
+          .then(() => {
+            const href = this.shareLinkManager.buildLink();
+            return href ? share(href) : false;
+          })
+          .catch(() => false);
+      } else {
+        result = (await this.shareLinkManager.copyLink()) ? 'copied' : false;
+      }
+      if (this._disposed || result === 'cancelled') return;
+      this._showToast(
+        result === 'shared'
+          ? t('Link shared')
+          : result === 'copied'
+            ? t('Link copied!')
+            : t('Copy failed'),
+      );
     });
   }
 
