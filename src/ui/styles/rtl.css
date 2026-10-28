@@ -4,16 +4,12 @@
 
 /* Arabic letters join: letter-spacing tears every word into separate glyphs.
    Latin marked translate="no" and the intel HUD's Latin telemetry keep their
-   tracking; the HUD's translated lines are released below. */
+   tracking; the HUD's translated lines are released below. Unlike cjk.css, a
+   container that merely holds a translate="no" span is not spared: its own
+   Arabic text would come apart. */
 html:lang(ar)
   body
-  :not(
-    #intel-hud,
-    #intel-hud *,
-    [translate='no'],
-    [translate='no'] *,
-    :has([translate='no'])
-  ) {
+  :not(#intel-hud, #intel-hud *, [translate='no'], [translate='no'] *) {
   letter-spacing: 0 !important;
 }
 
