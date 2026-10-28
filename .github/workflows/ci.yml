@@ -150,9 +150,8 @@ jobs:
         run: npm run build
 
   docker:
-    # Builds the image on a native runner per architecture (no QEMU), then
-    # starts it standalone and checks it the way a user would. Nothing is
-    # pushed and no registry login happens; publishing is docker-release.yml.
+    # Native runner per architecture, no QEMU. Nothing is pushed; that is
+    # docker-release.yml.
     name: Docker image (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -198,9 +197,7 @@ jobs:
       - name: Start the image and wait until it is healthy
         run: |
           echo "BUILD_SECONDS=$(( $(date +%s) - BUILD_START ))" >> "$GITHUB_ENV"
-          # The same flags the README tells users to run with, so this proves
-          # the hardened image works under them: read-only root, no
-          # capabilities, writable volumes/tmpfs only where the app writes.
+          # The flags the README gives users, so the hardened image is tested under them.
           docker run -d --name gev --init --read-only \
             --cap-drop ALL --security-opt no-new-privileges:true \
             --pids-limit 256 --user 1000:1000 \
@@ -246,8 +243,7 @@ jobs:
 
       - name: Save a key through Provider Settings and keep it
         run: |
-          # From inside the container the request comes from 127.0.0.1, which
-          # Provider Settings always admits.
+          # From inside the container the peer is 127.0.0.1, which Provider Settings admits.
           docker exec gev node -e "
             fetch('http://127.0.0.1:4173/api/setup/keys', {
               method: 'POST',
@@ -258,14 +254,12 @@ jobs:
           test "$(docker exec gev stat -c %a /data/.env)" = 600
           docker exec gev grep -q '^OPENAI_API_KEY=' /data/.env
           if docker exec gev test -e /app/.env; then echo 'key was written beside the code'; exit 1; fi
-          # The key outlives the container: a new one on the same volume sees it.
           docker rm -f gev
           docker run --rm -v gev-ci-data:/data --entrypoint grep "$IMAGE" -q '^OPENAI_API_KEY=' /data/.env
 
       - name: Scan for vulnerabilities (informational)
-        # Reports only: base-image CVEs are outside a pull request's control,
-        # so this never fails the build. Trivy runs from a digest-pinned
-        # container against a saved tarball, with no Docker socket access.
+        # Reports only: base-image CVEs are outside a pull request's control.
+        # Trivy runs from a pinned container on a saved tarball, with no Docker socket.
         continue-on-error: true
         run: |
           docker save "$IMAGE" -o "${RUNNER_TEMP}/image.tar"

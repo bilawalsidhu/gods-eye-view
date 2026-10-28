@@ -5,9 +5,8 @@
 # is nothing else to containerise. See compose.yaml for the usual entry point.
 # Same Node as CI (package.json engines, .github/workflows), pinned by digest.
 
-# Two targets. `dev` (below) is what compose.yaml builds: git for the test
-# suite, and the checkout bind-mounted over /app. `runtime` (last in this file)
-# is the hardened image that releases publish; it is also the default target.
+# `dev` is what compose.yaml builds; `runtime` (last) is the published image
+# and the default target.
 FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS dev
 
 # Puppeteer is only used by the QA scripts; skip its ~150MB Chromium download.
@@ -54,32 +53,26 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 CMD ["node", "scripts/docker-start.mjs"]
 
 # ---------------------------------------------------------------------------
-# Hardened image, published to GHCR. Everything under /app belongs to root and
-# the runtime user (1000) cannot change it; that user owns only the few paths
-# the app writes (see /data below). Run it with the flags in the README
-# (read-only root, no capabilities, --init); nothing here depends on them, they
-# are defence in depth.
+# Hardened image, published to GHCR. /app belongs to root and user 1000 cannot
+# change it; that user owns only the paths the app writes. The README's run
+# flags (read-only root, no capabilities) are defence in depth, not required.
 
 FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS deps
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 WORKDIR /app
 COPY package.json package-lock.json ./
 # Built here, per architecture, so esbuild and sharp are this platform's own.
-# The dev server needs the devDependencies (vite), so nothing is omitted.
 RUN npm ci && npm cache clean --force && rm -rf /root/.npm
 
 FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS runtime
 WORKDIR /app
-# Code and dependencies: root-owned, world-readable, not group/world-writable.
 COPY --from=deps --chmod=u=rwX,go=rX /app/node_modules ./node_modules
 COPY --chmod=u=rwX,go=rX . .
-# The launcher is `node` and Vite is a library; nothing at runtime calls npm,
-# npx or corepack, and there is no git, apt or package cache in this image.
+# Nothing at runtime calls npm, npx or corepack, so they and apt are removed.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
       /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
       /root/.npm /var/lib/apt/lists/* /usr/bin/apt /usr/bin/apt-* \
- # Writable: Vite's dependency cache and its config temp dir (mount tmpfs
- # on these when the root filesystem is read-only), and /data.
+ # Writable: Vite's caches (tmpfs when the root is read-only) and /data.
  && mkdir -p node_modules/.vite node_modules/.vite-temp /data \
  && chown 1000:1000 node_modules/.vite node_modules/.vite-temp /data
 

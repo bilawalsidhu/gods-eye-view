@@ -2,8 +2,7 @@ services:
   gods-eye-view:
     build:
       context: .
-      # The hardened `runtime` target is the published image; compose wants git
-      # for the tests and the bind-mounted checkout.
+      # Not the hardened `runtime` image: compose needs git for the tests.
       target: dev
     # Everything the app writes (.env with your keys, .gev-cache, .gev-logs)
     # lands in the bind-mounted repo, so run as you, not root. UID/GID are
