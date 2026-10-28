@@ -39,6 +39,7 @@ import {
 } from './hudLayouts.js';
 import { formatNumber, msg, t } from './i18n/index.js';
 import { localizeLayerName } from './ui/layerPanel.js';
+import { isEmbeddedInline } from './app/embed.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -363,9 +364,11 @@ export class IntelHUD {
         dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
     }, 800);
 
-    // Camera-derived data — 4 updates/second (250ms)
+    // Camera-derived data — 4 updates/second (250ms). Skipped in a hidden
+    // page, except an inline panel, whose host may report it hidden while it
+    // is on screen (see keepPanelRendering in app/embed.js).
     this._updateInterval = setInterval(() => {
-      if (!this._visible) return;
+      if (!this._visible || (document.hidden && !isEmbeddedInline())) return;
       this._updateCameraData();
     }, 250);
 
