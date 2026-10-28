@@ -81,9 +81,10 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+          # The description defaults to the repository's own, so it stays in step
+          # with the GitHub page.
           labels: |
             org.opencontainers.image.title=God's Eye View
-            org.opencontainers.image.description=Real-time 3D globe of live aircraft, ships, satellites, weather and more, served by the app's Vite dev server.
             org.opencontainers.image.licenses=MIT
 
       - name: Build and push by digest
@@ -168,7 +169,6 @@ jobs:
             type=raw,value=latest,enable=${{ (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && inputs.latest) }}
           annotations: |
             org.opencontainers.image.title=God's Eye View
-            org.opencontainers.image.description=Real-time 3D globe of live aircraft, ships, satellites, weather and more, served by the app's Vite dev server.
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.licenses=MIT
 
