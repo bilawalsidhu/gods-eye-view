@@ -71,13 +71,16 @@ test('Arabic formats with Western digits whatever ICU defaults to', () => {
   }
 });
 
+/** The text without the bidi isolates t() puts around values in RTL. */
+const plain = (text) => text.replace(/[\u2068\u2069]/g, '');
+
 test('Arabic uses all six plural forms and spaced HUD units', () => {
   const previous = getLocale();
   try {
     setLocale('ar');
     assert.deepEqual(
       [0, 1, 2, 3, 11, 100].map((n) =>
-        tn(n, '{count} SOURCE', '{count} SOURCES'),
+        plain(tn(n, '{count} SOURCE', '{count} SOURCES')),
       ),
       [
         '0 مصدر',
@@ -96,11 +99,16 @@ test('Arabic uses all six plural forms and spaced HUD units', () => {
       'Sentinel-2 · \u206830\u00a0م\u2069',
     );
     assert.equal(
-      LOCALIZED_LOCALITY.sector({ latDeg: 21.33, lonDeg: -77.5 }),
+      plain(LOCALIZED_LOCALITY.sector({ latDeg: 21.33, lonDeg: -77.5 })),
       'القطاع 21.33ش 77.50غ',
     );
     assert.equal(READOUT_WORDS.daysAgo(9), 'قبل 9 أيام');
     assert.equal(t('SAVE KEYS'), 'حفظ المفاتيح');
+    // Each value is isolated, so a time keeps its order inside Arabic text.
+    assert.equal(
+      t('Issued: {time}', { time: '10/28 00:00 UTC' }),
+      'صدر: \u206810/28 00:00 UTC\u2069',
+    );
     setLocale('ru');
     assert.equal(formatCockpitDistance(14000), '14 КМ');
   } finally {

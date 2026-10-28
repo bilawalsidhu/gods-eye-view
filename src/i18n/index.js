@@ -81,9 +81,13 @@ const PLACEHOLDER_PATTERN = /\{([A-Za-z0-9_]+)\}/g;
  * stays visible instead of silently vanishing. */
 function interpolate(pattern, values) {
   if (!values) return pattern;
-  return pattern.replace(PLACEHOLDER_PATTERN, (literal, name) =>
-    Object.hasOwn(values, name) ? String(values[name]) : literal,
-  );
+  // In a right-to-left page each value is isolated: a time, a code or an
+  // English name keeps its own order instead of mixing with the sentence.
+  return pattern.replace(PLACEHOLDER_PATTERN, (literal, name) => {
+    if (!Object.hasOwn(values, name)) return literal;
+    const value = String(values[name]);
+    return value === '' ? value : isolate(value);
+  });
 }
 
 /** A catalog string with something to show; an empty one counts as missing. */

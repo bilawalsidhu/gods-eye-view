@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { formatNumber, t } from '../../i18n/index.js';
+import { formatNumber, isolate, t } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
@@ -513,7 +513,7 @@ export function createModel({
       lon >= 0
         ? t('{value}°E', { value: amount(lon) })
         : t('{value}°W', { value: amount(lon) });
-    return `${latPart} ${lonPart}`;
+    return `${isolate(latPart)} ${isolate(lonPart)}`;
   }
 
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */

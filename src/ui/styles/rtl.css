@@ -68,16 +68,22 @@ html:lang(ar) :is(#intel-hud, #cockpit-hud) {
 }
 
 /* The right rail sits on the left: its expand/collapse arrows point the
-   other way. */
-html[dir='rtl'] #right-context-rail .panel-collapse-btn {
+   other way, and the start window's "go" arrows point along the reading
+   direction. */
+html[dir='rtl'] #right-context-rail .panel-collapse-btn,
+html[dir='rtl'] .first-run-arrow {
   transform: scaleX(-1);
+}
+html[dir='rtl'] .first-run-choices button:hover .first-run-arrow,
+html[dir='rtl'] .first-run-choices button:focus-visible .first-run-arrow {
+  transform: translateX(-2px) scaleX(-1);
 }
 
 /* The cockpit is an aircraft panel, not page chrome: its windows keep their
    physical sides, so the data-layer stack goes back to the left edge instead
-   of landing on the utility controls. Gauges, tapes, the roll counters and the
-   position readout stay left to right (speed left, altitude right, -10 not
-   10-); the cards keep reading right to left. */
+   of landing on the utility controls. Gauges, tapes and the roll counters stay
+   left to right (speed left, altitude right, -10 not 10-); the cards keep
+   reading right to left. */
 html[dir='rtl'] body.cockpit-mode #left-panel-stack {
   left: var(--left-stack-x);
   right: auto;
@@ -90,7 +96,6 @@ html[dir='rtl']
     .cockpit-pitch-rail,
     .cockpit-altitude-rim,
     .cockpit-roll-arc,
-    .cockpit-position-readout,
     .cockpit-vision-controls
   ) {
   direction: ltr;
@@ -110,9 +115,17 @@ html[dir='rtl']
   unicode-bidi: plaintext;
 }
 
-/* Physical controls keep their left-to-right sense: media transport
-   (previous / play / next) and the radio dial. */
+/* Clock readouts (~0:05 / 5:19) are numbers, not prose. */
+html[dir='rtl'] #bhote-koshi-event-panel [data-role='time'] {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Physical controls keep their left-to-right sense: the glyph-only media
+   transport (◀◀ ▶ ▶▶), FM seek down/up and the radio dial. The worded
+   PREV / PLAY / NEXT row follows the reading direction like any other
+   button row. */
 html[dir='rtl']
-  :is(.radio-transport, .context-radio-mini-transport, .radio-tuner) {
+  :is(.context-radio-mini-transport, .sdr-seek-row, .radio-tuner) {
   direction: ltr;
 }
