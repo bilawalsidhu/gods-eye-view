@@ -557,6 +557,51 @@ test('an adapter that can frame but says this image has no frame offers no FIT /
   assert.equal(state.street.renderModes, true, 'a flat image can be framed');
 });
 
+test('a caller that withdraws while the viewer is still mounting gets no photo', async () => {
+  const gate = deferred();
+  const adapter = fakeAdapter({ gate });
+  const { state, host } = harness(adapter);
+  const controller = new AbortController();
+  const pending = host.open('mapillary', 'a', { signal: controller.signal });
+  assert.equal(state.street.open, true, 'opening');
+  controller.abort(); // the library is still loading
+  gate.resolve();
+  assert.equal(await pending, false);
+  assert.deepEqual(adapter.calls.open, [], 'the image was never opened');
+  assert.equal(state.street.open, false, 'the photo is closed');
+  assert.equal(state.street.loading, false, 'no stuck spinner');
+  assert.equal(state.street.imageId, null);
+});
+
+test('a caller that withdraws while the photo is loading gets it closed', async () => {
+  const openGate = deferred();
+  const adapter = fakeAdapter({ openGate });
+  const { state, host } = harness(adapter);
+  const controller = new AbortController();
+  const pending = host.open('mapillary', 'a', { signal: controller.signal });
+  await settle();
+  assert.deepEqual(adapter.calls.open, ['a'], 'loading');
+  controller.abort();
+  openGate.resolve();
+  assert.equal(await pending, false);
+  assert.equal(state.street.open, false, 'the withdrawn photo is closed');
+  assert.equal(state.street.imageId, null);
+  // An already-withdrawn request asks nothing at all.
+  const done = new AbortController();
+  done.abort();
+  assert.equal(
+    await host.open('mapillary', 'b', { signal: done.signal }),
+    false,
+  );
+  assert.deepEqual(adapter.calls.open, ['a']);
+  // A signal that never fires changes nothing.
+  assert.equal(
+    await host.open('mapillary', 'c', { signal: new AbortController().signal }),
+    true,
+  );
+  assert.equal(state.street.imageId, 'c');
+});
+
 test('a pose’s licence reaches the caption state, and a closed viewer forgets it', async () => {
   const { state, host, google } = twoProviders();
   await host.open('google', 'g-1');

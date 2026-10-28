@@ -3222,5 +3222,13 @@
   "Audio": "الصوت",
   "UTILITIES": "الأدوات",
   "Exit cockpit to fly to a drawing": "اخرج من القمرة للانتقال إلى رسم",
-  "Directions, drawing and your own files": "الاتجاهات والرسم وملفاتك الخاصة"
+  "Directions, drawing and your own files": "الاتجاهات والرسم وملفاتك الخاصة",
+  "Press OPEN to load the photo": "اضغط «فتح» لتحميل الصورة",
+  "Captured {month}": "التُقطت في {month}",
+  "this spot": "هذا الموضع",
+  "the view centre": "مركز العرض",
+  "{source} at {place}": "{source} في {place}",
+  "Street level at {place}": "مستوى الشارع في {place}",
+  "Switching map": "جارٍ تبديل الخريطة",
+  "Opening imagery": "جارٍ فتح الصور"
 }

@@ -38,20 +38,37 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
-    // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality (ECCC AQHI) extends the manifest.
-    // Globe rotation adds one motion; visual keyhole fit and explicit
-    // reset guidance/defaults update only move_camera and mode descriptions.
-    // S2 GhostMaps extends the generated layer enums.
-    // The Utilities panel (Directions, Draw, Import) adds one panel target.
-    // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
-    // is consolidated without changing either feature's arguments.
-    // Snow leaves the set_visual_style enum.
-    // The Operator HUD layout leaves set_hud's layout enum.
-    // The layer alias hint leaves out aliases the layer id already spells.
+    // Street Level, GNSS and air quality (ECCC AQHI) extend the manifest;
+    // tracked and analyst aircraft describe broadcasts; globe rotation adds
+    // one motion; S2 GhostMaps, the Utilities panel target and the voice panel
+    // (named targets, timeout) follow; Snow leaves the set_visual_style enum, the Operator HUD layout
+    // leaves set_hud's layout enum and the layer alias hint leaves out aliases
+    // the layer id already spells; show_street_level (map, source, photo) is
+    // the only change on top of main.
+    SHOW_STREET_LEVEL_PAYLOAD_DIGEST,
+  );
+  // Every shipped tool is byte-identical to the previous release: the new
+  // tool is the whole difference, so a later edit cannot hide in a re-pin.
+  const shipped = createHash('sha256')
+    .update(
+      JSON.stringify(
+        stable(
+          GEV_REALTIME_TOOLS.filter(
+            (tool) =>
+              !['set_cyber_sonar', 'show_street_level'].includes(tool.name),
+          ),
+        ),
+      ),
+    )
+    .digest('hex');
+  assert.equal(
+    shipped,
     'dc2bac1be93a503dc88d637beea2f1bc457e1f9167422bd91548b44756a8aca5',
   );
 });
+
+const SHOW_STREET_LEVEL_PAYLOAD_DIGEST =
+  '2198c1f95cfbc19e89ba8814ad0fd8303a74a7b254703f2e7a4893f5798d9aed';
 
 test('descriptions customize wording without changing immutable shared arguments', () => {
   const descriptions = {
@@ -112,6 +129,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'next_satellite_pass',
         'set_cyber_sonar',
         'set_voice_inactivity_timeout',
+        'show_street_level',
       ].includes(tool.name),
   );
   // Layer enums are generated from the voice layer manifest and pinned by

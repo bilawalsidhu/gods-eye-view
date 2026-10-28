@@ -330,6 +330,7 @@ function resolveCropPixels(args, { imageFrame, cameraKey }) {
 const RESOLVERS = Object.freeze({
   track_entity: resolveTrack,
   fly_to_location: resolveFly,
+  show_street_level: resolveFly,
   get_entity_context: resolveContext,
   analyst_query: resolveAnalyst,
   annotate_map: resolveAnnotate,

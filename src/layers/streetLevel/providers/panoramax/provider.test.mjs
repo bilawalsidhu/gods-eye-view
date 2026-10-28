@@ -1182,3 +1182,9 @@ test('a busy or timed-out tile keeps its own message; only a body that is not a 
     assert.equal(env.instance.sequenceStats().error, failure.message);
   }
 });
+
+test('coverageLines exposes the drawn lines, none before any tile', () => {
+  const { instance } = setup();
+  assert.equal(typeof instance.coverageLines, 'function');
+  assert.deepEqual(instance.coverageLines(), []);
+});

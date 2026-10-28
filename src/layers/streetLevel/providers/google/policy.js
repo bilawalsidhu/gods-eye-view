@@ -1,7 +1,7 @@
 import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
 import { msg } from '../../../../i18n/index.js';
 
-export { NEAREST_RADIUS_M } from '../../policy.js';
+export { NEAREST_RADIUS_M, NEAREST_RADIUS_MAX_M } from '../../policy.js';
 
 export const GOOGLE_PROVIDER_ID = 'google';
 export const GOOGLE_NAME = msg('Google Street View');

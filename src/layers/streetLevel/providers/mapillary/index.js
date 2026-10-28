@@ -191,6 +191,7 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
           loading: state.sequence.loading,
           error: state.sequence.error,
         }),
+        coverageLines: () => parts.coverage.drawnLines(),
 
         viewer:
           photoViewer ||

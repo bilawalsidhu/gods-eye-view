@@ -3082,5 +3082,13 @@
   "Audio": "Аудіо",
   "UTILITIES": "ІНСТРУМЕНТИ",
   "Exit cockpit to fly to a drawing": "Вийдіть із кабіни, щоб перелетіти до малюнка",
-  "Directions, drawing and your own files": "Маршрути, малювання та ваші файли"
+  "Directions, drawing and your own files": "Маршрути, малювання та ваші файли",
+  "Press OPEN to load the photo": "Натисніть «ВІДКРИТИ», щоб завантажити фото",
+  "Captured {month}": "Знято: {month}",
+  "this spot": "це місце",
+  "the view centre": "центр карти",
+  "{source} at {place}": "{source}: {place}",
+  "Street level at {place}": "Вуличні знімки: {place}",
+  "Switching map": "Перемикання карти",
+  "Opening imagery": "Відкриття знімків"
 }

@@ -12,6 +12,7 @@ import {
   GROUND_CLICK_HINT,
   KEY_REJECTED_MESSAGE,
   NEAREST_RADIUS_M,
+  NEAREST_RADIUS_MAX_M,
   NEAREST_TIMEOUT_MS,
   NO_ANSWER_MESSAGE,
   PICK_PREFIX,
@@ -67,6 +68,7 @@ export function createGoogleProvider({
     requiresMapStack: GOOGLE_3D_MAP_STACK_ID,
     // Every panorama is billed to the Maps key.
     defaultOn: false,
+    billedPerImage: true,
     // All 360°, and no coverage for a date filter to thin.
     filters: [],
     marker: Object.freeze({ kind: 'view-cone', color: COLORS.coverage }),
@@ -136,8 +138,12 @@ export function createGoogleProvider({
          * Nearest Google-collected outdoor panorama, or null. The imagery
          * filters do not apply (see `filters`).
          */
-        async nearestImage({ lat, lon }, { signal } = {}) {
+        async nearestImage({ lat, lon }, { signal, radiusM } = {}) {
           if (loader.authFailed()) throw new Error(KEY_REJECTED_MESSAGE);
+          // Wider than the shared default only on request, never past the cap.
+          const radius = Number.isFinite(radiusM)
+            ? Math.min(NEAREST_RADIUS_MAX_M, Math.max(1, radiusM))
+            : NEAREST_RADIUS_M;
           signal?.throwIfAborted();
           // Set once the caller has its answer (aborted, timed out, refused):
           // a lookup still waiting on Google's script then asks nothing.
@@ -150,7 +156,7 @@ export function createGoogleProvider({
             try {
               const { data } = await service.getPanorama({
                 location: { lat, lng: lon },
-                radius: NEAREST_RADIUS_M,
+                radius,
                 // Both: Google's own imagery, outdoors (sources intersect).
                 sources: [GOOGLE, OUTDOOR],
                 preference: lib.StreetViewPreference.NEAREST,

@@ -47,10 +47,26 @@ export async function resolveViewArguments(args, { services, signal, tools }) {
     ? { ...args.camera }
     : { ...base.camera, ...args.camera };
   let label = null;
+  // Street-level photos open at the area's centre unless a point is given;
+  // a new area moves a passed-through view's photos with it.
+  let streetLevel =
+    args.street_level && typeof args.street_level === 'object'
+      ? { ...args.street_level }
+      : base.street_level && typeof base.street_level === 'object'
+        ? args.area
+          ? { provider: base.street_level.provider }
+          : { ...base.street_level }
+        : null;
   if (args.area) {
     const area = await resolveArea(args.area, { services, signal });
     label = area.label;
     const framed = cameraForArea(area);
+    if (
+      streetLevel &&
+      streetLevel.lat === undefined &&
+      streetLevel.lon === undefined
+    )
+      streetLevel = { ...streetLevel, lat: framed.lat, lon: framed.lon };
     // A tilted view of an area looks at its center from behind, unless the
     // caller placed the camera itself.
     camera =
@@ -84,6 +100,7 @@ export async function resolveViewArguments(args, { services, signal, tools }) {
       map: args.map ?? base.map ?? null,
       follow,
       annotations: args.annotations ?? base.annotations ?? [],
+      street_level: streetLevel,
     });
   } catch (error) {
     // A view passed through can hold anything; report it as bad arguments.
@@ -113,7 +130,9 @@ export const showInGodsEyeView = defineTool({
     'it. Pass the view another answer returned, or describe one: an area ' +
     'framed from above or a camera position, with chosen data layers, visual ' +
     'style and map, optionally following an aircraft (or riding in its ' +
-    'cockpit view) or a satellite, and with marks drawn on the map.',
+    'cockpit view) or a satellite, with marks drawn on the map, or opening ' +
+    'street-level photos (Google Street View, Mapillary, KartaView or ' +
+    'Panoramax) at a place.',
   inputSchema: {
     type: 'object',
     properties: VIEW_ARGUMENTS,

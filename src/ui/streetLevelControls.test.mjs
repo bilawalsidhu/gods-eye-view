@@ -921,3 +921,103 @@ test('a window changed elsewhere under a focused SINCE thumb leaves its readout 
     assert.equal(since.getAttribute('aria-valuetext'), label());
     controls.destroy();
   }));
+
+/** In embed mode, the viewer moved out of the hidden rail onto the globe. */
+const overGlobe = (dom) =>
+  dom.wrap.parentNode === dom.document.body &&
+  dom.wrap.classList.contains('sl-viewer-wrap-embed');
+
+const escape = () =>
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+
+test('in embed mode an open photo leaves the hidden rail for an overlay on the globe, and goes back when it closes', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const home = dom.wrap.parentNode;
+    const after = dom.wrap.nextSibling;
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    assert.equal(overGlobe(dom), false, 'nothing to show yet');
+    await layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), true, 'shown over the globe');
+    assert.equal(dom.wrap.hidden, false, 'the panel view still renders it');
+    await layer.publish(uiState({ open: true, renderMode: 'fill' }));
+    assert.equal(overGlobe(dom), true, 'an update keeps it there');
+    assert.equal(
+      dom.wrap.querySelector('[aria-checked="true"]')?.textContent.trim(),
+      'FILL',
+      'and the panel view keeps patching it there',
+    );
+    await layer.publish(uiState({ open: false }));
+    assert.equal(overGlobe(dom), false);
+    assertSameNode(dom.wrap.parentNode, home, 'back in the panel');
+    assertSameNode(dom.wrap.nextSibling, after, 'in its own place');
+    assert.equal(dom.wrap.hidden, true);
+    controls.destroy();
+  }));
+
+test('outside embed mode a photo stays in the panel', () =>
+  withDom(async (dom) => {
+    const home = dom.wrap.parentNode;
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    await layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), false);
+    assertSameNode(dom.wrap.parentNode, home);
+    controls.destroy();
+  }));
+
+test('in embed mode Esc closes the photo, and the next photo is shown over the globe again', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    let closed = 0;
+    layer.closeViewer = () => {
+      closed++;
+      layer.publish(uiState({ open: false }));
+    };
+    await layer.publish(uiState({ open: true }));
+    escape();
+    await nextTick();
+    assert.equal(closed, 1, 'Esc closed the photo');
+    assert.equal(overGlobe(dom), false);
+    await layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), true, 'the next photo is shown');
+    controls.destroy();
+  }));
+
+test('in embed mode Esc in full screen leaves full screen and keeps the photo', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    let closed = 0;
+    layer.closeViewer = () => closed++;
+    await layer.publish(uiState({ open: true }));
+    await dom.wrap.requestFullscreen();
+    await settle();
+    assert.equal(controls.isViewerExpanded(), true);
+    escape();
+    assert.equal(closed, 0, 'the photo stays open');
+    controls.destroy();
+  }));
+
+test('outside embed mode Esc does not close a photo in the panel', () =>
+  withDom(async (dom) => {
+    const { layer, controls } = await stubPanel(dom, uiState({ open: true }));
+    let closed = 0;
+    layer.closeViewer = () => closed++;
+    escape();
+    assert.equal(closed, 0);
+    controls.destroy();
+  }));
+
+test('destroying the panel in embed mode puts an open photo back in the panel', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const home = dom.wrap.parentNode;
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    await layer.publish(uiState({ open: true }));
+    controls.destroy();
+    assert.equal(overGlobe(dom), false);
+    assertSameNode(dom.wrap.parentNode, home);
+  }));

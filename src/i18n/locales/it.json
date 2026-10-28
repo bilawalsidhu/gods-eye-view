@@ -3012,5 +3012,13 @@
   "Audio": "Audio",
   "UTILITIES": "STRUMENTI",
   "Exit cockpit to fly to a drawing": "Esci dal cockpit per volare a un disegno",
-  "Directions, drawing and your own files": "Indicazioni, disegno e i tuoi file"
+  "Directions, drawing and your own files": "Indicazioni, disegno e i tuoi file",
+  "Press OPEN to load the photo": "Premi APRI per caricare la foto",
+  "Captured {month}": "Scattata a {month}",
+  "this spot": "questo punto",
+  "the view centre": "il centro della vista",
+  "{source} at {place}": "{source} a {place}",
+  "Street level at {place}": "Vista stradale a {place}",
+  "Switching map": "Cambio mappa",
+  "Opening imagery": "Apertura delle immagini"
 }

@@ -2872,5 +2872,13 @@
   "Right panels": "右側面板",
   "UTILITIES": "工具",
   "Exit cockpit to fly to a drawing": "請先退出座艙，再飛往繪製位置",
-  "Directions, drawing and your own files": "路線導航、繪製和你自己的文件"
+  "Directions, drawing and your own files": "路線導航、繪製和你自己的文件",
+  "Press OPEN to load the photo": "點擊“打開”載入照片",
+  "Captured {month}": "拍攝於 {month}",
+  "this spot": "此處",
+  "the view centre": "視圖中心",
+  "{source} at {place}": "{place} 的 {source}",
+  "Street level at {place}": "{place} 的街景",
+  "Switching map": "正在切換地圖",
+  "Opening imagery": "正在打開影像"
 }

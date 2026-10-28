@@ -2942,5 +2942,13 @@
   "Audio": "Audio",
   "UTILITIES": "WERKZEUGE",
   "Exit cockpit to fly to a drawing": "Cockpit verlassen, um zu einer Zeichnung zu fliegen",
-  "Directions, drawing and your own files": "Route, Zeichnen und eigene Dateien"
+  "Directions, drawing and your own files": "Route, Zeichnen und eigene Dateien",
+  "Press OPEN to load the photo": "Auf ÖFFNEN klicken, um das Foto zu laden",
+  "Captured {month}": "Aufgenommen im {month}",
+  "this spot": "diese Stelle",
+  "the view centre": "die Bildmitte",
+  "{source} at {place}": "{source} bei {place}",
+  "Street level at {place}": "Straßenebene bei {place}",
+  "Switching map": "Karte wird gewechselt",
+  "Opening imagery": "Bilder werden geöffnet"
 }

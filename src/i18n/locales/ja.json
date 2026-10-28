@@ -2872,5 +2872,13 @@
   "Audio": "オーディオ",
   "UTILITIES": "ユーティリティ",
   "Exit cockpit to fly to a drawing": "描画の位置へ移動するにはコックピットを終了してください",
-  "Directions, drawing and your own files": "ルート案内、描画、自分のファイル"
+  "Directions, drawing and your own files": "ルート案内、描画、自分のファイル",
+  "Press OPEN to load the photo": "「開く」を押して写真を読み込む",
+  "Captured {month}": "{month}撮影",
+  "this spot": "この地点",
+  "the view centre": "表示中心",
+  "{source} at {place}": "{place}の{source}",
+  "Street level at {place}": "{place}のストリートレベル",
+  "Switching map": "地図を切り替え中",
+  "Opening imagery": "画像を開いています"
 }

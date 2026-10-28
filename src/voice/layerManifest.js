@@ -352,7 +352,12 @@ const layers = [
   },
   {
     id: 'street-level',
-    aliases: ['street level', 'street-level imagery', 'mapillary'],
+    aliases: [
+      'street level',
+      'street-level imagery',
+      'mapillary',
+      'street view',
+    ],
     context: false,
     noQuery: 'street-level imagery; no countable records',
   },

@@ -13,3 +13,19 @@ body.ui-embed #world-overlay-actions,
 body.ui-embed #view-switcher {
   display: none !important;
 }
+
+/* Street-level photos: the rail that holds the panel is hidden here, so an
+   open photo shows over the globe (streetLevelControls moves the viewer). */
+body.ui-embed .sl-viewer-wrap-embed {
+  position: fixed;
+  inset: 12px;
+  z-index: 1000;
+}
+
+body.ui-embed .sl-viewer-wrap-embed .sl-viewer-stage,
+body.ui-embed .sl-viewer-wrap-embed .sl-viewer {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: auto;
+}

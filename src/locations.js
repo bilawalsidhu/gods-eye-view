@@ -380,6 +380,8 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
       });
       return {
         label,
+        latitude: lat,
+        longitude: lng,
         navigationMode: 'natural-region-swath',
         rangeM: swath.rangeM,
       };
@@ -415,6 +417,8 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     if (flight) {
       return {
         label,
+        latitude: lat,
+        longitude: lng,
         navigationMode,
         rangeM: null,
       };
@@ -468,6 +472,8 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
   });
   return {
     label,
+    latitude: lat,
+    longitude: lng,
     navigationMode: requestedRange
       ? 'explicit-range'
       : options.forceClose
