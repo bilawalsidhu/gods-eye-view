@@ -8,11 +8,19 @@ export const LOCALE_STORAGE_KEY = 'gev:locale:v1';
 export const DEFAULT_LOCALE = 'en';
 
 /** Shipped locales; order does not matter. Adding one: docs/TRANSLATORS.md. */
-export const LOCALES = Object.freeze(['en', 'es', 'ru', 'zh-CN', 'zh-Hant']);
+export const LOCALES = Object.freeze([
+  'en',
+  'ar',
+  'es',
+  'ru',
+  'zh-CN',
+  'zh-Hant',
+]);
 
 /** Each locale named in its own language, for the selector. */
 export const LOCALE_NAMES = Object.freeze({
   en: 'English',
+  ar: 'العربية',
   es: 'Español',
   ru: 'Русский',
   'zh-CN': '中文（简体）',
@@ -20,10 +28,24 @@ export const LOCALE_NAMES = Object.freeze({
 });
 
 /** Right-to-left locales. */
-const RTL_LOCALES = Object.freeze([]);
+const RTL_LOCALES = Object.freeze(['ar']);
+
+/**
+ * Tags for Intl formatters where the locale code alone is not enough. Arabic
+ * keeps Western digits (0–9) like its catalog: ICU picks Arabic-Indic digits
+ * (٠–٩) for some Arabic regions and browsers, and a HUD that mixes both
+ * misreads.
+ */
+const INTL_TAGS = Object.freeze({ ar: 'ar-u-nu-latn' });
+
+/** The tag to hand Intl.NumberFormat, DateTimeFormat and the like. */
+export function intlLocale(locale) {
+  return INTL_TAGS[locale] ?? locale;
+}
 
 /**
  * Map any language tag to a shipped locale: 'ru-RU' and 'RU' → 'ru',
+ * 'ar-EG' and 'ar-SA' → 'ar',
  * 'zh', 'zh-CN' and 'zh-Hans-SG' → 'zh-CN';
  * 'zh-Hant', 'zh-TW', 'zh-HK' and 'zh-MO' → 'zh-Hant'.
  * @returns {string|null}

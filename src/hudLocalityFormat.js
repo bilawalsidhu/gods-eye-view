@@ -8,6 +8,12 @@ import { formatNumber, getLocale, t } from './i18n/index.js';
 import { unitLabel } from './ui/unitLabels.js';
 import { localizePlaceName } from './ui/placeNames.js';
 
+/**
+ * Scripts without letter case keep a space before the unit: `13 km`, `13 كم`.
+ * Arabic would otherwise run the digits into the word.
+ */
+const UNCASED_UNITS = /^(?:zh-|ar$)/;
+
 /** An upper-case HUD quantity such as `13KM` / `13КМ`, in the active language. */
 export function hudQuantity(value, unit, digits = 0) {
   const number = formatNumber(value, {
@@ -16,7 +22,7 @@ export function hudQuantity(value, unit, digits = 0) {
     maximumFractionDigits: digits,
   });
   const label = unitLabel(unit);
-  if (getLocale().startsWith('zh-'))
+  if (UNCASED_UNITS.test(getLocale()))
     return label ? `${number} ${label}` : number;
   return `${number}${label.toUpperCase()}`;
 }

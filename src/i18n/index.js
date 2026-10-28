@@ -13,15 +13,23 @@
 // `npm run i18n` keeps the catalogs in step with the code. Guide: docs/I18N.md.
 import {
   DEFAULT_LOCALE,
+  intlLocale,
   normalizeLocale,
   writeStoredLocale,
 } from './locale.js';
+import ar from './locales/ar.json' with { type: 'json' };
 import es from './locales/es.json' with { type: 'json' };
 import ru from './locales/ru.json' with { type: 'json' };
 import zhCN from './locales/zh-CN.json' with { type: 'json' };
 import zhHant from './locales/zh-Hant.json' with { type: 'json' };
 
-const CATALOGS = Object.freeze({ es, ru, 'zh-CN': zhCN, 'zh-Hant': zhHant });
+const CATALOGS = Object.freeze({
+  ar,
+  es,
+  ru,
+  'zh-CN': zhCN,
+  'zh-Hant': zhHant,
+});
 
 let currentLocale = DEFAULT_LOCALE;
 
@@ -157,7 +165,7 @@ function cachedFormatter(kind, Constructor, options) {
   const cacheKey = `${kind}|${currentLocale}|${options ? JSON.stringify(options) : ''}`;
   let formatter = formatterCache.get(cacheKey);
   if (!formatter) {
-    formatter = new Constructor(currentLocale, options);
+    formatter = new Constructor(intlLocale(currentLocale), options);
     formatterCache.set(cacheKey, formatter);
   }
   return formatter;

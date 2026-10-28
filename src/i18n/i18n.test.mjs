@@ -47,6 +47,9 @@ test('normalizeLocale folds regional variants and rejects unshipped tags', () =>
   assert.equal(normalizeLocale('zh-Hant-CN'), 'zh-Hant');
   assert.equal(normalizeLocale('zh_HK'), 'zh-Hant');
   assert.equal(normalizeLocale('zh-MO'), 'zh-Hant');
+  assert.equal(normalizeLocale('ar'), 'ar');
+  assert.equal(normalizeLocale('ar-EG'), 'ar');
+  assert.equal(normalizeLocale(' AR_sa '), 'ar');
   assert.equal(normalizeLocale(undefined), null);
 });
 
@@ -102,6 +105,10 @@ test('applyDocumentLanguage sets lang and dir', () => {
   const doc = { documentElement: {} };
   applyDocumentLanguage(doc, 'ru-RU');
   assert.deepEqual(doc.documentElement, { lang: 'ru', dir: 'ltr' });
+  applyDocumentLanguage(doc, 'ar-EG');
+  assert.deepEqual(doc.documentElement, { lang: 'ar', dir: 'rtl' });
+  applyDocumentLanguage(doc, 'en');
+  assert.deepEqual(doc.documentElement, { lang: 'en', dir: 'ltr' });
 });
 
 test('t() returns English text in English and translates in Russian', () => {
