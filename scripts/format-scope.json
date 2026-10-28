@@ -595,6 +595,11 @@
   "src/layers/radio/presentation.js",
   "src/layers/radio/queries.js",
   "src/layers/radio/rendering.js",
+  "src/layers/radio/render/cesium.js",
+  "src/layers/radio/render/navara.js",
+  "src/layers/radio/render/navara.test.mjs",
+  "src/layers/radio/screenClusters.js",
+  "src/layers/radio/screenClusters.test.mjs",
   "src/layers/radio/selection.js",
   "src/layers/radio/source.js",
   "src/layers/radio/state.js",
@@ -1221,5 +1226,7 @@
   "src/layers/firms/lifecycle.test.mjs",
   "scripts/qa-w2-firms-renderer-entry.mjs",
   "scripts/qa-w2-firms-perf.mjs",
-  "scripts/qa-w2-firms-ground.mjs"
+  "scripts/qa-w2-firms-ground.mjs",
+  "scripts/qa-w2-radio.mjs",
+  "scripts/fixtures/w2/radio.mjs"
 ]

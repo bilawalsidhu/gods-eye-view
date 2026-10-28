@@ -182,12 +182,15 @@ test('Navara keeps attribution for every available W1/W2 source and excludes una
     'launch-library-2',
     'usgs',
     'firms',
+    'gbfs',
+    'overture-military-names',
+    'radio-browser',
     'photon-geocoder',
     'openstreetmap',
     'reearth-terrain',
   ];
   const run = await startScene({
-    credits: [...keys, 'radio-browser'].map((key) => ({
+    credits: [...keys, 'nasa-gibs'].map((key) => ({
       key,
       html: `Credit ${key}`,
     })),

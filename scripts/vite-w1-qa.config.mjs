@@ -15,6 +15,8 @@ const modules = [
   'src/data/focusDeemphasis.js',
   'src/data/pickRegistry.js',
   'src/overlays/worldOverlay.js',
+  'src/overlays/worldOverlayDraw.js',
+  'src/data/radio.js',
   'src/voice/gevActions.js',
   'src/data/detection.js',
   'src/scopeMask.js',

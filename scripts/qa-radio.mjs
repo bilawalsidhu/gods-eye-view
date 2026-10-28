@@ -9,12 +9,14 @@
  * independence, restoration without autoplay, responsive UI, and a clean
  * console. Screenshots are written under the gitignored `qa-shots/radio/`.
  *
- * Run: node scripts/qa-radio.mjs --url http://localhost:4173
+ * Run: node scripts/qa-radio.mjs --url http://localhost:4193
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { stations } from './fixtures/w2/radio.mjs';
+import { isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -24,8 +26,10 @@ const option = (name, fallback) => {
   const index = args.indexOf(name);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 };
-const APP_URL = option('--url', process.env.QA_BASE_URL || 'http://localhost:4173');
+const APP_URL = option('--url', process.env.QA_BASE_URL);
+if (!APP_URL) throw new Error('Radio QA requires an explicit --url or QA_BASE_URL');
 const APP_ORIGIN = new URL(APP_URL).origin;
+const expectedPreviewErrors = [];
 // Radio owns this harness's keyboard and pointer actions; the welcome dialog
 // has its own acceptance harness and must not intercept those gestures.
 const RADIO_URL = new URL(APP_URL);
@@ -42,35 +46,6 @@ const chrome = chromeCandidates.find((candidate) => {
   try { return fs.existsSync(candidate); } catch { return false; }
 });
 
-const tags = [
-  'news', 'talk', 'weather,emergency', 'public safety,scanner',
-  'aviation,atc', 'marine,maritime', 'traffic,transit',
-  'music,jazz', 'music,rock', 'community',
-];
-const stations = Array.from({ length: 750 }, (_, index) => {
-  const row = Math.floor(index / 30);
-  const column = index % 30;
-  return {
-    id: `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
-    name: index === 360
-      ? '100.3 The River - WQRV - Meridianville/Huntsville, AL'
-      : index === 390
-        ? 'La Zeta (Hermosillo) - 93.9 FM - XHHY - Uniradio - Hermosillo, Sonora'
-        : `QA Radio ${String(index + 1).padStart(3, '0')}`,
-    lat: -72 + row * 6,
-    lon: -174 + column * 12,
-    streamUrl: `https://audio.example.test/${index}.mp3`,
-    homepage: `https://station.example.test/${index}`,
-    tags: tags[index % tags.length].split(','),
-    languages: index === 360 ? ['Spanish'] : ['English'],
-    state: `Region ${row + 1}`,
-    country: 'United States',
-    countryCode: 'US',
-    metadataTrust: 'untrusted-community',
-    codec: index % 2 ? 'AAC' : 'MP3',
-    bitrate: 128,
-  };
-});
 
 const results = [];
 function check(name, ok, detail = '') {
@@ -241,6 +216,10 @@ async function main() {
     const failedResponses = [];
     const externalCesiumEndpointFailures = [];
     page.on('console', (message) => {
+      if (isExpectedPreviewSetupError(message, { preview: args.includes('--preview'), baseUrl: APP_URL })) {
+        expectedPreviewErrors.push('/api/setup/status: 404');
+        return;
+      }
       if (message.type() === 'error') {
         const sourceUrl = message.location()?.url || '';
         consoleErrors.push(sourceUrl ? `${message.text()} [${sourceUrl}]` : message.text());
@@ -697,7 +676,7 @@ async function main() {
           const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
           const dataSource = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
             .find((item) => item.name === 'Radio stations');
-          const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+          const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
           const { radioStationIdFromPick } = await import('/src/data/radio.js');
           return new Promise((resolve) => {
             let removePostRender = null;
@@ -1283,7 +1262,7 @@ async function main() {
     );
     const clusterBadge = await page.evaluate(async () => {
       const viewer = window.__godsEyeView.viewer;
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const { distanceFade } = await import('/src/overlays/worldOverlayDraw.js');
       const { radioStationIdFromPick } = await import('/src/data/radio.js');
       const baselineSolveRevision = getWorldOverlayDiagnostics().solveRevision;
@@ -1394,7 +1373,7 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const ellipsoid = viewer.scene.globe.ellipsoid;
-      const { getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const { distanceFade } = await import('/src/overlays/worldOverlayDraw.js');
       const source = radio.getOverlayDiagnostics();
       const cameraPosition = viewer.camera.positionWC;
@@ -1456,7 +1435,7 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const ellipsoid = viewer.scene.globe.ellipsoid;
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const paintedClusters = () => new Promise((resolve) => {
         let removePostRender = null;
         const timeout = setTimeout(() => {
@@ -3699,7 +3678,7 @@ async function main() {
       radio.setFilter('news');
       viewer.scene.requestRender();
       await new Promise((resolve) => setTimeout(resolve, 500));
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       return new Promise((resolve) => {
         let removePostRender = null;
         let timeout = null;
@@ -3862,7 +3841,7 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       const selectedEntity = window.__godsEyeView.viewer.entities.values
         .find((entity) => String(entity.id).startsWith('radio:selected:'));
-      const { getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const flightTargets = window.__qaRadioFlyToCalls.map(({ destination }) => {
         const position = viewer.scene.globe.ellipsoid.cartesianToCartographic(destination);
         return {
@@ -4045,7 +4024,7 @@ async function main() {
       });
       const selectedEntity = viewer.entities.values
         .find((entity) => String(entity.id) === `radio:selected:${selected.id}`);
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const expectedEntryId = `selected:${selected.id}`;
       let painted = null;
       // Radio's horizon pass reveals the selected entity on its own timer
@@ -4104,7 +4083,7 @@ async function main() {
       });
       const selectedEntity = viewer.entities.values
         .find((entity) => String(entity.id) === `radio:selected:${selected.id}`);
-      const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
+      const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const expectedEntryId = `selected:${selected.id}`;
       let rect = null;
       for (let attempt = 0; attempt < 20 && !rect; attempt += 1) {
@@ -4141,11 +4120,14 @@ async function main() {
         selectedNativePick = picks.find((picked) => picked?.id === selectedEntity);
         selectedPointPick = picks.find((picked) => (
           picked?.id === selectedEntity
-          && String(picked?.primitive?.constructor?.name || '').includes('PointPrimitive')
+          // Public point properties survive production minification; class names do not.
+          && Number.isFinite(picked?.primitive?.pixelSize)
+          && Number.isFinite(picked?.primitive?.outlineWidth)
         ));
         selectedBillboardPick = picks.find((picked) => (
           picked?.id === selectedEntity
-          && String(picked?.primitive?.constructor?.name || '').includes('Billboard')
+          && Number.isFinite(picked?.primitive?.width)
+          && Number.isFinite(picked?.primitive?.height)
         ));
         if (!selectedPointPick) {
           await new Promise((resolve) => {
@@ -4741,6 +4723,8 @@ async function main() {
   }
 
   const failures = results.filter((result) => !result.ok).length;
+  const reportPath = option('--report');
+  if (reportPath) fs.writeFileSync(reportPath, JSON.stringify({ pass: failures === 0, checks: results, expectedPreviewErrors }, null, 2) + '\n');
   console.log(`\nRadio QA: ${results.length - failures}/${results.length} passed`);
   console.log(`RESULT: ${results.length - failures} passed, ${failures} failed, 0 skipped`);
   process.exitCode = failures ? 1 : 0;

@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { normalizeRadioCountryInput } from '../../data/radioCountry.js';
 
@@ -107,31 +106,13 @@ export function createQueries({ state: layerState, services, parts, source }) {
   }
 
   function viewportRadioAnchor() {
-    const camera = layerState._viewer?.camera;
-    const scene = layerState._viewer?.scene;
-    if (!camera) return null;
-    const altitudeM = Number(camera.positionCartographic?.height);
-    let cartographic = null;
-    const canvas = scene?.canvas;
-    if (canvas && typeof camera.pickEllipsoid === 'function') {
-      const center = geo.cartesian2.create(
-        canvas.clientWidth / 2,
-        canvas.clientHeight / 2,
-      );
-      const position = camera.pickEllipsoid(
-        center,
-        scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
-      );
-      if (position) cartographic = geo.cartographic.fromCartesian(position);
-    }
-    cartographic ||= camera.positionCartographic || null;
-    if (!cartographic) return null;
-    return {
-      lat: geo.math.toDegrees(cartographic.latitude),
-      lon: geo.math.toDegrees(cartographic.longitude),
-      altitudeM,
-      globalView: parts.navigation.radioViewIsGlobal(altitudeM),
-    };
+    const anchor = parts.renderer?.viewportAnchor();
+    return anchor
+      ? {
+          ...anchor,
+          globalView: parts.navigation.radioViewIsGlobal(anchor.altitudeM),
+        }
+      : null;
   }
 
   function rankedVisibleStations() {

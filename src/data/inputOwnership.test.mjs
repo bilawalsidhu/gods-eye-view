@@ -128,7 +128,10 @@ test('every scene click handler consults ownership before it picks', () => {
       'viewer.scene.pick(click.position)',
     ],
     ['src/layers/launches/render/cesium.js', 'drillPick(movement.position'],
-    ['src/layers/radio/interaction.js', 'pickedRadioStationAt(click.position)'],
+    [
+      'src/layers/radio/interaction.js',
+      'const stationId = pickedRadioStationAt(position);',
+    ],
     [
       'src/layers/satellites/render/cesium.js',
       'viewer.scene.pick(click.position)',

@@ -1,0 +1,695 @@
+{
+  "status": "radio implementation checkpoint; W2 terrain/color/combined budgets remain open",
+  "baseCommit": "885853e65340f8dc3d20ec548d0d9aed205370c1",
+  "sourceSha256": {
+    "package-lock.json": "36c3225ca6f2954048e8e0e1b2e06bb7640224eb35f2739a21ff1fcfadf8b812",
+    "package.json": "285287204e1a57a7174e36f20545eabf8cfb6fa9bfbf1f8c03c40298d57dcab6",
+    "scripts/check-import-directions.mjs": "7c3b7042be0d0d45fe8a49a3e8b57d068f7f20b5a4f8f3aecb8d5d84ea9ac3ae",
+    "scripts/fixtures/w2/radio.mjs": "e593eb1b4ae11ee1536d9db22404791a1832a9f8567c89450128555ff2322911",
+    "scripts/format-scope.json": "b533a117b93a5e1d88eb3d8f1f4f8314db6bd2fb0efa07fe5caac6adae0006ff",
+    "scripts/package-boundaries.json": "d25c33d7eccc1e9930ca62b48e2f18b80cfa04d312016d817ce092a4763da7b6",
+    "scripts/qa-radio.mjs": "ed290cc33171fbdb9af9a911b79b21cb52e57150f8d2ff5b4df0258a36abeda4",
+    "scripts/qa-w2-radio.mjs": "04c329b2a4c93d7d9769d7a7a0f51fd0eb199377ebb291af94244548c65b50d4",
+    "scripts/vite-w1-qa.config.mjs": "5cb18461d44ca017b0c04a2b0c7e14c1d0ace6389b0b0037b0409b8c4c0075d6",
+    "src/app/layers/radio.js": "214fd2036df3bd5eb8cd3cf96a2c6438d833e51520cadc121489a31405514bce",
+    "src/app/navaraLayers.test.mjs": "55b67ba68f89014ff45bce7c30b7036595e732e2771f2a4c0d897392daf52b83",
+    "src/app/navaraMode.js": "5196f7d8b4ef4743ba9e43c05aa558c4dfd0043e1f7be38cdb9839db5e9d2ad1",
+    "src/app/navaraScene.test.mjs": "0604f1771ba4994ff43a8dde2afa8659ea465d809c303e6b69820cb225bbed43",
+    "src/data/inputOwnership.test.mjs": "8b3f529832f52a01a758b8cd19847cb512d28db70ec3212f26b7d653e8f503ce",
+    "src/layers/radio/index.js": "02426dbe025f3e01e6f3dde2ec5fe6595e3afe836f4e81047b32622e461d3b36",
+    "src/layers/radio/ingestion.js": "f41e7662159b11db910fa67111fce45fd943ab1e6c151f3bdcff56e4d3685535",
+    "src/layers/radio/interaction.js": "8c9504cc9511558af29bdad71881a5ae4b572c8e5f8d5ad357efc2a6e0ed6a46",
+    "src/layers/radio/lifecycle.js": "a8bc2d451e04dfd46c0610e84538fd3979db5ceb6725815ceee5fca635940b39",
+    "src/layers/radio/navigation.js": "d94b38506dd2e59cfdb76b75a9f0f03a734914be52dd6435caf8af4a3894f410",
+    "src/layers/radio/queries.js": "bb14e4a804107efd9b8b9fb0a255af8fc9942c51af0ec0cfde00e38b422d6062",
+    "src/layers/radio/render/cesium.js": "a536edb3b180f537ad780805883156d941696e1e76d2066cad4a18df1c83e030",
+    "src/layers/radio/render/navara.js": "6f353d3356a0c162423b982a74ba8f10110a82f4b2a0c00e39309cdec5b31224",
+    "src/layers/radio/render/navara.test.mjs": "a7e15862cb26165c1fe14f2e5af412fb79fae8b771cf2d9f455ef542601b6295",
+    "src/layers/radio/rendering.js": "2a7b323f276cce9877a67031a9e6daf2155f2b3ad0a4e3466cf0c0fe960dd4dd",
+    "src/layers/radio/screenClusters.js": "84ec788bb5d3828e469e029a2e7475dfc9f7736e6c9ec76b754d8c49b995b63c",
+    "src/layers/radio/screenClusters.test.mjs": "74e2264d781d2c8d76bcef152abe3eb4e0678409ba1a301795c70a38d112b0be",
+    "src/layers/radio/selection.js": "8b51f4530f03d647a6708b87549e8a8ee21f08be0904032fb33f4dcec02435c2",
+    "src/layers/radio/state.js": "1968fb4442d341cef0609002158f62865ca098e195f8ebf84c0d4806cd1e7b37",
+    "src/overlays/worldOverlay.js": "696381e8f110ced3a69cd9da4a0143772024cf79da0d73a8bbfe0305d98f23c8"
+  },
+  "qaManifestSha256": "903aac7db78530985a7486f54010fd0f24d054ebe7b6c5735f36e6a12f09d10c",
+  "cpuBuild": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 195.8
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 22.3
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 20.4
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 18.8
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 17.2
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 17.5
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.4
+    }
+  ],
+  "ordinaryTests": {
+    "total": 7254,
+    "passed": 7253,
+    "skipped": 1,
+    "failed": 0
+  },
+  "node24AllocationTests": 15,
+  "formatScopeFiles": 1618,
+  "browserGates": [
+    {
+      "gate": "radio-cesium-dev",
+      "code": 0,
+      "seconds": 50.4
+    },
+    {
+      "gate": "radio-navara-dev",
+      "code": 0,
+      "seconds": 55.7
+    },
+    {
+      "gate": "radio-cesium-preview",
+      "code": 0,
+      "seconds": 51.5
+    },
+    {
+      "gate": "radio-navara-preview",
+      "code": 0,
+      "seconds": 47.5
+    },
+    {
+      "gate": "legacy-dev",
+      "code": 0,
+      "seconds": 58.6
+    },
+    {
+      "gate": "legacy-preview",
+      "code": 0,
+      "seconds": 52.0
+    },
+    {
+      "gate": "contract-cesium",
+      "code": 0,
+      "seconds": 27.9
+    },
+    {
+      "gate": "shell-dev",
+      "code": 0,
+      "seconds": 211.1
+    },
+    {
+      "gate": "shell-production",
+      "code": 0,
+      "seconds": 197.5
+    },
+    {
+      "gate": "contract-navara",
+      "code": 0,
+      "seconds": 66.0
+    }
+  ],
+  "comparison": {
+    "dev": {
+      "pass": true,
+      "maxDisplacementPx": 2.1217485116020766e-10,
+      "poses": {
+        "global-all": {
+          "clusters": 42,
+          "singletonControls": 8,
+          "maxDisplacementPx": 8.038873388460929e-13
+        },
+        "global-news": {
+          "clusters": 4,
+          "singletonControls": 9,
+          "maxDisplacementPx": 7.389644451905042e-13
+        },
+        "global-weather": {
+          "clusters": 4,
+          "singletonControls": 9,
+          "maxDisplacementPx": 4.0990372275064023e-13
+        },
+        "global-public-safety": {
+          "clusters": 5,
+          "singletonControls": 10,
+          "maxDisplacementPx": 4.823324033076557e-13
+        },
+        "regional-all": {
+          "clusters": 2,
+          "singletonControls": 15,
+          "maxDisplacementPx": 4.865013002195067e-13
+        },
+        "regional-news": {
+          "clusters": 2,
+          "singletonControls": 5,
+          "maxDisplacementPx": 3.694822225952521e-13
+        },
+        "regional-weather": {
+          "clusters": 2,
+          "singletonControls": 5,
+          "maxDisplacementPx": 3.535733762892957e-12
+        },
+        "regional-public-safety": {
+          "clusters": 2,
+          "singletonControls": 11,
+          "maxDisplacementPx": 5.85238816540084e-13
+        },
+        "city-all": {
+          "clusters": 0,
+          "singletonControls": 1,
+          "maxDisplacementPx": 1.048140854583481e-12
+        },
+        "city-news": {
+          "clusters": 0,
+          "singletonControls": 1,
+          "maxDisplacementPx": 1.048140854583481e-12
+        },
+        "city-weather": {
+          "clusters": 0,
+          "singletonControls": 1,
+          "maxDisplacementPx": 1.2710574864626038e-13
+        },
+        "city-public-safety": {
+          "clusters": 0,
+          "singletonControls": 1,
+          "maxDisplacementPx": 7.626344918775623e-13
+        }
+      }
+    },
+    "preview": {
+      "pass": true,
+      "maxDisplacementPx": 2.1217485116020766e-10,
+      "poses": {
+        "global-all": {
+          "clusters": 42,
+          "singletonControls": 8,
+          "maxDisplacementPx": 8.038873388460929e-13
+        },
+        "global-news": {
+          "clusters": 4,
+          "singletonControls": 9,
+          "maxDisplacementPx": 7.389644451905042e-13
+        },
+        "global-weather": {
+          "clusters": 4,
+          "singletonControls": 9,
+          "maxDisplacementPx": 4.0990372275064023e-13
+        },
+        "global-public-safety": {
+          "clusters": 5,
+          "singletonControls": 10,
+          "maxDisplacementPx": 4.823324033076557e-13
+        },
+        "regional-all": {
+          "clusters": 2,
+          "singletonControls": 15,
+          "maxDisplacementPx": 4.865013002195067e-13
+        },
+        "regional-news": {
+          "clusters": 2,
+          "singletonControls": 5,
+          "maxDisplacementPx": 3.694822225952521e-13
+        },
+        "regional-weather": {
+          "clusters": 2,
+          "singletonControls": 5,
+          "maxDisplacementPx": 3.535733762892957e-12
+        },
+        "regional-public-safety": {
+          "clusters": 2,
+          "singletonControls": 11,
+          "maxDisplacementPx": 5.85238816540084e-13
+        },
+        "city-all": {
+          "clusters": 0,
+          "singletonControls": 1,
+          "maxDisplacementPx": 1.048140854583481e-12
+        },
+        "city-news": {
+          "clusters": 0,
+          "singletonControls": 1,
+          "maxDisplacementPx": 1.048140854583481e-12
+        },
+        "city-weather": {
+          "clusters": 0,
+          "singletonControls": 1,
+          "maxDisplacementPx": 1.2710574864626038e-13
+        },
+        "city-public-safety": {
+          "clusters": 0,
+          "singletonControls": 1,
+          "maxDisplacementPx": 7.626344918775623e-13
+        }
+      }
+    }
+  },
+  "selectedOpaquePointPalette": [
+    {
+      "mode": "dev",
+      "controls": 5,
+      "cesium": [
+        [
+          68,
+          172,
+          254
+        ],
+        [
+          68,
+          172,
+          254
+        ],
+        [
+          68,
+          172,
+          254
+        ],
+        [
+          68,
+          172,
+          254
+        ],
+        [
+          68,
+          172,
+          254
+        ]
+      ],
+      "navara": [
+        [
+          68,
+          173,
+          255
+        ],
+        [
+          68,
+          173,
+          255
+        ],
+        [
+          68,
+          173,
+          255
+        ],
+        [
+          68,
+          173,
+          255
+        ],
+        [
+          68,
+          173,
+          255
+        ]
+      ],
+      "maxChannelDelta": 1,
+      "limit": 3
+    },
+    {
+      "mode": "preview",
+      "controls": 5,
+      "cesium": [
+        [
+          68,
+          172,
+          254
+        ],
+        [
+          68,
+          172,
+          254
+        ],
+        [
+          68,
+          172,
+          254
+        ],
+        [
+          68,
+          172,
+          254
+        ],
+        [
+          68,
+          172,
+          254
+        ]
+      ],
+      "navara": [
+        [
+          68,
+          173,
+          255
+        ],
+        [
+          68,
+          173,
+          255
+        ],
+        [
+          68,
+          173,
+          255
+        ],
+        [
+          68,
+          173,
+          255
+        ],
+        [
+          68,
+          173,
+          255
+        ]
+      ],
+      "maxChannelDelta": 1,
+      "limit": 3
+    }
+  ],
+  "captures": {
+    "cesium-dev": {
+      "pass": true,
+      "checks": 70,
+      "directoryRecords": 750,
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "idleFramesIn2s": [
+        0,
+        0
+      ],
+      "rasterChangedPixels": {
+        "global": [
+          274,
+          276,
+          280,
+          281,
+          272
+        ],
+        "regional": [
+          301,
+          301,
+          304,
+          304,
+          300
+        ],
+        "city-dense": [
+          351,
+          440,
+          350,
+          363,
+          355
+        ],
+        "close-dense": [
+          356,
+          449,
+          360,
+          368,
+          361
+        ]
+      },
+      "mobileTuner": {
+        "end": 749,
+        "max": 749,
+        "active": true,
+        "previewOnly": true,
+        "restored": true,
+        "navigationCalls": 1,
+        "contained": true
+      },
+      "retiredPlay": {
+        "loading": "loading",
+        "result": false,
+        "selected": "00000000-0000-4000-8000-000000000001",
+        "expected": "00000000-0000-4000-8000-000000000001",
+        "stopped": true,
+        "playing": null
+      },
+      "reportSha256": "64e845c2f641e529a3c61bfc516eb72e3b001bbbcf079fc365b59741347abee5"
+    },
+    "navara-dev": {
+      "pass": true,
+      "checks": 70,
+      "directoryRecords": 750,
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "idleFramesIn2s": [
+        0,
+        0
+      ],
+      "rasterChangedPixels": {
+        "global": [
+          303,
+          307,
+          302,
+          305,
+          303
+        ],
+        "regional": [
+          324,
+          323,
+          320,
+          326,
+          322
+        ],
+        "city-dense": [
+          390,
+          489,
+          391,
+          396,
+          389
+        ],
+        "close-dense": [
+          388,
+          488,
+          381,
+          396,
+          385
+        ]
+      },
+      "mobileTuner": {
+        "end": 749,
+        "max": 749,
+        "active": true,
+        "previewOnly": true,
+        "restored": true,
+        "navigationCalls": 1,
+        "contained": true
+      },
+      "retiredPlay": {
+        "loading": "loading",
+        "result": false,
+        "selected": "00000000-0000-4000-8000-000000000001",
+        "expected": "00000000-0000-4000-8000-000000000001",
+        "stopped": true,
+        "playing": null
+      },
+      "reportSha256": "7f8214d2d424d064224647fc2911a6f8b8047db4f6f330735d586592f185c023"
+    },
+    "cesium-preview": {
+      "pass": true,
+      "checks": 70,
+      "directoryRecords": 750,
+      "browserErrors": [],
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "idleFramesIn2s": [
+        0,
+        0
+      ],
+      "rasterChangedPixels": {
+        "global": [
+          274,
+          276,
+          280,
+          281,
+          272
+        ],
+        "regional": [
+          301,
+          301,
+          304,
+          304,
+          300
+        ],
+        "city-dense": [
+          351,
+          440,
+          350,
+          363,
+          355
+        ],
+        "close-dense": [
+          356,
+          449,
+          360,
+          368,
+          361
+        ]
+      },
+      "mobileTuner": {
+        "end": 749,
+        "max": 749,
+        "active": true,
+        "previewOnly": true,
+        "restored": true,
+        "navigationCalls": 1,
+        "contained": true
+      },
+      "retiredPlay": {
+        "loading": "loading",
+        "result": false,
+        "selected": "00000000-0000-4000-8000-000000000001",
+        "expected": "00000000-0000-4000-8000-000000000001",
+        "stopped": true,
+        "playing": null
+      },
+      "reportSha256": "0aaae794e40a4afb00922cd386303087c481a956d71ee1d1c7a927d4c481d5f5"
+    },
+    "navara-preview": {
+      "pass": true,
+      "checks": 70,
+      "directoryRecords": 750,
+      "browserErrors": [],
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "idleFramesIn2s": [
+        0,
+        0
+      ],
+      "rasterChangedPixels": {
+        "global": [
+          303,
+          307,
+          302,
+          305,
+          303
+        ],
+        "regional": [
+          324,
+          323,
+          320,
+          326,
+          322
+        ],
+        "city-dense": [
+          390,
+          489,
+          391,
+          395,
+          389
+        ],
+        "close-dense": [
+          388,
+          488,
+          381,
+          396,
+          385
+        ]
+      },
+      "mobileTuner": {
+        "end": 749,
+        "max": 749,
+        "active": true,
+        "previewOnly": true,
+        "restored": true,
+        "navigationCalls": 1,
+        "contained": true
+      },
+      "retiredPlay": {
+        "loading": "loading",
+        "result": false,
+        "selected": "00000000-0000-4000-8000-000000000001",
+        "expected": "00000000-0000-4000-8000-000000000001",
+        "stopped": true,
+        "playing": null
+      },
+      "reportSha256": "662a647959fa700ecd8277130bf9c1c56f60cdfbcf531d194b0859a792fae819"
+    }
+  },
+  "legacy": {
+    "dev": {
+      "pass": true,
+      "checks": 106,
+      "expectedPreviewErrors": [],
+      "reportSha256": "d02f42752abbdfbc1e1344b14600876905693d6c59cfcce55721ff9457ccd585"
+    },
+    "preview": {
+      "pass": true,
+      "checks": 106,
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "reportSha256": "47fe86e3ead0134fd3030b3cda96700240726eb7dd69f2c2a7f6eca2d3c3ca9a"
+    }
+  },
+  "mainChunk": {
+    "bytes": 2914945,
+    "gzipBytes": 909698,
+    "containsThreeOrNavara": false,
+    "sizeBudgetChecked": false
+  },
+  "limits": [
+    "Radio keeps native cached ground-floor plus2.5m/5m and cold-cell zero fallback; direct rendered-surface placement remains a common W2 gate.",
+    "Selected opaque NEWS center has five RGB controls; all-category alpha/edge/area parity is not claimed.",
+    "Fixture media play primitive is stubbed: no live broadcaster availability or autoplay-policy acceptance claimed.",
+    "FIRMS uncapped close remains1.136 versus1.10; combined W2 performance remains open.",
+    "No main-chunk byte baseline exists in this branch."
+  ],
+  "failedAttempts": [
+    "legacy initial95/105 used a duplicate dev overlay singleton; live host facade baseline106/106 and extraction106/106 retained separately.",
+    "Mobile idle failed when QA changed Detection through a separate dev import; live application mode API fixes the measurement precondition.",
+    "Native dev idle once observed17frames; not reproduced by subsequent dev/preview checks, no root cause claimed.",
+    "Off-canvas marker anchor was incorrectly treated as a GPU-picking control; in-viewport anchors remain mandatory.",
+    "Global public-safety clusters differed after filters; actual native FIFO primitive reuse proved the cause, oracle and final12poses now match.",
+    "Legacy preview105/106 relied on minified constructor names; public point properties preserve the point-only pick invariant, final106/106.",
+    "Contract probe on preview could not resolve the dev Cesium module; final contracts use supported dev4193.",
+    "Initial Navara contract80/80 logged34console errors from orphan cache metadata;67orphan metadata files quarantined, repeat required zero failed tiles and no console errors."
+  ],
+  "contracts": {
+    "cesium": 73,
+    "navara": 80,
+    "server": "dev4193",
+    "unexpectedConsoleErrors": 0
+  },
+  "tileCacheRepair": {
+    "orphanMetadataQuarantined": 67,
+    "bodyFilesRemoved": 0,
+    "backup": "/private/tmp/gev-radio-tile-cache-orphans"
+  },
+  "shell": {
+    "dev": {
+      "cesium": 23,
+      "navara": 25,
+      "cross": 4,
+      "logSha256": "bb60522a8ca47fffd616e40fc111a93c6ddd532c4360527feead9a3fa734df7b"
+    },
+    "production": {
+      "cesium": 23,
+      "navara": 25,
+      "cross": 4,
+      "logSha256": "fce057f04f62cf3c06a13a384843e718b227e2cfcf365f59810d9cd4f9b6b55b"
+    }
+  }
+}
