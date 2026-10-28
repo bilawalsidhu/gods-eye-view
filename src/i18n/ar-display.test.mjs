@@ -10,6 +10,7 @@ import {
 import { hudQuantity, LOCALIZED_LOCALITY } from '../hudLocalityFormat.js';
 import { formatCockpitDistance } from '../ui/cockpitPresentation.js';
 import { READOUT_WORDS } from '../layers/recentImagery/display.js';
+import { formatQuantity } from '../ui/unitLabels.js';
 
 test('Arabic resolves from URL, saved preference and browser language', () => {
   assert.equal(
@@ -88,13 +89,20 @@ test('Arabic uses all six plural forms and spaced HUD units', () => {
       ],
     );
     assert.equal(hudQuantity(2069, 'km', 1), '2069.0 كم');
-    assert.equal(formatCockpitDistance(14000), '14 كم');
+    // Isolated, so the number keeps its unit next to Latin words.
+    assert.equal(formatCockpitDistance(14000), '\u206814\u00a0كم\u2069');
+    assert.equal(
+      `Sentinel-2 · ${formatQuantity(30, 'm')}`,
+      'Sentinel-2 · \u206830\u00a0م\u2069',
+    );
     assert.equal(
       LOCALIZED_LOCALITY.sector({ latDeg: 21.33, lonDeg: -77.5 }),
       'القطاع 21.33ش 77.50غ',
     );
     assert.equal(READOUT_WORDS.daysAgo(9), 'قبل 9 أيام');
     assert.equal(t('SAVE KEYS'), 'حفظ المفاتيح');
+    setLocale('ru');
+    assert.equal(formatCockpitDistance(14000), '14 КМ');
   } finally {
     setLocale(previous);
   }

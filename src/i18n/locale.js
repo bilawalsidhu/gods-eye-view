@@ -30,6 +30,11 @@ export const LOCALE_NAMES = Object.freeze({
 /** Right-to-left locales. */
 const RTL_LOCALES = Object.freeze(['ar']);
 
+/** Whether a shipped locale reads right to left. */
+export function isRtlLocale(locale) {
+  return RTL_LOCALES.includes(normalizeLocale(locale));
+}
+
 /**
  * Tags for Intl formatters where the locale code alone is not enough. Arabic
  * keeps Western digits (0–9) like its catalog: ICU picks Arabic-Indic digits

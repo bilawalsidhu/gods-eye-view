@@ -1,4 +1,4 @@
-import { formatNumber, t, msg } from '../i18n/index.js';
+import { formatNumber, isolate, msg, t } from '../i18n/index.js';
 import { createNumberInput } from './formField.js';
 
 /** Shortest-wrap signed degrees, for heading offsets typed as absolute values. */
@@ -79,13 +79,14 @@ function calValueText(field, value) {
       useGrouping: false,
       ...options,
     });
-    return `${t(field.label)} ${t('{value}m', { value: metres })}`;
+    return `${t(field.label)} ${isolate(t('{value}m', { value: metres }))}`;
   }
   const number = formatNumber(Number(value), {
     useGrouping: false,
     ...options,
   });
-  return `${t(field.label)} ${number}${field.unit}`;
+  // Isolated so a minus sign stays on its number in right-to-left text.
+  return `${t(field.label)} ${isolate(`${number}${field.unit}`)}`;
 }
 
 export function _activeCctvCameraId() {

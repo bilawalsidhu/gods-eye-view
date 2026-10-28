@@ -1,0 +1,118 @@
+/* Right-to-left languages (Arabic). The chrome mirrors through logical
+   properties in the component sheets (inset-inline-*, margin-inline-*); this
+   sheet holds only what logical properties cannot express. */
+
+/* Arabic letters join: letter-spacing tears every word into separate glyphs.
+   Latin marked translate="no" and the intel HUD's Latin telemetry keep their
+   tracking; the HUD's translated lines are released below. */
+html:lang(ar)
+  body
+  :not(
+    #intel-hud,
+    #intel-hud *,
+    [translate='no'],
+    [translate='no'] *,
+    :has([translate='no'])
+  ) {
+  letter-spacing: 0 !important;
+}
+
+/* The intel HUD is an instrument overlay: corners, brackets, coordinates and
+   sensor codes keep the English geometry. Its translated lines still read
+   right to left inside that frame. */
+html[dir='rtl'] #intel-hud {
+  direction: ltr;
+}
+html[dir='rtl'] #intel-hud :is(.hud-mode, .hud-summary-label, .hud-summary) {
+  unicode-bidi: plaintext;
+  text-align: left;
+  letter-spacing: 0 !important;
+}
+
+/* Font stacks: JetBrains Mono and Inter have no Arabic glyphs, and the
+   generic monospace fallback is a fixed-pitch Arabic face that spaces every
+   letter apart. Noto Sans Arabic (loaded with the other Google fonts; its
+   files download only when the page shows Arabic) leads the mono stack, so
+   the spaces between Arabic words come from it too and not from the
+   fixed-pitch Latin face. The intel and cockpit HUDs keep JetBrains Mono for
+   their Latin telemetry and column-aligned digits. */
+html:lang(ar) {
+  --font-mono:
+    'Noto Sans Arabic', 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Geeza Pro',
+    Tahoma, monospace;
+  --font-sans:
+    'Inter', 'Noto Sans Arabic', -apple-system, BlinkMacSystemFont,
+    'Geeza Pro', Tahoma, sans-serif;
+}
+html:lang(ar) :is(#intel-hud, #cockpit-hud) {
+  --font-mono:
+    'JetBrains Mono', 'SF Mono', 'Fira Code', 'Noto Sans Arabic', 'Geeza Pro',
+    Tahoma, monospace;
+}
+
+/* The Display/Context rail moves to the left edge. It keeps a physical
+   `right` in layers.css because the attribution-clearance model
+   (creditAttribution.test.mjs) reads that rule; the swap only applies above
+   the 720px band, where the rail is not edge-to-edge. */
+@media (min-width: 721px) {
+  html[dir='rtl'] #right-context-rail {
+    right: auto;
+    left: var(--right-rail-x);
+  }
+}
+@media (min-width: 961px) and (min-height: 650px) {
+  html[dir='rtl'][data-ui-theme='cyber'] #right-context-rail {
+    right: auto;
+    left: 62px;
+  }
+}
+
+/* The right rail sits on the left: its expand/collapse arrows point the
+   other way. */
+html[dir='rtl'] #right-context-rail .panel-collapse-btn {
+  transform: scaleX(-1);
+}
+
+/* The cockpit is an aircraft panel, not page chrome: its windows keep their
+   physical sides, so the data-layer stack goes back to the left edge instead
+   of landing on the utility controls. Gauges, tapes, the roll counters and the
+   position readout stay left to right (speed left, altitude right, -10 not
+   10-); the cards keep reading right to left. */
+html[dir='rtl'] body.cockpit-mode #left-panel-stack {
+  left: var(--left-stack-x);
+  right: auto;
+}
+html[dir='rtl']
+  #cockpit-hud
+  :is(
+    .cockpit-instrument-row,
+    .cockpit-compass,
+    .cockpit-pitch-rail,
+    .cockpit-altitude-rim,
+    .cockpit-roll-arc,
+    .cockpit-position-readout,
+    .cockpit-vision-controls
+  ) {
+  direction: ltr;
+}
+
+/* Feed text (news headlines, station names) arrives in its own language:
+   each line takes its direction from its first letter, so an English headline
+   reads and aligns left to right instead of moving its punctuation. */
+html[dir='rtl']
+  :is(
+    .cockpit-news-list li *,
+    #radio-station-name,
+    #radio-station-tags,
+    #context-radio-mini-station,
+    .cockpit-radio-station
+  ) {
+  unicode-bidi: plaintext;
+}
+
+/* Physical controls keep their left-to-right sense: media transport
+   (previous / play / next) and the radio dial. */
+html[dir='rtl']
+  :is(.radio-transport, .context-radio-mini-transport, .radio-tuner) {
+  direction: ltr;
+}

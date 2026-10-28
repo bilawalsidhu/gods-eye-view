@@ -550,7 +550,7 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
   assert.match(
     cyberStyles,
-    /#right-context-rail\s+:is\(\s*\.cctv-panel-inner,\s*\.weather-panel-inner,\s*\.recent-imagery-panel-inner,\s*\.street-level-panel-inner,\s*\.global-context-panel-inner\s*\) \{\s*padding-right: 8px;/,
+    /#right-context-rail\s+:is\(\s*\.cctv-panel-inner,\s*\.weather-panel-inner,\s*\.recent-imagery-panel-inner,\s*\.street-level-panel-inner,\s*\.global-context-panel-inner\s*\) \{\s*padding-inline-end: 8px;/,
   );
   assert.match(
     cyberStyles,
@@ -765,7 +765,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /mask-image: linear-gradient\(/);
   assert.match(cyberStyles, /flex: 1 1 auto;/);
   assert.match(cyberStyles, /#left-panel-stack:has/);
-  assert.match(cyberStyles, /left: 54px;/);
+  assert.match(cyberStyles, /inset-inline-start: 54px;/);
   assert.match(cyberStyles, /right: 62px;/);
   assert.match(cyberStyles, /bottom: calc\(2vh \+ 13rem\);/);
   assert.doesNotMatch(cyberStyles, /NAV 01  \/\/  COMMAND BUS  \/\/  VIS 03/);

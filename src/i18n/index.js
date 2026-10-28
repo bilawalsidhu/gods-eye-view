@@ -14,6 +14,7 @@
 import {
   DEFAULT_LOCALE,
   intlLocale,
+  isRtlLocale,
   normalizeLocale,
   writeStoredLocale,
 } from './locale.js';
@@ -41,6 +42,15 @@ export function getCatalog(locale) {
 /** Active locale. */
 export function getLocale() {
   return currentLocale;
+}
+
+/**
+ * A value inserted into right-to-left text as one unit: `30 م` next to
+ * `Sentinel-2` would otherwise lend its digits to the Latin run and leave the
+ * unit stranded. First-strong isolates (U+2068…U+2069) in RTL locales only.
+ */
+export function isolate(text) {
+  return isRtlLocale(currentLocale) ? `\u2068${text}\u2069` : String(text);
 }
 
 /**

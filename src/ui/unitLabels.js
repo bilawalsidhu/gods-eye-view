@@ -1,4 +1,4 @@
-import { formatNumber, msg, t } from '../i18n/index.js';
+import { formatNumber, isolate, msg, t } from '../i18n/index.js';
 
 // Unit ids stay English in data, params and AI-tool readings; only the label
 // shown on the page is translated. dBZ and °C read the same in every language.
@@ -30,7 +30,7 @@ export function unitLabel(unit) {
 export function formatQuantity(value, unit, options) {
   const label = unitLabel(unit);
   const number = formatNumber(value, { useGrouping: false, ...options });
-  return label ? `${number}\u00a0${label}` : number;
+  return label ? isolate(`${number}\u00a0${label}`) : number;
 }
 
 /**

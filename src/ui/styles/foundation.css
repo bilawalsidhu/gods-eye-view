@@ -492,7 +492,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #title-bar {
   position: fixed;
   top: 32px;
-  left: 36px;
+  inset-inline-start: 36px;
   z-index: 100;
   pointer-events: none;
   user-select: none;
@@ -501,7 +501,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #title-bar .title-glow {
   position: absolute;
   top: -20px;
-  left: -20px;
+  inset-inline-start: -20px;
   width: 200px;
   height: 80px;
   background: radial-gradient(ellipse, var(--accent-dim) 0%, transparent 70%);
@@ -626,11 +626,11 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #style-indicator {
   position: fixed;
   top: 32px;
-  right: 36px;
+  inset-inline-end: 36px;
   z-index: 100;
   pointer-events: none;
   user-select: none;
-  text-align: right;
+  text-align: end;
 }
 
 #style-indicator .indicator-label {
