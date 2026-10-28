@@ -1135,5 +1135,10 @@
   "src/voice/realtimeCostPanel.test.mjs",
   "src/agent/voicePanelIntegration.test.mjs",
   "scripts/qa-agent-voice-panel.mjs",
-  "scripts/qa-agent-phone.mjs"
+  "scripts/qa-agent-phone.mjs",
+  "src/agent/rightRailState.js",
+  "src/agent/rightRailState.test.mjs",
+  "src/agent/rightRailIntegration.test.mjs",
+  "src/agent/commandPanelTargets.test.mjs",
+  "scripts/qa-agent-right-rail.mjs"
 ]

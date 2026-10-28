@@ -19,3 +19,7 @@
   window to safe areas and keyboard visual viewports, and keep input reachable
   at the preferred minimum size. Add real-application phone/desktop browser
   regressions without merging or modifying #1429 (radianx, #1331).
+  COMMAND observes the final vertical-tab rail state after panel actions and uses
+  that state for panel-only confirmations, including independent mobile expansion.
+  Street Level becomes an addressable shared panel target. Shell exclusivity,
+  keyboard behavior, share links and preference ownership remain with the UI.

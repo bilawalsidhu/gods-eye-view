@@ -358,3 +358,96 @@ pointer-reachable. The launcher also clears the visible attribution elements.
   Node 24. Earlier runs overlapping software-GPU browser probes hit the
   analyst/KML timing budgets; the final run used unchanged budgets and separated
   the browser and unit workloads.
+
+## Right-rail integration (2026-10-28)
+
+Temporary test combination: #1331 at `1319e31fad41bc6d424d5e539e20ab66e34b3b99`
+and #1425 at `8c788474db58a94796cda7c4282399d182b08303`. The latter is newer
+than the originally reported 07:02 UTC update. Only #1331 receives the fixes;
+#1425 is a temporary test dependency, not part of this branch's history.
+
+Two command defects were reproduced. Street Level was absent from the shared
+panel schema and runner's canonical targets, causing the panel refusal guard to
+skip remaining sibling calls. It is now addressable as `street-level-panel`;
+common Display and Street Level aliases dispatch through the same explicit
+`setPanelCollapsed` route. The panel description is shortened to keep the
+existing 52,000-character Realtime prompt budget; schema fingerprints and
+explicit target expectations record the deliberate addition.
+
+Separately, successful panel results described individual actions rather than
+the resulting rail state. A scripted provider could claim that all panels were
+open after later calls had closed the earlier ones. COMMAND now appends a fresh
+`rightRailState` observation to the last tool result after every round. For
+panel-only requests, the final displayed confirmation is derived from a fresh
+observation, overriding contradictory provider prose. Mixed-tool requests retain
+model narration with explicit resulting-state guidance and the observation as
+evidence; this is not a deterministic semantic guarantee for arbitrary prose.
+There is no new tool or direct panel mutation in the text session. The reader
+activates only when the tab shell is mounted, records mobile expansion separately
+from sheet visibility, and never writes focus, preferences, share state or panel
+classes. A desktop invariant violation is reported as a failure, not repaired by
+silently overriding the shell.
+
+The temporary merge also exposed a test-only incompatibility: both branches add
+a component import, bringing `style.css` to 39 lines (40 elements when split on
+newlines). A pre-existing `<40` line assertion rejected the valid import shim.
+The regression now checks that removing comments and imports leaves no CSS
+rules; component rules remain forbidden without imposing a count of imports.
+The only merge conflict was in `scripts/format-scope.json`; both sets of entries
+were retained in the temporary test tree.
+
+Regression coverage includes the four-panel batch, successive typed openings,
+explicit close, focus retention, stored collapsed choices, restore-lane claims,
+mobile independence, target aliases/schema, hidden/Cockpit observations and
+reporting an invalid desktop owner count. The three shell integration tests
+explicitly skip on #1331 alone because #1425's shell/test DOM are absent; the
+snapshot, alias and schema unit tests run on both trees.
+
+Reproduce the real-application browser gate after temporarily merging #1425:
+
+```sh
+node scripts/qa-agent-right-rail.mjs
+```
+
+It starts Vite, renders the shipped application and Cesium viewer, types into the
+real COMMAND form, and uses scripted API responses without OAuth, a microphone
+or paid calls. Chromium headless shell uses a DevTools pipe because ordinary
+Chromium's singleton Unix socket is prohibited in this environment. The gate
+covers Tactical/Operator/Minimal/Cyber; successive Display, CCTV, Street Level,
+Context; four-call and CCTV→Context batches; explicit close; actual rendered
+panel visibility; retained input focus; preferences on a root reload; a real
+share link opened in a fresh browser context; Up/Down wrapping, Home/End, Enter,
+Tab through the compact Radio slot into the panel and Escape focus return; and
+independent mobile expansions and Cameras/Context/More sheets. Artifacts are
+written under `qa-artifacts/agent-right-rail/`.
+
+Validation (Linux, Node 24.22.1):
+
+- Corrected #1331: ordinary suite **9,093 passed, 10 skipped, 0 failed**.
+  Seven skips are the existing platform cases; three require #1425.
+- Temporary combined tree: ordinary suite **9,182 passed, 7 skipped, 0 failed**.
+  Both trees also pass all **15** separately serialized allocation checks.
+  Ordinary suites use four concurrent workers; no unit deadline was relaxed.
+- **11 new regressions**: six snapshot cases, one alias test, one schema test,
+  and three combined-shell cases (the latter explicitly skip without #1425).
+- `qa-agent-right-rail.mjs`: all seven groups pass, **62** scripted API rounds,
+  no application page errors. It exercises the complete shipped application.
+- Existing ChatGPT browser gate: **8 combinations pass** (en/es/ru/zh-CN at
+  1280×800 and 800×800). Existing camera browser gate passes, including real
+  rendered Cesium rotation, stop, navigation and refusal handling.
+- Production builds pass on both trees. Formatting, import/package ownership,
+  catalogs (2,752 entries per es/ru/zh-CN catalog), setup doctor, layer tokens
+  and changelog validation pass on corrected #1331. The new observation module
+  is registered with the existing application package owner.
+- The broad tracking harness was attempted with offline imagery, but its Node
+  HTTP preflight could not reach the Vite URL from this environment. No tracking
+  result is claimed. The targeted browser gate reaches its local Vite server
+  through Chromium and passes.
+
+The existing `qa-agent-voice-panel.mjs` gate fails at its Escape assertion
+(line 186): the voice pane stays open while COMMAND's active surface handles
+Escape. The same assertion fails on an untouched checkout of `1319e31`, on
+corrected #1331 alone, and on the combined tree. It is not a new right-rail
+integration regression and has not been changed in this correction. No live
+ChatGPT interpretation, account eligibility, physical-device keyboard, native
+Windows or broad external-feed/tracking certification is claimed.

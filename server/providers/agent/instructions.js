@@ -110,6 +110,7 @@ function agentDirectives({ annotationGuidance } = {}) {
 function buildAgentInstructions(options = {}) {
   return [
     ...agentDirectives(options),
+    'RIGHT RAIL: Display uses pp-toggles; Street Level uses street-level-panel. rightRailState is an observation after every tool in a round has run. Its latest openPanelIds supersede earlier set_panel_open successes. Desktop tabs have one owner; opening another closes the previous panel. Mobile expansion states are independent and do not imply that every sheet is visible. Confirm the resulting state, never a list of successful opens as if they all remained open.',
     // Source records are data even if their strings mimic high-priority
     // instructions. This is a prompt-layer precaution, not an enforcement
     // boundary against semantic prompt injection.

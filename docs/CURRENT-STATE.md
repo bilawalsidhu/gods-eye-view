@@ -6458,3 +6458,10 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+COMMAND's panel-only confirmation reads the final state of a mounted right-rail
+tab shell after all actions, so opening CCTV followed by Context reports Context
+as the owner. Round results carry an explicit state observation for mixed-tool
+requests. Street Level is an addressable shared panel target. This does not
+install or replace the tab shell: #1425 is tested as a temporary integration
+only. See `docs/CHATGPT-COMMAND.md` for revisions, regressions and validation.

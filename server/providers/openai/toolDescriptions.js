@@ -112,7 +112,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_panel_open: {
     description:
-      'Visual Presets/styles/filters=control-panel; Scenes/saved scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit directly.',
+      'Visual Presets/styles/filters=control-panel; Scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit.',
     $position: 1,
   },
   set_voice_inactivity_timeout: {

@@ -1,4 +1,5 @@
 import { fitHistoryToBytes, toolResultMessage } from './conversation.js';
+import { readRightRailState, rightRailReply } from './rightRailState.js';
 
 /**
  * Drives one typed command to completion in the browser.
@@ -270,6 +271,8 @@ function createAgentSession({
         message: { role: 'user', content: command },
       });
 
+      let panelOnly = true;
+      let railCommandSeen = false;
       try {
         for (let round = 0; round < maxToolRounds; round += 1) {
           controller.signal.throwIfAborted();
@@ -290,10 +293,14 @@ function createAgentSession({
               ['move_camera', 'zoom_to_globe'].includes(call.name) ||
               isPanelCommand(call.name, call.args),
           );
+          const railState = railCommandSeen ? readRightRailState() : null;
+          const finalRailReply =
+            !toolCalls.length && panelOnly ? rightRailReply(railState) : null;
+          const message = finalRailReply
+            ? { ...data.message, content: finalRailReply }
+            : data.message;
           // Narration before execution may claim an action that is refused.
-          messages.push(
-            guardedCalls ? { ...data.message, content: '' } : data.message,
-          );
+          messages.push(guardedCalls ? { ...message, content: '' } : message);
           for (const warning of Array.isArray(data.warnings)
             ? data.warnings
             : []) {
@@ -301,13 +308,23 @@ function createAgentSession({
           }
 
           if (!toolCalls.length) {
-            const content = data.message?.content || '';
+            const content = message?.content || '';
             onEvent({
               type: AGENT_EVENTS.MESSAGE,
               message: { role: 'assistant', content },
             });
             onEvent({ type: AGENT_EVENTS.DONE, rounds: round + 1 });
-            return { ok: !data.toolCallFailed, content, rounds: round + 1 };
+            return {
+              ok:
+                !data.toolCallFailed &&
+                !(
+                  finalRailReply &&
+                  railState.layout === 'desktop' &&
+                  railState.openPanelIds.length > 1
+                ),
+              content,
+              rounds: round + 1,
+            };
           }
 
           // The model may narrate alongside a call; surface it so the console
@@ -364,6 +381,17 @@ function createAgentSession({
                   call.args,
                   controller.signal,
                 );
+            const currentRailState = readRightRailState();
+            const isRailCall =
+              call.name === 'set_panel_open' &&
+              result?.ok === true &&
+              currentRailState &&
+              [
+                ...currentRailState.openPanelIds,
+                ...currentRailState.closedPanelIds,
+              ].includes(result.panelId);
+            railCommandSeen ||= Boolean(isRailCall);
+            panelOnly &&= Boolean(isRailCall);
             refusalReply ||=
               cameraRefusalReply(call.name, call.args, result) ||
               panelRefusalReply(call.name, call.args, result);
@@ -373,6 +401,19 @@ function createAgentSession({
               result,
             });
             messages.push(toolResultMessage(call.id, result));
+          }
+          // Attach one observation after ALL calls in this round, rather than
+          // presenting the individual successful openings as simultaneous state.
+          if (railCommandSeen && messages.at(-1)?.role === 'tool') {
+            const state = readRightRailState();
+            if (state) {
+              const last = messages.at(-1);
+              const result = JSON.parse(last.content);
+              messages[messages.length - 1] = toolResultMessage(
+                last.tool_call_id,
+                { ...result, rightRailState: state },
+              );
+            }
           }
           controller.signal.throwIfAborted();
           if (refusalReply) {
