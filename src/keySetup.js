@@ -215,7 +215,12 @@ export function stripKeylessBasemapFromHash(hash) {
   }
 }
 
-const TIER_DOTS = Object.freeze({ metered: '🔴', paid: '🔴', free: '🟡' });
+/** Visual tier marker, styled as a colored dot via CSS (was an emoji glyph). */
+const TIER_CLASSES = Object.freeze({
+  metered: 'tier-metered',
+  paid: 'tier-paid',
+  free: 'tier-free',
+});
 
 function updateCloudVoiceAuthControl(auth, busy = false) {
   const mode = readStoredCloudVoiceAuthMode();
@@ -254,8 +259,9 @@ function buildRow(documentRef, key) {
   const title = documentRef.createElement('strong');
   title.textContent = key.title; // i18n-ignore: provider product name
   const tier = documentRef.createElement('span');
-  tier.className = 'key-setup-tier';
-  tier.textContent = TIER_DOTS[key.tier] || '';
+  tier.className = `key-setup-tier ${TIER_CLASSES[key.tier] || ''}`.trim();
+  tier.setAttribute('aria-hidden', 'true');
+  tier.textContent = '';
   tier.title =
     key.tier === 'metered'
       ? t('Metered — a billing-enabled account')

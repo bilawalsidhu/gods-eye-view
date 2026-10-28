@@ -11,6 +11,7 @@ import {
 } from '../../data/contactMatch.js';
 import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
+import { ICONS } from '../../icons.js';
 
 export function createQueries({
   flightState,
@@ -227,7 +228,9 @@ export function createQueries({
 
     name: 'Military Flights',
 
-    icon: '🎖️',
+    icon: '',
+
+    iconSvg: ICONS.medal,
 
     source: flightState.feed._lastSource,
 

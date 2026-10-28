@@ -9,6 +9,7 @@ import {
 } from '../../data/trafficPresetStyle.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
 import { t, translateKnown } from '../../i18n/index.js';
+import { ICONS } from '../../icons.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   /** One status line: feed, drawn road source, then degraded-coverage notes. */
@@ -54,7 +55,9 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'Street Traffic',
 
-    icon: '🚗',
+    icon: '',
+
+    iconSvg: ICONS.car,
 
     source: 'OpenStreetMap / TomTom',
 

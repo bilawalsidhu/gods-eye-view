@@ -10,6 +10,7 @@ import {
   gnssProvenance,
   pruneGnssObservations,
 } from './records.js';
+import { ICONS } from '../../icons.js';
 export * from './records.js';
 export { createAdsbGnssSource } from './source.js';
 
@@ -212,7 +213,8 @@ export function createGnssIntegrityLayer({
   const layer = {
     id: 'gnss-integrity',
     name: 'GNSS Integrity',
-    icon: '📡',
+    icon: '',
+    iconSvg: ICONS.antenna,
     source: 'adsb.lol',
     /** Where each part of the method comes from; see records.js. */
     provenance,

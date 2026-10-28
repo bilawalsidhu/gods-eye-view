@@ -317,7 +317,9 @@ export class LayerPanel {
       const icon = document.createElement('span');
       icon.className = 'data-icon';
       icon.setAttribute('aria-hidden', 'true');
-      icon.textContent = layer.icon;
+      // iconSvg values are static markup from src/icons.js, never user data.
+      if (layer.iconSvg) icon.innerHTML = layer.iconSvg;
+      else icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';
       setRowText(name, panelLabel(layer));
@@ -467,6 +469,7 @@ export class LayerPanel {
         .map((layer) => ({
           id: layer.id,
           icon: layer.icon,
+          iconSvg: layer.iconSvg,
           ...this._rowControlsFor(layer.id),
         })),
     );

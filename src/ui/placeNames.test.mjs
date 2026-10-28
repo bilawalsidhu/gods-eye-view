@@ -77,6 +77,6 @@ test('ru: location pills and the mini-status show the translated city', () => {
   });
   assert.equal(elements.pills.children[0].textContent, 'Токио');
   controls.renderStatus({ city: CITY_POIS.tokyo, currentPoi: null });
-  assert.equal(elements.statusCity.textContent, '📍 Токио');
+  assert.equal(elements.statusCity.textContent, 'Токио');
   assert.equal(CITY_POIS.tokyo.name, 'Tokyo');
 });

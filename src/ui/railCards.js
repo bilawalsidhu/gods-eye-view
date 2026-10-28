@@ -90,8 +90,15 @@ export function createRailCards({
         set(row.title, 'textContent', card.title);
         if (row.title.getAttribute('title') !== card.title)
           row.title.setAttribute('title', card.title);
-        set(row.icon, 'textContent', card.icon || '');
-        set(row.icon, 'hidden', !card.icon);
+        // iconSvg values are static markup from src/icons.js, never user data.
+        if (card.iconSvg) {
+          if (row.icon.innerHTML !== card.iconSvg)
+            row.icon.innerHTML = card.iconSvg;
+        } else {
+          if (row.icon.innerHTML) row.icon.innerHTML = '';
+          set(row.icon, 'textContent', card.icon || '');
+        }
+        set(row.icon, 'hidden', !card.icon && !card.iconSvg);
         updateStatusBadge(row.badge, {
           label: card.badge || '',
           hidden: !card.badge,

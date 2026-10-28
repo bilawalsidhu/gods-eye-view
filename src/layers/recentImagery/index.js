@@ -34,6 +34,7 @@ import {
 } from './model.js';
 import { msg, t } from '../../i18n/index.js';
 import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
+import { ICONS } from '../../icons.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -798,7 +799,8 @@ export function createRecentImageryLayer({
   const layer = {
     id: 'recent-imagery',
     name: 'Recent Imagery',
-    icon: '🛰',
+    icon: '',
+    iconSvg: ICONS.satellite,
     source: 'NASA GIBS · HLS + VIIRS',
     updateInterval: 0,
 

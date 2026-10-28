@@ -13,6 +13,7 @@ import {
 } from './inspection.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
+import { ICONS } from '../../icons.js';
 
 /** Format a forecast timestamp explicitly in UTC. */
 export function formatWindValidTime(value) {
@@ -110,7 +111,8 @@ export function createWindLayer({
   const layer = {
     id: 'wind',
     name: 'Wind',
-    icon: '🌬',
+    icon: '',
+    iconSvg: ICONS.wind,
     source: 'GFS / ECMWF IFS · FORECAST',
     updateInterval: 3600_000,
     init(nextViewer) {

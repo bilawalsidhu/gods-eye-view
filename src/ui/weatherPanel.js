@@ -168,7 +168,7 @@ export function createWeatherPanel({
           : historyTime(state.target),
     });
     const models = active.map((entry) => {
-      const { id, icon, summary, legend = [], list } = entry;
+      const { id, icon, iconSvg, summary, legend = [], list } = entry;
       // Discrete classes (storm geometry, AQHI bands) list swatches, not a ramp.
       const categorical = entry.legendCategorical === true;
       let detail = summary.detail;
@@ -233,6 +233,7 @@ export function createWeatherPanel({
       return {
         id,
         icon,
+        iconSvg,
         title: summary.label,
         badge: summary.coverage,
         open: id === openId,
