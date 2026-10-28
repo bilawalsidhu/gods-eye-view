@@ -83,3 +83,39 @@ Native dev and QA-preview each pass 36/36: real parser and receipt clocks, five 
 The strict comparator accepts the real baseline and rejects 19 independently corrupted captures, including missing observers, late errors, empty data/rasters, wrong clocks/controls/geometry and broken selection/idle. These sensitivity probes are separate from the Node unit count. Legacy FIRMS runs on explicitly selected headless Metal and passes 9/9 with no unexpected browser errors. Two exact intentional keyless-source 503 messages are classified, with all other errors retained.
 
 Boundaries, scoped format (1582 files), production/panel/QA builds and main composition pass. The first full suite exposed an old camera-handoff source guard tied to a literal native event enum; the updated guard checks the injected event and actual native LEFT_CLICK owner, preserving sibling-pick/card ordering and the no-layer-camera-flight rule. Both engine contracts and dev/ordinary-preview shell regressions pass; native earthquakes retain 25/25 checks. No byte-budget baseline or live FIRMS provider acceptance is claimed. Next: actual Navara cells/glows, alpha/ground/pick/focus/share/lifecycle/performance proof and review under the detailed FIRMS plan.
+
+## W2-2b — FIRMS Navara acceptance checkpoint (2026-10-28)
+
+The Navara implementation and wiring are present but remain uncommitted because the close uncapped performance gate does not pass. Current evidence has 6000 parser-fed records in each engine, 3000 Navara sprite instances in the close pose, matching populations and no browser errors; close work p95 is 4.4ms native / 5.5ms Navara (1.25, limit1.10), with zero >33.4ms frames. The 64x40 ground candidate and alpha27/glows59 proofs, including default-sharpen parity, pass. The current full CPU/build gate list passes unit, boundaries, format, production, panel, QA preview and main composition.
+
+An always-visible vertex-distance shortcut made no measurable difference and was reverted. An unsigned-byte glyph target broke default-sharpen color parity (orange/red source-aligned maxima3.14/3.40 versus limit3); it was reverted. The final rebuilt HalfFloat QA preview passes alpha27 and glows59. The new detailed plan records this blocker and retains both failed experiments. No threshold/population was changed and no Navara FIRMS acceptance commit was made. The next W2 step remains measured optimization of this close cost, followed by rerunning performance and final FIRMS review; military installations stay sequenced after acceptance.
+
+## 2026-10-28 — W1 regression confirmation
+
+The current uncommitted source passed all 46 jobs in the W1 regression runner: uncapped and paced fleet/vessel budgets, satellite uncapped budget, pixel captures, engine contracts, dev/production shell and cross-engine share parity, gestures, all W1 layers and comparisons on dev/preview, quake checks, and the ground-own-mesh probe. Every recorded exit code is zero. The browser source record is pinned to HEAD `028beb8f75ad354245fb8c046ae0b146ee102a8e` and diff SHA-256 `739691900dcfa7b5e4421364c5b82db71612e5fcd29e0c9dd40b0472c9c7e17d`; reports and logs are under `/tmp/gev-w2-firms-regressions-front-side-confirm/`.
+
+The dedicated close FIRMS budget remains the known acceptance blocker: 4.4ms Cesium / 5.5ms Navara work p95 (1.25; limit1.10). W1 regressions passing does not replace this gate or accept the FIRMS renderer. No commit has been made.
+
+## 2026-10-28 — FIRMS close budget follow-up
+
+A fresh QA-preview diagnostic on the unchanged source measured 4.3ms Cesium / 5.4ms Navara close work p95 (1.256 against the existing1.10 limit), with 6000 records, 3000 Navara instances, and zero long frames. The dedicated FIRMS acceptance remains blocked. A per-render GPU query probe returned non-disjoint results for the instanced sprite scene and encoded composite, but those pass durations did not reconcile with the full-frame measurement; they are not treated as reliable cost attribution. No code or gate changed.
+
+## 2026-10-28 — matched FIRMS renderer timing probe
+
+A QA-only wrapper measured synchronous Three `renderer.render` calls in the same Navara close scene before and after disabling FIRMS. The main scene kept 222 direct children; its call p50/p95 shifted from3.6/5.0ms with FIRMS to0.2/0.5ms without it. The 3000-instance sprite draw and encoded full-frame composite calls each remained at or below0.1ms p95 on the CPU timer. This points to graphics-driver/GPU back-pressure while the layer is active, but does not identify which GPU pass causes it. A synchronized per-pass GPU timer probe returned zero for all draws despite `disjoint=false`; that probe is invalid and is retained only as a failed diagnostic. Raw paired captures and summaries are in `qa-artifacts/w2/firms/navara/glyph-target-performance/on-off-render-cpu-profile/`. No renderer change is accepted from these probes.
+
+## 2026-10-28 — FIRMS overlay isolation
+
+In the same Navara close scene, work p95 was5.4ms normally,5.3ms with `colorWrite=false` on the 3000-instance mesh, and4.4ms with that mesh hidden. The color-write control retains the sprite mesh and composite pass; the hidden control makes the overlay pass return early. This attributes about0.9ms to the active overlay path as a whole, but does not separate sprite shader/raster work from the full-frame composite. QA-only state was restored after each sample. Raw result: `qa-artifacts/w2/firms/navara/glyph-target-performance/on-off-render-cpu-profile/sprite-color-isolation.json`. No product change or gate change.
+
+The same close diagnostic read back the live HalfFloat glyph target:594,865/1,024,000 pixels had nonzero alpha (58.1%), within x269–1076 and the full target height. This establishes that the encoded overlay touches only about63% of target width in this pose and gives a concrete bound for a possible clipped composite. A copy-plus-scissor path would still need to prove exact output pixels and a net performance gain. This is diagnostic evidence only; the static preview also reported the expected missing `/api/setup/status` endpoint, so the run is not an acceptance gate. Raw capture: `qa-artifacts/w2/firms/navara/glyph-target-performance/on-off-render-cpu-profile/overlay-target-coverage.json`.
+
+
+## 2026-10-28 — bounded FIRMS compositor experiment (rejected)
+
+Using measured close-pose glyph coverage (about 63% of the target), a QA-preview candidate copied the scene buffer and scissored the encoded composite. Alpha and FIRMS glow pixel suites passed after the change (27/27 and 59/59), but close work p95 remained over budget: native 4.4ms/Navara 5.3ms, ratio 1.205 against 1.10. A follow-up bounded glyph-target clearing and used rotated sprite extents; pixel proofs still passed, while performance measured native 4.4ms/Navara 5.4ms, ratio 1.227. Both measurements used one measured context per engine and are diagnostics, not acceptance. The candidate was reverted because it did not provide a repeatable budget improvement. Full-frame compositing remains unchanged; captures are retained under `qa-artifacts/w2/firms/navara/scissor-*`.
+
+
+## 2026-10-28 — FIRMS visible-instance diagnostic
+
+A QA-only wrapper around the public mover-set API measured all 3000 close-pose FIRMS sprite instances as visible after horizon culling. Compacting hidden instances therefore has no close-pose draw-count benefit. This one-context preview diagnostic measured native 4.3ms/Navara 5.6ms (ratio 1.302), reinforcing that these short samples vary and cannot accept the layer. Capture: `qa-artifacts/w2/firms/navara/visible-instance-diagnostic-final.json`. The optional wrapper was removed from the QA driver after the measurement.
