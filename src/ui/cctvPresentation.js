@@ -274,6 +274,7 @@ export function _updateCctvSyncChip(loading, enabled) {
 
   if (!this._cctvChipHideTimer) {
     this._cctvChipWasBusy = false;
-    this._cctvSyncChip.classList.remove('visible');
+    if (this._cctvSyncChip.classList.contains('visible'))
+      this._cctvSyncChip.classList.remove('visible');
   }
 }

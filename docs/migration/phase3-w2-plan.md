@@ -66,6 +66,8 @@ Baseline: radio checkpoint `e5f245be`. ALPR currently owns native entities in `i
 
 ## W2-7 — CCTV execution plan
 
+Calibration-handle extraction and periodic idle review complete: native geometry/55 legacy checks preserved, all19 companion checks pass on dev/preview with22s idle windows, full gates pass. See `phase3-w2-cctv-gizmo-evidence.json`. Continue native marker/plane/coverage/volume/event ownership extraction before Navara; the complete CCTV/W2 gate remains open.
+
 Native reference captured after ALPR checkpoint0090c416: legacy55/55 and media/marker pixels19/19 on dev and preview, full CPU/build/contracts/shell pass. The still-image continuous-render defect is fixed; scoped fixture transport avoids stalled geometry workers. Evidence is in `phase3-w2-cctv-native-evidence.json`. Continue with native resources, beginning with calibration-handle drawing/input; preserve the shared drag math and restore the prior camera-input state rather than unconditionally enabling it. No CCTV Navara acceptance yet.
 
 The current layer assembles20parts. Renderer coupling extends beyond billboards: five coverage lines, an image/video plane, viewshed volumes, eight calibration handles, one activation obstruction ray, projected thumbnail cards and camera navigation. Existing calibration/save, frame freshness, source-health, geometry queues and active-camera generations remain the behavioral oracle. A factory registration alone is not a completed port.

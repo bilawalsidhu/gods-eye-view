@@ -312,7 +312,10 @@ export class LayerLifecycle {
       );
       // Even a rejected/partial update may have changed the data exposed by
       // the layer. Publish before classifying its result so observers see it.
-      this._publishActivity({ type: 'data-updated', layerId });
+      // A layer may explicitly report unchanged scene data while still
+      // completing health/UI polling. Legacy void/boolean results keep waking.
+      if (result?.changed !== false)
+        this._publishActivity({ type: 'data-updated', layerId });
       if (result === false)
         failure = lifecycleRejectedError(layerId, 'refresh');
       if (!failure)

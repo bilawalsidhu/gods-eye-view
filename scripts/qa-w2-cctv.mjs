@@ -229,12 +229,14 @@ async function idle(name) {
     const engine = window.__godsEyeView.engine;
     let count = 0;
     const remove = engine.frames.postRender.addEventListener(() => count++);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Span two catalog/health ticks so unchanged panel notifications cannot
+    // evade the idle gate merely by landing outside a short sample.
+    await new Promise((resolve) => setTimeout(resolve, 22000));
     remove();
     return { frames: count, governor: getRenderGovernorDiagnostics() };
   });
   report[name] = result;
-  check(`${name}: zero frames over 2s`, result.frames, 0);
+  check(`${name}: zero frames over 22s`, result.frames, 0);
 }
 try {
   // Generate real decoded media before launching the browser. No play stub or

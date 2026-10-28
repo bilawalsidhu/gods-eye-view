@@ -1,0 +1,666 @@
+{
+  "schema": 1,
+  "status": "native-gizmo-extracted-idle-regressions-fixed",
+  "parent": "1223f12a30e9cf94f26a7465d9a88b9aa9f2daa1",
+  "navaraAccepted": false,
+  "waveAccepted": false,
+  "sources": {
+    "scripts/fixtures/w2/cctv.mjs": "2fbba9386d2e3ee6305fa96b5a033c37038f8fca9555d210b1fe0bdf0a28ca5f",
+    "scripts/format-scope.json": "369e5d601b658a6d16a8ee32e62cd3c0dc57a99fd711732901142b736b8920cd",
+    "scripts/package-boundaries.json": "62bc946fa8b5a4b1ccff02e761e3685d91118b46f1837f6c415b752512862006",
+    "scripts/qa-cctv-v2.mjs": "f3b8a8f6337f9099b58f9f91e3601c76b9711520f37675a0881a68499617c400",
+    "scripts/qa-w2-cctv.mjs": "893d1b15f28a32d9c3af43633b6539cd3adc433289c521914ff2069e4645b7fc",
+    "src/app/layers/cctv.js": "5b0b517746557660273c1a5562221cc48596174fb761efad172d2b7eb51dcf48",
+    "src/data/cctv.js": "48e5be926ba8c2791410aa1a1992e2e9d65df0c4e8bb23fbabbc64fa9df0f017",
+    "src/data/cctvCards.js": "e4b12321793d9f2e0a372f8283b8d627f77f988f48722852c4cfde0c912bbe11",
+    "src/data/cctvFootprint.js": "e7b6a51efcc3cb7845e4ed898bdd9fc01beb6647f3f2b1d23752944400f0570a",
+    "src/data/cctvGizmo.js": "41d52af0eae01aaa8311831d7130af48f3a553fd63c319c7fcccee73babace91",
+    "src/data/cctvLod.js": "3b071cf9b5900c3d44eea7732d999f690e1e3b337d1786a10705083e6e323721",
+    "src/data/cctvViewshed.js": "d93c135ae2e73d5e4bc368ab5ebab6c49ea5e43b1fdd744c7149f29062b496b3",
+    "src/data/detectionRenderDemand.test.mjs": "c50fe5ad8d4f4ad81349085ec8ed85d901105de4a182fb9e3f94855bae7dd43a",
+    "src/data/lifecycle.js": "8d502c46850d9571c706a7332659f9af09c7393aa0126683af52180ba39e3a29",
+    "src/layers/cctv/calibration.js": "4952c40dff483b200d64f75ec0b24c77d70984bd0757c1a8d38b0cf715bbc162",
+    "src/layers/cctv/cards.js": "cea1fcfec2c7d19848bdc0820cc58de2ad7ff071d2cd4218caa378e1cfcf6739",
+    "src/layers/cctv/catalog.js": "c23a3ab9be726fb91f50c92921c1914557524b7231c9b7f095a27e73b25ab1da",
+    "src/layers/cctv/controls.js": "56c06c21e40b8ab93d08497d8888bdfb49294cd4a517980f09f02447c5ab16be",
+    "src/layers/cctv/frames.js": "5369008411992121875bdd30e29a6355b53a95bd5861ff5521b8bb1b126bd014",
+    "src/layers/cctv/geometry.js": "038ef39ef3efb4fc42ff1d3c0e411a7253958c93620bb57da6dc6f227774db32",
+    "src/layers/cctv/geometryQueue.js": "358fb89d76b045213829c101de3952de973b3720ffb551c2f0ec9c7eeca409cf",
+    "src/layers/cctv/gizmo.test.mjs": "0723b859c868c2aab9ae2eda0709ca81dcab15f5319f4b1d361247356761bb0d",
+    "src/layers/cctv/ground.js": "360ea46ee79a83ae64a9deb0433a441e6174ffaa5b7d56aa8aef27fc8205cf6f",
+    "src/layers/cctv/headingConfidence.js": "6176cc1e4c2f09ba8dbaec720aeca192ca9b2d9ecd6c3861210164335839e5fd",
+    "src/layers/cctv/health.js": "ab4eb5b3bf7eb296538059ab46c9678f1c951812b5fdc502fdd5d9d9fa7fc66d",
+    "src/layers/cctv/hover.js": "e56a8fe84ef711c10e3400f850f4b56d5955f861da80e941a9e6206a9c56e1bd",
+    "src/layers/cctv/index.js": "7e1abba859d7248bb50feededb1e6905361fdbe3996ffee5c5660a871c53c01e",
+    "src/layers/cctv/ingestion.js": "a60dbd0f9c6468fbed089ffde7e8a680d3f93d247105f911cc898322c5eb9bca",
+    "src/layers/cctv/ingestion.test.mjs": "1a2a6282b2f9d177467c797341bd2e50f882f34ce3de1c77333486e49720e1ae",
+    "src/layers/cctv/lifecycle.js": "3799952fdc80f9925905629b93e8e82b831f324197b8ae06be4b3c7afe53f7ec",
+    "src/layers/cctv/model.js": "5593e5308f23acf7796f1e9b44ba1d543b5c2378d899b47fee7b1b683aa186bf",
+    "src/layers/cctv/navigation.js": "d01a893ec6ce30bbefb85acbf737e20e9193b91fe39050ccd287601ecb8deec3",
+    "src/layers/cctv/policy.js": "50782ac74b69d5ebf81f0a1b880edc79cb2cb9210944b954177325c952cd076e",
+    "src/layers/cctv/presentation.js": "f4e74fb8b1bdebf84f91a05426b727b8d01fbff4ff7ec7494e03d0a46e7f8fb4",
+    "src/layers/cctv/projection.js": "230a17877e06f454470ebd5db95e84d4ea9bfadfeb22392eb81db82b0544c588",
+    "src/layers/cctv/render/cesiumGizmo.js": "805f1d8781e1d4601a12d57dc8477ef462efee3756e936883ad0c91a47f69940",
+    "src/layers/cctv/rendering.js": "bfd241a32b36995604d67634c7c4e6fb84c2a415bb3c30fd31901376b647d92c",
+    "src/layers/cctv/selection.js": "e8174a04a22a3f525f1e99e8925bb03390a90d27617a18124546d5a2d55868f0",
+    "src/layers/cctv/source.js": "95a4ca3e342e7ab824fed7a8d65cef1bb0f9d50b2b65f516baf7857f036313df",
+    "src/layers/cctv/sourcePolicy.js": "f3081542d2ced0165504c9d486b85a9875e48a8861fde87a97e6e296485dc3e7",
+    "src/layers/cctv/state.js": "7a421c18f8c9292fd8d449821810f6f625b085ce488039210c5268640e930baa",
+    "src/layers/cctv/testing.js": "7c6ddc374d0dc76d88656676dc6b06bbc805b6e0d1a271bdb4e50fcd49dd0656",
+    "src/layers/cctv/videoPlayback.js": "7786332674e5f4f8790f1cc8a2f974560c063909ec15b2dc399302920310bdf7",
+    "src/ui/cctvControls.test.mjs": "21af1a172e777123ea4c42a470c87e2daba088c33ce0f1f036a19fb13fdba40c",
+    "src/ui/cctvPresentation.js": "dc6986325fed182bcde8ab545813b15fb094b86654875cdcd0847ac810dbb0e2"
+  },
+  "legacyAndContractSources": {
+    "head": "1223f12a30e9cf94f26a7465d9a88b9aa9f2daa1",
+    "files": {
+      "scripts/fixtures/w2/cctv.mjs": "2fbba9386d2e3ee6305fa96b5a033c37038f8fca9555d210b1fe0bdf0a28ca5f",
+      "scripts/format-scope.json": "e3613c5eff07ac9598e07aca24f0570a1a5c89e338a9b132a0bf8e16377215f3",
+      "scripts/package-boundaries.json": "62bc946fa8b5a4b1ccff02e761e3685d91118b46f1837f6c415b752512862006",
+      "scripts/qa-cctv-v2.mjs": "f3b8a8f6337f9099b58f9f91e3601c76b9711520f37675a0881a68499617c400",
+      "scripts/qa-w2-cctv.mjs": "d7dd8028a31b999bb5a6a63d8d60354a7a655c52d590ab2700c4d2f2313ecc60",
+      "src/app/layers/cctv.js": "5b0b517746557660273c1a5562221cc48596174fb761efad172d2b7eb51dcf48",
+      "src/data/cctv.js": "48e5be926ba8c2791410aa1a1992e2e9d65df0c4e8bb23fbabbc64fa9df0f017",
+      "src/data/cctvCards.js": "e4b12321793d9f2e0a372f8283b8d627f77f988f48722852c4cfde0c912bbe11",
+      "src/data/cctvFootprint.js": "e7b6a51efcc3cb7845e4ed898bdd9fc01beb6647f3f2b1d23752944400f0570a",
+      "src/data/cctvGizmo.js": "41d52af0eae01aaa8311831d7130af48f3a553fd63c319c7fcccee73babace91",
+      "src/data/cctvLod.js": "3b071cf9b5900c3d44eea7732d999f690e1e3b337d1786a10705083e6e323721",
+      "src/data/cctvViewshed.js": "d93c135ae2e73d5e4bc368ab5ebab6c49ea5e43b1fdd744c7149f29062b496b3",
+      "src/layers/cctv/calibration.js": "4952c40dff483b200d64f75ec0b24c77d70984bd0757c1a8d38b0cf715bbc162",
+      "src/layers/cctv/cards.js": "cea1fcfec2c7d19848bdc0820cc58de2ad7ff071d2cd4218caa378e1cfcf6739",
+      "src/layers/cctv/catalog.js": "c23a3ab9be726fb91f50c92921c1914557524b7231c9b7f095a27e73b25ab1da",
+      "src/layers/cctv/controls.js": "56c06c21e40b8ab93d08497d8888bdfb49294cd4a517980f09f02447c5ab16be",
+      "src/layers/cctv/frames.js": "5369008411992121875bdd30e29a6355b53a95bd5861ff5521b8bb1b126bd014",
+      "src/layers/cctv/geometry.js": "038ef39ef3efb4fc42ff1d3c0e411a7253958c93620bb57da6dc6f227774db32",
+      "src/layers/cctv/geometryQueue.js": "358fb89d76b045213829c101de3952de973b3720ffb551c2f0ec9c7eeca409cf",
+      "src/layers/cctv/gizmo.test.mjs": "0723b859c868c2aab9ae2eda0709ca81dcab15f5319f4b1d361247356761bb0d",
+      "src/layers/cctv/ground.js": "360ea46ee79a83ae64a9deb0433a441e6174ffaa5b7d56aa8aef27fc8205cf6f",
+      "src/layers/cctv/headingConfidence.js": "6176cc1e4c2f09ba8dbaec720aeca192ca9b2d9ecd6c3861210164335839e5fd",
+      "src/layers/cctv/health.js": "ab4eb5b3bf7eb296538059ab46c9678f1c951812b5fdc502fdd5d9d9fa7fc66d",
+      "src/layers/cctv/hover.js": "e56a8fe84ef711c10e3400f850f4b56d5955f861da80e941a9e6206a9c56e1bd",
+      "src/layers/cctv/index.js": "7e1abba859d7248bb50feededb1e6905361fdbe3996ffee5c5660a871c53c01e",
+      "src/layers/cctv/ingestion.js": "e2dbe66007f6709d6b2be04b924561f6e05ad44648058ce2e786c645b6f998e5",
+      "src/layers/cctv/lifecycle.js": "3799952fdc80f9925905629b93e8e82b831f324197b8ae06be4b3c7afe53f7ec",
+      "src/layers/cctv/model.js": "5593e5308f23acf7796f1e9b44ba1d543b5c2378d899b47fee7b1b683aa186bf",
+      "src/layers/cctv/navigation.js": "d01a893ec6ce30bbefb85acbf737e20e9193b91fe39050ccd287601ecb8deec3",
+      "src/layers/cctv/policy.js": "50782ac74b69d5ebf81f0a1b880edc79cb2cb9210944b954177325c952cd076e",
+      "src/layers/cctv/presentation.js": "f4e74fb8b1bdebf84f91a05426b727b8d01fbff4ff7ec7494e03d0a46e7f8fb4",
+      "src/layers/cctv/projection.js": "230a17877e06f454470ebd5db95e84d4ea9bfadfeb22392eb81db82b0544c588",
+      "src/layers/cctv/render/cesiumGizmo.js": "805f1d8781e1d4601a12d57dc8477ef462efee3756e936883ad0c91a47f69940",
+      "src/layers/cctv/rendering.js": "bfd241a32b36995604d67634c7c4e6fb84c2a415bb3c30fd31901376b647d92c",
+      "src/layers/cctv/selection.js": "e8174a04a22a3f525f1e99e8925bb03390a90d27617a18124546d5a2d55868f0",
+      "src/layers/cctv/source.js": "95a4ca3e342e7ab824fed7a8d65cef1bb0f9d50b2b65f516baf7857f036313df",
+      "src/layers/cctv/sourcePolicy.js": "f3081542d2ced0165504c9d486b85a9875e48a8861fde87a97e6e296485dc3e7",
+      "src/layers/cctv/state.js": "7a421c18f8c9292fd8d449821810f6f625b085ce488039210c5268640e930baa",
+      "src/layers/cctv/testing.js": "7c6ddc374d0dc76d88656676dc6b06bbc805b6e0d1a271bdb4e50fcd49dd0656",
+      "src/layers/cctv/videoPlayback.js": "7786332674e5f4f8790f1cc8a2f974560c063909ec15b2dc399302920310bdf7"
+    }
+  },
+  "reports": {
+    "legacy-dev": {
+      "path": "/private/tmp/gev-cctv-gizmo/legacy-native-dev/result.json",
+      "sha256": "ddcd7b4e1dcfd834efee3687b61bb563c5b2875e8712f55feb6ed1623b0850f8",
+      "pass": true,
+      "checks": 55,
+      "failedChecks": [],
+      "browserErrors": [],
+      "staticIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "layer-tick:cctv",
+          "world-overlay"
+        ]
+      }
+    },
+    "pixels-dev": {
+      "path": "/private/tmp/gev-cctv-gizmo-idle/pixels-native-dev.json",
+      "sha256": "8a470405091751de7d2d0b80d5541dcc278f6153bd8cd59dd6e63f7cb360398b",
+      "pass": true,
+      "checks": 19,
+      "failedChecks": [],
+      "browserErrors": [],
+      "browser": "Chrome/152.0.7977.75",
+      "imageIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "world-overlay"
+        ]
+      },
+      "afterVideoIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "toggleIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "imageQuadrantPixels": [
+        252,
+        248,
+        251,
+        251
+      ],
+      "videoPlane": {
+        "id": "w2-cctv-video",
+        "before": {
+          "time": 0.279245,
+          "frames": 103,
+          "width": 320,
+          "height": 180
+        },
+        "after": {
+          "time": 1.474508,
+          "frames": 117,
+          "width": 320,
+          "height": 180
+        },
+        "changedPixels": 1129
+      }
+    },
+    "legacy-preview": {
+      "path": "/private/tmp/gev-cctv-gizmo/legacy-native-preview/result.json",
+      "sha256": "61474dde1a46155f09da008b765e1d12c45479b1a24c1067c21772f44d309d13",
+      "pass": true,
+      "checks": 55,
+      "failedChecks": [],
+      "browserErrors": [],
+      "staticIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "layer-tick:cctv",
+          "world-overlay"
+        ]
+      }
+    },
+    "pixels-preview": {
+      "path": "/private/tmp/gev-cctv-gizmo-idle/pixels-native-preview.json",
+      "sha256": "63773c87017a7293a1b1cfabd5d5ddce39180127d7100ac1b8c03ab99bc57332",
+      "pass": true,
+      "checks": 19,
+      "failedChecks": [],
+      "browserErrors": [],
+      "browser": "Chrome/152.0.7977.75",
+      "imageIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "world-overlay"
+        ]
+      },
+      "afterVideoIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "toggleIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "imageQuadrantPixels": [
+        252,
+        248,
+        251,
+        251
+      ],
+      "videoPlane": {
+        "id": "w2-cctv-video",
+        "before": {
+          "time": 0.770433,
+          "frames": 109,
+          "width": 320,
+          "height": 180
+        },
+        "after": {
+          "time": 2.063815,
+          "frames": 125,
+          "width": 320,
+          "height": 180
+        },
+        "changedPixels": 805
+      }
+    }
+  },
+  "geometryParity": {
+    "dev": {
+      "equalTo1223f12aBaseline": true,
+      "sha256": "da34139abbab3dfe16a898a5fdfbcdccf61bcb431e834f06d29f71cedb145844"
+    },
+    "preview": {
+      "equalTo1223f12aBaseline": true,
+      "sha256": "da34139abbab3dfe16a898a5fdfbcdccf61bcb431e834f06d29f71cedb145844"
+    }
+  },
+  "cpuGates": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 113.6
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 14.8
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 18.5
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 10.7
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 15.1
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 12.5
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.4
+    }
+  ],
+  "gizmoBrowserGates": [
+    {
+      "gate": "legacy-native-dev",
+      "code": 0,
+      "seconds": 103.0
+    },
+    {
+      "gate": "pixels-native-dev",
+      "code": 0,
+      "seconds": 71.6
+    },
+    {
+      "gate": "legacy-native-preview",
+      "code": 0,
+      "seconds": 102.0
+    },
+    {
+      "gate": "pixels-native-preview",
+      "code": 1,
+      "seconds": 72.9
+    },
+    {
+      "gate": "contract-cesium",
+      "code": 0,
+      "seconds": 27.3
+    },
+    {
+      "gate": "contract-navara",
+      "code": 0,
+      "seconds": 59.0
+    },
+    {
+      "gate": "shell-dev",
+      "code": 0,
+      "seconds": 193.6
+    },
+    {
+      "gate": "shell-production",
+      "code": 0,
+      "seconds": 184.0
+    }
+  ],
+  "idleFixBrowserGates": [
+    {
+      "gate": "pixels-native-dev",
+      "code": 0,
+      "seconds": 136.9
+    },
+    {
+      "gate": "pixels-native-preview",
+      "code": 0,
+      "seconds": 138.8
+    },
+    {
+      "gate": "shell-production",
+      "code": 0,
+      "seconds": 188.0
+    }
+  ],
+  "failedPredecessors": [
+    {
+      "path": "/private/tmp/gev-cctv-gizmo/pixels-native-preview.json",
+      "sha256": "8e5c781f2c1470758a71b0ec394311d5f0e53cc0bb14ffba983086c09e57f2f2",
+      "pass": false,
+      "checks": 19,
+      "failedChecks": [
+        {
+          "name": "imageIdle: zero frames over 2s",
+          "actual": 1,
+          "expected": 0,
+          "pass": false
+        }
+      ],
+      "browserErrors": [],
+      "browser": "Chrome/152.0.7977.75",
+      "imageIdle": {
+        "frames": 1,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-tick:cctv",
+          "world-overlay"
+        ]
+      },
+      "afterVideoIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "toggleIdle": {
+        "frames": 0,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "imageQuadrantPixels": [
+        252,
+        248,
+        251,
+        251
+      ],
+      "videoPlane": {
+        "id": "w2-cctv-video",
+        "before": {
+          "time": 3.714242,
+          "frames": 96,
+          "width": 320,
+          "height": 180
+        },
+        "after": {
+          "time": 0.815978,
+          "frames": 110,
+          "width": 320,
+          "height": 180
+        },
+        "changedPixels": 439
+      }
+    },
+    {
+      "path": "/private/tmp/gev-cctv-gizmo-final/pixels-native-dev.json",
+      "sha256": "75cb884f4b5022d025147b8b4c5b81aed44d0366856dbc671a81bb48cd958770",
+      "pass": false,
+      "checks": 19,
+      "failedChecks": [
+        {
+          "name": "imageIdle: zero frames over 22s",
+          "actual": 2,
+          "expected": 0,
+          "pass": false
+        },
+        {
+          "name": "afterVideoIdle: zero frames over 22s",
+          "actual": 2,
+          "expected": 0,
+          "pass": false
+        },
+        {
+          "name": "toggleIdle: zero frames over 22s",
+          "actual": 2,
+          "expected": 0,
+          "pass": false
+        }
+      ],
+      "browserErrors": [],
+      "browser": "Chrome/152.0.7977.75",
+      "imageIdle": {
+        "frames": 2,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-tick:cctv",
+          "world-overlay"
+        ]
+      },
+      "afterVideoIdle": {
+        "frames": 2,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-tick:cctv",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "toggleIdle": {
+        "frames": 2,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-tick:cctv",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "imageQuadrantPixels": [
+        252,
+        248,
+        251,
+        251
+      ],
+      "videoPlane": {
+        "id": "w2-cctv-video",
+        "before": {
+          "time": 0.294921,
+          "frames": 103,
+          "width": 320,
+          "height": 180
+        },
+        "after": {
+          "time": 1.391104,
+          "frames": 116,
+          "width": 320,
+          "height": 180
+        },
+        "changedPixels": 1129
+      }
+    },
+    {
+      "path": "/private/tmp/gev-cctv-gizmo-final/pixels-native-preview.json",
+      "sha256": "94454aff1d8abee186fee93803d0ed652f929060e841d9b80e0ae17a854cd479",
+      "pass": false,
+      "checks": 19,
+      "failedChecks": [
+        {
+          "name": "imageIdle: zero frames over 22s",
+          "actual": 2,
+          "expected": 0,
+          "pass": false
+        },
+        {
+          "name": "afterVideoIdle: zero frames over 22s",
+          "actual": 2,
+          "expected": 0,
+          "pass": false
+        },
+        {
+          "name": "toggleIdle: zero frames over 22s",
+          "actual": 2,
+          "expected": 0,
+          "pass": false
+        }
+      ],
+      "browserErrors": [],
+      "browser": "Chrome/152.0.7977.75",
+      "imageIdle": {
+        "frames": 2,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-tick:cctv",
+          "world-overlay"
+        ]
+      },
+      "afterVideoIdle": {
+        "frames": 2,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-tick:cctv",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "toggleIdle": {
+        "frames": 2,
+        "mode": "idle",
+        "holds": [],
+        "recentReasons": [
+          "cctv-qa-frame",
+          "layer-tick:cctv",
+          "layer-visibility",
+          "world-overlay"
+        ]
+      },
+      "imageQuadrantPixels": [
+        252,
+        248,
+        251,
+        251
+      ],
+      "videoPlane": {
+        "id": "w2-cctv-video",
+        "before": {
+          "time": 0.453472,
+          "frames": 105,
+          "width": 320,
+          "height": 180
+        },
+        "after": {
+          "time": 1.599297,
+          "frames": 119,
+          "width": 320,
+          "height": 180
+        },
+        "changedPixels": 1220
+      }
+    }
+  ],
+  "idleMutationTrace": {
+    "frames": 3,
+    "mutations": [
+      {
+        "kind": "mutation",
+        "time": 1793211493105,
+        "id": "cctv-sync-chip",
+        "attribute": "class",
+        "old": "",
+        "value": ""
+      },
+      {
+        "kind": "mutation",
+        "time": 1793211503109,
+        "id": "cctv-sync-chip",
+        "attribute": "class",
+        "old": "",
+        "value": ""
+      },
+      {
+        "kind": "mutation",
+        "time": 1793211513107,
+        "id": "cctv-sync-chip",
+        "attribute": "class",
+        "old": "",
+        "value": ""
+      }
+    ],
+    "requestReasons": [
+      "world-overlay",
+      "world-overlay",
+      "world-overlay"
+    ]
+  },
+  "review": [
+    "Native owner verifies exact current entity identity; foreign reserved-ID entities survive teardown.",
+    "Captured camera input restored on release, disable, selection change, destroy, pointercancel and blur; duplicate down cannot overwrite it.",
+    "Partial handle construction frees allocated resources; native geometry matches baseline.",
+    "Unchanged sync-chip attributes no longer invalidate world-overlay; 22s samples span at least two periodic updates.",
+    "CCTV health/UI polling remains active; explicit unchanged scene result suppresses only redundant manager data-updated render requests. Geometry completion and auto-hop retain changed publication."
+  ],
+  "remaining": [
+    "Complete native marker/plane/coverage/volume/event extraction.",
+    "Implement and validate CCTV Navara including media, arbitrary rays, calibration, mobile/cards and surface parity.",
+    "Resolve existing ALPR HTTP2/moving-p95 and FIRMS uncapped-close failures; complete transit, recent imagery and combined W2 gates."
+  ],
+  "conditions": {
+    "browser": "headless Chromium",
+    "angle": "metal",
+    "ownGpuJobs": "sequential",
+    "sourcesFrozen": true,
+    "ports": [
+      4193,
+      4207,
+      4208
+    ]
+  },
+  "unit": {
+    "total": 7289,
+    "passed": 7288,
+    "skipped": 1,
+    "skipReason": "Windows-only",
+    "allocationPassed": 15
+  },
+  "formatSourceFiles": 1631,
+  "main": {
+    "bytes": 2916375,
+    "gzip": 910459,
+    "threeOrNavaraInMain": false,
+    "sizeBudget": "not checked: missing baseline"
+  }
+}

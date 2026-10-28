@@ -1446,6 +1446,7 @@
     "modules": [
       "src/data/cctvCards.js",
       "src/data/cctvGizmo.js",
+      "src/layers/shared/color.js",
       "src/data/cctvLod.js",
       "src/data/cctvViewshed.js",
       "src/data/iconOrientation.js",
@@ -1833,6 +1834,7 @@
       "src/app/layers/alprCameras.js",
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
+      "src/layers/cctv/render/cesiumGizmo.js",
       "src/app/layers/earthquakes.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
@@ -2790,6 +2792,7 @@
       "src/app/layers/alprCameras.js",
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
+      "src/layers/cctv/render/cesiumGizmo.js",
       "src/app/layers/earthquakes.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
