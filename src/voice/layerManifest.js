@@ -424,6 +424,9 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  // Kept off so the Realtime prompt stays under its size budget; private
+  // vehicles are anonymous dots, so there are no analyst records either.
+  cits: 'live V2X stations; toggled from the Data Layers panel',
 });
 
 const TYPE_NAMES = Object.freeze({

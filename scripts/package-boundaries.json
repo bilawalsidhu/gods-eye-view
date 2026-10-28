@@ -2599,7 +2599,12 @@
       "src/voice/geminiCaptureWorklet.js",
       "src/ui/statusBadge.js",
       "src/sceneCommandRelease.js",
-      "src/scopeMaskPolicy.js"
+      "src/scopeMaskPolicy.js",
+      "src/app/layers/cits.js",
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js"
     ],
     "external": [
       "hls.js",
@@ -3176,7 +3181,12 @@
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/data/geoImportImages.js",
       "src/data/geoImportPins.js",
-      "src/data/geoFileImport.js"
+      "src/data/geoFileImport.js",
+      "src/app/layers/cits.js",
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js"
     ],
     "external": [
       "hls.js",
@@ -3954,6 +3964,34 @@
       "src/i18n/marker.js",
       "src/layers/perimeters/source.js"
     ],
+    "external": []
+  },
+  "cits": {
+    "exports": ["./layers/cits"],
+    "modules": [
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js",
+      "src/data/trafficPresetStyle.js",
+      "src/data/detectionDraw.js",
+      "src/overlays/worldOverlayTokens.js",
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/policy.js",
+      "src/layers/traffic/surface.js",
+      "src/renderGovernor.js",
+      "src/celestialRing.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json"
+    ],
+    "external": ["cesium"]
+  },
+  "cits-source": {
+    "exports": ["./layers/cits/source"],
+    "modules": ["src/layers/cits/source.js"],
     "external": []
   },
   "tools": {
