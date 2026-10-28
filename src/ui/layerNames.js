@@ -41,6 +41,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'weather-lightning': msg('Lightning density'),
   'weather-cyclones': msg('Cyclone advisories'),
   'air-quality': msg('Air quality'),
+  'caba-traffic-enforcement': msg('CABA Traffic Enforcement'),
   directions: msg('Directions'),
   'alpr-cameras': msg('ALPR Cameras'),
 });
@@ -117,6 +118,7 @@ const SOURCE_LABEL_KEYS = new Map(
     msg('NASA FIRMS · LIVE'),
     msg('OSM routing'),
     msg('Mapped camera locations'),
+    msg('Buenos Aires Data · location inventory'),
     msg('OpenStreetMap · community mapped'),
   ].map((key) => [key, key]),
 );

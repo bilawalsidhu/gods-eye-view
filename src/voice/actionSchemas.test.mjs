@@ -42,10 +42,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
-    // S2 GhostMaps extends the generated layer enums.
+    // S2 GhostMaps and CABA extend the generated layer enums.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
-    '9ee82c4214499280c208c93751b19d7b724c81b7727a2d0c6dab0184749fbe15',
+    'a0f8fbdfae271a6836fe37298f2e783c3650f32e98d608acc84512faa795633b',
   );
 });
 
