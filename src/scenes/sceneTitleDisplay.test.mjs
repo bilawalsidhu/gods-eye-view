@@ -87,6 +87,25 @@ test('a built-in shot title localizes only for a recipe-sourced shot', () => {
   }
 });
 
+test('bootstrap shots of an applied shot pack localize their built-in titles', () => {
+  setLocale('ru');
+  const title = 'Global Incident Context';
+  const shot = { id: 'shot-1', title };
+  // A legacy scene upgraded in place: its bootstrap shots have no
+  // sourcePackId, but the scene carries the pack marker.
+  const upgraded = {
+    id: 'scene-legacy',
+    appliedShotPacks: [{ id: 'bhote-koshi-nepal-evidence-pack', version: 12 }],
+  };
+  assert.equal(
+    displayShotTitle(title, shot, upgraded),
+    displayShotTitle(title),
+  );
+  assert.notEqual(displayShotTitle(title, shot, upgraded), title);
+  // The same typed title in a scene without the pack stays as typed.
+  assert.equal(displayShotTitle(title, shot, { id: 'scene-user' }), title);
+});
+
 test('the Scene status line shows an operator-typed shot title as typed', async () => {
   const { createScenePlaybackAdapter } = await import('./playbackAdapter.js');
   const statuses = [];

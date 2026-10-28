@@ -37,8 +37,8 @@ html:lang(ar) {
     'Noto Sans Arabic', 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Geeza Pro',
     Tahoma, monospace;
   --font-sans:
-    'Inter', 'Noto Sans Arabic', -apple-system, BlinkMacSystemFont,
-    'Geeza Pro', Tahoma, sans-serif;
+    'Inter', 'Noto Sans Arabic', -apple-system, BlinkMacSystemFont, 'Geeza Pro',
+    Tahoma, sans-serif;
 }
 /* The Global Context lines and their buttons set ui-monospace through the
    `font` shorthand; route them through the Arabic-aware stack too. */
@@ -138,4 +138,41 @@ html[dir='rtl'] #bhote-koshi-event-panel [data-role='time'] {
 html[dir='rtl']
   :is(.context-radio-mini-transport, .sdr-seek-row, .radio-tuner) {
   direction: ltr;
+}
+
+/* Canvas labels (installations, map cards, detections) are measured and drawn
+   with left-to-right geometry: a card's text starts at its left padding. A
+   canvas inherits the page direction, which turned that start into the right
+   edge and pushed every title out of its card. */
+html[dir='rtl'] canvas {
+  direction: ltr;
+}
+
+/* Scene callouts on the screen whiteboard: the card grows to the right of the
+   text's x, so right-to-left text ends there instead of starting there. The
+   injected stack (JetBrains Mono) has no Arabic glyphs; use the Arabic-aware
+   one. */
+html[dir='rtl'] .gev-anno-text {
+  text-anchor: end;
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+/* Position counters built from bare numbers (01 / 25, 1 / 3) read as a number
+   pair, left to right, as an unspaced 1/3 does; otherwise the slash swaps
+   them and the current item looks like the total. Translated counters say
+   «من» instead. */
+html[dir='rtl']
+  :is(
+    #bhote-koshi-event-panel [data-role='beat-index'],
+    #cockpit-brief-position
+  ) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* The radio tuner header is a left-to-right instrument row; its channel
+   readout («القناة 01 من 750») still reads in its own language. */
+html[dir='rtl'] #radio-tuner-value {
+  unicode-bidi: plaintext;
 }

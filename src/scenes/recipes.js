@@ -1069,17 +1069,30 @@ export function displaySceneTitle(scene) {
 export function displayShotTitle(title, shot = undefined, scene = undefined) {
   const text = typeof title === 'string' ? title : '';
   const fromRecipe = shot
-    ? Boolean(shot.sourcePackId) || recipeDeclaresShotTitle(scene?.id, text)
+    ? Boolean(shot.sourcePackId) || recipeDeclaresShotTitle(scene, text)
     : true;
   if (fromRecipe && BUILTIN_SHOT_TITLES.has(text)) return t(text);
   const numbered = /^Shot ([1-9]\d*)$/.exec(text);
   return numbered ? t('Shot {n}', { n: numbered[1] }) : text;
 }
 
-/** Whether the built-in recipe behind a scene declares a shot with this title. */
-function recipeDeclaresShotTitle(sceneId, title) {
-  const recipe = sceneId ? getSceneRecipeById(sceneId) : null;
-  return Boolean(
-    recipe?.cameraPath?.some((keyframe) => keyframe?.title === title),
+/**
+ * Whether the built-in recipe behind a scene declares a shot with this title:
+ * its own keyframes, or the bootstrap shots of a shot pack applied to the
+ * scene (those shots carry no sourcePackId; the scene's pack marker vouches
+ * for them).
+ */
+function recipeDeclaresShotTitle(scene, title) {
+  const declares = (cameraPath) =>
+    Boolean(cameraPath?.some((keyframe) => keyframe?.title === title));
+  const recipe = scene?.id ? getSceneRecipeById(scene.id) : null;
+  if (declares(recipe?.cameraPath)) return true;
+  const packs = Array.isArray(scene?.appliedShotPacks)
+    ? scene.appliedShotPacks
+    : [];
+  return packs.some((marker) =>
+    declares(
+      getSceneAppendRecipeById(marker?.id)?.legacySceneBootstrap?.cameraPath,
+    ),
   );
 }

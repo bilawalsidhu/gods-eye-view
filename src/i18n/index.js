@@ -53,6 +53,20 @@ export function isolate(text) {
   return isRtlLocale(currentLocale) ? `\u2068${text}\u2069` : String(text);
 }
 
+const CODE_BEFORE_VALUE =
+  /(?<![\p{L}\p{N}])([A-Z][A-Z0-9/]+) (\u2068[^\u2068\u2069]*\u2069)/gu;
+
+/**
+ * A Latin code and the isolated value after it ("HDG 68\u00b0") as one unit in
+ * right-to-left text. Two codes in a row (HDG 68\u00b0 \u00b7 FOV 44\u00b0) otherwise form a
+ * single left-to-right run and the second code ends up beside the first
+ * value. Applies to t() output; a no-op outside RTL locales.
+ */
+export function keepCodesWithValues(text) {
+  if (!isRtlLocale(currentLocale)) return text;
+  return String(text).replace(CODE_BEFORE_VALUE, '\u2068$1 $2\u2069');
+}
+
 /**
  * Switch the active locale. Pure state change: call applyDocumentLanguage /
  * applyDocumentTranslations to reflect it in the DOM.

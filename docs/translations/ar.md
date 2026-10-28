@@ -19,10 +19,12 @@ Translation sources: abiyeenzo (#915).
 - **Western digits (0–9)**, as in the catalog. The HUD reads like an instrument panel, and mixing ٠–٩ with Latin codes and coordinates misreads. `intlLocale('ar')` in `src/i18n/locale.js` passes `ar-u-nu-latn` to every Intl formatter, so browsers that default to Arabic-Indic digits for an Arabic region still show 0–9.
 - **Right to left.** `ar` is in `RTL_LOCALES`, so the page gets `<html dir="rtl">`. The title, style indicator and both rails swap sides; the dock and the corner row reverse. The intel HUD (classification block, MGRS, coordinates, GSD) stays a left-to-right instrument overlay; its translated lines read right to left inside it. Media transport (previous / play / next) and the radio dial stay left to right, as on any player. Layout rules: `src/ui/styles/rtl.css`.
 - Latin runs inside Arabic sentences (product names, codes, `{placeholders}` filled with English data) are isolated by the bidi algorithm; write them as plain text, without manual direction marks.
+- Position counters: a translated counter says «من» («القناة {index} من {total}», «الإطار {index} من {total}»); a spaced slash between two isolated numbers swaps them in right-to-left text. Counters the code builds from bare numbers (`01 / 25`, `1 / 3`) are shown left to right by `rtl.css`.
+- Code stays left to right: the JSON fields of the scene editor are LTR in every language.
 
 ## Units
 
-Distances and speeds take Arabic abbreviations after the number, with a space: كم، م، كم/س، كم/ث، م/ث، ميل/س، عقدة (knots)، قدم (feet)، مم. Time: ث (seconds)، د (minutes)، س (hours)، يوم. Scientific and radio units stay Latin: MHz، dB، dBFS، dBZ، hPa، MW، MiB. `°` and `%` stay. Hemisphere letters in coordinates: ش (N)، ج (S)، ق (E)، غ (W), as in `21.33ش`.
+Distances and speeds take Arabic abbreviations after the number, with a space: كم، م، كم/س، كم/ث، م/ث، ميل/س، عقدة (knots)، قدم (feet)، مم. Time: ث (seconds)، د (minutes)، س (hours)، يوم; compact age labels («3d», «5D AGO») use ي: «{count} ي»، «قبل {count} ي», since a plain string cannot make يوم agree with the count. Area: آكر (acres, the value is not converted; فدان is a different unit). Scientific and radio units stay Latin: MHz، dB، dBFS، dBZ، hPa، MW، MiB. `°` and `%` stay. Hemisphere letters in coordinates: ش (N)، ج (S)، ق (E)، غ (W), as in `21.33ش`.
 
 ## Plurals
 
@@ -55,6 +57,8 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | globe / map / map source / basemap        | الكرة الأرضية / الخريطة / مصدر الخريطة / الخريطة الأساسية |
 | tiles                                     | بلاطات                                                    |
 | aircraft / flight / military flights      | طائرة / رحلة / الرحلات العسكرية                           |
+| Live Flights / Live Vessels (layers)      | تتبّع الرحلات / السفن المباشر (not الرحلات المباشرة)      |
+| call sign                                 | رمز النداء                                                |
 | vessel, ship                              | سفينة                                                     |
 | satellite                                 | قمر صناعي                                                 |
 | launch (rocket) / space mission           | إطلاق / مهمة فضائية                                       |
@@ -78,12 +82,13 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | transit / bike share                      | النقل العام / الدراجات المشتركة                           |
 | Previous / Next                           | السابق / التالي                                           |
 | compass points (N, NNE, …)                | شمال، شمال شمال شرق، …                                    |
-| forecast / valid / issued                 | توقع / صالح حتى / صدر                                     |
+| forecast / valid (time) / issued          | توقع / عند، وقت التوقع (not صالح حتى) / صدر               |
 | observation / observed                    | رصد / مرصود                                               |
 | field (weather) / model                   | حقل / نموذج                                               |
+| parameters / ellipsoid                    | المعلمات / المجسّم الإهليلجي                              |
 | scene cloud                               | غيوم المشهد                                               |
 | box (Recent Imagery area) / pin           | منطقة / تثبيت                                             |
-| THIS (voice pointer)                      | المُشار إليه                                              |
+| THIS (voice pointer)                      | هذا                                                       |
 | outline / mark (map annotation)           | مخطط / علامة، تعليم                                       |
 | share (a view or link)                    | مشاركة                                                    |
 | AI agent                                  | وكيل ذكاء اصطناعي                                         |

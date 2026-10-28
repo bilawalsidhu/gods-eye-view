@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatDate, formatNumber, getLocale, setLocale, t, tn } from './index.js';
+import {
+  formatDate,
+  formatNumber,
+  getLocale,
+  keepCodesWithValues,
+  setLocale,
+  t,
+  tn,
+} from './index.js';
 import {
   applyDocumentLanguage,
   intlLocale,
@@ -109,7 +117,19 @@ test('Arabic uses all six plural forms and spaced HUD units', () => {
       t('Issued: {time}', { time: '10/28 00:00 UTC' }),
       'صدر: \u206810/28 00:00 UTC\u2069',
     );
+    // A Latin code stays beside its own value: HDG 68° · FOV 44°.
+    assert.equal(
+      keepCodesWithValues(
+        t('{city} · HDG {heading} · FOV {fov}', {
+          city: 'Austin',
+          heading: '68°',
+          fov: '44°',
+        }),
+      ),
+      '\u2068Austin\u2069 · \u2068HDG \u206868°\u2069\u2069 · \u2068FOV \u206844°\u2069\u2069',
+    );
     setLocale('ru');
+    assert.equal(keepCodesWithValues('HDG 68°'), 'HDG 68°');
     assert.equal(formatCockpitDistance(14000), '14 КМ');
   } finally {
     setLocale(previous);
