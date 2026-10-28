@@ -3103,7 +3103,14 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   usable per point, while an uncached absent height still returns 502 rather
 >   than becoming a fabricated ground value. A position the upstream answers
 >   with a null ellipsoid is reported as an absent height rather than a refresh
->   failure, and is left uncached so a later poll re-asks it. Client geoid
+>   failure, and is left uncached so a later poll re-asks it. A `Retry-After`
+>   longer than the 10 s retry budget ends the retries at once. After a 429 that
+>   outlasts its retries, the proxy pauses upstream calls for the `Retry-After`
+>   (60 seconds when none, at most 10 minutes). A request whose points are all
+>   cached, fresh or stale, is still served; a request with any uncached point
+>   gets 502 and the page uses its geoid fallback for that chunk. Each request
+>   that was waiting on the upstream when the 429 came back logs one warning;
+>   requests refused during the pause do not log. Client geoid
 >   fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on the
 >   first later successful fetch. Smaller chunks reduce timeout risk; complete
 >   camera batches still wait for their sequential requests, and unresolved
@@ -5292,7 +5299,13 @@ HTTP refusals and outages remain retryable. Searches share a 12-second total
 deadline, with Photon requests capped at six seconds each. Caller/application
 cancellation stops retries and late cache writes. Replacing a location search
 cancels the previous lookup; disposing its controls cancels the active lookup. Photon uses a soft proximity bias, up to five
-candidates, and an unbiased retry for name mismatches. Invalid or wrapped bounds returned by providers
+candidates, and an unbiased retry for name mismatches. A "place, region" query
+prefers a candidate named exactly for the place whose city, county, state,
+country or country code (or USA/UK) contains every word of the region, and a
+settlement or administrative area over a POI when both fit. Nearby results that
+fail that check are retried unbiased. After the region checks of both passes, a
+nearby place whose whole name is the query (one with a comma in it) comes next,
+then the unbiased name match. Invalid or wrapped bounds returned by providers
 are omitted rather than framing the wrong part of the globe.
 
 A location search that finds nothing, or fails, leaves the field open with the
