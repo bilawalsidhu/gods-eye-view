@@ -15,19 +15,20 @@ export function createLifecycle({
   const { clearSelectedEntityContextForLayer } = services.context;
 
   const methods = {
-    init(viewer) {
+    init(viewer, { engine = null } = {}) {
       layerState.viewer = viewer;
+      layerState.engine = engine;
       layerState.dataSource = new Cesium.CustomDataSource(
         'military-installations',
       );
       viewer.dataSources.add(layerState.dataSource);
+      const camera = engine?.camera ?? viewer.camera;
       const cameraChanged = () => {
         if (!layerState.contextAnchor) parts.viewport.scheduleLoad();
       };
-      layerState.moveEndRemove =
-        viewer.camera.moveEnd.addEventListener(cameraChanged);
+      layerState.moveEndRemove = camera.moveEnd.addEventListener(cameraChanged);
       layerState.changedRemove =
-        viewer.camera.changed?.addEventListener(cameraChanged);
+        camera.changed?.addEventListener(cameraChanged);
       parts.selection.installInteraction(viewer);
     },
 
@@ -100,6 +101,7 @@ export function createLifecycle({
       if (layerState.dataSource && viewer)
         viewer.dataSources.remove(layerState.dataSource, true);
       layerState.dataSource = null;
+      layerState.engine = null;
     },
   };
 

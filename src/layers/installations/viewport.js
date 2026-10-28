@@ -23,9 +23,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
   }
 
   function viewportBox(viewer) {
-    const rectangle = viewer?.camera?.computeViewRectangle(
-      viewer.scene.globe.ellipsoid,
-    );
+    const rectangle =
+      layerState.engine?.camera?.viewRectangle?.() ??
+      viewer?.camera?.computeViewRectangle(viewer.scene.globe.ellipsoid);
     if (!rectangle) return null;
     const south = geo.math.toDegrees(rectangle.south);
     const north = geo.math.toDegrees(rectangle.north);
@@ -89,14 +89,17 @@ export function createViewport({ state: layerState, services, parts, source }) {
   function scheduleLoad() {
     if (!layerState.enabled) return;
     const { box, coverage } = loadArea(layerState.viewer);
-    const camera = layerState.viewer.camera;
+    const pose = layerState.engine?.camera?.pose?.();
+    const camera = layerState.viewer?.camera;
+    const position = pose?.position ?? camera?.positionWC;
+    const direction = pose?.direction ?? camera?.directionWC;
     const widePose =
       coverage.kind === 'viewport' &&
       box &&
       (box.east < box.west ||
         box.east - box.west > 10 ||
         box.north - box.south > 10)
-        ? [camera.positionWC, camera.directionWC]
+        ? [position, direction]
             .map((v) =>
               v ? [v.x, v.y, v.z].map((n) => n.toFixed(4)).join(',') : '',
             )
