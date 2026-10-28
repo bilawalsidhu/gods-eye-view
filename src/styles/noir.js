@@ -1,4 +1,4 @@
-import { msg } from '../i18n/index.js';
+import { msg } from '../i18n/marker.js';
 
 /**
  * Noir Style — Desaturation + High Contrast + Vignette

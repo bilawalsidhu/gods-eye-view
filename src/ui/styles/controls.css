@@ -501,6 +501,27 @@ html:not([lang='en']) .panel-collapse-btn {
   color: var(--accent);
 }
 
+.pp-scope-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0 0 0 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.pp-scope-toggle:has(input:checked) .pp-label {
+  color: var(--accent);
+}
+
+.pp-scope-toggle:has(input:focus-visible) {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#scope-slider-row:has(input:disabled) {
+  opacity: 0.45;
+}
+
 /* ── Bloom Slider (inline with toggle) ───────── */
 .pp-toggle-group {
   display: flex;

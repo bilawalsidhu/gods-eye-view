@@ -80,24 +80,47 @@ export class LocationNavigation {
 
   _handleLocationSearchState(state, change) {
     if (this._disposed || !change) return;
-    if (change.type === 'started')
+    if (change.type === 'started') {
       this._activeLocationSearchGeneration = change.generation;
-    else if (change.type === 'found') {
+      this._setLocationSearchError(null);
+    } else if (change.type === 'found') {
       this._searchedLocationLabel = state.destination.label || state.query;
       this._setActiveLocation(null);
       this._currentPoi = null;
       this._collapsePOIRow();
       this._updateLocationMiniStatus();
     } else if (change.type === 'missing')
-      this._showToast(t('Location not found'));
-    else if (change.type === 'failed') this._showToast(t('Search failed'));
+      this._setLocationSearchError(
+        `${t('Location not found')}. ${t('Check the spelling and press Enter to search again.')}`,
+      );
+    else if (change.type === 'failed')
+      this._setLocationSearchError(
+        `${t('Search failed')}. ${t('Press Enter to try again.')}`,
+      );
     else if (change.type === 'settled')
-      this._settleLocationSearchUi(change.generation);
+      this._settleLocationSearchUi(change.generation, {
+        keepQuery: state.status === 'missing' || state.status === 'failed',
+      });
     else if (
       change.type === 'reset' &&
       this._activeLocationSearchGeneration !== null
     ) {
       this._settleLocationSearchUi(this._activeLocationSearchGeneration);
+    }
+  }
+
+  /** Show, or with null clear, the announced error under the search field. */
+  _setLocationSearchError(message) {
+    const input = this._locationSearch;
+    const error = this._locationSearchError;
+    if (error) error.textContent = message || '';
+    if (!input) return;
+    if (message) {
+      input.setAttribute('aria-invalid', 'true');
+      if (error?.id) input.setAttribute('aria-describedby', error.id);
+    } else {
+      input.removeAttribute('aria-invalid');
+      input.removeAttribute('aria-describedby');
     }
   }
 
@@ -144,6 +167,7 @@ export class LocationNavigation {
       onCity: (id) => this._onCityPillClick(id),
       onPoi: (id, index) => this._onPoiClick(id, index),
       onSearch: (query) => this._locationLookup.run(query),
+      onSearchEdit: () => this._setLocationSearchError(null),
       onReset: () => this.resetToGlobeView(),
     });
   }

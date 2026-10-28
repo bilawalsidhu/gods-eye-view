@@ -94,6 +94,15 @@ test('context restore settles the Contacts coordinator before dependency fanout'
   assert.match(restore, /excludeLayerIds: settleContactsCoordinator[\s\S]*?contactsCoordinatorId/);
 });
 
+test('Clear All during the Contacts settle stops the snapshot coming back', () => {
+  const restore = _restoreContextSession.toString();
+  const coordinatorOff = restore.indexOf('const coordinatorSettled = await this._dataManager.setEnabled(');
+  const cancelled = restore.indexOf('if (restoreState.cancelled) return;', coordinatorOff);
+  const fanout = restore.indexOf('await this._dataManager.restoreEnabledLayerIds(', coordinatorOff);
+  assert.ok(cancelled > coordinatorOff, 'the cancellation is checked after Contacts settles');
+  assert.ok(fanout > cancelled, 'and before the snapshot fans out');
+});
+
 test('context restore preserves its exact pending target after a failed transition', () => {
   const restore = _restoreContextSession.toString();
   assert.match(restore, /const replayError = await settleContextIntentReplay\(\{/);
