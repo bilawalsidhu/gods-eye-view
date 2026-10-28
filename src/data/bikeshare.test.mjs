@@ -41,7 +41,7 @@ test('selected bikeshare entry preserves source copy and protected-lane policy',
   assert.equal(entry.paintLane, 'selected');
   assert.equal(entry.collisionGroup, 'ambient-card');
   assert.equal(entry.edgeFade, 'keyhole');
-  assert.equal(entry.horizonCull, true);
+  assert.equal(entry.horizonCull, false);
 });
 
 test('real station select/clear path publishes one card and creates no native label graphic', () => {

@@ -160,6 +160,7 @@ function pointPart(options, store, factories, requestRender, owners) {
     outlineWidth: point.outlinePx,
     outlineColor: new Cesium.Color(...point.outlineColor),
     scaleByDistance: nearFar(point.scaleByDistance),
+    translucencyByDistance: nearFar(point.translucencyByDistance),
     disableDepthTestDistance: depthTestDistance(depthTest),
   };
   const points = [];

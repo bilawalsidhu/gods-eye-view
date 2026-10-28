@@ -1,17 +1,15 @@
 import * as Cesium from 'cesium';
 import {
-  DEFAULT_CAPACITY,
-  POINT_SIZE_MIN,
-  POINT_SIZE_MAX,
   COLOR_NEUTRAL,
-  COLOR_MUTED,
-  COLOR_GREEN,
-  COLOR_YELLOW,
-  COLOR_RED,
   POINT_HEIGHT_OFFSET_M,
   MAX_TOTAL_POINTS,
   COLOR_OUTLINE,
-} from './policy.js';
+} from '../../policy.js';
+import {
+  capacityToPixelSize,
+  resolveCapacity,
+  statusToColor,
+} from '../../presentation.js';
 
 export function createRendering({
   state: layerState,
@@ -20,71 +18,6 @@ export function createRendering({
   source,
 }) {
   const { governorRequestRender } = services.render;
-
-  /**
-   * Resolve the effective dock capacity for a station.
-   * Prefers the explicit capacity from station_information; falls back to
-   * bikes+docks from status data; uses DEFAULT_CAPACITY as last resort.
-   * @param {number|null} capacityFromInfo - Capacity from station_information, or null.
-   * @param {Object|null} status - Station status object with bikesAvailable/docksAvailable.
-   * @returns {number} Resolved capacity (always > 0).
-   */
-
-  function resolveCapacity(capacityFromInfo, status) {
-    const fromInfo = parts.model.toNonNegativeInteger(capacityFromInfo);
-    if (fromInfo && fromInfo > 0) return fromInfo;
-
-    // Derive capacity from current bikes + available docks
-    const bikes = parts.model.toNonNegativeInteger(status?.bikesAvailable, 0);
-    const docks = parts.model.toNonNegativeInteger(status?.docksAvailable, 0);
-    const derived = bikes + docks;
-    if (derived > 0) return derived;
-
-    return DEFAULT_CAPACITY;
-  }
-
-  /**
-   * Map station capacity to a point pixel size using a sqrt scale.
-   * Larger-capacity stations render as bigger dots; clamped to [POINT_SIZE_MIN, POINT_SIZE_MAX].
-   * @param {number} capacity - Station dock capacity.
-   * @returns {number} Point size in pixels.
-   */
-
-  function capacityToPixelSize(capacity) {
-    const c = Math.max(1, Math.min(80, Number(capacity) || DEFAULT_CAPACITY));
-    // sqrt scale so large stations don't dominate visually
-    const normalized = Math.sqrt(c) / Math.sqrt(80);
-    const size =
-      POINT_SIZE_MIN + normalized * (POINT_SIZE_MAX - POINT_SIZE_MIN);
-    return Math.max(POINT_SIZE_MIN, Math.min(POINT_SIZE_MAX, size));
-  }
-
-  /**
-   * Determine the display color for a station based on its availability ratio.
-   * - No status data: neutral gray.
-   * - Offline (not installed/renting/returning): muted gray.
-   * - >60% bikes available: green.
-   * - 30-60% bikes available: yellow.
-   * - <30% bikes available: red.
-   * @param {Object|null} status - Station status object.
-   * @param {number} capacity - Resolved station capacity.
-   * @returns {Cesium.Color} Color to apply to the station point.
-   */
-
-  function statusToColor(status, capacity) {
-    if (!status) return COLOR_NEUTRAL;
-    if (!status.isInstalled || !status.isRenting || !status.isReturning)
-      return COLOR_MUTED;
-
-    const bikes = parts.model.toNonNegativeInteger(status.bikesAvailable);
-    if (!Number.isFinite(bikes)) return COLOR_NEUTRAL;
-
-    const cap = Math.max(1, Number(capacity) || DEFAULT_CAPACITY);
-    const ratio = bikes / cap;
-    if (ratio > 0.6) return COLOR_GREEN;
-    if (ratio >= 0.3) return COLOR_YELLOW;
-    return COLOR_RED;
-  }
 
   /**
    * Create a Cartesian3 position for a station, terrain-clamped when possible.
@@ -245,7 +178,7 @@ export function createRendering({
       if (!record) continue;
 
       const status = statusMap.get(record.stationId) || null;
-      const capacity = resolveCapacity(record.capacity, status);
+      const capacity = resolveCapacity(parts.model, record.capacity, status);
       record.capacity = capacity;
 
       record.bikesAvailable = parts.model.toNonNegativeInteger(
@@ -266,13 +199,12 @@ export function createRendering({
 
       // Update visual properties based on current status
       record.point.pixelSize = capacityToPixelSize(capacity);
-      record.point.color = statusToColor(status, capacity);
+      record.point.color = statusToColor(parts.model, status, capacity);
     }
+    parts.selection.refreshSelectedCard();
   }
   return {
-    resolveCapacity,
     capacityToPixelSize,
-    statusToColor,
     createStationPosition,
     ensureCityRuntime,
     ensureCityPoints,

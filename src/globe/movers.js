@@ -123,6 +123,7 @@ export function normalizeMoverSetOptions(options) {
       sizePx: positive(point.sizePx, 'point.sizePx'),
       outlinePx: nonNegative(point.outlinePx, 'point.outlinePx', 0),
       scaleByDistance: scaleByDistanceOf(point.scaleByDistance),
+      translucencyByDistance: scaleByDistanceOf(point.translucencyByDistance),
     };
   } else {
     const model = options.model;

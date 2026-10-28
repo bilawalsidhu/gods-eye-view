@@ -3565,7 +3565,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
   const { createLifecycle: trafficLifecycle } =
     await import('../traffic/lifecycle.js');
   const { createLifecycle: bikeLifecycle } =
-    await import('../bikeshare/lifecycle.js');
+    await import('../bikeshare/render/cesium/lifecycle.js');
   const app = harness(t);
   const noop = () => {};
   const traffic = trafficLifecycle({
@@ -3583,6 +3583,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
   }).methods;
   const bike = bikeLifecycle({
     state: {
+      _viewer: app.viewer,
       _pointCollection: {},
       _overlayHost: { setVisible: noop },
       _cityRuntime: new Map(),

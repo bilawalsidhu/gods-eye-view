@@ -27,6 +27,7 @@ test('the Navara mode registers migrated renderers once', async () => {
     'earthquakes',
     'local-firms',
     'military-installations',
+    'bikeshare',
   ])
     assert.equal(layerAvailableOn(id, 'navara'), true, id);
   assert.deepEqual(
@@ -40,6 +41,7 @@ test('the Navara mode registers migrated renderers once', async () => {
       'earthquakes',
       'satellites',
       'rocket-launches',
+      'bikeshare',
       'ais-live-vessels',
       'military-installations',
       'local-firms',

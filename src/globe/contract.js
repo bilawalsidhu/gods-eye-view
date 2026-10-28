@@ -316,7 +316,7 @@
  *   each sprite is a square of sizePx CSS px times its scale, times the
  *   NearFarScalar [nearM, nearScale, farM, farScale] when given (Cesium's
  *   interpolation: over the squared camera distance, eased by ^0.2).
- * @property {{ sizePx: number, outlinePx?: number, outlineColor?: number[], scaleByDistance?: number[] }} [point]
+ * @property {{ sizePx: number, outlinePx?: number, outlineColor?: number[], scaleByDistance?: number[], translucencyByDistance?: number[] }} [point]
  *   A filled disc of sizePx CSS px diameter plus outlinePx on each side;
  *   outlineColor is rgba in 0..1 (opaque black by default).
  * @property {{ url: string, minimumPixelSize?: number, maximumScale?: number,

@@ -335,6 +335,7 @@ test('layers moved onto renderers keep each engine in its render file', (t) => {
     "import 'three'; import '@navaramap/three';",
   );
   write('src/layers/aircraft/render/cesium.js', "import 'cesium';");
+  write('src/layers/bikeshare/render/cesium/lifecycle.js', "import 'cesium';");
   write('src/layers/flights/render/cesium.test.mjs', "import 'cesium';");
   write(
     'src/app/navaraMode.js',

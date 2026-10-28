@@ -1,0 +1,222 @@
+{
+  "status": "bikeshare implementation checkpoint; W2 remains open",
+  "baseCommit": "ef9a167aa532fc82b86761d1ac6adc8b90829293",
+  "sourceSha256": {
+    "scripts/check-import-directions.mjs": "e20e6a00ac7f867888e36dafb71a7de3c16bf075893339cc3c67e941186f932e",
+    "scripts/format-scope.json": "4c239721ec2a6826a5c7471a3f9601630da60022ef0de9099fc29ed4532d2405",
+    "scripts/package-boundaries.json": "8e741c47d4806d9aae4f964bb200d74d31b99d04327e70af569a643ff58ce1cc",
+    "scripts/qa-gbfs-names.mjs": "3d64447fa3d421baacdf6be352630a15c67b9187fe4f82c49a091510aca6864d",
+    "src/app/layers/bikeshare.js": "e4b543c5cc9b5b9938154e0771a8785a40575c4930e4aaf754c30d3ad0cf9999",
+    "src/app/navaraLayers.test.mjs": "e115a9fe4c9f6e28a6d24b2a4e207358067d97b0ec8011d9674ebe1ed00e1f7b",
+    "src/app/navaraMode.js": "43654c0cc23d88f685f6ec71363e47288258930b492c14a673e922f9ac79097d",
+    "src/data/bikeshare.test.mjs": "70a8a07c88451499a558ec69a80c248919f4bea246328d51259e4d1989a1c03d",
+    "src/data/inputOwnership.test.mjs": "556e95a837a96a04ba2fe027cfe31f69e9ffcdce0cba192cefcfd8a78c70a3cc",
+    "src/globe/cesium/movers.js": "99cd6f077a48698ddc3e3e07a40d7f2da3f40463cdb3c37f52b70ce8e08f9992",
+    "src/globe/contract.js": "6b6ac8830ecffc409411daa0f3f5a2f366f85d1acd4fdcc37127cf2b27883ba9",
+    "src/globe/movers.js": "7ba24971466c4fd06152357b546a012eb2a9035522a60932c7d6e605c03331b9",
+    "src/globe/navara/movers/moverMesh.js": "dfa4550656d99afac5f485f0a434eaa32c71493f06aff4fd7e2d38358f796a14",
+    "src/globe/navara/movers/moverMesh.test.mjs": "b0482b6300cbfedfa0450abbc3428cf2e91d8a788805aa51b5000241cc28efbb",
+    "src/layers/bikeshare/index.js": "0564ef85eb6f868343de466556e335d4a1db6fa18fd0b457de422bb5dd677088",
+    "src/layers/bikeshare/ingestion.js": "d6e18b324d1e965765736d2e17660f02985aa3eed79796cbf6625c8dc7e5c4f4",
+    "src/layers/bikeshare/lifecycle.js": "deleted",
+    "src/layers/bikeshare/policy.js": "cb41016280cc4c20023e06c93383b60dcc15191f8ab2c385df70a57b7645e015",
+    "src/layers/bikeshare/presentation.js": "cc57113150ea4b12ba393b79e2f0eefdce788d56973234820d40ce756d383506",
+    "src/layers/bikeshare/presentation.test.mjs": "185d5e654ad31f322f0f584bf080921e103a3c04329e26fabcc99a293fb7b492",
+    "src/layers/bikeshare/queries.js": "cb5ca627c38e38d5893176e07fc2230266e655d00421ad25cd7087409024de1a",
+    "src/layers/bikeshare/render/cesium.js": "442db49e26bd83773f12d737c113d2757dce3f8abdc22c2017cd74430e87a2fe",
+    "src/layers/bikeshare/render/cesium/lifecycle.js": "000b761233b75e5dcd6ab355d1c2cf6c2021c2be10a7a20c844af700d3fb5321",
+    "src/layers/bikeshare/render/cesium/lifecycle.test.mjs": "535f21f0617fbf2e700793072bca240541bbc6675112779c563bba578bd31b95",
+    "src/layers/bikeshare/render/cesium/rendering.js": "0227defb0709ff13603e18076ef4123016a9024072ec128d43ade8710f89d337",
+    "src/layers/bikeshare/render/cesium/selection.js": "5507836cb7db36ff3e7cf6ddbe44df1ff6c6d72cc7478a00f650697ffdc1163b",
+    "src/layers/bikeshare/render/cesium/viewport.js": "4287f9a151d70eb23a41d5f72b9f27a55b4b1945ed85363a8f5e8efd95a265ea",
+    "src/layers/bikeshare/render/navara.js": "a41691dc0595d177dd93d610030d633aa6b210207cb4e3c985bae41b646ad666",
+    "src/layers/bikeshare/render/navara.test.mjs": "6fd68fa35f8af341ecb14190d680b4f0682dce8727eb617395789e815ebfb965",
+    "src/layers/bikeshare/rendering.js": "deleted",
+    "src/layers/bikeshare/selection.js": "deleted",
+    "src/layers/bikeshare/selectionModel.js": "d9e35a2cec5acee0c95fba7b7cd3ae41230117446d6954cdd41dc6551011fc45",
+    "src/layers/bikeshare/viewport.js": "604e6a94617320cdd8c7face2843c6598fc5c09c6933e07fa6fe388106144cd7",
+    "src/layers/transit/lifecycle.test.mjs": "e3f945044f88af835251a373f42cd2842d35c7351f550a69b51f2f1621d0b76e",
+    "src/tooling/importDirections.test.mjs": "3e8fe748853f6f6a41309c3c352ceabbbf73f97a11742425d84ea0c698410c8e"
+  },
+  "qaManifestSha256": "61b52c6152492e6cd7f0b33f1fee223b7029432c35b0403543565d78ba47a264",
+  "cpuBuild": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 142.6
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 16.1
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 23.2
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 51.0
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 55.2
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 15.0
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.4
+    }
+  ],
+  "ordinaryTests": {
+    "total": 7248,
+    "passed": 7247,
+    "skipped": 1,
+    "failed": 0
+  },
+  "node24AllocationTests": 15,
+  "browserGates": [
+    {
+      "gate": "preview-cesium",
+      "code": 0,
+      "seconds": 26.6
+    },
+    {
+      "gate": "preview-navara",
+      "code": 0,
+      "seconds": 33.8
+    },
+    {
+      "gate": "contract-cesium",
+      "code": 0,
+      "seconds": 29.5
+    },
+    {
+      "gate": "contract-navara",
+      "code": 0,
+      "seconds": 64.1
+    },
+    {
+      "gate": "production-shell",
+      "code": 0,
+      "seconds": 203.9
+    }
+  ],
+  "preview": {
+    "cesium": {
+      "checks": 28,
+      "pass": true,
+      "runtimePages": [
+        "normal",
+        "empty",
+        "failure"
+      ],
+      "browserErrors": [],
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404",
+        "/api/setup/status: 404",
+        "/api/setup/status: 404"
+      ],
+      "idleFramesIn2s": 0,
+      "reportSha256": "acfd9792b4d7663c1b69d65af8562c4c1160863200a609797322621820ea6dd6"
+    },
+    "navara": {
+      "checks": 28,
+      "pass": true,
+      "runtimePages": [
+        "normal",
+        "empty",
+        "failure"
+      ],
+      "browserErrors": [],
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404",
+        "/api/setup/status: 404",
+        "/api/setup/status: 404"
+      ],
+      "idleFramesIn2s": 0,
+      "reportSha256": "f4a0433c8b0e1446b7f0dbf1e5daae34e7d16665b6c44f48928917b5678465d1"
+    }
+  },
+  "pairedControlLimitPx": 2,
+  "pairedControls": {
+    "city": [
+      {
+        "id": "austin-capmetro:english",
+        "deltaPx": 0.016792,
+        "cesiumPixels": 161,
+        "navaraPixels": 211
+      },
+      {
+        "id": "austin-capmetro:short",
+        "deltaPx": 0.096847,
+        "cesiumPixels": 211,
+        "navaraPixels": 280
+      },
+      {
+        "id": "austin-capmetro:unnamed",
+        "deltaPx": 0.0,
+        "cesiumPixels": 180,
+        "navaraPixels": 252
+      },
+      {
+        "id": "austin-capmetro:legacy",
+        "deltaPx": 0.004641,
+        "cesiumPixels": 205,
+        "navaraPixels": 274
+      },
+      {
+        "id": "austin-capmetro:fallback",
+        "deltaPx": 0.01114,
+        "cesiumPixels": 167,
+        "navaraPixels": 211
+      }
+    ],
+    "close": [
+      {
+        "id": "austin-capmetro:english",
+        "deltaPx": 0.2494,
+        "cesiumPixels": 125,
+        "navaraPixels": 141
+      },
+      {
+        "id": "austin-capmetro:short",
+        "deltaPx": 1.090463,
+        "cesiumPixels": 79,
+        "navaraPixels": 99
+      },
+      {
+        "id": "austin-capmetro:unnamed",
+        "deltaPx": 0.0,
+        "cesiumPixels": 129,
+        "navaraPixels": 134
+      },
+      {
+        "id": "austin-capmetro:legacy",
+        "deltaPx": 0.002175,
+        "cesiumPixels": 144,
+        "navaraPixels": 160
+      },
+      {
+        "id": "austin-capmetro:fallback",
+        "deltaPx": 0.001045,
+        "cesiumPixels": 104,
+        "navaraPixels": 122
+      }
+    ],
+    "global": []
+  },
+  "limits": [
+    "No main-chunk byte baseline exists.",
+    "Photoreal scene captures prove positive markers and placement, not exact RGB/area equivalence.",
+    "Combined W2 performance, expanded terrain/tiles matrix and FIRMS uncapped close ratio remain open."
+  ]
+}

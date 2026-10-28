@@ -1,9 +1,13 @@
 import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { isPointerFree } from '../../../../data/inputOwnership.js';
+import {
+  buildBikeshareSelectionLabel,
+  createBikeshareSelectedOverlayEntry,
+} from '../../selectionModel.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
-} from './policy.js';
+} from '../../policy.js';
 
 export function createSelection({
   state: layerState,
@@ -11,77 +15,6 @@ export function createSelection({
   parts,
   source,
 }) {
-  /**
-   * Build a multi-line text label for the selected station popup.
-   * Shows station name, availability counts, and any abnormal operational flags.
-   * @param {Object} record - Render record from _stationRenderMap.
-   * @returns {string} Newline-delimited source text for the selected host card.
-   */
-
-  function buildSelectionLabel(record) {
-    const stationName = String(record?.stationName || '').trim();
-    const stationLabel =
-      stationName ||
-      (record?.stationId ? `Station ${record.stationId}` : 'Station');
-    const bikes = Number.isFinite(record?.bikesAvailable)
-      ? record.bikesAvailable
-      : '?';
-    const docks = Number.isFinite(record?.docksAvailable)
-      ? record.docksAvailable
-      : '?';
-    const capacity = Number.isFinite(record?.capacity) ? record.capacity : '?';
-
-    const lines = [
-      stationLabel,
-      `🚲 ${bikes} avail · ${docks} docks · ${capacity} cap`,
-    ];
-
-    // Append warnings for stations that are offline or partially non-operational
-    const abnormal = [];
-    if (record?.isInstalled === false) abnormal.push('⚠️ Not installed');
-    if (record?.isRenting === false) abnormal.push('⚠️ Not renting');
-    if (record?.isReturning === false) abnormal.push('⚠️ Not returning');
-    if (abnormal.length > 0) {
-      lines.push(abnormal.join(' · '));
-    }
-
-    return lines.join('\n');
-  }
-
-  /**
-   * Build the protected selected-station entry from source-owned copy.
-   * @param {string} key Stable city/station composite key.
-   * @param {Object} record Bikeshare render record.
-   * @returns {Object|null}
-   */
-
-  function createBikeshareSelectedOverlayEntry(key, record) {
-    const position = record?.point?.position;
-    if (!key || !position) return null;
-    const [title, ...details] = buildSelectionLabel(record).split('\n');
-    return {
-      id: String(key),
-      position,
-      variant: 'selected',
-      selected: true,
-      protected: true,
-      paintLane: 'selected',
-      collisionGroup: 'ambient-card',
-      priority: Number.MAX_SAFE_INTEGER,
-      title,
-      details,
-      accent: '#00ffff',
-      interactive: false,
-      anchorRadiusPx: 9,
-      minAnchorGapPx: 11,
-      verticalOnly: true,
-      placement: 'above',
-      edgeFade: 'keyhole',
-      horizonCull: true,
-      terrainOcclusion: false,
-    };
-  }
-
   /**
    * Clear the current station selection.
    * Re-shows the hidden point primitive and removes the highlight entity.
@@ -130,6 +63,13 @@ export function createSelection({
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     });
+    refreshSelectedCard();
+  }
+
+  function refreshSelectedCard() {
+    const key = layerState._selectedKey;
+    const record = layerState._stationRenderMap.get(key);
+    if (!record) return;
     const entry = createBikeshareSelectedOverlayEntry(key, record);
     if (entry) {
       layerState._overlayHost.setEntries(
@@ -199,7 +139,8 @@ export function createSelection({
     }
   }
   return {
-    buildSelectionLabel,
+    refreshSelectedCard,
+    buildSelectionLabel: buildBikeshareSelectionLabel,
     createBikeshareSelectedOverlayEntry,
     _clearSelection,
     _selectStation,

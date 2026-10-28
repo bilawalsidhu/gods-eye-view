@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-import * as geo from '../../geo/index.js';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -8,52 +6,9 @@ import {
   CAMERA_DEBOUNCE_MS,
 } from './policy.js';
 
-export function createViewport({ state: layerState, services, parts, source }) {
+export function createViewport({ state: layerState, services, parts, camera }) {
+  const { getCameraAltitude, getCameraCenterLatLon } = camera;
   const { governorRequestRender } = services.render;
-
-  /**
-   * Get the camera's current altitude in meters above the ellipsoid.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
-   * @returns {number} Altitude in meters, or Infinity if unavailable.
-   */
-
-  function getCameraAltitude(viewer) {
-    const carto = viewer?.camera?.positionCartographic;
-    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
-  }
-
-  /**
-   * Determine the lat/lon the camera is currently looking at.
-   * Prefers the center of the computed view rectangle; falls back to the
-   * camera's own cartographic position when the rectangle is unavailable.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
-   * @returns {{ lat: number, lon: number }|null} Center coordinates in degrees, or null.
-   */
-
-  function getCameraCenterLatLon(viewer) {
-    // Try view rectangle center first (more accurate for tilted views)
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
-    if (rect) {
-      const center = Cesium.Rectangle.center(rect);
-      return {
-        lat: geo.math.toDegrees(center.latitude),
-        lon: geo.math.toDegrees(center.longitude),
-      };
-    }
-
-    // Fallback: use the camera's own position
-    const carto = viewer?.camera?.positionCartographic;
-    if (carto) {
-      return {
-        lat: geo.math.toDegrees(carto.latitude),
-        lon: geo.math.toDegrees(carto.longitude),
-      };
-    }
-
-    return null;
-  }
 
   /**
    * Determine whether the layer should be active at the given camera altitude.
@@ -171,7 +126,12 @@ export function createViewport({ state: layerState, services, parts, source }) {
       layerState._lastUpdate = Date.now();
       layerState._error = null;
     } catch (error) {
-      if (error?.name === 'AbortError') return;
+      if (
+        error?.name === 'AbortError' ||
+        !layerState._enabled ||
+        generation !== layerState._proximityGeneration
+      )
+        return;
       console.warn(`[Data:Bikeshare] ${cityId} activate error:`, error);
       layerState._error = 'GBFS fetch error';
       deactivateCity(cityId);
@@ -189,7 +149,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   async function runProximityCheck() {
-    if (!layerState._enabled || !layerState._viewer) return;
+    if (!layerState._enabled) return;
 
     const generation = ++layerState._proximityGeneration;
     const altitude = getCameraAltitude(layerState._viewer);
@@ -233,6 +193,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
   function scheduleProximityCheck() {
     clearTimeout(layerState._cameraDebounceTimer);
     layerState._cameraDebounceTimer = setTimeout(() => {
+      layerState._cameraDebounceTimer = null;
       void runProximityCheck();
     }, CAMERA_DEBOUNCE_MS);
   }
