@@ -1,13 +1,12 @@
 import path from 'node:path';
 
 /**
- * Where the app writes at runtime: the saved `.env`, `.gev-cache` and
- * `.gev-logs`. Unset, that is `fallback` (the repository root), exactly as
- * before. The Docker image sets GEV_DATA_DIR=/data so the code under /app can
- * stay read-only and one volume holds everything the app keeps.
+ * Where the app writes at runtime (`.env`, `.gev-cache`, `.gev-logs`): unset,
+ * `fallback` (the repository root). The Docker image sets it to /data so /app
+ * can stay read-only.
  *
- * Read from the real environment at call time. It is a launch setting, not a
- * Provider Settings key, so a `.env` line cannot move the `.env` it lives in.
+ * Read from the real environment, not a `.env` line: a launch setting cannot
+ * move the `.env` it would be read from.
  * @param {string} [fallback]
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {string}

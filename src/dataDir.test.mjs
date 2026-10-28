@@ -1,6 +1,5 @@
-// GEV_DATA_DIR moves what the app writes (the saved .env, .gev-cache,
-// .gev-logs) out of the repo root, so the Docker image can keep its code
-// read-only. Unset, nothing moves.
+// GEV_DATA_DIR moves what the app writes out of the repo root, so the Docker
+// image can keep its code read-only. Unset, nothing moves.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';

@@ -1,11 +1,8 @@
 name: Docker release
 
-# Publishes a multi-arch (linux/amd64 + linux/arm64) image to GHCR when a
-# GitHub release is published. Each architecture is built on a native runner,
-# so there is no QEMU emulation and every platform gets its own esbuild/sharp
-# binaries from `npm ci`. The per-platform digests are then stitched into one
-# multi-arch manifest. Pattern: Docker's "distribute build across multiple
-# runners" guide.
+# Publishes the multi-arch image to GHCR on release. Each architecture builds on
+# a native runner (no QEMU), so esbuild and sharp are that platform's own; the
+# per-platform digests are then merged into one manifest.
 
 on:
   release:
@@ -32,7 +29,6 @@ concurrency:
 
 env:
   RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
-  # Vulnerability scanner, run as a container pinned by digest.
   TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
 
 jobs:
@@ -81,8 +77,6 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
-          # The description defaults to the repository's own, so it stays in step
-          # with the GitHub page.
           labels: |
             org.opencontainers.image.title=God's Eye View
             org.opencontainers.image.licenses=MIT
@@ -95,10 +89,8 @@ jobs:
           target: runtime
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.labels.outputs.labels }}
-          # Build provenance and an SBOM travel with each platform image.
           provenance: mode=max
           sbom: true
-          # No tags here: the merge job tags the combined manifest.
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=docker-${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=docker-${{ env.PLATFORM_PAIR }}
@@ -156,7 +148,6 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         env:
-          # Annotate the multi-arch index itself, which is what registries show.
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
         with:
           images: ${{ env.IMAGE }}
@@ -191,8 +182,7 @@ jobs:
           META_JSON: ${{ steps.meta.outputs.json }}
         run: |
           docker buildx imagetools inspect "${IMAGE}:${VERSION}"
-          # Whether this run actually moved `latest`, so the release notes
-          # only advertise a tag that exists.
+          # Did this run move `latest`? The notes should only name tags that exist.
           latest=false
           if jq -e --arg t "${IMAGE}:latest" '.tags | index($t)' <<< "$META_JSON" > /dev/null; then latest=true; fi
           digest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" --format '{{json .Manifest}}' | jq -r .digest)"
@@ -204,8 +194,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Verify provenance and SBOM attestations
-        # build-push-action attached SLSA provenance and an SBOM to each
-        # platform image; make sure `imagetools create` kept them.
+        # `imagetools create` must keep what build-push-action attached.
         env:
           DIGEST: ${{ steps.ref.outputs.digest }}
         run: |
