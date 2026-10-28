@@ -268,3 +268,31 @@ test('terrain parser rejects out-of-range WGS84 points and accepts inclusive bou
     [0, 0],
   ]);
 });
+
+test('a 502 lists the real heights it has, null for the rest', async () => {
+  const cache = new Map([
+    [terrainPointKey([1, 1]), { at: 0, result: result('stale-a', 11) }],
+  ]);
+  const response = await resolveTerrainHeightRequest({
+    points: [
+      [1, 1],
+      [2, 2],
+      [1, 1],
+    ],
+    cache,
+    ttlMs: 100,
+    now: () => 1000,
+    fetchMissing: async () => {
+      const error = new Error('HTTP 429');
+      error.status = 429;
+      error.coolingDown = true;
+      throw error;
+    },
+  });
+  assert.equal(response.status, 502);
+  assert.equal('results' in response.body, false);
+  assert.deepEqual(
+    response.body.partial.map((item) => item?.id ?? null),
+    ['stale-a', null, 'stale-a'],
+  );
+});

@@ -3092,7 +3092,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   outlasts its retries, the proxy pauses upstream calls for the `Retry-After`
 >   (60 seconds when none, at most 10 minutes). A request whose points are all
 >   cached, fresh or stale, is still served; a request with any uncached point
->   gets 502 and the page uses its geoid fallback for that chunk. Each request
+>   gets 502, whose `partial` lists the real heights it has (null for the rest)
+>   when it has any, and the page keeps those and uses its geoid fallback only
+>   for the points without one. The same holds when the upstream answers a
+>   point with a null height. Each request
 >   that was waiting on the upstream when the 429 came back logs one warning;
 >   requests refused during the pause do not log. Client geoid
 >   fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on the
