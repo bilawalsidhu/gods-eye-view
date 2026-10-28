@@ -62,7 +62,7 @@ test('cameraHue: consecutive indices separated by >= 80 degrees', () => {
 test('viewshedColors: fill/line pairs with the designed alphas', () => {
   const colors = viewshedColors(210);
   for (const key of ['fill', 'fillActive', 'line', 'lineActive']) {
-    assert.ok(colors[key] instanceof Cesium.Color, `${key} must be a Cesium.Color`);
+    assert.ok(['red', 'green', 'blue', 'alpha'].every((field) => Number.isFinite(colors[key][field])), `${key} has finite RGBA channels`);
   }
   assert.ok(Math.abs(colors.fill.alpha - 0.12) < 1e-6);
   assert.ok(Math.abs(colors.fillActive.alpha - 0.22) < 1e-6);
@@ -70,6 +70,20 @@ test('viewshedColors: fill/line pairs with the designed alphas', () => {
   assert.ok(Math.abs(colors.lineActive.alpha - 1.0) < 1e-6);
   // Same hue family: fill and line of the same hue must not be gray.
   assert.ok(colors.line.red !== colors.line.green || colors.line.green !== colors.line.blue);
+});
+
+test('portable viewshed colours exactly match the native palette across hue wraps', () => {
+  const palette = { fill: [0.85, 0.6, 0.12], fillActive: [0.85, 0.6, 0.22], line: [0.9, 0.65, 0.85], lineActive: [0.9, 0.7, 1] };
+  for (let i = -512; i <= 512; i++) {
+    const degrees = i * 137.50776405003785;
+    const hue = (((degrees % 360) + 360) % 360) / 360;
+    const actual = viewshedColors(degrees);
+    for (const [key, values] of Object.entries(palette)) {
+      const expected = Cesium.Color.fromHsl(hue, ...values);
+      for (const field of ['red', 'green', 'blue', 'alpha']) assert.equal(actual[key][field], expected[field], `${degrees}/${key}/${field}`);
+      assert.equal(actual[key].withAlpha(0.3).alpha, 0.3);
+    }
+  }
 });
 
 /** Minimal frustumCartesians-shaped fixture. */

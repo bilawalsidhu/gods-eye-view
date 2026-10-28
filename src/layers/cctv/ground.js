@@ -43,7 +43,7 @@ export function createGround({ state: layerState, services, parts, source }) {
    */
 
   function currentSurfaceRegime() {
-    return surfaceRegimeKey(layerState._viewer?.scene?.globe?.show);
+    return surfaceRegimeKey(parts.renderer?.globeVisible());
   }
 
   /**
@@ -244,7 +244,7 @@ export function createGround({ state: layerState, services, parts, source }) {
    */
 
   function handleMapStackChanged() {
-    if (!layerState._viewer || !layerState._records.length) return;
+    if (!parts.renderer?.ready || !layerState._records.length) return;
     const regime = currentSurfaceRegime();
     if (regime === layerState._lastAppliedRegime) return;
     layerState._lastAppliedRegime = regime;

@@ -20,7 +20,7 @@ import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
-export function createCctvLayer({ services, source }) {
+export function createCctvLayer({ services, source, rendererFactory }) {
   if (
     !['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'].every(
       (key) => typeof source?.[key] === 'function',
@@ -29,7 +29,7 @@ export function createCctvLayer({ services, source }) {
     throw new TypeError('A camera source is required');
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const context = { state, services, parts, source, rendererFactory };
   parts.calibration = createCalibration(context);
   parts.testing = createTesting(context);
   parts.projection = createProjection(context);
@@ -94,7 +94,6 @@ export function createCctvLayer({ services, source }) {
       clearProbeClampOnDeactivation:
         parts.geometry.clearProbeClampOnDeactivation,
       cctvRecordNeedsActivation: parts.model.cctvRecordNeedsActivation,
-      bindCctvWorldClickGesture: parts.selection.bindCctvWorldClickGesture,
       setActiveCamera: parts.selection.setActiveCamera,
       deactivateActiveCamera: parts.selection.deactivateActiveCamera,
       cctvEmptyClickDeselects: parts.selection.cctvEmptyClickDeselects,

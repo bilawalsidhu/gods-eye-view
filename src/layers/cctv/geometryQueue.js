@@ -196,7 +196,7 @@ export function createGeometryQueue({
 
   function processGeometryBatch() {
     layerState._geoQueueTimer = 0;
-    if (!layerState._viewer) {
+    if (!parts.renderer?.ready) {
       stopGeometryLoadQueue();
       return;
     }
@@ -209,7 +209,7 @@ export function createGeometryQueue({
     const batchResult = processCctvGeometryDrainBatch({
       queue: layerState._geoQueue,
       readOwnership: () => ({
-        trackedEntity: layerState._viewer.trackedEntity,
+        trackedEntity: parts.renderer.following(),
         cockpitActive:
           typeof document !== 'undefined' &&
           document.body?.classList.contains('cockpit-mode'),
@@ -296,7 +296,7 @@ export function createGeometryQueue({
     layerState._tilesReadyReenqueued = false;
     if (!layerState._records.length) return;
     const active = parts.selection.getActiveRecord();
-    const carto = layerState._viewer?.camera?.positionCartographic;
+    const carto = parts.renderer?.cameraCartographic();
     const refLat = carto
       ? geo.math.toDegrees(carto.latitude)
       : (active?.camera.lat ?? 0);

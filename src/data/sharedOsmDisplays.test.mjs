@@ -9,6 +9,7 @@ import * as annotations from '../annotations/worldAnnotationRenderer.js';
 import { createDirectionsLayer } from '../layers/directions/index.js';
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createLifecycle as createCctvLifecycle } from '../layers/cctv/lifecycle.js';
+import { createCctvCesiumRenderer } from '../layers/cctv/render/cesium.js';
 import * as input from './inputOwnership.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
 
@@ -83,9 +84,12 @@ test('Directions introduces the shared OSM credit when the requested route draws
 
 test('Warendorf webcam display introduces the shared OSM credit', (t) => {
   const v = viewer(t), empty = new Proxy({}, { get: () => noop });
-  const lifecycle = createCctvLifecycle({ state: { _viewer: v, _records: [{ camera: { id: 'warendorf-marktplatz-rathaus', cityId: 'warendorf' } }], _recordById: new Map(), _cctvOverlayHost: overlayHost },
+  const renderer = createCctvCesiumRenderer({ state: {}, services: { credits: { showOsmCredit, hideOsmCredit }, sprites: empty } });
+  renderer.attach(v);
+  t.after(() => renderer.destroy());
+  const lifecycle = createCctvLifecycle({ state: { _records: [{ camera: { id: 'warendorf-marktplatz-rathaus', cityId: 'warendorf' } }], _recordById: new Map(), _cctvOverlayHost: overlayHost },
     services: { credits: { showOsmCredit, hideOsmCredit }, sprites: empty, activation: empty, picking: empty, focus: empty, render: empty },
-    parts: { selection: empty, geometryQueue: empty, rendering: empty, projection: empty, cards: empty, presentation: empty }, source: {} });
+    parts: { renderer, selection: empty, geometryQueue: empty, rendering: empty, projection: empty, cards: empty, presentation: empty }, source: {} });
   lifecycle.methods.enable(); assertCredit(v); lifecycle.methods.disable();
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
 });

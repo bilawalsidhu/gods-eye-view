@@ -54,6 +54,7 @@ function setup(t) {
       },
     },
     parts: {
+      renderer: { ready: true },
       model: { projectionLoopIsNeeded: () => state._enabled },
       selection: { getActiveRecord: () => record },
       rendering: { refreshCctvFocusStyles() {} },
