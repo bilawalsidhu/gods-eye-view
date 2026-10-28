@@ -1257,6 +1257,7 @@
       "src/layers/installations/source.js",
       "src/layers/installations/state.js",
       "src/layers/installations/viewport.js",
+      "src/layers/shared/color.js",
       "src/data/inputOwnership.js",
       "src/data/tomtomTiles.js",
       "src/sources/capability.js",

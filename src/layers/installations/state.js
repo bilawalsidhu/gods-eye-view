@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
@@ -6,7 +5,7 @@ export function createState({ services }) {
 
   state.distanceEndpointScratch = geo.cartographic.create();
 
-  state.distanceGeodesicScratch = new Cesium.EllipsoidGeodesic();
+  state.distanceGeodesicScratch = geo.ellipsoidGeodesic.create();
 
   Object.assign(state, {
     viewer: null,
