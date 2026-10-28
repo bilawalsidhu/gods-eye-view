@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { LAYER_ID } from './policy.js';
+import { engineFromViewer } from '../../globe/cesium/engineFromViewer.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
@@ -16,6 +17,7 @@ export function createLifecycle({
 
   const methods = {
     init(viewer, { engine = null } = {}) {
+      engine ||= engineFromViewer(viewer);
       layerState.viewer = viewer;
       layerState.engine = engine;
       layerState.dataSource = new Cesium.CustomDataSource(

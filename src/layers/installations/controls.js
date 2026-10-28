@@ -144,21 +144,27 @@ export function createControls({ state: layerState, services, parts, source }) {
      */
     focusById(id) {
       const record = layerState.recordById.get(String(id));
-      if (!record || !layerState.engine?.camera?.flyToSphere) return false;
+      const camera = layerState.engine?.camera;
+      const flyToSphere = camera?.flyToSphere;
+      const flyToBoundingSphere =
+        layerState.viewer?.camera?.flyToBoundingSphere;
+      if (!record || (!flyToSphere && !flyToBoundingSphere)) return false;
       // No camera flight without a real selection: a flight plus a stale subject
       // reads as success to Context navigation and strands NEXT on this item.
       if (!parts.selection.selectRecord(record.id)) return false;
-      layerState.engine.camera.flyToSphere(
-        {
-          center: geo.cartesian3.fromDegrees(
-            record.longitude,
-            record.latitude,
-            parts.rendering.installationSurfaceHeightM(record),
-          ),
-          radius: 18000,
-        },
-        { duration: 1.4 },
-      );
+      const sphere = {
+        center: geo.cartesian3.fromDegrees(
+          record.longitude,
+          record.latitude,
+          parts.rendering.installationSurfaceHeightM(record),
+        ),
+        radius: 18000,
+      };
+      if (flyToSphere) flyToSphere.call(camera, sphere, { duration: 1.4 });
+      else
+        flyToBoundingSphere.call(layerState.viewer.camera, sphere, {
+          duration: 1.4,
+        });
       return true;
     },
 

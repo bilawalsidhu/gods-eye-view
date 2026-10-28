@@ -43,6 +43,14 @@ export function createModel({ state: layerState, services, parts, source }) {
     return rgbaFromCss(COLOR_BY_CLASS[record.class] || '#9ca6b0');
   }
 
+  function installationSurfaceHeightM(record) {
+    const floor = services.ground?.cachedGroundFloor?.(
+      record?.latitude,
+      record?.longitude,
+    );
+    return services.ground?.floorAltitudeM?.(null, floor) ?? 0;
+  }
+
   /**
    * Classify a Places text-search result without turning a name match into a
    * mapped military-land claim. Google currently has no documented military
@@ -144,6 +152,7 @@ export function createModel({ state: layerState, services, parts, source }) {
   return {
     approximateSurfaceDistanceM,
     colorFor,
+    installationSurfaceHeightM,
     classifyGoogleMilitaryPlace,
     installationSourceLabel,
     installationWithinViewport,

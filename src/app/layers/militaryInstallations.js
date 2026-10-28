@@ -1,6 +1,8 @@
 import { overlayHost } from './overlayHost.js';
 import * as credits from '../../data/dataCredits.js';
 import { createInstallationsLayer } from '../../layers/installations/index.js';
+import { createInstallationsCesiumRenderer } from '../../layers/installations/render/cesium.js';
+import { rendererFor } from './renderers.js';
 import * as render from '../../renderGovernor.js';
 import * as context from '../../data/contextStore.js';
 import * as picking from '../../data/pickRegistry.js';
@@ -11,6 +13,10 @@ export function createApplicationInstallations({ surface, source }) {
   return createInstallationsLayer({
     source,
     overlayHost,
+    rendererFactory: ({ engine, ...context }) =>
+      engine?.kind === 'navara'
+        ? rendererFor('military-installations', engine, context)
+        : createInstallationsCesiumRenderer(context),
     services: {
       credits,
       render,
