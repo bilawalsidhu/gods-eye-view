@@ -1134,5 +1134,6 @@
   "src/voice/panel/testDom.mjs",
   "src/voice/realtimeCostPanel.test.mjs",
   "src/agent/voicePanelIntegration.test.mjs",
-  "scripts/qa-agent-voice-panel.mjs"
+  "scripts/qa-agent-voice-panel.mjs",
+  "scripts/qa-agent-phone.mjs"
 ]

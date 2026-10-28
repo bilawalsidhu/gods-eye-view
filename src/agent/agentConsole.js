@@ -515,6 +515,7 @@ function mountAgentConsole({
   // and remembers where it was left. Attached before the keyboard so a
   // destroy tears the two down in the order they were built.
   const windowBox = attachConsoleBox({
+    chip,
     dialog,
     handle: header,
     root,
@@ -569,6 +570,7 @@ function mountAgentConsole({
   }
 
   chip.hidden = false;
+  windowBox.refresh();
   setStatus(AGENT_STATUS.READY);
   const stop = () => session.abort();
   stopButton?.addEventListener('click', stop);

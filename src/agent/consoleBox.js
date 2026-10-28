@@ -65,7 +65,7 @@ const DOUBLE_PRESS_SLOP_PX = 6;
 
 /** Interactive header children whose own behaviour wins over a drag. */
 const INTERACTIVE_SELECTOR =
-  'input, select, option, textarea, button, a, [role="button"]';
+  'input, select, option, textarea, button, a, [role="button"], .agent-console-selects';
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -91,24 +91,42 @@ function clampBox(
     minWidth = CONSOLE_MIN_SIZE.width,
     minHeight = CONSOLE_MIN_SIZE.height,
     margin = VIEWPORT_MARGIN_PX,
+    viewportLeft = 0,
+    viewportTop = 0,
   },
 ) {
-  const maxWidth = Math.max(minWidth, viewportWidth - 2 * margin);
-  const maxHeight = Math.max(minHeight, viewportHeight - 2 * margin);
-  const width = clamp(Math.round(box.width), minWidth, maxWidth);
-  const height = clamp(Math.round(box.height), minHeight, maxHeight);
+  // The visible area wins when a phone/keyboard is smaller than the usual
+  // minimum. CSS permits the same contraction and scrolls compact controls.
+  const maxWidth = Math.max(1, viewportWidth - 2 * margin);
+  const maxHeight = Math.max(1, viewportHeight - 2 * margin);
+  const width = clamp(
+    Math.round(box.width),
+    Math.min(minWidth, maxWidth),
+    maxWidth,
+  );
+  const height = clamp(
+    Math.round(box.height),
+    Math.min(minHeight, maxHeight),
+    maxHeight,
+  );
   return {
     width,
     height,
     left: clamp(
       Math.round(box.left),
-      margin,
-      Math.max(margin, viewportWidth - width - margin),
+      viewportLeft + margin,
+      Math.max(
+        viewportLeft + margin,
+        viewportLeft + viewportWidth - width - margin,
+      ),
     ),
     top: clamp(
       Math.round(box.top),
-      margin,
-      Math.max(margin, viewportHeight - height - margin),
+      viewportTop + margin,
+      Math.max(
+        viewportTop + margin,
+        viewportTop + viewportHeight - height - margin,
+      ),
     ),
   };
 }
@@ -138,6 +156,24 @@ function defaultBox({ viewportWidth, viewportHeight }) {
     },
     { viewportWidth, viewportHeight },
   );
+}
+
+/** Lift a launcher past intersecting controls without moving those controls. */
+function clearLauncherObstacles(launcher, obstacles, gap = 8) {
+  let bottom = launcher.bottom;
+  for (let pass = 0; pass <= obstacles.length; pass++) {
+    const top = bottom - launcher.height;
+    const collisions = obstacles.filter(
+      (r) =>
+        launcher.left < r.right + gap &&
+        launcher.right > r.left - gap &&
+        top < r.bottom + gap &&
+        bottom > r.top - gap,
+    );
+    if (!collisions.length) break;
+    bottom = Math.min(...collisions.map((r) => r.top - gap));
+  }
+  return bottom;
 }
 
 /** Whether a value is a complete, finite window record. */
@@ -224,6 +260,7 @@ function startsDrag(event) {
  * @returns {{apply: () => void, reset: () => void, destroy: () => void}}
  */
 function attachConsoleBox({
+  chip,
   dialog,
   handle,
   root = dialog?.ownerDocument ?? globalThis.document,
@@ -241,12 +278,55 @@ function attachConsoleBox({
     listeners.push(() => target.removeEventListener(type, callback, options));
   };
 
-  const viewport = () => ({
-    viewportWidth: view.innerWidth || 0,
-    viewportHeight: view.innerHeight || 0,
-  });
+  const viewport = () => {
+    const visual = view.visualViewport;
+    const style = view.getComputedStyle?.(dialog);
+    const inset = (side) =>
+      Math.max(
+        0,
+        Number.parseFloat(style?.getPropertyValue(`--agent-safe-${side}`)) || 0,
+      );
+    const viewportLeft = (visual?.offsetLeft || 0) + inset('left');
+    const viewportTop = (visual?.offsetTop || 0) + inset('top');
+    const right =
+      (visual?.offsetLeft || 0) +
+      (visual?.width || view.innerWidth || 0) -
+      inset('right');
+    let bottom =
+      (visual?.offsetTop || 0) +
+      (visual?.height || view.innerHeight || 0) -
+      inset('bottom');
+    if (root.body?.classList.contains('mobile-shell')) {
+      // Read the actual shell rather than copying #1429's media gate or sizes.
+      // Leave the idle voice controls usable alongside the non-modal console.
+      for (const selector of [
+        '#mobile-tab-bar',
+        '#gev-voice-button',
+        '.gev-voice-provider-field',
+        '.gev-voice-settings-button',
+      ]) {
+        const el = root.querySelector?.(selector);
+        if (
+          !el?.getClientRects?.().length ||
+          view.getComputedStyle?.(el).display === 'none'
+        )
+          continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top > viewportTop && rect.top < bottom) bottom = rect.top;
+      }
+    }
+    return {
+      viewportLeft,
+      viewportTop,
+      viewportWidth: Math.max(1, right - viewportLeft),
+      viewportHeight: Math.max(1, bottom - viewportTop),
+    };
+  };
 
   let box = null;
+  // Keep the user's intended window separate from temporary keyboard/rotation
+  // clamps, so dismissing the keyboard restores it without overwriting storage.
+  let preferredBox = null;
   let gesture = null;
 
   function paint() {
@@ -260,10 +340,13 @@ function attachConsoleBox({
     dialog.style.right = 'auto';
     dialog.style.bottom = 'auto';
     dialog.style.maxHeight = 'none';
+    dialog.style.minWidth = '0';
+    dialog.style.minHeight = '0';
     dialog.style.margin = '0';
   }
 
   function setBox(next, { persist = true } = {}) {
+    preferredBox = { ...next };
     box = clampBox(next, viewport());
     paint();
     if (persist) writeStoredBox(box, storage);
@@ -290,7 +373,10 @@ function attachConsoleBox({
       // The pointer may already be gone; releasing it is best effort.
     }
     gesture = null;
-    if (box) writeStoredBox(box, storage);
+    if (box) {
+      preferredBox = { ...box };
+      writeStoredBox(box, storage);
+    }
   }
 
   function onPointerMove(event) {
@@ -311,13 +397,14 @@ function attachConsoleBox({
       );
     }
     event.preventDefault?.();
-    const { viewportWidth, viewportHeight } = viewport();
+    const { viewportWidth, viewportHeight, viewportLeft, viewportTop } =
+      viewport();
     const next = gesture.dir
       ? resizeBox(gesture.origin, gesture.dir, dx, dy, {
           minWidth: CONSOLE_MIN_SIZE.width,
           minHeight: CONSOLE_MIN_SIZE.height,
-          viewportWidth,
-          viewportHeight,
+          viewportWidth: viewportLeft + viewportWidth,
+          viewportHeight: viewportTop + viewportHeight,
           margin: VIEWPORT_MARGIN_PX,
         })
       : {
@@ -390,19 +477,99 @@ function attachConsoleBox({
   listen(view, 'pointercancel', endGesture);
   // A viewport that shrinks must not strand the window off-screen with its
   // header unreachable, so the clamp runs again rather than only on open.
-  listen(view, 'resize', () => {
-    if (box) setBox(box, { persist: false });
+  const placeLauncher = () => {
+    if (!chip) return;
+    chip.style.bottom = '';
+    if (
+      !root.body?.classList.contains('mobile-shell') ||
+      !chip.getClientRects().length
+    )
+      return;
+    const rect = chip.getBoundingClientRect();
+    const obstacles = [
+      '#gev-voice-button',
+      '.gev-voice-provider-field',
+      '.gev-voice-settings-button',
+      '#cesium-credits .cesium-credit-logoContainer',
+      '#cesium-credits .cesium-credit-textContainer',
+      '#cesium-credits .cesium-credit-expand-link',
+    ]
+      .map((selector) => root.querySelector(selector))
+      .filter(
+        (el) =>
+          el?.getClientRects().length &&
+          view.getComputedStyle(el).display !== 'none',
+      )
+      .map((el) => el.getBoundingClientRect());
+    const bottom = clearLauncherObstacles(rect, obstacles);
+    if (bottom !== rect.bottom)
+      chip.style.bottom = `${view.innerHeight - bottom}px`;
+  };
+  const refit = () => {
+    placeLauncher();
+    for (const el of root.querySelectorAll?.('#cesium-credits img') ?? [])
+      resize?.observe(el);
+    if (preferredBox) {
+      box = clampBox(preferredBox, viewport());
+      paint();
+    }
+  };
+  listen(view, 'resize', refit);
+  listen(view.visualViewport, 'resize', refit);
+  listen(view.visualViewport, 'scroll', refit);
+  const observer =
+    root.body && view.MutationObserver
+      ? new view.MutationObserver(refit)
+      : null;
+  observer?.observe(root.body, {
+    attributes: true,
+    attributeFilter: ['class'],
   });
+  for (const el of [
+    root.getElementById?.('command-dock'),
+    root.getElementById?.('loading-screen'),
+  ]) {
+    if (el)
+      observer?.observe(el, {
+        attributes: true,
+        attributeFilter: ['class', 'style'],
+      });
+    listen(el, 'transitionend', refit);
+    listen(el, 'animationend', refit);
+  }
+  const credits = root.getElementById?.('cesium-credits');
+  if (credits) observer?.observe(credits, { childList: true, subtree: true });
+  // Startup owners may finish positioning the dock after mounting COMMAND.
+  const firstFrame = view.requestAnimationFrame?.(refit);
+
+  const resize =
+    chip && view.ResizeObserver ? new view.ResizeObserver(refit) : null;
+  for (const el of [
+    chip,
+    root.getElementById?.('command-dock'),
+    root.querySelector?.('#cesium-credits'),
+    root.querySelector?.('#gev-voice-button'),
+    root.querySelector?.('.gev-voice-provider-field'),
+    root.querySelector?.('.gev-voice-settings-button'),
+  ]) {
+    if (el) resize?.observe(el);
+  }
+  placeLauncher();
 
   return {
     apply,
     reset,
+    refresh: refit,
     /** The current window, for tests and the pop-out. */
     get box() {
       return box ? { ...box } : null;
     },
     destroy() {
       endGesture();
+      if (firstFrame != null) view.cancelAnimationFrame?.(firstFrame);
+      observer?.disconnect();
+      resize?.disconnect();
+      if (chip) chip.style.bottom = '';
       for (const remove of listeners.splice(0)) remove();
       for (const grip of handles.splice(0)) grip.remove?.();
     },
@@ -420,6 +587,7 @@ export {
   VIEWPORT_MARGIN_PX,
   attachConsoleBox,
   clampBox,
+  clearLauncherObstacles,
   defaultBox,
   readStoredBox,
   startsDrag,

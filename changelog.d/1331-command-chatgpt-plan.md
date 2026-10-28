@@ -15,3 +15,7 @@
   unavailable or cancelled panel operations locally instead of accepting a false
   model confirmation, preserving independent voice preferences and agent sessions
   (radianx, #1331).
+- Keep COMMAND's launcher reachable above phone tabs and voice controls, fit its
+  window to safe areas and keyboard visual viewports, and keep input reachable
+  at the preferred minimum size. Add real-application phone/desktop browser
+  regressions without merging or modifying #1429 (radianx, #1331).

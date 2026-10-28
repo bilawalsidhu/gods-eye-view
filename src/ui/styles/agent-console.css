@@ -50,6 +50,10 @@
 }
 
 #agent-console {
+  --agent-safe-left: env(safe-area-inset-left, 0px);
+  --agent-safe-right: env(safe-area-inset-right, 0px);
+  --agent-safe-top: env(safe-area-inset-top, 0px);
+  --agent-safe-bottom: env(safe-area-inset-bottom, 0px);
   position: fixed;
   /* Above the first-run launcher (175), below key setup (190): a command
      console must not cover the dialog that configures its own credentials. */
@@ -386,4 +390,42 @@ body.scene-playback-mode #agent-console {
 #agent-stop {
   font-size: 0.58rem;
   letter-spacing: 0.08rem;
+}
+
+/* Follow the shell's actual activation, including wide landscape phones. */
+body.mobile-shell #agent-console-chip {
+  left: calc(var(--mobile-left-inset, env(safe-area-inset-left, 0px)) + 0.9rem);
+  bottom: calc(var(--mobile-tab-space, 58px) + 24px);
+  min-height: 44px;
+}
+
+/* A small window must shrink its scrollable regions before its input row.
+   Selectors and account details remain scrollable at the 320x220 minimum and
+   when a keyboard reduces the visual viewport below that preferred minimum. */
+#agent-console {
+  overflow: auto;
+}
+#agent-console > [data-panel-header] {
+  flex: 0 1 auto;
+  min-height: 30px;
+  overflow: auto;
+}
+#agent-console #agent-transcript {
+  min-height: 0;
+  flex-basis: 2rem;
+}
+#agent-console .agent-chatgpt {
+  flex: 0 1 auto;
+}
+/* Avoid iOS focus zoom while entering a command. */
+body.mobile-shell #agent-input {
+  font-size: 16px;
+}
+
+/* Compact headers scroll on touch; the title remains a drag handle. */
+#agent-console > [data-panel-header] {
+  touch-action: pan-y;
+}
+#agent-console-title {
+  touch-action: none;
 }

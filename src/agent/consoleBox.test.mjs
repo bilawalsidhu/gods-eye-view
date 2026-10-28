@@ -14,6 +14,7 @@ import {
   VIEWPORT_MARGIN_PX,
   attachConsoleBox,
   clampBox,
+  clearLauncherObstacles,
   defaultBox,
   readStoredBox,
   startsDrag,
@@ -58,13 +59,13 @@ test('a window too big for the viewport shrinks rather than hanging off it', () 
   assert.equal(huge.left, VIEWPORT_MARGIN_PX);
 });
 
-test('the minimum size wins over a viewport too small to hold it', () => {
+test('a viewport smaller than the preferred minimum keeps all edges reachable', () => {
   const tiny = clampBox(
     { left: 0, top: 0, width: 10, height: 10 },
     { viewportWidth: 200, viewportHeight: 150 },
   );
-  assert.equal(tiny.width, CONSOLE_MIN_SIZE.width);
-  assert.equal(tiny.height, CONSOLE_MIN_SIZE.height);
+  assert.equal(tiny.width, 200 - 2 * VIEWPORT_MARGIN_PX);
+  assert.equal(tiny.height, 150 - 2 * VIEWPORT_MARGIN_PX);
   // The corner stays reachable rather than being pushed negative.
   assert.equal(tiny.left, VIEWPORT_MARGIN_PX);
   assert.equal(tiny.top, VIEWPORT_MARGIN_PX);
@@ -452,5 +453,90 @@ test('destroying releases every listener it added', () => {
     box.box,
     before,
     'a detached listener still moved the window',
+  );
+});
+
+test('keyboard visual viewport resize/scroll refits and restores without persisting', () => {
+  const dom = agentConsoleDom();
+  dom.view.visualViewport = Object.assign(new EventTarget(), {
+    width: 844,
+    height: 390,
+    offsetLeft: 0,
+    offsetTop: 0,
+  });
+  const storage = fakeStorage();
+  const saved = { left: 80, top: 80, width: 480, height: 280 };
+  writeStoredBox(saved, storage);
+  const controller = attachConsoleBox({
+    dialog: dom.dialog,
+    handle: dom.header,
+    root: dom.document,
+    view: dom.view,
+    storage,
+  });
+  controller.apply();
+  assert.deepEqual(controller.box, saved);
+  Object.assign(dom.view.visualViewport, {
+    height: 190,
+    offsetTop: 20,
+    offsetLeft: 44,
+    width: 756,
+  });
+  dom.view.visualViewport.dispatchEvent(new Event('resize'));
+  assert.ok(controller.box.height < CONSOLE_MIN_SIZE.height);
+  assert.ok(controller.box.top >= 26);
+  assert.ok(controller.box.left >= 50);
+  assert.ok(controller.box.top + controller.box.height <= 204);
+  dom.view.visualViewport.offsetTop = 35;
+  dom.view.visualViewport.dispatchEvent(new Event('scroll'));
+  assert.ok(controller.box.top >= 41);
+  assert.deepEqual(readStoredBox(storage), saved);
+  Object.assign(dom.view.visualViewport, {
+    height: 390,
+    offsetTop: 0,
+    offsetLeft: 0,
+    width: 844,
+  });
+  dom.view.visualViewport.dispatchEvent(new Event('resize'));
+  assert.deepEqual(controller.box, saved);
+  controller.destroy();
+  dom.view.visualViewport.height = 100;
+  dom.view.visualViewport.dispatchEvent(new Event('resize'));
+  assert.deepEqual(
+    controller.box,
+    saved,
+    'visual viewport listeners are removed',
+  );
+});
+
+test('safe-area bounds clamp a remembered desktop window on a notched phone', () => {
+  const box = clampBox(
+    { left: 0, top: 0, width: 1200, height: 900 },
+    {
+      viewportWidth: 844 - 88,
+      viewportHeight: 390 - 21 - 48,
+      viewportLeft: 44,
+      viewportTop: 0,
+    },
+  );
+  assert.equal(box.left, 50);
+  assert.equal(box.left + box.width, 844 - 44 - 6);
+  assert.equal(box.top + box.height, 390 - 21 - 48 - 6);
+});
+
+test('portrait launcher clears stacked voice controls and map attribution', () => {
+  const launcher = { left: 14, right: 139, bottom: 762, height: 44 };
+  const obstacles = [
+    { left: 62, right: 104, top: 696, bottom: 763 },
+    { left: 56, right: 334, top: 574, bottom: 623 },
+    { left: 12, right: 250, top: 664, bottom: 679 },
+  ];
+  assert.equal(clearLauncherObstacles(launcher, obstacles), 566);
+  assert.equal(clearLauncherObstacles(launcher, []), 762);
+  assert.equal(
+    clearLauncherObstacles(launcher, [
+      { left: 600, right: 830, top: 696, bottom: 763 },
+    ]),
+    762,
   );
 });

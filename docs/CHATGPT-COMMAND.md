@@ -103,14 +103,14 @@ local principal while GEV continued using it. No remote exploit or cross-user
 token theft was demonstrated by this review. Exploitability depends on the
 effective permissions, directory ancestry and privileges on the actual machine.
 
-| Condition | Storage behavior after this change |
-| --- | --- |
-| Existing account file or directory has an unsafe/unverifiable Windows ACL | Reject before reading token bytes or invoking the transaction callback; do not repair permissions. |
-| A new directory, lock or empty temporary file cannot be hardened | Reject; never write credentials to that temporary file. |
-| Permissions change while a transaction awaits refresh | Recheck before committing; reject and retain the previous committed account file. A remotely rotated token may then require a new sign-in. |
-| Temporary-file verification, write, fsync or rename fails | Reject; attempt cleanup and preserve the previously committed store. |
-| A held lock is replaced | Refuse the commit and leave the replacement lock in place. |
-| A competing process holds the lock | Wait up to the configured deadline, then reject; do not steal the lock. |
+| Condition                                                                 | Storage behavior after this change                                                                                                         |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Existing account file or directory has an unsafe/unverifiable Windows ACL | Reject before reading token bytes or invoking the transaction callback; do not repair permissions.                                         |
+| A new directory, lock or empty temporary file cannot be hardened          | Reject; never write credentials to that temporary file.                                                                                    |
+| Permissions change while a transaction awaits refresh                     | Recheck before committing; reject and retain the previous committed account file. A remotely rotated token may then require a new sign-in. |
+| Temporary-file verification, write, fsync or rename fails                 | Reject; attempt cleanup and preserve the previously committed store.                                                                       |
+| A held lock is replaced                                                   | Refuse the commit and leave the replacement lock in place.                                                                                 |
+| A competing process holds the lock                                        | Wait up to the configured deadline, then reject; do not steal the lock.                                                                    |
 
 The Windows verifier requires inheritance disabled and exactly three explicit
 FullControl allow entries: the current process user's SID, SYSTEM and the local
@@ -267,3 +267,94 @@ Keyboard/focus assertions in the minimal DOM are not graphical evidence. The
 probe is committed for rerun in an environment that permits Chromium. Live
 ChatGPT/OAuth, actual microphone, audio, physical devices and native Windows
 remain outside this validation.
+
+## Phone landscape integration (2026-10-27)
+
+The compatibility check uses #1331 at `df5b5e62963c8c2c146b719e774ec2bec56530aa`
+and #1429 at `6d2d3d126d4d033c5548aa41cc95e8718ff1c748`. The integration is
+local and temporary (`integration/check-1429-1331` in the test checkout). #1429 is not merged into the COMMAND branch, and #976
+remains in its existing history.
+
+A browser run against the integrated application reproduced the launcher bug:
+at 844x390 and 932x430 its center was inside the bottom tab bar, and a pointer
+press opened Layers instead of COMMAND. Portrait also exposed a collision with
+the voice bar. At the 320x220 console minimum, the input extended below the
+window (input bottom about 320px, window bottom 232px at 844x390).
+
+The COMMAND-owned correction follows `body.mobile-shell` and the actual tab,
+voice and attribution geometry. It leaves the shell's gate, tab heights, stacking,
+voice layout and actions unchanged. The launcher has a 44px minimum height and
+clears intersecting controls. The console fits inside safe-area and visual
+viewport bounds, reserves the idle voice controls on phones, and lets header,
+account and transcript content scroll before displacing the command row. An
+area smaller than the preferred 320x220 minimum wins, including a keyboard's
+reduced visual viewport. Transient resizing does not overwrite the saved window;
+dismissing the keyboard restores the intended geometry. All viewport/observer
+listeners are disposed with the console.
+
+### Reproduction
+
+On the COMMAND branch and then on a temporary merge with #1429:
+
+```sh
+node scripts/qa-agent-phone.mjs
+# On the temporary integration, also require the new landscape shell:
+node scripts/qa-agent-phone.mjs --landscape-shell
+```
+
+`--record-before` records the same pointer/geometry observations without
+requiring the correction. The gate starts its own Vite server and headless-shell
+browser. `PUPPETEER_EXECUTABLE_PATH` can select an installed compatible browser.
+The gate uses an isolated Vite dependency cache for each checkout. The same
+process owns server and browser, which also works in environments with
+isolated command network namespaces. The full application mounts normally; its
+continuous globe draw loop is paused for the chrome measurements.
+
+The gate covers 844x390, 932x430, 390x844, 320x568 and 1280x800. It uses actual
+pointer presses to open/close COMMAND, resize to its minimum, operate each tab
+and open/close Voice Settings. It checks input and close-button hit targets,
+focus restoration, voice provider/mic/settings hit targets, 44px side insets and
+a 21px bottom inset, and a simulated 190px visual viewport with a 20px offset.
+Keyboard dismissal must restore the previous geometry. JSON measurements and
+screenshots are written to `qa-artifacts/agent-phone/`.
+
+The agent API is a fixture; the gate never submits inference or microphone
+requests. Safe-area and keyboard signals are simulated, not physical-device
+certification. External imagery/fonts may be unavailable in this environment;
+this is application chrome/accessibility evidence, not a graphics, OAuth,
+live ChatGPT or audio certification. Existing release gates still apply.
+
+Final application geometry results (headless Chromium shell, Node 24.22.1):
+
+| Viewport | #1331 corrected | Temporary #1429 + corrected #1331 |
+| -------- | --------------- | --------------------------------- |
+| 844x390  | Pass            | Pass, mobile shell active         |
+| 932x430  | Pass            | Pass, mobile shell active         |
+| 390x844  | Pass            | Pass                              |
+| 320x568  | Pass            | Pass                              |
+| 1280x800 | Pass            | Pass, desktop shell               |
+
+The integrated 844x390 minimum window is 320x220 and contains its input. At
+320x568 the window contracts to 308x220 to retain its edge margins. With 44px
+side insets, a 21px bottom inset and the simulated keyboard, the narrowest
+window is 220x157, from (50,26) to (270,183); its input and close control remain
+pointer-reachable. The launcher also clears the visible attribution elements.
+
+- Focused console/controller/markup tests: 73 passed.
+- Existing ChatGPT browser gate: all eight locale/size combinations passed.
+- Production builds: passed on both the corrected branch and integration.
+- Existing voice-panel browser gate: fails at `qa-agent-voice-panel.mjs:186`
+  (`panelOpen` remains true after Escape). The identical failure was reproduced
+  on untouched #1331 `df5b5e6` in a separate worktree; it is not counted as a
+  passing gate or changed by this correction.
+
+- Existing full-application console gate: passed in offline ChatGPT mode,
+  including opening, provider selection, attribution clearance, drag/resize,
+  persistence and Escape dismissal. No model inference was attempted.
+- Formatting (1,553 files), import/package boundaries and changelog checks:
+  passed.
+- Full ordinary suite with two concurrent workers: **9,085 passed, 7 skipped,
+  0 failed**. All **15 allocation checks passed** separately on calibrated
+  Node 24. Earlier runs overlapping software-GPU browser probes hit the
+  analyst/KML timing budgets; the final run used unchanged budgets and separated
+  the browser and unit workloads.
