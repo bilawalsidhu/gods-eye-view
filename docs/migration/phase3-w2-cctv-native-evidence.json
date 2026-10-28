@@ -1,0 +1,625 @@
+{
+  "schema": 1,
+  "status": "native-baseline-and-idle-fix-only",
+  "parent": "0090c416c6bd44f9ce359c1d06ecde2e8f7f3fe6",
+  "renderer": "cesium",
+  "navaraAccepted": false,
+  "waveAccepted": false,
+  "sources": {
+    "src/layers/cctv/cards.js": "cea1fcfec2c7d19848bdc0820cc58de2ad7ff071d2cd4218caa378e1cfcf6739",
+    "src/layers/cctv/videoPlayback.js": "7786332674e5f4f8790f1cc8a2f974560c063909ec15b2dc399302920310bdf7",
+    "src/layers/cctv/health.js": "ab4eb5b3bf7eb296538059ab46c9678f1c951812b5fdc502fdd5d9d9fa7fc66d",
+    "src/layers/cctv/policy.js": "50782ac74b69d5ebf81f0a1b880edc79cb2cb9210944b954177325c952cd076e",
+    "src/layers/cctv/ingestion.js": "e2dbe66007f6709d6b2be04b924561f6e05ad44648058ce2e786c645b6f998e5",
+    "src/layers/cctv/controls.js": "56c06c21e40b8ab93d08497d8888bdfb49294cd4a517980f09f02447c5ab16be",
+    "src/layers/cctv/catalog.js": "c23a3ab9be726fb91f50c92921c1914557524b7231c9b7f095a27e73b25ab1da",
+    "src/layers/cctv/index.js": "7e1abba859d7248bb50feededb1e6905361fdbe3996ffee5c5660a871c53c01e",
+    "src/layers/cctv/headingConfidence.js": "6176cc1e4c2f09ba8dbaec720aeca192ca9b2d9ecd6c3861210164335839e5fd",
+    "src/layers/cctv/rendering.js": "bfd241a32b36995604d67634c7c4e6fb84c2a415bb3c30fd31901376b647d92c",
+    "src/layers/cctv/hover.js": "e56a8fe84ef711c10e3400f850f4b56d5955f861da80e941a9e6206a9c56e1bd",
+    "src/layers/cctv/testing.js": "7c6ddc374d0dc76d88656676dc6b06bbc805b6e0d1a271bdb4e50fcd49dd0656",
+    "src/layers/cctv/ground.js": "360ea46ee79a83ae64a9deb0433a441e6174ffaa5b7d56aa8aef27fc8205cf6f",
+    "src/layers/cctv/projection.js": "230a17877e06f454470ebd5db95e84d4ea9bfadfeb22392eb81db82b0544c588",
+    "src/layers/cctv/navigation.js": "d01a893ec6ce30bbefb85acbf737e20e9193b91fe39050ccd287601ecb8deec3",
+    "src/layers/cctv/selection.js": "e8174a04a22a3f525f1e99e8925bb03390a90d27617a18124546d5a2d55868f0",
+    "src/layers/cctv/geometryQueue.js": "358fb89d76b045213829c101de3952de973b3720ffb551c2f0ec9c7eeca409cf",
+    "src/layers/cctv/state.js": "7a421c18f8c9292fd8d449821810f6f625b085ce488039210c5268640e930baa",
+    "src/layers/cctv/calibration.js": "8e1578ac900ea2851c101cc7cb79fe2c3dd75dfe17ab79f1bd28cf9b6e0448e1",
+    "src/layers/cctv/source.js": "95a4ca3e342e7ab824fed7a8d65cef1bb0f9d50b2b65f516baf7857f036313df",
+    "src/layers/cctv/frames.js": "5369008411992121875bdd30e29a6355b53a95bd5861ff5521b8bb1b126bd014",
+    "src/layers/cctv/presentation.js": "f4e74fb8b1bdebf84f91a05426b727b8d01fbff4ff7ec7494e03d0a46e7f8fb4",
+    "src/layers/cctv/model.js": "5593e5308f23acf7796f1e9b44ba1d543b5c2378d899b47fee7b1b683aa186bf",
+    "src/layers/cctv/geometry.js": "038ef39ef3efb4fc42ff1d3c0e411a7253958c93620bb57da6dc6f227774db32",
+    "src/layers/cctv/sourcePolicy.js": "f3081542d2ced0165504c9d486b85a9875e48a8861fde87a97e6e296485dc3e7",
+    "src/layers/cctv/lifecycle.js": "bf856ecf2aacb74716c92e503d3c40849bbe9c30a2ba92e02b700862fe7858ea",
+    "src/data/cctvViewshed.js": "d93c135ae2e73d5e4bc368ab5ebab6c49ea5e43b1fdd744c7149f29062b496b3",
+    "src/data/cctvLod.js": "3b071cf9b5900c3d44eea7732d999f690e1e3b337d1786a10705083e6e323721",
+    "src/data/cctvCards.js": "e4b12321793d9f2e0a372f8283b8d627f77f988f48722852c4cfde0c912bbe11",
+    "src/data/cctv.js": "48e5be926ba8c2791410aa1a1992e2e9d65df0c4e8bb23fbabbc64fa9df0f017",
+    "src/data/cctvGizmo.js": "aac32d13d9ac4b33721fe44992fb637e154a01912978305da05cf596510c5f2c",
+    "src/data/cctvFootprint.js": "e7b6a51efcc3cb7845e4ed898bdd9fc01beb6647f3f2b1d23752944400f0570a",
+    "scripts/qa-cctv-v2.mjs": "f3b8a8f6337f9099b58f9f91e3601c76b9711520f37675a0881a68499617c400",
+    "scripts/fixtures/w2/cctv.mjs": "2fbba9386d2e3ee6305fa96b5a033c37038f8fca9555d210b1fe0bdf0a28ca5f",
+    "scripts/qa-w2-cctv.mjs": "d7dd8028a31b999bb5a6a63d8d60354a7a655c52d590ab2700c4d2f2313ecc60"
+  },
+  "reports": {
+    "legacyDev": {
+      "path": "/private/tmp/gev-cctv-baseline/legacy-native-scoped/result.json",
+      "sha256": "097b60f68360275eb3bf25a4df879919cdc8d75d28accb902eeee5ad44f9e8bf",
+      "checks": 55,
+      "pass": true,
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "cameraIds": [
+        "w2-cctv-000",
+        "w2-cctv-001",
+        "w2-cctv-002",
+        "w2-cctv-003",
+        "w2-cctv-004",
+        "w2-cctv-005",
+        "w2-cctv-006",
+        "w2-cctv-007",
+        "w2-cctv-008",
+        "w2-cctv-009",
+        "w2-cctv-010",
+        "w2-cctv-011",
+        "w2-cctv-012",
+        "w2-cctv-013",
+        "w2-cctv-014",
+        "w2-cctv-015",
+        "w2-cctv-016",
+        "w2-cctv-017",
+        "w2-cctv-018",
+        "w2-cctv-019",
+        "w2-cctv-020",
+        "w2-cctv-021",
+        "w2-cctv-022",
+        "w2-cctv-023",
+        "w2-cctv-024"
+      ],
+      "staticIdle": {
+        "frames": 0,
+        "durationMs": 2001.6000001430511,
+        "governor": {
+          "installed": true,
+          "mode": "idle",
+          "holds": [],
+          "recentRequests": [
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793208751312
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208761312
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793208761312
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208769383
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208769399
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208769493
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208769894
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208770209
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208770211
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208770615
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208771322
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793208771322
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208781314
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793208781314
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793208791314
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793208791314
+            }
+          ]
+        }
+      },
+      "geometryStable": {
+        "name": "geometry is byte-stable over 30s idle (no per-frame/timer resample)",
+        "ok": true,
+        "detail": "identical serialization"
+      },
+      "corners": {
+        "name": "plane corners coincide with wireframe corner-ray endpoints (ε < 0.5m, ground-clamp-cleared pose)",
+        "ok": true,
+        "detail": "tl=0.138m tr=0.139m br=0.138m bl=0.140m"
+      },
+      "gizmo": [
+        {
+          "name": "east-arrow drag changes the east offset (live, unsaved)",
+          "ok": true,
+          "detail": "offsetEastM 0 → 15.200000000000001"
+        },
+        {
+          "name": "east-arrow drag keeps mount elevation frozen until mouse-up",
+          "ok": true,
+          "detail": "max transient Δelevation=0.0000m over 5 moves"
+        },
+        {
+          "name": "east-arrow transient moves issue zero active-camera mesh-floor requests",
+          "ok": true,
+          "detail": "active-camera request Δ=0; global sampleHeight Δ=0 (other cells may finish asynchronously)"
+        },
+        {
+          "name": "east-arrow release resolves the committed floor exactly once",
+          "ok": true,
+          "detail": "ground resolutions 0 → 1"
+        }
+      ]
+    },
+    "pixelsDev": {
+      "path": "/private/tmp/gev-cctv-baseline/pixels-native-scoped.json",
+      "sha256": "24b4823ed04f888c4aa63a6dbc86d89e7e1945097f5207eb3dba728473c4df0f",
+      "checks": 19,
+      "pass": true,
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "browser": "Chrome/152.0.7977.75",
+      "videoFixture": {
+        "bytes": 246918,
+        "sha256": "f7ab4d9341e614e78b366c734bfe7d9d9a740ff95ea93be526b7245524262766",
+        "generation": [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc2=size=320x180:rate=12",
+          "-t",
+          "4",
+          "-an",
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-preset",
+          "ultrafast",
+          "-crf",
+          "18",
+          "-movflags",
+          "+faststart",
+          "-threads",
+          "1",
+          "-y"
+        ]
+      },
+      "imagePixels": [
+        252,
+        248,
+        251,
+        251
+      ],
+      "videoPixels": 1166,
+      "videoBefore": {
+        "time": 3.432271,
+        "frames": 93,
+        "width": 320,
+        "height": 180
+      },
+      "videoAfter": {
+        "time": 0.517082,
+        "frames": 106,
+        "width": 320,
+        "height": 180
+      },
+      "idle": {
+        "imageIdle": 0,
+        "afterVideoIdle": 0,
+        "toggleIdle": 0
+      },
+      "controlIds": {
+        "regional": [
+          "w2-cctv-001",
+          "w2-cctv-002",
+          "w2-cctv-003",
+          "w2-cctv-004",
+          "w2-cctv-005"
+        ],
+        "city": [
+          "w2-cctv-001",
+          "w2-cctv-002",
+          "w2-cctv-003",
+          "w2-cctv-004",
+          "w2-cctv-005"
+        ],
+        "close": [
+          "w2-cctv-006",
+          "w2-cctv-007",
+          "w2-cctv-008",
+          "w2-cctv-011",
+          "w2-cctv-012"
+        ]
+      }
+    },
+    "legacyPreview": {
+      "path": "/private/tmp/gev-cctv-baseline/legacy-native-preview/result.json",
+      "sha256": "e161249000ee2b0155bbd410b9a56071a9e3b169641508b3de37a8856c260ae5",
+      "checks": 55,
+      "pass": true,
+      "browserErrors": [],
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "cameraIds": [
+        "w2-cctv-000",
+        "w2-cctv-001",
+        "w2-cctv-002",
+        "w2-cctv-003",
+        "w2-cctv-004",
+        "w2-cctv-005",
+        "w2-cctv-006",
+        "w2-cctv-007",
+        "w2-cctv-008",
+        "w2-cctv-009",
+        "w2-cctv-010",
+        "w2-cctv-011",
+        "w2-cctv-012",
+        "w2-cctv-013",
+        "w2-cctv-014",
+        "w2-cctv-015",
+        "w2-cctv-016",
+        "w2-cctv-017",
+        "w2-cctv-018",
+        "w2-cctv-019",
+        "w2-cctv-020",
+        "w2-cctv-021",
+        "w2-cctv-022",
+        "w2-cctv-023",
+        "w2-cctv-024"
+      ],
+      "staticIdle": {
+        "frames": 0,
+        "durationMs": 2001.5,
+        "governor": {
+          "installed": true,
+          "mode": "idle",
+          "holds": [],
+          "recentRequests": [
+            {
+              "reason": "world-overlay",
+              "at": 1793209282506
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793209282506
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209292506
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793209292506
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209300608
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209300611
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209301121
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209301441
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209301443
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209301849
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209302512
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793209302512
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209312510
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793209312510
+            },
+            {
+              "reason": "world-overlay",
+              "at": 1793209322506
+            },
+            {
+              "reason": "layer-tick:cctv",
+              "at": 1793209322506
+            }
+          ]
+        }
+      },
+      "geometryStable": {
+        "name": "geometry is byte-stable over 30s idle (no per-frame/timer resample)",
+        "ok": true,
+        "detail": "identical serialization"
+      },
+      "corners": {
+        "name": "plane corners coincide with wireframe corner-ray endpoints (ε < 0.5m, ground-clamp-cleared pose)",
+        "ok": true,
+        "detail": "tl=0.138m tr=0.139m br=0.138m bl=0.140m"
+      },
+      "gizmo": [
+        {
+          "name": "east-arrow drag changes the east offset (live, unsaved)",
+          "ok": true,
+          "detail": "offsetEastM 0 → 15.200000000000001"
+        },
+        {
+          "name": "east-arrow drag keeps mount elevation frozen until mouse-up",
+          "ok": true,
+          "detail": "max transient Δelevation=0.0000m over 5 moves"
+        },
+        {
+          "name": "east-arrow transient moves issue zero active-camera mesh-floor requests",
+          "ok": true,
+          "detail": "active-camera request Δ=0; global sampleHeight Δ=0 (other cells may finish asynchronously)"
+        },
+        {
+          "name": "east-arrow release resolves the committed floor exactly once",
+          "ok": true,
+          "detail": "ground resolutions 0 → 1"
+        }
+      ]
+    },
+    "pixelsPreview": {
+      "path": "/private/tmp/gev-cctv-baseline/pixels-native-preview.json",
+      "sha256": "50c8c348e0518a64f4c99485d01bb872e8796a140ea474be11820bcc6b5f188c",
+      "checks": 19,
+      "pass": true,
+      "browserErrors": [],
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "browser": "Chrome/152.0.7977.75",
+      "videoFixture": {
+        "bytes": 246918,
+        "sha256": "f7ab4d9341e614e78b366c734bfe7d9d9a740ff95ea93be526b7245524262766",
+        "generation": [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc2=size=320x180:rate=12",
+          "-t",
+          "4",
+          "-an",
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-preset",
+          "ultrafast",
+          "-crf",
+          "18",
+          "-movflags",
+          "+faststart",
+          "-threads",
+          "1",
+          "-y"
+        ]
+      },
+      "imagePixels": [
+        252,
+        248,
+        251,
+        251
+      ],
+      "videoPixels": 1001,
+      "videoBefore": {
+        "time": 3.630983,
+        "frames": 95,
+        "width": 320,
+        "height": 180
+      },
+      "videoAfter": {
+        "time": 0.727588,
+        "frames": 108,
+        "width": 320,
+        "height": 180
+      },
+      "idle": {
+        "imageIdle": 0,
+        "afterVideoIdle": 0,
+        "toggleIdle": 0
+      },
+      "controlIds": {
+        "regional": [
+          "w2-cctv-001",
+          "w2-cctv-002",
+          "w2-cctv-003",
+          "w2-cctv-004",
+          "w2-cctv-005"
+        ],
+        "city": [
+          "w2-cctv-001",
+          "w2-cctv-002",
+          "w2-cctv-003",
+          "w2-cctv-004",
+          "w2-cctv-005"
+        ],
+        "close": [
+          "w2-cctv-006",
+          "w2-cctv-007",
+          "w2-cctv-008",
+          "w2-cctv-011",
+          "w2-cctv-012"
+        ]
+      }
+    }
+  },
+  "cpuGates": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 100.7
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 10.9
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 11.2
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 9.0
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 10.7
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 9.3
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.3
+    }
+  ],
+  "browserGates": [
+    {
+      "gate": "legacy-native-preview",
+      "code": 0,
+      "seconds": 101.1
+    },
+    {
+      "gate": "pixels-native-preview",
+      "code": 0,
+      "seconds": 71.5
+    },
+    {
+      "gate": "contract-cesium",
+      "code": 0,
+      "seconds": 27.6
+    },
+    {
+      "gate": "contract-navara",
+      "code": 0,
+      "seconds": 60.9
+    },
+    {
+      "gate": "shell-dev",
+      "code": 0,
+      "seconds": 196.4
+    },
+    {
+      "gate": "shell-production",
+      "code": 0,
+      "seconds": 183.3
+    }
+  ],
+  "unit": {
+    "total": 7268,
+    "pass": 7267,
+    "fail": 0,
+    "skip": 1,
+    "skipReason": "Windows-only test",
+    "allocation": 15
+  },
+  "formatSourceFiles": 1628,
+  "main": {
+    "bytes": 2916211,
+    "gzipBytes": 910174,
+    "noThreeOrNavara": true,
+    "budgetChecked": false
+  },
+  "image": {
+    "path": "docs/migration/images/phase3-w2-cctv-native.webp",
+    "bytes": 132712,
+    "sha256": "d867d382c092a38a8cd61472eeaa47f974db80b6362281bb0d213d0934cf8027"
+  },
+  "review": [
+    "Static images retain fetch/texture cadence without a continuous render hold; only actual texture changes request GPU work.",
+    "Four scheduler tests cover image changes, video/focus, cancellation generations and immediate focus wakeup.",
+    "Global request interception stalled native geometry workers: fixture Fetch patterns are now restricted to loopback API paths; tiles/workers remain live.",
+    "Legacy resource existence is paired with actual image/video pixel checks; no inconclusive or runtime-error waiver."
+  ],
+  "failedEvidence": [
+    {
+      "path": "/private/tmp/gev-cctv-baseline/native-dev",
+      "result": "49 pass,5 inconclusive; selected camera outside unchanged view before gizmo drag"
+    },
+    {
+      "path": "/private/tmp/gev-cctv-baseline/native-dev-focus",
+      "result": "54 pass,1 fail; unchanged still held continuous rendering,121frames/2s"
+    },
+    {
+      "path": "/private/tmp/gev-cctv-baseline/native-dev-idle-fix",
+      "result": "55 legacy pass but global fixture stalled geometry workers; insufficient standalone rendering evidence"
+    },
+    {
+      "path": "/private/tmp/gev-cctv-baseline/pixels-native-dev.json",
+      "result": "image/video plane pixels failed under global interception; decoder advanced"
+    }
+  ],
+  "remaining": [
+    "Extract native renderer resources before Navara implementation.",
+    "Preserve camera-input state through calibration drag completion/cancellation/destruction.",
+    "Complete the full CCTV parity plan including arbitrary obstruction rays, video frame-triggered rendering, lifecycle/failure recovery, mobile cards and surface cases.",
+    "ALPR native-dev HTTP2 and Navara-preview moving-p95 gates remain open.",
+    "FIRMS uncapped close ratio1.136 exceeds1.10; combined W2 acceptance remains open."
+  ]
+}

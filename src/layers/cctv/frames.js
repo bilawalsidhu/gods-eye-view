@@ -142,6 +142,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     runtime.lastTextureSwapAt = now;
     runtime.lastSwappedCanvasStamp = runtime.canvasStamp;
     runtime.planeMaterial.image = buffer;
+    return true;
   }
 
   /**
