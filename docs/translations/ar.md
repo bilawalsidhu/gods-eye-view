@@ -84,6 +84,7 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | Recent Imagery                             | الصور الحديثة                                              |
 | Global Context / Context                   | السياق العالمي / السياق                                    |
 | radio station / tuner / gain               | محطة / موالف / الكسب                                       |
+| broadcaster (radio stream)                 | محطة البث (not المحطة المُذيعة)                            |
 | VOLUME (slider) / VOICE                    | مستوى الصوت / الصوت                                        |
 | decoder (SDR)                              | مفكّك                                                      |
 | transit / bike share                       | النقل العام / الدراجات المشتركة                            |
@@ -104,6 +105,7 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | outline / mark (map annotation)            | مخطط / علامة، تعليم                                        |
 | share (a view or link)                     | مشاركة                                                     |
 | AI agent                                   | وكيل ذكاء اصطناعي                                          |
+| spacecraft                                 | مركبة فضائية (مركبة alone is any vehicle)                  |
 | stage (rocket) / downrange                 | مرحلة / على امتداد المسار                                  |
 | landing position: CONFIRMED / PAD (RTLS)   | مؤكَّد / منصة الإطلاق                                      |
 | recovery (rocket stage)                    | استعادة (not استرجاع)                                      |
