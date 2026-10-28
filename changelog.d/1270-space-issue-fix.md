@@ -1,1 +1,0 @@
-- Respect provider cooldowns and bound tle groups (asturksever, #1270).
