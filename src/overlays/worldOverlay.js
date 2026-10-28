@@ -2666,7 +2666,10 @@ function drawWorldOverlay() {
 
 function createDevFacade() {
   if (typeof window === 'undefined' || import.meta.env?.DEV !== true) return;
-  window.__gevWorldOverlay = { getDiagnostics: getWorldOverlayDiagnostics };
+  window.__gevWorldOverlay = {
+    getDiagnostics: getWorldOverlayDiagnostics,
+    getPaintRect: getOverlayPaintRect,
+  };
 }
 
 /**

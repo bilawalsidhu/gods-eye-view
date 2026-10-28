@@ -12,10 +12,6 @@ export function createState({ services }) {
 
   layerState._radioEarthToCenter = geo.cartesian3.create();
 
-  layerState._viewer = null;
-
-  layerState._dataSource = null;
-
   layerState._enabled = false;
 
   layerState._managerLifecyclePresentation = null;
@@ -44,7 +40,7 @@ export function createState({ services }) {
 
   layerState._selectedId = null;
 
-  layerState._selectedEntity = null;
+  layerState._selectedPosition = null;
 
   layerState._selectionGeneration = 0;
 
@@ -131,8 +127,6 @@ export function createState({ services }) {
   layerState._requestGeneration = 0;
 
   layerState._sessionGeneration = 0;
-
-  layerState._removeClusterListener = null;
 
   layerState._overlayPublishTimer = null;
 

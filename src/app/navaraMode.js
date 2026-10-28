@@ -54,6 +54,9 @@ const NAVARA_CREDIT_KEYS = new Set([
   'launch-library-2',
   'usgs',
   'firms',
+  'gbfs',
+  'overture-military-names',
+  'radio-browser',
 ]);
 
 /**
@@ -62,6 +65,9 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    radio: async () =>
+      (await import('../layers/radio/render/navara.js'))
+        .createRadioNavaraRenderer,
     bikeshare: async () =>
       (await import('../layers/bikeshare/render/navara.js'))
         .createBikeshareNavaraRenderer,
@@ -274,7 +280,7 @@ export function createViewerlessTools({
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
   // Voice on the engine (phase 3, Task 9): the W1 tools drive the engine;
-  // the viewer-only ones (director, annotations, cockpit, radio…) refuse.
+  // the viewer-only ones (director, annotations, cockpit…) refuse.
   const voiceCommands = initGevVoiceCommands({
     ...voice,
     annotationResolver: operations.annotationResolver,

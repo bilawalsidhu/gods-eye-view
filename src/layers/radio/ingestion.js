@@ -1,6 +1,7 @@
 import {
   RADIO_DIRECTORY_STALE_MS,
   RADIO_DIRECTORY_FUTURE_SKEW_MS,
+  RADIO_TUNER_DIRECTORY_LIMIT,
 } from './policy.js';
 
 export function createIngestion({
@@ -36,6 +37,8 @@ export function createIngestion({
           return;
         if (!Array.isArray(body?.stations))
           throw new Error('Radio directory response was malformed');
+        if (body.stations.length > RADIO_TUNER_DIRECTORY_LIMIT)
+          throw new Error('Radio directory exceeds its station budget');
         const updatedAt =
           typeof body.updatedAt === 'string' &&
           Number.isFinite(Date.parse(body.updatedAt))

@@ -1603,8 +1603,6 @@
   "radio-layer": {
     "exports": ["./layers/radio"],
     "modules": [
-      "src/data/iconOrientation.js",
-      "src/data/render/cesiumProjection.js",
       "src/data/idSwitches.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json",
@@ -1648,11 +1646,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js",
-      "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/geo/developerError.js"
     ],
-    "external": ["cesium"]
+    "external": []
   },
   "submarine-cables": {
     "exports": ["./layers/submarine-cables"],
@@ -2709,7 +2705,10 @@
       "src/layers/installations/render/navaraGeometry.js",
       "src/layers/firms/rectangle.js",
       "src/layers/firms/render/cesium.js",
+      "src/layers/radio/render/cesium.js",
       "src/layers/firms/render/navara.js",
+      "src/layers/radio/render/navara.js",
+      "src/layers/radio/screenClusters.js",
       "src/layers/firms/render/navaraGeometry.js",
       "src/layers/firms/render/navaraSprites.js",
       "src/layers/shared/render/navaraGroundGeometry.js",
@@ -2717,6 +2716,7 @@
       "src/layers/shared/render/navaraGroundSurface.js"
     ],
     "external": [
+      "kdbush",
       "hls.js",
       "@mapbox/vector-tile",
       "cesium",
@@ -3314,7 +3314,8 @@
       "src/layers/satellites/render/cesium.js",
       "src/layers/earthquakes/render/cesium.js",
       "src/layers/firms/rectangle.js",
-      "src/layers/firms/render/cesium.js"
+      "src/layers/firms/render/cesium.js",
+      "src/layers/radio/render/cesium.js"
     ],
     "external": [
       "hls.js",
