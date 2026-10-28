@@ -48,7 +48,9 @@ export function createQueries({
   }
 
   /**
-   * Chip text for a feed the server has reported as not delivering.
+   * Chip text for a feed the server has reported as not delivering, as
+   * English data; the Layers panel shows it in the UI language
+   * (ui/statusText.js).
    * @param {string} status - 'stale' | 'reconnecting' | 'down'
    * @param {Object} payload - Parsed /api/vessels JSON.
    * @returns {string}
@@ -58,22 +60,22 @@ export function createQueries({
     if (status === 'auth-failed') {
       // Actionable, not a countdown: retrying cannot fix a rejected credential,
       // so the chip asks the operator to do the one thing that can.
-      return t('API key rejected — check AISSTREAM_API_KEY');
+      return msg('API key rejected — check AISSTREAM_API_KEY');
     }
     if (status === 'stale') {
       const silentSec = Math.round(Number(payload?.silentForMs) / 1000);
       return Number.isFinite(silentSec) && silentSec > 0
-        ? t('feed silent {seconds}s — no AIS data', { seconds: silentSec })
-        : t('feed silent — no AIS data');
+        ? `feed silent ${silentSec}s — no AIS data`
+        : msg('feed silent — no AIS data');
     }
     const attempt = Number(payload?.reconnectAttempt);
     if (Number.isFinite(attempt) && attempt >= 1)
       return status === 'down'
-        ? t('feed down — retrying slowly (attempt {attempt})', { attempt })
-        : t('reconnecting to feed… (attempt {attempt})', { attempt });
+        ? `feed down — retrying slowly (attempt ${attempt})`
+        : `reconnecting to feed… (attempt ${attempt})`;
     return status === 'down'
-      ? t('feed down — retrying slowly')
-      : t('reconnecting to feed…');
+      ? msg('feed down — retrying slowly')
+      : msg('reconnecting to feed…');
   }
 
   /**
@@ -98,8 +100,8 @@ export function createQueries({
     if (acceptedRowCount > 0) return null; // accepted rows may be stale while reconnecting, but remain usable
     if (AIS_HEALTHY_STATUSES.has(status)) {
       return payload?.lastMessageAt
-        ? t('awaiting usable AIS positions…')
-        : t('awaiting first AIS message…');
+        ? msg('awaiting usable AIS positions…')
+        : msg('awaiting first AIS message…');
     }
     if (!status) return null;
     const detail =
@@ -107,7 +109,7 @@ export function createQueries({
         ? payload.error.trim()
         : '';
     // The reasons are English in policy.js (msg) and shown in the UI language.
-    const reason = t(AIS_STATUS_REASON[status] || msg('feed unavailable'));
+    const reason = AIS_STATUS_REASON[status] || msg('feed unavailable');
     return detail && !AIS_STATUS_REASON[status]
       ? `${reason} (${detail})`
       : reason;
@@ -159,7 +161,9 @@ export function createQueries({
       error: emptyCoverage
         ? null
         : deriveAisFeedError(payload, acceptedRowCount) ||
-          (acceptedRowCount === 0 ? t('awaiting usable AIS positions…') : null),
+          (acceptedRowCount === 0
+            ? msg('awaiting usable AIS positions…')
+            : null),
     };
   }
 

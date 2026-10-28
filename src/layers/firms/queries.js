@@ -1,5 +1,5 @@
 import { fireDetectionKey } from '../../data/firmsLabels.js';
-import { t } from '../../i18n/index.js';
+import { msg, t } from '../../i18n/index.js';
 import { REFRESH_INTERVAL_MS } from './policy.js';
 
 export function createQueries({
@@ -60,13 +60,23 @@ export function createQueries({
      */
     getStats() {
       const now = Date.now();
-      const staleText = layerState._lastUpdate
-        ? t('STALE · cached {age}', {
-            age:
-              components.model.formatAgeLabel(now - layerState._lastUpdate) ||
-              t('<1h', { context: 'age' }),
-          })
-        : t('STALE');
+      const staleDelta = layerState._lastUpdate
+        ? now - layerState._lastUpdate
+        : null;
+      const staleText =
+        staleDelta != null
+          ? t('STALE · cached {age}', {
+              age:
+                components.model.formatAgeLabel(staleDelta) ||
+                t('<1h', { context: 'age' }),
+            })
+          : t('STALE');
+      // `error` is English data (voice, analyst); the Layers panel shows it
+      // in the UI language (ui/statusText.js).
+      const staleError =
+        staleDelta != null
+          ? `STALE · cached ${components.model.formatAge(staleDelta) || '<1h'}`
+          : msg('STALE');
       let loadingLabel = '';
       if (layerState._loading) {
         loadingLabel = layerState._fires.length
@@ -95,9 +105,9 @@ export function createQueries({
         // the operator can take.
         keyRequired: layerState._keyRequired,
         error: layerState._keyRequired
-          ? t('KEY REQUIRED')
+          ? msg('KEY REQUIRED')
           : layerState._stale
-            ? staleText
+            ? staleError
             : layerState._error,
         loadingLabel,
       };
