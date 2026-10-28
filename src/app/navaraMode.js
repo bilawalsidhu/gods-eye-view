@@ -65,6 +65,9 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    'alpr-cameras': async () =>
+      (await import('../layers/alpr/render/navara.js'))
+        .createAlprNavaraRenderer,
     radio: async () =>
       (await import('../layers/radio/render/navara.js'))
         .createRadioNavaraRenderer,

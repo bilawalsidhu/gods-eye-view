@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createAlprOverlay } from './overlay.js';
+import { createAlprOverlay } from './render/cesiumOverlay.js';
 import {
   directionWedgePositions,
   alprLabelDetails,
@@ -46,6 +46,7 @@ function harness(t, count = 2, { floor = null } = {}) {
     paints = 0;
   const overlay = createAlprOverlay({
     state,
+    native: state,
     services: {
       groundFloor: { cachedGroundFloor: () => floor },
       overlays: {

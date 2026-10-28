@@ -8,7 +8,7 @@ import {
   SURFACE_BELOW_FLOOR_M,
   SURFACE_ABOVE_FLOOR_M,
   SURFACE_SAMPLES_PER_PAINT,
-} from './policy.js';
+} from '../policy.js';
 import {
   MARKER_IMAGE,
   SELECTED_IMAGE,
@@ -17,11 +17,12 @@ import {
   markerScale,
   paintDirectionWedge,
   validAlprGroundHeight,
-} from './visuals.js';
+} from '../visuals.js';
 
 /** Per-layer presentation on a caller-owned overlay; Cesium remains the fallback. */
 export function createAlprOverlay({
   state,
+  native,
   services,
   onSurfaceChange = () => {},
 }) {
@@ -86,7 +87,7 @@ export function createAlprOverlay({
   }
 
   function resetAnchors() {
-    for (const entity of state.dataSource.entities.values) {
+    for (const entity of native.dataSource.entities.values) {
       entity.gevAlprCanvasPosition = null;
       entity.gevAlprWedge = null;
       entity.gevAlprDisplayPosition = null;
@@ -99,7 +100,7 @@ export function createAlprOverlay({
 
   function anchorFor(record, entity, budget) {
     if (entity.gevAlprCanvasPosition) return entity.gevAlprCanvasPosition;
-    const scene = state.viewer.scene;
+    const scene = native.viewer.scene;
     const location = Cesium.Cartographic.fromDegrees(
       record.longitude,
       record.latitude,
@@ -166,8 +167,8 @@ export function createAlprOverlay({
    * rejected. Returns whether anchors remain to check.
    */
   function refineAnchors(budget) {
-    const camera = state.viewer.camera;
-    const scene = state.viewer.scene;
+    const camera = native.viewer.camera;
+    const scene = native.viewer.scene;
     const still =
       lastCamera &&
       camera.positionWC &&
@@ -191,7 +192,7 @@ export function createAlprOverlay({
     if (!scene.sampleHeightSupported) return false;
     let pending = false;
     for (const record of records) {
-      const entity = state.dataSource.entities.getById(record.id);
+      const entity = native.dataSource.entities.getById(record.id);
       const anchor = entity?.gevAlprCanvasPosition;
       if (!anchor || entity.gevAlprSurfaceCheckedFor === anchor) continue;
       if (!still || !surfaceSettled(scene) || budget.samples <= 0) {
@@ -234,7 +235,7 @@ export function createAlprOverlay({
     const painted = [];
     const budget = { samples: ANCHOR_SAMPLES_PER_PAINT };
     for (const record of records) {
-      const entity = state.dataSource.entities.getById(record.id);
+      const entity = native.dataSource.entities.getById(record.id);
       if (!entity) continue;
       const selected = record.id === state.selectedId;
       const image = images[selected ? 1 : 0];
@@ -257,7 +258,7 @@ export function createAlprOverlay({
         setShown(entity, false);
         continue;
       }
-      const scene = state.viewer.scene;
+      const scene = native.viewer.scene;
       const origin = Cesium.SceneTransforms.worldToWindowCoordinates(
         scene,
         anchor,
@@ -306,7 +307,7 @@ export function createAlprOverlay({
         image,
         alpha,
         scale: markerScale(
-          Cesium.Cartesian3.distance(state.viewer.camera.positionWC, anchor),
+          Cesium.Cartesian3.distance(native.viewer.camera.positionWC, anchor),
         ),
       });
       if (selected) entity.gevAlprDisplayPosition = anchor;
@@ -372,8 +373,8 @@ export function createAlprOverlay({
     sync(visible) {
       if (!lane) return;
       for (const record of records)
-        nativeVisible(state.dataSource.entities.getById(record.id), true);
-      const position = state.viewer.camera.positionWC;
+        nativeVisible(native.dataSource.entities.getById(record.id), true);
+      const position = native.viewer.camera.positionWC;
       records = visible
         .filter(
           (record) =>
@@ -422,7 +423,7 @@ export function createAlprOverlay({
       clearTimeout(retryTimer);
       retryTimer = null;
       for (const record of records)
-        nativeVisible(state.dataSource?.entities.getById(record.id), true);
+        nativeVisible(native.dataSource?.entities.getById(record.id), true);
       records = [];
       hits = [];
       lane?.setActive(false);

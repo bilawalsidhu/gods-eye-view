@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { isPointerFree } from '../../../data/inputOwnership.js';
 import {
   LAYER_ID,
   MAX_VIEWPORT_DEGREES,
@@ -11,19 +11,19 @@ import {
   CREDIT_DISPLAY_MS,
   MARKER_FLOOR_LIFT_M,
   MARKER_SCALE_BY_DISTANCE,
-} from './policy.js';
-import { boxContains } from './model.js';
-import { createAlprFloorResolver } from './floors.js';
-import { createAlprOverlay } from './overlay.js';
+} from '../policy.js';
+import { boxContains } from '../model.js';
+import { createAlprFloorResolver } from '../floors.js';
+import { createAlprOverlay } from './cesiumOverlay.js';
 import {
   MARKER_IMAGE,
   SELECTED_IMAGE,
   alprDisplayId,
   alprLabelDetails,
   validAlprGroundHeight,
-} from './visuals.js';
+} from '../visuals.js';
 
-export function createAlprPresentation({ state, services, source }) {
+export function createAlprPresentation({ state, native, services, source }) {
   const { governorRequestRender } = services.render;
   const {
     clearSelectedEntityContextForLayer,
@@ -36,6 +36,7 @@ export function createAlprPresentation({ state, services, source }) {
   const { cachedGroundFloor } = services.groundFloor;
   const overlay = createAlprOverlay({
     state,
+    native,
     services,
     onSurfaceChange: refreshMarkerPlacements,
   });
@@ -70,7 +71,7 @@ export function createAlprPresentation({ state, services, source }) {
 
   /** Records the current view would display (viewport box, nearest first when capped). */
   function viewRecords(records) {
-    const box = viewportBox(state.viewer);
+    const box = viewportBox(native.viewer);
     if (!box) return { box, visible: [], capped: false };
     let visible = records.filter((record) =>
       boxContains(box, {
@@ -129,11 +130,11 @@ export function createAlprPresentation({ state, services, source }) {
    * @returns {number|null} Count, or null without a scene to project into.
    */
   function countOnScreen() {
-    const scene = state.viewer?.scene;
+    const scene = native.viewer?.scene;
     const canvas = scene?.canvas;
     const width = canvas?.clientWidth || canvas?.width;
     const height = canvas?.clientHeight || canvas?.height;
-    const camera = state.viewer?.camera;
+    const camera = native.viewer?.camera;
     if (!scene || !width || !height || !camera?.positionWC) return null;
     const occluder = new Cesium.EllipsoidalOccluder(
       Cesium.Ellipsoid.WGS84,
@@ -141,7 +142,7 @@ export function createAlprPresentation({ state, services, source }) {
     );
     let count = 0;
     try {
-      for (const entity of state.dataSource.entities.values) {
+      for (const entity of native.dataSource.entities.values) {
         const position = entity.position?.getValue?.(Cesium.JulianDate.now());
         if (!position || !occluder.isPointVisible(position)) continue;
         const point = Cesium.SceneTransforms.worldToWindowCoordinates(
@@ -182,9 +183,9 @@ export function createAlprPresentation({ state, services, source }) {
 
   /** Refresh all native placements, including the appearances held by the canvas. */
   function refreshMarkerPlacements() {
-    if (!state.enabled || !state.dataSource) return;
+    if (!state.enabled || !native.dataSource) return;
     clampedMarkers.clear();
-    for (const entity of state.dataSource.entities.values) {
+    for (const entity of native.dataSource.entities.values) {
       const { position, clamped } = markerPlacement(entity.gevAlprRecord);
       setMarkerPosition(entity, position, clamped);
       if (clamped) clampedMarkers.set(entity.id, entity);
@@ -211,7 +212,7 @@ export function createAlprPresentation({ state, services, source }) {
       .then(() => {
         if (floorResolve !== request) return;
         floorResolve = null;
-        if (!state.enabled || !state.dataSource) return;
+        if (!state.enabled || !native.dataSource) return;
         let moved = false;
         for (const entity of batch) {
           if (clampedMarkers.get(entity.id) !== entity) continue;
@@ -309,16 +310,16 @@ export function createAlprPresentation({ state, services, source }) {
     overlay.clear();
     visibleRecords = [];
     clampedMarkers.clear();
-    if (state.dataSource?.entities) state.dataSource.entities.removeAll();
+    if (native.dataSource?.entities) native.dataSource.entities.removeAll();
     removeEntityContextsForLayer(LAYER_ID);
   }
 
   function hideOnMapCredit() {
-    services.credits?.hideOsmCredit?.(state.viewer, LAYER_ID);
-    clearTimeout(state.creditTimer);
-    state.creditTimer = null;
-    if (state.credit)
-      state.viewer?.creditDisplay?.removeStaticCredit(state.credit);
+    services.credits?.hideOsmCredit?.(native.viewer, LAYER_ID);
+    clearTimeout(native.creditTimer);
+    native.creditTimer = null;
+    if (native.credit)
+      native.viewer?.creditDisplay?.removeStaticCredit(native.credit);
     governorRequestRender('alpr-credit');
   }
 
@@ -328,13 +329,13 @@ export function createAlprPresentation({ state, services, source }) {
       source.attribution?.name === 'OpenStreetMap' &&
       services.credits?.showOsmCredit
     ) {
-      services.credits.showOsmCredit(state.viewer, LAYER_ID);
+      services.credits.showOsmCredit(native.viewer, LAYER_ID);
       return;
     }
-    if (!state.enabled || state.creditPresented || !state.credit) return;
-    state.creditPresented = true;
-    state.viewer.creditDisplay?.addStaticCredit(state.credit);
-    state.creditTimer = setTimeout(hideOnMapCredit, CREDIT_DISPLAY_MS);
+    if (!state.enabled || native.creditPresented || !native.credit) return;
+    native.creditPresented = true;
+    native.viewer.creditDisplay?.addStaticCredit(native.credit);
+    native.creditTimer = setTimeout(hideOnMapCredit, CREDIT_DISPLAY_MS);
     governorRequestRender('alpr-credit');
   }
 
@@ -358,17 +359,17 @@ export function createAlprPresentation({ state, services, source }) {
     governorRequestRender('alpr-render');
     const visibleIds = new Set(visible.map((record) => record.id));
     let changed = false;
-    state.dataSource.entities.suspendEvents();
-    for (const entity of [...state.dataSource.entities.values]) {
+    native.dataSource.entities.suspendEvents();
+    for (const entity of [...native.dataSource.entities.values]) {
       if (!visibleIds.has(entity.id)) {
-        state.dataSource.entities.remove(entity);
+        native.dataSource.entities.remove(entity);
         clampedMarkers.delete(entity.id);
         changed = true;
       }
     }
     removeEntityContextsForLayer(LAYER_ID, { retainIds: visibleIds });
     for (const record of visible) {
-      const existing = state.dataSource.entities.getById(record.id);
+      const existing = native.dataSource.entities.getById(record.id);
       if (existing?.gevAlprRecord === record) {
         updateAppearance(existing, record.id === state.selectedId);
         continue;
@@ -402,7 +403,7 @@ export function createAlprPresentation({ state, services, source }) {
       // geometry is unchanged. Updating metadata must not rebuild the marker.
       const previous = entity?.gevAlprRecord;
       if (!entity) {
-        entity = state.dataSource.entities.add(entityDef);
+        entity = native.dataSource.entities.add(entityDef);
         entity.gevAlprClamped = clamped;
         changed = true;
       } else {
@@ -447,7 +448,7 @@ export function createAlprPresentation({ state, services, source }) {
       registerEntityContext(entity, {
         id: record.id,
         layerId: LAYER_ID,
-        dataSource: state.dataSource,
+        dataSource: native.dataSource,
         layerName: 'ALPR Cameras',
         source:
           source.attribution?.description || source.label || 'Camera source',
@@ -467,14 +468,14 @@ export function createAlprPresentation({ state, services, source }) {
         },
       });
     }
-    state.dataSource.entities.resumeEvents();
+    native.dataSource.entities.resumeEvents();
     if (changed) state.renderRevision += 1;
     state.onScreen = countOnScreen();
-    for (const entity of state.dataSource.entities.values)
+    for (const entity of native.dataSource.entities.values)
       if (entity.gevAlprClamped) clampedMarkers.set(entity.id, entity);
     resolveClampedFloors();
     const selectedEntity = state.selectedId
-      ? state.dataSource.entities.getById(state.selectedId)
+      ? native.dataSource.entities.getById(state.selectedId)
       : null;
     if (!selectedEntity) state.selectedId = null;
     updateSelectedAnchor();
@@ -486,12 +487,12 @@ export function createAlprPresentation({ state, services, source }) {
   }
 
   function focusNearest() {
-    const camera = state.viewer?.camera;
-    if (!state.enabled || !camera?.positionWC || state.viewer.trackedEntity)
+    const camera = native.viewer?.camera;
+    if (!state.enabled || !camera?.positionWC || native.viewer.trackedEntity)
       return false;
     let nearest = null,
       distance = Infinity;
-    for (const entity of state.dataSource.entities.values) {
+    for (const entity of native.dataSource.entities.values) {
       const position = entity.position.getValue(Cesium.JulianDate.now());
       const candidate = Cesium.Cartesian3.distanceSquared(
         camera.positionWC,
@@ -509,15 +510,15 @@ export function createAlprPresentation({ state, services, source }) {
       record.latitude,
     );
     let height;
-    if (state.viewer.scene.sampleHeightSupported) {
+    if (native.viewer.scene.sampleHeightSupported) {
       try {
-        height = state.viewer.scene.sampleHeight(location, [nearest]);
+        height = native.viewer.scene.sampleHeight(location, [nearest]);
       } catch {
         /* tiles may still be streaming */
       }
     }
-    if (!validAlprGroundHeight(height) && state.viewer.scene.globe.show)
-      height = state.viewer.scene.globe.getHeight?.(location);
+    if (!validAlprGroundHeight(height) && native.viewer.scene.globe.show)
+      height = native.viewer.scene.globe.getHeight?.(location);
     if (!validAlprGroundHeight(height))
       height = cachedGroundFloor(record.latitude, record.longitude);
     const center = Cesium.Cartesian3.fromDegrees(
@@ -539,7 +540,7 @@ export function createAlprPresentation({ state, services, source }) {
   }
 
   function selectRecord(id) {
-    const entity = state.dataSource?.entities.getById(id);
+    const entity = native.dataSource?.entities.getById(id);
     if (!entity || !state.recordById.has(id)) return false;
     clearSelection();
     state.selectedId = id;
@@ -555,7 +556,7 @@ export function createAlprPresentation({ state, services, source }) {
 
   function clearSelection() {
     const entity = state.selectedId
-      ? state.dataSource?.entities.getById(state.selectedId)
+      ? native.dataSource?.entities.getById(state.selectedId)
       : null;
     const record = state.recordById.get(state.selectedId);
     if (entity && record) updateAppearance(entity, false);
@@ -573,7 +574,7 @@ export function createAlprPresentation({ state, services, source }) {
       clearSelection();
       return;
     }
-    const entity = state.dataSource?.entities.getById(state.selectedId);
+    const entity = native.dataSource?.entities.getById(state.selectedId);
     const record = state.recordById.get(state.selectedId);
     if (entity?.gevAlprCanvasPosition) {
       entity.gevAlprDisplayPosition = entity.gevAlprCanvasPosition;
@@ -582,7 +583,7 @@ export function createAlprPresentation({ state, services, source }) {
     if (!entity || !record || Date.now() - state.lastAnchorSampleAt < 1000)
       return;
     state.lastAnchorSampleAt = Date.now();
-    const scene = state.viewer.scene;
+    const scene = native.viewer.scene;
     const location = Cesium.Cartographic.fromDegrees(
       record.longitude,
       record.latitude,
@@ -615,11 +616,11 @@ export function createAlprPresentation({ state, services, source }) {
   }
 
   function installInteraction(viewer) {
-    if (state.clickHandler) return;
-    state.clickHandler = new Cesium.ScreenSpaceEventHandler(
+    if (native.clickHandler) return;
+    native.clickHandler = new Cesium.ScreenSpaceEventHandler(
       viewer.scene.canvas,
     );
-    state.clickHandler.setInputAction((click) => {
+    native.clickHandler.setInputAction((click) => {
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree()) return;
       if (!state.enabled) return;
@@ -640,7 +641,7 @@ export function createAlprPresentation({ state, services, source }) {
     initOverlay: () => overlay.init(),
     destroyOverlay: () => overlay.destroy(),
     markerColor,
-    viewportBox,
+    viewportBox: () => viewportBox(native.viewer),
     clearRendered,
     hideOnMapCredit,
     presentOnMapCredit,

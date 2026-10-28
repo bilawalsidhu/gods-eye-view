@@ -1,0 +1,1663 @@
+{
+  "status": "ALPR implementation checkpoint, NOT acceptance; native dev transport and Navara preview moving performance remain failed; common W2 surface and combined performance gates remain open",
+  "openMovingPerformanceGates": [
+    {
+      "gate": "journey-navara-preview",
+      "failures": [
+        "moving frameP95 33.4 ms with ALPR vs 23.3 ms without"
+      ]
+    }
+  ],
+  "openTransportGates": [
+    {
+      "gate": "journey-cesium-dev",
+      "pass": false,
+      "reason": "Google3DTiles HTTP2 protocol failures; cause unresolved"
+    }
+  ],
+  "baseCommit": "e5f245be8624fe4719848b5f40475abec63e1f99",
+  "sourceSha256": {
+    "scripts/check-import-directions.mjs": "5e2de878fe5049f66587d881c56387b050e1672bdc9100ce16e4c53114436a7a",
+    "scripts/fixtures/w2/alpr.mjs": "abcd249daab3444edd13f8f26e35b4af3651ff16419e36702a405b35a590bd97",
+    "scripts/format-scope.json": "81acf93c1cce2d9f3d9c37035274247090f84848e56d349ac427355df62c1e97",
+    "scripts/package-boundaries.json": "89dab7ba910496ec0945fed5da8e1752da492c02fedefccbd2b18c7408b5cf21",
+    "scripts/qa-alpr-journey.mjs": "911c4d2fe73a5b625c5fad3c0b23a672e35c7d3351c7022c6d20500056fe23ab",
+    "scripts/qa-journey-recorder.mjs": "b9967463a23f4dd266db80bedc1a4cc9165e2f7e1a3f303cb8093728c22a42e6",
+    "scripts/qa-w2-alpr.mjs": "485790a12954322c5e0b029de9167175db68c6a16a04a0451ebe76b9cd4445ad",
+    "src/app/layers/alprCameras.js": "1a4a9c1d74c67bec6e2faf7754c619903ad17e5875d17c5f742c6ddbd2db99e1",
+    "src/app/navaraLayers.test.mjs": "986826730ef47e25255fbdd4b4ac1a789af89b51d79bd6cb7887ee18655d1d08",
+    "src/app/navaraMode.js": "ace4bc2b317728fcb97035c79d3fae632412a27836c1ac607620775c3d972d69",
+    "src/data/alprCameras.test.mjs": "e9ba03b8bbc1b43fdd156f54e7c8a7ee44df8df8138232a938e421c9f52e1362",
+    "src/data/inputOwnership.test.mjs": "538395918785863789a4879f0249900d7d495425b02a07a2ee08caa79de4def8",
+    "src/layers/alpr/index.js": "1dd4a1ad526b64dcdd86f4eefb8bf4976b29ec3f50fc6a8ea6161787d5fc5e06",
+    "src/layers/alpr/overlay.test.mjs": "59ed09134127be860d61d44b0d70ecd1cc739c1807024fab83b90446f621ad79",
+    "src/layers/alpr/render/cesium.js": "7b86784902e87139fe5a855686203420db5c1303b601540829a9667b8fb62784",
+    "src/layers/alpr/render/cesiumOverlay.js": "77dc1460669f0fb158757269f3954eab693d993a8bea37b21d47d7514fad95bf",
+    "src/layers/alpr/render/cesiumPresentation.js": "4c4b10b932fafd011e3b0e5226145493c3e905c4de8af28c558f130f015df1a8",
+    "src/layers/alpr/render/navara.js": "07bded1d3ab933526f3b9aae2967b12e38ad1c442c678941f45b12b19fb04ded",
+    "src/layers/alpr/render/navara.test.mjs": "5d8eabd70e9dea280f60962db8dc38dfb06e25c4c241d99f28a3f482e364e9ca",
+    "src/layers/alpr/render/navaraOverlay.js": "ec655214d01e97a0eba71b2cee0c88ec16b83a4b51ca690f9175db0425d48171",
+    "src/layers/alpr/render/navaraOverlay.test.mjs": "31adb733fe0ad8e1f3c08d719ecba0fb3cd19b4de4ed239f43df61292ab32901",
+    "src/ui/leftPanelRail.js": "3040131064033f3e73667351396116de06a575ec3b04a2c78b937ca1610b5270",
+    "src/ui/panelRails.test.mjs": "0e55c2ebbb0e449852de321a38ebf196e0afbb3ab8eebdd81072108bc2b7d20c",
+    "src/ui/styles/overlays.css": "b9754ec90846958d9c5d92f6e22609b2697327c8b2276e85e57cc8edeb7d2a90"
+  },
+  "qaManifestSha256": "8ae8404eb6d19658eeefa8fde08385a2d9efdbff886c3e357f7a755b56f14f30",
+  "cpuBuild": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 126.6
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 12.8
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 13.8
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 12.2
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 13.3
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 11.7
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.3
+    }
+  ],
+  "ordinaryTests": {
+    "total": 7264,
+    "passed": 7263,
+    "skipped": 1,
+    "failed": 0
+  },
+  "node24AllocationTests": 15,
+  "afterCssFixTests": {
+    "passed": 371,
+    "failed": 0,
+    "files": [
+      "src/mapStackChips.test.mjs",
+      "src/cockpitMarkup.test.mjs",
+      "src/keyboardFocusStyles.test.mjs",
+      "src/radioMarkup.test.mjs",
+      "src/creditAttribution.test.mjs",
+      "src/costEndpointThrottle.test.mjs",
+      "src/voice/pointerReticle.test.mjs",
+      "src/hudAltitudeDatum.test.mjs",
+      "src/tools/queries/panelRequest.test.mjs",
+      "src/hudSummaryResponse.test.mjs",
+      "src/voice/voiceCard.test.mjs",
+      "src/ui/panelRails.test.mjs",
+      "src/firstRunExperience.test.mjs",
+      "src/contextTabKeyboard.test.mjs",
+      "src/panelStackLayout.test.mjs",
+      "src/loadingFeedback.test.mjs",
+      "src/rightRailPolicy.test.mjs",
+      "src/tooling/localServices.test.mjs",
+      "src/streetLevelMarkup.test.mjs",
+      "src/overlays/worldOverlay.test.mjs"
+    ]
+  },
+  "formatScopeFiles": 1625,
+  "reviewedPairedImage": {
+    "path": "docs/migration/images/phase3-w2-alpr-selected.webp",
+    "bytes": 190456,
+    "sha256": "a8e2048bbdf54064e85a10b8b9e16deb81e2c19fe337b6c014c7cfae90ac1ee8"
+  },
+  "mainChunk": {
+    "bytes": 2915746,
+    "gzipBytes": 910026,
+    "containsThreeOrNavara": false,
+    "sizeBudgetChecked": false
+  },
+  "browserGates": [
+    {
+      "gate": "alpr-cesium-dev",
+      "code": 0,
+      "seconds": 50.5
+    },
+    {
+      "gate": "alpr-navara-dev",
+      "code": 0,
+      "seconds": 45.3
+    },
+    {
+      "gate": "alpr-cesium-preview",
+      "code": 0,
+      "seconds": 46.3
+    },
+    {
+      "gate": "alpr-navara-preview",
+      "code": 0,
+      "seconds": 42.1
+    },
+    {
+      "gate": "journey-cesium-dev",
+      "code": 1,
+      "seconds": 247.6,
+      "previousFailedAttempts": [
+        "failures/cesium-dev-http2",
+        "failures/cesium-dev-http2-repeat"
+      ],
+      "attempt": 3,
+      "recorderSha256": "b9967463a23f4dd266db80bedc1a4cc9165e2f7e1a3f303cb8093728c22a42e6",
+      "unresolved": "external-google-http2",
+      "retainedReport": "failures/cesium-dev-http2-async/journey-cesium-dev/result.json",
+      "rejectedTransportExperiment": "failures/cesium-dev-http1-detached"
+    },
+    {
+      "gate": "journey-navara-dev",
+      "code": 0,
+      "seconds": 261.0,
+      "recorderSha256": "9aac61369f2835d26bc21e8776f9d48f74f00ebb99b9fef03c1007ca6404f3a9"
+    },
+    {
+      "gate": "journey-cesium-preview",
+      "code": 0,
+      "seconds": 243.3,
+      "recorderSha256": "9aac61369f2835d26bc21e8776f9d48f74f00ebb99b9fef03c1007ca6404f3a9"
+    },
+    {
+      "gate": "journey-navara-preview",
+      "code": 1,
+      "seconds": 260.5,
+      "unresolved": "moving-frame-performance",
+      "failures": [
+        "moving frameP95 33.4 ms with ALPR vs 23.3 ms without"
+      ],
+      "recorderSha256": "9aac61369f2835d26bc21e8776f9d48f74f00ebb99b9fef03c1007ca6404f3a9"
+    },
+    {
+      "gate": "contract-cesium",
+      "code": 0,
+      "seconds": 27.9
+    },
+    {
+      "gate": "contract-navara",
+      "code": 0,
+      "seconds": 61.8
+    },
+    {
+      "gate": "shell-dev",
+      "code": 0,
+      "seconds": 201.2
+    },
+    {
+      "gate": "shell-production",
+      "code": 0,
+      "seconds": 208.2
+    }
+  ],
+  "qaOnlyEncodingFollowup": {
+    "changedFiles": [
+      "scripts/qa-journey-recorder.mjs"
+    ],
+    "beforeSha256": "9aac61369f2835d26bc21e8776f9d48f74f00ebb99b9fef03c1007ca6404f3a9",
+    "afterSha256": "b9967463a23f4dd266db80bedc1a4cc9165e2f7e1a3f303cb8093728c22a42e6",
+    "scope": "Only ffmpeg encoding after all browser measurement windows now awaits asynchronous execFile; product source/build and measurement/assertion code unchanged. Earlier passing gates retain their actual recorder hash. No HTTP2 error waiver.",
+    "red": {
+      "servicedCallbacksWhileEncoding": 0,
+      "responsive": false
+    },
+    "green": {
+      "servicedCallbacksWhileEncoding": 78,
+      "responsive": true
+    }
+  },
+  "rejectedHttp1Experiment": {
+    "pass": false,
+    "completedPasses": 0,
+    "tileProtocols": {
+      "http/1.1": 404
+    },
+    "reason": "Detached browser frame; incomplete run; temporary HTTP1 option reverted"
+  },
+  "comparison": {
+    "dev": {
+      "pass": true,
+      "poses": {
+        "city": {
+          "records": 325,
+          "visible": 325,
+          "controls": 5,
+          "maxProjectionPx": 1.7521424871591167e-11,
+          "maxRgbDelta": 1,
+          "colors": {
+            "cesium": [
+              {
+                "id": "alpr:9000000",
+                "rgb": [
+                  63,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000004",
+                "rgb": [
+                  63,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000008",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000012",
+                "rgb": [
+                  65,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000045",
+                "rgb": [
+                  65,
+                  202,
+                  255
+                ]
+              }
+            ],
+            "navara": [
+              {
+                "id": "alpr:9000000",
+                "rgb": [
+                  63,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000004",
+                "rgb": [
+                  63,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000008",
+                "rgb": [
+                  65,
+                  201,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000012",
+                "rgb": [
+                  65,
+                  202,
+                  252
+                ]
+              },
+              {
+                "id": "alpr:9000045",
+                "rgb": [
+                  65,
+                  202,
+                  255
+                ]
+              }
+            ]
+          }
+        },
+        "regional": {
+          "records": 325,
+          "visible": 325,
+          "controls": 5,
+          "maxProjectionPx": 0.4024316984714116,
+          "maxRgbDelta": 3,
+          "colors": {
+            "cesium": [
+              {
+                "id": "alpr:9000062",
+                "rgb": [
+                  65,
+                  202,
+                  255
+                ]
+              },
+              {
+                "id": "alpr:9000063",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000064",
+                "rgb": [
+                  65,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000065",
+                "rgb": [
+                  66,
+                  202,
+                  252
+                ]
+              },
+              {
+                "id": "alpr:9000066",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              }
+            ],
+            "navara": [
+              {
+                "id": "alpr:9000062",
+                "rgb": [
+                  62,
+                  202,
+                  255
+                ]
+              },
+              {
+                "id": "alpr:9000063",
+                "rgb": [
+                  64,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000064",
+                "rgb": [
+                  65,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000065",
+                "rgb": [
+                  66,
+                  202,
+                  252
+                ]
+              },
+              {
+                "id": "alpr:9000066",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              }
+            ]
+          }
+        },
+        "close": {
+          "records": 325,
+          "visible": 225,
+          "controls": 5,
+          "maxProjectionPx": 0.7789670584283169,
+          "maxRgbDelta": 1,
+          "colors": {
+            "cesium": [
+              {
+                "id": "alpr:9000096",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000097",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000098",
+                "rgb": [
+                  65,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000111",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000112",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              }
+            ],
+            "navara": [
+              {
+                "id": "alpr:9000096",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000097",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000098",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000111",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000112",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "selectedRgbDelta": 1,
+      "selectedSizeDeltaPx": 0.00520556528137206,
+      "selected": {
+        "cesium": {
+          "id": "alpr:9000098",
+          "x": 911.1148735210261,
+          "y": 670.9676489293802,
+          "sizePx": 67.47714763134466,
+          "samples": [
+            {
+              "sourcePixel": [
+                48,
+                53
+              ],
+              "pixel": [
+                902,
+                665
+              ],
+              "rgb": [
+                254,
+                97,
+                99
+              ]
+            },
+            {
+              "sourcePixel": [
+                60,
+                53
+              ],
+              "pixel": [
+                909,
+                665
+              ],
+              "rgb": [
+                254,
+                100,
+                101
+              ]
+            },
+            {
+              "sourcePixel": [
+                72,
+                53
+              ],
+              "pixel": [
+                915,
+                665
+              ],
+              "rgb": [
+                253,
+                98,
+                99
+              ]
+            },
+            {
+              "sourcePixel": [
+                50,
+                64
+              ],
+              "pixel": [
+                903,
+                671
+              ],
+              "rgb": [
+                253,
+                99,
+                99
+              ]
+            },
+            {
+              "sourcePixel": [
+                70,
+                64
+              ],
+              "pixel": [
+                914,
+                671
+              ],
+              "rgb": [
+                253,
+                99,
+                100
+              ]
+            }
+          ]
+        },
+        "navara": {
+          "id": "alpr:9000098",
+          "x": 910.6053008853987,
+          "y": 670.3784754344432,
+          "sizePx": 67.47194206606329,
+          "samples": [
+            {
+              "sourcePixel": [
+                48,
+                53
+              ],
+              "pixel": [
+                902,
+                664
+              ],
+              "rgb": [
+                254,
+                98,
+                100
+              ]
+            },
+            {
+              "sourcePixel": [
+                60,
+                53
+              ],
+              "pixel": [
+                908,
+                664
+              ],
+              "rgb": [
+                254,
+                100,
+                101
+              ]
+            },
+            {
+              "sourcePixel": [
+                72,
+                53
+              ],
+              "pixel": [
+                915,
+                664
+              ],
+              "rgb": [
+                254,
+                98,
+                99
+              ]
+            },
+            {
+              "sourcePixel": [
+                50,
+                64
+              ],
+              "pixel": [
+                903,
+                670
+              ],
+              "rgb": [
+                254,
+                99,
+                100
+              ]
+            },
+            {
+              "sourcePixel": [
+                70,
+                64
+              ],
+              "pixel": [
+                914,
+                670
+              ],
+              "rgb": [
+                253,
+                98,
+                99
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "preview": {
+      "pass": true,
+      "poses": {
+        "city": {
+          "records": 325,
+          "visible": 325,
+          "controls": 5,
+          "maxProjectionPx": 1.7521424871591167e-11,
+          "maxRgbDelta": 1,
+          "colors": {
+            "cesium": [
+              {
+                "id": "alpr:9000000",
+                "rgb": [
+                  63,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000004",
+                "rgb": [
+                  63,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000008",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000012",
+                "rgb": [
+                  65,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000045",
+                "rgb": [
+                  65,
+                  202,
+                  255
+                ]
+              }
+            ],
+            "navara": [
+              {
+                "id": "alpr:9000000",
+                "rgb": [
+                  63,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000004",
+                "rgb": [
+                  63,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000008",
+                "rgb": [
+                  65,
+                  201,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000012",
+                "rgb": [
+                  65,
+                  202,
+                  252
+                ]
+              },
+              {
+                "id": "alpr:9000045",
+                "rgb": [
+                  65,
+                  202,
+                  255
+                ]
+              }
+            ]
+          }
+        },
+        "regional": {
+          "records": 325,
+          "visible": 325,
+          "controls": 5,
+          "maxProjectionPx": 0.4024316984714116,
+          "maxRgbDelta": 3,
+          "colors": {
+            "cesium": [
+              {
+                "id": "alpr:9000062",
+                "rgb": [
+                  65,
+                  202,
+                  255
+                ]
+              },
+              {
+                "id": "alpr:9000063",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000064",
+                "rgb": [
+                  65,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000065",
+                "rgb": [
+                  66,
+                  202,
+                  252
+                ]
+              },
+              {
+                "id": "alpr:9000066",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              }
+            ],
+            "navara": [
+              {
+                "id": "alpr:9000062",
+                "rgb": [
+                  62,
+                  202,
+                  255
+                ]
+              },
+              {
+                "id": "alpr:9000063",
+                "rgb": [
+                  64,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000064",
+                "rgb": [
+                  65,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000065",
+                "rgb": [
+                  66,
+                  202,
+                  252
+                ]
+              },
+              {
+                "id": "alpr:9000066",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              }
+            ]
+          }
+        },
+        "close": {
+          "records": 325,
+          "visible": 225,
+          "controls": 5,
+          "maxProjectionPx": 0.7789670584283169,
+          "maxRgbDelta": 1,
+          "colors": {
+            "cesium": [
+              {
+                "id": "alpr:9000096",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000097",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000098",
+                "rgb": [
+                  65,
+                  202,
+                  253
+                ]
+              },
+              {
+                "id": "alpr:9000111",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000112",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              }
+            ],
+            "navara": [
+              {
+                "id": "alpr:9000096",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000097",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000098",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000111",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              },
+              {
+                "id": "alpr:9000112",
+                "rgb": [
+                  65,
+                  202,
+                  254
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "selectedRgbDelta": 1,
+      "selectedSizeDeltaPx": 0.00520556528137206,
+      "selected": {
+        "cesium": {
+          "id": "alpr:9000098",
+          "x": 911.1148735210261,
+          "y": 670.9676489293802,
+          "sizePx": 67.47714763134466,
+          "samples": [
+            {
+              "sourcePixel": [
+                48,
+                53
+              ],
+              "pixel": [
+                902,
+                665
+              ],
+              "rgb": [
+                254,
+                97,
+                99
+              ]
+            },
+            {
+              "sourcePixel": [
+                60,
+                53
+              ],
+              "pixel": [
+                909,
+                665
+              ],
+              "rgb": [
+                254,
+                100,
+                101
+              ]
+            },
+            {
+              "sourcePixel": [
+                72,
+                53
+              ],
+              "pixel": [
+                915,
+                665
+              ],
+              "rgb": [
+                253,
+                98,
+                99
+              ]
+            },
+            {
+              "sourcePixel": [
+                50,
+                64
+              ],
+              "pixel": [
+                903,
+                671
+              ],
+              "rgb": [
+                253,
+                99,
+                99
+              ]
+            },
+            {
+              "sourcePixel": [
+                70,
+                64
+              ],
+              "pixel": [
+                914,
+                671
+              ],
+              "rgb": [
+                253,
+                99,
+                100
+              ]
+            }
+          ]
+        },
+        "navara": {
+          "id": "alpr:9000098",
+          "x": 910.6053008853987,
+          "y": 670.3784754344432,
+          "sizePx": 67.47194206606329,
+          "samples": [
+            {
+              "sourcePixel": [
+                48,
+                53
+              ],
+              "pixel": [
+                902,
+                664
+              ],
+              "rgb": [
+                254,
+                98,
+                100
+              ]
+            },
+            {
+              "sourcePixel": [
+                60,
+                53
+              ],
+              "pixel": [
+                908,
+                664
+              ],
+              "rgb": [
+                254,
+                100,
+                101
+              ]
+            },
+            {
+              "sourcePixel": [
+                72,
+                53
+              ],
+              "pixel": [
+                915,
+                664
+              ],
+              "rgb": [
+                254,
+                98,
+                99
+              ]
+            },
+            {
+              "sourcePixel": [
+                50,
+                64
+              ],
+              "pixel": [
+                903,
+                670
+              ],
+              "rgb": [
+                254,
+                99,
+                100
+              ]
+            },
+            {
+              "sourcePixel": [
+                70,
+                64
+              ],
+              "pixel": [
+                914,
+                670
+              ],
+              "rgb": [
+                253,
+                98,
+                99
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "captures": {
+    "cesium-dev": {
+      "checks": 27,
+      "pass": true,
+      "reportSha256": "d269e8366ccad2cca31c7354030f9ed9657e1d6933d8492293be282a0a0eaff2",
+      "summaryLineBox": {
+        "filled": 17.59375,
+        "empty": 17.59375,
+        "cornerFilled": 119.5625,
+        "cornerEmpty": 119.5625,
+        "widthFilled": 447.25,
+        "widthEmpty": 447.25
+      },
+      "mobileCard": {
+        "x": 72,
+        "y": 262,
+        "w": 245,
+        "h": 90,
+        "title": "ALPR-0098",
+        "selectedId": "alpr:9000098"
+      },
+      "idleFramesIn2s": {
+        "enabled-selected": 0,
+        "mobile-selected": 0,
+        "disabled": 0
+      },
+      "rasterChangedPixels": {
+        "city": [
+          1153,
+          1666,
+          1666,
+          1646,
+          1662
+        ],
+        "regional": [
+          615,
+          954,
+          934,
+          611,
+          935
+        ],
+        "close": [
+          1242,
+          1190,
+          1259,
+          1239,
+          1188
+        ]
+      },
+      "browserErrors": [],
+      "expectedPreviewErrors": []
+    },
+    "navara-dev": {
+      "checks": 27,
+      "pass": true,
+      "reportSha256": "718f65aedbfe367d4ae5a2d2e5386ff62b3ca2e7c21b93931efa677241c86142",
+      "summaryLineBox": {
+        "filled": 17.59375,
+        "empty": 17.59375,
+        "cornerFilled": 119.5625,
+        "cornerEmpty": 119.5625,
+        "widthFilled": 447.25,
+        "widthEmpty": 447.25
+      },
+      "mobileCard": {
+        "x": 73,
+        "y": 262,
+        "w": 245,
+        "h": 90,
+        "title": "ALPR-0098",
+        "selectedId": "alpr:9000098"
+      },
+      "idleFramesIn2s": {
+        "enabled-selected": 0,
+        "mobile-selected": 0,
+        "disabled": 0
+      },
+      "rasterChangedPixels": {
+        "city": [
+          1169,
+          1684,
+          1679,
+          1662,
+          1680
+        ],
+        "regional": [
+          653,
+          931,
+          936,
+          659,
+          933
+        ],
+        "close": [
+          1242,
+          1190,
+          1228,
+          1239,
+          1188
+        ]
+      },
+      "browserErrors": [],
+      "expectedPreviewErrors": []
+    },
+    "cesium-preview": {
+      "checks": 27,
+      "pass": true,
+      "reportSha256": "98c111ce7c7ea41c986985432c6a9cfadca7d2c335e6f01f9bb3092ef782c335",
+      "summaryLineBox": {
+        "filled": 17.59375,
+        "empty": 17.59375,
+        "cornerFilled": 119.5625,
+        "cornerEmpty": 119.5625,
+        "widthFilled": 447.25,
+        "widthEmpty": 447.25
+      },
+      "mobileCard": {
+        "x": 72,
+        "y": 262,
+        "w": 245,
+        "h": 90,
+        "title": "ALPR-0098",
+        "selectedId": "alpr:9000098"
+      },
+      "idleFramesIn2s": {
+        "enabled-selected": 0,
+        "mobile-selected": 0,
+        "disabled": 0
+      },
+      "rasterChangedPixels": {
+        "city": [
+          1153,
+          1666,
+          1666,
+          1646,
+          1662
+        ],
+        "regional": [
+          615,
+          954,
+          934,
+          611,
+          935
+        ],
+        "close": [
+          1242,
+          1190,
+          1259,
+          1239,
+          1188
+        ]
+      },
+      "browserErrors": [],
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ]
+    },
+    "navara-preview": {
+      "checks": 27,
+      "pass": true,
+      "reportSha256": "4cdd7df08be0063c35f787436d3c7984f3c8df1e47853db1767f43770d55bd0f",
+      "summaryLineBox": {
+        "filled": 17.59375,
+        "empty": 17.59375,
+        "cornerFilled": 119.5625,
+        "cornerEmpty": 119.5625,
+        "widthFilled": 447.25,
+        "widthEmpty": 447.25
+      },
+      "mobileCard": {
+        "x": 73,
+        "y": 262,
+        "w": 245,
+        "h": 90,
+        "title": "ALPR-0098",
+        "selectedId": "alpr:9000098"
+      },
+      "idleFramesIn2s": {
+        "enabled-selected": 0,
+        "mobile-selected": 0,
+        "disabled": 0
+      },
+      "rasterChangedPixels": {
+        "city": [
+          1169,
+          1684,
+          1679,
+          1662,
+          1680
+        ],
+        "regional": [
+          653,
+          931,
+          936,
+          659,
+          933
+        ],
+        "close": [
+          1242,
+          1190,
+          1228,
+          1239,
+          1188
+        ]
+      },
+      "browserErrors": [],
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ]
+    }
+  },
+  "journeys": {
+    "cesium-dev": {
+      "pass": false,
+      "correctnessAndPixelsPass": true,
+      "movingPerformanceAccepted": true,
+      "failures": [
+        "console errors: Failed to load resource: net::ERR_HTTP2_PROTOCOL_ERROR \u2014 [provider resource] | Failed to load resource: net::ERR_HTTP2_PROTOCOL_ERROR \u2014 [provider resource] | Failed to load resource: net::ERR_HTTP2_PROTOCOL_ERROR \u2014 [provider resource]"
+      ],
+      "unexpectedConsoleErrors": 19,
+      "stops": 24,
+      "summary": [
+        {
+          "pass": "1-off",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 3.5,
+            "renderP95": 4.8,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 3.5,
+            "renderP95": 5.7,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "2-on-cold",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 3.9,
+            "renderP95": 4.7,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 5.1,
+            "renderP95": 16.9,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "3-on-warm",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 3.8,
+            "renderP95": 4.5,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 3.5,
+            "renderP95": 9.9,
+            "longFrames": 0
+          }
+        }
+      ],
+      "reportSha256": "e8680a03d441986f59a07014256ba208db823279c5db4dba651dc1716d423110",
+      "expectedPreviewErrors": [],
+      "transport": "browser-default",
+      "tileProtocols": {}
+    },
+    "navara-dev": {
+      "pass": true,
+      "correctnessAndPixelsPass": true,
+      "movingPerformanceAccepted": true,
+      "failures": [],
+      "unexpectedConsoleErrors": 0,
+      "stops": 24,
+      "summary": [
+        {
+          "pass": "1-off",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 35.4,
+            "renderP50": 5.2,
+            "renderP95": 10.6,
+            "longFrames": 7
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 4.5,
+            "renderP95": 7.4,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "2-on-cold",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 35.3,
+            "renderP50": 5.7,
+            "renderP95": 10.4,
+            "longFrames": 6
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 4.4,
+            "renderP95": 6.2,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "3-on-warm",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 33.4,
+            "renderP50": 5.6,
+            "renderP95": 10.3,
+            "longFrames": 4
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 4.5,
+            "renderP95": 5.8,
+            "longFrames": 0
+          }
+        }
+      ],
+      "reportSha256": "8730e14e6a18382ad5340f7780fc8ae16633b8ea9c0e36b432d8e3836373b1aa",
+      "expectedPreviewErrors": [],
+      "transport": "browser-default",
+      "tileProtocols": {}
+    },
+    "cesium-preview": {
+      "pass": true,
+      "correctnessAndPixelsPass": true,
+      "movingPerformanceAccepted": true,
+      "failures": [],
+      "unexpectedConsoleErrors": 0,
+      "stops": 24,
+      "summary": [
+        {
+          "pass": "1-off",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 3.4,
+            "renderP95": 4.6,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 2.8,
+            "renderP95": 5.3,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "2-on-cold",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 3.7,
+            "renderP95": 4.5,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 7.8,
+            "renderP95": 19.3,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "3-on-warm",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 3.7,
+            "renderP95": 4.5,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 5.3,
+            "renderP95": 11.4,
+            "longFrames": 0
+          }
+        }
+      ],
+      "reportSha256": "d1db4babc45a0e3b782387a7d1c2e5050dc4df17bb183c372ec8b2f2e8103626",
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "transport": "browser-default",
+      "tileProtocols": {}
+    },
+    "navara-preview": {
+      "pass": false,
+      "correctnessAndPixelsPass": true,
+      "movingPerformanceAccepted": false,
+      "failures": [
+        "moving frameP95 33.4 ms with ALPR vs 23.3 ms without"
+      ],
+      "unexpectedConsoleErrors": 0,
+      "stops": 24,
+      "summary": [
+        {
+          "pass": "1-off",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 23.3,
+            "renderP50": 4.7,
+            "renderP95": 7.6,
+            "longFrames": 1
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 3.9,
+            "renderP95": 5.9,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "2-on-cold",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 33.4,
+            "renderP50": 5.6,
+            "renderP95": 10.1,
+            "longFrames": 3
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 4.3,
+            "renderP95": 6.2,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "3-on-warm",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 33.4,
+            "renderP50": 5.6,
+            "renderP95": 9.8,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 4.5,
+            "renderP95": 6.2,
+            "longFrames": 0
+          }
+        }
+      ],
+      "reportSha256": "7e0ca9d7aaf113306677c013e22c48fd8b3fc849c92ceb222b956c79d0d7e28a",
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "transport": "browser-default",
+      "tileProtocols": {}
+    }
+  },
+  "shell": {
+    "dev": {
+      "cesium": 23,
+      "navara": 25,
+      "cross": 4,
+      "logSha256": "df1ff7431c38762e453321f75d0bf5dea75babaf9b4fdbbbbb29971b56e47d23"
+    },
+    "production": {
+      "cesium": 23,
+      "navara": 25,
+      "cross": 4,
+      "logSha256": "614ee06c85eed2f777e244a059a5af80436d3f37124565d03f01b5a81c503935"
+    }
+  },
+  "limits": [
+    "Native dev legacy remains FAILED on Google3DTiles HTTP2 protocol errors (18,18,19 across three complete attempts). Native preview legacy and four focused captures pass with default browser transport. HTTP1 experiment was incomplete and reverted. No native dev runtime-reliability pass or root-cause fix is claimed.",
+    "Fixture serves real TileJSON/MVT with325 stable cameras; Google Places is pinned to an empty auxiliary response. No live provider availability claim.",
+    "Default photoreal Austin views are verified; common W2 terrain/provider-switch/foreground-mesh combinations and dense cold-floor performance remain wave-closure gates.",
+    "Legacy journeys gate paced frame intervals using their existing10% plus2ms noise allowance. CPU render time is diagnostic; no new uncapped CPU performance pass is inferred.",
+    "ALPR does not force Navara attribution open on enable; the global Google photoreal map policy can independently open its panel. Cesium retains native inline OSM attribution.",
+    "FIRMS uncapped close remains1.136 versus1.10; combined W2 budgets remain open.",
+    "No main-chunk byte baseline exists in this branch."
+  ],
+  "failedAttempts": [
+    "Three current final-series native dev journeys passed all24-stop behavior, pixel and performance gates but failed18,18,19Google3DTiles HTTP2 protocol console errors. All remain retained. Review independently proved synchronous ffmpeg blocks the Node request-interception event loop (0 callbacks versus78 after async encoding); fixing encoding did NOT resolve HTTP2. An HTTP1 experiment observed404HTTP/1.1 responses but lost its browser frame before completing a pass; it is rejected and the temporary option reverted. No errors are waived.",
+    "Original native journey passed behavioral/pixel/performance gates but logged3HTTP2 failures without locations; original raw result retained.",
+    "Initial focused close ROI found4controls; its top excluded a visible row. ROI expanded200..700 with all5actual picks and rasters still mandatory.",
+    "Native extraction repeated destroy initially failed2tests; optional renderer cleanup fixes it.",
+    "Mobile card existed visually but its paint index was cleared every frame by redundant absent-class removals in left rail. Exact Map/MutationObserver traces, red regression and fix retained.",
+    "Recovery initially compared arrival order. All325 records were bit-exact after ID sorting; canonical comparison preserves content equality.",
+    "Selected native idle intermittently produced13/17frames. Long traces proved HUD typewriter changes in height and width; direct browser red/green and a zero-frame15s diagnostic verify two CSS fixes. First height-only fix still11frames, retained.",
+    "Native journey with resource diagnostics passed all non-network gates but failed3nearby-places HTTP500. Auxiliary fixture added; no console error was waived.",
+    "First full formatting gate rejected only wrapping of the moved inputOwnership path. Changed lines formatted; failure retained and affected gates rerun.",
+    "Initial Navara journey failed stale return frames: extra GPU glyphs disappeared only after forced rendering. A deferred request fixes a postRender request lost when Navara clears its frame flag; GPU uploads remain in preRender. Regression models the cleared flag and settled idle. Initial dirty-buffer microtask candidate and later request-only histories retained; all16 cold/warm pixelchecks passed after both.",
+    "Earlier moving performance attempts failed; no threshold changed. All-off and warm off/on/off/on controls were inconclusive for stable layer cost. Concurrent external Node/GPU work was observed during the all-off control only; not claimed retrospectively for all failures. Raw histories retained separately from final captures.",
+    "Projection hotpath now reuses the host frame matrix and skips fully clipped wedges with a3px edge-stroke margin. Regression RED/GREEN and27 focused browser checks pass. This alone did not close moving-frame performance.",
+    "Diagnostic-only GPU-count-zero and Canvas-hidden controls preserved source/CPU work but deliberately changed draw population. GPU counts verified142-to0-to142. Neither gave stable timing improvement; these are NOT acceptance captures or proof of a specific GPU bottleneck."
+  ],
+  "contracts": {
+    "cesium": 73,
+    "navara": 80,
+    "unexpectedConsoleErrors": 0
+  }
+}
