@@ -132,7 +132,14 @@ function nearestHit(meshes, roots, ray) {
     if (!geometry.boundingSphere) geometry.computeBoundingSphere();
     sphere.copy(geometry.boundingSphere).applyMatrix4(mesh.matrixWorld);
     if (!worldRay.intersectSphere(sphere, entry)) continue;
-    candidates.push([worldRay.origin.distanceTo(entry), i]);
+    // intersectSphere returns the exit when the origin is inside. Such a mesh
+    // can contain the nearest triangle, so it must enter the candidate list at 0.
+    candidates.push([
+      sphere.containsPoint(worldRay.origin)
+        ? 0
+        : worldRay.origin.distanceTo(entry),
+      i,
+    ]);
   }
   candidates.sort((x, y) => x[0] - y[0]);
   let nearest = Infinity;
@@ -283,8 +290,59 @@ export function createNavaraSurface(view, hooks) {
   };
   const sampleHeight = (place, exclude) =>
     sampleHeightDetailed(place, exclude ? { exclude } : undefined)?.height;
+  // Activation-time obstruction probe: only the visible tile triangles, never
+  // a fabricated terrain intersection or a second retained-geometry cache.
+  const raycast = ({ origin, direction, far, exclude = [] }) => {
+    if (
+      !supported ||
+      ![
+        origin?.x,
+        origin?.y,
+        origin?.z,
+        direction?.x,
+        direction?.y,
+        direction?.z,
+        far,
+      ].every(Number.isFinite) ||
+      far <= 0
+    )
+      return undefined;
+    const length = Math.hypot(direction.x, direction.y, direction.z);
+    if (!length || !Number.isFinite(length)) return undefined;
+    const ray = {
+      origin,
+      direction: {
+        x: direction.x / length,
+        y: direction.y / length,
+        z: direction.z / length,
+      },
+      far,
+    };
+    const excluded = exclude.length ? new Set(exclude) : NO_EXCLUDE;
+    shownMeshes.length = shownRoots.length = 0;
+    let hit;
+    try {
+      for (const root of hooks.tileRoots())
+        collectMeshes(root, excluded, true, shownMeshes, shownRoots, root);
+      hit = nearestHit(shownMeshes, shownRoots, ray);
+    } finally {
+      shownMeshes.length = shownRoots.length = 0;
+    }
+    if (!Number.isFinite(hit.distance)) return undefined;
+    return {
+      distance: hit.distance,
+      object: hit.root,
+      position: {
+        x: origin.x + ray.direction.x * hit.distance,
+        y: origin.y + ray.direction.y * hit.distance,
+        z: origin.z + ray.direction.z * hit.distance,
+      },
+    };
+  };
   return {
     surface: {
+      raycast,
+      raycastSupported: supported,
       sampleHeight,
       sampleHeightDetailed,
       supported,

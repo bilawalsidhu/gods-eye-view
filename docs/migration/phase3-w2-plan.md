@@ -66,6 +66,8 @@ Baseline: radio checkpoint `e5f245be`. ALPR currently owns native entities in `i
 
 ## W2-7 — CCTV execution plan
 
+Finite Navara surface ray capability now implemented with15synthetic surface regressions and full keyless gates (7309ordinary pass +1Windows skip,15allocation). Inside-bound candidate ordering was reproduced and fixed. Continue step4 with owned projection/video/volume meshes and step5 calibration/picking; registering a layer before these work is not acceptance. The ray is documented as an optional surface capability and reuses retained visible tile triangles without a new cache or fabricated terrain fallback.
+
 2026-10-29 checkpoint: native resource extraction is implemented and reviewed; shared CCTV has no Cesium dependency. Keyless dev/preview media19/19, legacy56/56 and final settled-preview57/57 pass; geometry matches exactly. Full unit/allocation, boundaries, format and keyless builds pass. See `phase3-w2-cctv-renderer-evidence.json` for retained initial viewshed failure and keyless shell idle/terrain-height gaps. Continue step3 (finite Navara obstruction rays using retained tile triangles), then steps4–7. Do not use old keyed previews or rerun Google-dependent gates under routine QA; synthetic geometry must establish the needed mesh semantics without billing. This checkpoint does not close CCTV or W2.
 
 Calibration-handle extraction and periodic idle review complete: native geometry/55 legacy checks preserved, all19 companion checks pass on dev/preview with22s idle windows, full gates pass. See `phase3-w2-cctv-gizmo-evidence.json`. Continue native marker/plane/coverage/volume/event ownership extraction before Navara; the complete CCTV/W2 gate remains open.

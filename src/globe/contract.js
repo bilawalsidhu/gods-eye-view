@@ -203,6 +203,11 @@
  *   The position moved onto the rendered scene along the geodetic normal.
  * @property {boolean} clampToHeightSupported
  * @property {() => boolean} tilesLoaded
+ * @property {boolean} [raycastSupported] Optional visible-tile obstruction probe.
+ * @property {(ray: { origin: Cartesian3, direction: Cartesian3, far: number, exclude?: any[] }) => ({ position: Cartesian3, distance: number, object: any } | undefined)} [raycast]
+ *   Nearest visible tile triangle within finite positive `far` metres. Direction
+ *   is normalized by the adapter. Excluded roots/meshes and hidden objects do
+ *   not obstruct; a miss or unsupported geometry returns undefined, not terrain.
  *
  * @typedef {object} SurfaceHeight
  * @property {number} height Metres above the ellipsoid.

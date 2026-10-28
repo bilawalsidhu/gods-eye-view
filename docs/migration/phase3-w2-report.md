@@ -2,6 +2,12 @@
 
 Status: W2 in progress. Earthquakes are accepted; FIRMS, installations, bikeshare, radio and ALPR have implementation checkpoints with the limits below. ALPR acceptance, CCTV, transit, recent imagery and whole-wave gates remain. The execution sequence and later migration phases are in [the detailed plan](phase3-w2-plan.md).
 
+## W2 CCTV — Navara obstruction-ray capability (2026-10-29)
+
+Navara surface now exposes an optional finite raycast over visible retained tile triangles. It normalizes direction, respects tile/mesh exclusions and material sides/draw ranges, reports the actual world-space hit, and never substitutes a terrain height for an unknown obstruction. It reuses the existing triangle traversal and retained geometry. A synthetic overlapping-bound regression reproduced a real nearest-hit bug (5m returned instead of2m): an origin inside a bounding sphere must be ordered at entry distance0, rather than its forward exit. The corrected traversal passes that regression.
+
+All15focused surface tests pass, including released UV/normal arrays and world transforms. Full gates pass7309/7310ordinary tests (one Windows skip),15allocation checks, boundaries,1640-file formatting and production/panel/QA/main builds, with both credentials empty. Logs: `/private/tmp/gev-cctv-surface-ray-*`. These are CPU triangle/adapter checks, not a live-tile browser result. The CCTV Navara renderer still needs to consume this capability; media planes, volumes, gizmos and end-to-end parity remain next. Existing shell/terrain/performance gaps are unchanged.
+
 ## W2 CCTV — native renderer checkpoint, keyless QA (2026-10-29)
 
 The shared CCTV package no longer imports Cesium. A native renderer owns markers, coverage lines, projection materials/planes, viewshed primitives, input/listeners, credits and scene queries. Initialization rejects overlapping owners, teardown releases the original resources, and partial construction rolls back. Retired source/media completions cannot mutate a replacement owner; video metadata/resize listeners are released. Portable colours match the native HSL oracle over1025hues. Application defaults are unchanged.
