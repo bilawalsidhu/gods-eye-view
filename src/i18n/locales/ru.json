@@ -216,6 +216,8 @@
   "Pause replay": "Приостановить повтор",
   "Cancel replay": "Отменить повтор",
   "EST. DOWNRANGE": "РАСЧЁТ ПО ТРАССЕ",
+  "CONFIRMED": "ПОДТВЕРЖДЕНО",
+  "PAD / RTLS": "СТАРТОВАЯ ПЛОЩАДКА / RTLS",
   "PLANNED · ": "ПЛАН · ",
   "SUPPLIED TRAJECTORY POINTS": "ПРЕДОСТАВЛЕННЫЕ ТОЧКИ ТРАЕКТОРИИ",
   "RECONSTRUCTED ESTIMATE": "РЕКОНСТРУИРОВАННАЯ ОЦЕНКА",

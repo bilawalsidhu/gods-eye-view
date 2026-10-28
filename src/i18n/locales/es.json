@@ -739,6 +739,8 @@
   "awaiting usable AIS positions…": "esperando posiciones AIS utilizables…",
   "awaiting first AIS message…": "esperando el primer mensaje AIS…",
   "EST. DOWNRANGE": "DIST. ESTIMADA",
+  "CONFIRMED": "CONFIRMADA",
+  "PAD / RTLS": "PLATAFORMA / RTLS",
   "MISSION CONTROL · FIRST LAUNCH": "CENTRO DE MANDO · PRIMER INICIO",
   "Choose your first view": "Elige tu primera vista",
   "LIVE CONTACTS": "CONTACTOS EN VIVO",

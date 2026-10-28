@@ -6,6 +6,15 @@ import {
 } from './policy.js';
 import { UNKNOWN_LAUNCH_STATUS } from './model.js';
 
+// Landing endpoints carry an English accuracy code (the panel and the map
+// entity compare it); only the text shown in the stage table is translated.
+// The downrange estimate arrives already translated.
+function accuracyLabel(accuracy) {
+  if (accuracy === 'CONFIRMED') return t('CONFIRMED');
+  if (accuracy === 'PAD / RTLS') return t('PAD / RTLS');
+  return accuracy;
+}
+
 export function createPanel({ state: layerState, services, parts, source }) {
   /**
    * Preserve the user's globe scale for roster previews while avoiding an
@@ -251,7 +260,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
           ? launch.launchSite
           : t('UNAVAILABLE'));
       const position = endpoint
-        ? `${endpoint.lat.toFixed(2)}, ${endpoint.lon.toFixed(2)} · ${endpoint.accuracy}`
+        ? `${endpoint.lat.toFixed(2)}, ${endpoint.lon.toFixed(2)} · ${accuracyLabel(endpoint.accuracy)}`
         : stage.downrangeKm > 0
           ? t('{value} KM DOWNRANGE', {
               value: stage.downrangeKm.toLocaleString(),

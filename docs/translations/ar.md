@@ -8,8 +8,8 @@ Translation sources: abiyeenzo (#915).
 
 - Modern Standard Arabic, neutral across regions. Address the user with plain imperatives: «انقر»، «فعّل»، «أعد المحاولة».
 - Arabic has no letter case: an UPPERCASE English HUD label becomes the same short Arabic label. Keep labels as short as the English: «مباشر»، «متقادم»، «متوقف».
-- Status words in progress use «جارٍ …» («جارٍ التحميل»، «… جارٍ تشغيل اللقطة»); finished actions use the passive («تم الحفظ»، «أُلغي التحميل»). Data that refreshes itself «يُحدَّث» (يتحدّث means "speaks"). A sentence about a `{placeholder}` whose gender and number vary stays impersonal: «{layers}: تم التفعيل للتو».
-- A label followed by its value takes a colon, so it does not read as a sentence: «الصوت: نشط»، «السياق: {value}».
+- Status words in progress use «جارٍ …» («جارٍ التحميل»، «جارٍ الضبط»، «… جارٍ تشغيل اللقطة»), so a status chip never reads as the command next to it («ضبط» is the TUNE button); finished actions use the passive («تم الحفظ»، «أُلغي التحميل»). Data that refreshes itself «يُحدَّث» (يتحدّث means "speaks"). A sentence about a `{placeholder}` whose gender and number vary stays impersonal: «{layers}: تم التفعيل للتو».
+- A label followed by its value takes a colon, so it does not read as a sentence: «الصوت: نشط»، «السياق: {value}»، «الاحتواء: {percent}%». A named mode or control quoted in a sentence takes «»: «يظهر في وضع «كثيف» فقط».
 - Arabic punctuation in Arabic text: ، ؛ ؟ and «» for quotes. Keep `·` as the HUD separator, `—` with spaces, and `…`.
 - Arrows that show a sequence point the way Arabic reads: «الإشارات ← الأخبار ← المحلي», «{origin} ← {destination}».
 - Product names, provider names and codes stay in Latin letters: Google, Cesium ion, CelesTrak, NOAA, FIRMS, AIS, ADS-B, GNSS, CCTV, HUD, CRT, NVG, FLIR, WHOT/BHOT, Ironbow, Street View, Mapillary. Aviation and camera abbreviations stay Latin too: HDG, FOV, BRG, CRS, GS, TRK, V/S, SQUAWK. Local place names from the Bhote Koshi scene (Rasuwagadhi, Bidur, Timure…) stay Latin; well-known cities and countries are written in Arabic (أوستن، طوكيو، نيبال).
@@ -22,7 +22,7 @@ Translation sources: abiyeenzo (#915).
 - Latin runs inside Arabic sentences (product names, codes, `{placeholders}` filled with English data) are isolated by the bidi algorithm; write them as plain text, without manual direction marks.
 - Position counters: a translated counter says «من» («القناة {index} من {total}», «الإطار {index} من {total}»); a spaced slash between two isolated numbers swaps them in right-to-left text. Counters the code builds from bare numbers (`01 / 25`, `1 / 3`) are shown left to right by `rtl.css`.
 - Code stays left to right: the JSON fields of the scene editor are LTR in every language.
-- Comparison signs `<` and `>` are mirrored glyphs in right-to-left text («< 2%» shows as «> 2%»). Write them as words: «أقل من 2%»، «أكثر من 10%»، «أقل من ساعة». A legend's open upper bound («300+», «-40») is isolated by `formatScaleLabel()`, so its sign stays where it is written.
+- Comparison signs `<` and `>` are mirrored glyphs in right-to-left text («< 2%» shows as «> 2%»). Write them as words: «أقل من 2%»، «أكثر من 10%»، «أقل من ساعة». A legend's open upper bound («300+», «-40») is isolated by `formatScaleLabel()`, so its sign stays where it is written; `formatScaleRange()` isolates the unit after the range too («°C», not «C°»).
 
 ## Units
 
@@ -71,12 +71,13 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | installation, site / mapped                | منشأة، موقع / مرسوم                                        |
 | camera / CCTV camera                       | كاميرا / كاميرا CCTV                                       |
 | earthquake / active fire / fire perimeter  | زلزال / حريق نشط / محيط حريق                               |
+| containment (wildfire)                     | احتواء (not السيطرة)                                       |
 | cyclone advisory                           | نشرة إعصار                                                 |
 | scene / shot / scene recipe                | مشهد / لقطة / قالب المشهد                                  |
 | briefing / panel / dock                    | إحاطة / لوحة / الشريط السفلي                               |
 | preset / visual preset                     | إعداد مسبق / نمط بصري                                      |
 | Scope (circular viewport mask) / keyhole   | المنظار / الفتحة                                           |
-| Clean UI                                   | واجهة نظيفة                                                |
+| Clean UI / EXIT CLEAN VIEW                 | واجهة نظيفة / الخروج من الواجهة النظيفة (not العرض)        |
 | cockpit                                    | القمرة (قمرة القيادة)                                      |
 | heading / altitude / ground speed          | الاتجاه (HDG) / الارتفاع / السرعة الأرضية                  |
 | Street Level / Street View                 | مستوى الشارع / Street View                                 |
@@ -90,7 +91,7 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | forecast / valid (time) / issued           | توقع / عند، وقت التوقع (not صالح حتى) / صدر                |
 | observation / observed                     | رصد / مرصود                                                |
 | heard (aircraft received by the SDR)       | الملتقطة                                                   |
-| upstream (camera feed)                     | المصدر الأصلي                                              |
+| upstream (camera feed)                     | المصدر الأصلي (in every CCTV message, not bare المصدر)     |
 | field (weather) / model                    | حقل / نموذج                                                |
 | parameters / ellipsoid                     | المعلمات / المجسّم الإهليلجي                               |
 | scene cloud                                | غيوم المشهد                                                |
@@ -100,6 +101,7 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | share (a view or link)                     | مشاركة                                                     |
 | AI agent                                   | وكيل ذكاء اصطناعي                                          |
 | stage (rocket) / downrange                 | مرحلة / على امتداد المسار                                  |
+| landing position: CONFIRMED / PAD (RTLS)   | مؤكَّد / منصة الإطلاق                                      |
 | recovery (rocket stage)                    | استعادة (not استرجاع)                                      |
 | Arrive at your destination (route step)    | الوصول إلى وجهتك (a step, not وصلت)                        |
 | forecast lead hours                        | مدة التوقع بالساعات (not ساعات المهلة)                     |

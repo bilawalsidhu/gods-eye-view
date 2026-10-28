@@ -18,7 +18,11 @@ import {
 import { hudQuantity, LOCALIZED_LOCALITY } from '../hudLocalityFormat.js';
 import { formatCockpitDistance } from '../ui/cockpitPresentation.js';
 import { READOUT_WORDS } from '../layers/recentImagery/display.js';
-import { formatQuantity, formatScaleLabel } from '../ui/unitLabels.js';
+import {
+  formatQuantity,
+  formatScaleLabel,
+  formatScaleRange,
+} from '../ui/unitLabels.js';
 
 test('Arabic resolves from URL, saved preference and browser language', () => {
   assert.equal(
@@ -133,6 +137,11 @@ test('Arabic uses all six plural forms and spaced HUD units', () => {
       '\u2068300+\u2069',
       '\u20680.1\u2069',
     ]);
+    // A Latin unit after the range keeps its order: °C, not C°.
+    assert.equal(
+      formatScaleRange('-40', '50+', '°C'),
+      `${formatScaleLabel('-40')} — \u206850+\u2069\u00a0\u2068°C\u2069`,
+    );
     // Counted minutes agree with the number (3–10 plural, 11+ singular).
     assert.deepEqual(
       [3, 15].map((n) =>

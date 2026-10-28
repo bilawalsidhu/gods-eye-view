@@ -1,7 +1,7 @@
 import { t } from '../i18n/index.js';
 import { syncChipGroup } from './chipGroup.js';
 import { syncRowList } from './rowList.js';
-import { formatScaleLabel, unitLabel } from './unitLabels.js';
+import { formatScaleRange } from './unitLabels.js';
 import { createSlider } from './slider.js';
 
 const set = (node, key, value) => {
@@ -15,13 +15,6 @@ const order = (parent, nodes) =>
     if (parent.children[i] !== node)
       parent.insertBefore(node, parent.children[i] || null);
   });
-
-// "960 — 1050+ гПа": the unit stays with the last number.
-const scaleText = (low, high, units) => {
-  const unit = unitLabel(units);
-  const range = `${formatScaleLabel(low)} — ${formatScaleLabel(high)}`;
-  return unit ? `${range}\u00a0${unit}` : range;
-};
 
 /** Optional, ordered blocks without disclosure state. All controls are keyed. */
 export function createRailCardBlocks({ container, cardId, onParams }) {
@@ -309,7 +302,11 @@ export function createRailCardBlocks({ container, cardId, onParams }) {
             block.scale,
             'textContent',
             visible
-              ? scaleText(legend.labels[0], legend.labels.at(-1), legend.units)
+              ? formatScaleRange(
+                  legend.labels[0],
+                  legend.labels.at(-1),
+                  legend.units,
+                )
               : '',
           );
         } else if (props.type === 'actions') {

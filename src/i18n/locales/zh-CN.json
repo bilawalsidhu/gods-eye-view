@@ -811,6 +811,8 @@
   "Pause replay": "暂停回放",
   "Cancel replay": "取消回放",
   "EST. DOWNRANGE": "预估落点距离",
+  "CONFIRMED": "已确认",
+  "PAD / RTLS": "发射台 / RTLS",
   "PLANNED · ": "计划 · ",
   "SUPPLIED TRAJECTORY POINTS": "提供的轨迹点",
   "RECONSTRUCTED ESTIMATE": "重建估算",
