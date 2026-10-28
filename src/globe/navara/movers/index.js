@@ -20,6 +20,7 @@ import { createModelMover } from './modelMover.js';
 import { createMoverMesh } from './moverMesh.js';
 import { createPickIndex } from './pickIds.js';
 import { createMoverFrameCamera } from './frameCamera.js';
+import { createNavaraOverlay } from '../overlay.js';
 
 const DESC_NAME = 'gevMoverSet';
 const registered = new WeakSet();
@@ -94,24 +95,32 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
     loader ??= createGltfLoader();
     return loader.loadAsync(url);
   };
+  let preSharpenOverlay = null,
+    preSharpenUsers = 0;
   const request = () => view.forceUpdate();
   const overlaySet = (options, store) => {
+    const targetOverlay = options.sharpen
+      ? (preSharpenOverlay ??= createNavaraOverlay(view, {
+          beforeSharpen: true,
+        }))
+      : overlay;
+    if (options.sharpen) preSharpenUsers++;
     const mover = createMoverMesh(options, store, {
       onTextureLoad: request,
-      overlayUniforms: overlay.uniforms,
+      overlayUniforms: targetOverlay.uniforms,
     });
     const key = `gevMovers:${options.id}`;
     if (options.pickable) {
       const wrapper = new PickableInstancedMeshWrapper(
         mover.mesh,
         options.capacity,
-        overlay.ctx,
+        targetOverlay.ctx,
       );
-      overlay.registerPickable(key, wrapper);
+      targetOverlay.registerPickable(key, wrapper);
       pickIndex.add(options.id, wrapper, (index) => store.pickIds[index]);
     }
-    overlay.add(mover.mesh, (time) =>
-      updateMover(readFrameCamera, overlay.ctx, mover, time),
+    targetOverlay.add(mover.mesh, (time) =>
+      updateMover(readFrameCamera, targetOverlay.ctx, mover, time),
     );
     return {
       ready: mover.ready,
@@ -121,9 +130,13 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
       },
       destroy() {
         pickIndex.remove(options.id);
-        if (options.pickable) overlay.unregisterPickable(key);
-        overlay.remove(mover.mesh);
+        if (options.pickable) targetOverlay.unregisterPickable(key);
+        targetOverlay.remove(mover.mesh);
         mover.dispose();
+        if (options.sharpen && --preSharpenUsers === 0) {
+          preSharpenOverlay.destroy();
+          preSharpenOverlay = null;
+        }
         request();
       },
     };

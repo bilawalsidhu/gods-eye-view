@@ -2698,7 +2698,13 @@
       "src/layers/earthquakes/render/navaraGeometry.js",
       "src/layers/earthquakes/render/navaraGrid.js",
       "src/layers/firms/rectangle.js",
-      "src/layers/firms/render/cesium.js"
+      "src/layers/firms/render/cesium.js",
+      "src/layers/firms/render/navara.js",
+      "src/layers/firms/render/navaraGeometry.js",
+      "src/layers/firms/render/navaraSprites.js",
+      "src/layers/shared/render/navaraGroundGeometry.js",
+      "src/layers/shared/render/navaraGroundGrid.js",
+      "src/layers/shared/render/navaraGroundSurface.js"
     ],
     "external": [
       "hls.js",

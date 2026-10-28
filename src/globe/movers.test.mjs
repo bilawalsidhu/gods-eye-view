@@ -264,3 +264,32 @@ test('point outline RGBA is validated and copied independently of the caller', (
       TypeError,
     );
 });
+
+test('native-stage sprite fields opt into sharpening explicitly and reject model misuse', () => {
+  const base = {
+    id: 'firms',
+    kind: 'sprite',
+    capacity: 1,
+    sprite: { atlas, sizePx: 56 },
+  };
+  assert.equal(normalizeMoverSetOptions(base).sharpen, false);
+  assert.equal(
+    normalizeMoverSetOptions({ ...base, sharpen: true }).sharpen,
+    true,
+  );
+  assert.throws(
+    () => normalizeMoverSetOptions({ ...base, sharpen: 'true' }),
+    TypeError,
+  );
+  assert.throws(
+    () =>
+      normalizeMoverSetOptions({
+        id: 'm',
+        kind: 'model',
+        capacity: 1,
+        model: { url: '/box.glb' },
+        sharpen: true,
+      }),
+    TypeError,
+  );
+});

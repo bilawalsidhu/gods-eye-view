@@ -1,0 +1,50 @@
+{
+  "kind": "real headless Metal source/layer fixture captures, lossless61x61 RGB crops",
+  "fire": {
+    "frp": 0,
+    "confidence": "low"
+  },
+  "background": [16, 32, 48],
+  "matchedSharpenPct": 49,
+  "defaultSharpenPct": {
+    "cesium": 49,
+    "navara": 80
+  },
+  "files": [
+    {
+      "file": "cesium-raw.png",
+      "source": "qa-artifacts/w2/firms/navara/glows-exact-sharpen-cesium-raw-yellow.png",
+      "sha256": "f62ab36d166e94e6e15aee989094a0e6dc81f1ab76f5b0da8c462404434af591"
+    },
+    {
+      "file": "cesium-matched-sharpen.png",
+      "source": "qa-artifacts/w2/firms/navara/glows-exact-sharpen-cesium-matched-sharpen-yellow.png",
+      "sha256": "16ce41c9fbc25458670b104af0aa5230b27b50e6787be39de29fdb7b11470d83"
+    },
+    {
+      "file": "cesium-default-sharpen.png",
+      "source": "qa-artifacts/w2/firms/navara/glows-exact-sharpen-cesium-default-sharpen-yellow.png",
+      "sha256": "16ce41c9fbc25458670b104af0aa5230b27b50e6787be39de29fdb7b11470d83"
+    },
+    {
+      "file": "navara-raw.png",
+      "source": "qa-artifacts/w2/firms/navara/glows-exact-sharpen-navara-raw-yellow.png",
+      "sha256": "c1087f786f51ce420cbd8bc33e2ce4571a7963870b15cf034442c7554949018d"
+    },
+    {
+      "file": "navara-matched-sharpen.png",
+      "source": "qa-artifacts/w2/firms/navara/glows-exact-sharpen-navara-matched-sharpen-yellow.png",
+      "sha256": "d73fa06c878816fd77173a966bc451c617ebb3e515eaed6dfa8a3952e6a3bc14"
+    },
+    {
+      "file": "navara-default-sharpen.png",
+      "source": "qa-artifacts/w2/firms/navara/glows-exact-sharpen-navara-default-sharpen-yellow.png",
+      "sha256": "45f9ce7f76b5afde0e21239593540b115332a9b8072b657c221362bd484888d6"
+    },
+    {
+      "file": "navara-gamma22-matched-sharpen.png",
+      "source": "qa-artifacts/w2/firms/navara/glows-target-byte-navara-matched-sharpen-yellow.png",
+      "sha256": "fb046cd426aaf1fd2302360967a0ba0d1d0fb328cde529a6559eb52119782827"
+    }
+  ]
+}

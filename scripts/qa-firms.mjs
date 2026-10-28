@@ -30,25 +30,33 @@
  */
 
 import puppeteer from 'puppeteer';
-import { redact } from './qa-browserEvidence.mjs';
+import {
+  isExpectedPreviewSetupError,
+  redact,
+} from './qa-browserEvidence.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
-const SHOTS_DIR = path.join(REPO_ROOT, 'qa-shots');
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
   const i = argv.indexOf(name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
-const APP_URL = getOpt('--url', 'http://localhost:4420');
+const appUrl = new URL(getOpt('--url', 'http://localhost:4420'));
+const ENGINE = getOpt('--engine', appUrl.searchParams.get('engine') || 'cesium');
+if (!['cesium', 'navara'].includes(ENGINE)) throw new Error('Unknown engine');
+appUrl.searchParams.set('engine', ENGINE);
+const APP_URL = appUrl.href;
 const HEADFUL = argv.includes('--headful');
 const FIXTURES = argv.includes('--fixtures');
+const PREVIEW = argv.includes('--preview');
 const ANGLE = getOpt('--angle', 'swiftshader');
 const OUT = getOpt('--out', null);
+const SHOTS_DIR = OUT ? path.resolve(OUT).replace(/\.json$/, '') + '-shots' : path.join(REPO_ROOT, 'qa-shots');
 if (!['metal', 'swiftshader'].includes(ANGLE)) throw new Error('Unknown ANGLE backend');
 const runtimeErrors = [];
 const expectedSourceErrors = [];
@@ -163,9 +171,11 @@ async function waitForFirmsActionCount(page, expected, { timeoutMs = 12000 } = {
 async function bootAndEnable(page, { timeoutS = 45 } = {}) {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction(
-    () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+    () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
     { timeout: 60000 },
   );
+  const actualEngine = await page.evaluate(() => window.__godsEyeView.engine.kind);
+  if (actualEngine !== ENGINE) throw new Error('Requested FIRMS engine did not load');
   await sleep(5000);
   await page.keyboard.press('Escape');
   return page.evaluate(async (tS) => {
@@ -184,8 +194,15 @@ async function bootAndEnable(page, { timeoutS = 45 } = {}) {
 
 /** Teleport the camera (duck-typed cartographic — no Cesium global). */
 async function setView(page, lon, lat, height) {
-  await page.evaluate((lo, la, h) => {
+  await page.evaluate(async (lo, la, h) => {
     const gev = window.__godsEyeView;
+    if (!gev.viewer) {
+      const geo = await import('/src/geo/index.js');
+      gev.engine.camera.cancelFlight();
+      gev.engine.camera.setView({destination:geo.cartesian3.fromDegrees(lo,la,h),orientation:{heading:0,pitch:-Math.PI/2,roll:0}});
+      gev.engine.render.request('firms-legacy-view');
+      return;
+    }
     const ell = gev.viewer.scene.globe.ellipsoid;
     const d2r = Math.PI / 180;
     // The app's intro flyTo animation clobbers a setView issued mid-flight.
@@ -271,6 +288,10 @@ async function main() {
     page.on('error', error => runtimeErrors.push(redact(error.message)));
     page.on('console', message => {
       if (message.type() !== 'error') return;
+      if (isExpectedPreviewSetupError(message, { preview: PREVIEW, baseUrl: APP_URL })) {
+        expectedSourceErrors.push('/api/setup/status: 404');
+        return;
+      }
       let expected = false;
       try {
         const url = new URL(message.location()?.url);
@@ -401,17 +422,22 @@ async function main() {
         const target = mod.getDetectableObjects({ maxCount: 1 })[0];
         if (!target?.position) return null;
 
-        const sentinel = gev.viewer.entities.add({
+        const native = Boolean(gev.viewer);
+        const sentinel = native ? gev.viewer.entities.add({
           id: 'qa-firms-prior-camera-owner',
           position: target.position,
-        });
-        gev.viewer.trackedEntity = sentinel;
+        }) : gev.engine.camera.follow({position:()=>target.position,viewFrom:{x:0,y:-5000,z:8000},
+          label:{id:'qa-firms-prior-camera-owner',model:{title:'QA prior camera owner'},position:()=>target.position}});
+        if (native) gev.viewer.trackedEntity = sentinel;
 
-        const camera = gev.viewer.camera;
-        const originalFly = camera.flyToBoundingSphere;
+        const camera = native ? gev.viewer.camera : gev.engine.camera;
+        const flightMethod = native ? 'flyToBoundingSphere' : 'flyToSphere';
+        const originalFly = camera[flightMethod];
         const proof = {
           sentinel,
           originalFly,
+          flightMethod,
+          native,
           flightCount: 0,
           trackedAtFlight: 'not-called',
           request: null,
@@ -424,9 +450,9 @@ async function main() {
           };
         };
         window.addEventListener('gev:world-request-focus', proof.onRequest);
-        camera.flyToBoundingSphere = function qaFirmsObservedFlight(...args) {
+        camera[flightMethod] = function qaFirmsObservedFlight(...args) {
           proof.flightCount += 1;
-          proof.trackedAtFlight = gev.viewer.trackedEntity?.id || null;
+          proof.trackedAtFlight = native ? gev.viewer.trackedEntity?.id || null : gev.engine.camera.following()?.label?.id || null;
           return originalFly.apply(this, args);
         };
         window.__qaFirmsActionProof = proof;
@@ -448,7 +474,7 @@ async function main() {
 
         for (let i = 0; i < 30; i += 1) {
           const settled = await page.evaluate(() => {
-            window.__godsEyeView?.viewer?.scene?.requestRender?.();
+            window.__godsEyeView?.engine?.render?.request?.('firms-legacy');
             return (window.__qaFirmsActionProof?.flightCount || 0) > 0;
           });
           if (settled) break;
@@ -466,7 +492,7 @@ async function main() {
           const result = {
             flightCount: state?.flightCount || 0,
             trackedAtFlight: state?.trackedAtFlight,
-            trackingReleased: gev.viewer.trackedEntity == null,
+            trackingReleased: gev.viewer ? gev.viewer.trackedEntity == null : gev.engine.camera.following() == null,
             generationBefore: state?.generationBefore,
             generationAfter: gev.styleManager._navigationGeneration,
             request: state?.request || null,
@@ -476,9 +502,12 @@ async function main() {
             ).length,
           };
           if (state) {
-            gev.viewer.camera.flyToBoundingSphere = state.originalFly;
+            (state.native ? gev.viewer.camera : gev.engine.camera)[state.flightMethod] = state.originalFly;
             window.removeEventListener('gev:world-request-focus', state.onRequest);
-            if (state.sentinel) gev.viewer.entities.remove(state.sentinel);
+            if (state.sentinel) {
+              if (state.native) gev.viewer.entities.remove(state.sentinel);
+              else state.sentinel.stop();
+            }
           }
           delete window.__qaFirmsActionProof;
           return result;
@@ -540,8 +569,8 @@ async function main() {
   if (OUT) {
     const file = path.resolve(OUT);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ pass:exitCode === 0 && fail === 0, fixture:FIXTURES, angle:ANGLE,
-      results, browserErrors:runtimeErrors, expectedSourceErrors }, null, 2) + '\n');
+    fs.writeFileSync(file, JSON.stringify({ pass:exitCode === 0 && fail === 0, fixture:FIXTURES, angle:ANGLE, engine:ENGINE,
+      shots:SHOTS_DIR, results, browserErrors:runtimeErrors, expectedSourceErrors }, null, 2) + '\n');
   }
   process.exit(exitCode || (fail > 0 ? 1 : 0));
 }

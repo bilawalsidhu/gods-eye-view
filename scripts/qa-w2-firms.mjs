@@ -33,6 +33,19 @@ if (arg('compare')) {
         `${capture.engine}: failed checks or missing strict observer evidence`,
       );
     if (
+      (capture.engine === 'navara' || (capture.captureRevision ?? 1) >= 2) &&
+      ['cesium', 'navara'].some(
+        (opened) =>
+          !capture.runtimePages?.includes('share-' + opened) ||
+          !capture.mainVisibleAfterShares ||
+          !capture.shares?.[opened]?.restored ||
+          capture.shares[opened].actualEngine !== opened,
+      )
+    )
+      errors.push(
+        `${capture.engine}: missing observed cross-engine share restoration`,
+      );
+    if (
       capture.geometryEpochMs !== FIRMS_EPOCH_MS ||
       capture.records?.length !== FIRMS_VALID_COUNT ||
       capture.initialStats?.lastUpdate !== FIRMS_EPOCH_MS - 120000 ||
@@ -131,7 +144,8 @@ const fixture = firmsFixture();
 const report = {
   layer,
   engine,
-  stage: 'native-oracle',
+  captureRevision: 2,
+  stage: engine === 'cesium' ? 'native-oracle' : 'navara-acceptance',
   checks: [],
   poses: {},
   browserErrors: [],
@@ -144,19 +158,7 @@ const check = (name, pass, detail) => {
   report.checks.push({ name, pass: Boolean(pass), detail });
   console.log(`${pass ? 'PASS' : 'FAIL'} ${name}`);
 };
-const browser = await puppeteer.launch({
-  headless: true,
-  protocolTimeout: 180000,
-  args: ['--use-angle=metal'],
-});
-try {
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1280, height: 800 });
-  watchW1Page(page, report, {
-    name: 'main',
-    baseUrl: base,
-    preview: process.argv.includes('--preview'),
-  });
+async function installFirmsFixture(page) {
   await page.evaluateOnNewDocument((payload) => {
     localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
     const original = window.fetch.bind(window);
@@ -231,6 +233,22 @@ try {
       return original(input, init);
     };
   }, fixture);
+}
+
+const browser = await puppeteer.launch({
+  headless: true,
+  protocolTimeout: 180000,
+  args: ['--use-angle=metal'],
+});
+try {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1280, height: 800 });
+  watchW1Page(page, report, {
+    name: 'main',
+    baseUrl: base,
+    preview: process.argv.includes('--preview'),
+  });
+  await installFirmsFixture(page);
   const url = new URL(base);
   url.searchParams.set('engine', engine);
   await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 180000 });
@@ -627,6 +645,63 @@ try {
     report.source.count === FIRMS_VALID_COUNT &&
       !report.source.afterLate.loading,
     report.source.afterLate,
+  );
+  await sleep(2500);
+  const sharedHash = await page.evaluate(() => location.hash);
+  report.shares = {};
+  for (const opened of [engine, engine === 'cesium' ? 'navara' : 'cesium']) {
+    const context = await browser.createBrowserContext();
+    try {
+      const shared = await context.newPage();
+      watchW1Page(shared, report, {
+        name: 'share-' + opened,
+        baseUrl: base,
+        preview: process.argv.includes('--preview'),
+      });
+      await shared.setViewport({ width: 1280, height: 800 });
+      await installFirmsFixture(shared);
+      const url = new URL(base);
+      url.searchParams.set('engine', opened);
+      url.hash = sharedHash;
+      await shared.goto(url.href, {
+        waitUntil: 'domcontentloaded',
+        timeout: 180000,
+      });
+      const restored = await shared
+        .waitForFunction(
+          (id) => {
+            const a = window.__godsEyeView;
+            return (
+              a?.dataManager?.isEnabled(id) &&
+              a.dataManager.layers.get(id).module.getAnalystRecords(1000)
+                .length === 371
+            );
+          },
+          { timeout: 60000 },
+          layer,
+        )
+        .then(() => true)
+        .catch(() => false);
+      const actualEngine = await shared.evaluate(
+        () => window.__godsEyeView?.engine.kind,
+      );
+      report.shares[opened] = { restored, actualEngine };
+      check(
+        'share restores FIRMS on ' + opened,
+        restored && actualEngine === opened,
+        report.shares[opened],
+      );
+    } finally {
+      await context.close();
+    }
+  }
+  await page.bringToFront();
+  report.mainVisibleAfterShares = await page.evaluate(
+    () => document.visibilityState === 'visible',
+  );
+  check(
+    'main page is visible after share contexts close',
+    report.mainVisibleAfterShares,
   );
   await sleep(3500);
   report.hudSummaryFixture = true;

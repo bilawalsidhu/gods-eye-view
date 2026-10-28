@@ -53,6 +53,7 @@ const NAVARA_CREDIT_KEYS = new Set([
   'celestrak',
   'launch-library-2',
   'usgs',
+  'firms',
 ]);
 
 /**
@@ -61,6 +62,15 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    'local-firms': async () => {
+      const { createFirmsNavaraRenderer } =
+        await import('../layers/firms/render/navara.js');
+      return (engine, options) =>
+        createFirmsNavaraRenderer(engine, {
+          ...options,
+          ...navaraViews.get(engine),
+        });
+    },
     earthquakes: async () => {
       const { createEarthquakesNavaraRenderer } =
         await import('../layers/earthquakes/render/navara.js');

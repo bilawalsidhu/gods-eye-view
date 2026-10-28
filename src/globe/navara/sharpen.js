@@ -3,17 +3,11 @@
 // (src/ui/visualPresets.js SHARPEN_SHADER): a 3×3 box blur, then
 // center + (center − blur) × amount, clamped to [0, 1].
 //
-// Where it sits: right after tone mapping (after gev's overlay of sprites,
-// points and lines, which Cesium's sharpen stage also sharpens) and before
-// SMAA or FXAA (before `final` in a look without them), as Cesium runs its
-// custom stages after
-// its tone mapping and before FXAA. After tone mapping the colours are the
-// display's [0, 1] range, so highlights do not blow up; anti-aliasing after
-// it smooths the stair steps sharpening brings out. Cesium sharpens
-// gamma-encoded colours (its tone mapping ends with czm_inverseGamma) while
-// Navara's buffers stay linear until the final copy, so the mask encodes
-// with Cesium's gamma 2.2 and decodes after: the same amount sharpens the
-// same.
+// After tone mapping and native-stage fields such as FIRMS, before AA and
+// the ordinary W1 display overlay. Native SHARPEN_SHADER filters encoded
+// display RGB. Navara buffers stay linear, so use the exact sRGB transfer
+// before the box mask and its inverse afterward. A gamma-2.2 approximation
+// changes the colors of small, high-contrast glows even at the same amount.
 //
 // The sky is left alone: Navara's clouds are dithered (a fine grain at the
 // `low` quality the look uses), and the mask turned that grain into visible
@@ -39,11 +33,19 @@ uniform bool uSkipSky;
 const float SKY_DEPTH = 0.99999;
 
 vec3 encodeGamma(vec3 color) {
-  return pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
+  return mix(12.92*color,1.055*pow(max(color,vec3(0.0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),color));
+}
+
+vec3 decodeGamma(vec3 color) {
+  return mix(color/12.92,pow(max((color+0.055)/1.055,vec3(0.0)),vec3(2.4)),step(vec3(0.04045),color));
+}
+
+vec3 encoded8(vec3 color) {
+  return floor(clamp(color, 0.0, 1.0) * 255.0 + 0.5) / 255.0;
 }
 
 vec3 sampleGamma(vec2 uv) {
-  return encodeGamma(texture2D(inputBuffer, uv).rgb);
+  return encoded8(encodeGamma(texture2D(inputBuffer, uv).rgb));
 }
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
@@ -53,7 +55,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     return;
   }
   vec2 texel = texelSize;
-  vec3 center = encodeGamma(inputColor.rgb);
+  vec3 center = encoded8(encodeGamma(inputColor.rgb));
   vec3 blur = (
     sampleGamma(uv + vec2(-texel.x, -texel.y)) +
     sampleGamma(uv + vec2( 0.0,     -texel.y)) +
@@ -66,7 +68,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     sampleGamma(uv + vec2( texel.x,  texel.y))
   ) / 9.0;
   vec3 sharpened = clamp(center + (center - blur) * amount, 0.0, 1.0);
-  outputColor = vec4(pow(sharpened, vec3(2.2)), inputColor.a);
+  outputColor = vec4(decodeGamma(sharpened), inputColor.a);
 }
 `;
 

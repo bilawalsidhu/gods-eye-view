@@ -18,6 +18,10 @@ export const OVERLAY_DEPTH_FRAGMENT = /* glsl */ `
 uniform sampler2D tGevSceneDepth;
 uniform vec2 uGevResolution;
 uniform float uGevDepthMode;
+uniform float uGevDisplayBlend;
+vec4 gevOverlayDisplayColor(vec4 color) {
+  return uGevDisplayBlend>0.5 ? sRGBTransferOETF(color) : color;
+}
 varying float vGevDepthFree;
 bool gevOverlayHidden() {
   if (uGevDepthMode < 0.5 || vGevDepthFree > 0.5 || uGevResolution.x < 1.0)

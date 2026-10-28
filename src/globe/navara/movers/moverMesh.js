@@ -8,14 +8,15 @@
 
 import {
   CanvasTexture,
-  DoubleSide,
   DynamicDrawUsage,
+  FrontSide,
   InstancedBufferAttribute,
   InstancedMesh,
   LinearFilter,
   MeshBasicMaterial,
   PlaneGeometry,
   SRGBColorSpace,
+  NoColorSpace,
   Texture,
 } from 'three';
 import {
@@ -78,19 +79,19 @@ gevSizePx = gevOutlinedSize + 3.0 / uGevPixelRatio;
 vGevPixelDistance = 2.0 / max(gevSizePx * uGevPixelRatio, 1e-3);
 if (gevStyle.y <= 0.0) gevSizePx = 0.0;
 #endif
-float gevCos = cos(gevStyle.x);
-float gevSin = sin(gevStyle.x);
 vec2 gevCorner = position.xy;
 vec2 gevTurned = vec2(
-  gevCorner.x * gevCos - gevCorner.y * gevSin,
-  gevCorner.x * gevSin + gevCorner.y * gevCos
+  gevCorner.x * gevStyle.z - gevCorner.y * gevStyle.w,
+  gevCorner.x * gevStyle.w + gevCorner.y * gevStyle.z
 );
 vec4 mvPosition = mvCenter;
 mvPosition.xy += gevTurned * gevSizePx * uGevFootprint * max(-mvCenter.z, 0.0);
 gl_Position = projectionMatrix * mvPosition;
 vGevColor = gevColor;
 vGevLocal = gevCorner;
+#ifndef GEV_ALWAYS_VISIBLE
 vGevDepthFree = gevDistance < uGevDisableWithinM ? 1.0 : 0.0;
+#endif
 `;
 
 const VERTEX_UV = /* glsl */ `
@@ -138,10 +139,15 @@ diffuseColor *= sRGBTransferEOTF(vGevColor);
 const DETACHED_OVERLAY = Object.freeze({
   tGevSceneDepth: { value: null },
   uGevResolution: { value: [0, 0] },
+  uGevDisplayBlend: { value: 0 },
 });
 
 /** Patches three's MeshBasicMaterial shaders into the screen-space quad. */
-export function patchMoverShader(shader, uniforms, { point = false } = {}) {
+export function patchMoverShader(
+  shader,
+  uniforms,
+  { point = false, encodedAtlas = false, alwaysVisible = false } = {},
+) {
   Object.assign(shader.uniforms, uniforms);
   const replace = (source, from, to) => {
     if (!source.includes(from))
@@ -151,7 +157,7 @@ export function patchMoverShader(shader, uniforms, { point = false } = {}) {
   let vertex = replace(
     shader.vertexShader,
     'void main() {',
-    `${point ? '#define GEV_POINT\n' : ''}${VERTEX_HEAD}\nvoid main() {`,
+    `${point ? '#define GEV_POINT\n' : ''}${alwaysVisible ? '#define GEV_ALWAYS_VISIBLE\n' : ''}${VERTEX_HEAD}\nvoid main() {`,
   );
   vertex = replace(vertex, '#include <project_vertex>', VERTEX_PROJECT);
   vertex = replace(vertex, '#include <uv_vertex>', VERTEX_UV);
@@ -160,20 +166,34 @@ export function patchMoverShader(shader, uniforms, { point = false } = {}) {
     'void main() {',
     `${FRAGMENT_HEAD}\nvoid main() {`,
   );
+  let colorFragment = fragmentColor(point);
+  if (alwaysVisible)
+    colorFragment = replace(
+      colorFragment,
+      'if (gevOverlayHidden()) discard;',
+      '',
+    );
+  fragment = replace(fragment, '#include <color_fragment>', colorFragment);
   fragment = replace(
     fragment,
-    '#include <color_fragment>',
-    fragmentColor(point),
+    '#include <colorspace_fragment>',
+    'gl_FragColor=gevOverlayDisplayColor(gl_FragColor);\n#include <colorspace_fragment>',
   );
+  if (encodedAtlas)
+    fragment = replace(
+      fragment,
+      '#include <map_fragment>',
+      '#include <map_fragment>\ndiffuseColor.rgb = sRGBTransferEOTF(vec4(diffuseColor.rgb, 1.0)).rgb;',
+    );
   shader.vertexShader = vertex;
   shader.fragmentShader = fragment;
   return shader;
 }
-
 // Sampled as Cesium samples its billboard atlas: linear, no mipmaps (a
 // mipmapped atlas greys small glyphs that Cesium draws at full colour).
-function cesiumSampling(texture) {
-  texture.colorSpace = SRGBColorSpace;
+function cesiumSampling(texture, encoded = false) {
+  // Native FIRMS filters its original encoded PNG colors before display blending.
+  texture.colorSpace = encoded ? NoColorSpace : SRGBColorSpace;
   texture.generateMipmaps = false;
   texture.minFilter = LinearFilter;
   texture.magFilter = LinearFilter;
@@ -181,9 +201,10 @@ function cesiumSampling(texture) {
 }
 
 /** The atlas as a three texture (a canvas at once, a URL once loaded). */
-function atlasTexture(atlas, onLoad) {
-  if (atlas.canvas) return cesiumSampling(new CanvasTexture(atlas.canvas));
-  const texture = cesiumSampling(new Texture());
+function atlasTexture(atlas, encoded, onLoad) {
+  if (atlas.canvas)
+    return cesiumSampling(new CanvasTexture(atlas.canvas), encoded);
+  const texture = cesiumSampling(new Texture(), encoded);
   const image = new Image();
   image.crossOrigin = 'anonymous';
   image.onload = () => {
@@ -247,28 +268,41 @@ export function createMoverMesh(
     // Shared by every overlay: the scene depth and the target's size.
     tGevSceneDepth: overlayUniforms.tGevSceneDepth,
     uGevResolution: overlayUniforms.uGevResolution,
+    uGevDisplayBlend:
+      overlayUniforms.uGevDisplayBlend ?? DETACHED_OVERLAY.uGevDisplayBlend,
   };
   // A canvas atlas is there at once; a URL one once its image loads.
   let textureReady = point || Boolean(options.sprite.atlas.canvas);
+  const encodedAtlas = !point && options.sharpen === true;
   const material = new MeshBasicMaterial({
     map: point
       ? null
-      : atlasTexture(options.sprite.atlas, () => {
+      : atlasTexture(options.sprite.atlas, encodedAtlas, () => {
           textureReady = true;
           onTextureLoad();
         }),
     transparent: true,
-    alphaTest: point ? 0.005 : 0.02,
+    alphaTest: point || encodedAtlas ? 0.005 : 0.02,
     // Drawn after tone mapping, with no depth buffer: the shader tests the
     // scene depth itself (overlayDepth.js).
     depthTest: false,
     depthWrite: false,
-    side: DoubleSide,
+    side: FrontSide,
   });
   material.onBeforeCompile = (shader) =>
-    patchMoverShader(shader, uniforms, { point });
-  material.customProgramCacheKey = () => `gev-mover-${kind}`;
+    patchMoverShader(shader, uniforms, {
+      point,
+      encodedAtlas,
+      alwaysVisible: depthTest === 'always',
+    });
+  material.customProgramCacheKey = () =>
+    `gev-mover-${kind}${encodedAtlas ? '-encoded-atlas' : ''}`;
   const mesh = new InstancedMesh(geometry, material, capacity);
+  mesh.userData.gevStaticSprite =
+    kind === 'sprite' &&
+    options.sharpen &&
+    depthTest === 'always' &&
+    !style.scaleByDistance;
   mesh.instanceMatrix.setUsage(DynamicDrawUsage);
   mesh.frustumCulled = false;
   mesh.renderOrder = options.order;
@@ -301,6 +335,7 @@ export function createMoverMesh(
     mesh.updateMatrix();
     mesh.updateMatrixWorld(true);
   };
+  let previousCamera = null;
   return {
     mesh,
     uniforms,
@@ -332,6 +367,26 @@ export function createMoverMesh(
       viewportHeightPx,
       pixelRatio = 1,
     }) {
+      if (
+        previousCamera &&
+        previousCamera.x === cameraPosition.x &&
+        previousCamera.y === cameraPosition.y &&
+        previousCamera.z === cameraPosition.z &&
+        previousCamera.height === cameraHeight &&
+        previousCamera.fov === fovDeg &&
+        previousCamera.viewportHeight === viewportHeightPx &&
+        previousCamera.pixelRatio === pixelRatio
+      )
+        return false;
+      previousCamera = {
+        x: cameraPosition.x,
+        y: cameraPosition.y,
+        z: cameraPosition.z,
+        height: cameraHeight,
+        fov: fovDeg,
+        viewportHeight: viewportHeightPx,
+        pixelRatio,
+      };
       uniforms.uGevPixelRatio.value = pixelRatio;
       uniforms.uGevFootprint.value = footprintPerDepth(
         fovDeg,

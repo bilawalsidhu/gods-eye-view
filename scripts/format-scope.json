@@ -1201,5 +1201,17 @@
   "src/layers/firms/rectangle.test.mjs",
   "src/layers/firms/viewport.test.mjs",
   "scripts/qa-w2-firms.mjs",
-  "scripts/fixtures/w2/firms.mjs"
+  "scripts/fixtures/w2/firms.mjs",
+  "scripts/qa-w2-sprite-alpha.mjs",
+  "src/layers/firms/render/navara.test.mjs",
+  "src/layers/firms/render/navaraGeometry.test.mjs",
+  "src/layers/firms/render/navaraSprites.test.mjs",
+  "scripts/qa-w2-firms-glows.mjs",
+  "scripts/qa-firms-glow-metrics.mjs",
+  "src/tooling/firmsGlowMetrics.test.mjs",
+  "scripts/fixtures/w2/glow-metrics/capture.json",
+  "src/layers/firms/lifecycle.test.mjs",
+  "scripts/qa-w2-firms-renderer-entry.mjs",
+  "scripts/qa-w2-firms-perf.mjs",
+  "scripts/qa-w2-firms-ground.mjs"
 ]

@@ -15,7 +15,11 @@ if (
 )
   throw new Error('Supply unreserved --base-url');
 const preview = process.argv.includes('--preview'),
-  negative = process.argv.includes('--diagnostic-disable-mask');
+  negative = process.argv.includes('--diagnostic-disable-mask'),
+  negativeMesh = process.argv.includes('--diagnostic-disable-mesh');
+const layer = arg('layer') ?? 'earthquakes';
+if (!['earthquakes', 'local-firms'].includes(layer))
+  throw new Error('Unsupported ground probe layer');
 if (preview && negative) throw new Error('Negative shader probe is dev-only');
 const out = path.resolve(
   arg('out') ?? 'qa-artifacts/w2/earthquakes-navara/forward-mesh.json',
@@ -25,6 +29,8 @@ const report = {
   checks: [],
   browserErrors: [],
   negative,
+  negativeMesh,
+  layer,
   driverSha256: crypto
     .createHash('sha256')
     .update(await fs.readFile(new URL(import.meta.url)))
@@ -50,7 +56,11 @@ try {
       const pathname = new URL(request.url()).pathname;
       const globe = pathname === '/src/globe/navara/index.js';
       const shader =
-        negative && pathname === '/src/layers/earthquakes/render/navara.js';
+        negative &&
+        pathname ===
+          (layer === 'local-firms'
+            ? '/src/layers/firms/render/navara.js'
+            : '/src/layers/earthquakes/render/navara.js');
       if (!globe && !shader) {
         await request.continue();
         return;
@@ -121,7 +131,8 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 180000 },
   );
-  const scene = await page.evaluate(async (epoch) => {
+  const probeState = { epoch: W2_EPOCH_MS, layer };
+  const scene = await page.evaluate(async ({ epoch, layer }) => {
     const a = window.__godsEyeView,
       geo = await import('/src/geo/index.js');
     a.styleManager.orbitController.stop();
@@ -130,7 +141,23 @@ try {
       if (a.dataManager.isEnabled(id)) await a.layers.disable(id);
     (await import('/src/time/clock.js')).appClock.freeze(epoch);
     (await import('/src/data/detection.js')).setMode('OFF');
-    await a.layers.enable('earthquakes');
+    if (layer === 'local-firms') {
+      const { loadFirmsRenderer } =
+        await import('/scripts/qa-w2-firms-renderer-entry.mjs');
+      const { createFirmsNavaraRenderer } = await loadFirmsRenderer();
+      window.__w2GroundFirms = createFirmsNavaraRenderer(a.engine, {
+        ...window.__w2Native,
+        id: 'qa-firms-ground',
+      });
+      window.__w2GroundFirms.setVisible(true);
+      window.__w2GroundFirms.addCell({
+        west: -123,
+        south: 37,
+        east: -122,
+        north: 38,
+        color: { red: 1, green: 0, blue: 0, alpha: 0.66 },
+      });
+    } else await a.layers.enable(layer);
     await a.mapStackController.setStack('photoreal');
     a.engine.camera.setView({
       destination: geo.cartesian3.fromDegrees(-122.4028, 37.7952, 1800),
@@ -153,46 +180,81 @@ try {
       await new Promise((r) => setTimeout(r, 100));
     }
     return {
-      records: a.dataManager.layers
-        .get('earthquakes')
-        .module.getAnalystRecords().length,
+      records:
+        layer === 'local-firms'
+          ? 1
+          : a.dataManager.layers.get(layer).module.getAnalystRecords().length,
+      mode:
+        layer === 'local-firms'
+          ? 'isolated-renderer-classification'
+          : 'source-fed-earthquakes',
       photoreal: a.engine.maps.photorealActive(),
       settled: a.engine.surface.tilesLoaded(),
     };
-  }, W2_EPOCH_MS);
+  }, probeState);
   check(
-    'nonempty real photoreal earthquake scene',
-    scene.records === 15 && scene.photoreal && scene.settled,
+    'nonempty real photoreal ground scene',
+    scene.records === (layer === 'local-firms' ? 1 : 15) &&
+      scene.photoreal &&
+      scene.settled,
     scene,
   );
   await sleep(4000);
   const before = await page.screenshot();
-  await page.evaluate(async () => {
+  const setGroundVisible = async (show) => {
+    await page.evaluate(
+      async ({ layer, show }) => {
+        if (layer === 'local-firms') window.__w2GroundFirms.setVisible(show);
+        else
+          await window.__godsEyeView.layers[show ? 'enable' : 'disable'](layer);
+        window.__godsEyeView.engine.render.request('w2-ground-probe-toggle');
+      },
+      { layer, show },
+    );
+    await sleep(1200);
+  };
+  await setGroundVisible(false);
+  const unclassified = await page.screenshot({
+    path: out.replace(/\.json$/, '-bare.png'),
+  });
+  await setGroundVisible(true);
+
+  await page.evaluate(async (skip) => {
+    if (skip) return;
     const { createW2ForwardMeshProbe } =
       await import('/src/bench/w2GroundProbe.js');
     window.__w2Forward = await createW2ForwardMeshProbe(window.__w2Native);
     window.__godsEyeView.engine.render.request('w2-forward-box');
-  });
+  }, negativeMesh);
   await sleep(2500);
   const on = await page.screenshot({ path: out.replace(/\.json$/, '-on.png') });
-  await page.evaluate(() => window.__godsEyeView.layers.disable('earthquakes'));
+  await setGroundVisible(false);
   await sleep(1500);
   const off = await page.screenshot({
     path: out.replace(/\.json$/, '-off.png'),
   });
-  const [a, b, c] = await Promise.all(
-    [on, off, before].map((x) => sharp(x).removeAlpha().raw().toBuffer()),
+  const [a, b, c, d] = await Promise.all(
+    [on, off, unclassified, before].map((x) =>
+      sharp(x).removeAlpha().raw().toBuffer(),
+    ),
   );
   let maxDelta = 0,
-    contrast = 0;
+    contrast = 0,
+    groundContrast = 0;
   for (let y = 384; y < 416; y++)
     for (let x = 624; x < 656; x++)
       for (let channel = 0; channel < 3; channel++) {
         const i = (y * 1280 + x) * 3 + channel;
         maxDelta = Math.max(maxDelta, Math.abs(a[i] - b[i]));
         contrast = Math.max(contrast, Math.abs(b[i] - c[i]));
+        groundContrast = Math.max(groundContrast, Math.abs(d[i] - c[i]));
       }
-  report.forward = { maxDelta, contrast };
+  report.forward = { maxDelta, contrast, groundContrast };
+  check(
+    'classification actually paints the unobstructed photoreal roof',
+    groundContrast > 16,
+    report.forward,
+  );
   check(
     'a real opaque box covers the classified roof',
     contrast > 16,
@@ -204,7 +266,8 @@ try {
     report.forward,
   );
   await page.evaluate(() => {
-    window.__w2Forward.dispose();
+    window.__w2Forward?.dispose();
+    window.__w2GroundFirms?.destroy();
     window.__godsEyeView.engine.render.request('w2-probe-dispose');
   });
   await sleep(3000);
@@ -232,7 +295,8 @@ check(
   report.browserErrors.length === 0,
   report.browserErrors,
 );
-if (negative) check('diagnostic shader is not acceptance', false);
+if (negative || negativeMesh)
+  check('diagnostic mutation is not acceptance', false);
 report.pass = report.checks.every((c) => c.pass);
 await fs.writeFile(out, JSON.stringify(report, null, 2) + '\n');
 process.exitCode = report.pass ? 0 : 1;

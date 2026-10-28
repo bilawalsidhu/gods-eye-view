@@ -19,11 +19,13 @@ const modules = [
   'src/data/detection.js',
   'src/scopeMask.js',
   'src/bench/w2GroundProbe.js',
+  'src/layers/firms/index.js',
+  'scripts/qa-w2-firms-renderer-entry.mjs',
 ];
 export default async (env) => {
   const config = await standalone(env);
   config.define['import.meta.env.DEV'] = 'true';
-  config.build.outDir = 'qa-artifacts/w1-preview';
+  config.build.outDir = process.env.GEV_QA_OUTDIR ?? 'qa-artifacts/w1-preview';
   config.build.manifest = true;
   config.build.rollupOptions.input = [
     path.join(root, 'index.html'),
@@ -34,8 +36,28 @@ export default async (env) => {
     name: 'w1-qa-module-urls',
     // QA-only public native capability capture; normal production has none.
     transform(code, id) {
-      if (id.split('?')[0] !== path.join(root, 'src/globe/navara/index.js'))
-        return null;
+      const source = id.split('?')[0];
+      if (source === path.join(root, 'src/globe/navara/movers/index.js')) {
+        const marker = 'const mover = createMoverMesh(options, store, {';
+        if (code.split(marker).length !== 2)
+          throw new Error('W2 mover overlay probe lost its factory anchor');
+        return code.replace(
+          marker,
+          'globalThis.__gevW2MoverOverlayProbe?.(targetOverlay);\n' + marker,
+        );
+      }
+      if (source === path.join(root, 'src/globe/navara/overlayPass.js')) {
+        const marker =
+          'const reuseGlyphs = signatureMatches(signature, display.signature);';
+        if (code.split(marker).length !== 2)
+          throw new Error('W2 overlay cache probe lost its signature anchor');
+        return code.replace(
+          marker,
+          marker +
+            '\n globalThis.__gevW2OverlayCacheProbe?.(reuseGlyphs, signature !== null);',
+        );
+      }
+      if (source !== path.join(root, 'src/globe/navara/index.js')) return null;
       const marker = 'await view.init();';
       if (code.split(marker).length !== 2)
         throw new Error('W2 native probe lost its initialised-view anchor');
@@ -48,7 +70,7 @@ export default async (env) => {
     configurePreviewServer(server) {
       const manifest = JSON.parse(
         fs.readFileSync(
-          path.join(root, config.build.outDir, '.vite/manifest.json'),
+          path.resolve(root, config.build.outDir, '.vite/manifest.json'),
           'utf8',
         ),
       );

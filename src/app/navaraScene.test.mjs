@@ -181,12 +181,16 @@ test('Navara keeps attribution for every available W1/W2 source and excludes una
     'celestrak',
     'launch-library-2',
     'usgs',
+    'firms',
     'photon-geocoder',
     'openstreetmap',
     'reearth-terrain',
   ];
   const run = await startScene({
-    credits: [...keys, 'firms'].map((key) => ({ key, html: `Credit ${key}` })),
+    credits: [...keys, 'radio-browser'].map((key) => ({
+      key,
+      html: `Credit ${key}`,
+    })),
   });
   t.after(run.teardown);
   assert.deepEqual(

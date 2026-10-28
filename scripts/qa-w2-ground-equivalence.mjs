@@ -63,8 +63,8 @@ try {
         ],
         ['bool large=center.w>', 'bool large=uQaFast>0.5 && center.w>'],
         [
-          "['uLogDepthFC', new Uniform(1)],",
-          "['uLogDepthFC', new Uniform(1)], ['uQaFast', new Uniform(1)],",
+          '...groundSurfaceUniforms(),',
+          "...groundSurfaceUniforms(), ['uQaFast', new Uniform(1)],",
         ],
         [
           'return new NavaraEffect(this.view.camera.raw, this.effect);',
