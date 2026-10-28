@@ -119,3 +119,9 @@ Using measured close-pose glyph coverage (about 63% of the target), a QA-preview
 ## 2026-10-28 — FIRMS visible-instance diagnostic
 
 A QA-only wrapper around the public mover-set API measured all 3000 close-pose FIRMS sprite instances as visible after horizon culling. Compacting hidden instances therefore has no close-pose draw-count benefit. This one-context preview diagnostic measured native 4.3ms/Navara 5.6ms (ratio 1.302), reinforcing that these short samples vary and cannot accept the layer. Capture: `qa-artifacts/w2/firms/navara/visible-instance-diagnostic-final.json`. The optional wrapper was removed from the QA driver after the measurement.
+
+## 2026-10-28 — FIRMS static glyph-target cache (not accepted)
+
+A full-resolution HalfFloat glyph target was cached for stationary, sharpened, always-visible sprite sets. The cache invalidates on camera, target-size, instance/geometry/material/texture, and context changes. QA instrumentation observed 3928 cache hits, two redraws, and no non-cacheable frames in a close sample. Alpha 27/27 and glow/sharpen 59/59 pixel checks passed on the full-resolution target. A 75% target-resolution variant passed alpha geometry but failed the strict RGB profile for yellow, orange, and red glows; that variant was reverted.
+
+The full three-context uncapped series with the full-resolution cache passes global (ratio 0.946), regional (0.982), and local (0.773), but close remains 5.0ms Navara / 4.4ms Cesium (1.136; required <=1.10). A second full uncapped run confirmed the same close result. The three-context paced series passes all poses, including close at 1.068, with zero long frames. The cache is not accepted and FIRMS remains uncommitted until uncapped close passes. Raw reports are currently under `/private/tmp/gev-w2-firms-cache-*`; the acceptance threshold and population remain unchanged.
