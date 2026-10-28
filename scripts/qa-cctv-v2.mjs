@@ -68,6 +68,8 @@
  * is no longer needed to avoid a plane/wireframe disagreement.
  *
  * Run:  node scripts/qa-cctv-v2.mjs --url <explicit-server-url> --out <evidence-directory> [--fixture] [--preview]
+ * Routine keyless builds also pass --terrain-globe: assert zero scene floor
+ * samples instead of claiming mesh-floor coverage on a globe-only map.
  *
  * Exit 0 = all asserts passed. Non-zero = a hard failure.
  */
@@ -99,6 +101,9 @@ const output = getOpt('--out');
 if (!explicitUrl || !output)
   throw new Error('Explicit --url and --out are required');
 const mapPolicy = { allowPaidMaps: getFlag('--allow-paid-maps') };
+const terrainGlobe = getFlag('--terrain-globe');
+if (terrainGlobe && mapPolicy.allowPaidMaps)
+  throw new Error('Terrain-globe QA must keep paid maps blocked');
 const CCTV_URL = new URL(explicitUrl);
 if (
   ['4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
@@ -404,6 +409,17 @@ async function main() {
   try {
     const page = await browser.newPage();
     await blockPaidQaMaps(page, mapPolicy);
+    const terrainRequests = new Set();
+    let terrainActivityAt = 0;
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname !== '/api/terrain/heights') return;
+      terrainRequests.add(request);
+      terrainActivityAt = Date.now();
+    });
+    for (const event of ['requestfinished', 'requestfailed'])
+      page.on(event, (request) => {
+        if (terrainRequests.delete(request)) terrainActivityAt = Date.now();
+      });
     await page.setViewport({ width: 1280, height: 800 });
     watchW1Page(page, evidence, {
       name: 'cctv-legacy',
@@ -435,6 +451,27 @@ async function main() {
         if (layer.enabled) await app.dataManager.setEnabled(id, false);
       app.styleManager._setDetectionMode('OFF');
     });
+    evidence.surface = await page.evaluate(() => {
+      const app = window.__godsEyeView;
+      return {
+        map: app.mapStackController.getActiveId(),
+        globeVisible: app.viewer.scene.globe.show,
+        tileset: Boolean(app.tileset),
+        googleKeyPresent: Boolean(window.__GOOGLE_MAPS_API_KEY__),
+        photorealAvailable:
+          app.mapStackController.isStackAvailable('photoreal'),
+      };
+    });
+    evidence.surfaceMode = terrainGlobe ? 'terrain-globe' : 'mesh-floor';
+    if (terrainGlobe) {
+      const keyless =
+        evidence.surface.globeVisible === true &&
+        !evidence.surface.tileset &&
+        !evidence.surface.googleKeyPresent &&
+        !evidence.surface.photorealAvailable;
+      record('keyless terrain-globe startup', keyless);
+      if (!keyless) throw new Error('Expected a keyless globe before CCTV QA');
+    }
     // Let the initial fly-to Austin and first tiles settle.
     await sleep(4000);
 
@@ -619,7 +656,7 @@ async function main() {
     console.log('Waiting for tiles + the one-shot completion pass...');
     const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
     let sampleFloorOk = false;
-    if (tilesSeenLoaded) {
+    if (tilesSeenLoaded && !terrainGlobe) {
       sampleFloorOk = await page
         .waitForFunction(
           (base) => window.__qaCounters.sampleHeight - base >= 1,
@@ -631,8 +668,12 @@ async function main() {
     }
     const cFloor = await readCounters();
     record(
-      '>=1 real ground sample once tilesLoaded observed (one-shot snap completed)',
-      tilesSeenLoaded && sampleFloorOk,
+      terrainGlobe
+        ? 'terrain-globe resolves from priors with zero scene ground samples'
+        : '>=1 real ground sample once tilesLoaded observed (one-shot snap completed)',
+      terrainGlobe
+        ? cFloor.sampleHeight - c0.sampleHeight === 0
+        : tilesSeenLoaded && sampleFloorOk,
       tilesSeenLoaded
         ? `total real samples since enable=${cFloor.sampleHeight - c0.sampleHeight}`
         : 'tilesLoaded never observed within 45s — floor not assessable this run',
@@ -1588,6 +1629,24 @@ async function main() {
       });
 
     const cBeforeViewshed = await readCounters();
+    await page.evaluate(() => {
+      const primitives = window.__godsEyeView.viewer.scene.primitives;
+      const events = [];
+      window.__qaViewshedTrace = events;
+      for (const method of ['add', 'remove']) {
+        const original = primitives[method].bind(primitives);
+        primitives[method] = (primitive, ...args) => {
+          if (primitive?._gevViewshed)
+            events.push({
+              method,
+              camera: primitive._gevViewshed,
+              at: performance.now(),
+              stack: new Error().stack,
+            });
+          return original(primitive, ...args);
+        };
+      }
+    });
     const modeAfterSet = await page.evaluate(() => {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ coverageMode: 'viewshed' });
@@ -1638,6 +1697,18 @@ async function main() {
       mod.setParams({ coverageMode: 'viewshed' });
     });
     await sleep(400);
+    // NEXT starts an asynchronous footprint-height lookup. Its completion is
+    // allowed to update geometry; the unchanged 8s idle window starts after it.
+    const terrainDeadline = Date.now() + 35000;
+    while (
+      (terrainRequests.size || Date.now() - terrainActivityAt < 250) &&
+      Date.now() < terrainDeadline
+    )
+      await sleep(50);
+    const terrainSettled =
+      terrainRequests.size === 0 && Date.now() - terrainActivityAt >= 250;
+    record('footprint requests settle before viewshed idle', terrainSettled);
+    if (!terrainSettled) throw new Error('Footprint requests did not settle');
     await page.evaluate(() => {
       const prims = window.__godsEyeView.viewer.scene.primitives;
       window.__qaViewshedRefs = [];
@@ -1659,6 +1730,9 @@ async function main() {
       return { sameCount, sameIdentity, count: now.length };
     });
     const cAfterViewshed = await readCounters();
+    evidence.viewshedTrace = await page.evaluate(
+      () => window.__qaViewshedTrace,
+    );
     const lateFloorSamples =
       cAfterViewshed.sampleHeight - cBeforeViewshed.sampleHeight;
     record(

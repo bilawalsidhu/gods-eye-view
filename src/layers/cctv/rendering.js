@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
@@ -37,27 +35,26 @@ export function createRendering({
     const target = getFocusTarget();
     if (
       !layerState._enabled ||
-      !layerState._viewer ||
+      !parts.renderer?.ready ||
       !focusPassIsNeeded(target, layerState._activeFocusStyleCount)
     )
       return;
     if (nowMs - layerState._lastFocusStyleAt < 80) return;
     layerState._lastFocusStyleAt = nowMs;
-    const scene = layerState._viewer.scene;
-    const camera = layerState._viewer.camera;
     const result = applyCctvFocusDeemphasis({
       records: layerState._records,
       target,
       previousActiveCount: layerState._activeFocusStyleCount,
       nowMs,
+      // prettier-ignore
       screenPositionFor: (position) =>
-        Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
+        parts.renderer.project(
           position,
           layerState._scratchFocusScreen,
         ),
+      // prettier-ignore
       cameraDistanceFor: (position) =>
-        Cesium.Cartesian3.distance(camera.positionWC, position),
+        parts.renderer.distance(position),
       baseColorFor: (record) =>
         record.camera.id === layerState._activeCameraId
           ? ACTIVE_CAMERA_COLOR
@@ -136,17 +133,17 @@ export function createRendering({
    */
 
   function refreshHorizonCulling() {
+    // prettier-ignore
     if (
-      !layerState._viewer ||
-      layerState._viewer.isDestroyed() ||
+      !parts.renderer?.ready ||
       !layerState._records.length
     )
       return;
-    const occluder = horizonOccluder(layerState._viewer.camera);
+    const horizonVisible = parts.renderer.horizonTest();
     for (const record of layerState._records) {
       const bb = record.billboard;
       if (!bb) continue;
-      const visible = occluder.isPointVisible(bb.position);
+      const visible = horizonVisible(bb.position);
       if (bb.show !== visible) bb.show = visible;
     }
   }
@@ -173,8 +170,10 @@ export function createRendering({
       }
       for (const entity of record?.coverageEntities || []) entity.show = false;
       if (record?.viewshedPrimitive) destroyVolume?.(record);
-      if (record?.projection?.planeEntity)
+      if (record?.projection?.planeEntity) {
         record.projection.planeEntity.show = false;
+        record.projection.planeVisible = false;
+      }
     }
   }
 
@@ -185,7 +184,7 @@ export function createRendering({
       layerState._activeCameraId,
     );
     parts.projection.clearProjectionOverlay();
-    if (layerState._billboards) layerState._billboards.show = false;
+    parts.renderer?.setMarkersVisible(false);
     parts.projection.pauseInactiveProjectionFeeds(null);
   }
 
@@ -239,56 +238,40 @@ export function createRendering({
       // rather than rendering identically to a surveyed one (#639). Colors,
       // widths, and the active/idle emphasis are unchanged.
       const bearingEstimated = isHeadingEstimated(record.camera);
-      const lineMaterial = (color) =>
-        bearingEstimated
-          ? new Cesium.PolylineDashMaterialProperty({ color })
-          : color;
       for (const entity of record.coverageEntities || []) {
-        // The frustum wireframe is part of the projection representation —
-        // force it on for the active camera and let it read through geometry
-        // via depthFailMaterial (polylines have no disableDepthTestDistance).
-        entity.show = !!(
+        const visible = !!(
           layerState._enabled &&
           ((coverageOn && inVisibleSet) || planeShowing)
         );
-        if (!entity.polyline) continue;
-        // Viewshed mode swaps the cyan/green scheme for the camera's own hue so
-        // adjacent cones read as distinct coverage claims (design §3b); the
-        // active camera keeps its width/alpha emphasis in both schemes.
         const hue = viewshedOn ? record.viewshedColors : null;
-        if (entity._coverageRole === 'cap') {
-          entity.polyline.material = lineMaterial(
-            hue
-              ? isActive
-                ? hue.lineActive
-                : hue.line
-              : isActive
-                ? ACTIVE_COVERAGE_CENTER
-                : IDLE_COVERAGE_CENTER_MUTED,
-          );
-          entity.polyline.width = isActive ? 2.2 : 1.0;
-          entity.polyline.depthFailMaterial = planeShowing
-            ? hue
-              ? hue.line.withAlpha(0.26)
-              : ACTIVE_COVERAGE_CENTER_DEPTHFAIL
-            : undefined;
-        } else {
-          entity.polyline.material = lineMaterial(
-            hue
-              ? isActive
-                ? hue.lineActive
-                : hue.line.withAlpha(0.6)
-              : isActive
-                ? ACTIVE_COVERAGE_EDGE
-                : IDLE_COVERAGE_EDGE_MUTED,
-          );
-          entity.polyline.width = isActive ? 1.8 : 0.9;
-          entity.polyline.depthFailMaterial = planeShowing
-            ? hue
-              ? hue.line.withAlpha(0.18)
-              : ACTIVE_COVERAGE_EDGE_DEPTHFAIL
-            : undefined;
-        }
+        const cap = entity._coverageRole === 'cap';
+        const tint = hue
+          ? isActive
+            ? hue.lineActive
+            : cap
+              ? hue.line
+              : hue.line.withAlpha(0.6)
+          : cap
+            ? isActive
+              ? ACTIVE_COVERAGE_CENTER
+              : IDLE_COVERAGE_CENTER_MUTED
+            : isActive
+              ? ACTIVE_COVERAGE_EDGE
+              : IDLE_COVERAGE_EDGE_MUTED;
+        const depthFail = !planeShowing
+          ? undefined
+          : hue
+            ? hue.line.withAlpha(cap ? 0.26 : 0.18)
+            : cap
+              ? ACTIVE_COVERAGE_CENTER_DEPTHFAIL
+              : ACTIVE_COVERAGE_EDGE_DEPTHFAIL;
+        parts.renderer.styleLine(entity, {
+          visible,
+          width: cap ? (isActive ? 2.2 : 1.0) : isActive ? 1.8 : 0.9,
+          tint,
+          dashed: bearingEstimated,
+          depthFail,
+        });
       }
 
       // Viewshed volume lifecycle: exists iff enabled + viewshed mode + in the
@@ -316,8 +299,7 @@ export function createRendering({
       }
     }
 
-    if (layerState._billboards)
-      layerState._billboards.show = !!layerState._enabled;
+    parts.renderer?.setMarkersVisible(!!layerState._enabled);
     parts.projection.pauseInactiveProjectionFeeds(activeId);
   }
   return {

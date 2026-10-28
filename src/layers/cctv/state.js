@@ -13,10 +13,6 @@ export function createState({ services }) {
   // Module-scoped mutable state
   // ---------------------------------------------------------------------------
 
-  layerState._viewer = null;
-
-  layerState._billboards = null;
-
   layerState._records = [];
 
   layerState._recordById = new Map();
@@ -48,7 +44,7 @@ export function createState({ services }) {
 
   layerState._lastViewContext = '';
 
-  layerState._clickHandler = null;
+  layerState._removeClick = null;
 
   layerState._count = 0;
 
@@ -112,8 +108,6 @@ export function createState({ services }) {
   // lazily from scene.primitives. Shared mesh-floor sampling is gated on its
   // tilesLoaded flag so a coarse-LOD miss is never baked in. Cleared when the
   // tileset is destroyed / the layer tears down.
-
-  layerState._activeTileset = null;
 
   // Task 5: last surface regime the record geometry was recomputed for. The
   // map-stack change listener compares the CURRENT regime (derived live from

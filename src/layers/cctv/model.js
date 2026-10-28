@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { staticFrameRefreshMs } from '../../data/cctvLod.js';
 import { frameFetchDue, cardFetchPolicy } from '../../data/cctvCards.js';
@@ -327,7 +326,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function currentViewContext() {
-    const carto = layerState._viewer?.camera?.positionCartographic;
+    const carto = parts.renderer?.cameraCartographic();
     if (!carto) return 'none';
     const lat = geo.math.toDegrees(carto.latitude);
     const lon = geo.math.toDegrees(carto.longitude);
@@ -355,8 +354,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * Reports whether the active Google Photorealistic 3D Tileset (if any) has
    * finished loading the tiles in view. Shared mesh-floor sampling is gated on
    * this so a one-shot cell never bakes in a miss from still-streaming tiles.
-   * Discovers + caches the tileset lazily from scene
-   * primitives (the CCTV module holds only a `_viewer` reference). When no
+   * The renderer discovers and caches its active tileset. When no
    * tileset is present (OSM fallback) this returns true so ground sampling is
    * not permanently blocked.
    *
@@ -370,25 +368,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function projectionTilesReady() {
-    if (
-      !layerState._activeTileset ||
-      layerState._activeTileset.isDestroyed?.()
-    ) {
-      layerState._activeTileset = null;
-      const primitives = layerState._viewer?.scene?.primitives;
-      if (primitives && typeof primitives.get === 'function') {
-        for (let i = 0; i < primitives.length; i++) {
-          const p = primitives.get(i);
-          if (p instanceof Cesium.Cesium3DTileset && !p.isDestroyed?.()) {
-            layerState._activeTileset = p;
-            break;
-          }
-        }
-      }
-    }
-    if (!layerState._activeTileset) return true;
-    if (layerState._activeTileset.show === false) return false;
-    return layerState._activeTileset.tilesLoaded === true;
+    return parts.renderer?.tilesReady() ?? true;
   }
 
   /**
@@ -399,8 +379,8 @@ export function createModel({ state: layerState, services, parts, source }) {
    * frame-up, so the 16:9 texture maps upright and unmirrored. Static geometry —
    * computed only on slider/save/activation, never per frame (§2b).
    * @param {Object} camera - Camera pose.
-   * @param {Cesium.Cartesian3} capCenterPos - Plane center in ECEF.
-   * @returns {Cesium.Quaternion}
+   * @param {{x: number, y: number, z: number}} capCenterPos - Plane center in ECEF.
+   * @returns {{x: number, y: number, z: number, w: number}}
    */
 
   function planeOrientationFor(camera, capCenterPos) {
@@ -422,9 +402,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     m[6] = normal.x;
     m[7] = normal.y;
     m[8] = normal.z;
-    // The quaternion becomes an entity's ConstantProperty value, so it stays a
-    // Cesium Quaternion there (that property clones and compares its value).
-    return geo.quaternion.fromRotationMatrix(m, new Cesium.Quaternion());
+    return geo.quaternion.fromRotationMatrix(m, geo.quaternion.create());
   }
 
   /**
@@ -442,7 +420,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function projectionLoopIsNeeded() {
-    if (!layerState._enabled || !layerState._viewer) return false;
+    if (!layerState._enabled || !parts.renderer?.ready) return false;
     if (layerState._showProjection && parts.selection.getActiveRecord())
       return true;
     return focusPassIsNeeded(

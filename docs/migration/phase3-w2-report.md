@@ -2,6 +2,18 @@
 
 Status: W2 in progress. Earthquakes are accepted; FIRMS, installations, bikeshare, radio and ALPR have implementation checkpoints with the limits below. ALPR acceptance, CCTV, transit, recent imagery and whole-wave gates remain. The execution sequence and later migration phases are in [the detailed plan](phase3-w2-plan.md).
 
+## W2 CCTV — native renderer checkpoint, keyless QA (2026-10-29)
+
+The shared CCTV package no longer imports Cesium. A native renderer owns markers, coverage lines, projection materials/planes, viewshed primitives, input/listeners, credits and scene queries. Initialization rejects overlapping owners, teardown releases the original resources, and partial construction rolls back. Retired source/media completions cannot mutate a replacement owner; video metadata/resize listeners are released. Portable colours match the native HSL oracle over1025hues. Application defaults are unchanged.
+
+All7303ordinary tests pass (7304total, one Windows skip), along with15allocation checks and package boundaries. Scoped formatting passes1639files. Production/panel/QA builds were rebuilt with both Google and Cesium credentials explicitly empty; preview cannot remove credentials already compiled into an old build. Main composition contains no Three/Navara:2920270bytes,911779gzip; the size baseline is still missing.
+
+Native dev/preview media checks pass19/19 each: identical camera/control IDs, identical four-quadrant pixel counts253/249/251/251, advancing decoded video and rendered pixels, media release, ten toggles and all three zero-frame22s intervals. Legacy checks pass56/56 on dev and preview, with exact geometry equality. The final preview driver passes57/57 after adding a positive requirement that footprint-height requests finish before the unchanged8s viewshed identity window. One initial dev run failed that identity check; it did not recur with tracing or on preview, and its original cause remains unconfirmed. Its failed artifact is retained.
+
+The keyless legacy mode explicitly proves globe startup and zero scene ground samples. It does not claim photoreal mesh-floor acceptance. The keyless production shell verifies Esri/OSM switching, attribution, search, input, sharing and engine isolation, but remains23/24 Cesium,26/26 Navara and3/4 cross-engine: one Cesium idle frame and a5.09m terrain-height difference exceed the unchanged0-frame/2m limits. The initial shell incorrectly used the mesh-depth query on a globe; its corrected mode uses terrainHeight. Neither the remaining failures nor Google-dependent contract scenarios are waived. Historical live Google results are not a new acceptance result.
+
+[Source hashes, results and review](phase3-w2-cctv-renderer-evidence.json) record this implementation checkpoint. Next: Navara's finite obstruction ray, projection/video surfaces, volumes and calibration handles, then complete parity/lifecycle checks. CCTV/W2 and the broader roadmap remain unfinished.
+
 ## W2 CCTV — native calibration handles and periodic idle
 
 Calibration-handle math now uses the shared geo/Rgba modules. A native owner holds the eight entities, materials, picking and input handlers. Release, disable, camera selection, destruction, pointer cancellation and window blur restore the camera-input flag captured at drag start; duplicate down cannot overwrite it. Exact current entity identity prevents stale or foreign handles from being picked/deleted. Partial construction releases resources. All15new lifecycle/ownership tests and10existing math tests pass, and both native legacy runs pass55/55 with geometry exactly equal to the1223f12a baseline.

@@ -1,6 +1,4 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
-import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
 import {
   PROJECTION_VERT_ASPECT,
   FRUSTUM_GROUND_CLEARANCE_M,
@@ -8,7 +6,6 @@ import {
   PROBE_CLEARANCE_M,
   COVERAGE_NEIGHBOR_RADIUS_KM,
   COVERAGE_NEIGHBOR_LIMIT,
-  IDLE_COVERAGE_COLOR,
   PLANE_FOOTPRINT_LIFT_CAP_M,
 } from './policy.js';
 
@@ -20,7 +17,6 @@ import {
 
 export function createGeometry({ state: layerState, services, parts, source }) {
   const { warmGroundFloor, cachedGroundFloor } = services.ground;
-  const { sampleMeshFloorCells } = services.mesh;
 
   /**
    * Ground measured under the plane's support points for the record's
@@ -346,31 +342,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     if (record.billboard) {
       record.billboard.position = positions.mount;
     }
-    if (record.coverageEntities?.length >= 5) {
-      record.coverageEntities[0].polyline.positions = [
-        positions.mount,
-        positions.tl,
-      ];
-      record.coverageEntities[1].polyline.positions = [
-        positions.mount,
-        positions.tr,
-      ];
-      record.coverageEntities[2].polyline.positions = [
-        positions.mount,
-        positions.br,
-      ];
-      record.coverageEntities[3].polyline.positions = [
-        positions.mount,
-        positions.bl,
-      ];
-      record.coverageEntities[4].polyline.positions = [
-        positions.tl,
-        positions.tr,
-        positions.br,
-        positions.bl,
-        positions.tl,
-      ];
-    }
+    parts.renderer?.updateCoverage(record, positions);
     // A live viewshed volume tracks its wireframe: rebuild from the SAME fresh
     // positions (weld invariant). Only records currently showing a volume pay
     // this (6 triangles, synchronous — trivial even during slider/gizmo drags).
@@ -451,12 +423,12 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     if (sampleGround && parts.model.projectionTilesReady()) {
       record.groundMeshSampleRequestCount =
         (record.groundMeshSampleRequestCount || 0) + 1;
-      const viewerCarto = layerState._viewer?.camera?.positionCartographic;
+      const viewerCarto = parts.renderer?.cameraCartographic();
       const excludeObjects = [...(record.coverageEntities || [])];
       if (record.billboard) excludeObjects.push(record.billboard);
       if (record.projection?.planeEntity)
         excludeObjects.push(record.projection.planeEntity);
-      sampleMeshFloorCells(layerState._viewer?.scene, [point], {
+      parts.renderer.sampleMeshFloorCells([point], {
         excludeObjects: excludeObjects.filter(Boolean),
         viewerLat: viewerCarto
           ? geo.math.toDegrees(viewerCarto.latitude)
@@ -530,9 +502,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function destroyViewshedVolume(record) {
     if (!record) return;
-    if (record.viewshedPrimitive && layerState._viewer) {
-      layerState._viewer.scene.primitives.remove(record.viewshedPrimitive);
-    }
+    if (record.viewshedPrimitive)
+      parts.renderer?.removeVolume(record.viewshedPrimitive);
     record.viewshedPrimitive = null;
   }
 
@@ -550,7 +521,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   function rebuildViewshedVolume(record, isActive) {
     destroyViewshedVolume(record);
     if (
-      !layerState._viewer ||
+      !parts.renderer?.ready ||
       !record?.frustumPositions ||
       !record.viewshedColors
     )
@@ -558,14 +529,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     const color = isActive
       ? record.viewshedColors.fillActive
       : record.viewshedColors.fill;
-    const primitive = createFrustumVolumePrimitive(
-      record.frustumPositions,
-      color,
-    );
-    // QA tag: the harness counts viewshed volumes by this marker.
-    primitive._gevViewshed = record.camera.id;
-    record.viewshedPrimitive =
-      layerState._viewer.scene.primitives.add(primitive);
+    record.viewshedPrimitive = parts.renderer.createVolume(record, color);
     record.viewshedActiveTint = !!isActive;
   }
 
@@ -611,8 +575,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function runActivationObstructionProbe(record) {
     record.probeClampRangeM = null;
-    const scene = layerState._viewer?.scene;
-    if (!scene || typeof scene.pickFromRay !== 'function') return;
+    if (!parts.renderer?.ready) return;
     const camera = record.camera;
     const rangeScale = parts.calibration.normalizeCalibration(
       camera.calibration,
@@ -628,11 +591,19 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       const { dir } = frustumFrameEcef(camera, mountPos);
       // Exclude everything the layer itself draws so the probe can only hit the
       // world (3D tiles), not our own billboards/polylines/planes.
-      const exclude = [layerState._billboards, ...layerState._coverageEntities];
+      const exclude = [...layerState._coverageEntities];
       for (const runtime of layerState._projectionEntities) {
         if (runtime?.planeEntity) exclude.push(runtime.planeEntity);
       }
-      const hit = scene.pickFromRay(new Cesium.Ray(mountPos, dir), exclude);
+      for (const other of layerState._records) {
+        if (other.viewshedPrimitive) exclude.push(other.viewshedPrimitive);
+      }
+      const hit = parts.renderer.obstructionRay(
+        mountPos,
+        dir,
+        exclude,
+        camera.rangeM,
+      );
       if (!hit?.position) return;
       const dist = geo.cartesian3.distance(mountPos, hit.position);
       record.probeClampRangeM = activationProbeClampRange(camera.rangeM, dist);
@@ -684,37 +655,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       record.position = positions.mount;
     }
 
-    const addPolyline = (role, linePositions) =>
-      layerState._viewer.entities.add({
-        id: `cctv-${camera.id}-${role}`,
-        properties: { cctvCameraId: camera.id },
-        polyline: {
-          positions: linePositions,
-          width: 1.2,
-          material: IDLE_COVERAGE_COLOR,
-        },
-      });
-
-    const entities = [
-      addPolyline('ray-tl', [positions.mount, positions.tl]),
-      addPolyline('ray-tr', [positions.mount, positions.tr]),
-      addPolyline('ray-br', [positions.mount, positions.br]),
-      addPolyline('ray-bl', [positions.mount, positions.bl]),
-      addPolyline('cap', [
-        positions.tl,
-        positions.tr,
-        positions.br,
-        positions.bl,
-        positions.tl,
-      ]),
-    ];
-
-    entities[0]._coverageRole = 'edge';
-    entities[1]._coverageRole = 'edge';
-    entities[2]._coverageRole = 'edge';
-    entities[3]._coverageRole = 'edge';
-    entities[4]._coverageRole = 'cap';
-    return entities;
+    return parts.renderer.createCoverage(camera.id, positions);
   }
 
   /**
@@ -797,9 +738,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    */
 
   function destroyCoverageEntities() {
-    if (!layerState._viewer) return;
+    if (!parts.renderer?.ready) return;
     for (const entity of layerState._coverageEntities) {
-      layerState._viewer.entities.remove(entity);
+      parts.renderer.removeCoverageEntity(entity);
     }
     layerState._coverageEntities = [];
 

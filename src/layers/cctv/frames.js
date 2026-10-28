@@ -127,7 +127,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     )
       return;
 
-    const planeShowing = !!(runtime.planeEntity?.show && runtime.planeMaterial);
+    const planeShowing = !!(runtime.planeVisible && runtime.planeMaterial);
     if (!planeShowing) return;
 
     // Only swap when the canvas content actually changed since the last swap.
@@ -141,7 +141,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     if (!buffer) return;
     runtime.lastTextureSwapAt = now;
     runtime.lastSwappedCanvasStamp = runtime.canvasStamp;
-    runtime.planeMaterial.image = buffer;
+    parts.renderer.setPlaneImage(runtime, buffer);
     return true;
   }
 

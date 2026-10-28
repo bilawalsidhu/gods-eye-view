@@ -1449,10 +1449,6 @@
       "src/layers/shared/color.js",
       "src/data/cctvLod.js",
       "src/data/cctvViewshed.js",
-      "src/data/iconOrientation.js",
-      "src/data/render/cesiumProjection.js",
-      "src/data/trackingClickGesture.js",
-      "src/data/render/cesiumConstants.js",
       "src/layers/cctv/calibration.js",
       "src/layers/cctv/cards.js",
       "src/layers/cctv/catalog.js",
@@ -1497,11 +1493,9 @@
       "src/geo/scaleToGeodeticSurface.js",
       "src/geo/check.js",
       "src/geo/debug.js",
-      "src/geo/developerError.js",
-      "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/geo/developerError.js"
     ],
-    "external": ["hls.js", "cesium"]
+    "external": ["hls.js"]
   },
   "street-level-layer": {
     "exports": [
@@ -1835,6 +1829,8 @@
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
       "src/layers/cctv/render/cesiumGizmo.js",
+      "src/layers/cctv/render/cesium.js",
+      "src/layers/cctv/render/cesiumViewshed.js",
       "src/app/layers/earthquakes.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
@@ -2793,6 +2789,8 @@
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
       "src/layers/cctv/render/cesiumGizmo.js",
+      "src/layers/cctv/render/cesium.js",
+      "src/layers/cctv/render/cesiumViewshed.js",
       "src/app/layers/earthquakes.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",

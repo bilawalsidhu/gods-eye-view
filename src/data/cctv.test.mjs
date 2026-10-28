@@ -305,6 +305,15 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
         inserted.push(entity);
         return entity;
       },
+      getById(id) {
+        return inserted.find((entity) => entity.id === id);
+      },
+      remove(entity) {
+        const index = inserted.indexOf(entity);
+        if (index < 0) return false;
+        inserted.splice(index, 1);
+        return true;
+      },
     },
   };
   const activeRecord = records.at(-1);
@@ -966,7 +975,7 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
   assert.deepEqual(requests, [{ cameraId: 'atx-cam-3' }]);
   assert.match(
     componentFunctionSource(cctvLayer.init),
-    /bindCctvWorldClickGesture\(_clickHandler/,
+    /_removeClick = bindClick\(/,
   );
   assert.match(
     componentFunctionSource(cctvLayer.init),

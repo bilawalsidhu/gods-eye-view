@@ -1,4 +1,7 @@
-import { createCesiumCctvGizmoRenderer } from '../../layers/cctv/render/cesiumGizmo.js';
+import {
+  createCctvCesiumRenderer,
+  bindCctvWorldClickGesture,
+} from '../../layers/cctv/render/cesium.js';
 import { createCctvLayer } from '../../layers/cctv/index.js';
 import * as credits from '../../data/dataCredits.js';
 import * as sprites from '../../data/spriteOrder.js';
@@ -10,12 +13,16 @@ import * as focus from '../../data/focusDeemphasis.js';
 import * as render from '../../renderGovernor.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
-export function createApplicationCctv({ surface, source }) {
+export function createApplicationCctv({
+  surface,
+  source,
+  rendererFactory = createCctvCesiumRenderer,
+}) {
   const { terrain, groundFloor: ground, meshFloor: mesh } = surface;
-  return createCctvLayer({
+  const layer = createCctvLayer({
     source,
+    rendererFactory,
     services: {
-      createGizmoRenderer: createCesiumCctvGizmoRenderer,
       credits,
       sprites,
       activation,
@@ -29,4 +36,16 @@ export function createApplicationCctv({ surface, source }) {
       render,
     },
   });
+  return {
+    ...layer,
+    bindCctvWorldClickGesture,
+    // Legacy native helper; production navigation uses the initialized owner.
+    focusCctvRecord(viewer, record, duration) {
+      const renderer = viewer
+        ? createCctvCesiumRenderer({ services: {}, state: {} })
+        : null;
+      renderer?.attach(viewer);
+      return layer.focusCctvRecord(renderer, record, duration);
+    },
+  };
 }

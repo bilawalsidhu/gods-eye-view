@@ -35,6 +35,8 @@
  *
  * Starts this checkout's Vite dev server on a free port (never 4185–4189) unless
  * --base-url names a running server (a `vite preview` of a build works too).
+ * --keyless requires a keyless build, blocks paid maps before navigation and
+ * checks Esri/OSM switching and attribution instead of Google 3D.
  * --out keeps a screenshot per engine. Browsers are always headless. Provider
  * keys are never printed: console text is redacted, and the map sources the
  * engine shows (engine.maps.current(), which holds keys) are never read.
@@ -46,6 +48,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -66,8 +69,14 @@ for (const engine of ENGINES) {
   }
 }
 const outDir = argument('out');
+const keyless = process.argv.includes('--keyless');
 const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
-const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188, 4189]);
+const RESERVED_PORTS = new Set([4173, 4185, 4186, 4187, 4188, 4189, 4194]);
+if (
+  argument('base-url') &&
+  RESERVED_PORTS.has(Number(new URL(argument('base-url')).port))
+)
+  throw new Error('Shell QA may not use a reserved port');
 const SEARCH = { query: 'Paris', lat: 48.8566, lon: 2.3522, withinKm: 60 };
 const SHARE_TOLERANCE = 1e-6;
 const TOKYO = { query: 'Tokyo', lat: 35.6762, lon: 139.6503, withinKm: 60 };
@@ -164,7 +173,13 @@ async function startServer() {
       '--host',
       'localhost',
     ],
-    { cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe'] },
+    {
+      cwd: repoRoot,
+      stdio: ['ignore', 'ignore', 'pipe'],
+      env: keyless
+        ? { ...process.env, GOOGLE_MAPS_API_KEY: '', CESIUM_ION_TOKEN: '' }
+        : process.env,
+    },
   );
   let stderr = '';
   child.stderr.on('data', (chunk) => {
@@ -291,7 +306,7 @@ async function countFrames(ms) {
  * Records the camera's clearance above the sampled surface on every rendered
  * frame until stopClearanceWatch.
  */
-function startClearanceWatch() {
+function startClearanceWatch(terrainOnly = false) {
   const { engine } = window.__godsEyeView;
   // Navara's floor keeps its margin above the ground it sampled itself
   // (engine.groundFloor, diagnostics); a fresh sample would also measure the
@@ -300,7 +315,9 @@ function startClearanceWatch() {
   const groundUnder = (pose) =>
     engine.groundFloor
       ? engine.groundFloor.ground()
-      : engine.surface.sampleHeight(pose.cartographic);
+      : terrainOnly
+        ? engine.surface.terrainHeight(pose.cartographic)
+        : engine.surface.sampleHeight(pose.cartographic);
   window.__qaGroundUnder = groundUnder;
   const watch = { min: null, sampled: 0, unsampled: 0, lowest: null };
   watch.remove = engine.frames.postRender.addEventListener(() => {
@@ -355,12 +372,13 @@ function stopClearanceWatch() {
 }
 
 /**
- * The on-screen attribution that names Google: Cesium's credit strip
+ * The on-screen attribution that names the provider: Cesium's credit strip
  * (#cesium-credits) or Navara's attribution card. Visible means displayed,
- * inside the viewport and, for Navara, the Google line inside the card's
+ * inside the viewport and, for Navara, the provider line inside the card's
  * scrolled list.
  */
-function readAttribution() {
+function readAttribution(provider = 'Google') {
+  const pattern = new RegExp(provider, 'i');
   const inViewport = (rect) =>
     rect.width > 0 &&
     rect.height > 0 &&
@@ -381,20 +399,20 @@ function readAttribution() {
     }
     return true;
   };
-  const googleIn = (element) =>
-    /google/i.test(element.textContent ?? '') ||
+  const providerIn = (element) =>
+    pattern.test(element.textContent ?? '') ||
     [...element.querySelectorAll('img')].some((image) =>
-      /google/i.test(`${image.alt} ${image.title} ${image.src}`),
+      pattern.test(`${image.alt} ${image.title} ${image.src}`),
     );
   const strip = document.getElementById('cesium-credits');
   const card = document.querySelector('.navara-attr-card');
   const container = card ?? strip;
   if (!container) return { found: false };
   const containerRect = container.getBoundingClientRect();
-  // The smallest element that names Google.
+  // The smallest element that names the provider.
   const candidates = [...container.querySelectorAll('*')].filter(
     (element) =>
-      googleIn(element) && ![...element.children].some((c) => googleIn(c)),
+      providerIn(element) && ![...element.children].some((c) => providerIn(c)),
   );
   const line = candidates.find((element) => {
     const rect = element.getBoundingClientRect();
@@ -409,14 +427,15 @@ function readAttribution() {
     found: true,
     which: card ? 'navara-attr-card' : 'cesium-credits',
     // The strip can be a zero-size box around fixed children; its own
-    // display, visibility and opacity count, the Google line's box below.
+    // display, visibility and opacity count, the provider line's box below.
     containerShown: shown(container),
     containerSize: [
       Math.round(containerRect.width),
       Math.round(containerRect.height),
     ],
-    googleLines: candidates.length,
-    googleLineVisible: Boolean(line),
+    provider,
+    providerLines: candidates.length,
+    providerLineVisible: Boolean(line),
     text: line
       ? (line.textContent || line.querySelector('img')?.alt || 'logo')
           .replace(/\s+/g, ' ')
@@ -492,6 +511,7 @@ function createRecorder(label) {
 async function openPage(browser) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
+  if (keyless) await blockPaidQaMaps(page);
   await page.setViewport({ width: 1280, height: 800 });
   const errors = [];
   const ignored = [];
@@ -591,6 +611,25 @@ async function runEngine(browser, baseUrl, engine) {
     );
   const bootRest = await page.evaluate(waitForRest, 1500, 90000);
   record('boot flight comes to rest', bootRest);
+  if (keyless) {
+    const map = await page.evaluate(() => {
+      const app = window.__godsEyeView;
+      return {
+        stack: app.mapStackController.getActiveId(),
+        tileset: Boolean(app.tileset),
+        googleKeyPresent: Boolean(window.__GOOGLE_MAPS_API_KEY__),
+        photorealAvailable:
+          app.mapStackController.isStackAvailable('photoreal'),
+      };
+    });
+    const safe =
+      map.stack === 'esri-imagery' &&
+      !map.tileset &&
+      !map.googleKeyPresent &&
+      !map.photorealAvailable;
+    record('keyless startup without photoreal tiles', safe, map);
+    if (!safe) throw new Error('Keyless shell QA requires a keyless build');
+  }
   // Judge the picture once the engine reports its tiles loaded (a cold dev
   // server and cache can take a while).
   const tiles = await waitForTiles(page);
@@ -614,21 +653,23 @@ async function runEngine(browser, baseUrl, engine) {
 
   // The rendered surface's height at the startup pose (compared across
   // engines in runCrossEngine).
-  const surfaceHeights = await page.evaluate((points) => {
+  const heightMethod = keyless ? 'terrainHeight' : 'sampleHeight';
+  // prettier-ignore
+  const surfaceHeights = await page.evaluate(({ points, method }) => {
     const { engine } = window.__godsEyeView;
     const radians = Math.PI / 180;
     return points.map(([lat, lon]) => {
       // A src/geo cartographic (radians), built here so a build works too.
-      const height = engine.surface.sampleHeight({
+      const height = engine.surface[method]({
         longitude: lon * radians,
         latitude: lat * radians,
         height: 0,
       });
       return Number.isFinite(height) ? Math.round(height * 100) / 100 : null;
     });
-  }, SURFACE_POINTS);
+  }, { points: SURFACE_POINTS, method: heightMethod });
   record(
-    'surface.sampleHeight is finite at the startup pose, under the camera too',
+    `surface.${heightMethod} is finite at the startup pose, under the camera too`,
     surfaceHeights.every(Number.isFinite),
     { heights: surfaceHeights },
   );
@@ -641,17 +682,20 @@ async function runEngine(browser, baseUrl, engine) {
     continuous: bootIdle.continuous,
   });
 
-  // Attributions: the Google line is on screen.
-  const attribution = await page.evaluate(readAttribution);
+  // Attribution for the actual map; keyless Navara exposes it in its popup.
+  const provider = keyless ? 'Esri' : 'Google';
+  if (keyless && engine === 'navara') await page.click('.navara-attr-toggle');
+  const attribution = await page.evaluate(readAttribution, provider);
   record(
-    'attribution shows the Google line',
+    `attribution shows the ${provider} line`,
     attribution.found &&
       attribution.containerShown &&
-      attribution.googleLineVisible &&
+      attribution.providerLineVisible &&
       attribution.which ===
         (engine === 'navara' ? 'navara-attr-card' : 'cesium-credits'),
     attribution,
   );
+  if (keyless && engine === 'navara') await page.click('.navara-attr-toggle');
 
   // HUD at boot.
   const hudBoot = await page.evaluate(readHud);
@@ -795,7 +839,7 @@ async function runEngine(browser, baseUrl, engine) {
   // Keep zooming: the camera must stop above the ground. Paris lies about
   // 80 m above the ellipsoid; the clearance is to the sampled surface, and
   // the smallest clearance of any frame rendered during the wheel counts.
-  await page.evaluate(startClearanceWatch);
+  await page.evaluate(startClearanceWatch, keyless);
   const floor = await wheel(10, -400);
   await sleep(500);
   const floorState = await page.evaluate(stopClearanceWatch);
@@ -887,8 +931,10 @@ async function runEngine(browser, baseUrl, engine) {
     height: Math.round(globe.height),
   });
 
-  // Map stacks: base imagery, then Google 3D again.
-  for (const stack of ['esri-imagery', 'photoreal']) {
+  // Keyless checks switch between base maps; live checks retain Google 3D.
+  for (const stack of keyless
+    ? ['osm', 'esri-imagery']
+    : ['esri-imagery', 'photoreal']) {
     const result = await page.evaluate(async (id) => {
       const { styleManager, mapStackController } = window.__godsEyeView;
       const outcome = await styleManager.setMapStack(id);
@@ -985,7 +1031,7 @@ async function runCrossEngine(browser, baseUrl, shares, heights = {}) {
         : null,
     );
     record(
-      `surface.sampleHeight at the Austin startup pose agrees across engines (<= ${SURFACE_TOLERANCE_M} m)`,
+      `surface.${keyless ? 'terrainHeight' : 'sampleHeight'} at the Austin startup pose agrees across engines (<= ${SURFACE_TOLERANCE_M} m)`,
       deltas.every(
         (delta) => Number.isFinite(delta) && delta <= SURFACE_TOLERANCE_M,
       ),
