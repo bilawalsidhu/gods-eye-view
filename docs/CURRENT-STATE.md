@@ -2060,10 +2060,19 @@ Every FIRMS detection is colored by fire radiative power on a six-stop cold →
 hot ramp: blue from 0 MW, teal from 5, lime from 20, amber from 50, orange from
 100 and red from 300 MW (`FRP_RAMP` in `src/data/firmsIntensity.js`). Glow
 sprites and fire-card accents read that ramp; confidence and brightness do
-not affect the color. Aggregated heat cells (far zoom) instead take the warm
-end of the ramp — lime, amber or red — from their heat-normalized score
-(density, night share and strongest FRP), so a region reads as one field
-rather than a per-cell mosaic; the cell card's accent matches its fill.
+not affect the color.
+
+At far zoom (camera above ~3,000 km) the layer drapes a Snap Map–style
+heatmap instead of individual markers: the shown detections are binned on a
+global 2048 × 1024 grid, each weighted `1 + log10(1 + FRP)`, Gaussian-blurred,
+normalized on a log scale against the 99.5th percentile and mapped from blue
+through cyan, green, yellow and orange to red. Nothing is painted where
+nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
+tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
+on each data refresh or filter change (the first paint at once, later ones
+150 ms after the last change) and hidden once markers take over below
+~750 km. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
+areas; their accent is the strongest fire's FRP color.
 
 The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale
 whose track is painted with the ramp and ticked at the same six values (its
@@ -2071,7 +2080,7 @@ value reads "All" or "≥ N MW"), a "Confidence" switch with All / Nominal+ /
 High, and an "N of M shown" counter. The default is 0 MW and
 All, because many of the strongest detections are rated low confidence. The
 filter runs once in `ingestion.applyFilter()` before rendering, so markers,
-cards, heat cells, the shared context store, the top-fires query and the
+cards, the heatmap, the shared context store, the top-fires query and the
 analyst records all see one filtered set; a selected fire that no longer passes
 is deselected. The layer state keeps both options under the `w` (`local-firms`)
 share token as `f` (whole megawatts, 0–10,000) and `c` (`a`, `n`, `h`),
