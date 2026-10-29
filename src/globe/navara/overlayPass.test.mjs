@@ -30,6 +30,7 @@ function harness() {
     pass = new GevOverlayPass(scene, new PerspectiveCamera(), overlay),
     draws = [];
   const renderer = {
+    domElement: new EventTarget(),
     autoClear: true,
     outputColorSpace: SRGBColorSpace,
     getPixelRatio: () => 1,
@@ -190,6 +191,21 @@ test('static sprite glyphs reuse their target until instance data changes', () =
   h.pass.camera.updateMatrixWorld();
   h.pass.render(h.renderer, input, output);
   assert.equal(h.draws.filter((draw) => draw.object === h.scene).length, 3);
+  for (const type of ['webglcontextlost', 'webglcontextrestored']) {
+    h.renderer.domElement.dispatchEvent(new Event(type));
+    const before = h.draws.filter((draw) => draw.object === h.scene).length;
+    h.pass.render(h.renderer, input, output);
+    assert.equal(
+      h.draws.filter((draw) => draw.object === h.scene).length,
+      before + 1,
+      `${type} invalidates the cached GPU pixels`,
+    );
+    h.pass.render(h.renderer, input, output);
+    assert.equal(
+      h.draws.filter((draw) => draw.object === h.scene).length,
+      before + 1,
+    );
+  }
   h.pass.dispose();
   texture.dispose();
   mesh.geometry.dispose();
