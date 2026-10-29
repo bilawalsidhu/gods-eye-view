@@ -13,6 +13,11 @@ import * as Cesium from 'cesium';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
 import {
+  hudViewportSamples,
+  placeLookupView,
+  placeLookupViewChanged,
+} from '../hudPlaceLookup.js';
+import {
   findPoiByName,
   flyToGlobeView,
   flyToLandmark,
@@ -2692,13 +2697,20 @@ function runManagedVoiceNavigation(
   };
 }
 
+/**
+ * Place labels for the HUD's passive summary. It geocodes the view center
+ * and one more point. While the view still shows about the same area (see
+ * hudPlaceLookup.js) it answers for the points the last lookup asked about
+ * instead, so a settled camera does not buy a new set of Google requests for
+ * every small pan; those points are cache hits, and only what the last
+ * lookup did not get (a timeout, a failure, an empty answer) is asked again.
+ * `cachedOnly` reads the shared caches and makes no request.
+ */
 export async function getBasemapLabelContext(
   viewer,
   service = defaultGeospatial,
-  { cachedOnly = false } = {},
+  { cachedOnly = false, previous = null } = {},
 ) {
-  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
-  const samples = sampleViewportCartographics(viewer);
   const cameraHeightM = viewer.camera.positionCartographic.height;
   const target = getViewTargetCartographic(viewer);
   if (!target) {
@@ -2706,11 +2718,77 @@ export async function getBasemapLabelContext(
       placeLabels: [],
       streetLabels: [],
       nearbyPlaceLabels: [],
+      view: null,
+      lookup: null,
     };
   }
 
   const latitude = Number(Cesium.Math.toDegrees(target.latitude).toFixed(6));
   const longitude = Number(Cesium.Math.toDegrees(target.longitude).toFixed(6));
+  const view = placeLookupView({
+    latitude,
+    longitude,
+    rangeM: viewTargetRangeM(viewer, target, cameraHeightM),
+    fovRad: viewer.camera.frustum?.fov,
+    aspectRatio: viewer.camera.frustum?.aspectRatio,
+    tier: basemapLookupTier(cameraHeightM),
+  });
+  if (
+    !cachedOnly &&
+    previous?.lookup &&
+    !placeLookupViewChanged(previous.view, view)
+  ) {
+    // The same points again: what the last lookup got is a cache hit, and
+    // only what it did not (a timeout, a failure, an empty answer) is asked.
+    const labels = await basemapLabelsAt(previous.lookup, service, {
+      cachedOnly: false,
+    });
+    return { ...labels, view: previous.view, lookup: previous.lookup };
+  }
+  const samples = sampleViewportCartographics(viewer);
+  const lookup = {
+    latitude,
+    longitude,
+    cameraHeightM,
+    // Cache reads are free, so a cached-only host keeps every sample.
+    samples: cachedOnly
+      ? samples
+      : hudViewportSamples(samples, shouldReverseGeocode(cameraHeightM)),
+  };
+  return {
+    ...(await basemapLabelsAt(lookup, service, { cachedOnly })),
+    view,
+    lookup,
+  };
+}
+
+/** Which of the height-gated lookups a camera height calls for. */
+function basemapLookupTier(cameraHeightM) {
+  return [
+    shouldReverseGeocode(cameraHeightM),
+    shouldReverseGeocodeViewport(cameraHeightM) && cameraHeightM > 10000,
+    shouldFetchNearbyPlaces(cameraHeightM) &&
+      nearbyPlacesRadiusM(cameraHeightM),
+  ].join(':');
+}
+
+/** Camera distance to the view target, or the camera height without one. */
+function viewTargetRangeM(viewer, target, cameraHeightM) {
+  const position = viewer.camera.positionWC;
+  if (!position) return cameraHeightM;
+  const range = Cesium.Cartesian3.distance(
+    position,
+    Cesium.Cartographic.toCartesian(target),
+  );
+  return Number.isFinite(range) ? range : cameraHeightM;
+}
+
+async function basemapLabelsAt(
+  { latitude, longitude, cameraHeightM, samples },
+  service,
+  { cachedOnly },
+) {
+  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const cachedViewportPlaces = viewportPlacesFromCache(
     samples,
     cameraHeightM,
@@ -2748,7 +2826,6 @@ export async function getBasemapLabelContext(
     resolveWithin(placePromise, BASEMAP_CONTEXT_WAIT_MS, null),
     resolveWithin(nearbyPromise, BASEMAP_CONTEXT_WAIT_MS, []),
   ]);
-
   return {
     placeLabels: uniqueStrings([
       place?.formattedAddress,

@@ -149,7 +149,7 @@ export function formatCockpitDistance(distanceM) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-  return getLocale() === 'zh-CN' ? distance : distance.toUpperCase();
+  return getLocale().startsWith('zh-') ? distance : distance.toUpperCase();
 }
 
 export function formatCockpitWindDirection(value) {

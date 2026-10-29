@@ -14,6 +14,7 @@ import { readShellSource } from '../testSupport/readShellSource.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { LayerLifecycle } from '../data/lifecycle.js';
 import { SceneDirector } from './director.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
 import { SCENE_RECIPES, getSceneAppendRecipeById } from './recipes.js';
@@ -170,6 +171,348 @@ test('scene clock seek resolves the exact shot phase and camera in both directio
     assert.equal(loads[2].options.sceneSeek.camera.lat, 10);
     assert.equal(loads[2].options.sceneSeek.camera.lon, 20);
   } finally {
+    restore();
+  }
+});
+
+test('same-shot seeking restores declared layer visibility after manual changes', async () => {
+  const { director, dataManager, styleManager, restore } = makeDirector();
+  try {
+    const shot = director._project.scenes[0].shots[0];
+    shot.layers = { flights: { enabled: true }, traffic: { enabled: false } };
+    await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    await dataManager.setEnabled('flights', false);
+    await dataManager.setEnabled('traffic', true);
+    await dataManager.setEnabled('satellites', true);
+    dataManager.setEnabledCalls.length = 0;
+    const visualCalls = styleManager.visualCalls.length;
+
+    assert.equal(await director.seekScene('scene-1', 0.25), true);
+    assert.equal(styleManager.visualCalls.length, visualCalls, 'do not rebuild the shot');
+    assert.equal(director.getPlaybackTimingState().snapshot.sceneProgress, 0.25);
+    const enabled = new Map(dataManager.getAll().map(({ id, enabled }) => [id, enabled]));
+    assert.equal(enabled.get('flights'), true, 'restore the shot\'s enabled layer');
+    assert.equal(enabled.get('traffic'), false, 'restore the shot\'s disabled layer');
+    assert.equal(enabled.get('satellites'), true, 'preserve undeclared operator layers');
+    assert.ok(dataManager.setEnabledCalls.every(({ id }) => id !== 'satellites'));
+  } finally {
+    await director.destroy();
+    restore();
+  }
+});
+
+test('same-shot seeking reports refusal when a manually disabled layer cannot be restored', async () => {
+  let refuse = false;
+  const { director, dataManager, styleManager, restore } = makeDirector({
+    data: { refuse: () => refuse },
+  });
+  try {
+    await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    assert.equal(await director.seekScene('scene-1', 0.1), true);
+    await dataManager.setEnabled('flights', false);
+    refuse = true;
+    const visualCalls = styleManager.visualCalls.length;
+
+    assert.equal(await director.seekScene('scene-1', 0.25), false);
+    assert.equal(dataManager.getAll().find(({ id }) => id === 'flights').enabled, false);
+    const timing = director.getPlaybackTimingState();
+    assert.equal(timing.activeTimers, 0);
+    assert.ok(Math.abs(timing.snapshot.sceneProgress - 0.1) < 1e-9, 'keep the last settled seek position');
+    assert.equal(styleManager.visualCalls.length, visualCalls, 'do not rebuild the shot');
+  } finally {
+    await director.destroy();
+    restore();
+  }
+});
+
+test('same-shot seeking restores visibility a manual toggle is still changing', async () => {
+  const { director, dataManager, restore } = makeDirector();
+  try {
+    await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    const disabling = dataManager.setEnabled('flights', false);
+
+    assert.equal(await director.seekScene('scene-1', 0.25), true);
+    await disabling;
+    await settle();
+    assert.equal(dataManager.getAll().find(({ id }) => id === 'flights').enabled, true);
+  } finally {
+    await director.destroy();
+    restore();
+  }
+});
+
+test('same-shot seeking restores a layer whose superseded LOAD transition rolls back', async () => {
+  const { director, dataManager, styleManager, viewer, restore } = makeDirector();
+  const lifecycle = new LayerLifecycle(viewer);
+  for (const id of ['flights', 'traffic', 'satellites']) {
+    lifecycle.register({
+      id,
+      name: id,
+      init() {},
+      enable() {},
+      disable() {},
+      update() {},
+    });
+  }
+  const realDirector = new SceneDirector(viewer, styleManager, lifecycle);
+  try {
+    await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    await dataManager.setEnabled('flights', false);
+    dataManager.setEnabledCalls.length = 0;
+    const reload = director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    for (let i = 0; i < 20 && !dataManager.setEnabledCalls.length; i++) await Promise.resolve();
+    assert.equal(dataManager.getLayerLifecycleState('flights').lifecycleState, 'enabling');
+
+    assert.equal(await director.seekScene('scene-1', 0.25), true);
+    await reload;
+    await settle();
+    assert.equal(dataManager.getAll().find(({ id }) => id === 'flights').enabled, true);
+
+    await realDirector.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    await lifecycle.setEnabled('flights', false);
+    const queuedReload = realDirector.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    for (let i = 0; i < 20 && !lifecycle.isEffectivelyEnabled('flights'); i++) {
+      await Promise.resolve();
+    }
+    assert.deepEqual(lifecycle.getLayerLifecycleState('flights'), {
+      enabled: false,
+      lifecycleState: 'disabled',
+      uncertain: false,
+    });
+    assert.equal(await realDirector.seekScene('scene-1', 0.25), true);
+    await queuedReload;
+    await settle();
+    assert.equal(lifecycle.isEnabled('flights'), true);
+
+    lifecycle.layers.get('flights').lifecycleUncertain = true;
+    assert.equal(await realDirector.seekScene('scene-1', 0.3), true);
+    assert.equal(lifecycle.getLayerLifecycleState('flights').uncertain, false);
+
+    let navClaims = 0;
+    styleManager.runImmediateNavigation = () => {
+      navClaims += 1;
+      return false;
+    };
+    assert.equal(await realDirector.seekScene('scene-1', 0.4), false);
+    assert.equal(navClaims, 1, 'camera refusal fails the seek without falling back to LOAD');
+  } finally {
+    await realDirector.destroy();
+    await director.destroy();
+    restore();
+  }
+});
+
+test('same-shot seeking rolls back earlier layers and preserves Context, clock and camera when a later layer is refused', async () => {
+  let refuse = () => false;
+  const { director, dataManager, styleManager, viewer, restore } = makeDirector({
+    data: { refuse: (id, on) => refuse(id, on) },
+  });
+  try {
+    const shot = director._project.scenes[0].shots[0];
+    shot.layers = {
+      flights: { enabled: true },
+      traffic: { enabled: true },
+      satellites: { enabled: true },
+    };
+    await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    assert.equal(await director.seekScene('scene-1', 0.1), true);
+    await dataManager.setEnabled('flights', false);
+    await dataManager.setEnabled('traffic', false);
+    await dataManager.setEnabled('satellites', false);
+    styleManager.contextMode = 'space-missions';
+    styleManager.contextExits.length = 0;
+    refuse = (id) => id === 'traffic';
+    dataManager.setEnabledCalls.length = 0;
+    const viewsBefore = viewer.views.length;
+    const visualCalls = styleManager.visualCalls.length;
+
+    assert.equal(await director.seekScene('scene-1', 0.25), false);
+    assert.equal(
+      dataManager.setEnabledCalls.some(({ id }) => id === 'satellites'),
+      false,
+      'stop the plan before later ids are written',
+    );
+    const enabled = new Map(dataManager.getAll().map(({ id, enabled }) => [id, enabled]));
+    assert.equal(enabled.get('flights'), false, 'first stale layer stays disabled');
+    assert.equal(enabled.get('traffic'), false, 'refused second layer stays disabled');
+    assert.equal(enabled.get('satellites'), false, 'later stale layer is never written');
+    assert.equal(styleManager.contextMode, 'space-missions');
+    assert.deepEqual(styleManager.contextExits, []);
+    assert.equal(viewer.views.length, viewsBefore, 'camera stays at the pre-seek pose');
+    assert.equal(styleManager.visualCalls.length, visualCalls, 'do not rebuild the shot');
+    assert.ok(
+      Math.abs(director.getPlaybackTimingState().snapshot.sceneProgress - 0.1) < 1e-9,
+      'clock stays at the last settled seek position',
+    );
+  } finally {
+    await director.destroy();
+    restore();
+  }
+});
+
+test('same-shot seeking aborts in-flight admission when superseded by an early-return load or start', async () => {
+  const { styleManager, viewer, restore } = makeDirector();
+  let holdEnable = false;
+  let releaseEnable;
+  const enableGate = new Promise((resolve) => {
+    releaseEnable = resolve;
+  });
+  const lifecycle = new LayerLifecycle(viewer);
+  lifecycle.register({
+    id: 'flights',
+    name: 'flights',
+    init() {},
+    async enable() {
+      if (holdEnable) await enableGate;
+    },
+    disable() {},
+    update() {},
+  });
+  const director = new SceneDirector(viewer, styleManager, lifecycle);
+  try {
+    await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    assert.equal(await director.seekScene('scene-1', 0.1), true);
+    await lifecycle.setEnabled('flights', false);
+    holdEnable = true;
+    const viewsBefore = viewer.views.length;
+
+    const seek = director.seekScene('scene-1', 0.25);
+    for (
+      let i = 0;
+      i < 20 && lifecycle.getLayerLifecycleState('flights').lifecycleState !== 'enabling';
+      i++
+    ) {
+      await Promise.resolve();
+    }
+    assert.equal(lifecycle.getLayerLifecycleState('flights').lifecycleState, 'enabling');
+    const admissionSignal = director._loadAbort?.signal;
+    assert.ok(admissionSignal, 'same-shot seek installs an admission controller');
+
+    const missingLoad = director.loadShot('missing', 'nope');
+    assert.equal(
+      admissionSignal.aborted,
+      true,
+      'missing load aborts the admission controller before returning',
+    );
+    assert.equal((await missingLoad).reason, 'shot-not-found');
+    assert.equal(viewer.views.length, viewsBefore, 'shortcut has not committed before abort');
+
+    releaseEnable();
+    assert.equal(await seek, false);
+    await settle();
+    assert.equal(lifecycle.isEnabled('flights'), false, 'layer is not restored');
+    assert.equal(viewer.views.length, viewsBefore, 'setView is not called');
+    assert.ok(
+      Math.abs(director.getPlaybackTimingState().snapshot.sceneProgress - 0.1) < 1e-9,
+      'sceneProgress stays at the last settled value',
+    );
+
+    let loadFallbackCalls = 0;
+    const origLoadShot = director._loadShot.bind(director);
+    director._loadShot = (...args) => {
+      loadFallbackCalls += 1;
+      return origLoadShot(...args);
+    };
+    const origSeekLoadedShot = director._seekLoadedShot.bind(director);
+    director._seekLoadedShot = async () => {
+      await director.startScene('missing');
+      return null;
+    };
+    assert.equal(await director.seekScene('scene-1', 0.25), false);
+    assert.equal(loadFallbackCalls, 0, 'stale seek returning null must not start _loadShot');
+    director._seekLoadedShot = origSeekLoadedShot;
+  } finally {
+    releaseEnable?.();
+    await director.destroy();
+    restore();
+  }
+});
+
+test('a rejected loadShot does not cancel an in-flight LOAD', async () => {
+  const { styleManager, viewer, restore } = makeDirector();
+  let holdEnable = true;
+  let releaseEnable;
+  const enableGate = new Promise((resolve) => {
+    releaseEnable = resolve;
+  });
+  const lifecycle = new LayerLifecycle(viewer);
+  lifecycle.register({
+    id: 'flights',
+    name: 'flights',
+    init() {},
+    async enable() {
+      if (holdEnable) await enableGate;
+    },
+    disable() {},
+    update() {},
+  });
+  const director = new SceneDirector(viewer, styleManager, lifecycle);
+  try {
+    const load = director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    for (
+      let i = 0;
+      i < 20 && lifecycle.getLayerLifecycleState('flights').lifecycleState !== 'enabling';
+      i++
+    ) {
+      await Promise.resolve();
+    }
+    assert.equal(lifecycle.getLayerLifecycleState('flights').lifecycleState, 'enabling');
+
+    assert.equal((await director.loadShot('missing', 'nope')).reason, 'shot-not-found');
+    holdEnable = false;
+    releaseEnable();
+    assert.equal((await load)?.started, true, 'the valid LOAD still lands');
+    assert.equal(lifecycle.isEnabled('flights'), true);
+  } finally {
+    releaseEnable?.();
+    await director.destroy();
+    restore();
+  }
+});
+
+test('refused same-shot seek rollback keeps a manual toggle still in flight', async () => {
+  let refuse = () => false;
+  const { director, dataManager, restore } = makeDirector({
+    data: { refuse: (id, on) => refuse(id, on) },
+  });
+  try {
+    const shot = director._project.scenes[0].shots[0];
+    shot.layers = { flights: { enabled: true }, traffic: { enabled: true } };
+    await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    assert.equal(await director.seekScene('scene-1', 0.1), true);
+    await dataManager.setEnabled('flights', false);
+    await dataManager.setEnabled('traffic', false);
+    refuse = (id) => id === 'traffic';
+    const manualEnable = dataManager.setEnabled('flights', true);
+
+    assert.equal(await director.seekScene('scene-1', 0.25), false);
+    await manualEnable;
+    await settle();
+    assert.equal(
+      dataManager.getAll().find(({ id }) => id === 'flights').enabled,
+      true,
+      'rollback restores the operator\'s intended state, not the stale committed one',
+    );
+  } finally {
+    await director.destroy();
+    restore();
+  }
+});
+
+test('same-shot seeking keeps the shortcut when declared visibility is unchanged', async () => {
+  const { director, dataManager, styleManager, restore } = makeDirector();
+  try {
+    await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    await dataManager.setEnabled('satellites', true);
+    dataManager.setEnabledCalls.length = 0;
+    const visualCalls = styleManager.visualCalls.length;
+
+    assert.equal(await director.seekScene('scene-1', 0.25), true);
+    assert.deepEqual(dataManager.setEnabledCalls, []);
+    assert.equal(styleManager.visualCalls.length, visualCalls);
+    assert.equal(director.getPlaybackTimingState().snapshot.sceneProgress, 0.25);
+  } finally {
+    await director.destroy();
     restore();
   }
 });
@@ -647,6 +990,7 @@ function installSceneRuntime(project = PROJECT_FIXTURE, { storage } = {}) {
  */
 function fakeDataManager({ registered = REGISTERED, refuse = () => false } = {}) {
   const enabled = new Map();
+  const pending = new Map();
   const setEnabledCalls = [];
   const setParamsCalls = [];
   const committed = [];
@@ -659,12 +1003,25 @@ function fakeDataManager({ registered = REGISTERED, refuse = () => false } = {})
     setParamsCalls,
     committed,
     getAll: () => registered.map((id) => ({ id, enabled: !!enabled.get(id) })),
+    getLayerLifecycleState: (id) => {
+      if (!registered.includes(id)) return null;
+      const on = !!enabled.get(id);
+      const target = pending.get(id);
+      return {
+        enabled: on,
+        lifecycleState:
+          target === undefined ? (on ? 'enabled' : 'disabled') : target ? 'enabling' : 'disabling',
+      };
+    },
+    isEffectivelyEnabled: (id) => pending.get(id) ?? !!enabled.get(id),
     getLayerParams: () => null,
     async setEnabled(id, shouldEnable, { signal } = {}) {
       setEnabledCalls.push({ id, enabled: shouldEnable, signal });
       if (refuse(id, shouldEnable)) return false;
       // Yield once so a stop landing during the transition is observable.
+      pending.set(id, shouldEnable);
       await Promise.resolve();
+      if (pending.get(id) === shouldEnable) pending.delete(id);
       if (signal?.aborted) return false;
       enabled.set(id, shouldEnable);
       committed.push({ id, enabled: shouldEnable });
@@ -707,14 +1064,19 @@ function fakeStyleManager({ contextMode = null, exitFails = false } = {}) {
 /** Cesium viewer double whose flights complete on the next microtask turn. */
 function fakeViewer() {
   const flights = [];
+  const views = [];
   let cancelled = 0;
   return {
     flights,
+    views,
     get cancelledFlights() { return cancelled; },
     camera: {
       flyTo(options) {
         flights.push(options);
         Promise.resolve().then(() => options.complete?.());
+      },
+      setView(options) {
+        views.push(options);
       },
       cancelFlight() { cancelled++; },
     },

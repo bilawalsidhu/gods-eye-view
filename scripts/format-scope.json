@@ -1102,6 +1102,8 @@
   "src/cameraGlobeRotation.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs",
   "src/hudDms.test.mjs",
+  "src/hudSummaryGate.test.mjs",
+  "src/voice/hudPlaceLabels.test.mjs",
   "src/voice/panel/preferences.test.mjs",
   "src/voice/panel/host.test.mjs",
   "src/voice/panel/manualPanel.test.mjs",

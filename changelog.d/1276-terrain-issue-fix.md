@@ -1,1 +1,0 @@
-- Bound each height request to one upstream chunk (asturksever, #1276).
