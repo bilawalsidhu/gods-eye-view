@@ -172,3 +172,59 @@ test('destruction releases an active tuner pointer after revoking listeners', ()
     f.cleanup();
   }
 });
+
+test('a user scroll during the Radio reveal is not undone by the scrollend landing', async () => {
+  const prior = {
+    document: globalThis.document,
+    window: globalThis.window,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+  };
+  const rect = (top, bottom) => ({ top, bottom });
+  const scroller = Object.assign(new EventTarget(), {
+    scrollTop: 0,
+    scrollHeight: 1200,
+    clientHeight: 300,
+    getBoundingClientRect: () => rect(100, 400),
+    scrollTo() {},
+  });
+  const below = (top) => ({
+    getBoundingClientRect: () =>
+      rect(top - scroller.scrollTop, top + 30 - scroller.scrollTop),
+  });
+  const parts = {
+    '.radio-directory-row': below(500),
+    '.radio-transport': below(700),
+  };
+  const context = {
+    classList: { contains: () => false },
+    querySelector: (sel) =>
+      sel === '.global-context-panel-inner' ? scroller : null,
+  };
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    getElementById: (id) => (id === 'global-context-panel' ? context : null),
+  };
+  globalThis.window = { matchMedia: () => ({ matches: false }) };
+  globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 0);
+  const controls = Object.assign(Object.create(RadioControls.prototype), {
+    destroyed: false,
+    listeners: new AbortController(),
+    _radioPanel: { querySelector: (sel) => parts[sel] ?? null },
+    _radioState: { enabled: true },
+  });
+  try {
+    assert.equal(
+      await controls._revealRadioControlsAfterExplicitEnable({
+        isConnected: true,
+      }),
+      true,
+    );
+    scroller.dispatchEvent(new Event('keydown'));
+    scroller.scrollTop = 0;
+    scroller.dispatchEvent(new Event('scrollend'));
+    assert.equal(scroller.scrollTop, 0);
+  } finally {
+    controls.listeners.abort();
+    Object.assign(globalThis, prior);
+  }
+});

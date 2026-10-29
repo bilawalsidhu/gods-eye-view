@@ -129,3 +129,49 @@ test('adaptive rail restore reveals Context without touching the compact player'
   assert.equal(dock.classList.contains('disclosure-open'), true);
   assert.deepEqual(calls, ['button:global-context-panel', 'layout']);
 });
+
+// A globe station pick opens Radio, which may already be expanded inside a
+// closed Context.
+for (const theme of ['tactical', 'cyber']) {
+  test(`${theme}: a radio pick reopens the closed Context around an expanded Radio section`, (t) => {
+    const priorDocument = globalThis.document;
+    const contextPanel = {
+      id: 'global-context-panel',
+      classList: classList(['collapsed']),
+    };
+    const panels = {
+      'global-context-panel': contextPanel,
+      'radio-panel': { id: 'radio-panel', classList: classList() },
+    };
+    globalThis.document = {
+      documentElement: { dataset: { uiTheme: theme } },
+      body: { classList: classList() },
+      getElementById: (id) => panels[id] || null,
+    };
+    t.after(() => {
+      globalThis.document = priorDocument;
+    });
+    const owner = {
+      _leftPanelStack: null,
+      _rightPanelStack: { contains: (el) => el === contextPanel },
+      _panelLayout: {
+        _leftStackPreferredPanelId: null,
+        _rightStackPreferredPanelId: 'pp-toggles',
+      },
+      _syncPanelCollapseButton() {},
+      _scheduleLeftPanelLayout() {},
+      _scheduleRightPanelLayout() {},
+      _savePanelCollapsedState() {},
+      _syncCctvPanelViewport() {},
+      _updateCommandDockTrayStack() {},
+      _lifetime: { frame() {} },
+      shareLinkManager: null,
+      cockpitView: null,
+    };
+    owner.setPanelCollapsed = PanelChrome.prototype.setPanelCollapsed;
+
+    owner.setPanelCollapsed('radio-panel', false);
+
+    assert.equal(contextPanel.classList.contains('collapsed'), false);
+  });
+}

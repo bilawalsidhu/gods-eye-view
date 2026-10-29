@@ -501,7 +501,6 @@ export class PanelChrome {
     // Reveal Radio's owner before the no-op check: the nested section may
     // already be expanded while its Context parent is closed.
     if (
-      document.documentElement?.dataset.uiTheme === 'cyber' &&
       !nextCollapsed &&
       panelId === 'radio-panel' &&
       document
@@ -539,20 +538,6 @@ export class PanelChrome {
       if (this._cockpitContextCollapsedForDataPanel) {
         this.cockpitView.setContextCollapsed(true);
       }
-    }
-    if (
-      !nextCollapsed &&
-      panelId === 'radio-panel' &&
-      document.documentElement?.dataset.uiTheme !== 'cyber' &&
-      document
-        .getElementById('global-context-panel')
-        ?.classList.contains('collapsed')
-    ) {
-      this.setPanelCollapsed('global-context-panel', false, {
-        restore,
-        persist,
-        syncShare,
-      });
     }
     if (!nextCollapsed && !restore && panelId === 'location-bar') {
       const otherPanel = document.getElementById('control-panel');

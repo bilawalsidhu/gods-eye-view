@@ -59,37 +59,49 @@ export class RadioControls {
    * @returns {Promise<boolean>} Whether the internal scroller moved.
    */
   async _revealRadioControlsAfterExplicitEnable(trigger) {
+    const directory = this._radioPanel?.querySelector('.radio-directory-row');
+    const transport = this._radioPanel?.querySelector('.radio-transport');
+    if (!directory || !transport || !this._radioState?.enabled) return false;
+    return this._revealInsideContext(
+      directory,
+      transport,
+      () => this._radioState?.enabled && trigger?.isConnected,
+    );
+  }
+
+  /**
+   * Scroll Context so `top` through `bottom` show, preferring `bottom` when
+   * both do not fit, once the rail has laid out the opened panels.
+   * @param {HTMLElement} top
+   * @param {HTMLElement} bottom
+   * @param {() => boolean} stillWanted Rechecked after the layout frames.
+   * @returns {Promise<boolean>} Whether the internal scroller moved.
+   */
+  async _revealInsideContext(top, bottom, stillWanted) {
     const contextPanel = document.getElementById('global-context-panel');
     const scroller =
       (document.documentElement?.dataset.uiTheme === 'cyber' &&
         contextPanel?.querySelector('.cyber-panel-body')) ||
       contextPanel?.querySelector('.global-context-panel-inner');
-    const directory = this._radioPanel?.querySelector('.radio-directory-row');
-    const transport = this._radioPanel?.querySelector('.radio-transport');
     if (
       !contextPanel ||
       contextPanel.classList.contains('collapsed') ||
-      !scroller ||
-      !directory ||
-      !transport ||
-      !this._radioState?.enabled
+      !scroller
     )
       return false;
 
     await new Promise((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
     );
-    if (this.destroyed || !this._radioState?.enabled || !trigger?.isConnected)
-      return false;
+    if (this.destroyed || !stillWanted()) return false;
 
     const viewport = scroller.getBoundingClientRect();
-    const directoryRect = directory.getBoundingClientRect();
-    const transportRect = transport.getBoundingClientRect();
+    const topRect = top.getBoundingClientRect();
+    const bottomRect = bottom.getBoundingClientRect();
     const margin = 10;
     const minimum =
-      scroller.scrollTop + transportRect.bottom - (viewport.bottom - margin);
-    const maximum =
-      scroller.scrollTop + directoryRect.top - (viewport.top + margin);
+      scroller.scrollTop + bottomRect.bottom - (viewport.bottom - margin);
+    const maximum = scroller.scrollTop + topRect.top - (viewport.top + margin);
     const desired =
       minimum <= maximum
         ? Math.min(Math.max(scroller.scrollTop, minimum), maximum)
@@ -108,16 +120,27 @@ export class RadioControls {
     });
     // A rail layout pass that measures the panels mid-scroll puts the scroll
     // offset back where it was, which cancels the smooth scroll: land it when
-    // the scroll ends short.
-    if (!reducedMotion)
+    // the scroll ends short, unless the user took the scroll over meanwhile.
+    if (!reducedMotion) {
+      const landing = new AbortController();
+      const signal = AbortSignal.any([
+        this.listeners.signal,
+        landing.signal,
+        AbortSignal.timeout(2000),
+      ]);
+      const cancel = () => landing.abort();
+      for (const type of ['keydown', 'wheel', 'pointerdown', 'touchstart'])
+        scroller.addEventListener(type, cancel, { signal, passive: true });
       scroller.addEventListener(
         'scrollend',
         () => {
-          if (!this.destroyed && Math.abs(scroller.scrollTop - next) >= 1)
+          cancel();
+          if (Math.abs(scroller.scrollTop - next) >= 1)
             scroller.scrollTop = next;
         },
-        { once: true },
+        { signal },
       );
+    }
     return true;
   }
 

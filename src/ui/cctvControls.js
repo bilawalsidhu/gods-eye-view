@@ -31,6 +31,8 @@ export class CctvControls {
     this._cctvSummaryTypingTimer = null;
     this._lastCctvSummaryText = '';
     this._lastSeenCctvActiveId = null;
+    this._cctvRestoredEnable = false;
+    this._unsubscribeEnableRequests = null;
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = false;
     this._cctvFrameRequestToken = 0;
@@ -65,6 +67,11 @@ export class CctvControls {
     this._cctvUnsubscribe?.();
     this._cctvUnsubscribe = null;
     if (this.destroyed) return;
+    this._unsubscribeEnableRequests?.();
+    this._unsubscribeEnableRequests =
+      this.actions.subscribeEnableRequests?.((restored) => {
+        this._cctvRestoredEnable = restored;
+      }) || null;
     this._cctvUnsubscribe = this.cctv.subscribe?.((state) =>
       this._renderCctvState(state),
     );
@@ -118,6 +125,8 @@ export class CctvControls {
     this.listeners.abort();
     this._cctvUnsubscribe?.();
     this._cctvUnsubscribe = null;
+    this._unsubscribeEnableRequests?.();
+    this._unsubscribeEnableRequests = null;
     this._calibrationEdit?.(false);
     this._clearCctvFrame();
     clearInterval(this._cctvSummaryTypingTimer);

@@ -43,12 +43,16 @@ export function _renderCctvState(state) {
   if (
     effectiveActiveId &&
     effectiveActiveId !== this._lastSeenCctvActiveId &&
-    (!state?.autoHop || isFirstActivation)
+    (!state?.autoHop || isFirstActivation) &&
+    // A restored layer leaves the panel to the restored panel state, so its
+    // first camera does not take the rail from the restored tab.
+    !this._cctvRestoredEnable
   ) {
     this.actions.setPanelCollapsed('cctv-panel', false, {
       explicit: Boolean(state?.explicitSelection),
     });
   }
+  if (effectiveActiveId) this._cctvRestoredEnable = false;
   this._lastSeenCctvActiveId = effectiveActiveId;
 
   this._updateCctvSyncChip(state?.loading, enabled);
