@@ -48,7 +48,6 @@ export const ORDER_REJECTS_BEFORE_RESET = 3;
  */
 export function createIngestion({ state, services, parts, source }) {
   const { governorRequestRender } = services.render;
-  const { registerDynamicCredit, transitFeedCredit } = services.credits;
 
   function feedStatus(feedId) {
     let status = state._feedStatus.get(feedId);
@@ -397,8 +396,7 @@ export function createIngestion({ state, services, parts, source }) {
         `[Data:Transit] ${feed.id}: ${rejectedFixes} fix(es) implied impossible travel and were not animated`,
       );
     }
-    if (state._viewer)
-      registerDynamicCredit(state._viewer, transitFeedCredit(feed));
+    parts.renderer?.addCredit(feed);
     if (
       state._selectedKey &&
       state._vehicles.get(state._selectedKey)?.feedId === feed.id

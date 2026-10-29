@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import {
   ACTIVATION_ENTER_ALTITUDE_M,
@@ -18,23 +17,25 @@ import { transitFeedsInRange } from '../../data/transitFeeds.js';
 export function createViewport({ state, services, parts }) {
   const { governorRequestRender } = services.render;
 
-  function getCameraAltitude(viewer = state._viewer) {
-    const carto = viewer?.camera?.positionCartographic;
+  function getCameraAltitude() {
+    const carto = parts.renderer?.cameraCartographic();
     return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
   }
 
-  function getCameraCenterLatLon(viewer = state._viewer) {
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
+  function getCameraCenterLatLon() {
+    const rect = parts.renderer?.viewRectangle();
     if (rect) {
-      const center = Cesium.Rectangle.center(rect);
+      const east = rect.east < rect.west ? rect.east + Math.PI * 2 : rect.east;
+      const center = {
+        latitude: (rect.south + rect.north) / 2,
+        longitude: geo.math.negativePiToPi((rect.west + east) / 2),
+      };
       return {
         lat: geo.math.toDegrees(center.latitude),
         lon: geo.math.toDegrees(center.longitude),
       };
     }
-    const carto = viewer?.camera?.positionCartographic;
+    const carto = parts.renderer?.cameraCartographic();
     if (carto) {
       return {
         lat: geo.math.toDegrees(carto.latitude),
@@ -54,10 +55,7 @@ export function createViewport({ state, services, parts }) {
    * animating. Cheap, and only on a settled camera — never per frame.
    */
   function refreshViewBounds() {
-    const viewer = state._viewer;
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
+    const rect = parts.renderer?.viewRectangle();
     state._viewBounds = rect
       ? inflateViewBounds({
           south: geo.math.toDegrees(rect.south),
@@ -76,7 +74,7 @@ export function createViewport({ state, services, parts }) {
   }
 
   function runProximityCheck() {
-    if (!state._enabled || !state._viewer) return;
+    if (!state._enabled || !parts.renderer?.ready) return;
     refreshViewBounds();
     const altitude = getCameraAltitude();
     state._altitudeGateOpen = altitudeGateOpen(altitude);

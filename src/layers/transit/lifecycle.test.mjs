@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createTransitLayer } from './index.js';
+import { createTransitCesiumRenderer } from './render/cesium.js';
 import {
   FEED_EVICT_AFTER_MS,
   FEED_STALE_AFTER_MS,
@@ -264,6 +265,7 @@ function harness(
   /** Every call the floor cycle makes to the rendered-mesh sampler. */
   const meshCalls = [];
   const layer = createTransitLayer({
+    rendererFactory: createTransitCesiumRenderer,
     source,
     services: {
       ground,
@@ -937,6 +939,7 @@ test('destroy releases every shared registration this layer took', async (t) => 
 test('two layers built from the factory share no state', async (t) => {
   const app = harness(t);
   const second = createTransitLayer({
+    rendererFactory: createTransitCesiumRenderer,
     services: {
       ground: groundStub(() => 12),
       render: {
@@ -2922,6 +2925,13 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
       },
     },
     parts: {
+      renderer: {
+        cameraCartographic: () => state._viewer.camera.positionCartographic,
+        terrainHeight: () => undefined,
+        sampleMeshFloorCells(points) {
+          for (const point of points) probed.add(point.cell);
+        },
+      },
       trails: {
         prepareEntry(e, collect) {
           if (collect)
@@ -3931,6 +3941,9 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     _rotationDirty: false,
   };
   const noop = () => {};
+  const renderer = createTransitCesiumRenderer({ state, services: {} });
+  renderer.attach(state._viewer);
+  t.after(() => renderer.destroy());
   const rendering = createRendering({
     state,
     services: {
@@ -3940,7 +3953,11 @@ test('parked transit reprojects held and reported courses at the bounded camera 
         releaseContinuousRender: noop,
       },
     },
-    parts: { height: { nearGround: () => false }, trails: { update: noop } },
+    parts: {
+      renderer,
+      height: { nearGround: () => false },
+      trails: { update: noop },
+    },
   });
   rendering.onPreRender();
   const before = [held.marker.rotation, reportedOnly.marker.rotation];
