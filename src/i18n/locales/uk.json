@@ -724,7 +724,6 @@
   "NIGHT": "НІЧ",
   "▲ {frp} MW": "▲ {frp} МВт",
   "FIRE": "ПОЖЕЖА",
-  "FIRES": "ПОЖ.",
   "max {value} MW": "макс. {value} МВт",
   "new {value}": "останнє: {value} тому",
   "{value}°N": "{value}° пн. ш.",
@@ -3073,5 +3072,7 @@
   "ESC to dismiss": "ESC — приховати",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Порада: кнопка МІК у доку дає змогу говорити з картою.",
   "Malformed cyclone snapshot": "Некоректний знімок циклонів",
-  "Cyclone request timed out": "Минув час очікування запиту циклонів"
+  "Cyclone request timed out": "Минув час очікування запиту циклонів",
+  "CONFIRMED": "ПІДТВЕРДЖЕНО",
+  "PAD / RTLS": "МІСЦЕ ЗАПУСКУ / RTLS"
 }

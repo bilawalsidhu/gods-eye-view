@@ -716,7 +716,6 @@
   "NIGHT": "NOTTE",
   "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "INCENDIO",
-  "FIRES": "INCENDI",
   "max {value} MW": "max {value} MW",
   "new {value}": "ultimo: {value} fa",
   "{value}°N": "{value}°N",
@@ -3004,5 +3003,7 @@
   "ESC to dismiss": "ESC per chiudere",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Suggerimento: il pulsante GEV MIC nel dock ti permette di parlare con la mappa.",
   "Malformed cyclone snapshot": "Snapshot dei cicloni non valido",
-  "Cyclone request timed out": "La richiesta dei cicloni è andata in timeout"
+  "Cyclone request timed out": "La richiesta dei cicloni è andata in timeout",
+  "CONFIRMED": "CONFERMATA",
+  "PAD / RTLS": "SITO DI LANCIO / RTLS"
 }

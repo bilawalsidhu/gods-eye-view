@@ -183,8 +183,6 @@
   "Anime": "أنمي",
   "Apply high-contrast monochrome film-noir grading.": "تطبيق تدرج أحادي اللون عالي التباين بأسلوب الفيلم نوار.",
   "Noir": "نوار",
-  "Add a cold, snowy whiteout treatment to the scene.": "إضافة تأثير بياض ثلجي بارد إلى المشهد.",
-  "Snow": "ثلج",
   "MAP SOURCE": "مصدر الخريطة",
   "Map source": "مصدر الخريطة",
   "Style": "النمط",
@@ -3212,5 +3210,7 @@
   "SINCE": "منذ",
   "Toggle straight-down and tilted map views": "التبديل بين العرض العمودي والمائل للخريطة",
   "Reset map to north up": "إعادة توجيه الخريطة بحيث يكون الشمال للأعلى",
-  "Reset map bearing to north": "إعادة اتجاه الخريطة إلى الشمال"
+  "Reset map bearing to north": "إعادة اتجاه الخريطة إلى الشمال",
+  "Malformed cyclone snapshot": "لقطة الأعاصير مشوّهة",
+  "Cyclone request timed out": "انتهت مهلة طلب الأعاصير"
 }
