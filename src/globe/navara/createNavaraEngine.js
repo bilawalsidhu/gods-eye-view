@@ -222,6 +222,8 @@ export function createNavaraEngine(
   });
 
   const picker = {
+    // Navara mesh owners supply exact triangle hits for sync/hover/click picks.
+    registerMeshPicker: (pick) => picking.registerMeshPicker(pick),
     // The CPU pick of movers and lines (picking.js); 3D tiles carry no ids.
     // Clicks with { pick } get Navara's GPU pick of the gesture instead.
     pick: (screen) => picking.pick(screen),

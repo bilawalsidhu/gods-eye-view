@@ -58,8 +58,8 @@ function applyMode() {
   if (!_installed) return;
   const continuous = _holds.size > 0;
   if (_engine) {
-    if (_engine.render.isContinuous() !== continuous)
-      _engine.render.setContinuous(continuous);
+    if (_engine.render.isContinuous() === continuous) return;
+    _engine.render.setContinuous(continuous);
     if (!continuous) _engine.render.request('governor-idle');
     return;
   }

@@ -136,3 +136,20 @@ test('on a non-Cesium globe engine the governor drives engine.render with owner-
   uninstallRenderGovernor(engine);
   _resetRenderGovernorForTest();
 });
+
+test('releasing an absent Navara hold does not wake an already idle engine', async () => {
+  const { createFakeEngine } = await import('./globe/testing/fakeEngine.js');
+  _resetRenderGovernorForTest();
+  const engine = createFakeEngine({ kind: 'navara' });
+  installRenderGovernor(engine);
+  engine.fake.resetCalls();
+  for (let i = 0; i < 22; i++) releaseContinuousRender('cctv-projection');
+  assert.equal(engine.fake.callsOf('render.request').length, 0);
+  holdContinuousRender('video');
+  releaseContinuousRender('video');
+  assert.equal(engine.fake.callsOf('render.request').length, 1);
+  releaseContinuousRender('video');
+  assert.equal(engine.fake.callsOf('render.request').length, 1);
+  uninstallRenderGovernor(engine);
+  _resetRenderGovernorForTest();
+});

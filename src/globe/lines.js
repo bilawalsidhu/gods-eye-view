@@ -82,6 +82,7 @@ export function normalizeLineOptions(options) {
     arc,
     depthFailAlpha,
     dash: dashOf(options.dash),
+    ...(options.arrow === true ? { arrow: true } : {}),
     modelMatrix: modelMatrix ? [...modelMatrix] : null,
     pickId: options.pickId,
     order: isFiniteNumber(options.order) ? options.order : 0,

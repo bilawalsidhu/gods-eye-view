@@ -3,6 +3,7 @@ import {
   bindCctvWorldClickGesture,
 } from '../../layers/cctv/render/cesium.js';
 import { createCctvLayer } from '../../layers/cctv/index.js';
+import { rendererFor } from './renderers.js';
 import * as credits from '../../data/dataCredits.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as activation from '../../cctvFocusRequest.js';
@@ -16,7 +17,10 @@ import * as render from '../../renderGovernor.js';
 export function createApplicationCctv({
   surface,
   source,
-  rendererFactory = createCctvCesiumRenderer,
+  rendererFactory = ({ engine, ...context }) =>
+    engine?.kind === 'navara'
+      ? rendererFor('cctv', engine, context)
+      : createCctvCesiumRenderer(context),
 }) {
   const { terrain, groundFloor: ground, meshFloor: mesh } = surface;
   const layer = createCctvLayer({

@@ -65,6 +65,7 @@ uniform float uGevAlphaScale;
 uniform float uGevPixelRatio;
 ${OVERLAY_DEPTH_FRAGMENT}
 uniform float uGevDash;
+uniform bool uGevArrow;
 uniform vec2 uGevDashPx;
 uniform vec2 uGevTactical;
 varying float vGevS;
@@ -93,6 +94,12 @@ if (gevOverlayHidden()) discard;
 // sRGB colours (as Cesium takes them) into the linear output.
 diffuseColor = sRGBTransferEOTF(uGevColor);
 diffuseColor.a *= uGevAlphaScale;
+if (uGevArrow) {
+  float head = max(fwidth(vGevS) * 10.0 * uGevPixelRatio, 1e-6);
+  float halfWidth = vGevS < 1.0 - head ? 0.15 : 0.5 * (1.0 - vGevS) / head;
+  float edge = max(fwidth(vGevT), 1e-5);
+  diffuseColor.a *= 1.0 - smoothstep(halfWidth - edge, halfWidth + edge, abs(vGevT - 0.5));
+}
 if (uGevDash > 1.5) {
   diffuseColor.a *= gevTactical();
 } else if (uGevDash > 0.5) {
@@ -201,6 +208,7 @@ export function createLineMesh(
     uGevWidthPx: { value: options.widthPx },
     uGevColor: { value: [...options.color] },
     uGevDash: { value: dash?.kind === 'tactical' ? 2 : dash ? 1 : 0 },
+    uGevArrow: { value: options.arrow === true },
     uGevDashPx: {
       value: dash?.kind === 'pixels' ? [dash.lengthPx, dash.gapPx] : [1, 0],
     },

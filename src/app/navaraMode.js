@@ -65,6 +65,15 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    cctv: async () => {
+      const { createCctvNavaraRenderer } =
+        await import('../layers/cctv/render/navara.js');
+      return (engine, options) =>
+        createCctvNavaraRenderer(engine, {
+          ...options,
+          ...navaraViews.get(engine),
+        });
+    },
     'alpr-cameras': async () =>
       (await import('../layers/alpr/render/navara.js'))
         .createAlprNavaraRenderer,

@@ -434,3 +434,85 @@ test('stale GPU model hits cannot select hidden or removed instances', async () 
   assert.equal(await removed, undefined);
   picking.destroy();
 });
+
+test('owned mesh triangle hits participate in hover, GPU-empty clicks and disposal', async () => {
+  const view = fakeView();
+  const picking = createNavaraPicking({
+    view,
+    projector,
+    camera,
+    movers: () => [],
+    lines: () => [],
+    resolveBatch: () => null,
+    ...timers(),
+  });
+  const hit = { id: 'plane', owner: 'plane' };
+  const release = picking.registerMeshPicker((at) =>
+    at.x === 10 ? [{ onTop: 0, order: 0, depth: 100, result: hit }] : [],
+  );
+  assert.equal(picking.pick({ x: 10, y: 20 }), hit);
+  assert.equal(picking.pick({ x: 11, y: 20 }), undefined);
+  const clicked = picking.clickPick({ x: 10, y: 20 });
+  view.emit('featureClick', null);
+  assert.equal(await clicked, hit);
+  release();
+  assert.equal(picking.pick({ x: 10, y: 20 }), undefined);
+  picking.registerMeshPicker(() => [
+    { onTop: 0, order: 0, depth: 100, result: hit },
+  ]);
+  picking.destroy();
+  assert.equal(picking.pick({ x: 10, y: 20 }), undefined);
+});
+
+test('mesh picks preserve always-on-top siblings and reject stale sprite GPU answers', async () => {
+  const view = fakeView();
+  const sprite = moverSet('points', [[100, 100, 500, 'sprite']]);
+  const picking = createNavaraPicking({
+    view,
+    projector,
+    camera,
+    movers: () => [sprite],
+    lines: () => [],
+    resolveBatch: () => ({ set: 'points', instance: 0, pickId: 'sprite' }),
+    ...timers(),
+  });
+  picking.registerMeshPicker(() => [
+    { onTop: 0, order: 0, depth: 10, result: { id: 'plane', owner: 'plane' } },
+  ]);
+  const pending = picking.clickPick({ x: 100, y: 100 });
+  view.emit('featureClick', { batchId: 1 });
+  assert.equal((await pending).id, 'plane');
+  sprite.options.depthTest = 'always';
+  assert.equal(picking.pick({ x: 100, y: 100 }).id, 'sprite');
+  picking.destroy();
+});
+
+test('an exact foreground mesh wins over a GPU model pick behind it', async () => {
+  const view = fakeView();
+  const model = modelSet('models', [[100, 100, 500, 'jet']], 20);
+  const picking = createNavaraPicking({
+    view,
+    projector,
+    camera,
+    movers: () => [model],
+    lines: () => [],
+    resolveBatch: () => ({ set: 'models', instance: 0, pickId: 'jet' }),
+    ...timers(),
+  });
+  const release = picking.registerMeshPicker(() => [
+    {
+      onTop: 0,
+      order: 0,
+      depth: 10,
+      result: { id: 'plane', owner: 'plane' },
+    },
+  ]);
+  const pending = picking.clickPick({ x: 100, y: 100 });
+  view.emit('featureClick', { batchId: 1 });
+  assert.equal((await pending).id, 'plane');
+  release();
+  const uncovered = picking.clickPick({ x: 100, y: 100 });
+  view.emit('featureClick', { batchId: 1 });
+  assert.equal((await uncovered).id, 'jet');
+  picking.destroy();
+});
