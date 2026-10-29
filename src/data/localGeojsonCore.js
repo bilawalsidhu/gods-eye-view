@@ -1140,29 +1140,60 @@ const groundSampleOccluder = new Cesium.EllipsoidalOccluder(
   Cesium.Ellipsoid.WGS84,
 );
 
+const groundSampleCarto = new Cesium.Cartographic();
+const groundSampleTop = new Cesium.Cartesian3();
+
 /**
- * Whether the camera sees the record's base: inside the view frustum and
- * above the horizon. scene.sampleHeight reads only surface rendered for the
- * current view, so a sample of an unseen base passes through the Earth (about
- * -6,344 km near Ashburn on Esri) and fails on every 2 s retry, each one a
- * full offscreen render: 110 unseen data centres there held the page near 2 s
- * a frame indefinitely. An unseen base keeps its stem at the unsampled height
- * and is sampled on the first walk that sees it.
+ * Whether the camera can see the ground under the record: inside the view
+ * frustum and above the horizon. scene.sampleHeight reads only surface
+ * rendered for the current view, so a sample of unseen ground passes through
+ * the Earth (about -6,344 km near Ashburn on Esri) and fails on every 2 s
+ * retry, each one a full offscreen render; 110 unseen data centres there held
+ * rest frames at 58-589 ms. Unsampled bases sit on the ellipsoid, so the test
+ * uses loaded globe terrain when there is some, and otherwise every height a
+ * sample can accept (0 to GROUND_SAMPLE_MAX_ABS_HEIGHT_M): high ground in
+ * view is never mistaken for an unseen base. Unseen ground is sampled on the
+ * first walk that sees it.
  */
 function groundSampleInView(viewer, record) {
   const camera = viewer.camera;
+  const globe = viewer.scene.globe;
+  const terrain = globe?.show ? globe.getHeight?.(record.carto) : undefined;
+  const known =
+    Number.isFinite(terrain) &&
+    Math.abs(terrain) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
+  const span = GROUND_SAMPLE_MAX_ABS_HEIGHT_M / 2;
+  groundSampleCarto.longitude = record.carto.longitude;
+  groundSampleCarto.latitude = record.carto.latitude;
+  groundSampleCarto.height = known ? terrain : span;
+  Cesium.Cartographic.toCartesian(
+    groundSampleCarto,
+    Cesium.Ellipsoid.WGS84,
+    groundSampleSphere.center,
+  );
+  groundSampleSphere.radius = known ? 1 : span;
   const culling = camera.frustum.computeCullingVolume(
     camera.positionWC,
     camera.directionWC,
     camera.upWC,
   );
-  Cesium.Cartesian3.clone(record.base, groundSampleSphere.center);
   if (
     culling.computeVisibility(groundSampleSphere) === Cesium.Intersect.OUTSIDE
   )
     return false;
+  // The highest ground the sample could find is the last to drop below the
+  // horizon.
+  if (!known) groundSampleCarto.height = GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
   groundSampleOccluder.cameraPosition = camera.positionWC;
-  return groundSampleOccluder.isPointVisible(record.base);
+  return groundSampleOccluder.isPointVisible(
+    known
+      ? groundSampleSphere.center
+      : Cesium.Cartographic.toCartesian(
+          groundSampleCarto,
+          Cesium.Ellipsoid.WGS84,
+          groundSampleTop,
+        ),
+  );
 }
 
 function sampleLocalGroundHeight(viewer, record, now) {
