@@ -1337,7 +1337,7 @@ export class StyleManager extends ShellFacade {
 
   /**
    * Switches the HUD layout variant.
-   * @param {'tactical'|'operator'|'minimal'|'cyber'} variantName - Layout variant.
+   * @param {'tactical'|'minimal'|'cyber'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
    */
   setHudLayout(variantName) {

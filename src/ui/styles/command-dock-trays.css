@@ -463,15 +463,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(
 }
 
 #intel-hud[data-variant='tactical'] .hud-bottom-left,
-#intel-hud[data-variant='tactical'] .hud-bottom-right,
-#intel-hud[data-variant='operator'] .hud-bottom-left,
-#intel-hud[data-variant='operator'] .hud-bottom-right {
+#intel-hud[data-variant='tactical'] .hud-bottom-right {
   bottom: calc(2vh + 6.5rem);
-}
-
-#intel-hud[data-variant='operator'] .hud-bottom-bar {
-  bottom: calc(2vh + 9.8rem);
-  width: min(48vw, 680px);
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {

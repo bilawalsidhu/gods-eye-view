@@ -206,10 +206,11 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((tool) => structuredClone(tool))
     .filter((tool) => tool.name !== 'set_cyber_sonar');
-  // Cyber adds one HUD choice and the sonar tool; retain the existing pin for every legacy field.
+  // Cyber adds one HUD choice and the sonar tool, and Operator was retired;
+  // retain the existing pin for every legacy field.
   const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
-  assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
-  hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal', 'cyber']);
+  hudLayout.enum = ['tactical', 'operator', 'minimal'];
   // Globe rotation adds one motion and clarifies the two affected descriptions.
   // Check those edits explicitly, then keep the legacy pin for every other field.
   const camera = unchanged.find((tool) => tool.name === 'move_camera');

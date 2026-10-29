@@ -221,7 +221,7 @@ from 0–200%. OFF disables the slider while retaining its value. HUD layout
 changes preserve both settings; share links and scenes restore them. The
 historical missing-`scf` fallback remains 35%; explicit 0% keeps the hard edge.
 
-With Scope OFF, Tactical, Operator and Minimal add text-sized black backplates
+With Scope OFF, Tactical and Minimal add text-sized black backplates
 at 70% opacity behind telemetry, vertical metadata and scene chrome. Original
 HUD text color, glow and opacity are preserved. Scope OFF brightens the tagline
 and Active Style label with the shared secondary text color. The title plate
@@ -230,6 +230,15 @@ the original HUD presentation; Cyber retains its existing skin.
 
 `node scripts/qa-scope-hud.mjs` checks native input, range, layout persistence,
 restoration and both Scope presentations. `QA_SCREENSHOT_DIR` saves screenshots.
+
+## HUD layouts — October 29, 2026
+
+Display > HUD > Layout offers Tactical, Minimal and Cyber; the `set_hud` voice
+action accepts the same three. The Operator layout is retired. Share links
+keep its enum code so older links still parse, and a link, scene or saved state
+that names Operator restores the default Tactical layout. Operator was the
+only layout that showed the HUD's top banner bar, so its markup and styles are
+removed too.
 
 ## Cyber HUD — September 30, 2026
 
@@ -2929,7 +2938,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   corridor). Its minimal Display popover exposes Intel HUD,
 >   Detection, Parameters, and 3D aircraft. During Cockpit, those existing
 >   standard Display controls move into the Cockpit popover and retain their normal
->   nested interaction: HUD plus Tactical/Operator/Minimal layout, Detection plus
+>   nested interaction: HUD plus Tactical/Minimal/Cyber layout, Detection plus
 >   Density/Allocation/Fade/Outside tuning, and 3D plus Proximity/All mode. The
 >   same nodes and state return to the map Display on exit, so Cockpit does not
 >   maintain a second control state. **Detection is owned by the CONTACTS
@@ -3784,7 +3793,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 
 ### Interface localization (October 2026)
 
-Shipped locales: **en** (source and fallback), **es**, **fr**, **it**, **pt** (Brazilian Portuguese), **ru**, **uk**, **zh-CN** and **zh-Hant**. The code lives in
+Shipped locales: **en** (source and fallback), **de**, **es**, **fr**, **it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **uk**, **zh-CN** and **zh-Hant**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
 

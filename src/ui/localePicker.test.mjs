@@ -43,7 +43,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['ru', 'uk', 'en', 'es', 'fr', 'it', 'pt', 'zh-CN', 'zh-Hant'],
+    ['ru', 'uk', 'de', 'en', 'es', 'fr', 'it', 'pt', 'zh-CN', 'zh-Hant', 'ja'],
   );
   assert.deepEqual(
     codes(
@@ -53,7 +53,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['es', 'en', 'fr', 'it', 'pt', 'ru', 'uk', 'zh-CN', 'zh-Hant'],
+    ['es', 'de', 'en', 'fr', 'it', 'pt', 'ru', 'uk', 'zh-CN', 'zh-Hant', 'ja'],
   );
   assert.deepEqual(
     codes(
@@ -63,7 +63,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['en', 'es', 'fr', 'it', 'pt', 'ru', 'uk', 'zh-CN', 'zh-Hant'],
+    ['en', 'de', 'es', 'fr', 'it', 'pt', 'ru', 'uk', 'zh-CN', 'zh-Hant', 'ja'],
   );
   const rows = buildLocaleOptions({
     locales: MANY,
@@ -98,6 +98,7 @@ test('each row gets the interface-language name for search, unless it only repea
   const byCode = Object.fromEntries(rows.map((row) => [row.code, row]));
   assert.equal(byCode.en.localName, 'английский');
   assert.equal(byCode.es.localName, 'испанский');
+  assert.equal(byCode.de.localName, 'немецкий');
   assert.equal(byCode.fr.localName, 'французский');
   assert.equal(byCode.ru.localName, '', 'русский only repeats Русский');
   const english = buildLocaleOptions({

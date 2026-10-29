@@ -438,9 +438,18 @@ test('defaults travel as frozen meanings that match today’s app defaults', () 
   assert.equal(defaults.bloomIntensity, BLOOM_INTENSITY_DEFAULT);
   assert.equal(defaults.bloomVersion, BLOOM_SCALE_VERSION);
   assert.equal(defaults.hudVariant, HUD_LAYOUTS[0]);
-  assert.deepEqual(SHARE_VIEW_ENUMS.hudVariant.slice(0, HUD_LAYOUTS.length), [
-    ...HUD_LAYOUTS,
+  // Codes are append-only: the retired Operator layout keeps code 1 so old
+  // links still parse, and the app restores them as Tactical.
+  assert.deepEqual(SHARE_VIEW_ENUMS.hudVariant, [
+    'tactical',
+    'operator',
+    'minimal',
+    'cyber',
   ]);
+  assert.deepEqual(
+    SHARE_VIEW_ENUMS.hudVariant.filter((variant) => variant !== 'operator'),
+    [...HUD_LAYOUTS],
+  );
   // Snow is retired; its code stays reserved (see the retired-style test).
   assert.deepEqual(SHARE_VIEW_ENUMS.style, [...VIEW_STYLES, 'snow']);
   assert.deepEqual(SHARE_VIEW_ENUMS.mapStack, [...VIEW_MAPS]);

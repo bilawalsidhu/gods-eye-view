@@ -39,7 +39,7 @@ test('Cyber restores one expanded owner, keeps launchers, and restores other the
       true,
       'layout does not reopen a peer',
     );
-    f.options.hud.variant = 'operator';
+    f.options.hud.variant = 'minimal';
     f.run();
     assert.equal(f.first.classList.contains('collapsed'), false);
     assert.equal(
