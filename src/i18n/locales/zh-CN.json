@@ -1059,6 +1059,7 @@
   "LIVE · Roads: {source} · No flow roads in view": "实时 · 道路：{source} · 视野内没有带路况数据的道路",
   "LIVE · Roads: {source} · Flow {percent}%": "实时 · 道路：{source} · 路况 {percent}%",
   "SIMULATED · Roads: {source} · Flow {percent}%": "模拟 · 道路：{source} · 路况 {percent}%",
+  "STALE · Roads: {source} · Flow: cached TomTom tiles": "过期 · 道路：{source} · 路况：TomTom 缓存瓦片",
   "Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated": "正在同步路况 · 道路：OpenStreetMap · 路况：TomTom · 未匹配：模拟",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov · Unmatched: simulated": "实时 · 道路：OpenStreetMap · 路况：TomTom · 覆盖 {percent}% · 未匹配：模拟",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov": "实时 · 道路：OpenStreetMap · 路况：TomTom · 覆盖 {percent}%",
@@ -2876,5 +2877,7 @@
   "Minimum fire radiative power, megawatts": "最小火辐射功率（兆瓦）",
   "fire intensity filter|All": "全部",
   "Detection confidence": "检测置信度",
-  "{shown} of {total} shown": "显示 {shown} / {total}"
+  "{shown} of {total} shown": "显示 {shown} / {total}",
+  "routing busy — too many routes at once": "路线服务繁忙：同时请求的路线过多",
+  "route proxy error": "路线代理出错"
 }

@@ -38,33 +38,21 @@ export const DIRECTIONS_MODES = Object.freeze({
 export const DEFAULT_DIRECTIONS_MODE = 'car';
 
 /**
- * The route proxy's refusal texts (server/providers/places/routes.js). They
- * stay English on the wire and in the AI tools; the row shows them translated.
+ * The row error for a failed route request (createDirectionsSource errors),
+ * as English data; the Layers panel shows it translated (ROUTING_ERROR_PATTERNS
+ * in src/ui/statusText.js).
  */
-const ROUTING_REFUSALS = new Set([
-  msg('rate limited'),
-  msg('routing service is rate limited'),
-  msg('route leg too long'),
-  msg('route too long'),
-]);
-
-/** A refusal text from the route proxy in the language; unknown ones as given. */
-export function presentRoutingRefusal(text) {
-  return ROUTING_REFUSALS.has(text) ? t(text) : text;
-}
-
-/** The row text for a failed route request (createDirectionsSource errors). */
 export function presentRoutingFailure(error) {
   if (error?.status === 429) {
     return error.refusal
-      ? t('{error} — try again in a moment', {
-          error: presentRoutingRefusal(error.refusal),
-        })
-      : t('Routing is rate limited — try again in a moment');
+      ? // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+        `${error.refusal} — try again in a moment`
+      : msg('Routing is rate limited — try again in a moment');
   }
   if (Number.isFinite(error?.status) && error.status > 0)
-    return t('Routing unavailable (HTTP {status})', { status: error.status });
-  return error?.message || t('Routing unavailable');
+    // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+    return `Routing unavailable (HTTP ${error.status})`;
+  return error?.message || msg('Routing unavailable');
 }
 
 /** Route colour — the annotation palette's cyan, so voice routes and Directions match. */
@@ -659,7 +647,9 @@ export function directionsStats(state) {
     return {
       count: route?.steps.length || 0,
       lastUpdate,
-      error: t('Another map tool is using clicks — close it, then SET A again'),
+      error: msg(
+        'Another map tool is using clicks — close it, then SET A again',
+      ),
       status: 'empty',
       source,
     };
@@ -678,7 +668,7 @@ export function directionsStats(state) {
     return {
       count: 0,
       lastUpdate,
-      error: error || t('No route found'),
+      error: error || msg('No route found'),
       status: 'empty',
       source,
     };
@@ -1160,13 +1150,10 @@ export function createDirectionsLayer({ services, source }) {
         clearRouteGraphics();
         _status = 'error';
         _error =
-          payload?.error === 'no route found'
-            ? t('No route found between A and B')
-            : payload?.error
-              ? t('Routing failed: {error}', {
-                  error: presentRoutingRefusal(payload.error),
-                })
-              : t('No route found between A and B');
+          // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+          payload?.error && payload.error !== 'no route found'
+            ? `Routing failed: ${payload.error}`
+            : msg('No route found between A and B');
         return;
       }
       _route = route;
@@ -1183,9 +1170,9 @@ export function createDirectionsLayer({ services, source }) {
       // happened instead.
       _error =
         error?.name === 'AbortError'
-          ? t('Routing timed out')
+          ? msg('Routing timed out')
           : error?.name === 'TypeError'
-            ? t('Routing unavailable — no response from the routing service')
+            ? msg('Routing unavailable — no response from the routing service')
             : presentRoutingFailure(error);
     } finally {
       clearTimeout(timer);
