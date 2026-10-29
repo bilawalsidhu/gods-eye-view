@@ -48,12 +48,14 @@ void main(){vec4 bg=texture2D(image,vUv);vec4 glyph=texture2D(glyphs,vUv);if(gly
   });
   const quad = new FullScreenQuad(composite);
   const canvas = renderer.domElement;
+  const display = { target, composite, quad, canvas, signature: null };
   const invalidate = () => {
-    target.signature = null;
+    display.signature = null;
   };
   canvas?.addEventListener('webglcontextlost', invalidate);
   canvas?.addEventListener('webglcontextrestored', invalidate);
-  return { target, composite, quad, canvas, invalidate };
+  display.invalidate = invalidate;
+  return display;
 }
 
 function staticSpriteSignature(scene, camera, renderer, width, height) {
