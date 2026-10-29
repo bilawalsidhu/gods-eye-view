@@ -1,6 +1,16 @@
 # Phase 3 W2 — execution report
 
-Status: W2 in progress. Earthquakes are accepted; FIRMS, installations, bikeshare, radio, ALPR, CCTV and transit have implementation checkpoints with the limits below. Recent imagery and whole-wave functional/performance gates remain. Dioxus is deferred by the current user scope. The execution sequence is in [the detailed plan](phase3-w2-plan.md).
+Status: all nine W2 layers now have implementation checkpoints. Whole-wave functional/performance acceptance remains, including the existing failures below. Dioxus is deferred by the current user scope. The execution sequence is in [the detailed plan](phase3-w2-plan.md).
+
+## W2 recent imagery — implementation and paired checks (2026-10-29)
+
+Navara now displays the existing source/catalog selection through two ground-depth imagery slots, clipped to the selected geographic box, with opacity and A/B or basemap swipe. The native renderer is unchanged. Application dispatch supplies the actual engine; no fabricated Cesium viewer/imagery collection is used. Existing comparison leases, pins, thumbnails and source policy remain shared. The public Navara raster API has no clip/split capability, so the renderer owns bounded visible mosaics: at most8×8 tiles per slot and six shared fetch/decode admissions. The selected LOD decreases when needed to stay within that bound. Cancelled/late decodes release images; replacement, disable and destruction release texture/canvas/credit ownership. The box tool renders a ground preview and returns camera/pointer ownership on release, cancellation, blur and destruction.
+
+Final frozen dev and QA-preview captures pass19/19 each on Cesium and20/20 each on Navara, with zero unexpected console/page errors. Actual pixels prove geographic clipping, both dates, swap, physical divider dragging, Home/End,50% alpha and basemap comparison. Ten toggles, failed-source replacement, rapid date changes, physical box selection without camera movement, USE VIEW, oversized nonpolar refusal/ZOOM IN and teardown pass. Whole-globe/polar bounds retain the existing refusal policy. The first QA attempts used a sample inside the selected box, an incorrect method name, and later whole-globe bounds; these failed attempts and the exact cancelled-CDP-response classification are retained in [the evidence](phase3-w2-imagery-evidence.json).
+
+Full gates pass7335/7336 ordinary tests(one Windows skip),15allocation tests, boundaries, scoped formatting, production/panel/QA builds and main composition. The final rename/registration/input/ownership focused suite passes6/6. Main is2923330bytes/912843gzip and contains no Three/Navara; the missing baseline still prevents a size-budget verdict. New effect naming and package ownership declarations were corrected after boundary failures. All builds and launches had empty Google/Cesium credentials, and paid URLs were blocked before navigation.
+
+The reviewed [paired A/B preview](images/phase3-w2-imagery-ab.webp) shows Cesium left and Navara right. Imagery bounds and date colors agree; engine-wide map tone/scope differences remain and whole-frame equality is not claimed. Next: outstanding W2 functional gates and paired heavy-layer/all-nine performance. This checkpoint does not waive the FIRMS/ALPR budgets, CCTV viewshed browser checks or common terrain/shell gaps.
 
 ## W2 transit — native extraction and Navara checkpoint (2026-10-29)
 

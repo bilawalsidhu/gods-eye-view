@@ -105,6 +105,7 @@ const modeFrom = (value) =>
 export function createRecentImageryLayer({
   catalog = { searchHls },
   renderer,
+  rendererFactory,
   thumbnails,
   host = resolveImageryHost,
   now = () => new Date(),
@@ -113,6 +114,7 @@ export function createRecentImageryLayer({
   clearTimeoutImpl = (id) => globalThis.clearTimeout(id),
 } = {}) {
   let _viewer = null;
+  let _engine = null;
   let _tileset = null;
   let _mapStackController = null;
   let _dataManager = null;
@@ -370,14 +372,17 @@ export function createRecentImageryLayer({
   }
 
   function syncHost() {
-    const next = host({ viewer: _viewer, tileset: _tileset }) || {
-      collection: null,
-      kind: 'none',
-    };
+    const next = renderer?.resolveHost?.() ||
+      host({ viewer: _viewer, tileset: _tileset }) || {
+        collection: null,
+        kind: 'none',
+      };
     const changed =
-      next.collection !== _hostInfo.collection || next.kind !== _hostInfo.kind;
+      (next.identity || next.collection) !==
+        (_hostInfo.identity || _hostInfo.collection) ||
+      next.kind !== _hostInfo.kind;
     _hostInfo = next;
-    renderer.rebind(next);
+    renderer?.rebind(next);
     return changed;
   }
 
@@ -531,15 +536,16 @@ export function createRecentImageryLayer({
   }
 
   function syncRender({ comparison = true } = {}) {
-    if (_destroyed) return;
+    if (_destroyed || !renderer) return;
     syncHost();
     pruneEmpty();
     const shown = plan();
     trackSwipeStart(shown.swipe);
     const live = swipeLive(shown);
+    renderer.setSplit?.(_split);
     for (const slotId of SLOT_IDS) {
       const candidate = candidateFor(shown[slotId]);
-      if (candidate && _hostInfo.collection) {
+      if (candidate && (_hostInfo.identity || _hostInfo.collection)) {
         renderer.showSlot(slotId, candidate, _box, {
           alpha: _alpha,
           splitDirection: !live
@@ -794,8 +800,12 @@ export function createRecentImageryLayer({
     source: 'NASA GIBS · HLS + VIIRS',
     updateInterval: 0,
 
-    init(viewer) {
+    init(viewer, { engine } = {}) {
       _viewer = viewer || null;
+      _engine = engine || null;
+      if (rendererFactory && !renderer)
+        renderer = rendererFactory({ viewer, engine });
+      if (!renderer) throw new TypeError('Recent imagery requires a renderer');
       return true;
     },
 
@@ -849,7 +859,7 @@ export function createRecentImageryLayer({
       resetCatalog();
       _previewKey = null;
       _swipeKind = 'none';
-      for (const slotId of SLOT_IDS) renderer.hideSlot(slotId);
+      for (const slotId of SLOT_IDS) renderer?.hideSlot(slotId);
       releaseComparison();
       notify();
       return true;
@@ -865,12 +875,13 @@ export function createRecentImageryLayer({
       clearSplitTimer();
       _unsubscribeMap?.();
       _unsubscribeMap = null;
-      renderer.destroy();
+      renderer?.destroy();
       thumbnails.destroy();
       _listeners.clear();
       _rowListener = null;
       _toolHandler = null;
       _viewer = null;
+      _engine = null;
       _tileset = null;
       _mapStackController = null;
       _dataManager = null;
@@ -947,7 +958,9 @@ export function createRecentImageryLayer({
      * @returns {boolean}
      */
     useCurrentView(viewer = _viewer) {
-      const rectangle = viewer?.camera?.computeViewRectangle?.();
+      const rectangle =
+        _engine?.camera.viewRectangle() ||
+        viewer?.camera?.computeViewRectangle?.();
       if (!rectangle)
         return refuseBox('Point the camera at the ground to use the view');
       const box = boxFromRectangle(rectangle);
@@ -955,7 +968,7 @@ export function createRecentImageryLayer({
         const { width, height } = boxSideKm(box);
         return refuseBox(
           viewTooLargeMessage(Math.max(width, height)),
-          viewCentre(viewer) || boxCentre(box),
+          renderer?.viewCentre?.() || viewCentre(viewer) || boxCentre(box),
         );
       }
       return chooseBox(box);
@@ -969,6 +982,7 @@ export function createRecentImageryLayer({
      */
     zoomToFit() {
       const target = _boxError ? _refusalTarget : null;
+      if (target && renderer?.zoomToFit) return renderer.zoomToFit(target);
       const camera = _viewer?.camera;
       const ellipsoid = ellipsoidOf(_viewer);
       if (!target || !camera?.flyTo || !ellipsoid?.cartographicToCartesian)
@@ -989,6 +1003,11 @@ export function createRecentImageryLayer({
         duration: ZOOM_FIT_SECONDS,
       });
       return height;
+    },
+
+    /** The box tool's transient ground preview, owned by the renderer. */
+    setBoxPreview(box) {
+      renderer?.setBoxPreview?.(box);
     },
 
     /** A 10 km box centred on a point. */
@@ -1170,6 +1189,7 @@ export function createRecentImageryLayer({
       const next = clampUnit(value, _split);
       if (next === _split) return;
       _split = next;
+      renderer?.setSplit?.(next);
       clearSplitTimer();
       _splitTimer = setTimeoutImpl(() => {
         _splitTimer = null;
@@ -1436,7 +1456,8 @@ export function createRecentImageryLayer({
       const shown = plan();
       return {
         host: _hostInfo.kind,
-        ownedCount: renderer.ownedCount(),
+        ownedCount: renderer?.ownedCount() || 0,
+        renderer: renderer?.diagnostics?.(),
         lease: Boolean(_lease),
         releasing: Boolean(_releasing),
         mode: _mode,
