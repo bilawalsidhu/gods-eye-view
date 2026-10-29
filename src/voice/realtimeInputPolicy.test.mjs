@@ -29,6 +29,90 @@ test('voice presentation exposes one stable semantic vocabulary', () => {
   );
 });
 
+test('unknown session state fails closed before activity flags', () => {
+  for (const sessionState of [
+    null,
+    'closed',
+    'Idle',
+    'ready',
+    'speaking',
+    'interrupted',
+    '',
+    123,
+  ]) {
+    assert.equal(
+      resolveVoicePresentationState({
+        sessionState,
+        speaker: 'user',
+        interrupted: true,
+        actionActive: true,
+        outputAudible: true,
+        responseActive: true,
+      }),
+      'idle',
+      `unknown session state: ${String(sessionState)}`,
+    );
+  }
+});
+
+test('supported session states retain their settled baseline', () => {
+  const expected = [
+    ['idle', 'idle'],
+    ['connecting', 'connecting'],
+    ['listening', 'ready'],
+    ['executing', 'executing'],
+    ['error', 'error'],
+  ];
+  for (const [sessionState, state] of expected) {
+    assert.equal(resolveVoicePresentationState({ sessionState }), state);
+  }
+});
+
+test('only literal true activates interruption, action, audio and response', () => {
+  for (const value of [undefined, null, 'false', 'true', 0, 1, [], {}]) {
+    const label = `non-boolean: ${JSON.stringify(value)}`;
+    assert.equal(
+      resolveVoicePresentationState({
+        sessionState: 'listening',
+        speaker: 'ai',
+        interrupted: value,
+        outputAudible: true,
+      }),
+      'speaking',
+      `interrupted, ${label}`,
+    );
+    assert.equal(
+      resolveVoicePresentationState({
+        sessionState: 'listening',
+        speaker: 'ai',
+        actionActive: value,
+        responseActive: true,
+      }),
+      'working',
+      `actionActive, ${label}`,
+    );
+    assert.equal(
+      resolveVoicePresentationState({
+        sessionState: 'listening',
+        speaker: 'ai',
+        outputAudible: value,
+        responseActive: true,
+      }),
+      'working',
+      `outputAudible, ${label}`,
+    );
+    assert.equal(
+      resolveVoicePresentationState({
+        sessionState: 'listening',
+        speaker: 'ai',
+        responseActive: value,
+      }),
+      'ready',
+      `responseActive, ${label}`,
+    );
+  }
+});
+
 test('response ownership is working until output becomes measurably audible', () => {
   assert.equal(
     resolveVoicePresentationState({
@@ -128,54 +212,5 @@ test('session terminal states remain authoritative', () => {
       interrupted: true,
     }),
     'idle',
-  );
-});
-
-test('unknown sessions cannot imply an active HUD state', () => {
-  for (const sessionState of [
-    null,
-    undefined,
-    'closed',
-    'Idle',
-    'speaking',
-    {},
-  ]) {
-    assert.equal(
-      resolveVoicePresentationState({
-        sessionState,
-        speaker: 'ai',
-        responseActive: true,
-        actionActive: true,
-        outputAudible: true,
-        interrupted: true,
-      }),
-      'idle',
-      `unrecognized state ${String(sessionState)} must fail closed`,
-    );
-  }
-  assert.equal(resolveVoicePresentationState({ sessionState: 'ready' }), 'ready');
-});
-
-test('only Boolean true may signal ongoing voice activity', () => {
-  const input = { sessionState: 'listening', speaker: 'ai' };
-  for (const flag of [
-    'interrupted',
-    'actionActive',
-    'outputAudible',
-    'responseActive',
-  ]) {
-    assert.equal(
-      resolveVoicePresentationState({ ...input, [flag]: 'false' }),
-      'ready',
-      `${flag} string must not imply activity`,
-    );
-  }
-  assert.equal(
-    resolveVoicePresentationState({ ...input, outputAudible: true }),
-    'speaking',
-  );
-  assert.equal(
-    resolveVoicePresentationState({ ...input, responseActive: true }),
-    'working',
   );
 });

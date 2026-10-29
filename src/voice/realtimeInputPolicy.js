@@ -173,7 +173,7 @@ export const VOICE_PRESENTATION_STATES = Object.freeze([
  * Radio or another owner refused the barge-in.
  *
  * @param {object} input
- * @param {string} [input.sessionState='idle'] Session/controller state.
+ * @param {'idle'|'connecting'|'listening'|'executing'|'error'} [input.sessionState='idle'] Session/controller state.
  * @param {'idle'|'user'|'ai'} [input.speaker='idle'] Current turn speaker owner.
  * @param {boolean} [input.responseActive=false] A model response is in flight.
  * @param {boolean} [input.actionActive=false] A typed GEV action is executing.
@@ -192,14 +192,9 @@ export function resolveVoicePresentationState({
   if (sessionState === 'error') return 'error';
   if (sessionState === 'idle') return 'idle';
   if (sessionState === 'connecting') return 'connecting';
-  // Unknown/closed session states cannot prove a live voice interaction.
-  if (
-    sessionState !== 'ready' &&
-    sessionState !== 'listening' &&
-    sessionState !== 'executing'
-  ) {
+  // Only the controller's active states may project READY or activity.
+  if (sessionState !== 'listening' && sessionState !== 'executing')
     return 'idle';
-  }
   if (interrupted === true) return 'interrupted';
   if (speaker === 'user') return 'listening';
   if (actionActive === true || sessionState === 'executing') return 'executing';

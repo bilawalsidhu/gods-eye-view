@@ -460,6 +460,15 @@ replacement session; audio meters release failed initialization and reject revok
 frames. Delayed action results and post-capture continuations cannot resume a
 stopped conversation or send output into a replacement. See [voice ownership](VOICE-OWNERSHIP.md).
 
+The experimental presentation-only `resolveVoicePresentationState()` policy
+recognizes the controller session states `idle`, `connecting`, `listening`,
+`executing` and `error`. Unknown states fall back to `idle`, never `ready`;
+only literal boolean `true` activates interruption, action, audio or response
+flags. An accepted Space barge-in still outranks action/audio; the user turn
+outranks lingering assistant work, and audible output outranks an in-flight
+response. No app/HUD consumer is connected to this resolver, and localized
+labels for the extra presentation states are not yet implemented.
+
 Contacts nearest-aircraft follow-ups retain the snapshot's distance basis even
 after the camera moves. An explicit new scope replaces that basis. Provider
 instructions require an analyst query for requested lists and use the requested
