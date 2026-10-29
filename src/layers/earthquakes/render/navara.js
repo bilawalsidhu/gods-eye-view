@@ -199,8 +199,16 @@ function buildState(discs) {
 function groundEffectClass(EffectDesc, NavaraEffect) {
   return class GroundEffectDesc extends EffectDesc {
     static key = KEY;
-    static insertAfter = ['toneMapping'];
-    static insertBefore = ['gevSharpen', 'smaa', 'fxaa', 'gevOverlay', 'final'];
+    static insertAfter = ['gevRecentImagery', 'toneMapping'];
+    static insertBefore = [
+      'gevFirmsGround',
+      'gevPreSharpenOverlay',
+      'gevSharpen',
+      'smaa',
+      'fxaa',
+      'gevOverlay',
+      'final',
+    ];
     constructor(view, ctx, config) {
       super(view, ctx, config);
       this.owner = config[KEY].owner;

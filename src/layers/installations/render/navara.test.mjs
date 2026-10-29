@@ -42,6 +42,7 @@ test('selected installation fill is reused and removed with its scene resources'
         };
       },
       removeEntityContextsForLayer() {},
+      clearSelectedEntityContextForLayer() {},
     },
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
   };
@@ -64,13 +65,19 @@ test('selected installation fill is reused and removed with its scene resources'
     render: { request() {} },
   };
   let effectConfig;
+  let deletedEffects = 0;
   const view = {
     canvas: { clientHeight: 800 },
     camera: { raw: { fov: 60 } },
     registerEffect() {},
     addEffect(config) {
       effectConfig = config;
-      return { update() {}, destroy() {} };
+      return {
+        update() {},
+        delete() {
+          deletedEffects++;
+        },
+      };
     },
   };
   let meshCount = 0;
@@ -88,6 +95,8 @@ test('selected installation fill is reused and removed with its scene resources'
       installationSourceLabel: () => 'OpenStreetMap',
     },
     namedMarkers: { sync() {}, enable() {}, hide() {}, destroy() {} },
+    viewport: { clearUnavailableRetry() {} },
+    ingestion: { setInstallationStatus() {} },
   };
   const renderer = createInstallationsNavaraRenderer(engine, {
     state,
@@ -144,4 +153,7 @@ test('selected installation fill is reused and removed with its scene resources'
     'clearing selection preserves the ordinary outline',
   );
   assert.equal(sets.length, 3);
+  renderer.lifecycle.methods.destroy();
+  assert.equal(deletedEffects, 1, 'destroy deletes the public effect handle');
+  assert.equal(effectConfig.gevInstallationsDrape.owner.meshes.size, 0);
 });

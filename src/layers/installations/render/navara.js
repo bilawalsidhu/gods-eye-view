@@ -11,6 +11,7 @@ import {
   createInstallationDrapedMesh,
   createInstallationOutlineDrapedMesh,
 } from './navaraGeometry.js';
+import { batchInstallationOutlines } from './navaraOutlineBatch.js';
 
 const registeredViews = new WeakSet();
 const KEY = 'gevInstallationsDrape';
@@ -131,7 +132,9 @@ export function createInstallationsNavaraRenderer(
   const contextObjects = new Map();
   const namedRecords = new Map();
   const selectionMeshes = new Set();
-  const outlinesById = new Map();
+  const outlineMeshes = new Set();
+  let outlineRecords = [],
+    outlineWidthM = null;
   let drapeHandle = null;
   let visible = false;
   let fillRecord = null;
@@ -228,18 +231,17 @@ export function createInstallationsNavaraRenderer(
       1,
       (2 * cameraHeight * Math.tan(fov / 2) * 2) / canvasHeight,
     );
-    const desired = new Map(
-      records
-        .filter((record) => !record.pointOnly && !record.namedArea)
-        .map((record) => [record.id, record]),
+    const desired = records.filter(
+      (record) => !record.pointOnly && !record.namedArea,
     );
-    for (const [id, entry] of outlinesById) {
-      if (desired.get(id) === entry.record && entry.widthM === widthM) continue;
-      replaceOwnedMeshes(entry.meshes, []);
-      outlinesById.delete(id);
-    }
-    for (const [id, record] of desired) {
-      if (outlinesById.has(id)) continue;
+    if (
+      outlineWidthM === widthM &&
+      desired.length === outlineRecords.length &&
+      desired.every((record, index) => record === outlineRecords[index])
+    )
+      return;
+    const next = [];
+    for (const record of desired) {
       const lines =
         record.outlineLines || (record.footprint ? [record.footprint] : []);
       const meshes = lines
@@ -254,17 +256,17 @@ export function createInstallationsNavaraRenderer(
           }),
         )
         .filter(Boolean);
-      const owned = new Set(meshes);
-      for (const mesh of owned) owner.meshes.add(mesh);
-      outlinesById.set(id, { record, widthM, meshes: owned });
+      next.push(...meshes);
     }
-    syncDrapeEffect();
+    replaceOwnedMeshes(outlineMeshes, batchInstallationOutlines(next));
+    outlineRecords = desired;
+    outlineWidthM = widthM;
   }
 
   function clearOutlines() {
-    for (const entry of outlinesById.values())
-      replaceOwnedMeshes(entry.meshes, []);
-    outlinesById.clear();
+    replaceOwnedMeshes(outlineMeshes, []);
+    outlineRecords = [];
+    outlineWidthM = null;
   }
 
   function registerContext(record) {
@@ -643,7 +645,7 @@ export function createInstallationsNavaraRenderer(
         selection.destroy();
         rendering.clearRendered();
         namedMarkers.destroy();
-        drapeHandle?.destroy();
+        drapeHandle?.delete();
         drapeHandle = null;
         normalSet.destroy();
         selectedSet.destroy();

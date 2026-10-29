@@ -214,12 +214,16 @@ function buildState(cells) {
 function groundEffectClass(EffectDesc, NavaraEffect) {
   return class FirmsGroundEffectDesc extends EffectDesc {
     static key = KEY;
-    static insertAfter = ['toneMapping'];
+    static insertAfter = [
+      'gevEarthquakeGround',
+      'gevRecentImagery',
+      'toneMapping',
+    ];
     static insertBefore = [
+      'gevPreSharpenOverlay',
       'gevSharpen',
       'smaa',
       'fxaa',
-      'gevPreSharpenOverlay',
       'gevOverlay',
       'final',
     ];

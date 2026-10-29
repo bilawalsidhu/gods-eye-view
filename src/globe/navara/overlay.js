@@ -55,7 +55,9 @@ class GevOverlayEffectDesc extends EffectDesc {
 
 class GevPreSharpenOverlayEffectDesc extends GevOverlayEffectDesc {
   static key = PRE_SHARPEN_KEY;
-  static insertAfter = ['toneMapping'];
+  // Ground classifiers also insert after tone mapping. Anchor to the next
+  // stage so glyphs stay above them regardless of layer activation order.
+  static insertAfter = [];
   static insertBefore = [
     'gevSharpen',
     'smaa',
