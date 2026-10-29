@@ -116,6 +116,53 @@ test('a full-coverage TomTom line is two-way and covers both OSM directions', ()
   assert.equal(roads.length, 1);
   assert.equal(roads[0].directFlow, true);
 });
+test("opposite TomTom sides of one street share a two-way street's dots", () => {
+  // About 1 m and 20 m north of `coordinates`, drawn westbound.
+  const back = (dLat) => ({
+    ...flow,
+    coords: coordinates.map(([lon, lat]) => [lon, lat + dLat]).reverse(),
+  });
+  const weights = (segments) =>
+    flowSegmentsToRoads(segments).map((road) => road.densityWeight ?? 1);
+  assert.deepEqual(weights([flow, back(0.00001)]), [0.5, 0.5]);
+  assert.deepEqual(weights([flow]), [1], 'a lone side keeps the one-way share');
+  assert.deepEqual(
+    weights([flow, back(0.00018)]),
+    [1, 1],
+    'a divided carriageway keeps one-way shares',
+  );
+  assert.deepEqual(
+    weights([
+      flow,
+      {
+        ...flow,
+        coords: coordinates.map(([lon, lat]) => [lon, lat + 0.00001]),
+      },
+    ]),
+    [1, 1],
+    'same-direction lines are not a pair',
+  );
+  assert.deepEqual(
+    weights([{ ...flow, coverage: 'full' }, back(0.00001)]),
+    [1, 1],
+    'a full-coverage line is not a side, and pairs with nothing',
+  );
+});
+test('a TomTom side paired along only part of its length keeps its share', () => {
+  // Westbound partners about 1 m north, from the start of `flow` to 30% and
+  // to 60% of its length: one or two of its three sample points.
+  const partner = (toLon) => ({
+    ...flow,
+    coords: [
+      [toLon, 30.26701],
+      [-97.744, 30.26701],
+    ],
+  });
+  const weightOfFlow = (other) =>
+    flowSegmentsToRoads([flow, other])[0].densityWeight ?? 1;
+  assert.equal(weightOfFlow(partner(-97.7434)), 1);
+  assert.equal(weightOfFlow(partner(-97.7428)), 0.5);
+});
 test('bearing and distance reject nearby crossing and separate OSM roads', () => {
   const parallel = {
     ...main,

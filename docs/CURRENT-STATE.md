@@ -5897,6 +5897,11 @@ easier to meet (detection is now on more often), but does not create it.
   TomTom draws only flow-tile lines with their own flow; roads without flow
   are not drawn and the status says so. A `full`-coverage flow line carries
   both travel directions, a `one_side` line the direction it is drawn in.
+  When an opposite-direction `one_side` line runs within 5 m of at least two
+  of three points a quarter, half and three quarters along a `one_side` line,
+  the two are one street's directions and each
+  gets a two-way direction's half share of dots, so the street is as dense as
+  one `full` line (#1455).
   OSM draws OpenFreeMap roads with flow matched onto them (below). Hybrid
   draws eligible TomTom motor-road lines and adds OpenFreeMap roads only where no eligible TomTom line
   runs within 35 m in the same travel direction (30 degrees), tested every
