@@ -1131,17 +1131,25 @@ function refreshLocalTerrainFloor(viewer, record) {
   return true;
 }
 
-const groundSampleSphere = new Cesium.BoundingSphere(
-  new Cesium.Cartesian3(),
-  1,
-);
-
 const groundSampleOccluder = new Cesium.EllipsoidalOccluder(
   Cesium.Ellipsoid.WGS84,
 );
 
 const groundSampleCarto = new Cesium.Cartographic();
-const groundSampleTop = new Cesium.Cartesian3();
+const groundSampleLow = new Cesium.Cartesian3();
+const groundSampleHigh = new Cesium.Cartesian3();
+
+/** The record's vertical at `height` metres above the ellipsoid. */
+function groundSamplePoint(record, height, result) {
+  groundSampleCarto.longitude = record.carto.longitude;
+  groundSampleCarto.latitude = record.carto.latitude;
+  groundSampleCarto.height = height;
+  return Cesium.Cartographic.toCartesian(
+    groundSampleCarto,
+    Cesium.Ellipsoid.WGS84,
+    result,
+  );
+}
 
 /**
  * Whether the camera can see the ground under the record: inside the view
@@ -1150,10 +1158,10 @@ const groundSampleTop = new Cesium.Cartesian3();
  * the Earth (about -6,344 km near Ashburn on Esri) and fails on every 2 s
  * retry, each one a full offscreen render; 110 unseen data centres there held
  * rest frames at 58-589 ms. Unsampled bases sit on the ellipsoid, so the test
- * uses loaded globe terrain when there is some, and otherwise every height a
- * sample can accept (0 to GROUND_SAMPLE_MAX_ABS_HEIGHT_M): high ground in
- * view is never mistaken for an unseen base. Unseen ground is sampled on the
- * first walk that sees it.
+ * uses loaded globe terrain when there is some. Otherwise (a hidden globe) it
+ * tests the vertical from 0 to GROUND_SAMPLE_MAX_ABS_HEIGHT_M, every height a
+ * sample can accept, so high ground in view is never mistaken for an unseen
+ * base. Unseen ground is sampled on the first walk that sees it.
  */
 function groundSampleInView(viewer, record) {
   const camera = viewer.camera;
@@ -1162,37 +1170,36 @@ function groundSampleInView(viewer, record) {
   const known =
     Number.isFinite(terrain) &&
     Math.abs(terrain) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
-  const span = GROUND_SAMPLE_MAX_ABS_HEIGHT_M / 2;
-  groundSampleCarto.longitude = record.carto.longitude;
-  groundSampleCarto.latitude = record.carto.latitude;
-  groundSampleCarto.height = known ? terrain : span;
-  Cesium.Cartographic.toCartesian(
-    groundSampleCarto,
-    Cesium.Ellipsoid.WGS84,
-    groundSampleSphere.center,
-  );
-  groundSampleSphere.radius = known ? 1 : span;
-  const culling = camera.frustum.computeCullingVolume(
+  const low = groundSamplePoint(record, known ? terrain : 0, groundSampleLow);
+  const high = known
+    ? low
+    : groundSamplePoint(
+        record,
+        GROUND_SAMPLE_MAX_ABS_HEIGHT_M,
+        groundSampleHigh,
+      );
+  // The vertical is unseen only when both ends are outside the same plane.
+  const { planes } = camera.frustum.computeCullingVolume(
     camera.positionWC,
     camera.directionWC,
     camera.upWC,
   );
-  if (
-    culling.computeVisibility(groundSampleSphere) === Cesium.Intersect.OUTSIDE
-  )
-    return false;
-  // The highest ground the sample could find is the last to drop below the
-  // horizon.
-  if (!known) groundSampleCarto.height = GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
+  for (const plane of planes) {
+    if (
+      Cesium.Cartesian3.dot(plane, low) + plane.w < 0 &&
+      Cesium.Cartesian3.dot(plane, high) + plane.w < 0
+    )
+      return false;
+  }
+  // The ellipsoidal occluder hides every point below the ellipsoid from a
+  // camera near it, so ground below 0 m (low-geoid coasts, the Dead Sea) is
+  // tested at 0 m; unknown ground at the top of the vertical.
+  const horizonHeight = known
+    ? Math.max(terrain, 0)
+    : GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
   groundSampleOccluder.cameraPosition = camera.positionWC;
   return groundSampleOccluder.isPointVisible(
-    known
-      ? groundSampleSphere.center
-      : Cesium.Cartographic.toCartesian(
-          groundSampleCarto,
-          Cesium.Ellipsoid.WGS84,
-          groundSampleTop,
-        ),
+    groundSamplePoint(record, horizonHeight, groundSampleHigh),
   );
 }
 

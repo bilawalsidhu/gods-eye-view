@@ -113,8 +113,13 @@ async function createRealLocalLayerHarness({
       upWC: new Cesium.Cartesian3(),
       frustum: {
         fov: Math.PI / 3,
+        // No planes: everything is in view. One plane no point satisfies:
+        // nothing is.
         computeCullingVolume: () => ({
-          computeVisibility: () => baseVisibility,
+          planes:
+            baseVisibility === Cesium.Intersect.OUTSIDE
+              ? [new Cesium.Cartesian4(0, 0, 0, -1)]
+              : [],
         }),
       },
       moveEnd,
@@ -787,63 +792,94 @@ test('an unseen base is not sampled and arms no retry until it is in view', asyn
   assert.ok(Math.abs(baseHeightM(env) - 117) < 0.01);
 });
 
-for (const [label, globe] of [
-  ['loaded terrain', { show: true, tilesLoaded: true, getHeight: () => 2_500 }],
-  ['a hidden globe', { show: false, tilesLoaded: true, getHeight: () => undefined }],
+/**
+ * Give the harness a real Cesium camera `southM` metres south of the base at
+ * `cameraM` metres above the ellipsoid, looking at the base's ground at
+ * `groundM` (or directly away from it).
+ */
+function aimRealCamera(env, { groundM, cameraM, southM, away = false }) {
+  const entity = env.dataSources[0].entities.values[0];
+  const base = Cesium.Cartographic.fromCartesian(entity.__localBaseCartesian);
+  const ground = Cesium.Cartesian3.fromRadians(base.longitude, base.latitude, groundM);
+  const position = Cesium.Cartesian3.fromRadians(
+    base.longitude,
+    base.latitude - southM / 6_371_000,
+    cameraM,
+  );
+  const direction = Cesium.Cartesian3.normalize(
+    away
+      ? Cesium.Cartesian3.subtract(position, ground, new Cesium.Cartesian3())
+      : Cesium.Cartesian3.subtract(ground, position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const right = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(
+      direction,
+      Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(position),
+      new Cesium.Cartesian3(),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const up = Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3());
+  const frustum = new Cesium.PerspectiveFrustum({
+    fov: Math.PI / 3,
+    aspectRatio: 800 / 600,
+    near: 1,
+    far: 1e8,
+  });
+  Object.assign(env.viewer.camera, {
+    positionWC: position,
+    directionWC: direction,
+    upWC: up,
+    frustum,
+  });
+  return frustum
+    .computeCullingVolume(position, direction, up)
+    .computeVisibility(new Cesium.BoundingSphere(entity.__localBaseCartesian, 1));
+}
+
+const loadedTerrain = (height) => ({ show: true, tilesLoaded: true, getHeight: () => height });
+const hiddenGlobe = { show: false, tilesLoaded: true, getHeight: () => undefined };
+
+for (const { label, globe, groundM, cameraM, southM, baseOffScreen } of [
+  // 2,500 m terrain from 3 km away at a shallow angle: the ellipsoid-height
+  // base is far below the bottom of the screen.
+  { label: 'high ground with loaded terrain', globe: loadedTerrain(2_500), groundM: 2_500, cameraM: 3_500, southM: 3_000, baseOffScreen: true },
+  { label: 'high ground under a hidden globe', globe: hiddenGlobe, groundM: 2_500, cameraM: 3_500, southM: 3_000, baseOffScreen: true },
+  // A low-geoid coast (about -63 m near Mumbai) from a camera 50 m above the
+  // ellipsoid: the ellipsoidal horizon would hide the ground itself.
+  { label: 'ground below the ellipsoid', globe: loadedTerrain(-63), groundM: -63, cameraM: 50, southM: 2_000, baseOffScreen: false },
 ]) {
-  test(`high ground in view is sampled with ${label} although its unsampled base projects off screen`, async (t) => {
-    // A base on 2,500 m terrain, seen from 3 km away at a shallow angle: its
-    // ellipsoid-height point is far below the bottom of the screen.
+  test(`${label} in view is sampled`, async (t) => {
     const env = await createRealLocalLayerHarness({
-      sampleHeightSupported: true, sampleHeight: () => 2_500,
+      sampleHeightSupported: true, sampleHeight: () => groundM,
     });
     const clock = installFakeClock(t);
     t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
     env.viewer.scene.globe = globe;
-    const entity = env.dataSources[0].entities.values[0];
-    const base = Cesium.Cartographic.fromCartesian(entity.__localBaseCartesian);
-    const ground = Cesium.Cartesian3.fromRadians(base.longitude, base.latitude, 2_500);
-    const position = Cesium.Cartesian3.fromRadians(
-      base.longitude,
-      base.latitude - 3_000 / 6_371_000,
-      2_500 + 1_000,
-    );
-    const direction = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.subtract(ground, position, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3(),
-    );
-    const right = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.cross(
-        direction,
-        Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(position),
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
-    );
-    const up = Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3());
-    const frustum = new Cesium.PerspectiveFrustum({
-      fov: Math.PI / 3,
-      aspectRatio: 800 / 600,
-      near: 1,
-      far: 1e8,
-    });
-    Object.assign(env.viewer.camera, {
-      positionWC: position,
-      directionWC: direction,
-      upWC: up,
-      frustum,
-    });
-    const offScreen = frustum
-      .computeCullingVolume(position, direction, up)
-      .computeVisibility(new Cesium.BoundingSphere(entity.__localBaseCartesian, 1));
-    assert.equal(offScreen, Cesium.Intersect.OUTSIDE, 'precondition: the ellipsoid-height base is off screen');
+    const baseVisibility = aimRealCamera(env, { groundM, cameraM, southM });
+    if (baseOffScreen)
+      assert.equal(baseVisibility, Cesium.Intersect.OUTSIDE, 'precondition: the ellipsoid-height base is off screen');
 
     clock.advance(2_100);
     env.preRender.raise();
     assert.equal(env.sampleCalls.count, 1, 'the ground in view is sampled');
-    assert.ok(Math.abs(baseHeightM(env) - 2_500) < 0.01);
+    assert.ok(Math.abs(baseHeightM(env) - groundM) < 0.01);
   });
 }
+
+test('under a hidden globe, ground behind the camera is not sampled', async (t) => {
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true, sampleHeight: () => 2_500,
+  });
+  const clock = installFakeClock(t);
+  t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
+  env.viewer.scene.globe = hiddenGlobe;
+  aimRealCamera(env, { groundM: 2_500, cameraM: 3_500, southM: 3_000, away: true });
+  clock.advance(2_100);
+  env.preRender.raise();
+  assert.equal(env.sampleCalls.count, 0);
+});
 
 test('settled terrain refinement lifts an already sampled stem without another GPU sample', async (t) => {
   const env = await createRealLocalLayerHarness({
