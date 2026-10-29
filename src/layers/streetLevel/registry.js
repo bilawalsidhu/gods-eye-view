@@ -1,6 +1,6 @@
 import { encodeIdSwitches } from '../../data/idSwitches.js';
 
-export const IMAGERY_FILTERS = Object.freeze(['pano', 'since']);
+const IMAGERY_FILTERS = Object.freeze(['pano', 'since']);
 
 export function filtersOf(provider) {
   return provider?.filters ?? IMAGERY_FILTERS;

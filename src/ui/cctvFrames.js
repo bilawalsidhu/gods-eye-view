@@ -46,7 +46,7 @@ const SOURCE_LABELS = Object.freeze({
 });
 
 /** "SNAPSHOT" / "СНИМОК"; unknown codes (HLS, MJPEG…) stay as uppercase codes. */
-export function cctvSourceKindLabel(kind) {
+function cctvSourceKindLabel(kind) {
   const key = String(kind || 'unknown').toLowerCase();
   return SOURCE_KIND_LABELS[key]
     ? t(SOURCE_KIND_LABELS[key])

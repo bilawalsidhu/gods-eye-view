@@ -178,6 +178,9 @@ const schemas = [
             'global-context-panel',
             'weather-panel',
             'recent-imagery-panel',
+            'voice-settings',
+            'voice-preview',
+            'provider-settings',
           ],
         },
         open: {
@@ -185,6 +188,15 @@ const schemas = [
         },
       },
       required: ['panelId', 'open'],
+    },
+  },
+  {
+    name: 'set_voice_inactivity_timeout',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { minutes: { type: 'integer', minimum: 0, maximum: 60 } },
+      required: ['minutes'],
     },
   },
   {
@@ -223,6 +235,7 @@ const schemas = [
         aircraftClass: {
           type: 'string',
         },
+        voicePanel: { type: 'string', enum: ['preview', 'settings'] },
       },
       required: ['action'],
     },
@@ -729,7 +742,7 @@ const schemas = [
       properties: {
         motion: {
           type: 'string',
-          enum: ['orbit', 'pan', 'tilt', 'rotate', 'stop'],
+          enum: ['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe', 'stop'],
         },
         direction: {
           type: 'string',

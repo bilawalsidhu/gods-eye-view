@@ -41,13 +41,16 @@ const ADVISORIES_UNAVAILABLE = msg('Cyclone advisories unavailable');
 const SERVER_REASONS = new Set([msg('Cyclone data unavailable')]);
 const errorText = (error) =>
   error && (SERVER_REASONS.has(error) ? t(error) : translateKnown(error));
+// NHC's Tropical Cyclone Status JSON reference: PTC is post-tropical, PC is a
+// potential tropical cyclone, and subtropical systems are STS and STD.
 const CLASSIFICATION_NAMES = Object.freeze({
-  PTC: msg('Potential tropical cyclone'),
+  PC: msg('Potential tropical cyclone'),
+  PTC: msg('Post-tropical cyclone'),
   HU: msg('Hurricane'),
   TS: msg('Tropical storm'),
   TD: msg('Tropical depression'),
-  SS: msg('Subtropical storm'),
-  SD: msg('Subtropical depression'),
+  STS: msg('Subtropical storm'),
+  STD: msg('Subtropical depression'),
 });
 const classificationName = (code) =>
   Object.hasOwn(CLASSIFICATION_NAMES, code)

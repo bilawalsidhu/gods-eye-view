@@ -91,6 +91,36 @@ test('429 retry honors Retry-After before the next attempt', async () => {
   assert.equal(results[0].id, 'recovered');
 });
 
+test('a Retry-After longer than the retry budget ends the retries without sleeping', async () => {
+  let clock = 3_000_000;
+  let attempts = 0;
+  const sleeps = [];
+  await assert.rejects(
+    fetchTerrainChunkWithRetry([[1, 1]], {
+      now: () => clock,
+      random: () => 0.5,
+      makeSignal: () => undefined,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        clock += ms;
+      },
+      fetchImpl: async () => {
+        attempts += 1;
+        return {
+          ok: false,
+          status: 429,
+          headers: {
+            get: (name) => (name.toLowerCase() === 'retry-after' ? '30' : null),
+          },
+        };
+      },
+    }),
+    (error) => error.status === 429 && error.retryAfter === '30',
+  );
+  assert.equal(attempts, 1);
+  assert.deepEqual(sleeps, [], 'no sleep that cannot reach the Retry-After');
+});
+
 test('permanently failing upstream exhausts retries and returns 502 without fake results', async () => {
   let clock = 2_000_000;
   let attempts = 0;

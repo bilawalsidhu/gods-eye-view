@@ -40,7 +40,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['ru', 'en', 'es', 'zh-CN'],
+    ['ru', 'uk', 'en', 'es', 'it', 'zh-CN', 'zh-Hant'],
   );
   assert.deepEqual(
     codes(
@@ -50,7 +50,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['es', 'en', 'ru', 'zh-CN'],
+    ['es', 'en', 'it', 'ru', 'uk', 'zh-CN', 'zh-Hant'],
   );
   assert.deepEqual(
     codes(
@@ -60,7 +60,7 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['en', 'es', 'ru', 'zh-CN'],
+    ['en', 'es', 'it', 'ru', 'uk', 'zh-CN', 'zh-Hant'],
   );
   const rows = buildLocaleOptions({
     locales: MANY,
@@ -261,9 +261,10 @@ test('keyboard model: open on the current language, move, choose, close', () => 
   model.openList();
   assert.equal(model.activeOption.code, 'ru');
   assert.deepEqual(model.keydown({ key: 'ArrowDown' }), { handled: true });
-  assert.equal(model.activeOption.code, 'en');
+  // Russian collation puts the other Cyrillic name next.
+  assert.equal(model.activeOption.code, 'uk');
   model.keydown({ key: 'End' });
-  assert.equal(model.activeOption.code, 'zh-CN');
+  assert.equal(model.activeOption.code, 'zh-Hant');
   model.keydown({ key: 'Home' });
   assert.equal(model.activeOption.code, 'ru');
   model.keydown({ key: 'ArrowUp' });
@@ -275,7 +276,7 @@ test('keyboard model: open on the current language, move, choose, close', () => 
   model.keydown({ key: 'ArrowDown' });
   assert.deepEqual(model.keydown({ key: ' ' }), {
     handled: true,
-    choose: 'en',
+    choose: 'uk',
   });
   assert.deepEqual(model.keydown({ key: 'Escape' }), {
     handled: true,

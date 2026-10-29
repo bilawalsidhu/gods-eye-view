@@ -1,3 +1,4 @@
+import { getScopeMaskFeather, isScopeMaskEnabled, setScopeMaskEnabled, setScopeMaskFeather } from '../scopeMask.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -269,6 +270,35 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
   assert.equal(exited.ok, true);
   assert.equal(voice.hud.getVariant(), 'operator');
   assert.equal(voice.owner.activeStyle, 'snow');
+});
+
+test('scope choice and expanded feather survive every HUD layout and both restore paths', async (t) => {
+  const { owner } = styleOwner(t, 'tactical');
+  const previous = { enabled: isScopeMaskEnabled(), feather: getScopeMaskFeather() };
+  t.after(() => { setScopeMaskEnabled(previous.enabled); setScopeMaskFeather(previous.feather); });
+  Object.assign(owner.services, { setScopeMaskEnabled, setScopeMaskFeather });
+  owner._scopeBtn = { checked: true };
+  owner._scopeFeatherSlider = { value: '11', disabled: false };
+  owner._scopeFeatherValue = {};
+  await owner.restoreShareState({ scopeEnabled: false, scopeFeatherPct: 200 });
+  assert.equal(owner._scopeBtn.checked, false);
+  assert.equal(owner._scopeFeatherSlider.disabled, true);
+  assert.equal(owner._scopeFeatherSlider.value, '200');
+  for (const layout of ['minimal', 'operator', 'cyber', 'tactical']) {
+    owner._setHudVariant(layout, { applyVisualDefaults: true });
+    assert.equal(isScopeMaskEnabled(), false, layout);
+    assert.equal(getScopeMaskFeather(), 2, layout);
+    assert.equal(owner._scopeBtn.checked, false, layout);
+  }
+  await owner.applyVisualState({ scope: { enabled: true, featherPct: 175 } });
+  assert.equal(isScopeMaskEnabled(), true);
+  assert.equal(getScopeMaskFeather(), 1.75);
+  assert.equal(owner._scopeBtn.checked, true);
+  assert.equal(owner._scopeFeatherSlider.disabled, false);
+  assert.equal(owner._scopeFeatherValue.textContent, '175%');
+  await owner.applyVisualState({ scope: { featherPct: 500 } });
+  assert.equal(getScopeMaskFeather(), 2);
+  assert.equal(owner._scopeFeatherSlider.value, '200');
 });
 
 test('scene and share HUD transitions do not restore a local pre-Cyber preset', async (t) => {

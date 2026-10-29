@@ -17,10 +17,20 @@ import {
   writeStoredLocale,
 } from './locale.js';
 import es from './locales/es.json' with { type: 'json' };
+import it from './locales/it.json' with { type: 'json' };
 import ru from './locales/ru.json' with { type: 'json' };
+import uk from './locales/uk.json' with { type: 'json' };
 import zhCN from './locales/zh-CN.json' with { type: 'json' };
+import zhHant from './locales/zh-Hant.json' with { type: 'json' };
 
-const CATALOGS = Object.freeze({ es, ru, 'zh-CN': zhCN });
+const CATALOGS = Object.freeze({
+  es,
+  it,
+  ru,
+  uk,
+  'zh-CN': zhCN,
+  'zh-Hant': zhHant,
+});
 
 let currentLocale = DEFAULT_LOCALE;
 
@@ -210,7 +220,7 @@ export function formatRelativeTime(value, unit = 'second', options) {
 }
 
 /** Collapse markup whitespace so a message reads the same in HTML and JS. */
-export function normalizeMarkupText(text) {
+function normalizeMarkupText(text) {
   return String(text ?? '')
     .replace(/\s+/g, ' ')
     .trim();
