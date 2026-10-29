@@ -11,6 +11,7 @@ import puppeteer from 'puppeteer';
 
 const before = process.argv.includes('--record-before');
 const landscapeShell = process.argv.includes('--landscape-shell');
+const locales = process.env.QA_AGENT_LOCALES?.split(',') || ['en'];
 const sizes = process.argv.includes('--portrait-only')
   ? [
       [390, 844],
@@ -151,11 +152,16 @@ try {
       };
     });
   }
-  for (const [width, height] of sizes) {
+  for (const [locale, width, height] of locales.flatMap((locale) =>
+    sizes.map(([width, height]) => [locale, width, height]),
+  )) {
     await page.setViewport({ width, height });
-    await page.goto(server.resolvedUrls.local[0] + '?welcome=0', {
-      waitUntil: 'domcontentloaded',
-    });
+    await page.goto(
+      server.resolvedUrls.local[0] + '?welcome=0&lang=' + locale,
+      {
+        waitUntil: 'domcontentloaded',
+      },
+    );
     await page.waitForFunction(
       () =>
         window.__godsEyeView?.viewer &&
@@ -176,7 +182,7 @@ try {
     if (landscapeShell && [844, 932].includes(width))
       assert.ok(closed.mobile, '#1429 landscape shell active');
     await page.screenshot({
-      path: `${artifacts}/${before ? 'before' : 'after'}-${width}x${height}-closed.png`,
+      path: `${artifacts}/${before ? 'before' : 'after'}-${locale}-${width}x${height}-closed.png`,
     });
     // Pointer click, never DOM .click(): this reproduces tab-bar interception.
     await page.click('#agent-console-chip');
@@ -192,7 +198,7 @@ try {
     );
     const opened = await geometry();
     await page.screenshot({
-      path: `${artifacts}/${before ? 'before' : 'after'}-${width}x${height}-open.png`,
+      path: `${artifacts}/${before ? 'before' : 'after'}-${locale}-${width}x${height}-open.png`,
     });
     // Force the existing minimum-size path and inspect actual content layout.
     const grip = await page.$('#agent-console .agent-resize-grip');
@@ -207,9 +213,17 @@ try {
     await page.mouse.up();
     const minimum = await geometry();
     await page.screenshot({
-      path: `${artifacts}/${before ? 'before' : 'after'}-${width}x${height}-minimum.png`,
+      path: `${artifacts}/${before ? 'before' : 'after'}-${locale}-${width}x${height}-minimum.png`,
     });
-    results.push({ width, height, closed, openedByPointer, opened, minimum });
+    results.push({
+      locale,
+      width,
+      height,
+      closed,
+      openedByPointer,
+      opened,
+      minimum,
+    });
     if (!before) {
       for (const credit of closed.credits)
         assert.ok(
@@ -223,24 +237,24 @@ try {
         );
       assert.ok(
         closed.chipHit && openedByPointer,
-        `${width}×${height}: pointer opens COMMAND`,
+        `${locale} ${width}×${height}: pointer opens COMMAND`,
       );
       assert.ok(
         opened.inputHit && opened.closeHit,
-        `${width}×${height}: input and close reachable`,
+        `${locale} ${width}×${height}: input and close reachable`,
       );
       assert.ok(
         opened.dialog.left >= 0 &&
           opened.dialog.right <= width &&
           opened.dialog.bottom <= (closed.tab?.top ?? height),
-        `${width}×${height}: console clears tabs`,
+        `${locale} ${width}×${height}: console clears tabs`,
       );
       assert.ok(
         minimum.input.bottom <= minimum.dialog.bottom &&
           minimum.closeHit &&
           minimum.inputHit &&
           minimum.scrollWidth <= minimum.clientWidth + 3,
-        `${width}×${height}: minimum geometry fits controls`,
+        `${locale} ${width}×${height}: minimum geometry fits controls`,
       );
     }
     if (!before && closed.mobile) {
@@ -338,7 +352,7 @@ try {
         'visual viewport keyboard reduction keeps input and dismissal reachable',
       );
       await page.screenshot({
-        path: `${artifacts}/after-${width}x${height}-keyboard.png`,
+        path: `${artifacts}/after-${locale}-${width}x${height}-keyboard.png`,
       });
       await page.evaluate(() => {
         delete window.qaRealViewport.height;
@@ -362,7 +376,7 @@ try {
         'agent-console-chip',
       );
     }
-    console.log(`${before ? 'RECORDED' : 'PASS'} ${width}×${height}`);
+    console.log(`${before ? 'RECORDED' : 'PASS'} ${locale} ${width}×${height}`);
   }
 } finally {
   await fs.writeFile(

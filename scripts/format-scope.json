@@ -1153,5 +1153,7 @@
   "src/agent/commandPanelTargets.test.mjs",
   "scripts/qa-agent-right-rail.mjs",
   "src/voice/hudResult.js",
-  "src/agent/hudIntegration.test.mjs"
+  "src/agent/hudIntegration.test.mjs",
+  "src/i18n/supplements/command-ar.json",
+  "src/agent/rtlIntegration.test.mjs"
 ]

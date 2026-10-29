@@ -134,7 +134,7 @@
 }
 
 .agent-console-cost {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 0.55rem;
   letter-spacing: 0.06rem;
   opacity: 0.8;
@@ -428,4 +428,34 @@ body.mobile-shell #agent-input {
 }
 #agent-console-title {
   touch-action: none;
+}
+
+/* Mirror only the initial launcher/window side. Once opened, consoleBox owns
+   physical left/top geometry; dragging and resize handles must not reverse. */
+html[dir='rtl'] #agent-console-chip {
+  left: auto;
+  right: 0.9rem;
+}
+html[dir='rtl'] body.mobile-shell #agent-console-chip {
+  left: auto;
+  right: calc(
+    var(--mobile-right-inset, env(safe-area-inset-right, 0px)) + 0.9rem
+  );
+}
+
+/* Content chooses its own base direction independently of the shell. Keep
+   machine syntax, signs, parentheses and IDs in physical left-to-right order. */
+.agent-entry,
+#agent-input {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+.agent-entry-tool,
+#agent-provider,
+#agent-model,
+#agent-chatgpt-account,
+#agent-console-title,
+.agent-console-chip-caret {
+  direction: ltr;
+  unicode-bidi: isolate;
 }

@@ -540,3 +540,32 @@ test('portrait launcher clears stacked voice controls and map attribution', () =
     762,
   );
 });
+
+test('RTL first placement mirrors the LTR window without changing its size or height', () => {
+  for (const viewport of [
+    DESKTOP,
+    { viewportWidth: 390, viewportHeight: 844 },
+    { viewportWidth: 844, viewportHeight: 390 },
+  ]) {
+    const ltr = defaultBox(viewport);
+    const rtl = defaultBox({ ...viewport, rtl: true });
+    assert.equal(rtl.left, viewport.viewportWidth - ltr.left - ltr.width);
+    assert.equal(rtl.top, ltr.top);
+    assert.equal(rtl.width, ltr.width);
+    assert.equal(rtl.height, ltr.height);
+  }
+});
+
+test('RTL initial/reset placement follows direction while a saved physical window stays put', () => {
+  const { dom, box, storage } = mounted();
+  dom.document.documentElement = { dir: 'rtl' };
+  box.apply();
+  assert.deepEqual(box.box, defaultBox({ ...DESKTOP, rtl: true }));
+  const remembered = { left: 300, top: 120, width: 600, height: 400 };
+  writeStoredBox(remembered, storage);
+  box.apply();
+  assert.deepEqual(box.box, remembered);
+  box.reset();
+  assert.deepEqual(box.box, defaultBox({ ...DESKTOP, rtl: true }));
+  box.destroy();
+});

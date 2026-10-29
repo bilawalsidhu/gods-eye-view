@@ -138,7 +138,7 @@ function clampBox(
  * @param {{viewportWidth:number, viewportHeight:number}} viewport
  * @returns {{left:number, top:number, width:number, height:number}}
  */
-function defaultBox({ viewportWidth, viewportHeight }) {
+function defaultBox({ viewportWidth, viewportHeight, rtl = false }) {
   const width = Math.min(
     CONSOLE_DEFAULT_SIZE.width,
     viewportWidth - 2 * VIEWPORT_MARGIN_PX,
@@ -149,7 +149,7 @@ function defaultBox({ viewportWidth, viewportHeight }) {
   );
   return clampBox(
     {
-      left: DEFAULT_LEFT_PX,
+      left: rtl ? viewportWidth - width - DEFAULT_LEFT_PX : DEFAULT_LEFT_PX,
       top: viewportHeight - DEFAULT_BOTTOM_CLEARANCE_PX - height,
       width,
       height,
@@ -355,13 +355,20 @@ function attachConsoleBox({
   /** Place the window: the remembered one, clamped, else the default. */
   function apply() {
     const remembered = readStoredBox(storage);
-    setBox(remembered ?? defaultBox(viewport()), { persist: false });
+    setBox(
+      remembered ??
+        defaultBox({ ...viewport(), rtl: root.documentElement?.dir === 'rtl' }),
+      { persist: false },
+    );
   }
 
   /** Forget the remembered window and return to the default placement. */
   function reset() {
     writeStoredBox(null, storage);
-    setBox(defaultBox(viewport()), { persist: false });
+    setBox(
+      defaultBox({ ...viewport(), rtl: root.documentElement?.dir === 'rtl' }),
+      { persist: false },
+    );
   }
 
   function endGesture() {

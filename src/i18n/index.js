@@ -21,7 +21,13 @@ import ru from './locales/ru.json' with { type: 'json' };
 import zhCN from './locales/zh-CN.json' with { type: 'json' };
 import zhHant from './locales/zh-Hant.json' with { type: 'json' };
 
+import commandAr from './supplements/command-ar.json' with { type: 'json' };
+
 const CATALOGS = Object.freeze({ es, ru, 'zh-CN': zhCN, 'zh-Hant': zhHant });
+
+// #1479 owns Arabic registration and its base catalog. Extend it only when
+// present in the tree; COMMAND alone must not advertise an incomplete locale.
+if (CATALOGS.ar) Object.assign(CATALOGS.ar, commandAr);
 
 let currentLocale = DEFAULT_LOCALE;
 

@@ -532,6 +532,10 @@ test('one typed command renders the command, its tools and the answer', async ()
     ['agent', 'Globe view.'],
   ]);
   assert.equal(dom.transcript.children[1].dataset.outcome, 'ok');
+  assert.deepEqual(
+    dom.transcript.children.map((e) => e.getAttribute('dir')),
+    ['auto', 'ltr', 'auto'],
+  );
   assert.equal(dom.input.value, '');
   assert.equal(dom.input.disabled, false);
   assert.equal(dom.status.textContent, AGENT_STATUS.READY);

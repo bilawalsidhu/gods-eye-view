@@ -13,6 +13,8 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 
+const rtlGate = process.argv.includes('--rtl');
+const before = process.argv.includes('--record-before');
 const root = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 const template = await fs.readFile(
   path.join(root, 'src/ui/templates/agent-console.html'),
@@ -44,11 +46,11 @@ const fetchImpl = async (url, init = {}) => {
     window.fixture.requests.push(body);
     if (body.messages.at(-1)?.content === 'wait') return new Promise((_, reject) => init.signal.addEventListener('abort', () => { window.fixture.aborted = true; reject(new DOMException('Stopped', 'AbortError')); }, { once: true }));
     if (body.messages.at(-1)?.role === 'user') return Response.json({ message: { role: 'assistant', content: '', tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'zoom_to_globe', arguments: '{}' } }] }, toolCalls: [{ id: 'call-1', name: 'zoom_to_globe', args: {} }] });
-    return Response.json({ message: { role: 'assistant', content: 'Fixture action completed.' }, toolCalls: [] });
+    return Response.json({ message: { role: 'assistant', content: new URLSearchParams(location.search).get('lang') === 'ar' ? 'تم الانتقال إلى الموقع ABC-123 عند الإحداثيات (-27.367, -55.896).' : 'Fixture action completed.' }, toolCalls: [] });
   }
   throw new Error('Unexpected fixture request');
 };
-window.consoleController = mountAgentConsole({ fetchImpl, runAction: async (name) => { window.fixture.actions.push(name); return { ok: true }; } });
+window.consoleController = mountAgentConsole({ fetchImpl, runAction: async (name) => { window.fixture.actions.push(name); return { ok: true, coordinates: [-27.367, -55.896], code: 'HDG 68°', id: 'ABC-123' }; } });
 window.consoleController.open();
 </script></body></html>`;
 const mime = {
@@ -95,12 +97,34 @@ try {
   });
   const artifactDir = path.join(root, 'qa-artifacts/agent-chatgpt');
   await fs.mkdir(artifactDir, { recursive: true });
-  for (const locale of ['en', 'es', 'ru', 'zh-CN', 'zh-Hant', 'zh-TW'])
-    for (const width of [1280, 800]) {
+  for (const locale of rtlGate
+    ? ['ar', 'en']
+    : process.env.QA_AGENT_LOCALES?.split(',') || [
+        'en',
+        'es',
+        'ru',
+        'zh-CN',
+        'zh-Hant',
+        'zh-TW',
+      ])
+    for (const [width, height] of rtlGate
+      ? [
+          [1440, 900],
+          [800, 800],
+          [390, 844],
+          [320, 568],
+          [844, 390],
+          [932, 430],
+        ]
+      : [
+          [1280, 800],
+          [800, 800],
+        ]) {
       const page = await browser.newPage();
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
-      await page.setViewport({ width, height: 800 });
+      await page.setViewport({ width, height });
+      await page.evaluateOnNewDocument(() => localStorage.clear());
       await page.goto(
         `http://127.0.0.1:${server.address().port}/?lang=${locale}`,
       );
@@ -146,6 +170,167 @@ try {
       assert.deepEqual(await page.evaluate(() => window.fixture.actions), [
         'zoom_to_globe',
       ]);
+      if (rtlGate) {
+        const sample = await page.evaluate(() => {
+          const direction = (s) =>
+            getComputedStyle(document.querySelector(s)).direction;
+          const rect = document
+            .querySelector('#agent-console')
+            .getBoundingClientRect();
+          return {
+            html: document.documentElement.dir,
+            input: document.querySelector('#agent-input').dir,
+            user: direction('.agent-entry-user'),
+            agent: direction('.agent-entry-agent'),
+            tool: direction('.agent-entry-tool'),
+            left: rect.left,
+            right: rect.right,
+            text: document.querySelector('.agent-entry-agent').textContent,
+            login: document.querySelector('#agent-chatgpt-login').textContent,
+          };
+        });
+        console.log(JSON.stringify({ locale, width, height, sample }));
+        if (!before) {
+          assert.equal(sample.input, 'auto');
+          assert.equal(sample.user, 'ltr');
+          assert.equal(sample.tool, 'ltr');
+          assert.equal(sample.agent, locale === 'ar' ? 'rtl' : 'ltr');
+          if (locale === 'ar') {
+            assert.equal(sample.html, 'rtl');
+            assert.match(sample.login, /[\u0600-\u06ff]/);
+            const isolates = await page.$$eval('.agent-entry-agent bdi', (es) =>
+              es.map((e) => ({
+                text: e.textContent,
+                dir: getComputedStyle(e).direction,
+              })),
+            );
+            assert.ok(
+              isolates.some(
+                (e) => e.text === '(-27.367, -55.896)' && e.dir === 'ltr',
+              ),
+            );
+            assert.ok(
+              isolates.some((e) => e.text === 'ABC-123' && e.dir === 'ltr'),
+            );
+            assert.equal(
+              sample.text,
+              'تم الانتقال إلى الموقع ABC-123 عند الإحداثيات (-27.367, -55.896).',
+            );
+            assert.ok(Math.abs(width - sample.right - 14) <= 1 || width <= 500);
+          }
+          // Each command's direction follows its content, not the shell locale.
+          await page.type(
+            '#agent-input',
+            'انتقل إلى ABC-123 (-27.367, -55.896)',
+          );
+          assert.equal(
+            await page.$eval(
+              '#agent-input',
+              (e) => getComputedStyle(e).direction,
+            ),
+            'rtl',
+          );
+          await page.click('#agent-send');
+          await page.waitForFunction(
+            () => !window.consoleController.session.busy,
+          );
+          assert.equal(
+            await page.$$eval(
+              '.agent-entry-user',
+              (es) => getComputedStyle(es.at(-1)).direction,
+            ),
+            'rtl',
+          );
+          assert.equal(
+            await page.evaluate(
+              () => window.fixture.requests[2].messages.at(-1).content,
+            ),
+            'انتقل إلى ABC-123 (-27.367, -55.896)',
+          );
+          // Clear the extra round trip so the shared account assertions stay exact.
+          await page.evaluate(() => window.fixture.requests.splice(2));
+        }
+        if (!before) {
+          const payload = await page.evaluate(() =>
+            JSON.parse(
+              window.fixture.requests[1].messages.find((m) => m.role === 'tool')
+                .content,
+            ),
+          );
+          assert.deepEqual(payload.coordinates, [-27.367, -55.896]);
+          assert.equal(payload.id, 'ABC-123');
+          assert.equal(payload.code, 'HDG 68°');
+          await page.screenshot({
+            path: path.join(
+              artifactDir,
+              `rtl-content-${locale}-${width}x${height}.png`,
+            ),
+          });
+          const scrolling = await page.evaluate(() => {
+            const list = document.querySelector('#agent-transcript');
+            for (let i = 0; i < 40; i++) {
+              const li = document.createElement('li');
+              li.textContent = 'اختبار التمرير ABC-123';
+              list.append(li);
+            }
+            list.scrollTop = 0;
+            const first = list.scrollTop;
+            list.scrollTop = list.scrollHeight;
+            return { first, last: list.scrollTop };
+          });
+          assert.ok(
+            scrolling.last > scrolling.first,
+            'transcript scrolls in either direction',
+          );
+        }
+        // Exercise physical geometry even though the content direction is RTL.
+        const start = await page.$eval('#agent-console', (e) => {
+          const r = e.getBoundingClientRect();
+          return { left: r.left, top: r.top, width: r.width, height: r.height };
+        });
+        const title = await page.$('#agent-console-title');
+        const tr = await title.boundingBox();
+        await page.mouse.move(tr.x + 20, tr.y + 8);
+        await page.mouse.down();
+        await page.mouse.move(
+          tr.x + 20 + (start.left > 45 ? -40 : 40),
+          tr.y + 28,
+          { steps: 6 },
+        );
+        await page.mouse.up();
+        const moved = await page.$eval('#agent-console', (e) => {
+          const r = e.getBoundingClientRect();
+          return { left: r.left, top: r.top };
+        });
+        assert.ok(
+          moved.left !== start.left ||
+            moved.top !== start.top ||
+            (start.width >= width - 12 && start.height >= height - 12),
+          'drag moves the physical window or reaches viewport limits',
+        );
+        const grip = await page.$('#agent-console .agent-resize-grip');
+        const gr = await grip.boundingBox();
+        await page.mouse.move(gr.x + 7, gr.y + 7);
+        await page.mouse.down();
+        await page.mouse.move(gr.x - 33, gr.y - 33, { steps: 6 });
+        await page.mouse.up();
+        const size = await page.$eval('#agent-console', (e) => {
+          const r = e.getBoundingClientRect();
+          return { width: r.width, height: r.height };
+        });
+        assert.ok(
+          size.width < start.width ||
+            size.height < start.height ||
+            width <= 340,
+          'resize shrinks or reaches phone minimum',
+        );
+        await page.screenshot({
+          path: path.join(
+            artifactDir,
+            `rtl-${before ? 'before' : 'after'}-${locale}-${width}x${height}.png`,
+          ),
+        });
+      }
       await page.select('#agent-chatgpt-account', 'account-two');
       await page.waitForFunction(
         () =>
@@ -207,7 +392,7 @@ try {
         };
       });
       await page.screenshot({
-        path: path.join(artifactDir, `${locale}-${width}.png`),
+        path: path.join(artifactDir, `${locale}-${width}x${height}.png`),
       });
       assert.ok(
         geometry.fits && geometry.noOverflow && geometry.inputInside,
@@ -216,7 +401,7 @@ try {
       assert.doesNotMatch(geometry.text, /\{envVar\}|\{count\}/);
       assert.deepEqual(errors, []);
       await page.screenshot({
-        path: path.join(artifactDir, `${locale}-${width}.png`),
+        path: path.join(artifactDir, `${locale}-${width}x${height}.png`),
       });
       await page.click('#agent-chatgpt-logout');
       await page.waitForFunction(
@@ -231,6 +416,13 @@ try {
       await page.waitForFunction(
         () => document.getElementById('agent-chatgpt-login').disabled,
       );
+      if (locale === 'ar') {
+        await page.waitForFunction(
+          () =>
+            document.getElementById('agent-chatgpt-status').textContent ===
+            'أكمل تسجيل الدخول في المتصفح.',
+        );
+      }
       if (locale === 'zh-Hant' || locale === 'zh-TW' || locale === 'zh-CN') {
         await page.waitForFunction(
           () =>
@@ -253,7 +445,7 @@ try {
       }
       await page.close();
       console.log(
-        `PASS ${locale} ${width}×800: tool round trip, account isolation, STOP, logout, sign-in copy, layout`,
+        `PASS ${locale} ${width}×${height}: tool round trip, account isolation, STOP, logout, sign-in copy, layout`,
       );
     }
 } finally {

@@ -38,6 +38,26 @@ const AGENT_STATUS = Object.freeze({
   UNAVAILABLE: msg('UNAVAILABLE'),
 });
 
+// Display-only isolation. Do not put Unicode controls into conversation data:
+// canonical IDs and coordinates must reach the runner byte-for-byte unchanged.
+export function consoleTextParts(text) {
+  const value = String(text);
+  if (!/[\p{Script=Arabic}\p{Script=Hebrew}]/u.test(value))
+    return [{ text: value, ltr: false }];
+  const technical =
+    /\(?[+-]?\d+(?:\.\d+)?\s*,\s*[+-]?\d+(?:\.\d+)?\)?|[A-Za-z][A-Za-z0-9_.:/@-]*(?:[ \t]+[+-]?\d+(?:\.\d+)?[°%]?)?/g;
+  const parts = [];
+  let end = 0;
+  for (const match of value.matchAll(technical)) {
+    if (match.index > end)
+      parts.push({ text: value.slice(end, match.index), ltr: false });
+    parts.push({ text: match[0], ltr: true });
+    end = match.index + match[0].length;
+  }
+  if (end < value.length) parts.push({ text: value.slice(end), ltr: false });
+  return parts;
+}
+
 /**
  * Render a tool call as a compact one-liner.
  *
@@ -49,6 +69,7 @@ const AGENT_STATUS = Object.freeze({
  * @param {object|undefined} args
  * @returns {string}
  */
+
 function describeToolCall(name, args) {
   const values = args && typeof args === 'object' ? Object.entries(args) : [];
   if (!values.length) return name;
@@ -284,7 +305,18 @@ function mountAgentConsole({
   function append(kind, text) {
     const entry = root.createElement('li');
     entry.className = `agent-entry agent-entry-${kind}`;
+    entry.setAttribute('dir', kind === ENTRY_KIND.TOOL ? 'ltr' : 'auto');
     entry.textContent = text;
+    const parts = consoleTextParts(text);
+    if (kind !== ENTRY_KIND.TOOL && parts.some((part) => part.ltr)) {
+      entry.textContent = '';
+      for (const part of parts) {
+        const span = root.createElement(part.ltr ? 'bdi' : 'span');
+        if (part.ltr) span.setAttribute('dir', 'ltr');
+        span.textContent = part.text;
+        entry.appendChild(span);
+      }
+    }
     transcript.appendChild(entry);
     transcript.scrollTop = transcript.scrollHeight;
     return entry;

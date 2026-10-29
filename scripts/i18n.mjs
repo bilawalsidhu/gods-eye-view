@@ -448,7 +448,18 @@ export function catalogPath(locale) {
 }
 
 export function readCatalog(locale) {
-  return JSON.parse(readFileSync(catalogPath(locale), 'utf8'));
+  const catalog = JSON.parse(readFileSync(catalogPath(locale), 'utf8'));
+  if (locale === 'ar')
+    Object.assign(
+      catalog,
+      JSON.parse(
+        readFileSync(
+          path.join(ROOT, 'src/i18n/supplements/command-ar.json'),
+          'utf8',
+        ),
+      ),
+    );
+  return catalog;
 }
 
 export function shippedLocales() {

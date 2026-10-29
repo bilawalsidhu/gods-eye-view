@@ -36,3 +36,9 @@
   expanding the shared Realtime schema. Read back panel disclosure and visibility
   before confirming; stop locally on refusal or silent no-op. Add unit and real
   application browser regressions for temporary integration with #1469 (#1331).
+- Prepare COMMAND for the independent Arabic/RTL locale: mirror initial window
+  and launcher placement, preserve physical drag/resize and saved positions,
+  isolate mixed-direction transcript codes and coordinates without rewriting
+  tool data, and provide 32 Arabic account/console translations. Add desktop,
+  phone, authentication-fixture and payload-preservation regressions (radianx,
+  #1331; compatibility with #1479).
