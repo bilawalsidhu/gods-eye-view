@@ -1,0 +1,3536 @@
+{
+  "date": "2026-10-29",
+  "scope": "transit implementation checkpoint; W2 not accepted",
+  "keyless": true,
+  "captures": {
+    "dev-cesium": {
+      "engine": "cesium",
+      "checks": [
+        {
+          "name": "real source retains twelve vehicles and rejects stale fix",
+          "actual": 12,
+          "expected": 12,
+          "pass": true
+        },
+        {
+          "name": "all five resolved MBTA modes retained",
+          "actual": [
+            "bus",
+            "ferry",
+            "rail",
+            "subway",
+            "tram"
+          ],
+          "expected": [
+            "bus",
+            "ferry",
+            "rail",
+            "subway",
+            "tram"
+          ],
+          "pass": true
+        },
+        {
+          "name": "each moving vehicle retains nine reports",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "five positive rendered marker controls",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "orbit: five visible courses match projected travel",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "oblique: five visible courses match projected travel",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "actual 1x playback moves the rendered marker",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical click selects exact vehicle",
+          "actual": "mbta:w2-0",
+          "expected": "mbta:w2-0",
+          "pass": true
+        },
+        {
+          "name": "selected history requested through real source",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "selected trail uses actual ground classification",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "selected trail retains history",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "three positive ground-trail pixel controls",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "Escape clears selection",
+          "actual": false,
+          "expected": false,
+          "pass": true
+        },
+        {
+          "name": "ten disable/enable cycles retain exactly the fixture fleet",
+          "actual": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "expected": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "pass": true
+        },
+        {
+          "name": "disable releases fleet, requests and render hold",
+          "actual": {
+            "vehicles": 0,
+            "moving": 0,
+            "selected": null,
+            "held": false,
+            "markers": 0,
+            "requests": 0
+          },
+          "expected": {
+            "vehicles": 0,
+            "moving": 0,
+            "selected": null,
+            "held": false,
+            "markers": 0,
+            "requests": 0
+          },
+          "pass": true
+        },
+        {
+          "name": "no unexpected browser errors",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        }
+      ],
+      "browserErrors": [],
+      "fixtureHash": "5137ca101cef5b7ba5fdabbd5b8e6f1600f5e0227052e1729422bf9ba78def5d",
+      "pass": true,
+      "expectedPreviewErrors": [],
+      "failedResponses": [],
+      "runtimePages": [
+        "transit"
+      ],
+      "vehicles": [
+        {
+          "id": "mbta:w2-0",
+          "mode": "bus",
+          "shown": true,
+          "x": 449.6149169910658,
+          "y": 498.6428185751561,
+          "rotation": -2.693603805676678e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-1",
+          "mode": "tram",
+          "shown": true,
+          "x": 576.3693466160871,
+          "y": 498.907989026481,
+          "rotation": -8.976092149895858e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-2",
+          "mode": "subway",
+          "shown": true,
+          "x": 703.7413005751969,
+          "y": 499.0799812296616,
+          "rotation": 8.974400720589985e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-3",
+          "mode": "rail",
+          "shown": true,
+          "x": 831.0290266926028,
+          "y": 498.9764629639578,
+          "rotation": 2.6926103200914858e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-4",
+          "mode": "ferry",
+          "shown": true,
+          "x": 449.1674625110553,
+          "y": 327.34925155074103,
+          "rotation": -3.2037947223434914e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-5",
+          "mode": "bus",
+          "shown": true,
+          "x": 576.1890504786243,
+          "y": 327.1232637903706,
+          "rotation": -1.0681612174383024e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-6",
+          "mode": "bus",
+          "shown": true,
+          "x": 703.7074480858502,
+          "y": 399.99898302605897,
+          "rotation": 9.958098035150485e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-7",
+          "mode": "tram",
+          "shown": true,
+          "x": 831.0926875072173,
+          "y": 399.9964364788311,
+          "rotation": 2.9874186272225874e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-8",
+          "mode": "subway",
+          "shown": true,
+          "x": 448.770735330156,
+          "y": 228.10906949549326,
+          "rotation": -3.499379498349307e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-9",
+          "mode": "rail",
+          "shown": true,
+          "x": 576.0232822707229,
+          "y": 227.48161926080536,
+          "rotation": -1.1670869700585583e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-10",
+          "mode": "ferry",
+          "shown": true,
+          "x": 704.0363959436265,
+          "y": 227.3206926780848,
+          "rotation": 1.1672474638001033e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-11",
+          "mode": "bus",
+          "shown": true,
+          "x": 832.135417258632,
+          "y": 227.29455562728617,
+          "rotation": 3.5018046369228006e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        }
+      ],
+      "controls": [
+        {
+          "id": "mbta:w2-0",
+          "mode": "bus",
+          "shown": true,
+          "x": 449.6149169910658,
+          "y": 498.6428185751561,
+          "rotation": -2.693603805676678e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 169
+        },
+        {
+          "id": "mbta:w2-1",
+          "mode": "tram",
+          "shown": true,
+          "x": 576.3693466160871,
+          "y": 498.907989026481,
+          "rotation": -8.976092149895858e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 148
+        },
+        {
+          "id": "mbta:w2-2",
+          "mode": "subway",
+          "shown": true,
+          "x": 703.7413005751969,
+          "y": 499.0799812296616,
+          "rotation": 8.974400720589985e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 157
+        },
+        {
+          "id": "mbta:w2-3",
+          "mode": "rail",
+          "shown": true,
+          "x": 831.0290266926028,
+          "y": 498.9764629639578,
+          "rotation": 2.6926103200914858e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 162
+        },
+        {
+          "id": "mbta:w2-4",
+          "mode": "ferry",
+          "shown": true,
+          "x": 449.1674625110553,
+          "y": 327.34925155074103,
+          "rotation": -3.2037947223434914e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 165
+        },
+        {
+          "id": "mbta:w2-5",
+          "mode": "bus",
+          "shown": true,
+          "x": 576.1890504786243,
+          "y": 327.1232637903706,
+          "rotation": -1.0681612174383024e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 166
+        },
+        {
+          "id": "mbta:w2-6",
+          "mode": "bus",
+          "shown": true,
+          "x": 703.7074480858502,
+          "y": 399.99898302605897,
+          "rotation": 9.958098035150485e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 166
+        },
+        {
+          "id": "mbta:w2-7",
+          "mode": "tram",
+          "shown": true,
+          "x": 831.0926875072173,
+          "y": 399.9964364788311,
+          "rotation": 2.9874186272225874e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 156
+        },
+        {
+          "id": "mbta:w2-8",
+          "mode": "subway",
+          "shown": true,
+          "x": 448.770735330156,
+          "y": 228.10906949549326,
+          "rotation": -3.499379498349307e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 157
+        },
+        {
+          "id": "mbta:w2-9",
+          "mode": "rail",
+          "shown": true,
+          "x": 576.0232822707229,
+          "y": 227.48161926080536,
+          "rotation": -1.1670869700585583e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 164
+        },
+        {
+          "id": "mbta:w2-10",
+          "mode": "ferry",
+          "shown": true,
+          "x": 704.0363959436265,
+          "y": 227.3206926780848,
+          "rotation": 1.1672474638001033e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 166
+        },
+        {
+          "id": "mbta:w2-11",
+          "mode": "bus",
+          "shown": true,
+          "x": 832.135417258632,
+          "y": 227.29455562728617,
+          "rotation": 3.5018046369228006e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 165
+        }
+      ],
+      "poses": [
+        {
+          "name": "orbit",
+          "controls": [
+            {
+              "id": "mbta:w2-0",
+              "x": 738.642818575081,
+              "y": 590.3850830089973,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-1",
+              "x": 738.907989026481,
+              "y": 463.63065338390993,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-2",
+              "x": 739.0799812296616,
+              "y": 336.2586994248001,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-3",
+              "x": 738.9764629639577,
+              "y": 208.9709733071826,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-4",
+              "x": 567.3492515507965,
+              "y": 590.832537489008,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-5",
+              "x": 567.1232637904263,
+              "y": 463.81094952153654,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-6",
+              "x": 639.9989830260589,
+              "y": 336.2925519144076,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-7",
+              "x": 639.9964364792546,
+              "y": 208.90731249292594,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-8",
+              "x": 468.1090694959172,
+              "y": 591.2292646698418,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-9",
+              "x": 467.48161926080536,
+              "y": 463.9767177294875,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-10",
+              "x": 467.3206926782175,
+              "y": 335.9636040564204,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-11",
+              "x": 467.2945556274189,
+              "y": 207.86458274130052,
+              "errorDeg": 0
+            }
+          ]
+        },
+        {
+          "name": "oblique",
+          "controls": [
+            {
+              "id": "mbta:w2-0",
+              "x": 467.56905327644506,
+              "y": 487.99149789899764,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-1",
+              "x": 582.403000408188,
+              "y": 486.8415118550944,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-2",
+              "x": 697.6754824647825,
+              "y": 486.0877671462877,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-3",
+              "x": 812.8880628402742,
+              "y": 486.528119144401,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-4",
+              "x": 478.5610941252029,
+              "y": 355.61058860841183,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-5",
+              "x": 586.0630615260314,
+              "y": 354.0364396086283,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-6",
+              "x": 695.4110527876337,
+              "y": 408.3684454380361,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-7",
+              "x": 806.2135618068673,
+              "y": 408.440348308748,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-8",
+              "x": 484.204452665472,
+              "y": 286.3081127314564,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-9",
+              "x": 587.9339518054526,
+              "y": 284.36287261995153,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-10",
+              "x": 692.1002691576399,
+              "y": 283.8662222032398,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-11",
+              "x": 796.3156964284387,
+              "y": 283.7917888394994,
+              "errorDeg": 0
+            }
+          ]
+        }
+      ],
+      "motion": {
+        "distance": 0.6193405705437536,
+        "moving": true
+      },
+      "trail": {
+        "ground": true,
+        "segments": 8,
+        "rebuilds": 4,
+        "strategy": "draped corridor with material clip",
+        "head": true
+      },
+      "trailControls": [
+        {
+          "x": 449.7430642095304,
+          "y": 564.9652805822581,
+          "pixels": 45
+        },
+        {
+          "x": 449.73671855762484,
+          "y": 552.8997823901775,
+          "pixels": 45
+        },
+        {
+          "x": 449.7173048182956,
+          "y": 540.8431056821884,
+          "pixels": 45
+        },
+        {
+          "x": 449.6899873462752,
+          "y": 528.7892681247299,
+          "pixels": 45
+        },
+        {
+          "x": 449.65454820974884,
+          "y": 516.7368991121639,
+          "pixels": 45
+        },
+        {
+          "x": 449.6258181704509,
+          "y": 504.6762981121107,
+          "pixels": 51
+        }
+      ],
+      "disabled": {
+        "vehicles": 0,
+        "moving": 0,
+        "selected": null,
+        "held": false,
+        "markers": 0,
+        "requests": 0
+      }
+    },
+    "dev-navara": {
+      "engine": "navara",
+      "checks": [
+        {
+          "name": "real source retains twelve vehicles and rejects stale fix",
+          "actual": 12,
+          "expected": 12,
+          "pass": true
+        },
+        {
+          "name": "all five resolved MBTA modes retained",
+          "actual": [
+            "bus",
+            "ferry",
+            "rail",
+            "subway",
+            "tram"
+          ],
+          "expected": [
+            "bus",
+            "ferry",
+            "rail",
+            "subway",
+            "tram"
+          ],
+          "pass": true
+        },
+        {
+          "name": "each moving vehicle retains nine reports",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "five positive rendered marker controls",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "orbit: five visible courses match projected travel",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "oblique: five visible courses match projected travel",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "actual 1x playback moves the rendered marker",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical click selects exact vehicle",
+          "actual": "mbta:w2-0",
+          "expected": "mbta:w2-0",
+          "pass": true
+        },
+        {
+          "name": "selected history requested through real source",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "selected trail uses actual ground classification",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "selected trail retains history",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "three positive ground-trail pixel controls",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "Escape clears selection",
+          "actual": false,
+          "expected": false,
+          "pass": true
+        },
+        {
+          "name": "ten disable/enable cycles retain exactly the fixture fleet",
+          "actual": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "expected": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "pass": true
+        },
+        {
+          "name": "disable releases fleet, requests and render hold",
+          "actual": {
+            "vehicles": 0,
+            "moving": 0,
+            "selected": null,
+            "held": false,
+            "markers": 0,
+            "requests": 0
+          },
+          "expected": {
+            "vehicles": 0,
+            "moving": 0,
+            "selected": null,
+            "held": false,
+            "markers": 0,
+            "requests": 0
+          },
+          "pass": true
+        },
+        {
+          "name": "no unexpected browser errors",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        }
+      ],
+      "browserErrors": [],
+      "fixtureHash": "5137ca101cef5b7ba5fdabbd5b8e6f1600f5e0227052e1729422bf9ba78def5d",
+      "pass": true,
+      "expectedPreviewErrors": [],
+      "failedResponses": [],
+      "runtimePages": [
+        "transit"
+      ],
+      "vehicles": [
+        {
+          "id": "mbta:w2-0",
+          "mode": "bus",
+          "shown": true,
+          "x": 449.6155500477713,
+          "y": 498.64249057238163,
+          "rotation": -2.6936054707037184e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-1",
+          "mode": "tram",
+          "shown": true,
+          "x": 576.3690740042631,
+          "y": 498.90841277936033,
+          "rotation": -8.976094128518307e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-2",
+          "mode": "subway",
+          "shown": true,
+          "x": 703.7426779512921,
+          "y": 499.08212225094496,
+          "rotation": 8.974376041344533e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-3",
+          "mode": "rail",
+          "shown": true,
+          "x": 831.0309585409855,
+          "y": 498.97746390583313,
+          "rotation": 2.6926086062797818e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-4",
+          "mode": "ferry",
+          "shown": true,
+          "x": 449.16712766414355,
+          "y": 327.34912407509665,
+          "rotation": -3.203796190579386e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-5",
+          "mode": "bus",
+          "shown": true,
+          "x": 576.1872373351742,
+          "y": 327.1211930682103,
+          "rotation": -1.0681632243795358e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-6",
+          "mode": "bus",
+          "shown": true,
+          "x": 703.7089012322217,
+          "y": 399.99898301866085,
+          "rotation": 9.958091471783354e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-7",
+          "mode": "tram",
+          "shown": true,
+          "x": 831.0963540957966,
+          "y": 399.9964364245829,
+          "rotation": 2.9874190403607142e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-8",
+          "mode": "subway",
+          "shown": true,
+          "x": 448.77163832540975,
+          "y": 228.10988117223374,
+          "rotation": -3.499376852187853e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-9",
+          "mode": "rail",
+          "shown": true,
+          "x": 576.0246208226021,
+          "y": 227.48522876266222,
+          "rotation": -1.1670844018236205e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-10",
+          "mode": "ferry",
+          "shown": true,
+          "x": 704.0362891178349,
+          "y": 227.32098074182022,
+          "rotation": 1.1672471648910704e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-11",
+          "mode": "bus",
+          "shown": true,
+          "x": 832.1339207007384,
+          "y": 227.29590083913135,
+          "rotation": 3.501801163050873e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        }
+      ],
+      "controls": [
+        {
+          "id": "mbta:w2-0",
+          "mode": "bus",
+          "shown": true,
+          "x": 449.6155500477713,
+          "y": 498.64249057238163,
+          "rotation": -2.6936054707037184e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 146
+        },
+        {
+          "id": "mbta:w2-1",
+          "mode": "tram",
+          "shown": true,
+          "x": 576.3690740042631,
+          "y": 498.90841277936033,
+          "rotation": -8.976094128518307e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 134
+        },
+        {
+          "id": "mbta:w2-2",
+          "mode": "subway",
+          "shown": true,
+          "x": 703.7426779512921,
+          "y": 499.08212225094496,
+          "rotation": 8.974376041344533e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 137
+        },
+        {
+          "id": "mbta:w2-3",
+          "mode": "rail",
+          "shown": true,
+          "x": 831.0309585409855,
+          "y": 498.97746390583313,
+          "rotation": 2.6926086062797818e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 120
+        },
+        {
+          "id": "mbta:w2-4",
+          "mode": "ferry",
+          "shown": true,
+          "x": 449.16712766414355,
+          "y": 327.34912407509665,
+          "rotation": -3.203796190579386e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 132
+        },
+        {
+          "id": "mbta:w2-5",
+          "mode": "bus",
+          "shown": true,
+          "x": 576.1872373351742,
+          "y": 327.1211930682103,
+          "rotation": -1.0681632243795358e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 153
+        },
+        {
+          "id": "mbta:w2-6",
+          "mode": "bus",
+          "shown": true,
+          "x": 703.7089012322217,
+          "y": 399.99898301866085,
+          "rotation": 9.958091471783354e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 142
+        },
+        {
+          "id": "mbta:w2-7",
+          "mode": "tram",
+          "shown": true,
+          "x": 831.0963540957966,
+          "y": 399.9964364245829,
+          "rotation": 2.9874190403607142e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 118
+        },
+        {
+          "id": "mbta:w2-8",
+          "mode": "subway",
+          "shown": true,
+          "x": 448.77163832540975,
+          "y": 228.10988117223374,
+          "rotation": -3.499376852187853e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 132
+        },
+        {
+          "id": "mbta:w2-9",
+          "mode": "rail",
+          "shown": true,
+          "x": 576.0246208226021,
+          "y": 227.48522876266222,
+          "rotation": -1.1670844018236205e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 123
+        },
+        {
+          "id": "mbta:w2-10",
+          "mode": "ferry",
+          "shown": true,
+          "x": 704.0362891178349,
+          "y": 227.32098074182022,
+          "rotation": 1.1672471648910704e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 130
+        },
+        {
+          "id": "mbta:w2-11",
+          "mode": "bus",
+          "shown": true,
+          "x": 832.1339207007384,
+          "y": 227.29590083913135,
+          "rotation": 3.501801163050873e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 155
+        }
+      ],
+      "poses": [
+        {
+          "name": "orbit",
+          "controls": [
+            {
+              "id": "mbta:w2-0",
+              "x": 738.6424905723816,
+              "y": 590.3844499522288,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-1",
+              "x": 738.9084127793602,
+              "y": 463.630925995737,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-2",
+              "x": 739.0821222509451,
+              "y": 336.2573220487079,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-3",
+              "x": 738.977463905833,
+              "y": 208.96904145901462,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-4",
+              "x": 567.3491240750967,
+              "y": 590.8328723358566,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-5",
+              "x": 567.1211930682102,
+              "y": 463.8127626648259,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-6",
+              "x": 639.9989830186609,
+              "y": 336.29109876777835,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-7",
+              "x": 639.9964364245828,
+              "y": 208.9036459042034,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-8",
+              "x": 468.1098811722336,
+              "y": 591.2283616745904,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-9",
+              "x": 467.48522876266225,
+              "y": 463.97537917739805,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-10",
+              "x": 467.3209807418202,
+              "y": 335.9637108821652,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-11",
+              "x": 467.2959008391314,
+              "y": 207.86607929926174,
+              "errorDeg": 0
+            }
+          ]
+        },
+        {
+          "name": "oblique",
+          "controls": [
+            {
+              "id": "mbta:w2-0",
+              "x": 467.56950299273007,
+              "y": 487.99293758778583,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-1",
+              "x": 582.4028069702608,
+              "y": 486.8396540890937,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-2",
+              "x": 697.6764590766461,
+              "y": 486.0783878289632,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-3",
+              "x": 812.8894331983541,
+              "y": 486.52373217860907,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-4",
+              "x": 478.56088659171184,
+              "y": 355.6097088111133,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-5",
+              "x": 586.0619396584231,
+              "y": 354.0221718357605,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-6",
+              "x": 695.4120048165753,
+              "y": 408.3575932524796,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-7",
+              "x": 806.215964153108,
+              "y": 408.43122014749633,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-8",
+              "x": 484.2049717262623,
+              "y": 286.3106237906051,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-9",
+              "x": 587.9347195806074,
+              "y": 284.37401537271325,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-10",
+              "x": 692.1002079180591,
+              "y": 283.8671109773416,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-11",
+              "x": 796.3148385704666,
+              "y": 283.7959388975551,
+              "errorDeg": 0
+            }
+          ]
+        }
+      ],
+      "motion": {
+        "distance": 0.6169513445913668,
+        "moving": true
+      },
+      "trail": {
+        "ground": true,
+        "segments": 8,
+        "rebuilds": 4,
+        "strategy": "surface-depth corridor with time clip",
+        "head": true
+      },
+      "trailControls": [
+        {
+          "x": 449.7412264526406,
+          "y": 564.9668740517507,
+          "pixels": 54
+        },
+        {
+          "x": 449.7358585163093,
+          "y": 552.9004735433531,
+          "pixels": 54
+        },
+        {
+          "x": 449.7166487894038,
+          "y": 540.8435912641559,
+          "pixels": 54
+        },
+        {
+          "x": 449.6896211679849,
+          "y": 528.7895159327014,
+          "pixels": 54
+        },
+        {
+          "x": 449.65419110474244,
+          "y": 516.7371181223419,
+          "pixels": 54
+        },
+        {
+          "x": 449.6258671109783,
+          "y": 504.6762712052566,
+          "pixels": 46
+        }
+      ],
+      "disabled": {
+        "vehicles": 0,
+        "moving": 0,
+        "selected": null,
+        "held": false,
+        "markers": 0,
+        "requests": 0
+      }
+    },
+    "preview-cesium": {
+      "engine": "cesium",
+      "checks": [
+        {
+          "name": "real source retains twelve vehicles and rejects stale fix",
+          "actual": 12,
+          "expected": 12,
+          "pass": true
+        },
+        {
+          "name": "all five resolved MBTA modes retained",
+          "actual": [
+            "bus",
+            "ferry",
+            "rail",
+            "subway",
+            "tram"
+          ],
+          "expected": [
+            "bus",
+            "ferry",
+            "rail",
+            "subway",
+            "tram"
+          ],
+          "pass": true
+        },
+        {
+          "name": "each moving vehicle retains nine reports",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "five positive rendered marker controls",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "orbit: five visible courses match projected travel",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "oblique: five visible courses match projected travel",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "actual 1x playback moves the rendered marker",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical click selects exact vehicle",
+          "actual": "mbta:w2-0",
+          "expected": "mbta:w2-0",
+          "pass": true
+        },
+        {
+          "name": "selected history requested through real source",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "selected trail uses actual ground classification",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "selected trail retains history",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "three positive ground-trail pixel controls",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "Escape clears selection",
+          "actual": false,
+          "expected": false,
+          "pass": true
+        },
+        {
+          "name": "ten disable/enable cycles retain exactly the fixture fleet",
+          "actual": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "expected": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "pass": true
+        },
+        {
+          "name": "disable releases fleet, requests and render hold",
+          "actual": {
+            "vehicles": 0,
+            "moving": 0,
+            "selected": null,
+            "held": false,
+            "markers": 0,
+            "requests": 0
+          },
+          "expected": {
+            "vehicles": 0,
+            "moving": 0,
+            "selected": null,
+            "held": false,
+            "markers": 0,
+            "requests": 0
+          },
+          "pass": true
+        },
+        {
+          "name": "no unexpected browser errors",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        }
+      ],
+      "browserErrors": [],
+      "fixtureHash": "5137ca101cef5b7ba5fdabbd5b8e6f1600f5e0227052e1729422bf9ba78def5d",
+      "pass": true,
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "failedResponses": [
+        {
+          "page": "transit",
+          "status": 404,
+          "resource": "http://localhost:4207/api/setup/status"
+        }
+      ],
+      "runtimePages": [
+        "transit"
+      ],
+      "vehicles": [
+        {
+          "id": "mbta:w2-0",
+          "mode": "bus",
+          "shown": true,
+          "x": 449.6149169910658,
+          "y": 498.6428185751561,
+          "rotation": -2.693603805676678e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-1",
+          "mode": "tram",
+          "shown": true,
+          "x": 576.3693466160871,
+          "y": 498.907989026481,
+          "rotation": -8.976092149895858e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-2",
+          "mode": "subway",
+          "shown": true,
+          "x": 703.7413005751969,
+          "y": 499.0799812296616,
+          "rotation": 8.974400720589985e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-3",
+          "mode": "rail",
+          "shown": true,
+          "x": 831.0290266926028,
+          "y": 498.9764629639578,
+          "rotation": 2.6926103200914858e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-4",
+          "mode": "ferry",
+          "shown": true,
+          "x": 449.1674625110553,
+          "y": 327.34925155074103,
+          "rotation": -3.2037947223434914e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-5",
+          "mode": "bus",
+          "shown": true,
+          "x": 576.1890504786243,
+          "y": 327.1232637903706,
+          "rotation": -1.0681612174383024e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-6",
+          "mode": "bus",
+          "shown": true,
+          "x": 703.7074480858502,
+          "y": 399.99898302605897,
+          "rotation": 9.958098035150485e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-7",
+          "mode": "tram",
+          "shown": true,
+          "x": 831.0926875072173,
+          "y": 399.9964364788311,
+          "rotation": 2.9874186272225874e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-8",
+          "mode": "subway",
+          "shown": true,
+          "x": 448.770735330156,
+          "y": 228.10906949549326,
+          "rotation": -3.499379498349307e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-9",
+          "mode": "rail",
+          "shown": true,
+          "x": 576.0232822707229,
+          "y": 227.48161926080536,
+          "rotation": -1.1670869700585583e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-10",
+          "mode": "ferry",
+          "shown": true,
+          "x": 704.0363959436265,
+          "y": 227.3206926780848,
+          "rotation": 1.1672474638001033e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-11",
+          "mode": "bus",
+          "shown": true,
+          "x": 832.135417258632,
+          "y": 227.29455562728617,
+          "rotation": 3.5018046369228006e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        }
+      ],
+      "controls": [
+        {
+          "id": "mbta:w2-0",
+          "mode": "bus",
+          "shown": true,
+          "x": 449.6149169910658,
+          "y": 498.6428185751561,
+          "rotation": -2.693603805676678e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 169
+        },
+        {
+          "id": "mbta:w2-1",
+          "mode": "tram",
+          "shown": true,
+          "x": 576.3693466160871,
+          "y": 498.907989026481,
+          "rotation": -8.976092149895858e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 148
+        },
+        {
+          "id": "mbta:w2-2",
+          "mode": "subway",
+          "shown": true,
+          "x": 703.7413005751969,
+          "y": 499.0799812296616,
+          "rotation": 8.974400720589985e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 157
+        },
+        {
+          "id": "mbta:w2-3",
+          "mode": "rail",
+          "shown": true,
+          "x": 831.0290266926028,
+          "y": 498.9764629639578,
+          "rotation": 2.6926103200914858e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 162
+        },
+        {
+          "id": "mbta:w2-4",
+          "mode": "ferry",
+          "shown": true,
+          "x": 449.1674625110553,
+          "y": 327.34925155074103,
+          "rotation": -3.2037947223434914e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 165
+        },
+        {
+          "id": "mbta:w2-5",
+          "mode": "bus",
+          "shown": true,
+          "x": 576.1890504786243,
+          "y": 327.1232637903706,
+          "rotation": -1.0681612174383024e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 166
+        },
+        {
+          "id": "mbta:w2-6",
+          "mode": "bus",
+          "shown": true,
+          "x": 703.7074480858502,
+          "y": 399.99898302605897,
+          "rotation": 9.958098035150485e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 166
+        },
+        {
+          "id": "mbta:w2-7",
+          "mode": "tram",
+          "shown": true,
+          "x": 831.0926875072173,
+          "y": 399.9964364788311,
+          "rotation": 2.9874186272225874e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 156
+        },
+        {
+          "id": "mbta:w2-8",
+          "mode": "subway",
+          "shown": true,
+          "x": 448.770735330156,
+          "y": 228.10906949549326,
+          "rotation": -3.499379498349307e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 157
+        },
+        {
+          "id": "mbta:w2-9",
+          "mode": "rail",
+          "shown": true,
+          "x": 576.0232822707229,
+          "y": 227.48161926080536,
+          "rotation": -1.1670869700585583e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 164
+        },
+        {
+          "id": "mbta:w2-10",
+          "mode": "ferry",
+          "shown": true,
+          "x": 704.0363959436265,
+          "y": 227.3206926780848,
+          "rotation": 1.1672474638001033e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 166
+        },
+        {
+          "id": "mbta:w2-11",
+          "mode": "bus",
+          "shown": true,
+          "x": 832.135417258632,
+          "y": 227.29455562728617,
+          "rotation": 3.5018046369228006e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 165
+        }
+      ],
+      "poses": [
+        {
+          "name": "orbit",
+          "controls": [
+            {
+              "id": "mbta:w2-0",
+              "x": 738.642818575081,
+              "y": 590.3850830089973,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-1",
+              "x": 738.907989026481,
+              "y": 463.63065338390993,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-2",
+              "x": 739.0799812296616,
+              "y": 336.2586994248001,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-3",
+              "x": 738.9764629639577,
+              "y": 208.9709733071826,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-4",
+              "x": 567.3492515507965,
+              "y": 590.832537489008,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-5",
+              "x": 567.1232637904263,
+              "y": 463.81094952153654,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-6",
+              "x": 639.9989830260589,
+              "y": 336.2925519144076,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-7",
+              "x": 639.9964364792546,
+              "y": 208.90731249292594,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-8",
+              "x": 468.1090694959172,
+              "y": 591.2292646698418,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-9",
+              "x": 467.48161926080536,
+              "y": 463.9767177294875,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-10",
+              "x": 467.3206926782175,
+              "y": 335.9636040564204,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-11",
+              "x": 467.2945556274189,
+              "y": 207.86458274130052,
+              "errorDeg": 0
+            }
+          ]
+        },
+        {
+          "name": "oblique",
+          "controls": [
+            {
+              "id": "mbta:w2-0",
+              "x": 467.56905327644506,
+              "y": 487.99149789899764,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-1",
+              "x": 582.403000408188,
+              "y": 486.8415118550944,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-2",
+              "x": 697.6754824647825,
+              "y": 486.0877671462877,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-3",
+              "x": 812.8880628402742,
+              "y": 486.528119144401,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-4",
+              "x": 478.5610941252029,
+              "y": 355.61058860841183,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-5",
+              "x": 586.0630615260314,
+              "y": 354.0364396086283,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-6",
+              "x": 695.4110527876337,
+              "y": 408.3684454380361,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-7",
+              "x": 806.2135618068673,
+              "y": 408.440348308748,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-8",
+              "x": 484.204452665472,
+              "y": 286.3081127314564,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-9",
+              "x": 587.9339518054526,
+              "y": 284.36287261995153,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-10",
+              "x": 692.1002691576399,
+              "y": 283.8662222032398,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-11",
+              "x": 796.3156964284387,
+              "y": 283.7917888394994,
+              "errorDeg": 0
+            }
+          ]
+        }
+      ],
+      "motion": {
+        "distance": 0.620763457492418,
+        "moving": true
+      },
+      "trail": {
+        "ground": true,
+        "segments": 8,
+        "rebuilds": 4,
+        "strategy": "draped corridor with material clip",
+        "head": true
+      },
+      "trailControls": [
+        {
+          "x": 449.7430642095304,
+          "y": 564.9652805822581,
+          "pixels": 45
+        },
+        {
+          "x": 449.73671855762484,
+          "y": 552.8997823901775,
+          "pixels": 45
+        },
+        {
+          "x": 449.7173048182956,
+          "y": 540.8431056821884,
+          "pixels": 45
+        },
+        {
+          "x": 449.6899873462752,
+          "y": 528.7892681247299,
+          "pixels": 45
+        },
+        {
+          "x": 449.65454820974884,
+          "y": 516.7368991121639,
+          "pixels": 45
+        },
+        {
+          "x": 449.6258181704509,
+          "y": 504.6762981121107,
+          "pixels": 51
+        }
+      ],
+      "disabled": {
+        "vehicles": 0,
+        "moving": 0,
+        "selected": null,
+        "held": false,
+        "markers": 0,
+        "requests": 0
+      }
+    },
+    "preview-navara": {
+      "engine": "navara",
+      "checks": [
+        {
+          "name": "real source retains twelve vehicles and rejects stale fix",
+          "actual": 12,
+          "expected": 12,
+          "pass": true
+        },
+        {
+          "name": "all five resolved MBTA modes retained",
+          "actual": [
+            "bus",
+            "ferry",
+            "rail",
+            "subway",
+            "tram"
+          ],
+          "expected": [
+            "bus",
+            "ferry",
+            "rail",
+            "subway",
+            "tram"
+          ],
+          "pass": true
+        },
+        {
+          "name": "each moving vehicle retains nine reports",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "five positive rendered marker controls",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "orbit: five visible courses match projected travel",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "oblique: five visible courses match projected travel",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "actual 1x playback moves the rendered marker",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical click selects exact vehicle",
+          "actual": "mbta:w2-0",
+          "expected": "mbta:w2-0",
+          "pass": true
+        },
+        {
+          "name": "selected history requested through real source",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "selected trail uses actual ground classification",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "selected trail retains history",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "three positive ground-trail pixel controls",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "Escape clears selection",
+          "actual": false,
+          "expected": false,
+          "pass": true
+        },
+        {
+          "name": "ten disable/enable cycles retain exactly the fixture fleet",
+          "actual": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "expected": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "pass": true
+        },
+        {
+          "name": "disable releases fleet, requests and render hold",
+          "actual": {
+            "vehicles": 0,
+            "moving": 0,
+            "selected": null,
+            "held": false,
+            "markers": 0,
+            "requests": 0
+          },
+          "expected": {
+            "vehicles": 0,
+            "moving": 0,
+            "selected": null,
+            "held": false,
+            "markers": 0,
+            "requests": 0
+          },
+          "pass": true
+        },
+        {
+          "name": "no unexpected browser errors",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        }
+      ],
+      "browserErrors": [],
+      "fixtureHash": "5137ca101cef5b7ba5fdabbd5b8e6f1600f5e0227052e1729422bf9ba78def5d",
+      "pass": true,
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "failedResponses": [
+        {
+          "page": "transit",
+          "status": 404,
+          "resource": "http://localhost:4207/api/setup/status"
+        }
+      ],
+      "runtimePages": [
+        "transit"
+      ],
+      "vehicles": [
+        {
+          "id": "mbta:w2-0",
+          "mode": "bus",
+          "shown": true,
+          "x": 449.6155500477713,
+          "y": 498.64249057238163,
+          "rotation": -2.6936054707037184e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-1",
+          "mode": "tram",
+          "shown": true,
+          "x": 576.3690740042631,
+          "y": 498.90841277936033,
+          "rotation": -8.976094128518307e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-2",
+          "mode": "subway",
+          "shown": true,
+          "x": 703.7426779512921,
+          "y": 499.08212225094496,
+          "rotation": 8.974376041344533e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-3",
+          "mode": "rail",
+          "shown": true,
+          "x": 831.0309585409855,
+          "y": 498.97746390583313,
+          "rotation": 2.6926086062797818e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-4",
+          "mode": "ferry",
+          "shown": true,
+          "x": 449.16712766414355,
+          "y": 327.34912407509665,
+          "rotation": -3.203796190579386e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-5",
+          "mode": "bus",
+          "shown": true,
+          "x": 576.1872373351742,
+          "y": 327.1211930682103,
+          "rotation": -1.0681632243795358e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-6",
+          "mode": "bus",
+          "shown": true,
+          "x": 703.7089012322217,
+          "y": 399.99898301866085,
+          "rotation": 9.958091471783354e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-7",
+          "mode": "tram",
+          "shown": true,
+          "x": 831.0963540957966,
+          "y": 399.9964364245829,
+          "rotation": 2.9874190403607142e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-8",
+          "mode": "subway",
+          "shown": true,
+          "x": 448.77163832540975,
+          "y": 228.10988117223374,
+          "rotation": -3.499376852187853e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-9",
+          "mode": "rail",
+          "shown": true,
+          "x": 576.0246208226021,
+          "y": 227.48522876266222,
+          "rotation": -1.1670844018236205e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-10",
+          "mode": "ferry",
+          "shown": true,
+          "x": 704.0362891178349,
+          "y": 227.32098074182022,
+          "rotation": 1.1672471648910704e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        },
+        {
+          "id": "mbta:w2-11",
+          "mode": "bus",
+          "shown": true,
+          "x": 832.1339207007384,
+          "y": 227.29590083913135,
+          "rotation": 3.501801163050873e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true
+        }
+      ],
+      "controls": [
+        {
+          "id": "mbta:w2-0",
+          "mode": "bus",
+          "shown": true,
+          "x": 449.6155500477713,
+          "y": 498.64249057238163,
+          "rotation": -2.6936054707037184e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 146
+        },
+        {
+          "id": "mbta:w2-1",
+          "mode": "tram",
+          "shown": true,
+          "x": 576.3690740042631,
+          "y": 498.90841277936033,
+          "rotation": -8.976094128518307e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 134
+        },
+        {
+          "id": "mbta:w2-2",
+          "mode": "subway",
+          "shown": true,
+          "x": 703.7426779512921,
+          "y": 499.08212225094496,
+          "rotation": 8.974376041344533e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 137
+        },
+        {
+          "id": "mbta:w2-3",
+          "mode": "rail",
+          "shown": true,
+          "x": 831.0309585409855,
+          "y": 498.97746390583313,
+          "rotation": 2.6926086062797818e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 120
+        },
+        {
+          "id": "mbta:w2-4",
+          "mode": "ferry",
+          "shown": true,
+          "x": 449.16712766414355,
+          "y": 327.34912407509665,
+          "rotation": -3.203796190579386e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 132
+        },
+        {
+          "id": "mbta:w2-5",
+          "mode": "bus",
+          "shown": true,
+          "x": 576.1872373351742,
+          "y": 327.1211930682103,
+          "rotation": -1.0681632243795358e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 153
+        },
+        {
+          "id": "mbta:w2-6",
+          "mode": "bus",
+          "shown": true,
+          "x": 703.7089012322217,
+          "y": 399.99898301866085,
+          "rotation": 9.958091471783354e-06,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 142
+        },
+        {
+          "id": "mbta:w2-7",
+          "mode": "tram",
+          "shown": true,
+          "x": 831.0963540957966,
+          "y": 399.9964364245829,
+          "rotation": 2.9874190403607142e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 118
+        },
+        {
+          "id": "mbta:w2-8",
+          "mode": "subway",
+          "shown": true,
+          "x": 448.77163832540975,
+          "y": 228.10988117223374,
+          "rotation": -3.499376852187853e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 132
+        },
+        {
+          "id": "mbta:w2-9",
+          "mode": "rail",
+          "shown": true,
+          "x": 576.0246208226021,
+          "y": 227.48522876266222,
+          "rotation": -1.1670844018236205e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 123
+        },
+        {
+          "id": "mbta:w2-10",
+          "mode": "ferry",
+          "shown": true,
+          "x": 704.0362891178349,
+          "y": 227.32098074182022,
+          "rotation": 1.1672471648910704e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 130
+        },
+        {
+          "id": "mbta:w2-11",
+          "mode": "bus",
+          "shown": true,
+          "x": 832.1339207007384,
+          "y": 227.29590083913135,
+          "rotation": 3.501801163050873e-05,
+          "fixes": 9,
+          "selected": false,
+          "visibility": {
+            "bounds": true,
+            "boundsApplied": false,
+            "occluder": true,
+            "frustum": true,
+            "noSample": false,
+            "heightPending": false,
+            "surfaceReady": true
+          },
+          "surfaceReady": true,
+          "pixels": 155
+        }
+      ],
+      "poses": [
+        {
+          "name": "orbit",
+          "controls": [
+            {
+              "id": "mbta:w2-0",
+              "x": 738.6424905723816,
+              "y": 590.3844499522288,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-1",
+              "x": 738.9084127793602,
+              "y": 463.630925995737,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-2",
+              "x": 739.0821222509451,
+              "y": 336.2573220487079,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-3",
+              "x": 738.977463905833,
+              "y": 208.96904145901462,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-4",
+              "x": 567.3491240750967,
+              "y": 590.8328723358566,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-5",
+              "x": 567.1211930682102,
+              "y": 463.8127626648259,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-6",
+              "x": 639.9989830186609,
+              "y": 336.29109876777835,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-7",
+              "x": 639.9964364245828,
+              "y": 208.9036459042034,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-8",
+              "x": 468.1098811722336,
+              "y": 591.2283616745904,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-9",
+              "x": 467.48522876266225,
+              "y": 463.97537917739805,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-10",
+              "x": 467.3209807418202,
+              "y": 335.9637108821652,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-11",
+              "x": 467.2959008391314,
+              "y": 207.86607929926174,
+              "errorDeg": 0
+            }
+          ]
+        },
+        {
+          "name": "oblique",
+          "controls": [
+            {
+              "id": "mbta:w2-0",
+              "x": 467.56950299273007,
+              "y": 487.99293758778583,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-1",
+              "x": 582.4028069702608,
+              "y": 486.8396540890937,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-2",
+              "x": 697.6764590766461,
+              "y": 486.0783878289632,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-3",
+              "x": 812.8894331983541,
+              "y": 486.52373217860907,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-4",
+              "x": 478.56088659171184,
+              "y": 355.6097088111133,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-5",
+              "x": 586.0619396584231,
+              "y": 354.0221718357605,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-6",
+              "x": 695.4120048165753,
+              "y": 408.3575932524796,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-7",
+              "x": 806.215964153108,
+              "y": 408.43122014749633,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-8",
+              "x": 484.2049717262623,
+              "y": 286.3106237906051,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-9",
+              "x": 587.9347195806074,
+              "y": 284.37401537271325,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-10",
+              "x": 692.1002079180591,
+              "y": 283.8671109773416,
+              "errorDeg": 0
+            },
+            {
+              "id": "mbta:w2-11",
+              "x": 796.3148385704666,
+              "y": 283.7959388975551,
+              "errorDeg": 0
+            }
+          ]
+        }
+      ],
+      "motion": {
+        "distance": 0.617306529468145,
+        "moving": true
+      },
+      "trail": {
+        "ground": true,
+        "segments": 8,
+        "rebuilds": 4,
+        "strategy": "surface-depth corridor with time clip",
+        "head": true
+      },
+      "trailControls": [
+        {
+          "x": 449.7412264526406,
+          "y": 564.9668740517507,
+          "pixels": 54
+        },
+        {
+          "x": 449.7358585163093,
+          "y": 552.9004735433531,
+          "pixels": 54
+        },
+        {
+          "x": 449.7166487894038,
+          "y": 540.8435912641559,
+          "pixels": 54
+        },
+        {
+          "x": 449.6896211679849,
+          "y": 528.7895159327014,
+          "pixels": 54
+        },
+        {
+          "x": 449.65419110474244,
+          "y": 516.7371181223419,
+          "pixels": 54
+        },
+        {
+          "x": 449.6258671109783,
+          "y": 504.6762712052566,
+          "pixels": 46
+        }
+      ],
+      "disabled": {
+        "vehicles": 0,
+        "moving": 0,
+        "selected": null,
+        "held": false,
+        "markers": 0,
+        "requests": 0
+      }
+    }
+  },
+  "gates": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 105.6
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 10.7
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 10.1
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 17.8
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 21.3
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 18.9
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.4
+    }
+  ],
+  "sourceSha256": {
+    "src/layers/transit/trails.js": "0a5ec1c7b98a2cfd464b0c87376e98a3eab266d3d6fc687ee2f37d550687b7da",
+    "src/layers/transit/movement.js": "c49f4e5dddb8f9328cdd4d76f3b8afecb432c92241fd2a5d9cafdacea262a837",
+    "src/layers/transit/qaMetrics.js": "3a4e9fde55652b434c5764928fdcd133f728172e49577acfc7df0bc1b02aa016",
+    "src/layers/transit/policy.js": "791fe2e270eef27d0765b37a292945ad9077c2b45633692f3f196f7eadf6d9b1",
+    "src/layers/transit/ingestion.js": "a4e6e2c9de0c1c837321e3ae110632bd7d4fde3b183d216903cb09e2009b1029",
+    "src/layers/transit/controls.js": "ad7b47f52922c459eabb1c26b65a07df2f19c0efc37dd41bf93c3fd8a127fab1",
+    "src/layers/transit/height.js": "424c34b585c13bc7da7616a8242e726c498e42cf26adb6ad7b79f3b52c33fb46",
+    "src/layers/transit/index.js": "6b9db084ec4601038eb8f6cb2eff2c0ac20b97c7d3882d9906e85a43a7ac2399",
+    "src/layers/transit/rendering.js": "78d3074962c49e8616a87fe31850bbac09e7903a07066ca7d5751b48133882f1",
+    "src/layers/transit/testing.js": "96b7b05d4d67fd52bb66a3c54524a146a65b22860cafd012865f6ffd1dae0bd0",
+    "src/layers/transit/selection.js": "290cdda7e8dfa85976b588142e93d34baa1acda2461b569b1a4560ed3aa5c134",
+    "src/layers/transit/state.js": "47cae8e5c53d397aa6b8b16d2d7de23c8863a885783d7e40af10230a4c9d7c38",
+    "src/layers/transit/source.js": "dfdd818d0faf5d80bdf9b06c8dffc2bccf66ef5286672b9a3c9de1307c23e8d4",
+    "src/layers/transit/viewport.js": "aebf23b12729d3e69070c371cfd8bb7b407564bec5adcbfee308cb905b15cf22",
+    "src/layers/transit/queries.js": "2af00c368ada43869225704445479ecd0f6a111aedc952c55d07a72588ee917b",
+    "src/layers/transit/lifecycle.js": "cff9e8757b6e745eb01737518a4fac61a4529135795717db103b30caded3d30f",
+    "src/layers/transit/render/navaraTrail.js": "784494c6091f5eeb6deb337dbf7b09f5978b1f155a3a3eab863dd8051523cefe",
+    "src/layers/transit/render/navaraSprites.js": "78c81260e71e51ce358a0d34387c2bf435f726c714d5d1c905714a3b5548af20",
+    "src/layers/transit/render/cesium.js": "4ac1d646a4f965d72afec635579c1aee76cf1f265d7668976faae730a703f8e6",
+    "src/layers/transit/render/navara.js": "25d2166790dc8b013d2f3f04bb69f904b6f8fa95df071309bc0e401e64a3a919",
+    "src/layers/transit/render/navaraView.js": "951c84f9c9d7bcd7b09a66b3a8f2106d7cdb2529ae97f1e18e141997d8cae17e",
+    "src/app/layers/transit.js": "1956cc4b26c74900d4a76cd4964830e33b4fb1938a150903c4c24a4cfd4af3e2",
+    "src/app/navaraMode.js": "32ebd83b204be8bf17e2fde686830ed87174b567d3a911379e54560218e17eda",
+    "scripts/qa-w2-transit.mjs": "b79b4f8c453875ee5ab5f2987b21106306b850db61a0dfe951e987ac715f2e5e",
+    "scripts/fixtures/w2/transit.mjs": "ff5e0b8a0770d4f2f40ffe9bc95ea0b35906f69f083cfe72b21360bcd9745e89"
+  },
+  "retainedFailures": [
+    "/private/tmp/gev-transit-first-cesium.json",
+    "/private/tmp/gev-transit-first-navara.json",
+    "/private/tmp/gev-transit-surface-cesium.json",
+    "/private/tmp/gev-transit-surface-navara.json",
+    "/private/tmp/gev-transit-clock-fixed-cesium.json",
+    "/private/tmp/gev-transit-clock-fixed-navara.json"
+  ],
+  "interruptedAfterPassingAssertions": "/private/tmp/gev-transit-expanded-dev-cesium.json"
+}

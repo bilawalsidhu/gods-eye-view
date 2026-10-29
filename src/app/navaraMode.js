@@ -65,6 +65,15 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    transit: async () => {
+      const { createTransitNavaraRenderer } =
+        await import('../layers/transit/render/navara.js');
+      return (engine, options) =>
+        createTransitNavaraRenderer(engine, {
+          ...options,
+          ...navaraViews.get(engine),
+        });
+    },
     cctv: async () => {
       const { createCctvNavaraRenderer } =
         await import('../layers/cctv/render/navara.js');

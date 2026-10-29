@@ -1,6 +1,16 @@
 # Phase 3 W2 — execution report
 
-Status: W2 in progress. Earthquakes are accepted; FIRMS, installations, bikeshare, radio and ALPR have implementation checkpoints with the limits below. ALPR acceptance, CCTV, transit, recent imagery and whole-wave gates remain. The execution sequence and later migration phases are in [the detailed plan](phase3-w2-plan.md).
+Status: W2 in progress. Earthquakes are accepted; FIRMS, installations, bikeshare, radio, ALPR, CCTV and transit have implementation checkpoints with the limits below. Recent imagery and whole-wave functional/performance gates remain. Dioxus is deferred by the current user scope. The execution sequence is in [the detailed plan](phase3-w2-plan.md).
+
+## W2 transit — native extraction and Navara checkpoint (2026-10-29)
+
+The shared transit package is Cesium-free. Native construction retains the original trail implementation; Navara owns separate static/moving sprite banks and an actual surface-depth trail with time clipping. The atlas uses the existing mode/style/selection artwork. Equal-value setters do not commit, mutable coordinates are copied, atlas completion cannot resurrect a destroyed bank, and source/playback/height policy remains shared. Review also fixed native partial-construction cleanup. Native extraction is committed as `b0f95e5f`.
+
+Four frozen captures pass16/16 each: Cesium/Navara on dev and instrumented preview. The same nine source snapshots retain12 vehicles, reject the stale record and exercise all five resolved MBTA modes; unknown-mode fallback remains covered by unit/atlas tests rather than a claimed sixth natural MBTA mode. Positive controls prove rendered markers and ground-trail pixels. Physical selection, history acquisition,90-degree camera orbit, oblique perspective course, actual1x motion, Escape, ten toggles and final cleanup pass with zero unexpected errors. The retained screenshots have the known engine-wide scope-mask/tone difference; these results do not establish whole-frame colour equality.
+
+Full gates pass7330/7331ordinary tests (one Windows skip),15allocation tests, boundaries,1656-file scoped formatting, production/panel/QA builds and main composition. Both credentials were empty throughout. After the builds, only the Node QA driver gained the expanded checks; runtime sources remained frozen. Source hashes and results are in [the transit evidence](phase3-w2-transit-evidence.json). One earlier dev process printed a passing report but did not exit; it was stopped, recorded as interrupted, and replaced by clean final dev/preview exits. Earlier shader/QA-clock failures are retained rather than relabelled as passes.
+
+This is an implementation checkpoint, not whole-W2 acceptance. Transit800/3000 performance, detailed sensor-preset pixels, dense/partial-head and common-surface acceptance remain in wave closure. Navara's public upload probe counts whole-scene writes as an explicit upper bound; it is not comparable to the native marker-bank-only byte count. Continue with [recent imagery](phase3-w2-recent-imagery-plan.md), then the combined comparison and existing FIRMS/ALPR/CCTV/shell gaps.
 
 ## W2 CCTV — Navara implementation and paired checks (2026-10-29)
 
