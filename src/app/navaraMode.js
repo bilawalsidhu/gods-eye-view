@@ -17,6 +17,8 @@ import {
   uninstallRenderGovernor,
 } from '../renderGovernor.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { initNavaraImageryBoxTool } from '../ui/imageryBoxNavara.js';
+import { createRecentImageryPanel } from '../ui/recentImagery.js';
 
 // Native mesh capability stays at the composition boundary.
 const navaraViews = new WeakMap();
@@ -65,6 +67,15 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
+    'recent-imagery': async () => {
+      const { createRecentImageryNavaraRenderer } =
+        await import('../layers/recentImagery/render/navara.js');
+      return (engine, options) =>
+        createRecentImageryNavaraRenderer(engine, {
+          ...options,
+          ...navaraViews.get(engine),
+        });
+    },
     transit: async () => {
       const { createTransitNavaraRenderer } =
         await import('../layers/transit/render/navara.js');
@@ -252,6 +263,35 @@ export function createViewerlessTools({
   defer,
 }) {
   const { dataManager } = data;
+  const recentImagery = dataManager.layers.get('recent-imagery')?.module;
+  if (recentImagery) {
+    const tool = initNavaraImageryBoxTool({
+      engine,
+      onBox: (box) => recentImagery.setBox(box),
+      onPreview: (box) => recentImagery.setBoxPreview(box),
+      onCancel: (reason, message, box) => {
+        if (message) recentImagery.reportBoxRefusal(message, box);
+      },
+      onActive: (active) => recentImagery.setToolActive(active),
+      onEscape: () => recentImagery.clearPreview(),
+    });
+    data.presentation.attachRecentImagery((container) =>
+      createRecentImageryPanel({
+        container,
+        engine,
+        layer: recentImagery,
+        tool,
+      }),
+    );
+    const handle = { layer: recentImagery, tool };
+    window.__gevRecentImagery = handle;
+    defer(() => {
+      if (window.__gevRecentImagery === handle)
+        delete window.__gevRecentImagery;
+      data.presentation.attachRecentImagery(null);
+      tool.destroy();
+    });
+  }
   // No first-run welcome: its choices turn on data layers.
   if (startChrome)
     defer(

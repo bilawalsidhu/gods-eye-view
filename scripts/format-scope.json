@@ -1266,5 +1266,9 @@
   "scripts/fixtures/w2/radio.mjs",
   "scripts/qa-map-policy.mjs",
   "scripts/qa-map-policy.test.mjs",
-  "scripts/qa-map-startup.mjs"
+  "scripts/qa-map-startup.mjs",
+  "src/layers/recentImagery/render/tiles.test.mjs",
+  "src/layers/recentImagery/render/navara.test.mjs",
+  "src/ui/imageryBoxNavara.test.mjs",
+  "scripts/qa-w2-imagery.mjs"
 ]
