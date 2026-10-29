@@ -1848,8 +1848,6 @@
   "STATION UNAVAILABLE": "電臺不可用",
   "Station unavailable after directory refresh": "目錄刷新後該電臺不可用",
   "Radio could not {action} cleanly": "電臺未能正常{action}",
-  "Go to expanded Radio section": "前往展開的電臺區域",
-  "Expand Radio section in Context": "在態勢面板中展開電臺區域",
   "Close compact Radio controls": "關閉精簡電臺控件",
   "Open compact Radio controls": "打開精簡電臺控件",
   "SYNC": "同步",
