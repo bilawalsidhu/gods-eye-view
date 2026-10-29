@@ -1723,7 +1723,6 @@
   "Thermal": "Тепловізор",
   "Anime": "Аніме",
   "Noir": "Нуар",
-  "Snow": "Сніг",
   "Current cockpit vision style: {style}. Activate for next style.": "Поточний візуальний стиль у кабіні: {style}. Активуйте, щоб перейти до наступного.",
   "Current style: {style} — click for next": "Поточний стиль: {style} — клацніть для наступного",
   "Collapse Contact panel": "Згорнути панель контактів",
@@ -2850,7 +2849,6 @@
   "Simulate FLIR-style thermal contrast. Turn up Ironbow for color.": "Імітує тепловий контраст у стилі FLIR. Для кольору збільште Ironbow.",
   "Apply bright cel-shaded color and illustrated outlines.": "Застосовує яскраву мультяшну заливку та ілюстровані контури.",
   "Apply high-contrast monochrome film-noir grading.": "Застосовує висококонтрастну чорно-білу обробку в стилі нуар.",
-  "Add a cold, snowy whiteout treatment to the scene.": "Додає до сцени холодний ефект снігової імли.",
   "MAP SOURCE": "ДЖЕРЕЛО КАРТИ",
   "Map source": "Джерело карти",
   "Style": "Стиль",
@@ -3086,5 +3084,7 @@
   "Minimum fire radiative power, megawatts": "Мінімальна потужність випромінювання пожежі, мегавати",
   "fire intensity filter|All": "Усі",
   "Detection confidence": "Достовірність виявлення",
-  "{shown} of {total} shown": "показано {shown} з {total}"
+  "{shown} of {total} shown": "показано {shown} з {total}",
+  "Malformed cyclone snapshot": "Некоректний знімок циклонів",
+  "Cyclone request timed out": "Минув час очікування запиту циклонів"
 }

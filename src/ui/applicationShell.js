@@ -1598,7 +1598,7 @@ export class StyleManager extends ShellFacade {
    * 2. Crossfades the new shader stage intensity to 1.
    * 3. Applies style preset defaults (bloom/sharpen/HUD) if applyPreset is true.
    * 4. Updates button highlights, style indicator, slider panel, HUD, and detection overlay.
-   * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir'|'snow').
+   * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
    * @param {boolean} [options.userInitiated=false] - Whether a direct user preset choice owns the Cyber exit style.

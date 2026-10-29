@@ -76,7 +76,6 @@ const MODE_LABELS = Object.freeze({
   thermal: msg('FLIR'),
   anime: msg('ANIME'),
   noir: msg('NOIR'),
-  snow: msg('SNOW'),
 });
 
 /** Region ids from _regionLabel() and the name shown for each. */

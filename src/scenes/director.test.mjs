@@ -712,6 +712,10 @@ test('a legacy three-shot Nepal browser project bootstraps to the current 25-sho
     assert.deepEqual(scene.shots.slice(0, 3).map(({ camera }) => camera), originalCameras);
     assert.equal(scene.appliedShotPacks[0].id, 'bhote-koshi-nepal-evidence-pack');
     assert.equal(scene.appliedShotPacks[0].version, 18);
+    // displayShotTitle trusts these bindings to localize the bootstrap shots.
+    for (const shot of scene.shots.slice(0, 8)) {
+      assert.equal(scene.appliedShotPacks[0].shotBindings[shot.title], shot.id);
+    }
     assert.equal(director._selectedSceneId, scene.id);
     assert.equal(director._selectedShotId, scene.shots[0].id);
   } finally {
