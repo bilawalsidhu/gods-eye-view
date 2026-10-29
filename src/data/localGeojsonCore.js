@@ -1000,9 +1000,9 @@ export function createLocalGeoJsonLayer(
             // governor the retry's preRender never arrives on a parked camera
             // and the stem stays at ellipsoid height (buried/floating) until
             // the user happens to move. Schedule the frame the retry needs.
-            // Gated on a sampleable scene and in-range records only, so a far
-            // camera (or a keyless scene) stays fully idle; the distance is
-            // only computed for still-unsampled stems.
+            // Gated on a sampleable scene and in-range, in-view records only,
+            // so a far camera (or a keyless scene) stays fully idle; the
+            // distance is only computed for still-unsampled stems.
             if (
               canSampleGround &&
               !record.groundSampled &&
@@ -1010,7 +1010,8 @@ export function createLocalGeoJsonLayer(
               Cesium.Cartesian3.distance(
                 viewer.camera.positionWC,
                 record.base,
-              ) < GROUND_SAMPLE_MAX_DISTANCE_M
+              ) < GROUND_SAMPLE_MAX_DISTANCE_M &&
+              groundSampleInView(viewer, record)
             ) {
               groundRetryPending = true;
             }
@@ -1130,9 +1131,44 @@ function refreshLocalTerrainFloor(viewer, record) {
   return true;
 }
 
+const groundSampleSphere = new Cesium.BoundingSphere(
+  new Cesium.Cartesian3(),
+  1,
+);
+
+const groundSampleOccluder = new Cesium.EllipsoidalOccluder(
+  Cesium.Ellipsoid.WGS84,
+);
+
+/**
+ * Whether the camera sees the record's base: inside the view frustum and
+ * above the horizon. scene.sampleHeight reads only surface rendered for the
+ * current view, so a sample of an unseen base passes through the Earth (about
+ * -6,344 km near Ashburn on Esri) and fails on every 2 s retry, each one a
+ * full offscreen render: 110 unseen data centres there held the page near 2 s
+ * a frame indefinitely. An unseen base keeps its stem at the unsampled height
+ * and is sampled on the first walk that sees it.
+ */
+function groundSampleInView(viewer, record) {
+  const camera = viewer.camera;
+  const culling = camera.frustum.computeCullingVolume(
+    camera.positionWC,
+    camera.directionWC,
+    camera.upWC,
+  );
+  Cesium.Cartesian3.clone(record.base, groundSampleSphere.center);
+  if (
+    culling.computeVisibility(groundSampleSphere) === Cesium.Intersect.OUTSIDE
+  )
+    return false;
+  groundSampleOccluder.cameraPosition = camera.positionWC;
+  return groundSampleOccluder.isPointVisible(record.base);
+}
+
 function sampleLocalGroundHeight(viewer, record, now) {
   if (record.groundSampled || !viewer.scene.sampleHeightSupported) return false;
   if (now - record.lastGroundSampleMs < GROUND_SAMPLE_RETRY_MS) return false;
+  if (!groundSampleInView(viewer, record)) return false;
   record.lastGroundSampleMs = now;
   const globe = viewer.scene.globe;
   if (globe?.show && globe.tilesLoaded === false) return false;

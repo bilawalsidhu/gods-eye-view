@@ -90,6 +90,8 @@ async function createRealLocalLayerHarness({
   globalThis.window = { dispatchEvent() {} };
   let sampleHeightImpl = sampleHeight;
   const sampleCalls = { count: 0 };
+  // The camera frustum, reduced to the one answer ground sampling asks of it.
+  let baseVisibility = Cesium.Intersect.INSIDE;
   const overlayHost = {
     setVisible: (...args) => hostCalls.push(['visible', ...args]),
     setEntries: (...args) => hostCalls.push(['entries', ...args]),
@@ -107,7 +109,14 @@ async function createRealLocalLayerHarness({
     },
     camera: {
       positionWC: Cesium.Cartesian3.fromDegrees(-97.695, 30.205, 100_000),
-      frustum: { fov: Math.PI / 3 },
+      directionWC: new Cesium.Cartesian3(),
+      upWC: new Cesium.Cartesian3(),
+      frustum: {
+        fov: Math.PI / 3,
+        computeCullingVolume: () => ({
+          computeVisibility: () => baseVisibility,
+        }),
+      },
       moveEnd,
       flyTo() {},
     },
@@ -151,6 +160,10 @@ async function createRealLocalLayerHarness({
     sampleCalls,
     /** Swap scene.sampleHeight mid-test (e.g. tiles finally arrive). */
     setSampleHeight(next) { sampleHeightImpl = next; },
+    /** Put the feature's base inside (true) or outside the camera frustum. */
+    setBaseInView(inView) {
+      baseVisibility = inView ? Cesium.Intersect.INSIDE : Cesium.Intersect.OUTSIDE;
+    },
     cleanup() {
       if (originalWindow === undefined) delete globalThis.window;
       else globalThis.window = originalWindow;
@@ -733,6 +746,44 @@ test('ground sampling waits for visible globe tiles before caching a height', as
   clock.advance(2_100);
   env.preRender.raise();
   assert.equal(env.sampleCalls.count, 1, 'the existing retry must sample the settled scene');
+  assert.ok(Math.abs(baseHeightM(env) - 117) < 0.01);
+});
+
+test('an unseen base is not sampled and arms no retry until it is in view', async (t) => {
+  // Out of view the scene has no surface under the base, so the depth sample
+  // would pass through the Earth (about -6,344 km) and fail on every retry.
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true, sampleHeight: () => 117,
+  });
+  _resetRenderGovernorForTest();
+  const governorScene = { renders: 0, requestRender() { this.renders += 1; } };
+  installRenderGovernor({ scene: governorScene });
+  governorScene.renders = 0; // discard the governor's own install settling frame
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const clock = installFakeClock(t);
+  t.after(() => {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+    _resetRenderGovernorForTest();
+  });
+  env.viewer.scene.globe = { show: true, tilesLoaded: true, getHeight: () => 117 };
+  setCameraAltitude(env, 20_000);
+  env.setBaseInView(false);
+  runArmedRetryChain(env, t, clock, 5);
+  assert.equal(env.sampleCalls.count, 0, 'an off-screen base must not be sampled');
+  assert.equal(governorScene.renders, 0, 'an off-screen base must not keep a parked camera rendering');
+  assert.ok(Math.abs(baseHeightM(env)) < 0.01);
+
+  // In the frustum but over the horizon: 50 m up, about 67 km away.
+  env.setBaseInView(true);
+  env.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(-97.0, 30.205, 50);
+  runArmedRetryChain(env, t, clock, 5);
+  assert.equal(env.sampleCalls.count, 0, 'a base over the horizon must not be sampled');
+  assert.equal(governorScene.renders, 0);
+
+  setCameraAltitude(env, 20_000);
+  env.preRender.raise();
+  assert.equal(env.sampleCalls.count, 1, 'the base is sampled on the first walk that sees it');
   assert.ok(Math.abs(baseHeightM(env) - 117) < 0.01);
 });
 
