@@ -1203,6 +1203,8 @@
   "Some weather tiles unavailable": "部分天气瓦片不可用",
   "Malformed weather manifest": "天气清单格式错误",
   "Weather request timed out": "天气请求超时",
+  "Cyclone request timed out": "气旋请求超时",
+  "Malformed cyclone snapshot": "气旋快照格式错误",
   "Temperature field unavailable": "温度场不可用",
   "Mean sea level pressure field unavailable": "平均海平面气压场不可用",
   "Wind upstream unavailable": "风场上游数据源不可用",

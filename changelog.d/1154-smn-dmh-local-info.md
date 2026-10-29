@@ -8,4 +8,4 @@
 
 - Reconcile SMN and DMH observations in overlapping coverage, select stations at each exact query point, coalesce model fallback, and keep independent provenance, expiry and clearing in Local Info. Add integration, UI and tool regressions. (radianx, #1153, #1154).
 
-Includes Simplified Chinese, Traditional Chinese, Ukrainian and Italian UI copy and locale regressions, preserving source attribution, interpolation and locale-specific number/date formatting.
+Includes Simplified Chinese, Traditional Chinese, Ukrainian, Italian and Brazilian Portuguese UI copy and locale regressions, preserving source attribution, interpolation and locale-specific number/date formatting.

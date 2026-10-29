@@ -2263,6 +2263,8 @@
   "GOOGLE_MAPS_API_KEY is not set": "GOOGLE_MAPS_API_KEY не задан",
   "The Google Maps JavaScript API could not load": "Не удалось загрузить Google Maps JavaScript API",
   "Weather request timed out": "Истекло время ожидания запроса погоды",
+  "Cyclone request timed out": "Истекло время ожидания запроса циклонов",
+  "Malformed cyclone snapshot": "Некорректный снимок циклонов",
   "Malformed weather manifest": "Некорректный манифест погоды",
   "Weather HTTP {status}": "Погода: HTTP {status}",
   "Weather image HTTP {status}": "Снимок погоды: HTTP {status}",

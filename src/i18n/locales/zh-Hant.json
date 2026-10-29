@@ -1198,6 +1198,8 @@
   "Some weather tiles unavailable": "部分天氣瓦片不可用",
   "Malformed weather manifest": "天氣清單格式錯誤",
   "Weather request timed out": "天氣請求超時",
+  "Cyclone request timed out": "氣旋請求超時",
+  "Malformed cyclone snapshot": "氣旋快照格式錯誤",
   "Temperature field unavailable": "溫度場不可用",
   "Mean sea level pressure field unavailable": "平均海平面氣壓場不可用",
   "Wind upstream unavailable": "風場上游數據源不可用",

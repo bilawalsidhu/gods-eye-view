@@ -2227,6 +2227,8 @@
   "GOOGLE_MAPS_API_KEY is not set": "GOOGLE_MAPS_API_KEY no está configurada",
   "The Google Maps JavaScript API could not load": "No se pudo cargar la API de Maps JavaScript de Google",
   "Weather request timed out": "La petición del clima agotó el tiempo de espera",
+  "Cyclone request timed out": "La petición de ciclones agotó el tiempo de espera",
+  "Malformed cyclone snapshot": "Instantánea de ciclones mal formada",
   "Malformed weather manifest": "Manifiesto del clima mal formado",
   "Weather HTTP {status}": "Clima: HTTP {status}",
   "Weather image HTTP {status}": "Imagen del clima: HTTP {status}",

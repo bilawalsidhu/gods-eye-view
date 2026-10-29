@@ -36,6 +36,8 @@ test('normalizeLocale folds regional variants and rejects unshipped tags', () =>
   assert.equal(normalizeLocale('uk'), 'uk');
   assert.equal(normalizeLocale('uk-UA'), 'uk');
   assert.equal(normalizeLocale('en_GB'), 'en');
+  assert.equal(normalizeLocale('pt-BR'), 'pt');
+  assert.equal(normalizeLocale('pt_PT'), 'pt');
   assert.equal(normalizeLocale('xx'), null);
   assert.equal(normalizeLocale('it-IT'), 'it');
   assert.equal(normalizeLocale('it_CH'), 'it');
@@ -146,6 +148,20 @@ test('tn() picks English and Russian plural forms', () => {
   assert.match(label(21), / 21 КЛЮЧ(?![А-ЯЁ])/);
 });
 
+test('tn() picks the Portuguese one, many and other forms', () => {
+  const label = (count) =>
+    tn(
+      count,
+      'POWER UP · {count} KEY WAITING',
+      'POWER UP · {count} KEYS WAITING',
+    );
+  setLocale('pt');
+  assert.equal(label(0), 'ATIVAR · 0 CHAVE PENDENTE');
+  assert.equal(label(1), 'ATIVAR · 1 CHAVE PENDENTE');
+  assert.equal(label(3), 'ATIVAR · 3 CHAVES PENDENTES');
+  assert.equal(label(1_000_000), 'ATIVAR · 1000000 DE CHAVES PENDENTES');
+});
+
 test('tn() picks the four Ukrainian plural forms', () => {
   const label = (count) =>
     tn(
@@ -218,6 +234,21 @@ test('applyDocumentTranslations translates opted-in text and attributes in place
   assert.equal(label.textContent, t('POWERED UP'));
   assert.equal(pin.attrs.get('title'), t('POWERED UP'));
   assert.equal(unknown.textContent, 'No such message');
+});
+
+test('applyDocumentTranslations reads data-i18n-context for element text', () => {
+  const option = fakeElement({
+    text: 'All',
+    attributes: { 'data-i18n-context': 'radio tag' },
+  });
+  const doc = {
+    querySelectorAll: (selector) =>
+      selector === '[data-i18n]' ? [option] : [],
+  };
+  setLocale('pt');
+  applyDocumentTranslations(doc);
+  assert.equal(option.textContent, t('All', { context: 'radio tag' }));
+  assert.notEqual(option.textContent, t('All'));
 });
 
 test('persistLocaleAndReload keeps the choice in ?lang when storage is blocked', () => {

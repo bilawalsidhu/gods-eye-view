@@ -3005,6 +3005,8 @@
   "Don't show this again": "Non mostrare più",
   "ESC to dismiss": "ESC per chiudere",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Suggerimento: il pulsante GEV MIC nel dock ti permette di parlare con la mappa.",
+  "Malformed cyclone snapshot": "Snapshot dei cicloni non valido",
+  "Cyclone request timed out": "La richiesta dei cicloni è andata in timeout",
   "NATURAL EARTH · SMN STATION OBSERVATION": "NATURAL EARTH · OSSERVAZIONE DELLA STAZIONE SMN",
   "NATURAL EARTH · OPEN-METEO · UTC": "NATURAL EARTH · OPEN-METEO · UTC",
   "NATURAL EARTH · WEATHER UNAVAILABLE": "NATURAL EARTH · DATI METEO NON DISPONIBILI",
