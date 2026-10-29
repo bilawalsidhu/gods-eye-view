@@ -1,3 +1,4 @@
+import { menuPanelOutcome } from './menuPanelResult.js';
 import { hudOutcome } from '../voice/hudResult.js';
 import { fitHistoryToBytes, toolResultMessage } from './conversation.js';
 import { readRightRailState, rightRailReply } from './rightRailState.js';
@@ -113,6 +114,7 @@ function cameraRefusalReply(name, args, result) {
 function isPanelCommand(name, args) {
   return (
     name === 'set_panel_open' ||
+    name === 'show_data_layers_menu' ||
     name === 'set_voice_inactivity_timeout' ||
     (name === 'control_cockpit' && Boolean(args?.voicePanel))
   );
@@ -275,6 +277,8 @@ function createAgentSession({
       let panelOnly = true;
       let railCommandSeen = false;
       let hudReply = null;
+      let menuResult = null;
+      let menuOnly = true;
       let hudOnly = true;
       try {
         for (let round = 0; round < maxToolRounds; round += 1) {
@@ -292,7 +296,7 @@ function createAgentSession({
           const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
           if (!toolCalls.length) controller.signal.throwIfAborted();
           const guardedCalls =
-            Boolean(toolCalls.length && hudReply) ||
+            Boolean(toolCalls.length && (hudReply || menuResult)) ||
             toolCalls.some(
               (call) =>
                 ['move_camera', 'zoom_to_globe', 'set_hud'].includes(
@@ -302,6 +306,10 @@ function createAgentSession({
           const railState = railCommandSeen ? readRightRailState() : null;
           const finalRailReply =
             !toolCalls.length && panelOnly ? rightRailReply(railState) : null;
+          const finalMenu =
+            !toolCalls.length && menuResult
+              ? menuPanelOutcome(menuResult.result, menuResult.args)
+              : null;
           const finalHudReply =
             !toolCalls.length && hudReply
               ? hudOnly
@@ -310,11 +318,19 @@ function createAgentSession({
                   hudReply +
                   ' Other tool results are shown in the console.'
               : null;
-          const message = finalHudReply
-            ? { ...data.message, content: finalHudReply }
-            : finalRailReply
-              ? { ...data.message, content: finalRailReply }
-              : data.message;
+          const message = finalMenu
+            ? {
+                ...data.message,
+                content: menuOnly
+                  ? finalMenu.content
+                  : finalMenu.content +
+                    ' Other tool results are shown in the console.',
+              }
+            : finalHudReply
+              ? { ...data.message, content: finalHudReply }
+              : finalRailReply
+                ? { ...data.message, content: finalRailReply }
+                : data.message;
           // Narration before execution may claim an action that is refused.
           messages.push(guardedCalls ? { ...message, content: '' } : message);
           for (const warning of Array.isArray(data.warnings)
@@ -333,6 +349,7 @@ function createAgentSession({
             return {
               ok:
                 !data.toolCallFailed &&
+                (!finalMenu || finalMenu.ok) &&
                 !(
                   finalRailReply &&
                   railState.layout === 'desktop' &&
@@ -397,6 +414,12 @@ function createAgentSession({
                   call.args,
                   controller.signal,
                 );
+            menuOnly &&= call.name === 'show_data_layers_menu';
+            if (call.name === 'show_data_layers_menu' && !result?.skipped) {
+              menuResult = { result, args: call.args };
+              const outcome = menuPanelOutcome(result, call.args);
+              if (!outcome.ok) refusalReply ||= outcome.content;
+            }
             hudOnly &&= call.name === 'set_hud';
             if (call.name === 'set_hud' && !result?.skipped) {
               const outcome = hudOutcome(result, call.args);

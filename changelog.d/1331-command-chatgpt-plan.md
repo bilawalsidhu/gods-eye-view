@@ -32,3 +32,7 @@
   suppress false typed confirmations after rejection, normalization or partial
   failure. Add retirement integration regressions without incorporating or
   replacing asturksever's independent Operator removal in #1467 (#1331).
+- Reveal Utilities through the existing Directions menu tool in COMMAND, without
+  expanding the shared Realtime schema. Read back panel disclosure and visibility
+  before confirming; stop locally on refusal or silent no-op. Add unit and real
+  application browser regressions for temporary integration with #1469 (#1331).

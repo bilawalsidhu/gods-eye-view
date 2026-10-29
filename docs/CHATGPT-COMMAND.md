@@ -451,3 +451,66 @@ corrected #1331 alone, and on the combined tree. It is not a new right-rail
 integration regression and has not been changed in this correction. No live
 ChatGPT interpretation, account eligibility, physical-device keyboard, native
 Windows or broad external-feed/tracking certification is claimed.
+
+## Utilities compatibility with #1469 (2026-10-29)
+
+COMMAND routes typed requests such as “mostrame Indicaciones”, “abrí Utilidades”
+and “mostrame las herramientas para dibujar” through the existing
+`show_data_layers_menu({layerId: 'directions'})` tool. In #1469 that tool finds
+Directions' actual row and opens its containing `utilities-panel`. This reveals
+controls; it does not enable Directions, activate Draw, create a mark or import a
+file. Draw and Import remain hidden in Cockpit according to #1469's policy.
+
+The new routing guidance is text-only. No Realtime enum, schema digest, shared
+voice instruction or share-link format is enlarged. In particular, sending
+`utilities-panel` directly to `set_panel_open` is still invalid. Before #1469
+lands, the same reveal tool opens Data Layers; COMMAND reports that actual panel
+rather than claiming Utilities or Draw is available there.
+
+The typed loop suppresses speculative narration for the reveal operation and
+reads back the returned panel from the DOM. It requires a successful result,
+matching focused row when requested, and an expanded panel with no hidden or
+CSS-hidden ancestor. Missing, rejected, cancelled, unapplied and silent no-op
+operations terminate the request locally and skip sibling calls. A fresh explicit
+request remains possible. Before final confirmation, COMMAND checks again so a
+manual close during follow-up inference cannot become an “open” confirmation.
+For mixed requests the console retains each tool result separately.
+
+Temporary integration uses #1469 head
+`6f93c21aaa212e857cb0e80fb952c77a2b8b2c61` and #1331 baseline
+`7acd11bfa5469c21c5e1e2b843268c0b2aab95da`, plus this correction. The only merge
+conflict was the end of `zh-Hant.json`; both COMMAND account messages and the two
+new route-error translations were retained. The Utilities/Draw contribution and
+that temporary merge are not included in #1331's branch.
+
+Reproduce the integration browser gate with
+`node scripts/qa-agent-utilities.mjs` after temporarily merging #1469. It uses the
+real application, typed console, panel owner and shared runner, with scripted
+provider replies (including deliberately false success claims). It checks all
+three Spanish requests in Tactical and Cyber, the actual Directions row owner,
+panel visibility, unchanged layer enablement, an invalid direct panel target, a
+silent no-op owner and recovery with a fresh request. These are execution and
+confirmation checks; they do not certify live model interpretation or OAuth.
+
+Validation (Linux, Node 24.22.1):
+
+- Corrected #1331: complete ordinary suite with four workers: **9,228 passed,
+  12 skipped, 0 failed**. The 15 serialized allocation checks also passed.
+- Combined #1331 + #1469: **327 agent tests passed**, five skipped, zero failed.
+  All 12 new Utilities regressions pass. Chromium's real-application gate passed
+  the six Spanish-command/layout combinations plus invalid-target, silent-no-op
+  and fresh-request recovery checks. The gate uses scripted inference.
+- The first complete combined run recorded 9,319 passes, 12 skips and two failures:
+  an assertion still expecting the pre-HUD-change instruction sentence (corrected
+  to the current resulting-state contract and passing in the complete agent run),
+  and Traffic's timed “settled footprint” test. All 15 Traffic navigation tests
+  passed in an isolated rerun. That initial combined run is not claimed green;
+  no timing threshold was relaxed.
+- Production builds, package/import boundaries, i18n and formatting passed on both
+  trees (1,577 files on #1331; 1,582 combined). Catalogs remain complete: 2,759
+  messages per locale on #1331 and 2,765 combined. Changelog validation passed;
+  combined token validation against the #1331 baseline preserved all 32 tokens.
+- The stale instruction assertion was inherited from the earlier HUD correction;
+  production voice behavior and its payload are unchanged by this Utilities fix.
+  Live ChatGPT interpretation, mobile interaction, external feed reliability and
+  the broader graphics/tracking release gates were not certified here.

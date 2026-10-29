@@ -84,7 +84,10 @@ test('the typed manual keeps the product contracts voice encodes', () => {
   assert.match(instructions, /^You are GEV Command,/);
   assert.match(instructions, /COUNTING CONTRACT/);
   assert.match(instructions, /WHITEBOARD THE WORLD/);
-  assert.match(instructions, /Never claim an action without ok=true/);
+  assert.match(
+    instructions,
+    /Confirm only the returned RESULTING state after ok=true/,
+  );
   assert.match(instructions, /NAMED VIEWS/);
 });
 

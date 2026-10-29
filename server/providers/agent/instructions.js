@@ -110,6 +110,7 @@ function agentDirectives({ annotationGuidance } = {}) {
 function buildAgentInstructions(options = {}) {
   return [
     ...agentDirectives(options),
+    'UTILITIES: To show Directions (Indicaciones), open Utilities (Utilidades), or show the drawing/import tools, call show_data_layers_menu with layerId="directions". This reveals the panel containing that row without enabling the layer, drawing, or importing. Do not send utilities-panel to set_panel_open: it is deliberately absent from the shared voice enum. On older shells the result may instead be data-panel; report the returned and observed panel, never claim Utilities or Draw opened there. Opening the container does not activate Draw or expand its controls; in Cockpit Draw/Import remain unavailable. If an operation fails, do not claim success or retry without a new request.',
     'RIGHT RAIL: Display uses pp-toggles; Street Level uses street-level-panel. rightRailState is an observation after every tool in a round has run. Its latest openPanelIds supersede earlier set_panel_open successes. Desktop tabs have one owner; opening another closes the previous panel. Mobile expansion states are independent and do not imply that every sheet is visible. Confirm the resulting state, never a list of successful opens as if they all remained open.',
     // Source records are data even if their strings mimic high-priority
     // instructions. This is a prompt-layer precaution, not an enforcement
