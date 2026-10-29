@@ -1,0 +1,4110 @@
+{
+  "status": "implementation checkpoint; W2 acceptance remains open",
+  "date": "2026-10-29",
+  "keyless": true,
+  "raw": "/private/tmp/gev-cctv-navara-final",
+  "checks": {
+    "pixels-cesium-dev": {
+      "pass": true,
+      "checks": [
+        {
+          "name": "regional: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "regional: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "regional: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "city: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "city: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "city: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "close: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "close: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "close: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical click selects exact camera",
+          "actual": "w2-cctv-008",
+          "expected": "w2-cctv-008",
+          "pass": true
+        },
+        {
+          "name": "image plane has all four decoded quadrants with correct UV orientation",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "imageIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "visible image plane resolves to its camera",
+          "actual": "w2-cctv-012",
+          "expected": "w2-cctv-012",
+          "pass": true
+        },
+        {
+          "name": "all eight calibration handles are shown",
+          "actual": 8,
+          "expected": 8,
+          "pass": true
+        },
+        {
+          "name": "east handle owns an on-screen pick",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical east drag changes the live calibration",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "transient drag preserves the floor and does not sample it",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "drag release resolves the committed anchor once",
+          "actual": 1,
+          "expected": 1,
+          "pass": true
+        },
+        {
+          "name": "calibration remains unsaved after drag",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "real video decoder advances",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "video plane pixels actually advance on the globe",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "disable releases the real video source",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "afterVideoIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "ten toggles preserve the exact catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "toggleIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "no browser runtime errors",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        }
+      ],
+      "browserErrors": [],
+      "imagePixels": [
+        253,
+        249,
+        251,
+        251
+      ],
+      "videoChangedPixels": 1078,
+      "idleFrames": {
+        "imageIdle": 0,
+        "afterVideoIdle": 0,
+        "toggleIdle": 0
+      },
+      "calibration": {
+        "before": {
+          "id": "w2-cctv-012",
+          "name": "Cámara pública — Congress",
+          "city": "Austin",
+          "provider": "W2 deterministic fixture",
+          "lat": 30.2672,
+          "lon": -97.7431,
+          "headingDeg": 84,
+          "headingConfidence": "low",
+          "headingEstimated": true,
+          "pitchDeg": 10,
+          "fovDeg": 42,
+          "rangeM": 126,
+          "elevationM": 311.2857631556751,
+          "mountHeightM": 190,
+          "active": true,
+          "feedType": "image",
+          "isVideo": false,
+          "sourceKind": "image",
+          "sourceStatus": "online",
+          "sourceMessage": "",
+          "sourceLabel": "W2 deterministic fixture",
+          "credit": "",
+          "calibration": {
+            "offsetNorthM": 0,
+            "offsetEastM": 0,
+            "headingDeg": 0,
+            "pitchDeg": 34,
+            "fovDeg": -14,
+            "rangeScale": 0.6,
+            "heightM": 180
+          },
+          "calDirty": true,
+          "groundResolveCount": 0,
+          "groundMeshSampleRequestCount": 0,
+          "groundPriorM": 121.50911480526301,
+          "intrinsics": {
+            "fovDeg": 42,
+            "principalPoint": [
+              0.5,
+              0.5
+            ]
+          },
+          "extrinsics": {
+            "headingDeg": 84,
+            "pitchDeg": 10,
+            "rollDeg": 0,
+            "heightM": 190
+          },
+          "anchor": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "elevM": 150,
+            "targetLatLon": null
+          },
+          "calBadge": "raw-prior",
+          "poseSource": null,
+          "basePose": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "headingDeg": 84,
+            "pitchDeg": -24,
+            "fovDeg": 56,
+            "rangeM": 210,
+            "mountHeightM": 10
+          },
+          "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743100&heading=84&fov=42&pitch=10&ts=179327080",
+          "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551387"
+        },
+        "count": 8,
+        "at": {
+          "x": 730.4315888602882,
+          "y": 412.8203187517508
+        },
+        "ux": 0.27014085463470305,
+        "uy": -0.9628208133693581,
+        "stored": null,
+        "samples": [
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.7430573562227,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 4.1000000000000005,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.7430573562227,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743057&heading=84&fov=42&pitch=10&ts=179327080",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551387"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74301367235327,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 8.3,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74301367235327,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743014&heading=84&fov=42&pitch=10&ts=179327080",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551387"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74296894839172,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 12.600000000000001,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74296894839172,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742969&heading=84&fov=42&pitch=10&ts=179327080",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551387"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.7429221442459,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 17.1,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.7429221442459,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742922&heading=84&fov=42&pitch=10&ts=179327080",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551387"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74287534010008,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 21.6,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74287534010008,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742875&heading=84&fov=42&pitch=10&ts=179327080",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551387"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74282645577001,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 26.3,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74282645577001,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742826&heading=84&fov=42&pitch=10&ts=179327080",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551387"
+          }
+        ],
+        "after": {
+          "id": "w2-cctv-012",
+          "name": "Cámara pública — Congress",
+          "city": "Austin",
+          "provider": "W2 deterministic fixture",
+          "lat": 30.2672,
+          "lon": -97.74282645577001,
+          "headingDeg": 84,
+          "headingConfidence": "low",
+          "headingEstimated": true,
+          "pitchDeg": 10,
+          "fovDeg": 42,
+          "rangeM": 126,
+          "elevationM": 311.2857631556751,
+          "mountHeightM": 190,
+          "active": true,
+          "feedType": "image",
+          "isVideo": false,
+          "sourceKind": "image",
+          "sourceStatus": "online",
+          "sourceMessage": "",
+          "sourceLabel": "W2 deterministic fixture",
+          "credit": "",
+          "calibration": {
+            "offsetNorthM": 0,
+            "offsetEastM": 26.3,
+            "headingDeg": 0,
+            "pitchDeg": 34,
+            "fovDeg": -14,
+            "rangeScale": 0.6,
+            "heightM": 180
+          },
+          "calDirty": true,
+          "groundResolveCount": 1,
+          "groundMeshSampleRequestCount": 0,
+          "groundPriorM": 121.50911480526301,
+          "intrinsics": {
+            "fovDeg": 42,
+            "principalPoint": [
+              0.5,
+              0.5
+            ]
+          },
+          "extrinsics": {
+            "headingDeg": 84,
+            "pitchDeg": 10,
+            "rollDeg": 0,
+            "heightM": 190
+          },
+          "anchor": {
+            "lat": 30.2672,
+            "lon": -97.74282645577001,
+            "elevM": 150,
+            "targetLatLon": null
+          },
+          "calBadge": "raw-prior",
+          "poseSource": null,
+          "basePose": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "headingDeg": 84,
+            "pitchDeg": -24,
+            "fovDeg": 56,
+            "rangeM": 210,
+            "mountHeightM": 10
+          },
+          "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742826&heading=84&fov=42&pitch=10&ts=179327080",
+          "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551387"
+        }
+      }
+    },
+    "pixels-navara-dev": {
+      "pass": true,
+      "checks": [
+        {
+          "name": "regional: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "regional: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "regional: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "city: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "city: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "city: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "close: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "close: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "close: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical click selects exact camera",
+          "actual": "w2-cctv-008",
+          "expected": "w2-cctv-008",
+          "pass": true
+        },
+        {
+          "name": "image plane has all four decoded quadrants with correct UV orientation",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "imageIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "visible image plane resolves to its camera",
+          "actual": "w2-cctv-012",
+          "expected": "w2-cctv-012",
+          "pass": true
+        },
+        {
+          "name": "all eight calibration handles are shown",
+          "actual": 8,
+          "expected": 8,
+          "pass": true
+        },
+        {
+          "name": "east handle owns an on-screen pick",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical east drag changes the live calibration",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "transient drag preserves the floor and does not sample it",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "drag release resolves the committed anchor once",
+          "actual": 1,
+          "expected": 1,
+          "pass": true
+        },
+        {
+          "name": "calibration remains unsaved after drag",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "real video decoder advances",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "video plane pixels actually advance on the globe",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "disable releases the real video source",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "afterVideoIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "ten toggles preserve the exact catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "toggleIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "no browser runtime errors",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        }
+      ],
+      "browserErrors": [],
+      "imagePixels": [
+        256,
+        229,
+        257,
+        221
+      ],
+      "videoChangedPixels": 432,
+      "idleFrames": {
+        "imageIdle": 0,
+        "afterVideoIdle": 0,
+        "toggleIdle": 0
+      },
+      "calibration": {
+        "before": {
+          "id": "w2-cctv-012",
+          "name": "Cámara pública — Congress",
+          "city": "Austin",
+          "provider": "W2 deterministic fixture",
+          "lat": 30.2672,
+          "lon": -97.7431,
+          "headingDeg": 84,
+          "headingConfidence": "low",
+          "headingEstimated": true,
+          "pitchDeg": 10,
+          "fovDeg": 42,
+          "rangeM": 126,
+          "elevationM": 311.2857631556751,
+          "mountHeightM": 190,
+          "active": true,
+          "feedType": "image",
+          "isVideo": false,
+          "sourceKind": "image",
+          "sourceStatus": "online",
+          "sourceMessage": "",
+          "sourceLabel": "W2 deterministic fixture",
+          "credit": "",
+          "calibration": {
+            "offsetNorthM": 0,
+            "offsetEastM": 0,
+            "headingDeg": 0,
+            "pitchDeg": 34,
+            "fovDeg": -14,
+            "rangeScale": 0.6,
+            "heightM": 180
+          },
+          "calDirty": true,
+          "groundResolveCount": 0,
+          "groundMeshSampleRequestCount": 0,
+          "groundPriorM": 121.50911480526301,
+          "intrinsics": {
+            "fovDeg": 42,
+            "principalPoint": [
+              0.5,
+              0.5
+            ]
+          },
+          "extrinsics": {
+            "headingDeg": 84,
+            "pitchDeg": 10,
+            "rollDeg": 0,
+            "heightM": 190
+          },
+          "anchor": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "elevM": 150,
+            "targetLatLon": null
+          },
+          "calBadge": "raw-prior",
+          "poseSource": null,
+          "basePose": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "headingDeg": 84,
+            "pitchDeg": -24,
+            "fovDeg": 56,
+            "rangeM": 210,
+            "mountHeightM": 10
+          },
+          "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743100&heading=84&fov=42&pitch=10&ts=179327092",
+          "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551395"
+        },
+        "count": 8,
+        "at": {
+          "x": 730.4315888541091,
+          "y": 412.82031875510756
+        },
+        "ux": 0.2701408546228519,
+        "uy": -0.9628208133726832,
+        "stored": null,
+        "samples": [
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.7430573562227,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 4.1000000000000005,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.7430573562227,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743057&heading=84&fov=42&pitch=10&ts=179327092",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551395"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74301367235327,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 8.3,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74301367235327,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743014&heading=84&fov=42&pitch=10&ts=179327092",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551395"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74296894839172,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 12.600000000000001,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74296894839172,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742969&heading=84&fov=42&pitch=10&ts=179327092",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551395"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.7429221442459,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 17.1,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.7429221442459,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742922&heading=84&fov=42&pitch=10&ts=179327092",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551395"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74287534010008,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 21.6,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74287534010008,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742875&heading=84&fov=42&pitch=10&ts=179327092",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551395"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74282645577001,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 26.3,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74282645577001,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742826&heading=84&fov=42&pitch=10&ts=179327092",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551395"
+          }
+        ],
+        "after": {
+          "id": "w2-cctv-012",
+          "name": "Cámara pública — Congress",
+          "city": "Austin",
+          "provider": "W2 deterministic fixture",
+          "lat": 30.2672,
+          "lon": -97.74282645577001,
+          "headingDeg": 84,
+          "headingConfidence": "low",
+          "headingEstimated": true,
+          "pitchDeg": 10,
+          "fovDeg": 42,
+          "rangeM": 126,
+          "elevationM": 311.2857631556751,
+          "mountHeightM": 190,
+          "active": true,
+          "feedType": "image",
+          "isVideo": false,
+          "sourceKind": "image",
+          "sourceStatus": "online",
+          "sourceMessage": "",
+          "sourceLabel": "W2 deterministic fixture",
+          "credit": "",
+          "calibration": {
+            "offsetNorthM": 0,
+            "offsetEastM": 26.3,
+            "headingDeg": 0,
+            "pitchDeg": 34,
+            "fovDeg": -14,
+            "rangeScale": 0.6,
+            "heightM": 180
+          },
+          "calDirty": true,
+          "groundResolveCount": 1,
+          "groundMeshSampleRequestCount": 0,
+          "groundPriorM": 121.50911480526301,
+          "intrinsics": {
+            "fovDeg": 42,
+            "principalPoint": [
+              0.5,
+              0.5
+            ]
+          },
+          "extrinsics": {
+            "headingDeg": 84,
+            "pitchDeg": 10,
+            "rollDeg": 0,
+            "heightM": 190
+          },
+          "anchor": {
+            "lat": 30.2672,
+            "lon": -97.74282645577001,
+            "elevM": 150,
+            "targetLatLon": null
+          },
+          "calBadge": "raw-prior",
+          "poseSource": null,
+          "basePose": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "headingDeg": 84,
+            "pitchDeg": -24,
+            "fovDeg": 56,
+            "rangeM": 210,
+            "mountHeightM": 10
+          },
+          "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742826&heading=84&fov=42&pitch=10&ts=179327092",
+          "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551395"
+        }
+      }
+    },
+    "pixels-cesium-preview": {
+      "pass": true,
+      "checks": [
+        {
+          "name": "regional: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "regional: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "regional: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "city: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "city: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "city: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "close: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "close: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "close: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical click selects exact camera",
+          "actual": "w2-cctv-008",
+          "expected": "w2-cctv-008",
+          "pass": true
+        },
+        {
+          "name": "image plane has all four decoded quadrants with correct UV orientation",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "imageIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "visible image plane resolves to its camera",
+          "actual": "w2-cctv-012",
+          "expected": "w2-cctv-012",
+          "pass": true
+        },
+        {
+          "name": "all eight calibration handles are shown",
+          "actual": 8,
+          "expected": 8,
+          "pass": true
+        },
+        {
+          "name": "east handle owns an on-screen pick",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical east drag changes the live calibration",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "transient drag preserves the floor and does not sample it",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "drag release resolves the committed anchor once",
+          "actual": 1,
+          "expected": 1,
+          "pass": true
+        },
+        {
+          "name": "calibration remains unsaved after drag",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "real video decoder advances",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "video plane pixels actually advance on the globe",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "disable releases the real video source",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "afterVideoIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "ten toggles preserve the exact catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "toggleIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "no browser runtime errors",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        }
+      ],
+      "browserErrors": [],
+      "imagePixels": [
+        253,
+        249,
+        251,
+        251
+      ],
+      "videoChangedPixels": 527,
+      "idleFrames": {
+        "imageIdle": 0,
+        "afterVideoIdle": 0,
+        "toggleIdle": 0
+      },
+      "calibration": {
+        "before": {
+          "id": "w2-cctv-012",
+          "name": "Cámara pública — Congress",
+          "city": "Austin",
+          "provider": "W2 deterministic fixture",
+          "lat": 30.2672,
+          "lon": -97.7431,
+          "headingDeg": 84,
+          "headingConfidence": "low",
+          "headingEstimated": true,
+          "pitchDeg": 10,
+          "fovDeg": 42,
+          "rangeM": 126,
+          "elevationM": 311.2857631556751,
+          "mountHeightM": 190,
+          "active": true,
+          "feedType": "image",
+          "isVideo": false,
+          "sourceKind": "image",
+          "sourceStatus": "online",
+          "sourceMessage": "",
+          "sourceLabel": "W2 deterministic fixture",
+          "credit": "",
+          "calibration": {
+            "offsetNorthM": 0,
+            "offsetEastM": 0,
+            "headingDeg": 0,
+            "pitchDeg": 34,
+            "fovDeg": -14,
+            "rangeScale": 0.6,
+            "heightM": 180
+          },
+          "calDirty": true,
+          "groundResolveCount": 0,
+          "groundMeshSampleRequestCount": 0,
+          "groundPriorM": 121.50911480526301,
+          "intrinsics": {
+            "fovDeg": 42,
+            "principalPoint": [
+              0.5,
+              0.5
+            ]
+          },
+          "extrinsics": {
+            "headingDeg": 84,
+            "pitchDeg": 10,
+            "rollDeg": 0,
+            "heightM": 190
+          },
+          "anchor": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "elevM": 150,
+            "targetLatLon": null
+          },
+          "calBadge": "raw-prior",
+          "poseSource": null,
+          "basePose": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "headingDeg": 84,
+            "pitchDeg": -24,
+            "fovDeg": 56,
+            "rangeM": 210,
+            "mountHeightM": 10
+          },
+          "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743100&heading=84&fov=42&pitch=10&ts=179327104",
+          "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551402"
+        },
+        "count": 8,
+        "at": {
+          "x": 730.4315888602882,
+          "y": 412.8203187517508
+        },
+        "ux": 0.27014085463470305,
+        "uy": -0.9628208133693581,
+        "stored": null,
+        "samples": [
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.7430573562227,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 4.1000000000000005,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.7430573562227,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743057&heading=84&fov=42&pitch=10&ts=179327104",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551402"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74301367235327,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 8.3,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74301367235327,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743014&heading=84&fov=42&pitch=10&ts=179327104",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551402"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74296894839172,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 12.600000000000001,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74296894839172,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742969&heading=84&fov=42&pitch=10&ts=179327104",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551402"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.7429221442459,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 17.1,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.7429221442459,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742922&heading=84&fov=42&pitch=10&ts=179327104",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551402"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74287534010008,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 21.6,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74287534010008,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742875&heading=84&fov=42&pitch=10&ts=179327104",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551402"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74282645577001,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 26.3,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74282645577001,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742826&heading=84&fov=42&pitch=10&ts=179327104",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551402"
+          }
+        ],
+        "after": {
+          "id": "w2-cctv-012",
+          "name": "Cámara pública — Congress",
+          "city": "Austin",
+          "provider": "W2 deterministic fixture",
+          "lat": 30.2672,
+          "lon": -97.74282645577001,
+          "headingDeg": 84,
+          "headingConfidence": "low",
+          "headingEstimated": true,
+          "pitchDeg": 10,
+          "fovDeg": 42,
+          "rangeM": 126,
+          "elevationM": 311.2857631556751,
+          "mountHeightM": 190,
+          "active": true,
+          "feedType": "image",
+          "isVideo": false,
+          "sourceKind": "image",
+          "sourceStatus": "online",
+          "sourceMessage": "",
+          "sourceLabel": "W2 deterministic fixture",
+          "credit": "",
+          "calibration": {
+            "offsetNorthM": 0,
+            "offsetEastM": 26.3,
+            "headingDeg": 0,
+            "pitchDeg": 34,
+            "fovDeg": -14,
+            "rangeScale": 0.6,
+            "heightM": 180
+          },
+          "calDirty": true,
+          "groundResolveCount": 1,
+          "groundMeshSampleRequestCount": 0,
+          "groundPriorM": 121.50911480526301,
+          "intrinsics": {
+            "fovDeg": 42,
+            "principalPoint": [
+              0.5,
+              0.5
+            ]
+          },
+          "extrinsics": {
+            "headingDeg": 84,
+            "pitchDeg": 10,
+            "rollDeg": 0,
+            "heightM": 190
+          },
+          "anchor": {
+            "lat": 30.2672,
+            "lon": -97.74282645577001,
+            "elevM": 150,
+            "targetLatLon": null
+          },
+          "calBadge": "raw-prior",
+          "poseSource": null,
+          "basePose": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "headingDeg": 84,
+            "pitchDeg": -24,
+            "fovDeg": 56,
+            "rangeM": 210,
+            "mountHeightM": 10
+          },
+          "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742826&heading=84&fov=42&pitch=10&ts=179327104",
+          "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551402"
+        }
+      }
+    },
+    "pixels-navara-preview": {
+      "pass": true,
+      "checks": [
+        {
+          "name": "regional: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "regional: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "regional: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "city: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "city: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "city: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "close: exact fixture catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "close: five actual GPU marker picks",
+          "actual": 5,
+          "expected": 5,
+          "pass": true
+        },
+        {
+          "name": "close: five positive marker rasters",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical click selects exact camera",
+          "actual": "w2-cctv-008",
+          "expected": "w2-cctv-008",
+          "pass": true
+        },
+        {
+          "name": "image plane has all four decoded quadrants with correct UV orientation",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "imageIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "visible image plane resolves to its camera",
+          "actual": "w2-cctv-012",
+          "expected": "w2-cctv-012",
+          "pass": true
+        },
+        {
+          "name": "all eight calibration handles are shown",
+          "actual": 8,
+          "expected": 8,
+          "pass": true
+        },
+        {
+          "name": "east handle owns an on-screen pick",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "physical east drag changes the live calibration",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "transient drag preserves the floor and does not sample it",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "drag release resolves the committed anchor once",
+          "actual": 1,
+          "expected": 1,
+          "pass": true
+        },
+        {
+          "name": "calibration remains unsaved after drag",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "real video decoder advances",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "video plane pixels actually advance on the globe",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "disable releases the real video source",
+          "actual": true,
+          "expected": true,
+          "pass": true
+        },
+        {
+          "name": "afterVideoIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "ten toggles preserve the exact catalog",
+          "actual": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "expected": [
+            "w2-cctv-000",
+            "w2-cctv-001",
+            "w2-cctv-002",
+            "w2-cctv-003",
+            "w2-cctv-004",
+            "w2-cctv-005",
+            "w2-cctv-006",
+            "w2-cctv-007",
+            "w2-cctv-008",
+            "w2-cctv-009",
+            "w2-cctv-010",
+            "w2-cctv-011",
+            "w2-cctv-012",
+            "w2-cctv-013",
+            "w2-cctv-014",
+            "w2-cctv-015",
+            "w2-cctv-016",
+            "w2-cctv-017",
+            "w2-cctv-018",
+            "w2-cctv-019",
+            "w2-cctv-020",
+            "w2-cctv-021",
+            "w2-cctv-022",
+            "w2-cctv-023",
+            "w2-cctv-024",
+            "w2-cctv-video"
+          ],
+          "pass": true
+        },
+        {
+          "name": "toggleIdle: zero frames over 22s",
+          "actual": 0,
+          "expected": 0,
+          "pass": true
+        },
+        {
+          "name": "no browser runtime errors",
+          "actual": [],
+          "expected": [],
+          "pass": true
+        }
+      ],
+      "browserErrors": [],
+      "imagePixels": [
+        256,
+        229,
+        257,
+        221
+      ],
+      "videoChangedPixels": 1344,
+      "idleFrames": {
+        "imageIdle": 0,
+        "afterVideoIdle": 0,
+        "toggleIdle": 0
+      },
+      "calibration": {
+        "before": {
+          "id": "w2-cctv-012",
+          "name": "Cámara pública — Congress",
+          "city": "Austin",
+          "provider": "W2 deterministic fixture",
+          "lat": 30.2672,
+          "lon": -97.7431,
+          "headingDeg": 84,
+          "headingConfidence": "low",
+          "headingEstimated": true,
+          "pitchDeg": 10,
+          "fovDeg": 42,
+          "rangeM": 126,
+          "elevationM": 311.2857631556751,
+          "mountHeightM": 190,
+          "active": true,
+          "feedType": "image",
+          "isVideo": false,
+          "sourceKind": "image",
+          "sourceStatus": "online",
+          "sourceMessage": "",
+          "sourceLabel": "W2 deterministic fixture",
+          "credit": "",
+          "calibration": {
+            "offsetNorthM": 0,
+            "offsetEastM": 0,
+            "headingDeg": 0,
+            "pitchDeg": 34,
+            "fovDeg": -14,
+            "rangeScale": 0.6,
+            "heightM": 180
+          },
+          "calDirty": true,
+          "groundResolveCount": 0,
+          "groundMeshSampleRequestCount": 0,
+          "groundPriorM": 121.50911480526301,
+          "intrinsics": {
+            "fovDeg": 42,
+            "principalPoint": [
+              0.5,
+              0.5
+            ]
+          },
+          "extrinsics": {
+            "headingDeg": 84,
+            "pitchDeg": 10,
+            "rollDeg": 0,
+            "heightM": 190
+          },
+          "anchor": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "elevM": 150,
+            "targetLatLon": null
+          },
+          "calBadge": "raw-prior",
+          "poseSource": null,
+          "basePose": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "headingDeg": 84,
+            "pitchDeg": -24,
+            "fovDeg": 56,
+            "rangeM": 210,
+            "mountHeightM": 10
+          },
+          "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743100&heading=84&fov=42&pitch=10&ts=179327116",
+          "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551410"
+        },
+        "count": 8,
+        "at": {
+          "x": 730.4315888541091,
+          "y": 412.82031875510756
+        },
+        "ux": 0.2701408546228519,
+        "uy": -0.9628208133726832,
+        "stored": null,
+        "samples": [
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.7430573562227,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 4.1000000000000005,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.7430573562227,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743057&heading=84&fov=42&pitch=10&ts=179327116",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551410"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74301367235327,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 8.3,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74301367235327,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.743014&heading=84&fov=42&pitch=10&ts=179327116",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551410"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74296894839172,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 12.600000000000001,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74296894839172,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742969&heading=84&fov=42&pitch=10&ts=179327116",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551410"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.7429221442459,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 17.1,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.7429221442459,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742922&heading=84&fov=42&pitch=10&ts=179327116",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551410"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74287534010008,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 21.6,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74287534010008,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742875&heading=84&fov=42&pitch=10&ts=179327116",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551410"
+          },
+          {
+            "id": "w2-cctv-012",
+            "name": "Cámara pública — Congress",
+            "city": "Austin",
+            "provider": "W2 deterministic fixture",
+            "lat": 30.2672,
+            "lon": -97.74282645577001,
+            "headingDeg": 84,
+            "headingConfidence": "low",
+            "headingEstimated": true,
+            "pitchDeg": 10,
+            "fovDeg": 42,
+            "rangeM": 126,
+            "elevationM": 311.2857631556751,
+            "mountHeightM": 190,
+            "active": true,
+            "feedType": "image",
+            "isVideo": false,
+            "sourceKind": "image",
+            "sourceStatus": "online",
+            "sourceMessage": "",
+            "sourceLabel": "W2 deterministic fixture",
+            "credit": "",
+            "calibration": {
+              "offsetNorthM": 0,
+              "offsetEastM": 26.3,
+              "headingDeg": 0,
+              "pitchDeg": 34,
+              "fovDeg": -14,
+              "rangeScale": 0.6,
+              "heightM": 180
+            },
+            "calDirty": true,
+            "groundResolveCount": 0,
+            "groundMeshSampleRequestCount": 0,
+            "groundPriorM": 121.50911480526301,
+            "intrinsics": {
+              "fovDeg": 42,
+              "principalPoint": [
+                0.5,
+                0.5
+              ]
+            },
+            "extrinsics": {
+              "headingDeg": 84,
+              "pitchDeg": 10,
+              "rollDeg": 0,
+              "heightM": 190
+            },
+            "anchor": {
+              "lat": 30.2672,
+              "lon": -97.74282645577001,
+              "elevM": 150,
+              "targetLatLon": null
+            },
+            "calBadge": "raw-prior",
+            "poseSource": null,
+            "basePose": {
+              "lat": 30.2672,
+              "lon": -97.7431,
+              "headingDeg": 84,
+              "pitchDeg": -24,
+              "fovDeg": 56,
+              "rangeM": 210,
+              "mountHeightM": 10
+            },
+            "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742826&heading=84&fov=42&pitch=10&ts=179327116",
+            "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551410"
+          }
+        ],
+        "after": {
+          "id": "w2-cctv-012",
+          "name": "Cámara pública — Congress",
+          "city": "Austin",
+          "provider": "W2 deterministic fixture",
+          "lat": 30.2672,
+          "lon": -97.74282645577001,
+          "headingDeg": 84,
+          "headingConfidence": "low",
+          "headingEstimated": true,
+          "pitchDeg": 10,
+          "fovDeg": 42,
+          "rangeM": 126,
+          "elevationM": 311.2857631556751,
+          "mountHeightM": 190,
+          "active": true,
+          "feedType": "image",
+          "isVideo": false,
+          "sourceKind": "image",
+          "sourceStatus": "online",
+          "sourceMessage": "",
+          "sourceLabel": "W2 deterministic fixture",
+          "credit": "",
+          "calibration": {
+            "offsetNorthM": 0,
+            "offsetEastM": 26.3,
+            "headingDeg": 0,
+            "pitchDeg": 34,
+            "fovDeg": -14,
+            "rangeScale": 0.6,
+            "heightM": 180
+          },
+          "calDirty": true,
+          "groundResolveCount": 1,
+          "groundMeshSampleRequestCount": 0,
+          "groundPriorM": 121.50911480526301,
+          "intrinsics": {
+            "fovDeg": 42,
+            "principalPoint": [
+              0.5,
+              0.5
+            ]
+          },
+          "extrinsics": {
+            "headingDeg": 84,
+            "pitchDeg": 10,
+            "rollDeg": 0,
+            "heightM": 190
+          },
+          "anchor": {
+            "lat": 30.2672,
+            "lon": -97.74282645577001,
+            "elevM": 150,
+            "targetLatLon": null
+          },
+          "calBadge": "raw-prior",
+          "poseSource": null,
+          "basePose": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "headingDeg": 84,
+            "pitchDeg": -24,
+            "fovDeg": 56,
+            "rangeM": 210,
+            "mountHeightM": 10
+          },
+          "frameUrl": "/api/cctv/frame/w2-cctv-012?label=C%C3%A1mara+p%C3%BAblica+%E2%80%94+Congress&city=Austin&lat=30.267200&lon=-97.742826&heading=84&fov=42&pitch=10&ts=179327116",
+          "mediaUrl": "/api/cctv/media/w2-cctv-012?ts=119551410"
+        }
+      }
+    }
+  },
+  "parity": {
+    "dev": {
+      "catalogsEqual": true,
+      "imageGeometryEqual": true,
+      "poses": {
+        "regional": {
+          "sameControlIds": true,
+          "maximumProjectionDeltaPx": 1.4117369489628803e-10,
+          "positiveNativePixels": [
+            52,
+            55,
+            49,
+            71,
+            54
+          ],
+          "positiveNavaraPixels": [
+            61,
+            62,
+            63,
+            70,
+            71
+          ]
+        },
+        "city": {
+          "sameControlIds": true,
+          "maximumProjectionDeltaPx": 2.7967341033075863e-10,
+          "positiveNativePixels": [
+            49,
+            41,
+            51,
+            67,
+            56
+          ],
+          "positiveNavaraPixels": [
+            63,
+            63,
+            73,
+            73,
+            64
+          ]
+        },
+        "close": {
+          "sameControlIds": true,
+          "maximumProjectionDeltaPx": 7.81281764506762e-10,
+          "positiveNativePixels": [
+            61,
+            56,
+            49,
+            60,
+            36
+          ],
+          "positiveNavaraPixels": [
+            83,
+            61,
+            71,
+            72,
+            62
+          ]
+        }
+      }
+    },
+    "preview": {
+      "catalogsEqual": true,
+      "imageGeometryEqual": true,
+      "poses": {
+        "regional": {
+          "sameControlIds": true,
+          "maximumProjectionDeltaPx": 1.4117369489628803e-10,
+          "positiveNativePixels": [
+            52,
+            55,
+            49,
+            71,
+            54
+          ],
+          "positiveNavaraPixels": [
+            61,
+            62,
+            63,
+            70,
+            71
+          ]
+        },
+        "city": {
+          "sameControlIds": true,
+          "maximumProjectionDeltaPx": 2.7967341033075863e-10,
+          "positiveNativePixels": [
+            49,
+            41,
+            51,
+            67,
+            56
+          ],
+          "positiveNavaraPixels": [
+            63,
+            63,
+            73,
+            73,
+            64
+          ]
+        },
+        "close": {
+          "sameControlIds": true,
+          "maximumProjectionDeltaPx": 7.81281764506762e-10,
+          "positiveNativePixels": [
+            61,
+            56,
+            49,
+            60,
+            36
+          ],
+          "positiveNavaraPixels": [
+            83,
+            61,
+            71,
+            72,
+            62
+          ]
+        }
+      }
+    }
+  },
+  "gates": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 90.9
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 11.2
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 10.2
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 8.9
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 10.1
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 8.5
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.3
+    }
+  ],
+  "browserGates": [
+    {
+      "gate": "pixels-cesium-dev",
+      "code": 0,
+      "seconds": 120.9,
+      "keyless": true
+    },
+    {
+      "gate": "pixels-navara-dev",
+      "code": 0,
+      "seconds": 120.2,
+      "keyless": true
+    },
+    {
+      "gate": "pixels-cesium-preview",
+      "code": 0,
+      "seconds": 117.6,
+      "keyless": true
+    },
+    {
+      "gate": "pixels-navara-preview",
+      "code": 0,
+      "seconds": 118.5,
+      "keyless": true
+    },
+    {
+      "gate": "legacy-native-preview",
+      "code": 1,
+      "seconds": 113.1,
+      "keyless": true
+    },
+    {
+      "gate": "contract-cesium",
+      "code": 1,
+      "seconds": 26.1,
+      "keyless": true
+    },
+    {
+      "gate": "contract-navara",
+      "code": 1,
+      "seconds": 54.2,
+      "keyless": true
+    },
+    {
+      "gate": "shell-production",
+      "code": 1,
+      "seconds": 179.0,
+      "keyless": true
+    }
+  ],
+  "correctedKeylessGates": [
+    {
+      "gate": "legacy-native-preview",
+      "code": 0,
+      "seconds": 82.0,
+      "keyless": true
+    },
+    {
+      "gate": "contract-cesium",
+      "code": 0,
+      "seconds": 27.6,
+      "keyless": true
+    },
+    {
+      "gate": "contract-navara",
+      "code": 0,
+      "seconds": 52.0,
+      "keyless": true
+    }
+  ],
+  "review": [
+    "Corrected flattened engine sphere-flight options; old nested offset left the media plane off-screen.",
+    "Fixed absent-hold release waking Navara every second; static-image/after-video/after-toggle idle is zero over22s.",
+    "Copied marker positions to prevent in-place source mutation hiding GPU updates.",
+    "Rolled back arrow shafts when tip allocation fails; rejected duplicate/retired handles before allocation.",
+    "Disposed failed mesh geometry exactly once.",
+    "Exact foreground triangle hits supersede a GPU model behind them without overriding always-on-top siblings.",
+    "Native depth-fail contract explicitly enables terrain occlusion only inside its QA scope and restores the prior flag.",
+    "Paid map contract is opt-in; its exclusion is NOT RUN, never a pass. Strict console errors now affect the verdict."
+  ],
+  "limits": [
+    "Native production shell still fails one idle frame/2s and cross-engine terrain delta5.09m vs2m; unchanged gates.",
+    "Navara viewshed browser pixel/identity coverage remains for combined W2 closure; mesh geometry/disposal unit tests pass.",
+    "Plane geometry/identity and positive rendered media are proved; whole-frame/postprocessing colour equality is not claimed.",
+    "No paid Google3D map acceptance or performance measurements.",
+    "FIRMS uncapped close, ALPR moving preview and whole-W2 performance gates remain open; transit/recent imagery are not ported yet."
+  ],
+  "failedAttempts": {
+    "first": "/private/tmp/gev-cctv-navara-first.json",
+    "diagnostic": "/private/tmp/gev-cctv-navara-diagnostic.json",
+    "opaque-diagnostic": "/private/tmp/gev-cctv-navara-opaque-diagnostic.json",
+    "legacyWrongMode": "First final-series legacy invocation omitted --terrain-globe; expected a mesh-floor sample in a keyless globe. Corrected invocation57/57."
+  },
+  "sourceHashes": {
+    "scripts/format-scope.json": "dd476eb4c6e606edfb92748924b6ea90de2cfa5e9c4e742a1515e1815df96233",
+    "scripts/package-boundaries.json": "e64f6c469be50190f5f0b53e334b95bc402f56403fbc75dca387c438033229e1",
+    "scripts/qa-globe-contract.mjs": "95e51a9eb7908ee6442a16a2f65a6e8dbce7d86fdb5ef0ff1befacc45838ff44",
+    "scripts/qa-w2-cctv.mjs": "881854e4db1a5290df52be639f910129af8c4c474100ce3233313ffa58478b5e",
+    "src/app/layers/cctv.js": "77f4dba066840ade9b59853f36d9d857559de64e8a90029479321f61e046afa8",
+    "src/app/navaraLayers.test.mjs": "e84506611d2002a4d1b9aa1602915150369fa9ea925e02bc3494fe0de2a55d67",
+    "src/app/navaraMode.js": "9542ec9fafaf1fe8413df62368158f0b4379f416101b3cc8726781d1e152fc45",
+    "src/globe/cesium/lines.js": "0eb8ca65331f5e781044364faddbe7d76aa328d3fe9a04cbbcb627ce952f1d83",
+    "src/globe/cesium/lines.test.mjs": "5d1f6273a3443af754d90ec8c0afff1e0b2b934e30923c69ddd6df46ba254e38",
+    "src/globe/cpuPicks.js": "708ca56a65ceaea0321abc5afbb1acefee6c1380ae7e438cb48c46fbe689cd92",
+    "src/globe/lines.js": "c2d03377bf135b4b4d41b2cde595acdd0b184eeb1f4492e3cd4d4c5dbbbb49b8",
+    "src/globe/navara/createNavaraEngine.js": "3ef81db31a1a2928aa46bd012280ca82d290bb2efb1e222737aaac979c3d0206",
+    "src/globe/navara/lines/lineMesh.js": "760737f8ed76dde3ba2f12efa70658f1942ec4adef5f23828a0bcda36a364735",
+    "src/globe/navara/picking.js": "c8fafee238087e9f173d98c8941ff1a4d0fb916c11957cd88aa2b67a6e12cfba",
+    "src/globe/navara/picking.test.mjs": "ca9c3ba05c96e8ceffb67940e73699049f9bad8dc52697865571cabe629dbc70",
+    "src/renderGovernor.js": "75b2cf4682b9aa2d05a5ca86c6301d6e510f027310e2e868103dcc117ae78e1e",
+    "src/renderGovernor.test.mjs": "3ce7d16b98e6c7817ec4d315424bd18d5e9d22c4c3a98939a08651a60769e686",
+    "src/layers/cctv/render/navara.js": "af5cc4bd1dc9b45ba5a76a7832da5e816402532fbc4e43636feaf9a032f5d7af",
+    "src/layers/cctv/render/navara.test.mjs": "ee2cf9b61ba16bddfee41337d261f3eb3b41a20712bc6b654e35369d53c39949",
+    "src/layers/cctv/render/navaraGizmo.js": "601ea6c9804c96cdc02dc2272c76aedb100a0ab2355823740e32c4a44db63941",
+    "src/layers/cctv/render/navaraGizmo.test.mjs": "8b90cc508021ec0b6090771888a38d9851f03ab96fe7f80d653608c0556dc25b",
+    "src/layers/cctv/render/navaraLine.js": "fba4e4968fc58de61d422cf52ea2ba7bfac6cf7b4531afdfc7fcc85454de1ce2",
+    "src/layers/cctv/render/navaraMeshes.js": "a4d41b913a7fde4e7f718cdc460e7c91459ef96b85ea3e324c519308bcb6f18e",
+    "src/layers/cctv/render/navaraMeshes.test.mjs": "66fc34be51ef4dfb8203b3c9b7e4e84759eb7a9c7561904b8207841de97a2286"
+  },
+  "captureSourceHashes": "/private/tmp/gev-cctv-navara-final/source-hashes.json",
+  "unit": {
+    "total": 7325,
+    "passed": 7324,
+    "skipped": 1,
+    "allocationPassed": 15
+  },
+  "formatFiles": 1647
+}

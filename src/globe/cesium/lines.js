@@ -62,6 +62,11 @@ const toColor = ([r, g, b, a], alphaScale = 1) =>
 
 /** The Cesium material type and uniforms of a line (pure, for tests). */
 export function materialSpec(options, color, alphaScale = 1) {
+  if (options.arrow)
+    return {
+      type: 'PolylineArrow',
+      uniforms: { color: toColor(color, alphaScale) },
+    };
   const { dash } = options;
   if (dash?.kind === 'pixels')
     return {

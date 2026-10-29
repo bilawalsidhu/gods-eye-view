@@ -37,7 +37,14 @@ export function createNavaraPicking({
   timeoutMs = CLICK_TIMEOUT_MS,
   now = () => performance.now(),
 }) {
-  const drillPick = createCpuPicker({ projector, camera, movers, lines });
+  const meshPickers = new Set();
+  const drillPick = createCpuPicker({
+    projector,
+    camera,
+    movers,
+    lines,
+    meshes: (at) => [...meshPickers].flatMap((pick) => pick(at)),
+  });
   const isModelSet = (id) =>
     movers().some(
       ({ options }) => options.id === id && options.kind === 'model',
@@ -75,7 +82,7 @@ export function createNavaraPicking({
         !drillPick.near(hit.set, hit.instance, at, 1) ||
         (top !== undefined &&
           !(top.owner === hit.set && top.instance === hit.instance) &&
-          !isModelSet(hit.set));
+          (!isModelSet(hit.set) || top.instance === undefined));
       if (stale) {
         stats.stale++;
         return drillPick(at, 1)[0];
@@ -102,6 +109,10 @@ export function createNavaraPicking({
   view.on('featureClick', onFeatureClick);
 
   return {
+    registerMeshPicker(pick) {
+      meshPickers.add(pick);
+      return () => meshPickers.delete(pick);
+    },
     pick: (at) => drillPick(at, 1)[0],
     drillPick: (at, limit) => drillPick(at, limit ?? Infinity),
     /** The answer for a click at `at`: the GPU pick of its gesture. */
@@ -132,6 +143,7 @@ export function createNavaraPicking({
     /** How clicks were answered: GPU picks, timeouts, recent latencies (ms). */
     clickStats: () => ({ ...stats, latencies: [...stats.latencies] }),
     destroy() {
+      meshPickers.clear();
       view.off('featureClick', onFeatureClick);
       for (const entry of waiting.splice(0)) {
         cancel(entry.timer);

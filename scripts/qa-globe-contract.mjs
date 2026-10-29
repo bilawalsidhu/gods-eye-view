@@ -22,6 +22,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { installTileCache } from './qa/tileCache.mjs';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import puppeteer from 'puppeteer';
 
 const repoRoot = path.resolve(
@@ -49,6 +50,7 @@ const ENGINES = {
 };
 const engineName = argument('engine') ?? 'cesium';
 const DPR = Number(argument('dpr') ?? 1);
+const allowPaidMaps = process.argv.includes('--allow-paid-maps');
 const engineSpec = ENGINES[engineName];
 if (!engineSpec) {
   console.error(
@@ -57,7 +59,12 @@ if (!engineSpec) {
   process.exit(2);
 }
 const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
-const RESERVED_PORTS = new Set([4185, 4186, 4187, 4188, 4189]);
+const RESERVED_PORTS = new Set([4173, 4185, 4186, 4187, 4188, 4189, 4194]);
+if (
+  argument('base-url') &&
+  RESERVED_PORTS.has(Number(new URL(argument('base-url')).port))
+)
+  throw new Error('Contract QA may not use a reserved port');
 
 const redact = (text) =>
   String(text)
@@ -107,7 +114,13 @@ async function startServer() {
       '--host',
       'localhost',
     ],
-    { cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe'] },
+    {
+      cwd: repoRoot,
+      stdio: ['ignore', 'ignore', 'pipe'],
+      env: allowPaidMaps
+        ? process.env
+        : { ...process.env, GOOGLE_MAPS_API_KEY: '', CESIUM_ION_TOKEN: '' },
+    },
   );
   let stderr = '';
   child.stderr.on('data', (chunk) => {
@@ -346,15 +359,27 @@ async function runCesium(page, url) {
           );
         },
       };
-      const results = (
-        await runContractSuite(engine, {
+      // This suite deliberately puts a line underground to test depth failure.
+      // The keyless application's default globe does not occlude primitives.
+      const priorDepthTest = scene.globe.depthTestAgainstTerrain;
+      scene.globe.depthTestAgainstTerrain = true;
+      let contractResults;
+      try {
+        contractResults = await runContractSuite(engine, {
           waitFrames,
           mapSources,
           readRegion,
           makeCanvas,
           pointer,
-        })
-      ).map(({ name, ok, error }) => ({ name, ok, error: error?.message }));
+        });
+      } finally {
+        scene.globe.depthTestAgainstTerrain = priorDepthTest;
+      }
+      const results = contractResults.map(({ name, ok, error }) => ({
+        name,
+        ok,
+        error: error?.message,
+      }));
       // Reapplying the active stack sends its sources to the engine again.
       if (debug.mapStackController)
         await debug.mapStackController.setStack(
@@ -623,7 +648,11 @@ async function runNavara(page, url, consoleErrors) {
   const failure = await page.evaluate(() => window.__globeQa.error);
   if (failure) throw new Error(`the Navara globe did not start: ${failure}`);
 
+  await page.evaluate((value) => {
+    window.__qaAllowPaidMaps = value;
+  }, allowPaidMaps);
   const report = await page.evaluate(async () => {
+    const allowPaidMaps = window.__qaAllowPaidMaps === true;
     const qa = window.__globeQa;
     const { engine, view } = qa;
     const { runContractSuite } =
@@ -659,12 +688,13 @@ async function runNavara(page, url, consoleErrors) {
     // on keyless terrain, as the app's globe stacks show.
     await engine.maps.setBaseImagery({ kind: 'osm' });
     await engine.maps.setTerrain({ kind: 'keyless' });
-    const mapSources = qa.googleApiKey
-      ? {
-          imagery: [{ kind: 'osm' }, { kind: 'esri-imagery' }],
-          photoreal: { kind: 'photoreal', googleApiKey: qa.googleApiKey },
-        }
-      : null;
+    const mapSources =
+      allowPaidMaps && qa.googleApiKey
+        ? {
+            imagery: [{ kind: 'osm' }, { kind: 'esri-imagery' }],
+            photoreal: { kind: 'photoreal', googleApiKey: qa.googleApiKey },
+          }
+        : null;
 
     // RGBA of the last drawn frame in a CSS-pixel box (both engines keep
     // their drawing buffer), and 2D canvases for sprite atlases.
@@ -1411,7 +1441,9 @@ async function runNavara(page, url, consoleErrors) {
       },
     );
 
-    await check(
+    const skipped = [];
+    const paidCheck = allowPaidMaps ? check : (name) => skipped.push(name);
+    await paidCheck(
       'navara: maps — OSM, keyless terrain under Google 3D tiles, credits on screen; surface height at JFK (S2)',
       async () => {
         ensure(qa.googleApiKey, 'the dev server has no Google browser key');
@@ -1512,7 +1544,7 @@ async function runNavara(page, url, consoleErrors) {
         );
       },
     );
-    return { results, extra, dashes: globalThis.__qaDashes ?? null };
+    return { results, extra, skipped, dashes: globalThis.__qaDashes ?? null };
   });
   const clickLatency = await page.evaluate(
     () => window.__qaClickLatency ?? null,
@@ -1643,6 +1675,7 @@ try {
     defaultViewport: { width: 1280, height: 800, deviceScaleFactor: DPR },
   });
   const page = await browser.newPage();
+  await blockPaidQaMaps(page, { allowPaidMaps });
   // OSM and keyless terrain tiles from a shared disk cache, with backoff on
   // 429 (qa/tileCache.mjs).
   const tiles = await installTileCache(page);
@@ -1655,7 +1688,11 @@ try {
     rateLimited.set(host, (rateLimited.get(host) ?? 0) + 1);
   });
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(redact(message.text()));
+    if (message.type() === 'error') {
+      const location = message.location()?.url;
+      const resource = location ? new URL(location).pathname : '(unknown)';
+      consoleErrors.push(redact(`${message.text()} — ${resource}`));
+    }
   });
   page.on('pageerror', (error) => consoleErrors.push(redact(error.message)));
 
@@ -1670,6 +1707,8 @@ try {
       `[qa-globe-contract] 16/16 px dashes at DPR ${DPR}: ${JSON.stringify(report.dashes)}`,
     );
   const all = [...report.results, ...report.extra];
+  for (const name of report.skipped ?? [])
+    console.log(`  [NOT RUN: paid maps disabled] ${name}`);
   for (const { name, ok, error } of all)
     console.log(
       `  [${ok ? 'PASS' : 'FAIL'}] ${name}${ok ? '' : ` — ${error}`}`,
@@ -1693,7 +1732,7 @@ try {
     for (const text of consoleErrors.slice(0, 20))
       console.log(`  ${text.slice(0, 300)}`);
   }
-  exitCode = failed.length ? 1 : 0;
+  exitCode = failed.length || consoleErrors.length ? 1 : 0;
 } catch (error) {
   console.error(`[qa-globe-contract] ${redact(error?.stack || error)}`);
   exitCode = 1;

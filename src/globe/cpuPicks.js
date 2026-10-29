@@ -107,7 +107,13 @@ function transformed(matrix, flat, index, result) {
  * @returns {(at: { x: number, y: number }, limit?: number, options?: { includeMovers?: boolean }) => object[]}
  *   Pick results ({ id, owner, instance? }) under a window position, nearest first.
  */
-export function createCpuPicker({ projector, camera, movers, lines }) {
+export function createCpuPicker({
+  projector,
+  camera,
+  movers,
+  lines,
+  meshes = () => [],
+}) {
   const depthOf = (position) =>
     geo.cartesian3.distance(position, camera.livePosition);
 
@@ -181,11 +187,12 @@ export function createCpuPicker({ projector, camera, movers, lines }) {
   const drill = (
     at,
     limit = Infinity,
-    { includeMovers = true, includeLines = true } = {},
+    { includeMovers = true, includeLines = true, includeMeshes = true } = {},
   ) => {
     const hits = [];
     if (includeMovers) moverHits(at, hits);
     if (includeLines) lineHits(at, hits);
+    if (includeMeshes) hits.push(...meshes(at));
     hits.sort(
       (a, b) => b.onTop - a.onTop || b.order - a.order || a.depth - b.depth,
     );

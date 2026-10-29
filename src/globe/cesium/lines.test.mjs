@@ -143,3 +143,23 @@ test('a pick of a line primitive names the line', () => {
   });
   assert.equal(identify({ primitive: {}, id: 'o' }), null);
 });
+
+test('arrow lines retain the native arrow material in both depth passes', () => {
+  const { factories, made } = fakePrimitives();
+  const { lines, destroy } = createCesiumLines(createFakeViewer(), {
+    factories,
+  });
+  lines
+    .createLine({
+      id: 'arrow',
+      widthPx: 8,
+      color: [1, 0, 0, 1],
+      arrow: true,
+      depthFailAlpha: 0.45,
+    })
+    .setPositions(points);
+  assert.equal(made[0].appearance.material.type, 'PolylineArrow');
+  assert.equal(made[0].depthFailAppearance.material.type, 'PolylineArrow');
+  assert.equal(made[0].depthFailAppearance.material.uniforms.color.alpha, 0.45);
+  destroy();
+});

@@ -380,6 +380,138 @@ try {
     report.imagePlane.pixels.every((n) => n > 10),
   );
   await idle('imageIdle');
+  check(
+    'visible image plane resolves to its camera',
+    await page.evaluate((at) => {
+      const app = window.__godsEyeView;
+      const layer = app.dataManager.layers.get('cctv').module;
+      return layer._extractPickedCameraIdForTest(app.engine.picker.pick(at));
+    }, report.imagePlane.projection.quadrants[0]),
+    'w2-cctv-012',
+  );
+  await params({ calibrationMode: true });
+  await frames();
+  report.calibration = await page.evaluate(async () => {
+    const app = window.__godsEyeView;
+    const camera = app.dataManager.layers
+      .get('cctv')
+      .module.getUIState().activeCamera;
+    const geo = await import('/src/geo/index.js');
+    const mount = geo.cartesian3.fromDegrees(
+      camera.lon,
+      camera.lat,
+      camera.elevationM,
+    );
+    const enu = geo.transforms.eastNorthUpToFixedFrame(mount);
+    const length = Math.min(40, Math.max(6, camera.rangeM * 0.12)) * 1.6;
+    const end = {
+      x: mount.x + enu[0] * length,
+      y: mount.y + enu[1] * length,
+      z: mount.z + enu[2] * length,
+    };
+    const a = app.engine.projector.worldToWindow(mount);
+    const b = app.engine.projector.worldToWindow(end);
+    const id = 'cctv-gizmo-move-east';
+    const picks = [1, 0.8, 0.6, 0.4].map((t) => ({
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+    }));
+    const at = picks.find((p) => {
+      const hit = app.engine.picker.pick(p);
+      return (typeof hit?.id === 'string' ? hit.id : hit?.id?.id) === id;
+    });
+    const count = app.viewer
+      ? [
+          'ring-heading',
+          'ring-pitch',
+          'move-east',
+          'move-north',
+          'move-up',
+          'handle-range',
+          'handle-fov-l',
+          'handle-fov-r',
+        ].filter(
+          (part) => app.viewer.entities.getById(`cctv-gizmo-${part}`)?.show,
+        ).length
+      : new Set(
+          [
+            ...app.engine.lines.list().filter((line) => line.shown),
+            ...app.engine.movers.list().filter((set) => set.count > 0),
+          ]
+            .filter((entry) => entry.id.startsWith('cctv-gizmo-'))
+            .map((entry) => entry.id),
+        ).size;
+    const pixels = Math.hypot(b.x - a.x, b.y - a.y);
+    return {
+      before: camera,
+      count,
+      at,
+      ux: (b.x - a.x) / pixels,
+      uy: (b.y - a.y) / pixels,
+      stored: localStorage.getItem('godsEyeView.cctv.calibration.v2'),
+    };
+  });
+  check('all eight calibration handles are shown', report.calibration.count, 8);
+  await page.screenshot({ path: path.join(shots, 'calibration.png') });
+  check('east handle owns an on-screen pick', Boolean(report.calibration.at));
+  if (!report.calibration.at)
+    throw new Error('No owned east calibration handle');
+  const drag = report.calibration;
+  await page.mouse.move(drag.at.x, drag.at.y);
+  await page.mouse.down();
+  drag.samples = [];
+  for (let i = 1; i <= 6; i++) {
+    await page.mouse.move(
+      drag.at.x + drag.ux * i * 6,
+      drag.at.y + drag.uy * i * 6,
+    );
+    await sleep(40);
+    drag.samples.push(
+      await page.evaluate(
+        () =>
+          window.__godsEyeView.dataManager.layers
+            .get('cctv')
+            .module.getUIState().activeCamera,
+      ),
+    );
+  }
+  await page.mouse.up();
+  await frames();
+  drag.after = await page.evaluate(
+    () =>
+      window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
+        .activeCamera,
+  );
+  check(
+    'physical east drag changes the live calibration',
+    Math.abs(
+      drag.after.calibration.offsetEastM - drag.before.calibration.offsetEastM,
+    ) > 0.5,
+  );
+  check(
+    'transient drag preserves the floor and does not sample it',
+    drag.samples.every(
+      (sample) =>
+        sample.elevationM === drag.before.elevationM &&
+        sample.groundMeshSampleRequestCount ===
+          drag.before.groundMeshSampleRequestCount,
+    ),
+  );
+  check(
+    'drag release resolves the committed anchor once',
+    drag.after.groundResolveCount,
+    drag.before.groundResolveCount + 1,
+  );
+  check(
+    'calibration remains unsaved after drag',
+    drag.after.calDirty &&
+      (await page.evaluate(
+        (stored) =>
+          localStorage.getItem('godsEyeView.cctv.calibration.v2') === stored,
+        drag.stored,
+      )),
+  );
+  await params({ calibrationMode: false });
   report.videoPlane = await mediaPose('w2-cctv-video');
   await page.waitForFunction(
     () => {
