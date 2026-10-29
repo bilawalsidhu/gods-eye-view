@@ -73,6 +73,17 @@ class UpstreamRateLimitError extends Error {
 }
 
 /**
+ * Thrown when the routing service failed, did not answer (timeout, network
+ * error, refused redirect) or did not answer with JSON.
+ */
+class UpstreamUnavailableError extends Error {
+  constructor() {
+    super('routing service unavailable');
+    this.name = 'UpstreamUnavailableError';
+  }
+}
+
+/**
  * Run one outbound request no sooner than the shared gate allows.
  * @template T
  * @param {() => Promise<T>} run The request.
@@ -167,18 +178,26 @@ async function fetchRoute({
     `${base.replace(/\/$/, '')}/route/v1/${osrmProfile}/${coords}` +
     `?overview=full&geometries=geojson&alternatives=false&steps=${withSteps ? 'true' : 'false'}`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
+  let timer;
   let osrm;
   try {
-    const upstreamRes = await throughUpstreamGate(() =>
-      fetchImpl(upstream, {
-        signal: controller.signal,
-        // The endpoint is configured above; a redirect is the one way out of
-        // it, so it is refused rather than followed.
-        redirect: 'error',
-        headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
-      }),
-    );
+    const upstreamRes = await throughUpstreamGate(async () => {
+      // The 12 s budget starts when the request leaves, not while it waits
+      // for an outbound slot, so a wait in our own queue is never reported
+      // as the routing service being unavailable.
+      timer = setTimeout(() => controller.abort(), 12000);
+      try {
+        return await fetchImpl(upstream, {
+          signal: controller.signal,
+          // The endpoint is configured above; a redirect is the one way out of
+          // it, so it is refused rather than followed.
+          redirect: 'error',
+          headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
+        });
+      } catch {
+        throw new UpstreamUnavailableError();
+      }
+    });
     if (upstreamRes.status === 429) {
       await cancelBody(upstreamRes);
       const retryAfter = Number(upstreamRes.headers.get('retry-after'));
@@ -186,20 +205,31 @@ async function fetchRoute({
         Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5,
       );
     }
-    if (!upstreamRes.ok) {
+    // OSRM answers 400 for a request it cannot route (NoRoute, NoSegment);
+    // any other failure status (a 5xx, a 403 block, a 404) is the service's.
+    if (upstreamRes.status === 400) {
       await cancelBody(upstreamRes);
       return { payload: null, error: 'no route found' };
+    }
+    if (!upstreamRes.ok) {
+      await cancelBody(upstreamRes);
+      throw new UpstreamUnavailableError();
     }
     const ctype = upstreamRes.headers.get('content-type') || '';
     if (!ctype.includes('json')) {
       await cancelBody(upstreamRes);
-      return { payload: null, error: 'no route found' };
+      throw new UpstreamUnavailableError();
     }
-    const text = await readResponseTextCapped(
-      upstreamRes,
-      ROUTE_MAX_RESPONSE_BYTES,
-    );
-    osrm = JSON.parse(text);
+    // A body cut off by the timeout or the network, an oversized one and one
+    // that is not JSON are all the service's failure; an exception after this
+    // point is ours and stays a "route proxy error".
+    try {
+      osrm = JSON.parse(
+        await readResponseTextCapped(upstreamRes, ROUTE_MAX_RESPONSE_BYTES),
+      );
+    } catch {
+      throw new UpstreamUnavailableError();
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -236,6 +266,10 @@ export function installRouteMiddleware(
         'Content-Type': 'application/json',
         'Retry-After': String(Math.max(1, Math.round(retryAfterSec || 5))),
       });
+      res.end(JSON.stringify({ ok: false, error: msg }));
+    };
+    const unavailable = (msg) => {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: msg }));
     };
     try {
@@ -349,6 +383,10 @@ export function installRouteMiddleware(
             'routing service is rate limited',
             upstreamError.retryAfterSec,
           );
+        }
+        if (upstreamError instanceof UpstreamUnavailableError) {
+          // Same reason: an outage says nothing about whether a route exists.
+          return unavailable(upstreamError.message);
         }
         throw upstreamError;
       }

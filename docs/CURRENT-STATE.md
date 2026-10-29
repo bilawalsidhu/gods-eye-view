@@ -4375,7 +4375,15 @@ service's usage policy states; past a bounded queue the answer is a 429 with a
 `Retry-After` rather than a queue that grows until everything times out. The
 upstream host is pinned and a redirect is refused rather than followed, and a
 rate limit from the routing service is reported as one instead of as "no route
-found". `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
+found". So is an outage: any failure status but 400 (a 5xx, a 403 block, a
+404), no answer (a 12 s timeout counted from when the request leaves, not
+while it waits for an outbound slot; a network error) or a body that is not
+JSON answers
+`502 routing service unavailable`, which `plan_route`
+reports as `unavailable` and the layer as `Routing unavailable (HTTP 502)`;
+only OSRM's own refusal (a 400, or a 200 without a route) reads "no route
+found".
+`src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
 road name into one plain-English sentence per decision, folding
 `exit roundabout` steps into the roundabout they leave, and caps one route at
 200 maneuvers — a route with more is reported as cut off, in the row summary
@@ -5694,7 +5702,7 @@ apply to `public/` assets or built-preview serving.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
-- `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
+- `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors; a routing-service outage answers 502 instead.
 - Track endpoints: `/api/vessels/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/flights/track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/military/track?hex=` (400 for an invalid hex, otherwise `503 history_unavailable` with `Retry-After: 1800` and `Cache-Control: no-store`, no upstream request; military tracking uses its locally accumulated trail).
 - Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
 - `/api/realtime/debug-log` enforces an always-on 120-per-client/400-global one-minute limiter (not the opt-in `GEV_RATELIMIT_OPENAI_PER_MIN` bucket the cost-bearing OpenAI routes share), appends asynchronously through a serialized queue, and rotates `realtime-conversations.jsonl` at 32 MB keeping one prior generation, so the sink is bounded at twice that regardless of session length. A malformed record answers 400 and a failed write 500, both with a fixed message.

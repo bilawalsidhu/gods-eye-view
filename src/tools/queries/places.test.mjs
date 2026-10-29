@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { composeCatalog, coreTools } from '../index.js';
+import { createMcpServer } from '../mcp/index.js';
 import { createPlaceSearchService, createRouteService } from '../places.js';
 
 const place = (id, latitude, longitude, extra = {}) => ({
@@ -247,6 +248,41 @@ test('the place and route services read the app routes and translate failures', 
     routing.route(points, 'foot'),
     (error) => error.code === 'retry_later' && error.retryAfterSeconds === 5,
   );
+});
+
+test('a routing outage is reported as unavailable, not as invalid arguments', async () => {
+  for (const fetchImpl of [
+    async () =>
+      Response.json(
+        { ok: false, error: 'routing service unavailable' },
+        { status: 502 },
+      ),
+    async () => {
+      throw new TypeError('fetch failed');
+    },
+  ]) {
+    const catalog = composeCatalog({
+      tools: coreTools,
+      services: { routing: createRouteService({ fetchImpl }), places },
+    });
+    const server = createMcpServer({
+      catalog,
+      name: 'test',
+      version: '1.0.0',
+    });
+    const { result } = await server.handle({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'plan_route',
+        arguments: { from: { place: 'Austin' }, to: { place: 'Dallas' } },
+      },
+    });
+    assert.equal(result.isError, true);
+    assert.equal(result.structuredContent.error, 'unavailable');
+    assert.doesNotMatch(result.content[0].text, /No walk route/);
+  }
 });
 
 test('place answers say when the search limits may have left places out', async () => {

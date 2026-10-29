@@ -189,7 +189,10 @@ export function createRouteService({
       } catch {
         /* the status below is authoritative */
       }
-      if (response.status === 429) throw httpFailure(response, 'Routing');
+      // A rate limit or an outage (5xx) is the routing service's failure, not
+      // a missing route, whatever the body says.
+      if (response.status === 429 || response.status >= 500)
+        throw httpFailure(response, 'Routing');
       if (payload?.ok === false || response.status === 400)
         return { ok: false, error: payload?.error || 'no route found' };
       if (!response.ok) throw httpFailure(response, 'Routing');
