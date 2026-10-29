@@ -3325,5 +3325,10 @@
   "Maximum event age: {days}d; undated markers are kept": "Максимальний вік події: {days} дн.; позначки без дати збережено",
   "event age filter|All": "Усі",
   "Event age": "Вік події",
-  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено"
+  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено",
+  "Zoom in to a region to load river gauges": "Наблизьте регіон, щоб завантажити вимірювачі рівня річок",
+  "USGS Rivers & Streams": "USGS: річки та струмки",
+  "USGS Lakes & Reservoirs": "USGS: озера та водосховища",
+  "USGS Springs": "USGS: джерела",
+  "Water": "Вода"
 }
