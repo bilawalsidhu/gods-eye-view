@@ -714,18 +714,24 @@ export class LayerPanel {
       });
     }
     if (feedState === 'stale') {
+      // A layer drawing cached upstream data (Traffic's proxy tiles) dates the
+      // row by the oldest of it, not by the load that re-served it.
+      const dataAgo =
+        Number(stats.oldestTileAt) > 0
+          ? this._timeAgo(stats.oldestTileAt)
+          : ago;
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
         return t('{state} · {source} · {ago} · retrying in {seconds}s', {
           state: stateLabel,
           source,
-          ago,
+          ago: dataAgo,
           seconds: stats.retryInSec,
         });
       }
       return t('{state} · {source} · {ago}', {
         state: stateLabel,
         source,
-        ago,
+        ago: dataAgo,
       });
     }
     if (typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()) {

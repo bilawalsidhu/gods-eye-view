@@ -1055,6 +1055,7 @@
   "LIVE · Roads: {source} · No flow roads in view": "實時 · 道路：{source} · 視野內沒有帶路況數據的道路",
   "LIVE · Roads: {source} · Flow {percent}%": "實時 · 道路：{source} · 路況 {percent}%",
   "SIMULATED · Roads: {source} · Flow {percent}%": "模擬 · 道路：{source} · 路況 {percent}%",
+  "STALE · Roads: {source} · Flow: cached TomTom tiles": "過期 · 道路：{source} · 路況：TomTom 緩存瓦片",
   "Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated": "正在同步路況 · 道路：OpenStreetMap · 路況：TomTom · 未匹配：模擬",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov · Unmatched: simulated": "實時 · 道路：OpenStreetMap · 路況：TomTom · 覆蓋 {percent}% · 未匹配：模擬",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov": "實時 · 道路：OpenStreetMap · 路況：TomTom · 覆蓋 {percent}%",
@@ -2864,5 +2865,7 @@
   "{count} placemarks": {
     "other": "{count} 個地標"
   },
-  "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 發布這些 KMZ 產品。新上傳的內容會在數秒內被檢測到，並自動替換舊版本。點擊標記查看報告。"
+  "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 發布這些 KMZ 產品。新上傳的內容會在數秒內被檢測到，並自動替換舊版本。點擊標記查看報告。",
+  "routing busy — too many routes at once": "路線服務繁忙：同時請求的路線過多",
+  "route proxy error": "路線代理出錯"
 }
