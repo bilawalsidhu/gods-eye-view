@@ -729,3 +729,21 @@ test('the map-object count in a row title keeps digit grouping', async () => {
   assert.match(row.children[1].title, /12,345 map objects/);
   t.tool.destroy();
 });
+
+test('a refusal shows its counts in the language’s numerals, not the browser’s', async () => {
+  const t = setup({
+    load: async () => {
+      throw new GeoImportError(
+        'That file has 60,000 map objects; the limit is 50,000.',
+        'That file has {count} map objects; the limit is {limit}.',
+        { count: 60000, limit: 50000 },
+      );
+    },
+  });
+  const [out] = await t.tool.importFiles([file('huge.kml')]);
+  assert.equal(
+    out.error,
+    'That file has 60,000 map objects; the limit is 50,000.',
+  );
+  t.tool.destroy();
+});

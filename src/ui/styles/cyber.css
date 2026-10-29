@@ -247,7 +247,7 @@
     .street-level-panel-inner,
     .global-context-panel-inner
   ) {
-  padding-right: 8px;
+  padding-inline-end: 8px;
 }
 
 /* Collapsed right-rail panels otherwise inherit different legacy gutters:
@@ -1647,10 +1647,10 @@
   :root[data-ui-theme='cyber'] #left-panel-stack {
     top: var(--cyber-left-rail-top) !important;
     bottom: calc(2vh + 13rem);
-    left: 54px;
+    inset-inline-start: 54px;
     width: 300px;
-    padding-left: 10px;
-    border-left: 1px solid rgba(196, 84, 84, 0.72);
+    padding-inline-start: 10px;
+    border-inline-start: 1px solid rgba(196, 84, 84, 0.72);
   }
 
   :root[data-ui-theme='cyber']
@@ -2715,10 +2715,13 @@
 :root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack {
   top: clamp(164px, 19vh, 204px) !important;
   bottom: auto;
+  /* The cockpit keeps its physical sides in every language (rtl.css): the
+     utility controls hold the right edge. */
+  right: auto;
   left: 30px;
   width: var(--cyber-panel-width);
-  padding-left: 0;
-  border-left: 0;
+  padding-inline-start: 0;
+  border-inline-start: 0;
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack > #data-panel {

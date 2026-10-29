@@ -84,10 +84,10 @@ body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
   background: rgba(0, 0, 0, 0.18);
 }
 
-/* ── Top bar: logo left, globe actions right ───────────────────────────── */
+/* ── Top bar: logo at the start, globe actions at the end ──────────────── */
 body.mobile-shell #title-bar {
   top: calc(var(--mobile-top-inset) + 10px);
-  left: 14px;
+  inset-inline-start: 14px;
 }
 
 body.mobile-shell #title-bar .title-logo {
@@ -101,7 +101,8 @@ body.mobile-shell #title-bar .subtitle {
 
 body.mobile-shell #top-center-actions {
   top: calc(var(--mobile-top-inset) + 10px);
-  right: 12px;
+  inset-inline-start: auto;
+  inset-inline-end: 12px;
 }
 
 /* ── HUD: one compact readout under the top bar ────────────────────────── */
@@ -401,7 +402,7 @@ body.mobile-shell:not(.cockpit-mode) #view-switcher {
 
 body.mobile-shell #corner-actions {
   top: calc(var(--mobile-top-inset) + 60px);
-  right: 12px;
+  inset-inline-end: 12px;
   bottom: auto;
 }
 

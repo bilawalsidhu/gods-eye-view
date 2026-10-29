@@ -716,7 +716,6 @@
   "NIGHT": "NUIT",
   "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "FEU",
-  "FIRES": "FEUX",
   "max {value} MW": "max {value} MW",
   "new {value}": "dernier il y a {value}",
   "{value}°N": "{value}°N",
@@ -3004,5 +3003,7 @@
   "ESC to dismiss": "ESC pour fermer",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Astuce : le bouton GEV MIC du dock permet de parler à la carte.",
   "Malformed cyclone snapshot": "Instantané cyclonique mal formé",
-  "Cyclone request timed out": "Délai dépassé pour la requête cyclonique"
+  "Cyclone request timed out": "Délai dépassé pour la requête cyclonique",
+  "CONFIRMED": "CONFIRMÉE",
+  "PAD / RTLS": "PAS DE TIR / RTLS"
 }

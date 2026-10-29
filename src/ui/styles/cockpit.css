@@ -1082,7 +1082,7 @@ body.cockpit-mode #view-switcher button {
   gap: 3px 8px;
   min-width: 0;
   padding: 6px 9px;
-  border-left: 1px solid
+  border-inline-start: 1px solid
     color-mix(in srgb, var(--cockpit-accent) 40%, transparent);
   background: rgba(0, 7, 12, 0.34);
 }
@@ -1108,7 +1108,7 @@ body.cockpit-mode #view-switcher button {
   white-space: nowrap;
 }
 .cockpit-context-cohorts > div.unknown {
-  border-left-color: rgba(213, 168, 99, 0.58);
+  border-inline-start-color: rgba(213, 168, 99, 0.58);
 }
 .cockpit-context-cohorts > div.unknown strong {
   color: #d5a863;
@@ -1627,8 +1627,9 @@ html:not([lang='en']) #cockpit-brief-auto {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
   gap: 8px;
-  padding: 7px 7px 7px 9px;
-  border-left: 1px solid rgba(244, 251, 255, 0.2);
+  padding-block: 7px;
+  padding-inline: 9px 7px;
+  border-inline-start: 1px solid rgba(244, 251, 255, 0.2);
   background: rgba(0, 7, 12, 0.3);
 }
 .cockpit-signal-list li.actionable {
@@ -1638,7 +1639,7 @@ html:not([lang='en']) #cockpit-brief-auto {
 }
 .cockpit-signal-list li.actionable:hover,
 .cockpit-signal-list li.actionable:focus-within {
-  border-left-color: var(--cockpit-accent);
+  border-inline-start-color: var(--cockpit-accent);
   background: color-mix(
     in srgb,
     var(--cockpit-accent) 10%,
@@ -1647,16 +1648,16 @@ html:not([lang='en']) #cockpit-brief-auto {
 }
 .cockpit-signal-list li.track,
 .cockpit-signal-list li.current {
-  border-left-color: var(--cockpit-accent);
+  border-inline-start-color: var(--cockpit-accent);
 }
 .cockpit-signal-list li.nearby {
-  border-left-color: #fff;
+  border-inline-start-color: #fff;
 }
 .cockpit-signal-list li.military {
-  border-left-color: #d5a863;
+  border-inline-start-color: #d5a863;
 }
 .cockpit-signal-list li.warning {
-  border-left-color: #d5a863;
+  border-inline-start-color: #d5a863;
 }
 .cockpit-signal-list time {
   color: rgba(244, 251, 255, 0.38);

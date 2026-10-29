@@ -25,7 +25,7 @@
 
   #title-bar {
     top: 20px;
-    left: 20px;
+    inset-inline-start: 20px;
   }
 
   #top-center-actions {
@@ -55,7 +55,7 @@
   #title-bar .frame-rate-readout {
     position: fixed;
     top: 52px;
-    left: 20px;
+    inset-inline-start: 20px;
     margin: 0;
     font-size: 10px;
     line-height: 12px;
@@ -229,7 +229,7 @@
     width: 100%;
   }
   .context-radio-mini {
-    right: -38px;
+    inset-inline-end: -38px;
     width: min(244px, calc(100vw - 32px));
   }
 
@@ -262,7 +262,7 @@
   /* 16px keeps the Radio broadcast waves (15px above the logo) on-screen. */
   #title-bar {
     top: 16px;
-    left: 16px;
+    inset-inline-start: 16px;
   }
 
   #title-bar h1 > span:last-child,

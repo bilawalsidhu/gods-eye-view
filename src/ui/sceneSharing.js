@@ -80,7 +80,13 @@ export function createSceneDialog(title, onClose) {
       border: '1px solid #397080',
       font: multiline ? '12px monospace' : 'inherit',
     });
-    if (multiline) node.rows = 9;
+    if (multiline) {
+      node.rows = 9;
+      // The multiline fields hold JSON: code reads left to right in every
+      // language, or braces, quotes and minus signs move in Arabic.
+      node.dir = 'ltr';
+      node.spellcheck = false;
+    }
     wrapper.append(node);
     if (type === 'file') fileChooser(wrapper, node);
     body.append(wrapper);

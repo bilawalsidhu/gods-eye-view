@@ -153,7 +153,6 @@
   "NIGHT": "NACHT",
   "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "BRAND",
-  "FIRES": "BRÄNDE",
   "max {value} MW": "max. {value} MW",
   "new {value}": "zuletzt vor {value}",
   "just now": "gerade eben",
@@ -2935,5 +2934,7 @@
   "Malformed cyclone snapshot": "Fehlerhafter Wirbelsturm-Snapshot",
   "STALE · Roads: {source} · Flow: cached TomTom tiles": "VERALTET · Straßen: {source} · Verkehrsfluss: TomTom-Kacheln aus dem Cache",
   "routing busy — too many routes at once": "Routing-Dienst ausgelastet – zu viele Routen gleichzeitig",
-  "route proxy error": "Fehler des Routen-Proxys"
+  "route proxy error": "Fehler des Routen-Proxys",
+  "CONFIRMED": "BESTÄTIGT",
+  "PAD / RTLS": "STARTPLATZ / RTLS"
 }

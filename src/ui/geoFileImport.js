@@ -18,6 +18,16 @@ import { flyToDataSource } from './flyToDataSource.js';
 // One color per file, in import order, from the whiteboard palette.
 const COLORS = ['#39d0ff', '#ffb547', '#5dff9f', '#ff6b6b', '#8be9ff'];
 
+/** An import error's values, with its counts and limits in local numerals. */
+function localizedValues(values) {
+  return Object.fromEntries(
+    Object.entries(values || {}).map(([name, value]) => [
+      name,
+      typeof value === 'number' ? formatNumber(value) : value,
+    ]),
+  );
+}
+
 /**
  * Wire the Import control.
  * @param {{viewer: object, load?: Function, document?: Document}} deps
@@ -303,7 +313,10 @@ export function initGeoFileImport({
           ok: false,
           error:
             error instanceof GeoImportError || error?.name === 'GeoImportError'
-              ? t(error.template || error.message, error.values)
+              ? t(
+                  error.template || error.message,
+                  localizedValues(error.values),
+                )
               : t('That file could not be read.'),
         });
         continue;

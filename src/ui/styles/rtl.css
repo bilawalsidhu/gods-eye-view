@@ -1,0 +1,210 @@
+/* Right-to-left languages (Arabic). The chrome mirrors through logical
+   properties in the component sheets (inset-inline-*, margin-inline-*); this
+   sheet holds only what logical properties cannot express. */
+
+/* Arabic letters join: letter-spacing tears every word into separate glyphs.
+   Latin marked translate="no" and the intel HUD's Latin telemetry keep their
+   tracking; the HUD's translated lines are released below. Unlike cjk.css, a
+   container that merely holds a translate="no" span is not spared: its own
+   Arabic text would come apart. */
+html:lang(ar)
+  body
+  :not(#intel-hud, #intel-hud *, [translate='no'], [translate='no'] *) {
+  letter-spacing: 0 !important;
+}
+
+/* The intel HUD is an instrument overlay: corners, brackets, coordinates and
+   sensor codes keep the English geometry. Its translated lines still read
+   right to left inside that frame. */
+html[dir='rtl'] #intel-hud {
+  direction: ltr;
+}
+html[dir='rtl'] #intel-hud :is(.hud-mode, .hud-summary-label, .hud-summary) {
+  unicode-bidi: plaintext;
+  text-align: left;
+  letter-spacing: 0 !important;
+}
+
+/* Font stacks: JetBrains Mono and Inter have no Arabic glyphs, and the
+   generic monospace fallback is a fixed-pitch Arabic face that spaces every
+   letter apart. Noto Sans Arabic (loaded with the other Google fonts; its
+   files download only when the page shows Arabic) leads the mono stack, so
+   the spaces between Arabic words come from it too and not from the
+   fixed-pitch Latin face. The intel and cockpit HUDs keep JetBrains Mono for
+   their Latin telemetry and column-aligned digits. */
+html:lang(ar) {
+  --font-mono:
+    'Noto Sans Arabic', 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Geeza Pro',
+    Tahoma, monospace;
+  --font-sans:
+    'Inter', 'Noto Sans Arabic', -apple-system, BlinkMacSystemFont, 'Geeza Pro',
+    Tahoma, sans-serif;
+}
+/* The Global Context lines and their buttons set ui-monospace through the
+   `font` shorthand; route them through the Arabic-aware stack too. */
+html:lang(ar)
+  :is(
+    #military-awareness-panel,
+    .military-awareness-controls button,
+    .military-awareness-standby button,
+    .military-awareness-compass-label,
+    .military-awareness-compass-heading,
+    .military-awareness-direction-label,
+    .tr3b-toggle
+  ) {
+  font-family: var(--font-mono);
+}
+html:lang(ar) :is(#intel-hud, #cockpit-hud) {
+  --font-mono:
+    'JetBrains Mono', 'SF Mono', 'Fira Code', 'Noto Sans Arabic', 'Geeza Pro',
+    Tahoma, monospace;
+}
+
+/* The Display/Context rail moves to the left edge. It keeps a physical
+   `right` in layers.css because the attribution-clearance model
+   (creditAttribution.test.mjs) reads that rule; the swap only applies above
+   the 720px band, where the rail is not edge-to-edge. */
+@media (min-width: 721px) {
+  html[dir='rtl'] #right-context-rail {
+    right: auto;
+    left: var(--right-rail-x);
+  }
+}
+@media (min-width: 961px) and (min-height: 650px) {
+  html[dir='rtl'][data-ui-theme='cyber'] #right-context-rail {
+    right: auto;
+    left: 62px;
+  }
+}
+
+/* The dock's wings swap sides (Location on the right, Visual presets on the
+   left), so each slide-up tray is anchored from the wing's outer edge and
+   centred on the whole dock from there, as it is in left-to-right. */
+html[dir='rtl'] #command-dock #location-bar .dock-popover-content {
+  right: calc((var(--dock-unified-width) - var(--dock-location-open)) / 2);
+  left: auto;
+  transform-origin: bottom right;
+}
+html[dir='rtl'] #command-dock #control-panel .dock-popover-content {
+  right: auto;
+  left: calc((var(--dock-unified-width) - var(--dock-presets-open)) / 2);
+  transform-origin: bottom left;
+}
+@media (max-width: 900px) {
+  html[dir='rtl'] #command-dock #location-bar .dock-popover-content {
+    right: calc(
+      (var(--dock-unified-width) - var(--dock-popover-mobile-width)) / 2
+    );
+  }
+  html[dir='rtl'] #command-dock #control-panel .dock-popover-content {
+    left: calc(
+      (var(--dock-unified-width) - var(--dock-popover-mobile-width)) / 2
+    );
+  }
+}
+/* The tray pin sits on the tray's top end corner: top-left here. */
+html[dir='rtl'] #command-dock :is(#location-bar, #control-panel) .dock-pin-btn {
+  right: auto;
+  left: -1rem;
+}
+
+/* The right rail sits on the left: its expand/collapse arrows point the
+   other way, and the start window's "go" arrows point along the reading
+   direction. */
+html[dir='rtl'] #right-context-rail .panel-collapse-btn,
+html[dir='rtl'] .first-run-arrow {
+  transform: scaleX(-1);
+}
+html[dir='rtl'] .first-run-choices button:hover .first-run-arrow,
+html[dir='rtl'] .first-run-choices button:focus-visible .first-run-arrow {
+  transform: translateX(-2px) scaleX(-1);
+}
+
+/* The cockpit is an aircraft panel, not page chrome: its windows keep their
+   physical sides, so the data-layer stack goes back to the left edge instead
+   of landing on the utility controls. Gauges, tapes and the roll counters stay
+   left to right (speed left, altitude right, -10 not 10-); the cards keep
+   reading right to left. */
+html[dir='rtl'] body.cockpit-mode #left-panel-stack {
+  left: var(--left-stack-x);
+  right: auto;
+}
+html[dir='rtl']
+  #cockpit-hud
+  :is(
+    .cockpit-instrument-row,
+    .cockpit-compass,
+    .cockpit-pitch-rail,
+    .cockpit-altitude-rim,
+    .cockpit-roll-arc,
+    .cockpit-vision-controls
+  ) {
+  direction: ltr;
+}
+
+/* Feed text (news headlines, station names) arrives in its own language:
+   each line takes its direction from its first letter, so an English headline
+   reads and aligns left to right instead of moving its punctuation. */
+html[dir='rtl']
+  :is(
+    .cockpit-news-list li *,
+    #radio-station-name,
+    #radio-station-tags,
+    #context-radio-mini-station,
+    .cockpit-radio-station
+  ) {
+  unicode-bidi: plaintext;
+}
+
+/* Clock readouts (~0:05 / 5:19) are numbers, not prose. */
+html[dir='rtl'] #bhote-koshi-event-panel [data-role='time'] {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Physical controls keep their left-to-right sense: the glyph-only media
+   transport (◀◀ ▶ ▶▶), FM seek down/up and the radio dial. The worded
+   PREV / PLAY / NEXT row follows the reading direction like any other
+   button row. */
+html[dir='rtl']
+  :is(.context-radio-mini-transport, .sdr-seek-row, .radio-tuner) {
+  direction: ltr;
+}
+
+/* Canvas labels (installations, map cards, detections) are measured and drawn
+   with left-to-right geometry: a card's text starts at its left padding. A
+   canvas inherits the page direction, which turned that start into the right
+   edge and pushed every title out of its card. */
+html[dir='rtl'] canvas {
+  direction: ltr;
+}
+
+/* Scene callouts on the screen whiteboard: the card grows to the right of the
+   text's x, so right-to-left text ends there instead of starting there. The
+   injected stack (JetBrains Mono) has no Arabic glyphs; use the Arabic-aware
+   one. */
+html[dir='rtl'] .gev-anno-text {
+  text-anchor: end;
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+/* Position counters built from bare numbers (01 / 25, 1 / 3) read as a number
+   pair, left to right, as an unspaced 1/3 does; otherwise the slash swaps
+   them and the current item looks like the total. Translated counters say
+   «من» instead. */
+html[dir='rtl']
+  :is(
+    #bhote-koshi-event-panel [data-role='beat-index'],
+    #cockpit-brief-position,
+    [data-mission-index]
+  ) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* The radio tuner header is a left-to-right instrument row; its channel
+   readout («القناة 01 من 750») still reads in its own language. */
+html[dir='rtl'] #radio-tuner-value {
+  unicode-bidi: plaintext;
+}

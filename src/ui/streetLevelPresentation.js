@@ -1,4 +1,11 @@
-import { formatNumber, msg, t, tn, translateKnown } from '../i18n/index.js';
+import {
+  formatNumber,
+  isolate,
+  msg,
+  t,
+  tn,
+  translateKnown,
+} from '../i18n/index.js';
 import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
 
 // Street Level UI state to panel strings and flags. Pure, so it is testable.
@@ -174,7 +181,10 @@ function presentViewer(state) {
   if (street.capturedAt)
     right.push(formatDate(street.capturedAt, street.capturedAtPrecision));
   const left = [];
-  if (street.title) left.push(street.title);
+  // A provider address mixes Latin and the page language ("602 Congress Ave,
+  // أوستن"); each part is isolated so a house number stays with its street
+  // in right-to-left text. A no-op in left-to-right languages.
+  if (street.title) left.push(street.title.split(', ').map(isolate).join(', '));
   if (street.creator)
     left.push(t('Image by {creator}', { creator: street.creator }));
   if (street.license) left.push(street.license);

@@ -714,7 +714,6 @@
   "NIGHT": "NOITE",
   "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "INCÊNDIO",
-  "FIRES": "INCÊNDIOS",
   "max {value} MW": "máx {value} MW",
   "new {value}": "mais recente há {value}",
   "{value}°N": "{value}°N",
@@ -3004,5 +3003,7 @@
   "Begin with a clean globe": "Comece com um globo limpo",
   "Don't show this again": "Não mostrar novamente",
   "ESC to dismiss": "ESC para fechar",
-  "Tip: the GEV MIC button in the dock lets you talk to the map.": "Dica: o botão GEV MIC no dock permite falar com o mapa."
+  "Tip: the GEV MIC button in the dock lets you talk to the map.": "Dica: o botão GEV MIC no dock permite falar com o mapa.",
+  "CONFIRMED": "CONFIRMADA",
+  "PAD / RTLS": "PLATAFORMA / RTLS"
 }

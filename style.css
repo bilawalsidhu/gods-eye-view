@@ -33,5 +33,6 @@
 @import './src/ui/styles/panel-surfaces.css';
 @import './src/ui/styles/segmented-control.css';
 @import './src/ui/styles/cjk.css';
+@import './src/ui/styles/rtl.css';
 @import './src/ui/styles/mobile-shell.css';
 @import './src/ui/styles/cyber.css';

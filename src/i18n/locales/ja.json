@@ -698,7 +698,6 @@
   "NIGHT": "夜間",
   "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "火災",
-  "FIRES": "火災",
   "max {value} MW": "最大 {value} MW",
   "new {value}": "新規 {value}",
   "{value}°N": "{value}°N",
@@ -2866,5 +2865,7 @@
   "routing busy — too many routes at once": "ルート検索サービスが混雑しています。同時に要求されたルートが多すぎます",
   "route proxy error": "ルート検索プロキシでエラーが発生しました",
   "Malformed cyclone snapshot": "サイクロンのスナップショットの形式が不正です",
-  "Cyclone request timed out": "サイクロンのリクエストがタイムアウトしました"
+  "Cyclone request timed out": "サイクロンのリクエストがタイムアウトしました",
+  "CONFIRMED": "確認済み",
+  "PAD / RTLS": "射場 / RTLS"
 }

@@ -13,9 +13,12 @@
 // `npm run i18n` keeps the catalogs in step with the code. Guide: docs/I18N.md.
 import {
   DEFAULT_LOCALE,
+  intlLocale,
+  isRtlLocale,
   normalizeLocale,
   writeStoredLocale,
 } from './locale.js';
+import ar from './locales/ar.json' with { type: 'json' };
 import de from './locales/de.json' with { type: 'json' };
 import es from './locales/es.json' with { type: 'json' };
 import fr from './locales/fr.json' with { type: 'json' };
@@ -28,6 +31,7 @@ import zhCN from './locales/zh-CN.json' with { type: 'json' };
 import zhHant from './locales/zh-Hant.json' with { type: 'json' };
 
 const CATALOGS = Object.freeze({
+  ar,
   de,
   es,
   fr,
@@ -50,6 +54,29 @@ export function getCatalog(locale) {
 /** Active locale. */
 export function getLocale() {
   return currentLocale;
+}
+
+/**
+ * A value inserted into right-to-left text as one unit: `30 م` next to
+ * `Sentinel-2` would otherwise lend its digits to the Latin run and leave the
+ * unit stranded. First-strong isolates (U+2068…U+2069) in RTL locales only.
+ */
+export function isolate(text) {
+  return isRtlLocale(currentLocale) ? `\u2068${text}\u2069` : String(text);
+}
+
+const CODE_BEFORE_VALUE =
+  /(?<![\p{L}\p{N}])([A-Z][A-Z0-9/]+) (\u2068[^\u2068\u2069]*\u2069)/gu;
+
+/**
+ * A Latin code and the isolated value after it ("HDG 68\u00b0") as one unit in
+ * right-to-left text. Two codes in a row (HDG 68\u00b0 \u00b7 FOV 44\u00b0) otherwise form a
+ * single left-to-right run and the second code ends up beside the first
+ * value. Applies to t() output; a no-op outside RTL locales.
+ */
+export function keepCodesWithValues(text) {
+  if (!isRtlLocale(currentLocale)) return text;
+  return String(text).replace(CODE_BEFORE_VALUE, '\u2068$1 $2\u2069');
 }
 
 /**
@@ -80,9 +107,13 @@ const PLACEHOLDER_PATTERN = /\{([A-Za-z0-9_]+)\}/g;
  * stays visible instead of silently vanishing. */
 function interpolate(pattern, values) {
   if (!values) return pattern;
-  return pattern.replace(PLACEHOLDER_PATTERN, (literal, name) =>
-    Object.hasOwn(values, name) ? String(values[name]) : literal,
-  );
+  // In a right-to-left page each value is isolated: a time, a code or an
+  // English name keeps its own order instead of mixing with the sentence.
+  return pattern.replace(PLACEHOLDER_PATTERN, (literal, name) => {
+    if (!Object.hasOwn(values, name)) return literal;
+    const value = String(values[name]);
+    return value === '' ? value : isolate(value);
+  });
 }
 
 /** A catalog string with something to show; an empty one counts as missing. */
@@ -174,7 +205,7 @@ function cachedFormatter(kind, Constructor, options) {
   const cacheKey = `${kind}|${currentLocale}|${options ? JSON.stringify(options) : ''}`;
   let formatter = formatterCache.get(cacheKey);
   if (!formatter) {
-    formatter = new Constructor(currentLocale, options);
+    formatter = new Constructor(intlLocale(currentLocale), options);
     formatterCache.set(cacheKey, formatter);
   }
   return formatter;

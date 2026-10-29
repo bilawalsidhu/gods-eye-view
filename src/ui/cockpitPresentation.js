@@ -1,5 +1,5 @@
 /** Pure formatting and fixed presentation constants used by Cockpit components. */
-import { formatNumber, getLocale, t, msg } from '../i18n/index.js';
+import { formatNumber, getLocale, isolate, t, msg } from '../i18n/index.js';
 import { formatQuantity } from './unitLabels.js';
 
 export const COCKPIT_HEADING_SLEW_DPS = 28;
@@ -124,18 +124,19 @@ export function formatCockpitCoordinate(value, positive, negative) {
     maximumFractionDigits: 3,
   });
   const code = value >= 0 ? positive : negative;
-  // Not «30,203°С»: after a degree sign «С» reads as Celsius.
+  // Not «30,203°С»: after a degree sign «С» reads as Celsius. Isolated, so
+  // an Arabic hemisphere letter does not pull the next number into its run.
   switch (code) {
     case 'N':
-      return t('{value}°N', { value: amount });
+      return isolate(t('{value}°N', { value: amount }));
     case 'S':
-      return t('{value}°S', { value: amount });
+      return isolate(t('{value}°S', { value: amount }));
     case 'E':
-      return t('{value}°E', { value: amount });
+      return isolate(t('{value}°E', { value: amount }));
     case 'W':
-      return t('{value}°W', { value: amount });
+      return isolate(t('{value}°W', { value: amount }));
     default:
-      return `${amount}°${compassPointLabel(code)}`;
+      return isolate(`${amount}°${compassPointLabel(code)}`);
   }
 }
 
