@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
   displaySceneTitle,
   displayShotTitle,
@@ -87,31 +88,6 @@ test('a built-in shot title localizes only for a recipe-sourced shot', () => {
   }
 });
 
-test('bootstrap shots of an applied shot pack localize their built-in titles', () => {
-  setLocale('ru');
-  const title = 'Global Incident Context';
-  const shot = { id: 'shot-1', title };
-  // A legacy scene upgraded in place: its bootstrap shots have no
-  // sourcePackId, but the scene's pack marker binds the title to the shot.
-  const upgraded = {
-    id: 'scene-legacy',
-    appliedShotPacks: [
-      {
-        id: 'bhote-koshi-nepal-evidence-pack',
-        version: 12,
-        shotBindings: { [title]: 'shot-1' },
-      },
-    ],
-  };
-  assert.equal(
-    displayShotTitle(title, shot, upgraded),
-    displayShotTitle(title),
-  );
-  assert.notEqual(displayShotTitle(title, shot, upgraded), title);
-  // The same typed title in a scene without the pack stays as typed.
-  assert.equal(displayShotTitle(title, shot, { id: 'scene-user' }), title);
-});
-
 test('the Scene status line shows an operator-typed shot title as typed', async () => {
   const { createScenePlaybackAdapter } = await import('./playbackAdapter.js');
   const statuses = [];
@@ -165,4 +141,41 @@ test('the scene context of a shot carries its display title by provenance', asyn
       .shotDisplayTitle,
     title,
   );
+});
+
+test('bootstrap shots of a built-in scene localize without a source pack', () => {
+  setLocale('ru');
+  const append = SCENE_APPEND_RECIPES.find(
+    (recipe) => recipe.legacySceneBootstrap?.cameraPath?.length,
+  );
+  if (!append) return;
+  const bootstrap = append.legacySceneBootstrap;
+  const scene = SCENE_RECIPES.find(
+    (recipe) => recipe.title === bootstrap.targetSceneTitle,
+  );
+  if (!scene) return;
+  for (const { title } of bootstrap.cameraPath) {
+    // The upgrade copies these keyframes into the scene without sourcePackId
+    // and binds each title to its shot in the pack marker.
+    const upgraded = {
+      id: scene.id,
+      appliedShotPacks: [
+        { id: append.id, version: 1, shotBindings: { [title]: 'shot-old' } },
+      ],
+    };
+    assert.equal(
+      displayShotTitle(title, { id: 'shot-old', title }, upgraded),
+      displayShotTitle(title),
+    );
+    // Another shot the operator gave the same title stays as typed.
+    assert.equal(
+      displayShotTitle(title, { id: 'shot-user', title }, upgraded),
+      title,
+    );
+    // The same title in an operator's own scene stays as typed.
+    assert.equal(
+      displayShotTitle(title, { id: 'shot-user', title }, { id: 'scene-user' }),
+      title,
+    );
+  }
 });

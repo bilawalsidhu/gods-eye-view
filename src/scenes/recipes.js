@@ -1062,8 +1062,9 @@ export function displaySceneTitle(scene) {
  * typed. Without `shot`, the title alone decides.
  * @param {string} title
  * @param {{id?: string, sourcePackId?: string}} [shot]
- * @param {{id?: string, appliedShotPacks?: object[]}} [scene] The shot's
- *   scene, for projects saved before shots recorded their source pack.
+ * @param {{id?: string, appliedShotPacks?: Array<{id?: string, shotBindings?: Object<string, string>}>}} [scene]
+ *   The shot's scene, for projects saved before shots recorded their source
+ *   pack.
  * @returns {string}
  */
 export function displayShotTitle(title, shot = undefined, scene = undefined) {
@@ -1076,21 +1077,28 @@ export function displayShotTitle(title, shot = undefined, scene = undefined) {
   return numbered ? t('Shot {n}', { n: numbered[1] }) : text;
 }
 
-/**
- * Whether the built-in recipe behind a scene declares a shot with this title:
- * its own keyframes, or a bootstrap shot of a shot pack applied to the scene.
- * Those shots carry no sourcePackId; the pack marker binds the title to that
- * very shot, so another shot typed with the same title stays as typed.
- */
+/** Whether the built-in recipe behind a scene declares this shot's title. */
 function recipeDeclaresShotTitle(scene, shot, title) {
   const recipe = scene?.id ? getSceneRecipeById(scene.id) : null;
-  if (recipe?.cameraPath?.some((keyframe) => keyframe?.title === title))
-    return true;
-  const packs = Array.isArray(scene?.appliedShotPacks)
-    ? scene.appliedShotPacks
-    : [];
-  return (
-    Boolean(shot?.id) &&
-    packs.some((marker) => marker?.shotBindings?.[title] === shot.id)
+  if (!recipe) return false;
+  const declares = (path) =>
+    Array.isArray(path) && path.some((keyframe) => keyframe?.title === title);
+  if (declares(recipe.cameraPath)) return true;
+  // A bootstrap recipe seeds legacy "Shot N" keyframes; the upgrade replaces
+  // them with the append recipe's bootstrap shots, which carry no source pack.
+  // The pack marker binds each of those titles to its shot id, so a shot the
+  // operator later gave the same title stays as typed.
+  return SCENE_APPEND_RECIPES.some(
+    (append) =>
+      append.legacySceneBootstrap?.targetSceneTitle === recipe.title &&
+      declares(append.legacySceneBootstrap.cameraPath) &&
+      Boolean(shot?.id) &&
+      (Array.isArray(scene.appliedShotPacks)
+        ? scene.appliedShotPacks
+        : []
+      ).some(
+        (marker) =>
+          marker?.id === append.id && marker.shotBindings?.[title] === shot.id,
+      ),
   );
 }

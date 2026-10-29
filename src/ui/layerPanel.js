@@ -136,9 +136,11 @@ export function layerKeyRequirementTooltip(layer = {}) {
 
 const ROW_TEXT_SEPARATOR = ' · ';
 
-// A short Latin code joined by hyphens. Longer runs (a URL, a token in an
-// error) keep their break opportunities so they cannot overflow the rail.
-const HYPHENATED_CODE = /[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g;
+// A short Latin code joined by hyphens: every part after a hyphen is capitals
+// or digits (ADS-B, RTL-SDR, GTFS-RT). A compound such as "ALPR-Kameras" is a
+// word, not a code, and may break at its hyphen. Longer runs (a URL, a token
+// in an error) keep their break opportunities so they cannot overflow the rail.
+const HYPHENATED_CODE = /\b[A-Za-z0-9]+(?:-[A-Z0-9]+)+(?![A-Za-z0-9])/g;
 const HYPHENATED_CODE_MAX = 16;
 
 /** A span for one run of row text; `keep` stops the browser breaking inside it. */

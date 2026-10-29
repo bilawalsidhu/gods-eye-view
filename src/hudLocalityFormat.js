@@ -9,10 +9,11 @@ import { unitLabel } from './ui/unitLabels.js';
 import { localizePlaceName } from './ui/placeNames.js';
 
 /**
- * Scripts without letter case keep a space before the unit: `13 km`, `13 كم`.
- * Arabic would otherwise run the digits into the word.
+ * Scripts without letter case keep a space before the unit: `13 km` in
+ * Chinese and Japanese, `13 كم` in Arabic, which would otherwise run the
+ * digits into the word.
  */
-const UNCASED_UNITS = /^(?:zh-|ar$)/;
+const UNCASED_UNITS = /^(?:zh|ja|ar)(?:-|$)/;
 
 /** An upper-case HUD quantity such as `13KM` / `13КМ`, in the active language. */
 export function hudQuantity(value, unit, digits = 0) {
