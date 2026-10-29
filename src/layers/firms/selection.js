@@ -1,6 +1,7 @@
 import {
   FIRMS_OVERLAY_SOURCE_ID,
   fireDetectionKey,
+  fireEntityLabel,
 } from '../../data/firmsLabels.js';
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
@@ -191,15 +192,17 @@ export function createSelection({
       id: recordId,
       layerId: id,
       layerName: name,
-      source: 'NASA FIRMS',
+      source:
+        fire.provider === 'inpe' ? 'INPE Programa Queimadas' : 'NASA FIRMS',
       dataSource: layerState._dataSource,
-      // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
-      label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
+      label: fireEntityLabel(fire.frp),
       latitude: fire.lat,
       longitude: fire.lon,
       properties: {
         frp: fire.frp,
-        confidence: components.model.confidenceBucket(fire.confidence),
+        confidence: Number.isFinite(fire.confidence)
+          ? components.model.confidenceBucket(fire.confidence)
+          : null,
         age:
           fire.acqMs > 0
             ? components.model.formatAge(Date.now() - fire.acqMs)

@@ -34,13 +34,18 @@ export function adaptFirmsRecords(records) {
       index: fires.length,
       lat,
       lon,
-      frp: finiteNumber(record.frp),
-      confidence: normalizeConfidence(record.confidence),
+      // INPE publishes neither (src/data/inpeQueimadasCsv.js): unknown stays
+      // null, so a card never reads "0 MW" or "low" confidence for it.
+      frp: hasValue(record.frp) ? finiteNumber(record.frp) : null,
+      confidence: hasValue(record.confidence)
+        ? normalizeConfidence(record.confidence)
+        : null,
       brightness: finiteNumber(record.brightness),
       night: record.daynight === 'N',
       acqMs: parseAcquisitionMs(record.acqDate, record.acqTime, acqCache),
       sensor: normalizeSensor(record.instrument),
       satellite: typeof record.satellite === 'string' ? record.satellite : '',
+      provider: record.provider === 'inpe' ? 'inpe' : 'firms',
       contextEntity: null,
       position: null,
     });
@@ -140,6 +145,11 @@ function clamp01(value) {
 function finiteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+/** A field the source actually sent: null, undefined and blank are not values. */
+function hasValue(value) {
+  return value !== null && value !== undefined && String(value).trim() !== '';
 }
 
 // Same rule as parseFirmsCsv: a blank or non-numeric value is not a zero.

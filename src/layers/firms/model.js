@@ -115,7 +115,10 @@ export function createModel({
 
   function heatScore(cell) {
     return (
-      cell.intensity + cell.count * 0.8 + cell.night * 0.6 + cell.maxFrp * 0.12
+      cell.intensity +
+      cell.count * 0.8 +
+      cell.night * 0.6 +
+      (cell.maxFrp ?? 0) * 0.12
     );
   }
 
@@ -133,10 +136,13 @@ export function createModel({
    */
 
   function detectionColorStop(fire) {
-    const heat = Math.min(
-      1,
-      Math.sqrt(Math.max(0, fire.frp) / 150) * 0.85 + fire.confidence * 0.15,
-    );
+    // A detection with no FRP (INPE) is drawn mid-scale: its heat is unknown,
+    // not zero.
+    const power = Number.isFinite(fire.frp)
+      ? Math.sqrt(Math.max(0, fire.frp) / 150)
+      : 0.5;
+    const confidence = Number.isFinite(fire.confidence) ? fire.confidence : 0.5;
+    const heat = Math.min(1, power * 0.85 + confidence * 0.15);
     if (heat > 0.72) return DETECTION_COLOR_STOPS[0];
     if (heat > 0.42) return DETECTION_COLOR_STOPS[1];
     return DETECTION_COLOR_STOPS[2];
@@ -331,11 +337,13 @@ export function createModel({
    */
 
   function buildSelectedFireCard(fire, nowMs) {
-    const meta = [
-      t('{value} conf', {
-        value: confidenceLabel(confidenceBucket(fire.confidence)),
-      }),
-    ];
+    const meta = Number.isFinite(fire.confidence)
+      ? [
+          t('{value} conf', {
+            value: confidenceLabel(confidenceBucket(fire.confidence)),
+          }),
+        ]
+      : [];
     if (fire.acqMs > 0) {
       const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(t('{value} ago', { value: age }));
@@ -352,7 +360,9 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      title: Number.isFinite(fire.frp)
+        ? t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) })
+        : t('FIRE'),
       details: [
         meta.join(' · '),
         formatLatLonLabel(fire.lat, fire.lon) +
@@ -375,7 +385,9 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceLabel(confidenceBucket(fire.confidence))];
+    const meta = Number.isFinite(fire.confidence)
+      ? [confidenceLabel(confidenceBucket(fire.confidence))]
+      : [];
     if (fire.acqMs > 0) {
       const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(age);
@@ -389,7 +401,9 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      title: Number.isFinite(fire.frp)
+        ? t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) })
+        : t('FIRE'),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -408,7 +422,9 @@ export function createModel({
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
     const noun = cell.count === 1 ? t('FIRE') : t('FIRES');
-    const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
+    const parts = Number.isFinite(cell.maxFrp)
+      ? [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })]
+      : [];
     if (cell.newestAcqMs > 0) {
       const age = formatAgeLabel(nowMs - cell.newestAcqMs);
       if (age) parts.push(t('new {value}', { value: age }));

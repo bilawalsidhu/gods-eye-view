@@ -38,6 +38,7 @@ export function createIngestion({
       layerState._keyRequired = false;
       layerState._error = null;
       layerState._stale = Boolean(payload?.stale);
+      layerState._provider = payload?.provider === 'inpe' ? 'inpe' : 'firms';
       const previousSelection = layerState._selectedFire;
       layerState._selectedFire = null;
       layerState._fires = adaptFirmsRecords(payload?.fires);

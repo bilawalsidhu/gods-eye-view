@@ -113,7 +113,15 @@ export const getActiveFires = defineTool({
     const missing = (snapshot.sources || [])
       .filter((source) => source?.ok === false)
       .map((source) => source.source);
+    // A keyless server answers with INPE's detections, which cover South
+    // America only and carry no FRP or confidence.
+    const southAmericaOnly = snapshot.coverage === 'south-america';
     const notes = [
+      ...(southAmericaOnly
+        ? [
+            'keyless source INPE Programa Queimadas covers South America only, without FRP or confidence',
+          ]
+        : []),
       ...(stale ? ['data may be stale'] : []),
       ...(missing.length ? [`no data from ${missing.join(', ')}`] : []),
     ];
@@ -125,6 +133,8 @@ export const getActiveFires = defineTool({
         view: suggestView(services, { area, layers: ['local-firms'] }),
         stale,
         missing_sources: missing,
+        source: southAmericaOnly ? 'INPE Programa Queimadas' : 'NASA FIRMS',
+        coverage: southAmericaOnly ? 'south-america' : 'world',
         fetched_at: isoTime(snapshot.fetchedAt),
         ...result,
         rows: result.rows.map((fire) => ({
@@ -134,7 +144,7 @@ export const getActiveFires = defineTool({
           confidence: fire.confidence ?? null,
           acquired: isoTime(acquiredMsUtc(fire.acqDate, fire.acqTime)),
           satellite: fire.satellite ?? null,
-          day_night: fire.daynight ?? null,
+          day_night: fire.daynight || null,
         })),
       },
     };
