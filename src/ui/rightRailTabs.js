@@ -1,5 +1,5 @@
 /**
- * Vertical tab strip for the right context rail: one sideways tab per rail
+ * Vertical tab strip for the right context rail: one icon tab per rail
  * panel, the open panel beside the strip, at most one panel open. The panels'
  * `collapsed` classes remain the only state; the strip mirrors them and asks
  * the owner (setPanelCollapsed) for every change, so persistence, share links
@@ -20,6 +20,19 @@ import { msg, t } from '../i18n/index.js';
 const RAIL_TABS_ATTRIBUTE = 'data-rail-tabs';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * Each rail panel's tab glyph (Material Symbols). index.html subsets the icon
+ * font, so its `icon_names` must carry every one.
+ */
+export const RAIL_TAB_ICONS = Object.freeze({
+  'pp-toggles': 'tune',
+  'cctv-panel': 'videocam',
+  'street-level-panel': 'streetview',
+  'global-context-panel': 'travel_explore',
+  'weather-panel': 'cloud',
+  'recent-imagery-panel': 'satellite_alt',
+});
 
 /**
  * The tab keyboard navigation moves to in a vertical tablist: Down and Up
@@ -177,7 +190,7 @@ export function railJoinPath({
   return d.join(' ');
 }
 
-/** The tab label: the panel's own header title, already translated. */
+/** The tab's name: the panel's own header title, already translated. */
 function panelTitle(panel) {
   return (
     panel
@@ -230,7 +243,7 @@ export function createRightRailTabs({
   outline.append(outlinePath);
   join.append(shadow, glass, outline);
 
-  /** @type {Map<string, {tab: HTMLElement, label: HTMLElement}>} */
+  /** @type {Map<string, {tab: HTMLElement, icon: HTMLElement}>} */
   const entries = new Map();
   const observed = new WeakSet();
   let destroyed = false;
@@ -244,10 +257,12 @@ export function createRightRailTabs({
     tab.dataset.railTab = panel.id;
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-controls', panel.id);
-    const label = documentRef.createElement('span');
-    label.className = 'right-rail-tab-label';
-    tab.append(label);
-    entry = { tab, label };
+    const icon = documentRef.createElement('span');
+    icon.className = 'right-rail-tab-icon material-symbols-outlined';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = RAIL_TAB_ICONS[panel.id] || 'more_horiz';
+    tab.append(icon);
+    entry = { tab, icon };
     entries.set(panel.id, entry);
     return entry;
   };
@@ -256,9 +271,8 @@ export function createRightRailTabs({
     documentRef.defaultView?.MutationObserver ?? globalThis.MutationObserver;
   const observer =
     typeof Observer === 'function' ? new Observer(() => sync()) : null;
-  // Tab heights follow their labels (fonts, locale) and panel heights their
-  // content and allocation: re-measure the join when the strip or a panel
-  // changes size.
+  // Panel heights follow their content and allocation: re-measure the join
+  // when the strip or a panel changes size.
   const Resize = documentRef.defaultView?.ResizeObserver;
   const resizer =
     typeof Resize === 'function' ? new Resize(() => sync()) : null;
@@ -325,8 +339,7 @@ export function createRightRailTabs({
         right: stripLeft + tab.offsetLeft + tab.offsetWidth,
       },
       corner,
-      // A tab shrunk by a short strip keeps corners no larger than half of it.
-      tabRadius: Math.min(tabRadius, (tabBottom - tabTop) / 2),
+      tabRadius,
       fillet,
       style: chamfer ? 'chamfer' : 'round',
     };
@@ -342,7 +355,7 @@ export function createRightRailTabs({
     join.hidden = false;
   }
 
-  /** Reconcile tabs with the rail: order, visibility, selection, labels. */
+  /** Reconcile tabs with the rail: order, visibility, selection, names. */
   function sync() {
     if (destroyed) return;
     // The column precedes its panels in the tab order, so Tab from the open
@@ -365,13 +378,13 @@ export function createRightRailTabs({
     let cursor = strip.firstElementChild;
     let open = null;
     for (const panel of panels) {
-      const { tab, label } = entryFor(panel);
+      const { tab } = entryFor(panel);
       if (tab !== cursor) strip.insertBefore(tab, cursor);
       else cursor = cursor.nextElementSibling;
       const collapsed = panel.classList.contains('collapsed');
       if (!collapsed && !open) open = { tab, panel };
       const name = panelTitle(panel);
-      if (label.textContent !== name) label.textContent = name;
+      tab.setAttribute('aria-label', name);
       tab.setAttribute('aria-selected', String(!collapsed));
       tab.tabIndex = panel === focusOwner ? 0 : -1;
       tab.title = t(collapsed ? msg('Expand {name}') : msg('Collapse {name}'), {

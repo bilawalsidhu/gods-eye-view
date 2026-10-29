@@ -1498,8 +1498,8 @@ rule can still give them back.
 
 On desktop the right rail (Display, CCTV, Street Level, Context, plus Weather
 and Recent Imagery while shown) is a vertical tab strip
-(`src/ui/rightRailTabs.js`, `src/ui/styles/right-rail-tabs.css`): one sideways
-tab per panel at the rail's right edge, the open panel beside it. A tab
+(`src/ui/rightRailTabs.js`, `src/ui/styles/right-rail-tabs.css`): one upright
+icon tab per panel at the rail's right edge, the open panel beside it. A tab
 toggles its panel through `setPanelCollapsed` with the explicit flag; the
 panels' `collapsed` classes remain the only state, mirrored through a
 MutationObserver, and the owner rule above hides the rest. On desktop the
@@ -1509,11 +1509,12 @@ The strip is a vertical `role="tablist"`: Up/Down
 wrap, Home/End jump, the open tab (else the first) is the tab stop, Escape
 inside a panel returns focus to its tab, and the strip precedes the panels in
 the DOM so Tab from the open tab reaches the tool slot and then the panel.
-Labels are the panels' own translated header titles. The lane's top follows the
-left rail's; a strip taller than the lane lifts the rail toward the HUD corner
-above (`src/ui/rightPanelRail.js`), and a lane still shorter is shared equally
-between the tabs, so the long labels end up one height and clip; the strip
-never scrolls. Under the tabs the strip's
+Glyphs come from `RAIL_TAB_ICONS` (Material Symbols, in the `index.html`
+subset); a tab's accessible name and tooltip are the panel's translated header
+title. The tabs keep their size. The lane's top follows the left rail's; a
+strip taller than the lane lifts the rail toward the HUD corner above
+(`src/ui/rightPanelRail.js`), and on a lane still shorter the strip runs past
+its end; the strip never scrolls or clips. Under the tabs the strip's
 column keeps a tool slot (`#right-rail-tools`) that holds the compact Radio
 launcher on desktop: `src/ui/radioPanelPlacement.js` moves it there from
 Context's header, and back for the phone sheet, so the compact player stays one
@@ -1524,7 +1525,7 @@ plain geometry. Phones hide the strip and keep the sheet shell; Cockpit hides
 the rail and the strip with it.
 
 The open tab and its panel are one surface, like a folder tab; the other tabs
-are borderless labels. The strip measures the open panel and tab, traces their
+are borderless icons. The strip measures the open panel and tab, traces their
 joined silhouette as an SVG path (`railJoinPath`; Cyber gets its chamfered
 frame) and shapes a join element under the panels with it: glass, outline and
 shadow in one piece, so the junction has no seam. The panel and the tab draw
@@ -1533,7 +1534,7 @@ minimum height, so a short panel such as Context still reaches its tab.
 
 A first-time visitor on a desktop viewport finds Display open
 (`src/ui/panelPositionControls.js`): with every panel closed nothing shows that
-the labels are launchers. Phones keep it closed, a share link decides for
+the icons are launchers. Phones keep it closed, a share link decides for
 itself, and a stored choice wins either way. When the rail picks its owner, a
 panel the visitor or a share link opened outranks one open only by default, so
 a stored CCTV choice is not displaced by the Display default.

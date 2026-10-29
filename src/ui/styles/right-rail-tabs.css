@@ -1,5 +1,5 @@
 /* ── Right rail as vertical tabs ───────────────────────────────────────────
-   A sideways tab strip (rightRailTabs.js) hugs the rail's right edge and the
+   A strip of icon tabs (rightRailTabs.js) hugs the rail's right edge and the
    open panel sits beside it. Panels keep their `collapsed` state; the rail's
    exclusive layout (rightPanelRail.js) hides the collapsed ones, so the strip
    is the only launcher. The compact Radio launcher, which rides in Context's
@@ -12,7 +12,7 @@
    The glass layer blurs and tints the backdrop inside the path, one SVG
    strokes the outline and another casts the shadow, so the junction has no
    seam and no second blur region. The open panel and the tab draw no surface
-   of their own; the other tabs are plain labels. `data-rail-tabs` arrives on
+   of their own; the other tabs are plain icons. `data-rail-tabs` arrives on
    the rail with the strip, so a rail without it keeps its plain geometry; the
    selectors carry it to outrank the Cyber rail rules that follow this sheet. */
 
@@ -58,9 +58,9 @@
 }
 
 /* The strip's column: the tablist, then a tool slot for the compact Radio
-   launcher (radioPanelPlacement.js). It stands the lane's full height, which
-   makes the strip's size definite for the tabs' share (.right-rail-tab); only
-   the strip and the slot take the pointer. */
+   launcher (radioPanelPlacement.js). It keeps its natural height, so every
+   tab stays whole even past a short lane; only the strip and the slot take
+   the pointer. */
 #right-rail-column {
   position: absolute;
   top: 0;
@@ -70,28 +70,17 @@
   flex-direction: column;
   box-sizing: border-box;
   width: var(--right-rail-tabs-inset);
-  height: var(--right-stack-max-height, 70vh);
   pointer-events: none;
-}
-
-/* The layout pass reads the column's natural height, to climb when the lane
-   is too short for it (rightPanelRail.js). */
-#right-context-rail[data-rail-measuring] > #right-rail-column {
-  height: auto !important;
 }
 
 #right-rail-tabs {
   position: relative;
   display: flex;
-  flex: 0 1 auto;
   flex-direction: column;
   gap: 4px;
   box-sizing: border-box;
-  min-height: 0;
   /* Room for the open tab's bridge on the left. */
   padding-left: var(--right-rail-tabs-gap);
-  /* Never a scrollbar: a lane too short shrinks the tabs (.right-rail-tab). */
-  overflow: hidden;
   pointer-events: auto;
 }
 
@@ -110,7 +99,7 @@
   display: none;
 }
 
-/* In the slot the launcher is one more label in the column: no card, the
+/* In the slot the launcher is one more icon in the column: no card, the
    tab's corner, the accent while the radio plays. Its popover opens to the
    left over the panel, bottom-aligned so it stays inside the lane. */
 #right-rail-tools .context-radio-dock {
@@ -163,38 +152,22 @@ body:not(.mobile-shell)
   display: none;
 }
 
-/* The tab's mask covers its own box only: the focus ring draws inside it. */
-#right-rail-tabs > .right-rail-tab:focus-visible {
-  outline-offset: -3px;
-}
-
-/* A short strip is shared out equally: the zero basis hands every tab the
-   same part, a tab's own length caps it, and a short label's leftover goes
-   to the longer ones; with room each tab is its own length. The basis is
-   0%, not 0, so the strip still sizes to its labels. The label clips at the
-   end, faded over the bottom padding. */
+/* A square icon the strip's width; the panel's name is the tab's accessible
+   name and tooltip. */
 .right-rail-tab {
   position: relative;
   display: flex;
-  flex: 1 1 0%;
-  align-items: flex-start;
+  flex: 0 0 auto;
+  align-items: center;
   justify-content: center;
   box-sizing: border-box;
   width: var(--right-rail-tabs-width);
-  min-height: 0;
-  max-height: max-content;
-  padding: 6px 0;
-  overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 6px), transparent);
+  height: var(--right-rail-tabs-width);
+  padding: 0;
   border: 0;
   border-radius: var(--right-rail-tab-radius);
   background: transparent;
   color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  line-height: 1;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
   cursor: pointer;
   transition:
@@ -202,11 +175,9 @@ body:not(.mobile-shell)
     color var(--transition-fast);
 }
 
-.right-rail-tab-label {
-  display: block;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  white-space: nowrap;
+.right-rail-tab-icon {
+  color: inherit;
+  font-size: 19px;
 }
 
 .right-rail-tab:not([aria-selected='true']):hover {
@@ -214,8 +185,8 @@ body:not(.mobile-shell)
   color: var(--text-primary);
 }
 
-/* The open tab is the label and hit area over the join's surface; it spans
-   the bridge too, with the label kept in the strip's column. */
+/* The open tab is the icon and hit area over the join's surface; it spans
+   the bridge too, with the icon kept in the strip's column. */
 .right-rail-tab[aria-selected='true'] {
   width: calc(var(--right-rail-tabs-width) + var(--right-rail-tabs-gap));
   margin-left: calc(-1 * var(--right-rail-tabs-gap));
@@ -331,7 +302,7 @@ body:not(.mobile-shell)
 }
 
 /* Cyber's generic hover/selected button treatment (cyber.css) would paint
-   the tabs; the open tab stays a label on the shared surface. */
+   the tabs; the open tab stays an icon on the shared surface. */
 :root[data-ui-theme='cyber'] .right-rail-tab:not([aria-selected='true']):hover {
   background-color: rgba(226, 235, 236, 0.08);
   box-shadow: none;

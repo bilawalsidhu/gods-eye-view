@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fire, makeDocument } from '../testSupport/fakeDom.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
+import { readFileSync } from 'node:fs';
 import {
+  RAIL_TAB_ICONS,
   createRightRailTabs,
   nextRailTabIndex,
   railJoinPath,
@@ -57,10 +59,10 @@ function fixture() {
   const join = rail.querySelector('.right-rail-join');
   const tabFor = (id) =>
     strip.children.find((tab) => tab.dataset.railTab === id);
-  const labelOf = (tab) =>
+  const iconOf = (tab) =>
     tab.children.find((child) =>
-      child.classList.contains('right-rail-tab-label'),
-    ).textContent;
+      child.classList.contains('right-rail-tab-icon'),
+    );
   return {
     doc,
     rail,
@@ -75,11 +77,11 @@ function fixture() {
     join,
     calls,
     tabFor,
-    labelOf,
+    iconOf,
   };
 }
 
-test('builds one tab per visible rail panel, in rail order, labelled from the panel header', () => {
+test('builds one icon tab per visible rail panel, in rail order, named from the panel header', () => {
   const f = fixture();
   assert.equal(
     f.rail.children[0],
@@ -98,20 +100,37 @@ test('builds one tab per visible rail panel, in rail order, labelled from the pa
   assert.deepEqual(
     f.strip.children.map((tab) => [
       tab.dataset.railTab,
-      f.labelOf(tab),
+      f.iconOf(tab).textContent,
+      tab.getAttribute('aria-label'),
       tab.getAttribute('aria-controls'),
     ]),
     [
-      ['pp-toggles', 'DISPLAY', 'pp-toggles'],
-      ['cctv-panel', 'CCTV', 'cctv-panel'],
-      ['global-context-panel', 'CONTEXT', 'global-context-panel'],
+      ['pp-toggles', 'tune', 'DISPLAY', 'pp-toggles'],
+      ['cctv-panel', 'videocam', 'CCTV', 'cctv-panel'],
+      [
+        'global-context-panel',
+        'travel_explore',
+        'CONTEXT',
+        'global-context-panel',
+      ],
     ],
     'a hidden panel (Weather off) has no tab',
   );
   for (const tab of f.strip.children) {
     assert.equal(tab.getAttribute('role'), 'tab');
     assert.equal(tab.type, 'button');
+    assert.equal(f.iconOf(tab).getAttribute('aria-hidden'), 'true');
   }
+});
+
+test('the icon font subset carries every rail tab glyph', () => {
+  const html = readFileSync(
+    new URL('../../index.html', import.meta.url),
+    'utf8',
+  );
+  const subset = /icon_names=([a-z0-9_,]+)/.exec(html)[1].split(',');
+  for (const glyph of Object.values(RAIL_TAB_ICONS))
+    assert.ok(subset.includes(glyph), glyph);
 });
 
 test('mirrors collapsed state into aria-selected, a roving tabindex and titles', () => {
@@ -254,15 +273,6 @@ test('publishes the open tab extent on the rail and keeps a join element under t
   assert.match(
     glass.style.clipPath,
     /^path\('M 16 0 L 314 0 A 16 16 0 0 1 330 16 L 330 78 /,
-  );
-  // A short strip shrinks the tab: its corners stay within half its height.
-  tab.offsetHeight = 12;
-  f.tabs.sync();
-  assert.equal(props.get('--rail-tab-bottom'), '98px');
-  assert.match(
-    glass.style.clipPath,
-    /L 366 86 A 6 6 0 0 1 372 92 A 6 6 0 0 1 366 98 L 338 98 /,
-    'a 12px tab gets 6px corners',
   );
   f.cctv.classList.add('collapsed');
   f.tabs.sync();
@@ -431,7 +441,7 @@ test('railJoinPath shrinks the fillet and corner to the room left, down to a sha
   );
 });
 
-test('the stylesheet keeps phones on border-box, folds the strip into narrow desktops, shrinks tabs instead of scrolling and draws the focus ring inside', () => {
+test('the stylesheet keeps phones on border-box, folds the strip into narrow desktops, keeps icon tabs square and whole without scrolling', () => {
   const css = readStylesheet(new URL('../../style.css', import.meta.url));
   assert.match(
     css,
@@ -441,38 +451,24 @@ test('the stylesheet keeps phones on border-box, folds the strip into narrow des
     css,
     /@media \(min-width: 721px\) and \(max-width: 760px\) \{\s*#right-context-rail\[data-rail-tabs\] \{\s*width: calc\(330px - var\(--right-rail-tabs-inset\)\);/,
   );
-  assert.match(css, /#right-rail-tabs \{[^}]*overflow: hidden;/);
+  // The tabs keep their size: a square icon, never shrunk or rotated.
+  assert.match(
+    css,
+    /\.right-rail-tab \{[^}]*flex: 0 0 auto;[^}]*width: var\(--right-rail-tabs-width\);\s*height: var\(--right-rail-tabs-width\);/,
+  );
   assert.doesNotMatch(
     css,
-    /#right-rail-tabs \{[^}]*(overflow: [^;]*auto|scrollbar-width)/,
+    /\.right-rail-tab[^{]*\{[^}]*(writing-mode|mask-image)/,
   );
-  // The tabs give way to a short strip and clip their labels at the end.
-  assert.match(
+  // The column keeps its natural height: every tab stays whole, nothing
+  // scrolls or clips; only the strip and the slot take the pointer.
+  assert.doesNotMatch(
     css,
-    /\.right-rail-tab \{[^}]*flex: 1 1 0%;[^}]*align-items: flex-start;[^}]*min-height: 0;[^}]*max-height: max-content;[^}]*overflow: hidden;[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - 6px\), transparent\);/,
+    /#right-rail-(column|tabs) \{[^}]*(max-height|overflow|scrollbar-width)/,
   );
-  // The column stands the lane's full height so the strip's size is definite
-  // and a zero basis shares it; only the strip and the slot take the pointer.
-  assert.match(
-    css,
-    /#right-rail-column \{[^}]*height: var\(--right-stack-max-height, 70vh\);[^}]*pointer-events: none;/,
-  );
+  assert.match(css, /#right-rail-column \{[^}]*pointer-events: none;/);
   assert.match(css, /#right-rail-tabs \{[^}]*pointer-events: auto;/);
   assert.match(css, /#right-rail-tools \{[^}]*pointer-events: auto;/);
-  assert.doesNotMatch(
-    css,
-    /#right-rail-column \{[^}]*max-height: var\(--right-stack-max-height/,
-  );
-  // The rail layout pass measures the column's natural height to climb above
-  // its baseline before the strip has to scroll.
-  assert.match(
-    css,
-    /#right-context-rail\[data-rail-measuring\] > #right-rail-column \{\s*height: auto !important;/,
-  );
-  assert.match(
-    css,
-    /#right-rail-tabs > \.right-rail-tab:focus-visible \{\s*outline-offset: -3px;/,
-  );
   assert.match(css, /--right-rail-panel-cover: min\(/);
   // The column hides on phones, where the Radio launcher is back in Context's
   // header; in the slot the launcher's popover opens upward and to the left.

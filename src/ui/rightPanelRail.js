@@ -175,8 +175,7 @@ export function layoutRightPanelRail({
     .map((node) => [node, node.scrollTop || 0])
     .filter(([, top]) => top > 0);
   const naturalHeights = new Map();
-  // The tab strip's column stands beside the panels; the measuring override
-  // gives it its natural height.
+  // The tab strip's column stands beside the panels at its natural height.
   const column = stack.querySelector?.(':scope > #right-rail-column');
   let columnHeight = 0;
   // Remove live height allocations through a synchronous CSS override. Keeping
@@ -223,7 +222,7 @@ export function layoutRightPanelRail({
   if (!layout) return;
   // A lane too short for the strip's column: the rail climbs toward the HUD
   // above, as far as the strip needs and the obstacles allow. A lane still
-  // shorter shrinks the tabs (styles/right-rail-tabs.css).
+  // shorter leaves the strip running past the lane's end.
   const shortfall = columnHeight - (layout.safeBottom - layout.safeTop);
   if (shortfall > 0) layout = resolve(alignedTop - shortfall) || layout;
   const { safeTop, safeBottom, maxHeight: availableHeight } = layout;
