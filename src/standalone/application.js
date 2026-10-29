@@ -17,6 +17,8 @@ let constructed = false;
 export function createStandaloneApplication({
   googleApiKey,
   cesiumToken,
+  mapillaryToken,
+  loadBrowserConfig,
   geospatial = {},
   voice = {},
   sources = {},
@@ -40,26 +42,38 @@ export function createStandaloneApplication({
   let catalog;
   return createApplication({
     createScene: async (context) => {
+      // Keep application construction synchronous; only the existing async
+      // scene startup waits for the bounded standalone configuration read.
+      const browserConfig = loadBrowserConfig
+        ? await loadBrowserConfig(context.signal)
+        : { googleApiKey, cesiumToken, mapillaryToken };
+      context.signal.throwIfAborted();
+      const {
+        googleApiKey: configuredGoogleKey,
+        cesiumToken: configuredCesiumToken,
+        mapillaryToken: configuredMapillaryToken,
+      } = browserConfig;
       placeSearch = createStandalonePlaceSearch({
         // The bundled city and landmark data the offline name provider reads.
         // The search package takes it as plain data rather than importing it,
         // so it stays free of application state.
         presets: CITY_POIS,
         ...geospatial,
-        resolveApiKey: () => googleApiKey,
+        resolveApiKey: () => configuredGoogleKey,
         signal: context.signal,
       });
       const scene = await createStandaloneScene({
         ...context,
-        googleApiKey,
+        googleApiKey: configuredGoogleKey,
         // Without a key, Google 3D can still load with tokens from the
         // app's server when it offers them.
-        googleTokens: googleApiKey ? null : createGoogleTokenSource(),
-        cesiumToken,
+        googleTokens: configuredGoogleKey ? null : createGoogleTokenSource(),
+        cesiumToken: configuredCesiumToken,
         loaderStatus,
       });
       catalog = createStandaloneCatalog({
         sources,
+        mapillaryToken: configuredMapillaryToken,
         streetLevelProviders,
         nepalBoundaryResolver: (signal) =>
           scene.operations.annotationResolver.resolveRegionRingForQuery(

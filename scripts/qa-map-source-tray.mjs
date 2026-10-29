@@ -597,7 +597,9 @@ try {
   // exercised without opening a live microphone session during browser QA.
   await page.evaluate(() => {
     const manager = window.__godsEyeView.styleManager;
-    const voice = window.__godsEyeView.voiceCommands;
+    // Physical input calls the mounted controller rather than the facade's
+    // start method. Stub the actual seam to keep this gate microphone-free.
+    const voice = window.__godsEyeView.voiceCommands.session.adapter.controller;
     const grid = document.getElementById('style-buttons');
     const root = document.getElementById('gev-voice-control');
     const originalSetStyle = manager.setStyle;

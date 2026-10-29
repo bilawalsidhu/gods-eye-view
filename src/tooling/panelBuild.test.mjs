@@ -12,6 +12,12 @@ import {
   workerFilesPrelude,
 } from '../../build/panel.js';
 
+test('panel build keeps its separately restricted browser credentials', () => {
+  const config = panelBuildConfig({ define: { existing: 'true' } });
+  assert.equal(config.define['import.meta.env.GEV_PANEL_BUILD'], 'true');
+  assert.equal(config.define.existing, 'true');
+});
+
 test('the panel loads the paths the panel build writes', () => {
   assert.equal(PANEL_BASE, PANEL_PATHS.PANEL_BASE);
   assert.equal(

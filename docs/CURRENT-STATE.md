@@ -6408,3 +6408,26 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+## Runtime browser configuration
+
+Standalone development and preview expose GET /api/runtime-config with exactly
+googleMapsApiKey, cesiumIonToken and mapillaryClientToken. These are intentional
+browser credentials, not server secrets. Responses are uncached JSON; other
+methods return 405 and unrelated paths keep the usual unknown-API behavior.
+Existing Host/API response-header gates are unchanged.
+
+Before creating the scene, standalone startup reads this same-origin endpoint
+without following redirects, allowing at most one second and 16 KiB for acquisition
+and body consumption. Nonempty string values override their embedded build values;
+missing, empty, malformed, oversized, unavailable or timed-out configuration falls
+back per field to the build values. Startup cancellation prevents scene construction.
+The resolved Mapillary value reaches the standalone catalogue source and viewer.
+No provider request is made by configuration loading itself.
+
+MCP panel builds deliberately retain their separately restricted embedded keys and
+do not request runtime browser configuration. Runtime configuration does not add
+production hosting support, new network exposure, profile storage or proxy trust.
+Removing an embedded credential still requires rebuilding rather than sending an
+empty runtime value. Server keys, profiles and other environment fields are never
+serialized.

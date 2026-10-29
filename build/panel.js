@@ -17,6 +17,9 @@ export const PANEL_OUT_DIR = 'dist/panel';
 export function panelBuildConfig(config) {
   return {
     ...config,
+    // A panel may use keys restricted to the host client's origin. Do not
+    // replace them with the standalone server's runtime browser keys.
+    define: { ...config.define, 'import.meta.env.GEV_PANEL_BUILD': 'true' },
     base: PANEL_BASE,
     build: {
       ...config.build,
