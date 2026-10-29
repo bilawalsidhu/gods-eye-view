@@ -89,14 +89,15 @@ export function createIngestion({
   /**
    * Run the intensity filter over the loaded payload. This is the ONE place
    * the shown set is derived: `_fires` / `_firesByFrp` feed markers, cards,
-   * heat cells, the context store, the top-fires query and the analyst
-   * records, so none of them can disagree about which fires exist. Cells are
-   * aggregated per shown set, so the cache goes with it.
+   * the heatmap, the context store, the top-fires query and the analyst
+   * records, so none of them can disagree about which fires exist. Cells and
+   * the heat raster are built per shown set, so their caches go with it.
    */
 
   function applyFilter() {
     layerState._fires = filterFires(layerState._allFires, layerState._filter);
     layerState._cellCacheByGrid.clear();
+    layerState._heatRaster = null;
     layerState._firesByFrp = filterFires(
       layerState._allFiresByFrp,
       layerState._filter,

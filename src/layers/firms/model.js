@@ -137,36 +137,6 @@ export function createModel({
   }
 
   /**
-   * Severity stop for an aggregated heat cell from its heat-normalized score
-   * (density, night share and strongest FRP together). Cells say *where* it
-   * burns, so they stay on the warm end of the ramp — lime, amber, red — and
-   * read as one field instead of a per-cell mosaic; the cold stops belong to
-   * single detections, which say *how hard* each one burns.
-   * @param {number} normalized - 0..1 heat score (sqrt-normalized to the view).
-   * @returns {{name: string, minFrp: number, color: Cesium.Color}}
-   */
-
-  function cellColorStop(normalized) {
-    const name =
-      normalized > 0.72 ? 'red' : normalized > 0.42 ? 'amber' : 'lime';
-    return (
-      DETECTION_COLOR_STOPS.find((stop) => stop.name === name) ||
-      DETECTION_COLOR_STOPS[0]
-    );
-  }
-
-  /**
-   * Fill color for an aggregated heat cell.
-   * @param {number} normalized - 0..1 heat score (see {@link cellColorStop}).
-   * @param {number} alpha - Fill alpha (heat-normalized by the caller).
-   * @returns {Cesium.Color}
-   */
-
-  function heatColor(normalized, alpha) {
-    return cellColorStop(normalized).color.withAlpha(alpha);
-  }
-
-  /**
    * Pick a sprite color stop for one detection from its FRP on the shared ramp.
    * @param {Object} fire - Detection record.
    * @returns {{name: string, color: Cesium.Color}}
@@ -432,8 +402,8 @@ export function createModel({
 
   /**
    * Card model for an aggregated heat cell, e.g. title "14 FIRES", detail
-   * "max 210 MW · new 3h". Accent comes from the candidate (heat-normalized
-   * score is only known at renderCells time). Exported for unit tests.
+   * "max 210 MW · new 3h". Accent comes from the candidate (renderHeat sets
+   * it with {@link cellCardAccent}). Exported for unit tests.
    * @param {{cell: Object, position: Cesium.Cartesian3, accent: string}} candidate
    * @param {number} nowMs - Current epoch milliseconds.
    * @returns {Object} firmsLabels entry.
@@ -494,14 +464,14 @@ export function createModel({
   }
 
   /**
-   * Cell card accent: the warm severity stop of the cell's heat score,
-   * mirroring heatColor.
-   * @param {number} normalized - 0..1 heat score.
+   * Cell card accent: the cell's strongest fire on the FRP ramp, the same
+   * color its markers take once the camera is close enough to show them.
+   * @param {{maxFrp?: number}} cell - Aggregated cell.
    * @returns {string} "r, g, b" accent string.
    */
 
-  function cellAccent(normalized) {
-    return accentForSeverity(cellColorStop(normalized).name);
+  function cellCardAccent(cell) {
+    return accentForSeverity(frpColorStop(cell?.maxFrp ?? 0).name);
   }
 
   /** Coordinate line like "30.512°N 75.831°E". */
@@ -607,8 +577,6 @@ export function createModel({
     boundsContainPoint,
     cellIntersectsBounds,
     heatScore,
-    heatColor,
-    cellColorStop,
     frpColorStop,
     detectionColorStop,
     frpPixelSize,
@@ -623,7 +591,7 @@ export function createModel({
     buildFireCard,
     buildCellCard,
     applyFirmsOverlayPolicy,
-    cellAccent,
+    cellCardAccent,
     formatLatLon,
     formatFrp,
     formatAge,

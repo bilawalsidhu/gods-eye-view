@@ -55,6 +55,10 @@ export function createHeatImagery({
       raster = next;
       attach();
     },
+    /** True once a raster was handed over (painted or waiting for a host). */
+    hasRaster() {
+      return raster !== null;
+    },
     setShow(value) {
       show = Boolean(value);
       if (layer) layer.show = show;

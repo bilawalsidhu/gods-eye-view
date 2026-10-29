@@ -131,6 +131,25 @@ export function createFirmsState({ services, config }) {
 
   layerState._cellCacheByGrid = new Map();
 
+  /**
+   * Heat raster for the far bands (firmsHeatRaster.js); null = stale, rebuilt
+   * on the next far render. Cleared with the cell cache on every new shown set.
+   */
+
+  layerState._heatRaster = null;
+
+  /** Pending debounced heat rebuild (see HEAT_REBUILD_MS). */
+
+  layerState._heatRebuildTimer = null;
+
+  /** Imagery adapter (heatImagery.js), created on the first far render. */
+
+  layerState._heatImagery = null;
+
+  /** Shell-provided imagery host resolver; falls back to viewer.imageryLayers. */
+
+  layerState._imageryHost = null;
+
   /** Camera idle snapshot so the throttled LOD check is ~free when parked. */
 
   layerState._camSnapValid = false;

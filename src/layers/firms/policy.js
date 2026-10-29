@@ -7,9 +7,10 @@ import * as Cesium from 'cesium';
 export const REFRESH_INTERVAL_MS = 600_000;
 
 /**
- * LOD bands keyed by camera height. `cells` bands render aggregated
- * ground-clamped heat rectangles; `detections` bands (< ~750km plus the
- * local band) render individual fire detections as glow-sprite billboards.
+ * LOD bands keyed by camera height. `heat` bands (above ~3,000 km) drape a
+ * Snap Map–style heatmap over the globe (firmsHeatRaster.js); their
+ * `gridDegrees` aggregation only feeds the "N FIRES" cards. `detections`
+ * bands render individual fire detections as glow-sprite billboards.
  * Labels in every band go through the shared screen-space greedy declutter
  * (hard cap MAX_AMBIENT_LABELS) — there are no per-band label knobs.
  */
@@ -18,7 +19,7 @@ export const LOD_LEVELS = [
   {
     id: 'global',
     minHeight: 9000000,
-    mode: 'cells',
+    mode: 'heat',
     gridDegrees: 2.0,
     maxCells: 1800,
     labelDistance: 12000000,
@@ -26,7 +27,7 @@ export const LOD_LEVELS = [
   {
     id: 'regional',
     minHeight: 3000000,
-    mode: 'cells',
+    mode: 'heat',
     gridDegrees: 1.0,
     maxCells: 3600,
     labelDistance: 8500000,
@@ -46,6 +47,25 @@ export const LOD_LEVELS = [
     labelDistance: 1800000,
   },
 ];
+
+/**
+ * Global heat raster for the `heat` bands: ≈0.18° per pixel, Gaussian σ in
+ * pixels. Built once per data refresh or filter change, never per camera move.
+ */
+
+export const HEAT_RASTER = Object.freeze({
+  width: 2048,
+  height: 1024,
+  sigmaPx: 3,
+});
+
+/**
+ * Trailing delay before a stale heatmap is rebuilt while one is already on
+ * screen: a slider drag fires many filter changes, and a build plus PNG
+ * encode costs a few hundred milliseconds. The first paint is immediate.
+ */
+
+export const HEAT_REBUILD_MS = 150;
 
 export const LOD_CHECK_MS = 650;
 
@@ -90,7 +110,7 @@ export const CULL_LIFT_THRESHOLD_M = 10;
 export const CULL_LIFT_M = 12;
 
 /**
- * Color stops shared by cell heat fills and detection glow sprites: the
+ * Color stops for detection glow sprites and card accents: the
  * six-stop cold → hot FRP ramp (firmsIntensity.js), coldest first, as Cesium
  * colors. Stop names key the glow-sprite cache and the card accents.
  */

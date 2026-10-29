@@ -9,7 +9,7 @@ import {
   sliderPositionForFrp,
 } from '../../data/firmsIntensity.js';
 import { formatNumber, t } from '../../i18n/index.js';
-import { REFRESH_INTERVAL_MS } from './policy.js';
+import { LOD_LEVELS, REFRESH_INTERVAL_MS } from './policy.js';
 
 /** Slider resolution: whole-percent positions along the log axis. */
 const SLIDER_STEPS = 1000;
@@ -307,6 +307,19 @@ export function createQueries({
         if (result.length >= limit) break;
       }
       return result;
+    },
+
+    /** Test seam: render one named LOD band against a near-global view. */
+    _renderLodForTest(lodId) {
+      const lod = LOD_LEVELS.find((level) => level.id === lodId);
+      if (lod.mode === 'detections')
+        components.rendering.renderDetections(lod, null);
+      else components.rendering.renderHeat(lod, null);
+    },
+
+    /** Test seam: entities drawn by the layer's data source. */
+    _entityCountForTest() {
+      return layerState._dataSource?.entities?.values?.length ?? 0;
     },
 
     /** Test seam that binds the production click path and indexes. */
