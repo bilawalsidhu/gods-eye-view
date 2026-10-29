@@ -4,6 +4,24 @@ Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
 
+The HUD's AI summary line looks up place names for the view only when the
+summary can use them. The page asks `GET /api/openai/hud-summary/status` once;
+a server without an OpenAI key answers `{ configured: false }`, and the HUD then
+makes no reverse-geocode or Nearby Places request until the page reloads. A
+server without the route is asked once, and an unconfigured summary reply
+stops the lookups the same way. Each lookup reverse-geocodes at most two
+points: the view center alone below 10 km, the center and one viewport point
+up to 750 km, and two viewport points up to 3000 km; Nearby Places is still
+added below 25 km. A lookup is reused until the view center moves a quarter of
+the visible width, the camera's distance to the center doubles or halves, or
+the camera crosses one of those heights. The width is measured from the
+camera's distance to the view center, so terrain and tilt scale it. A reused
+lookup asks again only for what it did not get (a timeout, a failure, an empty
+answer); everything else is a cache hit. A small pan over a reused lookup
+repaints the last AI reply instead of asking for a new one. A host passing
+`cachedOnly` keeps reading every cached sample. Voice context lookups are
+unchanged.
+
 The HUD's LAT/LON degrees-minutes-seconds readout rounds the coordinate once, to
 hundredths of a second, and then splits it. A value within 0.005" of the next
 whole minute carries into the minutes and degrees, so `-122.35` reads
@@ -5788,7 +5806,11 @@ easier to meet (detection is now on more often), but does not create it.
   coverage number. `stats.loading` covers outstanding flow work as well as the
   road fetch, so a flow failure landing after the first paint still ends the
   shared loading batch as LOAD FAILED. Harnesses must gate on `!stats.error`,
-  never on `mode === 'live'` alone.
+  never on `mode === 'live'` alone. When the drawn flow came from the proxy's
+  cached STALE-BUDGET / STALE-ERROR tiles, `getStats()` reports `stale: true`
+  and `oldestTileAt`, the row reads STALE with the oldest tile's age, and the
+  sync chip reads
+  `STALE · Roads: <source> · Flow: cached TomTom tiles` instead of LIVE.
 - Traffic runs in `sim` mode (white dots, hardcoded speeds) unless `TOMTOM_API_KEY`
   is configured (env or Keychain `tomtom-api`/`api-key`), which enables `live` mode:
   TomTom flow vector tiles via the budget-governed `/api/tomtom` proxy

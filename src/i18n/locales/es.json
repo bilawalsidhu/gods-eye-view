@@ -864,6 +864,7 @@
   "LIVE · Roads: {source} · No flow roads in view": "EN VIVO · Vías: {source} · Sin vías con flujo a la vista",
   "LIVE · Roads: {source} · Flow {percent}%": "EN VIVO · Vías: {source} · Flujo {percent}%",
   "SIMULATED · Roads: {source} · Flow {percent}%": "SIMULADO · Vías: {source} · Flujo {percent}%",
+  "STALE · Roads: {source} · Flow: cached TomTom tiles": "DESACTUALIZADO · Vías: {source} · Flujo: teselas de TomTom en caché",
   "Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated": "Sincronizando flujo · Vías: OpenStreetMap · Flujo: TomTom · Sin coincidencia: simulado",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov · Unmatched: simulated": "EN VIVO · Vías: OpenStreetMap · Flujo: TomTom · {percent}% cob. · Sin coincidencia: simulado",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov": "EN VIVO · Vías: OpenStreetMap · Flujo: TomTom · {percent}% cob.",

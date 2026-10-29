@@ -254,6 +254,7 @@
   "LIVE · Roads: {source} · No flow roads in view": "ОНЛАЙН · Дороги: {source} · В кадре нет дорог с потоком",
   "LIVE · Roads: {source} · Flow {percent}%": "ОНЛАЙН · Дороги: {source} · Поток {percent}%",
   "SIMULATED · Roads: {source} · Flow {percent}%": "СИМУЛЯЦИЯ · Дороги: {source} · Поток {percent}%",
+  "STALE · Roads: {source} · Flow: cached TomTom tiles": "УСТАРЕЛ · Дороги: {source} · Поток: тайлы TomTom из кэша",
   "Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated": "Синхронизация потока · Дороги: OpenStreetMap · Поток: TomTom · Без совпадений: симуляция",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov · Unmatched: simulated": "ОНЛАЙН · Дороги: OpenStreetMap · Поток: TomTom · охват {percent}% · Без совпадений: симуляция",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov": "ОНЛАЙН · Дороги: OpenStreetMap · Поток: TomTom · охват {percent}%",
