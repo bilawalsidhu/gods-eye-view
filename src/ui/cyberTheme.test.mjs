@@ -1,4 +1,9 @@
-import { getScopeMaskFeather, isScopeMaskEnabled, setScopeMaskEnabled, setScopeMaskFeather } from '../scopeMask.js';
+import {
+  getScopeMaskFeather,
+  isScopeMaskEnabled,
+  setScopeMaskEnabled,
+  setScopeMaskFeather,
+} from '../scopeMask.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -274,8 +279,14 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
 
 test('scope choice and expanded feather survive every HUD layout and both restore paths', async (t) => {
   const { owner } = styleOwner(t, 'tactical');
-  const previous = { enabled: isScopeMaskEnabled(), feather: getScopeMaskFeather() };
-  t.after(() => { setScopeMaskEnabled(previous.enabled); setScopeMaskFeather(previous.feather); });
+  const previous = {
+    enabled: isScopeMaskEnabled(),
+    feather: getScopeMaskFeather(),
+  };
+  t.after(() => {
+    setScopeMaskEnabled(previous.enabled);
+    setScopeMaskFeather(previous.feather);
+  });
   Object.assign(owner.services, { setScopeMaskEnabled, setScopeMaskFeather });
   owner._scopeBtn = { checked: true };
   owner._scopeFeatherSlider = { value: '11', disabled: false };
@@ -534,11 +545,11 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
   assert.match(
     cyberStyles,
-    /#left-panel-stack\s*> :is\(#data-panel, #scene-panel\)\.collapsed \{\s*width: var\(--cyber-panel-collapsed-width\);/,
+    /#left-panel-stack\s*> :is\(#data-panel, #utilities-panel, #scene-panel\)\.collapsed \{\s*width: var\(--cyber-panel-collapsed-width\);/,
   );
   assert.match(
     cyberStyles,
-    /:is\(#data-panel, #scene-panel\)\.collapsed\s+:is\(\.data-panel-inner, \.scene-panel-inner\) \{[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
+    /:is\(#data-panel, #utilities-panel, #scene-panel\)\.collapsed\s+:is\(\.data-panel-inner, \.scene-panel-inner\) \{[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
   );
   assert.match(
     cyberStyles,

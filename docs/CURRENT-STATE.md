@@ -131,6 +131,20 @@ provider registration rejects compositions that cannot fit rather than truncatin
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
 
+## Utilities panel — October 29, 2026
+
+UTILITIES is its own panel in the left column, after Data Layers and CCTV and
+above Scenes (`#utilities-panel` in `src/ui/templates/layer-panels.html`). It
+holds the Directions layer row, which `LayerPanel` renders into
+`#utilities-toggles` instead of the Data Layers list, and Draw and Import,
+which moved there from DISPLAY with their ids unchanged. Radio, formerly the
+other row under the Data Layers "Utilities" heading, stays in Data Layers under
+"Audio". The panel collapses and remembers its state like the other left
+panels; share links do not carry it. It hides in clean view, recording and
+Cockpit, and on a phone it sits collapsed in the Layers sheet under Data
+Layers. The Directions, Draw and Import QA gates open it to reach their
+controls.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,
@@ -284,7 +298,7 @@ settings from active map/contact effects. Sonar settings are session-only and
 return to their defaults on reload. Sliders accept integer values matching the
 action's ranges.
 
-Wind appears in the Weather group before Utilities. The surface-weather prototype
+Wind appears in the Weather group before Audio. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
 It defaults to 10 m wind trails over the existing basemap. Speed shading is an explicit choice; earlier v2 links retain their original speed-shading meaning.
 Weather rows contain only the toggle and source/meta line. Configuration lives
@@ -5396,7 +5410,7 @@ request viewbox and continues searching without that geographic preference.
 
 ### Manual Whiteboard Drawing (September 2026)
 
-- DISPLAY ▸ **Draw** turns the globe into a whiteboard drawn by hand. Pick a shape (Area, Line, Pin), click the vertices on the real world, type an optional label and pick a colour, and finish. **Keyboard contract, live only while Draw is on and never while you are typing in another field:** Enter finishes the shape (as does a double-click, and the two cannot both submit it — the session is replaced before the annotate call is awaited); Backspace removes the last vertex; Esc cancels the shape in progress, and a second Esc — Esc on an empty session — leaves draw mode. Typing in the label field keeps Backspace; Enter there also finishes. **Clear** wipes the board (the shape in progress and every placed mark), so removing marks does not require the console or the microphone.
+- UTILITIES ▸ **Draw** turns the globe into a whiteboard drawn by hand. Pick a shape (Area, Line, Pin), click the vertices on the real world, type an optional label and pick a colour, and finish. **Keyboard contract, live only while Draw is on and never while you are typing in another field:** Enter finishes the shape (as does a double-click, and the two cannot both submit it — the session is replaced before the annotate call is awaited); Backspace removes the last vertex; Esc cancels the shape in progress, and a second Esc — Esc on an empty session — leaves draw mode. Typing in the label field keeps Backspace; Enter there also finishes. **Clear** wipes the board (the shape in progress and every placed mark), so removing marks does not require the console or the microphone.
 - Runtime entry: `createApplicationTools` (`src/app/tools.js`, behind the `src/standalone/tools.js` shim) calls `initDrawTool({ viewer, annotations })` after `initAnnotations` and defers its `destroy()`, so disposing the shell returns every DOM listener, the Cesium handler, the preview data source, the borrowed click actions and the `window.__gevDrawTool` handle. Its markup is a DISPLAY-rail component template (`src/ui/templates/display-controls.html`), assembled into `index.html` at build time. That handle (`setActive`, `setShape`, `addVertex(lon, lat)`, `finish`, `cancel`, `clearAll`, `diagnostics`) is the no-mouse test seam.
 - Contract: a finished shape is submitted through the SAME `annotationEngine.annotate()` the voice agent uses, with geometry supplied and `manual: true` (`type: area` + `ring`, `type: route` + `path`, `type: pin` + coordinates). `resolveSpec` short-circuits manual specs (`resolveManualSpec`) so no geocoder, Places or Overpass call is made. A drawn area is a real (not synthesized) outline and drapes solid; a drawn line is a `route` with `mode: 'manual'`, labelled with its length and never a travel time; a pin is a point. Drawn marks therefore render with the whiteboard look, persist, de-dup, appear in `.list()`, and clear with `clear_annotations` / `.clear()`.
 - **A vertex is a lon/lat, and the mark is DRAPED.** Clicks are picked through `pickWorldFromScreen` — one of two scene helpers the annotation resolver factory (`src/annotations/resolver.js`) exposes alongside `sampleGroundHeight`, so the app has ONE depth-aware pick cascade rather than a second written beside it — which returns the height the pick landed on as well as the coordinate, so the live preview hangs on the roof or hillside under the pointer instead of sinking to sea level. The world renderer draws areas and routes with `clampToGround`, so the height is dropped at finish in one place (`finishSpec`) rather than being carried downstream and discarded silently: what you get is the outline you drew, lying on the surface beneath it.
@@ -5436,7 +5450,7 @@ request viewbox and continues searching without that geographic preference.
 
 ### Import Your Own Files (October 2026)
 
-- DISPLAY ▸ **Import** reads GeoJSON (`.geojson`/`.json`), KML, KMZ and GPX from the picker or a file drop anywhere in the app. Each file gets show/hide, Fly-to and Remove controls. GeoJSON and GPX use the row's color; KML/KMZ retain their styles and show a hatched swatch. The file bytes remain on the device for the page session. Rendered overlays can appear in map screenshots sent through voice or other existing screenshot tools.
+- UTILITIES ▸ **Import** reads GeoJSON (`.geojson`/`.json`), KML, KMZ and GPX from the picker or a file drop anywhere in the app. Each file gets show/hide, Fly-to and Remove controls. GeoJSON and GPX use the row's color; KML/KMZ retain their styles and show a hatched swatch. The file bytes remain on the device for the page session. Rendered overlays can appear in map screenshots sent through voice or other existing screenshot tools.
 - **Ground and height.** GeoJSON XYZ coordinates become ground footprints. KML ground lines/rings are tessellated; static recorded tracks preserve their original vertices, segment gaps and explicit altitude modes. KML with absolute/relative altitude keeps that meaning. Ground pins resolve in batches of 256 against loaded terrain and, in the nearby camera footprint on photoreal maps, `clampToHeightMostDetailed`, then draw in one owned native BillboardCollection per file, with static positions and no per-frame point Entity visualizer or clamping callbacks. Point metadata remains in `dataSource.importedEntities` for framing/style inspection; non-point geometry stays in the normal source collection. Pin collections mount only after source admission, follow file show/hide, and are destroyed on removal. Settled camera/map-source changes and completed terrain loads refresh visible files through the same serial queue; distant points retain their latest available height. No detailed worldwide terrain sweep is started. Nearby mesh sampling can add requests/time; configured photoreal providers require separate validation. The depth test is disabled for ground pins, matching Draw's marker visibility policy.
 - **Navigation.** Row Fly-to uses `runImmediateNavigation('file', …)`; Cockpit can refuse it and existing follow/track ownership is released first. Automatic Fly-to is stamped when a batch is submitted and reasserted before flying. Pointer/wheel gestures and newer navigation supersede it, including time spent in the queue. Framing uses every finite visible point/path/polygon-hole/wall vertex plus rotated overlay bounds, with viewport-aware range and a nadir view. The target uses available terrain/cached ground height and the ground guard on arrival. Empty footprints never fall back to deferred `viewer.flyTo`.
 - **Clock.** Imports expose no source clock and no entity availability. KML times/view metadata are removed before loading; recorded tracks become static lines. GPX segments remain separate and GPX times are ignored. The shared clock stays unchanged.

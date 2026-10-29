@@ -3191,8 +3191,9 @@ function normalizeCockpitAction(value) {
 }
 
 function focusDataLayerRow(layerId) {
+  const selector = `[data-layer-id="${CSS.escape(layerId)}"]`;
   const row = document.querySelector(
-    `#data-toggles [data-layer-id="${CSS.escape(layerId)}"]`,
+    `#data-toggles ${selector}, #utilities-toggles ${selector}`,
   );
   if (!row) return null;
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });

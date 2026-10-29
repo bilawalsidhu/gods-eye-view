@@ -2007,6 +2007,7 @@ body.cockpit-mode #left-panel-stack {
   max-height: none;
   transition: none;
 }
+body.cockpit-mode #left-panel-stack > #utilities-panel,
 body.cockpit-mode #left-panel-stack > #scene-panel {
   display: none !important;
 }

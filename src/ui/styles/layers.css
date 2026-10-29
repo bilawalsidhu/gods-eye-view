@@ -1398,3 +1398,101 @@ body.recording-mode #right-context-rail > [data-panel-id] {
     width: 100%;
   }
 }
+
+/* ── Utilities Panel ─────────────────────────── */
+/* Directions (from the layer list), Draw and Import. Draw and Import read as
+   rows like Directions above them (.data-toggle-row): icon and name, their
+   options indented under the name. */
+#utilities-panel {
+  --panel-expanded-width: 280px;
+  width: var(--panel-expanded-width);
+}
+
+#utilities-panel .panel-glow {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(
+    ellipse at center,
+    var(--accent-dim) 0%,
+    transparent 60%
+  );
+  filter: blur(20px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+/* The layer list takes its natural height; the panel scrolls as a whole. */
+.utilities-list {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.utilities-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.utilities-tools .pp-toggle-group {
+  width: 100%;
+}
+
+#utilities-panel .utilities-tools .pp-toggle-btn {
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  gap: 8px;
+  padding: 8px 10px 6px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background var(--transition-fast);
+}
+
+#utilities-panel .utilities-tools .pp-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+#utilities-panel .utilities-tools .pp-icon {
+  flex: none;
+  width: 16px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+#utilities-panel .utilities-tools .pp-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-transform: none;
+  color: var(--text-primary);
+}
+
+/* Draw reads as on with the accent of an enabled layer row. */
+#utilities-panel
+  .utilities-tools
+  .pp-toggle-btn:is([aria-pressed='true'], .active) {
+  background: var(--accent-dim);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+#utilities-panel
+  .utilities-tools
+  :is(.pp-slider-row, .geo-import-list, .geo-import-hint) {
+  margin-left: 34px;
+  margin-right: 10px;
+}
+
+#utilities-panel.collapsed .utilities-tools {
+  display: none;
+}

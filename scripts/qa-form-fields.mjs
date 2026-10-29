@@ -276,7 +276,12 @@ try {
   );
 
   await page.evaluate(() => {
-    for (const panel of ['pp-toggles', 'scene-panel', 'cctv-panel'])
+    for (const panel of [
+      'pp-toggles',
+      'utilities-panel',
+      'scene-panel',
+      'cctv-panel',
+    ])
       window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
         persist: false,
         syncShare: false,
@@ -419,14 +424,24 @@ try {
     { timeout: 60000 },
   );
   await page.evaluate(() => {
-    for (const panel of ['pp-toggles', 'scene-panel', 'cctv-panel'])
+    for (const panel of [
+      'pp-toggles',
+      'utilities-panel',
+      'scene-panel',
+      'cctv-panel',
+    ])
       window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
         persist: false,
         syncShare: false,
       });
   });
   await page.evaluate(() => {
-    for (const panel of ['pp-toggles', 'scene-panel', 'cctv-panel'])
+    for (const panel of [
+      'pp-toggles',
+      'utilities-panel',
+      'scene-panel',
+      'cctv-panel',
+    ])
       window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
         persist: false,
         syncShare: false,

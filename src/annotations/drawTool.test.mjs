@@ -62,9 +62,9 @@ test('the engine resolves manual geometry before any name resolution', () => {
 });
 
 test('the Draw control markup carries the ids the tool binds to', () => {
-  // The DISPLAY rail is a component template now, assembled into index.html at
+  // UTILITIES is a component template now, assembled into index.html at
   // build time — the markup is not in index.html any more.
-  const html = read('src/ui/templates/display-controls.html');
+  const html = read('src/ui/templates/layer-panels.html');
   const ids = [
     'draw-toggle',
     'draw-mode-row',
@@ -140,8 +140,10 @@ test('nothing promises a GeoJSON export for drawn shapes', () => {
   }
   for (const file of ['README.md', 'CHANGELOG.md', 'docs/CURRENT-STATE.md']) {
     const source = read(file);
-    const at = source.indexOf('DISPLAY ▸ **Draw**');
-    const start = at >= 0 ? at : source.indexOf('DISPLAY ▸ Draw');
+    const start =
+      ['UTILITIES ▸ **Draw**', 'DISPLAY ▸ **Draw**', 'DISPLAY ▸ Draw']
+        .map((text) => source.indexOf(text))
+        .find((at) => at >= 0) ?? -1;
     assert.ok(start >= 0, `${file} should describe the Draw control`);
     const section = source.slice(start, start + 1200);
     assert.doesNotMatch(

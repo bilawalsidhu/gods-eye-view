@@ -269,10 +269,12 @@ try {
   }, VIEW);
   await wait(4000);
   await page.evaluate(() => {
-    const rail = document.getElementById('pp-toggles');
-    if (rail?.classList.contains('collapsed'))
+    const panel = document.getElementById('utilities-panel');
+    if (panel?.classList.contains('collapsed'))
       document
-        .querySelector('.panel-collapse-btn[data-collapse-target="pp-toggles"]')
+        .querySelector(
+          '.panel-collapse-btn[data-collapse-target="utilities-panel"]',
+        )
         ?.click();
   });
   await page.waitForFunction(

@@ -960,6 +960,7 @@ body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
+body.ui-clean-view #utilities-panel,
 body.ui-clean-view #scene-panel {
   opacity: 0 !important;
   visibility: hidden !important;

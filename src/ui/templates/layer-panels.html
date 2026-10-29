@@ -142,6 +142,56 @@
     </div>
   </div>
 
+  <!-- Utilities Panel: Directions (from the layer list), Draw and Import -->
+  <div id="utilities-panel" class="panel-collapsible collapsed" data-panel-id="utilities-panel">
+    <div class="panel-glow"></div>
+    <div class="data-panel-inner utilities-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title" data-i18n>UTILITIES</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="utilities-panel" title="Collapse panel" data-i18n-title>+</button>
+      </div>
+      <div id="utilities-toggles" class="data-toggle-list utilities-list"></div>
+      <div class="utilities-tools">
+        <div class="pp-toggle-group">
+          <button class="pp-toggle-btn" id="draw-toggle" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" aria-pressed="false" data-i18n-title>
+            <span class="pp-icon material-symbols-outlined" aria-hidden="true">draw</span>
+            <span class="pp-label" data-i18n>Draw</span>
+          </button>
+          <div class="pp-slider-row" id="draw-mode-row">
+            <span class="pp-slider-mini-label" data-i18n>Shape</span>
+            <div class="gev-segmented pp-mode-seg" role="radiogroup" aria-label="Shape to draw" data-i18n-aria-label>
+              <button class="gev-segment pp-mode-btn active" data-shape="area" role="radio" aria-checked="true" data-i18n>Area</button>
+              <button class="gev-segment pp-mode-btn" data-shape="line" role="radio" aria-checked="false" data-i18n>Line</button>
+              <button class="gev-segment pp-mode-btn" data-shape="pin" role="radio" aria-checked="false" data-i18n>Pin</button>
+            </div>
+          </div>
+          <div class="pp-slider-row" id="draw-label-row">
+            <input type="text" class="pp-text-input" id="draw-label-input" maxlength="120" placeholder="Label (optional)" aria-label="Label for the drawn shape" data-i18n-placeholder data-i18n-aria-label autocomplete="off" spellcheck="false">
+            <select class="pp-select draw-color-select gev-field gev-field--compact" id="draw-color-select" aria-label="Colour of the drawn shape" data-i18n-aria-label>
+              <option value="primary" data-i18n>Primary</option>
+              <option value="amber" data-i18n>Amber</option>
+              <option value="cyan" data-i18n>Cyan</option>
+              <option value="green" data-i18n>Green</option>
+              <option value="red" data-i18n>Red</option>
+            </select>
+            <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" title="Remove every mark from the board" data-i18n-title data-i18n>Clear</button>
+            <span class="draw-hint" id="draw-hint" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="pp-toggle-group" id="geo-import-group">
+          <button class="pp-toggle-btn" id="geo-import-button" type="button" title="Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). File bytes stay on this device; overlays can appear in map screenshots shared with voice." data-i18n-title>
+            <span class="pp-icon material-symbols-outlined" aria-hidden="true">upload_file</span>
+            <span class="pp-label" data-i18n>Import</span>
+          </button>
+          <input type="file" id="geo-import-input" accept=".geojson,.json,.kml,.kmz,.gpx" multiple hidden aria-label="Choose GeoJSON, KML, KMZ or GPX files" data-i18n-aria-label>
+          <ul class="geo-import-list" id="geo-import-list" aria-label="Imported files" data-i18n-aria-label></ul>
+          <span class="draw-hint geo-import-hint" id="geo-import-hint" aria-live="polite"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Scene Director Panel -->
   <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
     <div class="panel-glow"></div>

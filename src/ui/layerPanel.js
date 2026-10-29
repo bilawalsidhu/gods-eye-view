@@ -87,13 +87,20 @@ const PANEL_GROUPS = [
       'weather-cyclones',
     ],
   },
+  // Directions renders in the Utilities panel, beside Draw and Import, and
+  // needs no heading there.
   {
     label: msg('Utilities'),
-    ids: ['directions', 'radio'],
+    ids: ['directions'],
+    containerId: 'utilities-toggles',
+  },
+  {
+    label: msg('Audio'),
+    ids: ['radio'],
   },
 ];
-const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
-  ids.map((id) => ({ id, label })),
+const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids, containerId }) =>
+  ids.map((id) => ({ id, label, containerId })),
 );
 const PANEL_POSITIONS = new Map(
   PANEL_ORDER.map(({ id }, index) => [id, index]),
@@ -226,6 +233,12 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._releaseBindings();
     this._toggleContainer = container;
+    this._groupContainers = new Map();
+    for (const { containerId } of PANEL_GROUPS) {
+      const element =
+        containerId && container?.ownerDocument?.getElementById?.(containerId);
+      if (element) this._groupContainers.set(containerId, element);
+    }
     this._weatherPanel?.destroy();
     this._weatherPanel = createWeatherPanel({
       clock: this.weatherClock,
@@ -276,11 +289,27 @@ export class LayerPanel {
     this._recentImageryPanel = null;
     this._recentImageryFactory = null;
     this._toggleContainer = null;
+    this._groupContainers = null;
+  }
+  /** The list a row renders into: its group's own, else Data Layers. */
+  _containerFor(layerId) {
+    const containerId = PANEL_ORDER[PANEL_POSITIONS.get(layerId)]?.containerId;
+    return (
+      (containerId && this._groupContainers?.get(containerId)) ||
+      this._toggleContainer
+    );
+  }
+  _rowFor(layerId) {
+    return this._containerFor(layerId)?.querySelector(
+      `[data-layer-id="${layerId}"]`,
+    );
   }
   _renderToggles() {
     if (this._destroyed || !this._toggleContainer) return;
     this._releaseBindings();
     this._toggleContainer.innerHTML = '';
+    for (const element of this._groupContainers?.values() || [])
+      element.innerHTML = '';
 
     const generation = this._generation;
     const layers = this.getAll()
@@ -296,7 +325,12 @@ export class LayerPanel {
       const group =
         PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ??
         msg('Other layers');
-      if (group && group !== previousGroup) {
+      const rowContainer = this._containerFor(layer.id);
+      if (
+        rowContainer === this._toggleContainer &&
+        group &&
+        group !== previousGroup
+      ) {
         const heading = document.createElement('h3');
         heading.className = 'data-layer-group-heading';
         heading.textContent = t(group);
@@ -421,7 +455,7 @@ export class LayerPanel {
         }
       }
 
-      this._toggleContainer.appendChild(row);
+      rowContainer.appendChild(row);
     }
     this._refreshWeatherPanel();
   }
@@ -600,9 +634,7 @@ export class LayerPanel {
       return;
     }
     for (const layer of this.getAll()) {
-      const row = this._toggleContainer.querySelector(
-        `[data-layer-id="${layer.id}"]`,
-      );
+      const row = this._rowFor(layer.id);
       if (!row) continue;
 
       const btn = row.querySelector('.data-toggle-btn');

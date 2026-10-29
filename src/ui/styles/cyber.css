@@ -1662,7 +1662,9 @@
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
     #left-panel-stack:has(> [data-panel-id]:not(.collapsed))
-    > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed) {
+    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(
+      .collapsed
+    ) {
     flex: 1 1 auto;
     height: auto;
     max-height: none;
@@ -1677,20 +1679,20 @@
 
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel) {
+    > :is(#data-panel, #utilities-panel, #scene-panel) {
     --panel-expanded-width: var(--cyber-panel-width);
     width: var(--panel-expanded-width);
   }
 
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel).collapsed {
+    > :is(#data-panel, #utilities-panel, #scene-panel).collapsed {
     width: var(--cyber-panel-collapsed-width);
   }
 
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel).collapsed
+    > :is(#data-panel, #utilities-panel, #scene-panel).collapsed
     :is(.data-panel-inner, .scene-panel-inner) {
     box-sizing: border-box;
     height: 50px;
@@ -1718,7 +1720,7 @@
 
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
-    :is(#data-panel, #scene-panel)
+    :is(#data-panel, #utilities-panel, #scene-panel)
     .panel-collapse-btn {
     width: var(--cyber-panel-control-size);
     min-width: var(--cyber-panel-control-size);
