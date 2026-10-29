@@ -39,6 +39,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import sharp from 'sharp';
 import { installAlprFixture } from './fixtures/w2/alpr.mjs';
 import { redact, isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
@@ -191,6 +192,7 @@ const fail = (message) => {
 let page;
 try {
   page = await browser.newPage();
+  await blockPaidQaMaps(page);
   if (argv.includes('--fixture')) await installAlprFixture(page);
   await page.setViewport({ width: 1440, height: 900 });
   await page.evaluateOnNewDocument(() =>
