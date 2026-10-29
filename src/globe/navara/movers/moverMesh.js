@@ -309,7 +309,7 @@ export function createMoverMesh(
       alwaysVisible: depthTest === 'always',
     });
   material.customProgramCacheKey = () =>
-    `gev-mover-${kind}${encodedAtlas ? '-encoded-atlas' : ''}`;
+    `gev-mover-${kind}${encodedAtlas ? '-encoded-atlas' : ''}${depthTest === 'always' ? '-always-visible' : ''}`;
   const mesh = new InstancedMesh(geometry, material, capacity);
   mesh.userData.gevStaticSprite =
     kind === 'sprite' &&

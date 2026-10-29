@@ -29,6 +29,34 @@ const basicShader = () => ({
   fragmentShader: ShaderLib.basic.fragmentShader,
 });
 
+test('depth-tested and always-visible movers cannot reuse incompatible shader programs', () => {
+  for (const kind of ['point', 'sprite']) {
+    const movers = ['normal', 'always', { disableWithinM: 2000 }].map(
+      (depthTest) => {
+        const options = normalizeMoverSetOptions({
+          ...spriteOptions,
+          kind,
+          depthTest,
+          point: { sizePx: 8 },
+        });
+        return createMoverMesh(options, createMoverStore(options));
+      },
+    );
+    const keys = movers.map((m) => m.mesh.material.customProgramCacheKey());
+    assert.notEqual(
+      keys[0],
+      keys[1],
+      `${kind}: different depth GLSL requires different programs`,
+    );
+    assert.equal(
+      keys[0],
+      keys[2],
+      `${kind}: distance escape is a uniform, not another program`,
+    );
+    for (const mover of movers) mover.dispose();
+  }
+});
+
 test('point translucency applies to fill and outline and defaults to no fade', () => {
   const options = normalizeMoverSetOptions({
     id: 'stations',
