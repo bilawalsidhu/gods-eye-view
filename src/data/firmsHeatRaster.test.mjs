@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  HEAT_MIN_WEIGHT_MW,
   HEAT_PALETTE,
   heatColorAt,
   binFires,
@@ -23,7 +24,7 @@ test('palette runs cold to hot and starts fully transparent', () => {
 });
 
 test('binFires drops each detection into its equirectangular pixel', () => {
-  const grid = binFires([fire(89.9, -179.9, 0), fire(-89.9, 179.9, 0)], {
+  const grid = binFires([fire(89.9, -179.9, 1), fire(-89.9, 179.9, 1)], {
     width: 4,
     height: 2,
   });
@@ -35,9 +36,33 @@ test('binFires drops each detection into its equirectangular pixel', () => {
   );
 });
 
-test('binFires weights strong fires slightly more', () => {
-  const grid = binFires([fire(0.1, 0.1, 999)], { width: 4, height: 2 });
-  assert.ok(grid[2] > 3 && grid[2] < 5, String(grid[2]));
+test('binFires weights each detection by its radiative power', () => {
+  const grid = binFires(
+    [fire(0.1, 0.1, 250), fire(0.2, 0.2, 0), fire(0.3, 0.3, Number.NaN)],
+    { width: 4, height: 2 },
+  );
+  assert.equal(grid[2], 250 + 2 * HEAT_MIN_WEIGHT_MW);
+});
+
+test('filtering out weak fires keeps a strong fire hot', () => {
+  const strong = fire(0.1, 0.1, 300);
+  const weak = Array.from({ length: 40 }, () => fire(0.1, 0.1, 2));
+  const reference = Array.from({ length: 10 }, () => fire(20.1, 20.1, 100));
+  const options = { width: 360, height: 180, sigmaPx: 2 };
+  const pixel = ((90 - 0.1) | 0) * 360 + ((0.1 + 180) | 0);
+  const red = (r) => r.rgba[pixel * 4];
+  const alpha = (r) => r.rgba[pixel * 4 + 3];
+  const unfiltered = buildHeatRaster([strong, ...weak, ...reference], options);
+  const filtered = buildHeatRaster([strong, ...reference], options);
+  assert.ok(alpha(filtered) > 0);
+  assert.ok(
+    alpha(filtered) >= alpha(unfiltered) * 0.9,
+    `alpha ${alpha(unfiltered)} -> ${alpha(filtered)}`,
+  );
+  assert.ok(
+    red(filtered) >= red(unfiltered) * 0.9,
+    `red ${red(unfiltered)} -> ${red(filtered)}`,
+  );
 });
 
 test('blurGaussian keeps mass and wraps across the antimeridian', () => {

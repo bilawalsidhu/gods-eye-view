@@ -2096,7 +2096,9 @@ not affect the color.
 
 At far zoom (camera above ~3,000 km) the layer drapes a Snap Map–style
 heatmap instead of individual markers: the shown detections are binned on a
-global 2048 × 1024 grid, each weighted `1 + log10(1 + FRP)`, Gaussian-blurred,
+global 2048 × 1024 grid, each weighted by its FRP in megawatts (so heat is
+radiated power, and raising the FRP slider does not dim areas where strong fires
+burn), Gaussian-blurred,
 normalized on a log scale against the 99.5th percentile and mapped from blue
 through cyan, green, yellow and orange to red. Nothing is painted where
 nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery

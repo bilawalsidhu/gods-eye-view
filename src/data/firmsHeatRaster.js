@@ -35,8 +35,17 @@ export function heatColorAt(t) {
   ];
 }
 
+/** Weight of a detection with no or zero FRP, in megawatts. */
+export const HEAT_MIN_WEIGHT_MW = 0.5;
+
+/**
+ * Heat is radiated power, not a head count: each detection adds its FRP in
+ * megawatts. Weak fires carry little power, so raising the minimum-FRP slider
+ * removes most detections without dimming the areas where strong fires burn
+ * (a count-based heat collapsed there and the hot spots faded).
+ */
 const defaultWeight = (fire) =>
-  1 + Math.log10(1 + Math.max(0, Number(fire.frp) || 0));
+  Math.max(HEAT_MIN_WEIGHT_MW, Number(fire.frp) || 0);
 
 export function binFires(fires, { width, height, weight = defaultWeight }) {
   const grid = new Float32Array(width * height);
