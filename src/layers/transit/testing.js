@@ -212,6 +212,7 @@ export function createTesting({ state, parts }) {
       state._preRenderRemove?.();
       const removePre = parts.renderer.onPreRender(() => {
         upload = 0;
+        active = probe.allUploads === true;
         const start = performance.now();
         parts.rendering.onPreRender();
         cpu = performance.now() - start;
@@ -246,6 +247,7 @@ export function createTesting({ state, parts }) {
           }
           resolve({
             rows,
+            uploadScope: probe.uploadScope ?? 'transit-marker-banks',
             dpr: devicePixelRatio,
             width: probe.canvas.clientWidth,
             height: probe.canvas.clientHeight,
