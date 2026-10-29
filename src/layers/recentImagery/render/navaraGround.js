@@ -69,10 +69,12 @@ export function createImageryGround(
       static key = KEY;
       static insertAfter = ['toneMapping'];
       static insertBefore = [
+        'gevEarthquakeGround',
+        'gevFirmsGround',
+        'gevPreSharpenOverlay',
         'gevSharpen',
         'smaa',
         'fxaa',
-        'gevPreSharpenOverlay',
         'gevOverlay',
         'final',
       ];

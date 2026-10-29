@@ -2702,6 +2702,7 @@
       "src/layers/installations/render/navara.js",
       "src/layers/bikeshare/render/navara.js",
       "src/layers/installations/render/navaraGeometry.js",
+      "src/layers/installations/render/navaraOutlineBatch.js",
       "src/layers/firms/rectangle.js",
       "src/layers/firms/render/cesium.js",
       "src/layers/radio/render/cesium.js",

@@ -19,10 +19,10 @@ export function viewFrame(frame, matrix, out) {
 /** Conservative clip bounds, including a camera inside/crossing the volume. */
 export function groundClipBounds(frame, view, projection, out) {
   const p = projection.elements;
-  let x0 = 1,
-    y0 = 1,
-    x1 = -1,
-    y1 = -1,
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity,
     front = 0,
     behind = 0;
   for (let i = 0; i < 8; i++) {
