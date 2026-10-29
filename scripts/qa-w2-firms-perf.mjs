@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import { watchW1Page } from './qa-browserEvidence.mjs';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { FIRMS_EPOCH_MS as W2_EPOCH_MS } from './fixtures/w2/firms.mjs';
 const arg = (name) =>
   process.argv.find((v) => v.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -122,6 +123,7 @@ try {
       const context = await browser.createBrowserContext();
       try {
         const page = await context.newPage();
+        await blockPaidQaMaps(page);
         await page.setViewport({ width: 1280, height: 800 });
         watchW1Page(page, report, {
           name: `${engine}-${run}`,

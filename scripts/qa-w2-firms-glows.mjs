@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import sharp from 'sharp';
 import { watchW1Page } from './qa-browserEvidence.mjs';
 import { FIRMS_EPOCH_MS } from './fixtures/w2/firms.mjs';
@@ -127,6 +128,7 @@ try {
     const context = await browser.createBrowserContext();
     try {
       const page = await context.newPage();
+      await blockPaidQaMaps(page);
       await page.setViewport({ width: 1280, height: 800 });
       watchW1Page(page, report, { name: engine, baseUrl: base, preview });
       if (late && engine === 'navara') {

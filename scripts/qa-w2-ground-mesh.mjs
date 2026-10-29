@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import sharp from 'sharp';
 import { watchW1Page } from './qa-browserEvidence.mjs';
 import { earthquakeFixture, W2_EPOCH_MS } from './fixtures/w2/earthquakes.mjs';
@@ -15,6 +16,7 @@ if (
 )
   throw new Error('Supply unreserved --base-url');
 const preview = process.argv.includes('--preview'),
+  keyless = !process.argv.includes('--photoreal'),
   negative = process.argv.includes('--diagnostic-disable-mask'),
   negativeMesh = process.argv.includes('--diagnostic-disable-mesh');
 const layer = arg('layer') ?? 'earthquakes';
@@ -30,6 +32,7 @@ const report = {
   browserErrors: [],
   negative,
   negativeMesh,
+  keyless,
   layer,
   driverSha256: crypto
     .createHash('sha256')
@@ -48,6 +51,7 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
+  if (keyless) await blockPaidQaMaps(page);
   await page.setViewport({ width: 1280, height: 800 });
   watchW1Page(page, report, { name: 'main', baseUrl: base, preview });
   if (!preview) {
@@ -131,8 +135,8 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 180000 },
   );
-  const probeState = { epoch: W2_EPOCH_MS, layer };
-  const scene = await page.evaluate(async ({ epoch, layer }) => {
+  const probeState = { epoch: W2_EPOCH_MS, layer, keyless };
+  const scene = await page.evaluate(async ({ epoch, layer, keyless }) => {
     const a = window.__godsEyeView,
       geo = await import('/src/geo/index.js');
     a.styleManager.orbitController.stop();
@@ -158,7 +162,9 @@ try {
         color: { red: 1, green: 0, blue: 0, alpha: 0.66 },
       });
     } else await a.layers.enable(layer);
-    await a.mapStackController.setStack('photoreal');
+    if (keyless && (window.__GOOGLE_MAPS_API_KEY__ || a.tileset))
+      throw new Error('Keyless ground QA requires a keyless build');
+    await a.mapStackController.setStack(keyless ? 'osm' : 'photoreal');
     a.engine.camera.setView({
       destination: geo.cartesian3.fromDegrees(-122.4028, 37.7952, 1800),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
@@ -193,9 +199,11 @@ try {
     };
   }, probeState);
   check(
-    'nonempty real photoreal ground scene',
+    keyless
+      ? 'nonempty real keyless ground scene'
+      : 'nonempty real photoreal ground scene',
     scene.records === (layer === 'local-firms' ? 1 : 15) &&
-      scene.photoreal &&
+      (keyless ? !scene.photoreal : scene.photoreal) &&
       scene.settled,
     scene,
   );
@@ -251,12 +259,14 @@ try {
       }
   report.forward = { maxDelta, contrast, groundContrast };
   check(
-    'classification actually paints the unobstructed photoreal roof',
+    keyless
+      ? 'classification actually paints unobstructed terrain'
+      : 'classification actually paints the unobstructed photoreal roof',
     groundContrast > 16,
     report.forward,
   );
   check(
-    'a real opaque box covers the classified roof',
+    'a real opaque box covers the classified surface',
     contrast > 16,
     report.forward,
   );
@@ -265,6 +275,70 @@ try {
     maxDelta <= 1,
     report.forward,
   );
+  await page.evaluate(async () => {
+    const engine = window.__godsEyeView.engine;
+    const geo = await import('/src/geo/index.js');
+    const position = geo.cartesian3.fromDegrees(-122.4028, 37.7952, 1000);
+    window.__qaDepthMovers = ['always', 'normal'].map((depthTest) => {
+      const set = engine.movers.createSet({
+        id: `qa-ground-depth-${depthTest}`,
+        kind: 'point',
+        capacity: 1,
+        depthTest,
+        point: { sizePx: 24 },
+      });
+      set.setCount(depthTest === 'always' ? 1 : 0);
+      set.set(0, { position, color: [0, 1, 0, 1] });
+      set.commit();
+      return set;
+    });
+  });
+  await sleep(1000);
+  const always = await page.screenshot();
+  await page.evaluate(() => {
+    const [always, normal] = window.__qaDepthMovers;
+    always.setCount(0);
+    always.commit();
+    normal.setCount(1);
+    normal.commit();
+  });
+  await sleep(1000);
+  const normal = await page.screenshot();
+  const [alwaysPixels, normalPixels] = await Promise.all(
+    [always, normal].map((image) =>
+      sharp(image).removeAlpha().raw().toBuffer(),
+    ),
+  );
+  let alwaysContrast = 0,
+    normalContrast = 0;
+  for (let y = 392; y < 408; y++)
+    for (let x = 632; x < 648; x++)
+      for (let channel = 0; channel < 3; channel++) {
+        const i = (y * 1280 + x) * 3 + channel;
+        alwaysContrast = Math.max(
+          alwaysContrast,
+          Math.abs(alwaysPixels[i] - b[i]),
+        );
+        normalContrast = Math.max(
+          normalContrast,
+          Math.abs(normalPixels[i] - b[i]),
+        );
+      }
+  report.moverDepth = { alwaysContrast, normalContrast };
+  check(
+    'always-visible point paints through the opaque box',
+    alwaysContrast > 32,
+    report.moverDepth,
+  );
+  check(
+    'normal point stays hidden after an always-visible shader was compiled',
+    normalContrast <= 1,
+    report.moverDepth,
+  );
+  await page.evaluate(() => {
+    for (const set of window.__qaDepthMovers) set.destroy();
+    window.__qaDepthMovers = [];
+  });
   await page.evaluate(() => {
     window.__w2Forward?.dispose();
     window.__w2GroundFirms?.destroy();

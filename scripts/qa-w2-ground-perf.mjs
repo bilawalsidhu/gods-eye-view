@@ -6,6 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import puppeteer from 'puppeteer';
 import { watchW1Page } from './qa-browserEvidence.mjs';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import {
   earthquakePerformanceFixture,
   W2_EPOCH_MS,
@@ -69,6 +70,7 @@ try {
       const context = await browser.createBrowserContext();
       try {
         const page = await context.newPage();
+        await blockPaidQaMaps(page);
         await page.setViewport({ width: 1280, height: 800 });
         watchW1Page(page, report, {
           name: `${engine}-${run}`,

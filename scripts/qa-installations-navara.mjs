@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import sharp from 'sharp';
 
 const arg = (name) =>
@@ -56,6 +57,7 @@ const report = {
   fixtureId: 'osm:way:980001',
   checks: [],
   runtimeErrors: 0,
+  runtimeErrorPaths: [],
   expectedBlockedExternalErrors: 0,
   blockedGoogleTileRequests: 0,
   blockedExternalRequests: 0,
@@ -98,6 +100,7 @@ const approximateTerrainHeights = await fs.readFile(
 
 try {
   const page = await browser.newPage();
+  await blockPaidQaMaps(page);
   await page.setViewport({ width: 1280, height: 800 });
   await page.evaluateOnNewDocument(() => {
     localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
@@ -120,6 +123,13 @@ try {
       report.expectedBlockedExternalErrors++;
     } else {
       report.runtimeErrors++;
+      try {
+        report.runtimeErrorPaths.push(
+          new URL(message.location()?.url).pathname,
+        );
+      } catch {
+        report.runtimeErrorPaths.push('(no resource URL)');
+      }
       const safe = text
         .replace(/https?:\/\/[^\s"'<>]+/g, '[url]')
         .replace(/([?&][^=\s]+)=([^&\s]+)/g, '$1=[redacted]')

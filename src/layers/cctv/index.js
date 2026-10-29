@@ -105,6 +105,7 @@ export function createCctvLayer({ services, source, rendererFactory }) {
         parts.geometry.materializeCctvVisibleCoverageEntities,
       _extractPickedCameraIdForTest:
         parts.testing._extractPickedCameraIdForTest,
+      _cctvRecordsForTest: parts.testing._cctvRecordsForTest,
       _setCctvCoverageStateForTest: parts.testing._setCctvCoverageStateForTest,
       focusCctvRecord: parts.navigation.focusCctvRecord,
       maybeAutoHop: parts.navigation.maybeAutoHop,

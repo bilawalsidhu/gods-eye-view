@@ -165,6 +165,43 @@ function countPixels(data, point, predicate, radius = 16) {
     }
   return count;
 }
+function changedPlanePixels(before, after, projection) {
+  const { center, corners } = projection;
+  if (!center || corners.some((p) => !p)) return { changed: 0, sampled: 0 };
+  const quad = corners.map((p) => ({
+    x: center.x + (p.x - center.x) * 0.9,
+    y: center.y + (p.y - center.y) * 0.9,
+  }));
+  let changed = 0,
+    sampled = 0;
+  const left = Math.max(0, Math.floor(Math.min(...quad.map((p) => p.x)))),
+    right = Math.min(
+      before.info.width,
+      Math.ceil(Math.max(...quad.map((p) => p.x))),
+    ),
+    top = Math.max(0, Math.floor(Math.min(...quad.map((p) => p.y)))),
+    bottom = Math.min(
+      before.info.height,
+      Math.ceil(Math.max(...quad.map((p) => p.y))),
+    );
+  for (let y = top; y < bottom; y++)
+    for (let x = left; x < right; x++) {
+      const cross = quad.map((a, i) => {
+        const b = quad[(i + 1) % 4];
+        return (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+      });
+      if (!cross.every((v) => v >= 0) && !cross.every((v) => v <= 0)) continue;
+      sampled++;
+      const at = (y * before.info.width + x) * 4;
+      if (
+        [0, 1, 2].some(
+          (c) => Math.abs(before.data[at + c] - after.data[at + c]) > 25,
+        )
+      )
+        changed++;
+    }
+  return { changed, sampled };
+}
 async function mediaPose(id) {
   await params({
     selectedCameraId: id,
@@ -512,6 +549,90 @@ try {
       )),
   );
   await params({ calibrationMode: false });
+  await params({ showProjection: false, coverageMode: 'viewshed' });
+  await sleep(6000);
+  await frames();
+  const volumes = await page.evaluate(() => {
+    const app = window.__godsEyeView;
+    const records = app.dataManager.layers
+      .get('cctv')
+      .module._cctvRecordsForTest();
+    window.__qaCctvVolumes = records
+      .filter((r) => r.viewshedPrimitive)
+      .map((record) => ({
+        record,
+        volume: record.viewshedPrimitive,
+        groundRequests: record.groundMeshSampleRequestCount || 0,
+      }));
+    return window.__qaCctvVolumes.map(({ record }) => ({
+      id: record.camera.id,
+      points: Object.values(record.frustumPositions)
+        .map((p) => app.engine.projector.worldToWindow(p))
+        .filter(Boolean),
+    }));
+  });
+  check(
+    'viewshed owns between one and fifteen actual volumes',
+    volumes.length > 0 && volumes.length <= 15,
+  );
+  await sleep(8000);
+  check(
+    'viewshed retains exact volumes and ground sampling counts while idle',
+    await page.evaluate(() =>
+      window.__qaCctvVolumes.every(
+        ({ record, volume, groundRequests }) =>
+          record.viewshedPrimitive === volume &&
+          (record.groundMeshSampleRequestCount || 0) === groundRequests,
+      ),
+    ),
+  );
+  await frames();
+  const volumeOn = await imageData(
+    await page.screenshot({ path: path.join(shots, 'viewshed-on.png') }),
+  );
+  await page.evaluate(() => {
+    for (const { volume } of window.__qaCctvVolumes) volume.show = false;
+  });
+  await frames();
+  const volumeOff = await imageData(
+    await page.screenshot({ path: path.join(shots, 'viewshed-off.png') }),
+  );
+  const volumePixels = volumes.map(({ id, points }) => {
+    const left = Math.max(400, Math.floor(Math.min(...points.map((p) => p.x)))),
+      right = Math.min(1000, Math.ceil(Math.max(...points.map((p) => p.x)))),
+      top = Math.max(180, Math.floor(Math.min(...points.map((p) => p.y)))),
+      bottom = Math.min(720, Math.ceil(Math.max(...points.map((p) => p.y))));
+    let changed = 0;
+    for (let y = top; y < bottom; y++)
+      for (let x = left; x < right; x++) {
+        const at = (y * volumeOn.info.width + x) * 4;
+        if (
+          [0, 1, 2].some(
+            (c) => Math.abs(volumeOn.data[at + c] - volumeOff.data[at + c]) > 5,
+          )
+        )
+          changed++;
+      }
+    return { id, changed };
+  });
+  report.viewshed = { volumes, pixels: volumePixels };
+  check(
+    'hiding only viewshed volumes removes visible fill pixels',
+    volumePixels.some((p) => p.changed > 64),
+  );
+  await page.evaluate(() => {
+    for (const { volume } of window.__qaCctvVolumes) volume.show = true;
+  });
+  await params({ coverageMode: 'on' });
+  check(
+    'ordinary coverage releases every viewshed volume',
+    await page.evaluate(() =>
+      window.__godsEyeView.dataManager.layers
+        .get('cctv')
+        .module._cctvRecordsForTest()
+        .every((r) => !r.viewshedPrimitive),
+    ),
+  );
   report.videoPlane = await mediaPose('w2-cctv-video');
   await page.waitForFunction(
     () => {
@@ -548,23 +669,40 @@ try {
     report.videoPlane.after.frames > report.videoPlane.before.frames + 3 &&
       report.videoPlane.after.time !== report.videoPlane.before.time,
   );
-  let changes = 0;
-  const center = report.videoPlane.projection.center;
-  if (center)
-    for (let y = Math.floor(center.y) - 24; y <= center.y + 24; y++)
-      for (let x = Math.floor(center.x) - 40; x <= center.x + 40; x++) {
-        if (x < 0 || y < 0 || x >= before.info.width || y >= before.info.height)
-          continue;
-        const at = (y * before.info.width + x) * 4;
-        if (
-          [0, 1, 2].some(
-            (c) => Math.abs(before.data[at + c] - after.data[at + c]) > 25,
-          )
-        )
-          changes++;
-      }
-  report.videoPlane.changedPixels = changes;
-  check('video plane pixels actually advance on the globe', changes > 64);
+  // The central colour bars can remain static while the decoded diagonal
+  // moves elsewhere. Sample the projected plane interior, excluding its edge.
+  const videoPixels = changedPlanePixels(
+    before,
+    after,
+    report.videoPlane.projection,
+  );
+  report.videoPlane.changedPixels = videoPixels.changed;
+  report.videoPlane.sampledPixels = videoPixels.sampled;
+  check(
+    'video plane pixels actually advance on the globe',
+    videoPixels.changed > 64,
+  );
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('cctv')
+      .module.getActiveVideoElement()
+      .pause(),
+  );
+  await frames();
+  const pausedBefore = await imageData(await page.screenshot());
+  await sleep(350);
+  await frames();
+  const pausedAfter = await imageData(await page.screenshot());
+  report.videoPlane.pausedControl = changedPlanePixels(
+    pausedBefore,
+    pausedAfter,
+    report.videoPlane.projection,
+  );
+  check(
+    'paused video negative control has no changing plane pixels',
+    report.videoPlane.pausedControl.changed,
+    0,
+  );
   await page.evaluate(() => {
     window.__qaRetiredVideo = window.__godsEyeView.dataManager.layers
       .get('cctv')

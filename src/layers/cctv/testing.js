@@ -129,6 +129,7 @@ export function createTesting({
     layerState._showProjection = !!showProjection;
   }
   return {
+    _cctvRecordsForTest: () => layerState._records,
     _pushAmbientCardEntriesForTest,
     _setCctvOverlayHostForTest,
     _createCctvProjectionPlaneForTest,

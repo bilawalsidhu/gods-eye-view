@@ -1,0 +1,1128 @@
+{
+  "status": "nine implementation checkpoints and comparison complete; whole-wave acceptance NOT passed",
+  "date": "2026-10-29",
+  "runtimeCheckpoint": "c637a0485cade113ee3deede1c2e35d101d79640",
+  "unit": {
+    "total": 7342,
+    "pass": 7341,
+    "skip": 1,
+    "allocationPass": 15
+  },
+  "gates": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 88.8
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 9.6
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 9.0
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 8.3
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 9.3
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 8.4
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.3
+    }
+  ],
+  "browserJobs": [
+    {
+      "job": "contract-cesium",
+      "code": 0,
+      "seconds": 26.7
+    },
+    {
+      "job": "contract-navara",
+      "code": 0,
+      "seconds": 53.1
+    },
+    {
+      "job": "batch-pixels",
+      "code": 0,
+      "seconds": 13.3
+    },
+    {
+      "job": "installations-cesium",
+      "code": 0,
+      "seconds": 10.5
+    },
+    {
+      "job": "installations-navara",
+      "code": 0,
+      "seconds": 10.3
+    },
+    {
+      "job": "sprite-alpha",
+      "code": 0,
+      "seconds": 41.1
+    },
+    {
+      "job": "firms-glows",
+      "code": 0,
+      "seconds": 69.6
+    },
+    {
+      "job": "ground-mesh",
+      "code": 0,
+      "seconds": 28.0
+    },
+    {
+      "job": "comparison-uncapped",
+      "code": 1,
+      "seconds": 1121.3
+    },
+    {
+      "job": "comparison-paced",
+      "code": 0,
+      "seconds": 1086.5
+    },
+    {
+      "job": "cinematic-uncapped",
+      "code": 1,
+      "seconds": 328.8
+    },
+    {
+      "job": "cinematic-paced",
+      "code": 0,
+      "seconds": 319.9
+    }
+  ],
+  "contracts": {
+    "cesium": {
+      "pass": 70,
+      "total": 70
+    },
+    "navara": {
+      "pass": 76,
+      "total": 76
+    }
+  },
+  "browserChecks": {
+    "batch-pixels": {
+      "path": "/private/tmp/gev-w2-closure5-batch-pixels.json",
+      "sha256": "292c6cbf4751664e651144b0a0e50fda9703cf54ee9015c47ced3643de60c4ee",
+      "pass": true,
+      "checks": 7,
+      "failures": [],
+      "browserErrors": [],
+      "checksDetail": [
+        {
+          "name": "twenty contours retain all identities in fewer stencil batches",
+          "pass": true,
+          "detail": [
+            [
+              "osm:way:980000",
+              "osm:way:980001",
+              "osm:way:980002",
+              "osm:way:980003",
+              "osm:way:980004",
+              "osm:way:980005",
+              "osm:way:980006",
+              "osm:way:980007",
+              "osm:way:980008",
+              "osm:way:980009",
+              "osm:way:980010",
+              "osm:way:980011",
+              "osm:way:980012",
+              "osm:way:980013",
+              "osm:way:980014",
+              "osm:way:980015",
+              "osm:way:980016",
+              "osm:way:980017",
+              "osm:way:980018",
+              "osm:way:980019"
+            ]
+          ]
+        },
+        {
+          "name": "restoring the batch preserves pixels",
+          "pass": true,
+          "detail": {
+            "pixels": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "the compared contours have real visible pixels",
+          "pass": true,
+          "detail": {
+            "pixels": 4029,
+            "max": 137
+          }
+        },
+        {
+          "name": "batch preserves every painted contour pixel with less than one percent colour error",
+          "pass": true,
+          "detail": {
+            "coverageChanges": 0,
+            "relativeColourError": 0.0024358724249541118
+          }
+        },
+        {
+          "name": "the same pixel gate rejects a missing contour",
+          "pass": true,
+          "detail": {
+            "coverageChanges": 47,
+            "relativeColourError": 0.009827559633067076
+          }
+        },
+        {
+          "name": "imagery activated last remains below ground classification and glyphs",
+          "pass": true,
+          "detail": [
+            "gevRecentImagery",
+            "gevEarthquakeGround",
+            "gevPreSharpenOverlay"
+          ]
+        },
+        {
+          "name": "ground colour renders before FIRMS glyphs",
+          "pass": true,
+          "detail": [
+            "gevRecentImagery",
+            "gevEarthquakeGround",
+            "gevPreSharpenOverlay"
+          ]
+        }
+      ],
+      "exactPixelDifference": {
+        "pixels": 21,
+        "max": 58
+      }
+    },
+    "installations-cesium": {
+      "path": "/private/tmp/gev-w2-closure5-installations-cesium.json",
+      "sha256": "c2d33983e981a8ef46758b26f6def670b363784b525efe1cfe7aaae34c87c33d",
+      "pass": true,
+      "checks": 12,
+      "failures": [],
+      "browserErrors": 0
+    },
+    "installations-navara": {
+      "path": "/private/tmp/gev-w2-closure5-installations-navara.json",
+      "sha256": "74fbf04a45f57d7c89a125f4049ea5ffafe404278da2e8faf85f5521e721e2a3",
+      "pass": true,
+      "checks": 7,
+      "failures": [],
+      "browserErrors": 0
+    },
+    "sprite-alpha": {
+      "path": "/private/tmp/gev-w2-closure5-sprite-alpha.json",
+      "sha256": "47fba66c083c8250c4050605ed78617817c3b42349458954601019fd5a9ffe9f",
+      "pass": true,
+      "checks": 27,
+      "failures": [],
+      "browserErrors": []
+    },
+    "firms-glows": {
+      "path": "/private/tmp/gev-w2-closure5-firms-glows.json",
+      "sha256": "45922dfd2fa72823df8e4232fd3b311958f571f016265a4df93841fa8a30c940",
+      "pass": true,
+      "checks": 59,
+      "failures": [],
+      "browserErrors": []
+    },
+    "ground-mesh": {
+      "path": "/private/tmp/gev-w2-closure5-ground-mesh.json",
+      "sha256": "7715b0c9c0c9c40380b003fcc22325bdca42e37a9212cd95d3f26171fa158af6",
+      "pass": true,
+      "checks": 8,
+      "failures": [],
+      "browserErrors": [],
+      "keyless": true,
+      "forward": {
+        "maxDelta": 0,
+        "contrast": 95,
+        "groundContrast": 136
+      },
+      "moverDepth": {
+        "alwaysContrast": 140,
+        "normalContrast": 0
+      }
+    }
+  },
+  "cctvPreview": {
+    "cesium": {
+      "path": "/private/tmp/gev-w2-closure2-cctv-cesium.json",
+      "sha256": "621aae7d7b8adaefeb3f1cc8b7cca8311054940694db2be691a3f1cd795eeea8",
+      "checks": 31,
+      "pass": true,
+      "viewshedVolumes": 14,
+      "viewshedPixels": [
+        {
+          "id": "w2-cctv-006",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-007",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-008",
+          "changed": 40876
+        },
+        {
+          "id": "w2-cctv-009",
+          "changed": 21077
+        },
+        {
+          "id": "w2-cctv-010",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-011",
+          "changed": 3712
+        },
+        {
+          "id": "w2-cctv-012",
+          "changed": 15428
+        },
+        {
+          "id": "w2-cctv-013",
+          "changed": 34377
+        },
+        {
+          "id": "w2-cctv-014",
+          "changed": 29569
+        },
+        {
+          "id": "w2-cctv-016",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-017",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-018",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-019",
+          "changed": 2425
+        },
+        {
+          "id": "w2-cctv-022",
+          "changed": 0
+        }
+      ],
+      "videoPixels": 11746,
+      "pausedControl": {
+        "changed": 0,
+        "sampled": 42001
+      },
+      "browserErrors": []
+    },
+    "navara": {
+      "path": "/private/tmp/gev-w2-closure2-cctv-navara.json",
+      "sha256": "fad0e61d1db1ab255cb478299c7fe4a055fcc20d7e89c78e026ca1d87083ea11",
+      "checks": 31,
+      "pass": true,
+      "viewshedVolumes": 14,
+      "viewshedPixels": [
+        {
+          "id": "w2-cctv-006",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-007",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-008",
+          "changed": 8772
+        },
+        {
+          "id": "w2-cctv-009",
+          "changed": 26872
+        },
+        {
+          "id": "w2-cctv-010",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-011",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-012",
+          "changed": 48008
+        },
+        {
+          "id": "w2-cctv-013",
+          "changed": 46413
+        },
+        {
+          "id": "w2-cctv-014",
+          "changed": 41627
+        },
+        {
+          "id": "w2-cctv-016",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-017",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-018",
+          "changed": 0
+        },
+        {
+          "id": "w2-cctv-019",
+          "changed": 204
+        },
+        {
+          "id": "w2-cctv-022",
+          "changed": 0
+        }
+      ],
+      "videoPixels": 12905,
+      "pausedControl": {
+        "changed": 0,
+        "sampled": 42001
+      },
+      "browserErrors": []
+    }
+  },
+  "alprKeylessJourney": {
+    "cesium": {
+      "path": "/private/tmp/gev-w2-closure2-alpr-cesium/result.json",
+      "sha256": "6daafbf722b13f30e90e4e1144d4e68f59ab3621325b2f7d6842e38db5b6b4b7",
+      "failures": [],
+      "summary": [
+        {
+          "pass": "1-off",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 1,
+            "renderP95": 2.2,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 1.6,
+            "renderP95": 3,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "2-on-cold",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 1.4,
+            "renderP95": 2.7,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 8.1,
+            "renderP95": 16.2,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "3-on-warm",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 1.4,
+            "renderP95": 2.6,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 4.9,
+            "renderP95": 10.7,
+            "longFrames": 0
+          }
+        }
+      ]
+    },
+    "navara": {
+      "path": "/private/tmp/gev-w2-closure2-alpr-navara/result.json",
+      "sha256": "32e1ab1447b12d981c0610f1b5d064db2b8e42cf3b1e3513180b581116bdd3b4",
+      "failures": [],
+      "summary": [
+        {
+          "pass": "1-off",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 4.3,
+            "renderP95": 5.3,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 2.7,
+            "renderP95": 4.2,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "2-on-cold",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 4.6,
+            "renderP95": 5.2,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 3.5,
+            "renderP95": 4.8,
+            "longFrames": 0
+          }
+        },
+        {
+          "pass": "3-on-warm",
+          "moving": {
+            "frameP50": 16.7,
+            "frameP95": 16.8,
+            "renderP50": 4.6,
+            "renderP95": 5.2,
+            "longFrames": 0
+          },
+          "holding": {
+            "frameP50": 16.7,
+            "frameP95": 16.7,
+            "renderP50": 2.6,
+            "renderP95": 4.2,
+            "longFrames": 0
+          }
+        }
+      ]
+    }
+  },
+  "performance": {
+    "phase3-w2-performance-cinematic-uncapped.json": {
+      "sha256": "e5a441433b91086b322b4793f041ed1d2758d141ba9289908d07f9b71eb11943",
+      "comparison": {
+        "empty": {
+          "cesium": {
+            "workP95": 3,
+            "intervalP95": 3.799999952316284,
+            "longFrames33": 2,
+            "counts": {}
+          },
+          "navara": {
+            "workP95": 7.199999809265137,
+            "intervalP95": 8.900000095367432,
+            "longFrames33": 0,
+            "counts": {}
+          },
+          "ratio": 2.3999999364217124,
+          "sameCounts": true,
+          "pass": false
+        },
+        "combined": {
+          "cesium": {
+            "workP95": 4.200000047683716,
+            "intervalP95": 6.799999952316284,
+            "longFrames33": 0,
+            "counts": {
+              "earthquakes": 500,
+              "local-firms": 6000,
+              "military-installations": 20,
+              "bikeshare": 200,
+              "radio": 750,
+              "alpr-cameras": 325,
+              "cctv": 25,
+              "transit": 800,
+              "recent-imagery": 2
+            }
+          },
+          "navara": {
+            "workP95": 15.700000047683716,
+            "intervalP95": 18.200000047683716,
+            "longFrames33": 0,
+            "counts": {
+              "earthquakes": 500,
+              "local-firms": 6000,
+              "military-installations": 20,
+              "bikeshare": 200,
+              "radio": 750,
+              "alpr-cameras": 325,
+              "cctv": 25,
+              "transit": 800,
+              "recent-imagery": 2
+            }
+          },
+          "ratio": 3.7380952070089157,
+          "sameCounts": true,
+          "pass": false
+        }
+      },
+      "previewManifestSha256": "36be4442a34d4f9ef53d693798aa06bb767f237549241cd729cb3381f2fd8ebf",
+      "driverSha256": "2eaa4045e8d812a5e8a23201e66c611641247a88974cfea45c4218f1d0921ad7",
+      "fixtureSourceSha256": "3362ef99df6207a68f6ed87f047ee69b1b298f3cb9146f0becae987330e57e48",
+      "browserErrors": []
+    },
+    "phase3-w2-performance-minimal-uncapped.json": {
+      "sha256": "0c0a2d82ce51b6fe5b100a5d7563001fa716c5131497880a5dd96fd4463e2b70",
+      "comparison": {
+        "empty": {
+          "cesium": {
+            "workP95": 2.6000001430511475,
+            "intervalP95": 3.4000000953674316,
+            "longFrames33": 2,
+            "counts": {}
+          },
+          "navara": {
+            "workP95": 3.4000000953674316,
+            "intervalP95": 4.5,
+            "longFrames33": 0,
+            "counts": {}
+          },
+          "ratio": 1.3076922724232891,
+          "sameCounts": true,
+          "pass": false
+        },
+        "firms": {
+          "cesium": {
+            "workP95": 2.8999998569488525,
+            "intervalP95": 3.6000001430511475,
+            "longFrames33": 2,
+            "counts": {
+              "local-firms": 6000
+            }
+          },
+          "navara": {
+            "workP95": 3.799999952316284,
+            "intervalP95": 5.300000190734863,
+            "longFrames33": 0,
+            "counts": {
+              "local-firms": 6000
+            }
+          },
+          "ratio": 1.3103448757802145,
+          "sameCounts": true,
+          "pass": false
+        },
+        "alpr": {
+          "cesium": {
+            "workP95": 3.299999952316284,
+            "intervalP95": 4.099999904632568,
+            "longFrames33": 4,
+            "counts": {
+              "alpr-cameras": 325
+            }
+          },
+          "navara": {
+            "workP95": 4.5,
+            "intervalP95": 5.900000095367432,
+            "longFrames33": 0,
+            "counts": {
+              "alpr-cameras": 325
+            }
+          },
+          "ratio": 1.3636363833403786,
+          "sameCounts": true,
+          "pass": false
+        },
+        "cctv": {
+          "cesium": {
+            "workP95": 3.4000000953674316,
+            "intervalP95": 4.1000001430511475,
+            "longFrames33": 2,
+            "counts": {
+              "cctv": 25
+            }
+          },
+          "navara": {
+            "workP95": 4.200000047683716,
+            "intervalP95": 5.799999952316284,
+            "longFrames33": 0,
+            "counts": {
+              "cctv": 25
+            }
+          },
+          "ratio": 1.235294097022615,
+          "sameCounts": true,
+          "pass": false
+        },
+        "imagery": {
+          "cesium": {
+            "workP95": 3,
+            "intervalP95": 3.799999952316284,
+            "longFrames33": 2,
+            "counts": {
+              "recent-imagery": 2
+            }
+          },
+          "navara": {
+            "workP95": 4.400000095367432,
+            "intervalP95": 5.799999952316284,
+            "longFrames33": 0,
+            "counts": {
+              "recent-imagery": 2
+            }
+          },
+          "ratio": 1.4666666984558105,
+          "sameCounts": true,
+          "pass": false
+        },
+        "transit800": {
+          "cesium": {
+            "workP95": 2.9000000953674316,
+            "intervalP95": 3.5,
+            "longFrames33": 2,
+            "counts": {
+              "transit": 800
+            }
+          },
+          "navara": {
+            "workP95": 4.599999904632568,
+            "intervalP95": 5.8999998569488525,
+            "longFrames33": 0,
+            "counts": {
+              "transit": 800
+            }
+          },
+          "ratio": 1.5862068115034824,
+          "sameCounts": true,
+          "pass": false
+        },
+        "transit3000": {
+          "cesium": {
+            "workP95": 4.8999998569488525,
+            "intervalP95": 5.599999904632568,
+            "longFrames33": 0,
+            "counts": {
+              "transit": 3000
+            }
+          },
+          "navara": {
+            "workP95": 6.700000047683716,
+            "intervalP95": 8.200000047683716,
+            "longFrames33": 0,
+            "counts": {
+              "transit": 3000
+            }
+          },
+          "ratio": 1.3673469884253615,
+          "sameCounts": true,
+          "pass": false
+        },
+        "combined": {
+          "cesium": {
+            "workP95": 4.6000001430511475,
+            "intervalP95": 7.200000047683716,
+            "longFrames33": 0,
+            "counts": {
+              "earthquakes": 500,
+              "local-firms": 6000,
+              "military-installations": 20,
+              "bikeshare": 200,
+              "radio": 750,
+              "alpr-cameras": 325,
+              "cctv": 25,
+              "transit": 800,
+              "recent-imagery": 2
+            }
+          },
+          "navara": {
+            "workP95": 9.900000095367432,
+            "intervalP95": 12.100000143051147,
+            "longFrames33": 0,
+            "counts": {
+              "earthquakes": 500,
+              "local-firms": 6000,
+              "military-installations": 20,
+              "bikeshare": 200,
+              "radio": 750,
+              "alpr-cameras": 325,
+              "cctv": 25,
+              "transit": 800,
+              "recent-imagery": 2
+            }
+          },
+          "ratio": 2.1521738668470634,
+          "sameCounts": true,
+          "pass": false
+        }
+      },
+      "previewManifestSha256": "36be4442a34d4f9ef53d693798aa06bb767f237549241cd729cb3381f2fd8ebf",
+      "driverSha256": "2eaa4045e8d812a5e8a23201e66c611641247a88974cfea45c4218f1d0921ad7",
+      "fixtureSourceSha256": "3362ef99df6207a68f6ed87f047ee69b1b298f3cb9146f0becae987330e57e48",
+      "browserErrors": []
+    },
+    "phase3-w2-performance-minimal-paced.json": {
+      "sha256": "c67ab9c5249f1e932c100c730b76ab18e97a9b3553dcd8887c19f9b1bdb36fe2",
+      "comparison": {
+        "empty": {
+          "cesium": {
+            "workP95": 1.2000000476837158,
+            "intervalP95": 17.799999952316284,
+            "longFrames33": 0,
+            "counts": {}
+          },
+          "navara": {
+            "workP95": 1.2999999523162842,
+            "intervalP95": 18.899999856948853,
+            "longFrames33": 0,
+            "counts": {}
+          },
+          "ratio": 1.0617977476168154,
+          "sameCounts": true,
+          "pass": true
+        },
+        "firms": {
+          "cesium": {
+            "workP95": 1.8999998569488525,
+            "intervalP95": 17.90000009536743,
+            "longFrames33": 0,
+            "counts": {
+              "local-firms": 6000
+            }
+          },
+          "navara": {
+            "workP95": 1.8999998569488525,
+            "intervalP95": 19.200000047683716,
+            "longFrames33": 0,
+            "counts": {
+              "local-firms": 6000
+            }
+          },
+          "ratio": 1.0726256952731932,
+          "sameCounts": true,
+          "pass": true
+        },
+        "alpr": {
+          "cesium": {
+            "workP95": 2.1000001430511475,
+            "intervalP95": 18.09999990463257,
+            "longFrames33": 0,
+            "counts": {
+              "alpr-cameras": 325
+            }
+          },
+          "navara": {
+            "workP95": 2,
+            "intervalP95": 19.09999990463257,
+            "longFrames33": 0,
+            "counts": {
+              "alpr-cameras": 325
+            }
+          },
+          "ratio": 1.055248619075631,
+          "sameCounts": true,
+          "pass": true
+        },
+        "cctv": {
+          "cesium": {
+            "workP95": 2,
+            "intervalP95": 18.100000143051147,
+            "longFrames33": 0,
+            "counts": {
+              "cctv": 25
+            }
+          },
+          "navara": {
+            "workP95": 4.099999904632568,
+            "intervalP95": 19,
+            "longFrames33": 0,
+            "counts": {
+              "cctv": 25
+            }
+          },
+          "ratio": 1.0497237486097135,
+          "sameCounts": true,
+          "pass": true
+        },
+        "imagery": {
+          "cesium": {
+            "workP95": 1.7000000476837158,
+            "intervalP95": 18,
+            "longFrames33": 0,
+            "counts": {
+              "recent-imagery": 2
+            }
+          },
+          "navara": {
+            "workP95": 1.5999999046325684,
+            "intervalP95": 19,
+            "longFrames33": 0,
+            "counts": {
+              "recent-imagery": 2
+            }
+          },
+          "ratio": 1.0555555555555556,
+          "sameCounts": true,
+          "pass": true
+        },
+        "transit800": {
+          "cesium": {
+            "workP95": 3.700000047683716,
+            "intervalP95": 18.600000143051147,
+            "longFrames33": 0,
+            "counts": {
+              "transit": 800
+            }
+          },
+          "navara": {
+            "workP95": 3.8999998569488525,
+            "intervalP95": 19.200000047683716,
+            "longFrames33": 0,
+            "counts": {
+              "transit": 800
+            }
+          },
+          "ratio": 1.0322580591407535,
+          "sameCounts": true,
+          "pass": true
+        },
+        "transit3000": {
+          "cesium": {
+            "workP95": 6.1000001430511475,
+            "intervalP95": 18.59999990463257,
+            "longFrames33": 0,
+            "counts": {
+              "transit": 3000
+            }
+          },
+          "navara": {
+            "workP95": 6.799999952316284,
+            "intervalP95": 19.299999952316284,
+            "longFrames33": 0,
+            "counts": {
+              "transit": 3000
+            }
+          },
+          "ratio": 1.0376344113587535,
+          "sameCounts": true,
+          "pass": true
+        },
+        "combined": {
+          "cesium": {
+            "workP95": 4.699999809265137,
+            "intervalP95": 18.399999856948853,
+            "longFrames33": 0,
+            "counts": {
+              "earthquakes": 500,
+              "local-firms": 6000,
+              "military-installations": 20,
+              "bikeshare": 200,
+              "radio": 750,
+              "alpr-cameras": 325,
+              "cctv": 25,
+              "transit": 800,
+              "recent-imagery": 2
+            }
+          },
+          "navara": {
+            "workP95": 5.799999952316284,
+            "intervalP95": 19,
+            "longFrames33": 0,
+            "counts": {
+              "earthquakes": 500,
+              "local-firms": 6000,
+              "military-installations": 20,
+              "bikeshare": 200,
+              "radio": 750,
+              "alpr-cameras": 325,
+              "cctv": 25,
+              "transit": 800,
+              "recent-imagery": 2
+            }
+          },
+          "ratio": 1.0326087036802098,
+          "sameCounts": true,
+          "pass": true
+        }
+      },
+      "previewManifestSha256": "36be4442a34d4f9ef53d693798aa06bb767f237549241cd729cb3381f2fd8ebf",
+      "driverSha256": "2eaa4045e8d812a5e8a23201e66c611641247a88974cfea45c4218f1d0921ad7",
+      "fixtureSourceSha256": "3362ef99df6207a68f6ed87f047ee69b1b298f3cb9146f0becae987330e57e48",
+      "browserErrors": []
+    },
+    "phase3-w2-performance-cinematic-paced.json": {
+      "sha256": "120075bd115d0cb21a27d24065f60be5869eeda5b4c4bf5a92d4b4b36c5b15f4",
+      "comparison": {
+        "empty": {
+          "cesium": {
+            "workP95": 1.2999999523162842,
+            "intervalP95": 18.699999809265137,
+            "longFrames33": 0,
+            "counts": {}
+          },
+          "navara": {
+            "workP95": 0.9000000953674316,
+            "intervalP95": 18.799999952316284,
+            "longFrames33": 0,
+            "counts": {}
+          },
+          "ratio": 1.0053476012872258,
+          "sameCounts": true,
+          "pass": true
+        },
+        "combined": {
+          "cesium": {
+            "workP95": 3.200000047683716,
+            "intervalP95": 18.40000009536743,
+            "longFrames33": 0,
+            "counts": {
+              "earthquakes": 500,
+              "local-firms": 6000,
+              "military-installations": 20,
+              "bikeshare": 200,
+              "radio": 750,
+              "alpr-cameras": 325,
+              "cctv": 25,
+              "transit": 800,
+              "recent-imagery": 2
+            }
+          },
+          "navara": {
+            "workP95": 6.799999952316284,
+            "intervalP95": 19.199999809265137,
+            "longFrames33": 0,
+            "counts": {
+              "earthquakes": 500,
+              "local-firms": 6000,
+              "military-installations": 20,
+              "bikeshare": 200,
+              "radio": 750,
+              "alpr-cameras": 325,
+              "cctv": 25,
+              "transit": 800,
+              "recent-imagery": 2
+            }
+          },
+          "ratio": 1.0434782450951792,
+          "sameCounts": true,
+          "pass": true
+        }
+      },
+      "previewManifestSha256": "36be4442a34d4f9ef53d693798aa06bb767f237549241cd729cb3381f2fd8ebf",
+      "driverSha256": "2eaa4045e8d812a5e8a23201e66c611641247a88974cfea45c4218f1d0921ad7",
+      "fixtureSourceSha256": "3362ef99df6207a68f6ed87f047ee69b1b298f3cb9146f0becae987330e57e48",
+      "browserErrors": []
+    }
+  },
+  "sourceHashes": {
+    "src/globe/navara/overlayPass.js": "fd370c411b091c09b4acd1d2c84db43f3558d9c5f0c7d2f66a543054426eeeb1",
+    "src/globe/navara/overlayPass.test.mjs": "4d645be33b54ef4a4bc68c6dc547fb8831ee6f7f3da019026493cb24bf419b75",
+    "src/globe/navara/movers/moverMesh.js": "35bbcca909f7a0441c66239c3d3e8456c572f603f470a8a2f44c17c0907bfd2d",
+    "src/globe/navara/movers/moverMesh.test.mjs": "48db914bd4fc5753b5ace211453296ec797e6e69ce727a723549a7f55e88c2ae",
+    "src/layers/installations/render/navara.js": "1c2691334a1c7f6b6d237ae30b303f0e42f104428e120652b0b6015b39ca5b58",
+    "src/layers/installations/render/navaraOutlineBatch.js": "8b90986742a9c231e421afd6bd2d0312bf9e9403e84cacd2093975c3b073abb5",
+    "src/layers/shared/render/navaraGroundGeometry.js": "f2914d07789767cfe4fad917e7a6bd2d96ac23701054e613dd0aa2fbf1043870",
+    "src/layers/shared/render/navaraGroundOrder.test.mjs": "e70fa848c73f124637a91c1e5ddc92fa1632108b9d9ad6224a866d190357cfbf",
+    "src/layers/cctv/index.js": "93318f0302853d2a6e7e0e1afc46fd961e2957126fc70c6f56f6ace5373dc639",
+    "src/layers/cctv/testing.js": "eb1ecc422985ebdfa2f0225b65024cc45071d84be2f164007fc9090f5f93e398",
+    "scripts/qa-w2-cctv.mjs": "558a6b00d0e171f304a44d59bdef4e14aafc45311495f54a6a7517fae4551b32",
+    "scripts/qa-w2-comparison.mjs": "2eaa4045e8d812a5e8a23201e66c611641247a88974cfea45c4218f1d0921ad7",
+    "scripts/fixtures/w2/combined.mjs": "3362ef99df6207a68f6ed87f047ee69b1b298f3cb9146f0becae987330e57e48",
+    "scripts/qa-w2-ground-mesh.mjs": "d419d2e7b18d4482069647a6847c88859b778dc89b87ee81ea386920063b5dfc",
+    "scripts/qa-w2-installations-batch.mjs": "a302f76d4709ee6859f01bb3476e456ded09cee29f8e730420018f06d5f150c7"
+  },
+  "retainedFailures": [
+    {
+      "path": "/private/tmp/gev-w2-closure1-cctv-navara.json",
+      "sha256": "cc1e3f4d3a61363720a6c3eee3f6ce56dcb86417fd53f57c5a910ff51da3602d"
+    },
+    {
+      "path": "/private/tmp/gev-w2-closure1-shell.log",
+      "sha256": "399cf9c299e7211420092b3812da601a1ff3d53ef4982db08fff5bbf351ad37b"
+    },
+    {
+      "path": "/private/tmp/gev-w2-closure1-firms-close.json",
+      "sha256": "c3cbb2f457f2cbaf35ad49630dc6bd9bc5ab0aad92ad3823c612064ac5fbe362"
+    },
+    {
+      "path": "/private/tmp/gev-w2-batch-pixels1.json",
+      "sha256": "cc1b04eef7805be2c325acc37b7129f587f29c628bba735e324e5773b9aaa6dc"
+    },
+    {
+      "path": "/private/tmp/gev-w2-batch-pixels2.json",
+      "sha256": "2be7e43c528bd8377bd92d0996f381e704021d3c84974a47425ccff621f0c0a9"
+    },
+    {
+      "path": "/private/tmp/gev-w2-closure2-comparison-uncapped.json",
+      "sha256": "a8c47a038b5f449c2587dc45abf3a03db6909dfd6b2b00ff23faedeaacb801c3"
+    }
+  ],
+  "interruptedComparisons": {
+    "closure3": "stopped during discarded warmup for ground-order correction; not an acceptance series",
+    "closure4": "stopped during discarded warmup for shader-key correction; not an acceptance series"
+  },
+  "openGates": {
+    "firmsClose": {
+      "priorFullUncappedRatio": 1.136,
+      "limit": 1.1,
+      "freshSingleContextDiagnosticRatio": 1.341
+    },
+    "productionShell": {
+      "native": "23/24, one delayed idle frame",
+      "navara": "26/26",
+      "crossEngine": "3/4, one offscreen resident terrain-height delta about5.09m against2m limit",
+      "diagnostic": "matched direct source levels8-16 agree to about0.0001m; visible startup probe within0.01m; cause of native resident query difference unproven"
+    },
+    "visualMatrix": "broader sensor/dense/common-surface and look parity remain open",
+    "byteBudget": "no main-chunk baseline exists"
+  },
+  "constraints": [
+    "empty Google and Cesium credentials during builds and launches",
+    "paid maps blocked before navigation",
+    "headless only, sequential GPU jobs",
+    "no agents, pushes or publication",
+    "Dioxus deferred",
+    "no app-default changes"
+  ],
+  "images": {
+    "cesium": {
+      "path": "images/phase3-w2-comparison-cesium.webp",
+      "bytes": 60574,
+      "sha256": "ceec6fd6093e840c96ada10a86730c58042b33447b673e5237348b4e0da45035",
+      "rawPath": "/private/tmp/gev-w2-closure5-cinematic-paced-cesium-1-combined.png",
+      "rawSha256": "a6989a23d3783a6cabe1a63a03985384cadb2e13a0b9b2ff5092a2901176f480",
+      "kind": "lossy visual overview, not pixel oracle"
+    },
+    "navara": {
+      "path": "images/phase3-w2-comparison-navara.webp",
+      "bytes": 81974,
+      "sha256": "64d78c8247b2390a5825cc724f0704c75af27e8bef854c1560f0b5cc4ac242ba",
+      "rawPath": "/private/tmp/gev-w2-closure5-cinematic-paced-navara-1-combined.png",
+      "rawSha256": "e23a62b2efc4a580a0644f2447ffd3236bef73787839bc42a5071de28ca2d3b9",
+      "kind": "lossy visual overview, not pixel oracle"
+    }
+  },
+  "pacedOutlier": {
+    "look": "minimal",
+    "scenario": "firms",
+    "run": 1,
+    "navaraLongFrames33": 3,
+    "cesiumLongFrames33": 0,
+    "medianGatePass": true
+  }
+}

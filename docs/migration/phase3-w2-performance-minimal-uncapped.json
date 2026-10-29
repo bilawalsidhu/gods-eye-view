@@ -1,0 +1,3591 @@
+{
+  "mode": "uncapped",
+  "look": "minimal",
+  "diagnostic": false,
+  "denseQuakes": false,
+  "workload": "500 worldwide earthquakes, five near the Boston camera; dense local W2 catalog fixtures",
+  "head": "c637a0485cade113ee3deede1c2e35d101d79640",
+  "trackedDiffSha256": "97d54c43c77660b8cb427eb7d54829a4fd03369ded5be881999b67cfdf300ba5",
+  "host": {
+    "cpu": "Apple M2 Pro",
+    "cores": 12,
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "base": "http://127.0.0.1:4207",
+  "scenarios": [
+    "empty",
+    "firms",
+    "alpr",
+    "cctv",
+    "imagery",
+    "transit800",
+    "transit3000",
+    "combined"
+  ],
+  "fixtureSha256": "412e5250d74d1bd1940606425609279e308cf7d5e29a19c0b11d66e3a85af5de",
+  "fixtureSourceSha256": "3362ef99df6207a68f6ed87f047ee69b1b298f3cb9146f0becae987330e57e48",
+  "driverSha256": "2eaa4045e8d812a5e8a23201e66c611641247a88974cfea45c4218f1d0921ad7",
+  "measurement": "preRender listener installed before W2 enable to postRender listener after W2 setup; CPU/submission, not GPU timer",
+  "warmMs": 3000,
+  "measureMs": 10000,
+  "runs": [
+    {
+      "engine": "cesium",
+      "run": -1,
+      "discarded": true,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3636,
+          "workP50": 2.0999999046325684,
+          "workP95": 2.5,
+          "intervalP50": 2.700000047683716,
+          "intervalP95": 3.3999998569488525,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 29428900,
+          "heapAfter": 30035004
+        },
+        "firms": {
+          "counts": {
+            "local-firms": 6000
+          },
+          "stats": {
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3523,
+          "workP50": 2.200000047683716,
+          "workP95": 2.9000000953674316,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.5999999046325684,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 36308904,
+          "heapAfter": 36896440
+        },
+        "alpr": {
+          "counts": {
+            "alpr-cameras": 325
+          },
+          "stats": {
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292375466,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3417,
+          "workP50": 1.5,
+          "workP95": 3.5,
+          "intervalP50": 2.799999952316284,
+          "intervalP95": 4.3999998569488525,
+          "longFrames33": 5,
+          "longFrames50": 3,
+          "heapBefore": 44242796,
+          "heapAfter": 45074348
+        },
+        "cctv": {
+          "counts": {
+            "cctv": 25
+          },
+          "stats": {
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292401168,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3327,
+          "workP50": 2.200000047683716,
+          "workP95": 3.700000047683716,
+          "intervalP50": 3,
+          "intervalP95": 4.5,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 45162392,
+          "heapAfter": 45762308
+        },
+        "imagery": {
+          "counts": {
+            "recent-imagery": 2
+          },
+          "stats": {
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292407397,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 3439,
+          "workP50": 2.1000001430511475,
+          "workP95": 3,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.9000000953674316,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 47937468,
+          "heapAfter": 48912620
+        },
+        "transit800": {
+          "counts": {
+            "transit": 800
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292424987,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": null,
+          "frames": 3354,
+          "workP50": 2.3999998569488525,
+          "workP95": 2.9000000953674316,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.6000001430511475,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 56098828,
+          "heapAfter": 55983364
+        },
+        "transit3000": {
+          "counts": {
+            "transit": 3000
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292442519,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 3000,
+            "shown": 3000,
+            "moving": 3000
+          },
+          "imagery": null,
+          "frames": 2138,
+          "workP50": 4.200000047683716,
+          "workP95": 5.299999952316284,
+          "intervalP50": 4.700000047683716,
+          "intervalP95": 5.900000095367432,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 69577632,
+          "heapAfter": 69216108
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793292460206,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793292461644,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793292461033,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292375466,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 2,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292471512,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292464425,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292461714,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 1812,
+          "workP50": 3.3999998569488525,
+          "workP95": 4.799999952316284,
+          "intervalP50": 5.299999952316284,
+          "intervalP95": 7.8999998569488525,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 95556124,
+          "heapAfter": 96085704
+        }
+      },
+      "startupMs": 6521,
+      "requests": 159
+    },
+    {
+      "engine": "navara",
+      "run": -1,
+      "discarded": true,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2764,
+          "workP50": 2.5,
+          "workP95": 3.4000000953674316,
+          "intervalP50": 3.799999952316284,
+          "intervalP95": 4.400000095367432,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 35065144,
+          "heapAfter": 35335268
+        },
+        "firms": {
+          "counts": {
+            "local-firms": 6000
+          },
+          "stats": {
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2261,
+          "workP50": 2.8999998569488525,
+          "workP95": 4.1000001430511475,
+          "intervalP50": 4.400000095367432,
+          "intervalP95": 5.700000047683716,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 38241740,
+          "heapAfter": 39037336
+        },
+        "alpr": {
+          "counts": {
+            "alpr-cameras": 325
+          },
+          "stats": {
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292516493,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2322,
+          "workP50": 2.9000000953674316,
+          "workP95": 4.599999904632568,
+          "intervalP50": 4.099999904632568,
+          "intervalP95": 5.900000095367432,
+          "longFrames33": 2,
+          "longFrames50": 0,
+          "heapBefore": 39785224,
+          "heapAfter": 40037076
+        },
+        "cctv": {
+          "counts": {
+            "cctv": 25
+          },
+          "stats": {
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292542815,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 1992,
+          "workP50": 3.200000047683716,
+          "workP95": 4.299999952316284,
+          "intervalP50": 5,
+          "intervalP95": 6.299999952316284,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 41633840,
+          "heapAfter": 42011780
+        },
+        "imagery": {
+          "counts": {
+            "recent-imagery": 2
+          },
+          "stats": {
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292549050,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 4,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 1959,
+          "workP50": 3.6000001430511475,
+          "workP95": 4.6000001430511475,
+          "intervalP50": 5.200000047683716,
+          "intervalP95": 6.400000095367432,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 42169964,
+          "heapAfter": 42352232
+        },
+        "transit800": {
+          "counts": {
+            "transit": 800
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292567373,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": null,
+          "frames": 2004,
+          "workP50": 3.799999952316284,
+          "workP95": 4.700000047683716,
+          "intervalP50": 5.1000001430511475,
+          "intervalP95": 6.099999904632568,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 48743140,
+          "heapAfter": 48693456
+        },
+        "transit3000": {
+          "counts": {
+            "transit": 3000
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292586006,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 3000,
+            "shown": 3000,
+            "moving": 3000
+          },
+          "imagery": null,
+          "frames": 1589,
+          "workP50": 5.299999952316284,
+          "workP95": 6.5,
+          "intervalP50": 6.299999952316284,
+          "intervalP95": 7.700000047683716,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 65457200,
+          "heapAfter": 65293420
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793292600814,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793292601481,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793292600928,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292516493,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 2,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292611132,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292603897,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292601175,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 4,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 1015,
+          "workP50": 7.799999952316284,
+          "workP95": 10,
+          "intervalP50": 9.799999952316284,
+          "intervalP95": 12,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 57341292,
+          "heapAfter": 57654092
+        }
+      },
+      "startupMs": 5564,
+      "requests": 116
+    },
+    {
+      "engine": "cesium",
+      "run": 0,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3696,
+          "workP50": 2.200000047683716,
+          "workP95": 2.6000001430511475,
+          "intervalP50": 2.700000047683716,
+          "intervalP95": 3.200000047683716,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 29490280,
+          "heapAfter": 30099060
+        },
+        "firms": {
+          "counts": {
+            "local-firms": 6000
+          },
+          "stats": {
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3530,
+          "workP50": 2.200000047683716,
+          "workP95": 2.8000001907348633,
+          "intervalP50": 2.8999998569488525,
+          "intervalP95": 3.5999999046325684,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 36275176,
+          "heapAfter": 36961728
+        },
+        "alpr": {
+          "counts": {
+            "alpr-cameras": 325
+          },
+          "stats": {
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292655739,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3522,
+          "workP50": 1.5999999046325684,
+          "workP95": 3.200000047683716,
+          "intervalP50": 2.799999952316284,
+          "intervalP95": 4.099999904632568,
+          "longFrames33": 4,
+          "longFrames50": 2,
+          "heapBefore": 44350136,
+          "heapAfter": 45238052
+        },
+        "cctv": {
+          "counts": {
+            "cctv": 25
+          },
+          "stats": {
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292681335,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3488,
+          "workP50": 2.299999952316284,
+          "workP95": 3.4000000953674316,
+          "intervalP50": 3,
+          "intervalP95": 4.1000001430511475,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 45016964,
+          "heapAfter": 45793356
+        },
+        "imagery": {
+          "counts": {
+            "recent-imagery": 2
+          },
+          "stats": {
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292687677,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 3508,
+          "workP50": 2.1999998092651367,
+          "workP95": 3,
+          "intervalP50": 2.8999998569488525,
+          "intervalP95": 3.700000047683716,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 48103780,
+          "heapAfter": 49045992
+        },
+        "transit800": {
+          "counts": {
+            "transit": 800
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292705294,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": null,
+          "frames": 3390,
+          "workP50": 2.3999998569488525,
+          "workP95": 2.8999998569488525,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.5,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 56059152,
+          "heapAfter": 56097340
+        },
+        "transit3000": {
+          "counts": {
+            "transit": 3000
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292721710,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 3000,
+            "shown": 3000,
+            "moving": 3000
+          },
+          "imagery": null,
+          "frames": 2294,
+          "workP50": 3.8000001907348633,
+          "workP95": 4.799999952316284,
+          "intervalP50": 4.3999998569488525,
+          "intervalP95": 5.5,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 69560840,
+          "heapAfter": 69235860
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793292739333,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793292740734,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793292740138,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292655739,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 2,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292750603,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292743529,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292740803,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 1955,
+          "workP50": 3.200000047683716,
+          "workP95": 4.6000001430511475,
+          "intervalP50": 4.900000095367432,
+          "intervalP95": 7.200000047683716,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 95594988,
+          "heapAfter": 96101640
+        }
+      },
+      "startupMs": 5798,
+      "requests": 159
+    },
+    {
+      "engine": "navara",
+      "run": 0,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2767,
+          "workP50": 2.5,
+          "workP95": 3.299999952316284,
+          "intervalP50": 3.799999952316284,
+          "intervalP95": 4.5,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 35294468,
+          "heapAfter": 35559132
+        },
+        "firms": {
+          "counts": {
+            "local-firms": 6000
+          },
+          "stats": {
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2339,
+          "workP50": 2.8999998569488525,
+          "workP95": 3.6000001430511475,
+          "intervalP50": 4.299999952316284,
+          "intervalP95": 5.299999952316284,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 38430168,
+          "heapAfter": 39208232
+        },
+        "alpr": {
+          "counts": {
+            "alpr-cameras": 325
+          },
+          "stats": {
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292796763,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2233,
+          "workP50": 2.8999998569488525,
+          "workP95": 4.3999998569488525,
+          "intervalP50": 4.3999998569488525,
+          "intervalP95": 5.900000095367432,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 39965508,
+          "heapAfter": 40218740
+        },
+        "cctv": {
+          "counts": {
+            "cctv": 25
+          },
+          "stats": {
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292823088,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 1963,
+          "workP50": 3.1999998092651367,
+          "workP95": 4.299999952316284,
+          "intervalP50": 5.099999904632568,
+          "intervalP95": 6.5,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 41792476,
+          "heapAfter": 42181548
+        },
+        "imagery": {
+          "counts": {
+            "recent-imagery": 2
+          },
+          "stats": {
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292829314,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 4,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 2065,
+          "workP50": 3.4000000953674316,
+          "workP95": 4.299999952316284,
+          "intervalP50": 5.099999904632568,
+          "intervalP95": 5.700000047683716,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 42351344,
+          "heapAfter": 42580604
+        },
+        "transit800": {
+          "counts": {
+            "transit": 800
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292847655,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": null,
+          "frames": 1968,
+          "workP50": 3.799999952316284,
+          "workP95": 4.599999904632568,
+          "intervalP50": 5.200000047683716,
+          "intervalP95": 6,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 48990536,
+          "heapAfter": 48909788
+        },
+        "transit3000": {
+          "counts": {
+            "transit": 3000
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292866063,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 3000,
+            "shown": 3000,
+            "moving": 3000
+          },
+          "imagery": null,
+          "frames": 1583,
+          "workP50": 5.200000047683716,
+          "workP95": 6.700000047683716,
+          "intervalP50": 6.200000047683716,
+          "intervalP95": 8.200000047683716,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 65371880,
+          "heapAfter": 65008296
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793292880957,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793292881627,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793292881074,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292796763,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 2,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292891294,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292884080,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292881329,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 4,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 989,
+          "workP50": 8.100000143051147,
+          "workP95": 10,
+          "intervalP50": 10.100000143051147,
+          "intervalP95": 12.100000143051147,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 57319760,
+          "heapAfter": 57601656
+        }
+      },
+      "startupMs": 6850,
+      "requests": 116
+    },
+    {
+      "engine": "cesium",
+      "run": 1,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3635,
+          "workP50": 2.0999999046325684,
+          "workP95": 2.6000001430511475,
+          "intervalP50": 2.700000047683716,
+          "intervalP95": 3.4000000953674316,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 29496988,
+          "heapAfter": 30122016
+        },
+        "firms": {
+          "counts": {
+            "local-firms": 6000
+          },
+          "stats": {
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3499,
+          "workP50": 2.200000047683716,
+          "workP95": 2.8999998569488525,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.6000001430511475,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 36490176,
+          "heapAfter": 37039944
+        },
+        "alpr": {
+          "counts": {
+            "alpr-cameras": 325
+          },
+          "stats": {
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292936224,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3329,
+          "workP50": 1.5999999046325684,
+          "workP95": 3.3999998569488525,
+          "intervalP50": 2.8999998569488525,
+          "intervalP95": 4.299999952316284,
+          "longFrames33": 4,
+          "longFrames50": 4,
+          "heapBefore": 44310816,
+          "heapAfter": 45142288
+        },
+        "cctv": {
+          "counts": {
+            "cctv": 25
+          },
+          "stats": {
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793292961944,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3422,
+          "workP50": 2.299999952316284,
+          "workP95": 3.5,
+          "intervalP50": 3,
+          "intervalP95": 4.200000047683716,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 45235804,
+          "heapAfter": 45838688
+        },
+        "imagery": {
+          "counts": {
+            "recent-imagery": 2
+          },
+          "stats": {
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793292968171,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 3479,
+          "workP50": 2.1999998092651367,
+          "workP95": 3,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.799999952316284,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 48203328,
+          "heapAfter": 49079816
+        },
+        "transit800": {
+          "counts": {
+            "transit": 800
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793292985779,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": null,
+          "frames": 3385,
+          "workP50": 2.3999998569488525,
+          "workP95": 2.9000000953674316,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.5,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 56094988,
+          "heapAfter": 56114168
+        },
+        "transit3000": {
+          "counts": {
+            "transit": 3000
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293002212,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 3000,
+            "shown": 3000,
+            "moving": 3000
+          },
+          "imagery": null,
+          "frames": 2279,
+          "workP50": 3.8999998569488525,
+          "workP95": 4.8999998569488525,
+          "intervalP50": 4.400000095367432,
+          "intervalP95": 5.599999904632568,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 69626600,
+          "heapAfter": 69190288
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793293019822,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793293020289,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793293020617,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793292936224,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 2,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793293031058,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293023985,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793293021263,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 1972,
+          "workP50": 3.0999999046325684,
+          "workP95": 4.300000190734863,
+          "intervalP50": 4.900000095367432,
+          "intervalP95": 7.1000001430511475,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 95555772,
+          "heapAfter": 96065632
+        }
+      },
+      "startupMs": 6159,
+      "requests": 158
+    },
+    {
+      "engine": "navara",
+      "run": 1,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2822,
+          "workP50": 2.5999999046325684,
+          "workP95": 3.4000000953674316,
+          "intervalP50": 3.700000047683716,
+          "intervalP95": 4.3999998569488525,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 34929844,
+          "heapAfter": 35209380
+        },
+        "firms": {
+          "counts": {
+            "local-firms": 6000
+          },
+          "stats": {
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2364,
+          "workP50": 3,
+          "workP95": 3.9000000953674316,
+          "intervalP50": 4.200000047683716,
+          "intervalP95": 5.300000190734863,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 38084716,
+          "heapAfter": 38867160
+        },
+        "alpr": {
+          "counts": {
+            "alpr-cameras": 325
+          },
+          "stats": {
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793293076023,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2358,
+          "workP50": 3,
+          "workP95": 4.5,
+          "intervalP50": 4.299999952316284,
+          "intervalP95": 5.5,
+          "longFrames33": 2,
+          "longFrames50": 0,
+          "heapBefore": 39619568,
+          "heapAfter": 39869360
+        },
+        "cctv": {
+          "counts": {
+            "cctv": 25
+          },
+          "stats": {
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793293102320,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2140,
+          "workP50": 3.3999998569488525,
+          "workP95": 4.200000047683716,
+          "intervalP50": 4.700000047683716,
+          "intervalP95": 5.799999952316284,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 41486580,
+          "heapAfter": 41880776
+        },
+        "imagery": {
+          "counts": {
+            "recent-imagery": 2
+          },
+          "stats": {
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793293108540,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 4,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 2039,
+          "workP50": 3.5,
+          "workP95": 4.400000095367432,
+          "intervalP50": 5.099999904632568,
+          "intervalP95": 5.799999952316284,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 42050616,
+          "heapAfter": 42254972
+        },
+        "transit800": {
+          "counts": {
+            "transit": 800
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293126862,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": null,
+          "frames": 2046,
+          "workP50": 3.6000001430511475,
+          "workP95": 4.6000001430511475,
+          "intervalP50": 5,
+          "intervalP95": 5.8999998569488525,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 48642108,
+          "heapAfter": 48527984
+        },
+        "transit3000": {
+          "counts": {
+            "transit": 3000
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293145117,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 3000,
+            "shown": 3000,
+            "moving": 3000
+          },
+          "imagery": null,
+          "frames": 1643,
+          "workP50": 5,
+          "workP95": 6.200000047683716,
+          "intervalP50": 6.099999904632568,
+          "intervalP95": 7.5,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 65292664,
+          "heapAfter": 64934424
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793293159917,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793293160590,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793293160059,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793293076023,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 2,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793293170272,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293163056,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793293160327,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 4,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 1007,
+          "workP50": 7.900000095367432,
+          "workP95": 9.700000047683716,
+          "intervalP50": 9.900000095367432,
+          "intervalP95": 11.899999856948853,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 57271088,
+          "heapAfter": 57520860
+        }
+      },
+      "startupMs": 5555,
+      "requests": 116
+    },
+    {
+      "engine": "cesium",
+      "run": 2,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3583,
+          "workP50": 2.1000001430511475,
+          "workP95": 2.799999952316284,
+          "intervalP50": 2.700000047683716,
+          "intervalP95": 3.5999999046325684,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 29484848,
+          "heapAfter": 30051424
+        },
+        "firms": {
+          "counts": {
+            "local-firms": 6000
+          },
+          "stats": {
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3356,
+          "workP50": 2.200000047683716,
+          "workP95": 3,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.8000001907348633,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 36346304,
+          "heapAfter": 36973552
+        },
+        "alpr": {
+          "counts": {
+            "alpr-cameras": 325
+          },
+          "stats": {
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793293215014,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3500,
+          "workP50": 1.7000000476837158,
+          "workP95": 3.299999952316284,
+          "intervalP50": 2.799999952316284,
+          "intervalP95": 4.099999904632568,
+          "longFrames33": 4,
+          "longFrames50": 4,
+          "heapBefore": 44273540,
+          "heapAfter": 45099304
+        },
+        "cctv": {
+          "counts": {
+            "cctv": 25
+          },
+          "stats": {
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793293240690,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 3504,
+          "workP50": 2.200000047683716,
+          "workP95": 3.3000001907348633,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 4,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 45030912,
+          "heapAfter": 45829924
+        },
+        "imagery": {
+          "counts": {
+            "recent-imagery": 2
+          },
+          "stats": {
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793293246928,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 3413,
+          "workP50": 2.0999999046325684,
+          "workP95": 2.9000000953674316,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 3.799999952316284,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 48030740,
+          "heapAfter": 48963152
+        },
+        "transit800": {
+          "counts": {
+            "transit": 800
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293264581,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": null,
+          "frames": 3278,
+          "workP50": 2.3000001907348633,
+          "workP95": 3.3999998569488525,
+          "intervalP50": 2.9000000953674316,
+          "intervalP95": 4,
+          "longFrames33": 2,
+          "longFrames50": 2,
+          "heapBefore": 56016352,
+          "heapAfter": 56078996
+        },
+        "transit3000": {
+          "counts": {
+            "transit": 3000
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293281048,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 3000,
+            "shown": 3000,
+            "moving": 3000
+          },
+          "imagery": null,
+          "frames": 2182,
+          "workP50": 4,
+          "workP95": 5.099999904632568,
+          "intervalP50": 4.599999904632568,
+          "intervalP95": 5.799999952316284,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 69659292,
+          "heapAfter": 69786524
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793293298762,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793293299357,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793293299780,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793293215014,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 2,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793293310225,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293303157,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793293300424,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 2007,
+          "workP50": 3.1999998092651367,
+          "workP95": 4.6000001430511475,
+          "intervalP50": 4.799999952316284,
+          "intervalP95": 7.299999952316284,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 95520672,
+          "heapAfter": 96085200
+        }
+      },
+      "startupMs": 5877,
+      "requests": 158
+    },
+    {
+      "engine": "navara",
+      "run": 2,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2753,
+          "workP50": 2.5,
+          "workP95": 3.4000000953674316,
+          "intervalP50": 3.799999952316284,
+          "intervalP95": 4.5,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 35196020,
+          "heapAfter": 35438492
+        },
+        "firms": {
+          "counts": {
+            "local-firms": 6000
+          },
+          "stats": {
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2343,
+          "workP50": 2.9000000953674316,
+          "workP95": 3.799999952316284,
+          "intervalP50": 4.200000047683716,
+          "intervalP95": 5.400000095367432,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 38321084,
+          "heapAfter": 39110888
+        },
+        "alpr": {
+          "counts": {
+            "alpr-cameras": 325
+          },
+          "stats": {
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793293355947,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2271,
+          "workP50": 2.8000001907348633,
+          "workP95": 4.6000001430511475,
+          "intervalP50": 4.200000047683716,
+          "intervalP95": 6.199999809265137,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 39870808,
+          "heapAfter": 40131404
+        },
+        "cctv": {
+          "counts": {
+            "cctv": 25
+          },
+          "stats": {
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793293382291,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 2149,
+          "workP50": 3.200000047683716,
+          "workP95": 4,
+          "intervalP50": 4.700000047683716,
+          "intervalP95": 5.700000047683716,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 41734104,
+          "heapAfter": 42124504
+        },
+        "imagery": {
+          "counts": {
+            "recent-imagery": 2
+          },
+          "stats": {
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793293388518,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 4,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 1990,
+          "workP50": 3.5,
+          "workP95": 4.5,
+          "intervalP50": 5.1000001430511475,
+          "intervalP95": 6,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 42278912,
+          "heapAfter": 42486268
+        },
+        "transit800": {
+          "counts": {
+            "transit": 800
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293406857,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": null,
+          "frames": 2003,
+          "workP50": 3.799999952316284,
+          "workP95": 4.599999904632568,
+          "intervalP50": 5.199999809265137,
+          "intervalP95": 5.8999998569488525,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 48916636,
+          "heapAfter": 48782712
+        },
+        "transit3000": {
+          "counts": {
+            "transit": 3000
+          },
+          "stats": {
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293425475,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 3000,
+            "shown": 3000,
+            "moving": 3000
+          },
+          "imagery": null,
+          "frames": 1533,
+          "workP50": 5.599999904632568,
+          "workP95": 7,
+          "intervalP50": 6.5,
+          "intervalP95": 8.300000190734863,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 65378804,
+          "heapAfter": 64997608
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793293440314,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 23h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793293441000,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793293440426,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793293355947,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 2,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793293450646,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793293443369,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793293440681,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 4,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 994,
+          "workP50": 7.8999998569488525,
+          "workP95": 9.900000095367432,
+          "intervalP50": 9.900000095367432,
+          "intervalP95": 12.299999952316284,
+          "longFrames33": 1,
+          "longFrames50": 0,
+          "heapBefore": 57293548,
+          "heapAfter": 57575932
+        }
+      },
+      "startupMs": 6388,
+      "requests": 116
+    }
+  ],
+  "browserErrors": [],
+  "previewManifestSha256": "36be4442a34d4f9ef53d693798aa06bb767f237549241cd729cb3381f2fd8ebf",
+  "browser": "Chrome/152.0.7977.75",
+  "expectedPreviewErrors": [],
+  "failedResponses": [],
+  "runtimePages": [
+    "cesium--1",
+    "navara--1",
+    "cesium-0",
+    "navara-0",
+    "cesium-1",
+    "navara-1",
+    "cesium-2",
+    "navara-2"
+  ],
+  "comparison": {
+    "empty": {
+      "cesium": {
+        "workP95": 2.6000001430511475,
+        "intervalP95": 3.4000000953674316,
+        "longFrames33": 2,
+        "counts": {}
+      },
+      "navara": {
+        "workP95": 3.4000000953674316,
+        "intervalP95": 4.5,
+        "longFrames33": 0,
+        "counts": {}
+      },
+      "ratio": 1.3076922724232891,
+      "sameCounts": true,
+      "pass": false
+    },
+    "firms": {
+      "cesium": {
+        "workP95": 2.8999998569488525,
+        "intervalP95": 3.6000001430511475,
+        "longFrames33": 2,
+        "counts": {
+          "local-firms": 6000
+        }
+      },
+      "navara": {
+        "workP95": 3.799999952316284,
+        "intervalP95": 5.300000190734863,
+        "longFrames33": 0,
+        "counts": {
+          "local-firms": 6000
+        }
+      },
+      "ratio": 1.3103448757802145,
+      "sameCounts": true,
+      "pass": false
+    },
+    "alpr": {
+      "cesium": {
+        "workP95": 3.299999952316284,
+        "intervalP95": 4.099999904632568,
+        "longFrames33": 4,
+        "counts": {
+          "alpr-cameras": 325
+        }
+      },
+      "navara": {
+        "workP95": 4.5,
+        "intervalP95": 5.900000095367432,
+        "longFrames33": 0,
+        "counts": {
+          "alpr-cameras": 325
+        }
+      },
+      "ratio": 1.3636363833403786,
+      "sameCounts": true,
+      "pass": false
+    },
+    "cctv": {
+      "cesium": {
+        "workP95": 3.4000000953674316,
+        "intervalP95": 4.1000001430511475,
+        "longFrames33": 2,
+        "counts": {
+          "cctv": 25
+        }
+      },
+      "navara": {
+        "workP95": 4.200000047683716,
+        "intervalP95": 5.799999952316284,
+        "longFrames33": 0,
+        "counts": {
+          "cctv": 25
+        }
+      },
+      "ratio": 1.235294097022615,
+      "sameCounts": true,
+      "pass": false
+    },
+    "imagery": {
+      "cesium": {
+        "workP95": 3,
+        "intervalP95": 3.799999952316284,
+        "longFrames33": 2,
+        "counts": {
+          "recent-imagery": 2
+        }
+      },
+      "navara": {
+        "workP95": 4.400000095367432,
+        "intervalP95": 5.799999952316284,
+        "longFrames33": 0,
+        "counts": {
+          "recent-imagery": 2
+        }
+      },
+      "ratio": 1.4666666984558105,
+      "sameCounts": true,
+      "pass": false
+    },
+    "transit800": {
+      "cesium": {
+        "workP95": 2.9000000953674316,
+        "intervalP95": 3.5,
+        "longFrames33": 2,
+        "counts": {
+          "transit": 800
+        }
+      },
+      "navara": {
+        "workP95": 4.599999904632568,
+        "intervalP95": 5.8999998569488525,
+        "longFrames33": 0,
+        "counts": {
+          "transit": 800
+        }
+      },
+      "ratio": 1.5862068115034824,
+      "sameCounts": true,
+      "pass": false
+    },
+    "transit3000": {
+      "cesium": {
+        "workP95": 4.8999998569488525,
+        "intervalP95": 5.599999904632568,
+        "longFrames33": 0,
+        "counts": {
+          "transit": 3000
+        }
+      },
+      "navara": {
+        "workP95": 6.700000047683716,
+        "intervalP95": 8.200000047683716,
+        "longFrames33": 0,
+        "counts": {
+          "transit": 3000
+        }
+      },
+      "ratio": 1.3673469884253615,
+      "sameCounts": true,
+      "pass": false
+    },
+    "combined": {
+      "cesium": {
+        "workP95": 4.6000001430511475,
+        "intervalP95": 7.200000047683716,
+        "longFrames33": 0,
+        "counts": {
+          "earthquakes": 500,
+          "local-firms": 6000,
+          "military-installations": 20,
+          "bikeshare": 200,
+          "radio": 750,
+          "alpr-cameras": 325,
+          "cctv": 25,
+          "transit": 800,
+          "recent-imagery": 2
+        }
+      },
+      "navara": {
+        "workP95": 9.900000095367432,
+        "intervalP95": 12.100000143051147,
+        "longFrames33": 0,
+        "counts": {
+          "earthquakes": 500,
+          "local-firms": 6000,
+          "military-installations": 20,
+          "bikeshare": 200,
+          "radio": 750,
+          "alpr-cameras": 325,
+          "cctv": 25,
+          "transit": 800,
+          "recent-imagery": 2
+        }
+      },
+      "ratio": 2.1521738668470634,
+      "sameCounts": true,
+      "pass": false
+    }
+  }
+}
