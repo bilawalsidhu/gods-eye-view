@@ -9,6 +9,7 @@ import {
   VOICE_TOGGLE_LAYER_IDS,
   VOICE_CONTEXT_LAYER_IDS,
   VOICE_QUERY_LAYER_IDS,
+  voiceLayerAliasHint,
   voiceLayerAliasMap,
 } from './layerManifest.js';
 
@@ -111,4 +112,38 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       assert.ok(!claimed.has(alias), `"${alias}" claimed by ${claimed.get(alias)} and ${entry.id}`);
       claimed.set(alias, entry.id);
     }
+});
+
+test('the alias hint drops aliases that only read the id aloud, which the runner still maps', () => {
+  const hint = voiceLayerAliasHint();
+  const aliases = voiceLayerAliasMap();
+  const hinted = new Map();
+  for (const segment of hint.split(';')) {
+    const [names, id, ...rest] = segment.split('→');
+    assert.equal(rest.length, 0, segment);
+    assert.ok(names && id, `"${segment}" needs an alias and an id`);
+    hinted.set(id, names.split('/'));
+  }
+  for (const [id, names] of hinted) {
+    const spokenId = id.replace(/-/g, ' ');
+    assert.ok(!names.some((name) => name.toLowerCase() === spokenId), `${id} hints its own id`);
+  }
+  let dropped = 0;
+  for (const entry of VOICE_LAYER_MANIFEST) {
+    if (!entry.toggle || !entry.aliases.length) continue;
+    const spokenId = entry.id.replace(/-/g, ' ');
+    const kept = entry.aliases.slice(0, 2);
+    const names = kept.filter((alias) => alias.toLowerCase() !== spokenId);
+    for (const alias of kept.filter((alias) => !names.includes(alias))) {
+      dropped += 1;
+      assert.equal(aliases.get(alias.toLowerCase()), entry.id, alias);
+    }
+    // A layer left with only id readings is omitted, never "→id".
+    if (!names.length) assert.ok(!hinted.has(entry.id), `${entry.id} is hinted with no alias`);
+    else if (hinted.has(entry.id)) assert.deepEqual(hinted.get(entry.id), names, entry.id);
+  }
+  assert.ok(dropped > 0, 'some layer reads its id aloud as an alias');
+  assert.ok(hint.split(';').includes('highway signs→message-signs'));
+  assert.doesNotMatch(hint, /message signs/);
+  assert.equal(aliases.get('message signs'), 'message-signs');
 });

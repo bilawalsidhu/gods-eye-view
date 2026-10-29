@@ -457,6 +457,13 @@ export const DATA_CREDITS = [
       'Shown as published; reports are S2 assessments, not verified fact.',
   },
   {
+    key: 'mndot-message-signs',
+    html:
+      'Highway message signs (Minnesota): ' +
+      '<a href="https://www.dot.state.mn.us/" target="_blank" rel="noopener">Minnesota Department of Transportation (MnDOT)</a>, ' +
+      'public sign messages and sign images from the MnDOT IRIS system',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +

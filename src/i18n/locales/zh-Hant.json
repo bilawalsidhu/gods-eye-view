@@ -2865,6 +2865,18 @@
     "other": "{count} 個地標"
   },
   "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 發布這些 KMZ 產品。新上傳的內容會在數秒內被檢測到，並自動替換舊版本。點擊標記查看報告。",
+  "Highway message signs": "高速公路情報板",
+  "MnDOT · Minnesota only": "MnDOT · 僅限明尼蘇達州",
+  "MnDOT network error": "MnDOT 網絡錯誤",
+  "{count} signs lit": {
+    "other": "{count} 塊情報板亮起"
+  },
+  "Message sign, {location}": "情報板，{location}",
+  "SIGN · {location}": "情報板 · {location}",
+  "MnDOT data {age}": "MnDOT 數據 {age}",
+  "STALE · MnDOT data {age}": "已過時 · MnDOT 數據 {age}",
+  "Page {n} of {total}": "第 {n} 頁，共 {total} 頁",
+  "Graphic only": "僅圖形",
   "routing busy — too many routes at once": "路線服務繁忙：同時請求的路線過多",
   "route proxy error": "路線代理出錯"
 }

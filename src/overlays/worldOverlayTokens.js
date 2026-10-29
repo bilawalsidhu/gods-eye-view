@@ -45,6 +45,16 @@ export const CCTV_THUMBNAIL_STYLE = Object.freeze({
   radius: 4,
 });
 
+/** Message-sign faces: MnDOT's own sign rendering on a thin dark plate, with
+ * no title strip or accent rule so a face keeps its sign's proportions. */
+export const MESSAGE_SIGN_THUMBNAIL_STYLE = Object.freeze({
+  padding: 2,
+  background: 'rgba(0, 0, 0, 0.92)',
+  accent: 'rgb(255, 176, 0)',
+  leader: 'rgba(255, 176, 0, 0.55)',
+  radius: WORLD_OVERLAY_STYLE.radius,
+});
+
 /** Detection fonts and compositor glow retained exactly from the source renderer. */
 export const DETECTION_STYLE = Object.freeze({
   font: '10px JetBrains Mono, monospace',
