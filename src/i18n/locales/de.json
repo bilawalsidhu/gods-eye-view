@@ -3612,5 +3612,8 @@
   "Reset view reloads the app without the view restored from the address bar.": "Ansicht zurücksetzen lädt die App ohne die aus der Adressleiste wiederhergestellte Ansicht neu.",
   "Reload": "Neu laden",
   "Retry": "Erneut versuchen",
-  "Reset view": "Ansicht zurücksetzen"
+  "Reset view": "Ansicht zurücksetzen",
+  "Clean view: hide the controls": "Reine Ansicht: Steuerelemente ausblenden",
+  "Exit clean view: show the controls": "Reine Ansicht beenden: Steuerelemente anzeigen",
+  "{label} (V)": "{label} (V)"
 }
