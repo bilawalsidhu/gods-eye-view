@@ -296,6 +296,24 @@ test('satellites overhead are those above the elevation, highest first', async (
   );
 });
 
+test('satellite azimuths that round to 360 read as 0', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { satellites: satellites(), clock: CLOCK },
+  });
+  // From these points the ISS rises at 359.7° and stands at 359.8° at CLOCK.
+  const pass = await catalog.call('next_satellite_pass', {
+    location: { lat: 10, lon: 30 },
+  });
+  assert.equal(pass.data.pass.rise_azimuth_deg, 0);
+  assert.equal(pass.data.pass.rise_direction, 'N');
+  const overhead = await catalog.call('satellites_overhead', {
+    location: { lat: 39.25, lon: 65.75 },
+  });
+  assert.equal(overhead.data.rows[0].name, 'ISS (ZARYA)');
+  assert.equal(overhead.data.rows[0].azimuth_deg, 0);
+});
+
 test('stale orbit and launch data are reported', async () => {
   const stale = {
     readGroup: async () => ({ ok: true, status: 200, text: TLE, stale: true }),
