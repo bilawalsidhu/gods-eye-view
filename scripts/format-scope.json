@@ -1148,5 +1148,7 @@
   "src/agent/rightRailState.test.mjs",
   "src/agent/rightRailIntegration.test.mjs",
   "src/agent/commandPanelTargets.test.mjs",
-  "scripts/qa-agent-right-rail.mjs"
+  "scripts/qa-agent-right-rail.mjs",
+  "src/voice/hudResult.js",
+  "src/agent/hudIntegration.test.mjs"
 ]

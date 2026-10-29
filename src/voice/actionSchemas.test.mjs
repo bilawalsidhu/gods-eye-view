@@ -45,7 +45,12 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // S2 GhostMaps extends the generated layer enums.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
-    '01eb522d619c9a838a0e8f23b3417321867e8aedd2e0c98e942bfee565df637d',
+    // #1467 independently retires Operator; pin BOTH explicitly reviewed payloads.
+    GEV_ACTION_SCHEMAS.find(
+      (tool) => tool.name === 'set_hud',
+    ).parameters.properties.layout.enum.includes('operator')
+      ? '01eb522d619c9a838a0e8f23b3417321867e8aedd2e0c98e942bfee565df637d'
+      : 'a76545934d063400664a2515ac7ed638dc08e7ade9a0443015e6aa778966aa82',
   );
 });
 
@@ -167,9 +172,14 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout.
+  // Restore the historical vocabulary for the legacy digest, including Operator
+  // when #1467 is temporarily integrated. Exact live options are tested separately.
   const hud = property('set_hud').layout;
-  hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
+  assert.deepEqual(
+    hud.enum.filter((layout) => layout !== 'operator'),
+    ['tactical', 'minimal', 'cyber'],
+  );
+  hud.enum = ['tactical', 'operator', 'minimal'];
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),

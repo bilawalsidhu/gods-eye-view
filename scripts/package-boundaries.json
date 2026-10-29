@@ -1735,7 +1735,9 @@
       "src/voice/geminiCaptureWorklet.js",
       "src/sources/httpBody.js",
       "src/sources/requestDeadline.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "src/voice/hudResult.js",
+      "src/hudLayoutPolicy.js"
     ],
     "external": []
   },
@@ -2639,7 +2641,8 @@
       "src/agent/chatgptControls.js",
       "src/agent/responseReasoning.js",
       "src/sceneCommandRelease.js",
-      "src/scopeMaskPolicy.js"
+      "src/scopeMaskPolicy.js",
+      "src/voice/hudResult.js"
     ],
     "external": [
       "hls.js",
@@ -3552,7 +3555,9 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/statusText.js",
-      "src/voice/providerCapabilities.js"
+      "src/voice/providerCapabilities.js",
+      "src/voice/hudResult.js",
+      "src/hudLayoutPolicy.js"
     ],
     "external": []
   },

@@ -1,3 +1,4 @@
+import { hudOutcome } from '../voice/hudResult.js';
 import { fitHistoryToBytes, toolResultMessage } from './conversation.js';
 import { readRightRailState, rightRailReply } from './rightRailState.js';
 
@@ -273,6 +274,8 @@ function createAgentSession({
 
       let panelOnly = true;
       let railCommandSeen = false;
+      let hudReply = null;
+      let hudOnly = true;
       try {
         for (let round = 0; round < maxToolRounds; round += 1) {
           controller.signal.throwIfAborted();
@@ -288,17 +291,30 @@ function createAgentSession({
           usage = addUsage(usage, data.usage);
           const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
           if (!toolCalls.length) controller.signal.throwIfAborted();
-          const guardedCalls = toolCalls.some(
-            (call) =>
-              ['move_camera', 'zoom_to_globe'].includes(call.name) ||
-              isPanelCommand(call.name, call.args),
-          );
+          const guardedCalls =
+            Boolean(toolCalls.length && hudReply) ||
+            toolCalls.some(
+              (call) =>
+                ['move_camera', 'zoom_to_globe', 'set_hud'].includes(
+                  call.name,
+                ) || isPanelCommand(call.name, call.args),
+            );
           const railState = railCommandSeen ? readRightRailState() : null;
           const finalRailReply =
             !toolCalls.length && panelOnly ? rightRailReply(railState) : null;
-          const message = finalRailReply
-            ? { ...data.message, content: finalRailReply }
-            : data.message;
+          const finalHudReply =
+            !toolCalls.length && hudReply
+              ? hudOnly
+                ? hudReply
+                : 'Last HUD tool result: ' +
+                  hudReply +
+                  ' Other tool results are shown in the console.'
+              : null;
+          const message = finalHudReply
+            ? { ...data.message, content: finalHudReply }
+            : finalRailReply
+              ? { ...data.message, content: finalRailReply }
+              : data.message;
           // Narration before execution may claim an action that is refused.
           messages.push(guardedCalls ? { ...message, content: '' } : message);
           for (const warning of Array.isArray(data.warnings)
@@ -373,7 +389,7 @@ function createAgentSession({
                   action: call.name,
                   skipped: true,
                   error:
-                    'Not run: a camera or panel request was refused or cancelled.',
+                    'Not run: a camera, panel or HUD request was refused, normalized or cancelled.',
                 }
               : await runActionSafely(
                   runAction,
@@ -381,6 +397,12 @@ function createAgentSession({
                   call.args,
                   controller.signal,
                 );
+            hudOnly &&= call.name === 'set_hud';
+            if (call.name === 'set_hud' && !result?.skipped) {
+              const outcome = hudOutcome(result, call.args);
+              hudReply = outcome.content;
+              if (!outcome.ok) refusalReply ||= outcome.content;
+            }
             const currentRailState = readRightRailState();
             const isRailCall =
               call.name === 'set_panel_open' &&

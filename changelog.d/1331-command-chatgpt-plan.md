@@ -28,3 +28,7 @@
   all original contributor translations and locale behavior. Include the seven
   newer upstream messages in the existing COMMAND catalogs and exercise both
   Chinese scripts and the zh-TW alias in the browser gate (#1331).
+- Confirm HUD changes in COMMAND and voice from observed layout/visibility;
+  suppress false typed confirmations after rejection, normalization or partial
+  failure. Add retirement integration regressions without incorporating or
+  replacing asturksever's independent Operator removal in #1467 (#1331).

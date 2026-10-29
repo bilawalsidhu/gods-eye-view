@@ -1203,14 +1203,17 @@ export function createGevActionRunner({
 
     if (name === 'set_hud') {
       const out = { ok: true, action: 'set_hud' };
+      const snapshot = () => styleManager.getControlState?.()?.hud;
       if (args.layout != null) {
         const result = styleManager.setHudLayout(args.layout);
-        if (!result.ok) return { ...result, action: 'set_hud' };
+        if (!result.ok)
+          return { ...result, action: 'set_hud', hud: snapshot() };
         Object.assign(out, result);
       }
       if (args.visible != null) {
         const result = styleManager.setHudVisible(args.visible);
-        if (!result.ok) return { ...result, action: 'set_hud' };
+        if (!result.ok)
+          return { ...result, action: 'set_hud', hud: snapshot() };
         Object.assign(out, result);
       }
       return { ...out, hud: styleManager.getControlState().hud };
