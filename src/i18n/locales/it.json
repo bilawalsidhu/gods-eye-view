@@ -3692,5 +3692,10 @@
   "Confirm: remove every added entry from Data Layers": "Conferma: rimuovi da Livelli dati tutte le voci aggiunte",
   "Remove every added entry from Data Layers": "Rimuovi da Livelli dati tutte le voci aggiunte",
   "Showing {shown} of {total}": "Mostrati: {shown} su {total}",
-  "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI"
+  "BROWSE DATA LIBRARY": "ESPLORA LIBRERIA DATI",
+  "USGS Rivers & Streams": "USGS: fiumi e torrenti",
+  "USGS Lakes & Reservoirs": "USGS: laghi e bacini",
+  "USGS Springs": "USGS: sorgenti",
+  "Water": "Acqua",
+  "Zoom in to a region to load river gauges": "Ingrandisci una regione per caricare i misuratori dei fiumi"
 }

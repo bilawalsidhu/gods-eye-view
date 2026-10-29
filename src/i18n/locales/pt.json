@@ -3692,5 +3692,10 @@
   "Confirm: remove every added entry from Data Layers": "Confirmar: remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Remove every added entry from Data Layers": "Remover de \"Camadas de dados\" todas as entradas adicionadas",
   "Showing {shown} of {total}": "Mostrando {shown} de {total}",
-  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS"
+  "BROWSE DATA LIBRARY": "EXPLORAR BIBLIOTECA DE DADOS",
+  "USGS Rivers & Streams": "USGS: rios e riachos",
+  "USGS Lakes & Reservoirs": "USGS: lagos e reservatórios",
+  "USGS Springs": "USGS: nascentes",
+  "Water": "Água",
+  "Zoom in to a region to load river gauges": "Aproxime uma região para carregar os medidores de rios"
 }

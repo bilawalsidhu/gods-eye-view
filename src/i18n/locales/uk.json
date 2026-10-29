@@ -3779,5 +3779,10 @@
   "Confirm: remove every added entry from Data Layers": "Підтвердити: видалити всі додані записи з «Шарів даних»",
   "Remove every added entry from Data Layers": "Видалити всі додані записи з «Шарів даних»",
   "Showing {shown} of {total}": "Показано {shown} з {total}",
-  "BROWSE DATA LIBRARY": "ВІДКРИТИ БІБЛІОТЕКУ ДАНИХ"
+  "BROWSE DATA LIBRARY": "ВІДКРИТИ БІБЛІОТЕКУ ДАНИХ",
+  "USGS Rivers & Streams": "USGS: річки та струмки",
+  "USGS Lakes & Reservoirs": "USGS: озера та водосховища",
+  "USGS Springs": "USGS: джерела",
+  "Water": "Вода",
+  "Zoom in to a region to load river gauges": "Наблизьте регіон, щоб завантажити вимірювачі рівня річок"
 }
