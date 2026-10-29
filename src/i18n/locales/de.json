@@ -3184,5 +3184,8 @@
   "Close camera preview": "Kameravorschau schließen",
   "Refresh map still": "Kartenstandbild aktualisieren",
   "The map still uses a separate request and may show a different moment.": "Das Kartenstandbild wird separat abgerufen und kann einen anderen Moment zeigen.",
-  "Video plays from Québec 511, which sees your IP address.": "Das Video wird von Québec 511 abgespielt, das Ihre IP-Adresse sieht."
+  "Video plays from Québec 511, which sees your IP address.": "Das Video wird von Québec 511 abgespielt, das Ihre IP-Adresse sieht.",
+  "Clean view: hide the controls": "Reine Ansicht: Steuerelemente ausblenden",
+  "Exit clean view: show the controls": "Reine Ansicht beenden: Steuerelemente anzeigen",
+  "{label} (V)": "{label} (V)"
 }
