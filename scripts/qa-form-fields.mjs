@@ -275,6 +275,25 @@ try {
     await page.evaluate(() => window.__qaFormCalls.length === 2),
   );
 
+  // The left rail fits one tall panel at a time, so Scenes and Utilities
+  // take turns: each field is measured with its own panel open.
+  const LEFT_PANEL_FIELDS = [
+    [
+      'scene-panel',
+      ['scene-select', 'cctv-camera-select', 'hud-layout-select'],
+    ],
+    ['utilities-panel', ['draw-color-select']],
+  ];
+  const showLeftPanel = (open) =>
+    page.evaluate((open) => {
+      for (const panel of ['scene-panel', 'utilities-panel'])
+        window.__godsEyeView.styleManager.setPanelCollapsed(
+          panel,
+          panel !== open,
+          { persist: false, syncShare: false },
+        );
+    }, open);
+
   await page.evaluate(() => {
     for (const panel of [
       'pp-toggles',
@@ -287,6 +306,7 @@ try {
         syncShare: false,
       });
   });
+  await showLeftPanel('utilities-panel');
   if (
     await page.$eval(
       '#draw-toggle',
@@ -300,25 +320,31 @@ try {
     }, lang);
     for (const width of [1440, 620, 390]) {
       await page.setViewport({ width, height: 900 });
-      const layout = await page.evaluate(() => {
-        const ids = [
-          'scene-select',
-          'cctv-camera-select',
-          'hud-layout-select',
-          'draw-color-select',
-        ];
-        return ids.map((id) => {
-          const node = document.getElementById(id),
-            rect = node.getBoundingClientRect(),
-            panel = node.closest('.panel-collapsible')?.getBoundingClientRect();
-          return {
-            id,
-            width: rect.width,
-            fits: rect.width > 0 && rect.width <= (panel?.width || innerWidth),
-            radius: getComputedStyle(node).borderRadius,
-          };
-        });
-      });
+      const layout = [];
+      for (const [open, ids] of LEFT_PANEL_FIELDS) {
+        await showLeftPanel(open);
+        layout.push(
+          ...(await page.evaluate(
+            (ids) =>
+              ids.map((id) => {
+                const node = document.getElementById(id),
+                  rect = node.getBoundingClientRect(),
+                  panel = node
+                    .closest('.panel-collapsible')
+                    ?.getBoundingClientRect();
+                return {
+                  id,
+                  width: rect.width,
+                  fits:
+                    rect.width > 0 &&
+                    rect.width <= (panel?.width || innerWidth),
+                  radius: getComputedStyle(node).borderRadius,
+                };
+              }),
+            ids,
+          )),
+        );
+      }
       check(
         `${lang} fields fit their panels at ${width}px`,
         layout.every((item) => item.fits),
@@ -360,6 +386,7 @@ try {
   );
   // Scene selection can restore application settings. Exercise it after the
   // fixture-owned CCTV phase so those asynchronous effects cannot replace ports.
+  await showLeftPanel('scene-panel');
   page.once('dialog', (dialog) => dialog.accept('Baseline selection fixture'));
   await page.click('#scene-new-btn');
   await page.waitForFunction(() =>
@@ -447,6 +474,7 @@ try {
         syncShare: false,
       });
   });
+  await showLeftPanel('utilities-panel');
   if (
     await page.$eval(
       '#draw-toggle',
@@ -454,23 +482,22 @@ try {
     )
   )
     await page.click('#draw-toggle');
-  const translated = await page.evaluate(() => {
-    const nodes = [
-      'scene-select',
-      'cctv-camera-select',
-      'hud-layout-select',
-      'draw-color-select',
-    ].map((id) => document.getElementById(id));
-    return (
-      document.documentElement.lang === 'ru' &&
-      nodes.every(
-        (node) =>
-          node.clientWidth > 0 &&
-          node.getBoundingClientRect().width <=
-            node.closest('.panel-collapsible').getBoundingClientRect().width,
-      )
-    );
-  });
+  let translated = true;
+  for (const [open, ids] of LEFT_PANEL_FIELDS) {
+    await showLeftPanel(open);
+    translated &&= await page.evaluate((ids) => {
+      const nodes = ids.map((id) => document.getElementById(id));
+      return (
+        document.documentElement.lang === 'ru' &&
+        nodes.every(
+          (node) =>
+            node.clientWidth > 0 &&
+            node.getBoundingClientRect().width <=
+              node.closest('.panel-collapsible').getBoundingClientRect().width,
+        )
+      );
+    }, ids);
+  }
   check('real Russian labels and fields fit at 390px', translated);
   await page.screenshot({ path: 'qa-shots/form-fields/ru-390.png' });
   check('no uncaught browser errors', errors.length === 0, errors);

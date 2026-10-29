@@ -1,9 +1,4 @@
-import {
-  getScopeMaskFeather,
-  isScopeMaskEnabled,
-  setScopeMaskEnabled,
-  setScopeMaskFeather,
-} from '../scopeMask.js';
+import { getScopeMaskFeather, isScopeMaskEnabled, setScopeMaskEnabled, setScopeMaskFeather } from '../scopeMask.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -279,14 +274,8 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
 
 test('scope choice and expanded feather survive every HUD layout and both restore paths', async (t) => {
   const { owner } = styleOwner(t, 'tactical');
-  const previous = {
-    enabled: isScopeMaskEnabled(),
-    feather: getScopeMaskFeather(),
-  };
-  t.after(() => {
-    setScopeMaskEnabled(previous.enabled);
-    setScopeMaskFeather(previous.feather);
-  });
+  const previous = { enabled: isScopeMaskEnabled(), feather: getScopeMaskFeather() };
+  t.after(() => { setScopeMaskEnabled(previous.enabled); setScopeMaskFeather(previous.feather); });
   Object.assign(owner.services, { setScopeMaskEnabled, setScopeMaskFeather });
   owner._scopeBtn = { checked: true };
   owner._scopeFeatherSlider = { value: '11', disabled: false };

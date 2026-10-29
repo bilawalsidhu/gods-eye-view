@@ -2007,8 +2007,12 @@ body.cockpit-mode #left-panel-stack {
   max-height: none;
   transition: none;
 }
-body.cockpit-mode #left-panel-stack > #utilities-panel,
 body.cockpit-mode #left-panel-stack > #scene-panel {
+  display: none !important;
+}
+/* Directions stays reachable in Cockpit, as in Data Layers; Draw and Import
+   were never there (DISPLAY sits in the hidden right rail). */
+body.cockpit-mode #utilities-panel .utilities-tools {
   display: none !important;
 }
 body.cockpit-mode #right-context-rail {

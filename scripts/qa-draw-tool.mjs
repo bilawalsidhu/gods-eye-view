@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Rendered acceptance for DISPLAY ▸ Draw: real clicks, real keys, real teardown. */
+/** Rendered acceptance for UTILITIES ▸ Draw: real clicks, real keys, real teardown. */
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
@@ -212,7 +212,7 @@ try {
     { timeout: 10_000 },
   );
   check(
-    'the Draw control is on the DISPLAY rail and starts off',
+    'the Draw control is in the UTILITIES panel and starts off',
     await page.evaluate(() => {
       const toggle = document.getElementById('draw-toggle');
       return (

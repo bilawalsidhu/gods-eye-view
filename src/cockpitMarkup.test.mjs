@@ -680,6 +680,7 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
   for (const panelId of [
     'data-panel',
     'cctv-panel',
+    'utilities-panel',
     'scene-panel',
     'pp-toggles',
     'global-context-panel',

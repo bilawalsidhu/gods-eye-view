@@ -138,12 +138,14 @@ test('nothing promises a GeoJSON export for drawn shapes', () => {
       `${file} still claims a GeoJSON export`,
     );
   }
-  for (const file of ['README.md', 'CHANGELOG.md', 'docs/CURRENT-STATE.md']) {
+  // Draw lives in UTILITIES; only the changelog's history still says DISPLAY.
+  for (const [file, heading] of [
+    ['README.md', 'UTILITIES ▸ **Draw**'],
+    ['CHANGELOG.md', 'DISPLAY ▸ Draw'],
+    ['docs/CURRENT-STATE.md', 'UTILITIES ▸ **Draw**'],
+  ]) {
     const source = read(file);
-    const start =
-      ['UTILITIES ▸ **Draw**', 'DISPLAY ▸ **Draw**', 'DISPLAY ▸ Draw']
-        .map((text) => source.indexOf(text))
-        .find((at) => at >= 0) ?? -1;
+    const start = source.indexOf(heading);
     assert.ok(start >= 0, `${file} should describe the Draw control`);
     const section = source.slice(start, start + 1200);
     assert.doesNotMatch(

@@ -133,17 +133,19 @@ field. Existing whole-link size limits still apply.
 
 ## Utilities panel — October 29, 2026
 
-UTILITIES is its own panel in the left column, after Data Layers and CCTV and
-above Scenes (`#utilities-panel` in `src/ui/templates/layer-panels.html`). It
+UTILITIES is its own panel in the left column, between Data Layers and Scenes
+(`#utilities-panel` in `src/ui/templates/layer-panels.html`). It
 holds the Directions layer row, which `LayerPanel` renders into
 `#utilities-toggles` instead of the Data Layers list, and Draw and Import,
 which moved there from DISPLAY with their ids unchanged. Radio, formerly the
 other row under the Data Layers "Utilities" heading, stays in Data Layers under
 "Audio". The panel collapses and remembers its state like the other left
-panels; share links do not carry it. It hides in clean view, recording and
-Cockpit, and on a phone it sits collapsed in the Layers sheet under Data
-Layers. The Directions, Draw and Import QA gates open it to reach their
-controls.
+panels; share links do not carry it. It hides in clean view and recording. In
+Cockpit it stays with Directions alone, as Data Layers does; Draw and Import
+hide there, as DISPLAY always did. Voice `show_data_layers_menu` for
+Directions opens Utilities. On a phone it sits collapsed in the Layers sheet
+under Data Layers. The Directions, Draw, Import, form-field and
+segmented-control QA gates open it to reach their controls.
 
 ## God's Eye View in conversations — October 2, 2026
 
@@ -5411,7 +5413,7 @@ request viewbox and continues searching without that geographic preference.
 ### Manual Whiteboard Drawing (September 2026)
 
 - UTILITIES ▸ **Draw** turns the globe into a whiteboard drawn by hand. Pick a shape (Area, Line, Pin), click the vertices on the real world, type an optional label and pick a colour, and finish. **Keyboard contract, live only while Draw is on and never while you are typing in another field:** Enter finishes the shape (as does a double-click, and the two cannot both submit it — the session is replaced before the annotate call is awaited); Backspace removes the last vertex; Esc cancels the shape in progress, and a second Esc — Esc on an empty session — leaves draw mode. Typing in the label field keeps Backspace; Enter there also finishes. **Clear** wipes the board (the shape in progress and every placed mark), so removing marks does not require the console or the microphone.
-- Runtime entry: `createApplicationTools` (`src/app/tools.js`, behind the `src/standalone/tools.js` shim) calls `initDrawTool({ viewer, annotations })` after `initAnnotations` and defers its `destroy()`, so disposing the shell returns every DOM listener, the Cesium handler, the preview data source, the borrowed click actions and the `window.__gevDrawTool` handle. Its markup is a DISPLAY-rail component template (`src/ui/templates/display-controls.html`), assembled into `index.html` at build time. That handle (`setActive`, `setShape`, `addVertex(lon, lat)`, `finish`, `cancel`, `clearAll`, `diagnostics`) is the no-mouse test seam.
+- Runtime entry: `createApplicationTools` (`src/app/tools.js`, behind the `src/standalone/tools.js` shim) calls `initDrawTool({ viewer, annotations })` after `initAnnotations` and defers its `destroy()`, so disposing the shell returns every DOM listener, the Cesium handler, the preview data source, the borrowed click actions and the `window.__gevDrawTool` handle. Its markup lives in the UTILITIES panel's component template (`src/ui/templates/layer-panels.html`), assembled into `index.html` at build time. That handle (`setActive`, `setShape`, `addVertex(lon, lat)`, `finish`, `cancel`, `clearAll`, `diagnostics`) is the no-mouse test seam.
 - Contract: a finished shape is submitted through the SAME `annotationEngine.annotate()` the voice agent uses, with geometry supplied and `manual: true` (`type: area` + `ring`, `type: route` + `path`, `type: pin` + coordinates). `resolveSpec` short-circuits manual specs (`resolveManualSpec`) so no geocoder, Places or Overpass call is made. A drawn area is a real (not synthesized) outline and drapes solid; a drawn line is a `route` with `mode: 'manual'`, labelled with its length and never a travel time; a pin is a point. Drawn marks therefore render with the whiteboard look, persist, de-dup, appear in `.list()`, and clear with `clear_annotations` / `.clear()`.
 - **A vertex is a lon/lat, and the mark is DRAPED.** Clicks are picked through `pickWorldFromScreen` — one of two scene helpers the annotation resolver factory (`src/annotations/resolver.js`) exposes alongside `sampleGroundHeight`, so the app has ONE depth-aware pick cascade rather than a second written beside it — which returns the height the pick landed on as well as the coordinate, so the live preview hangs on the roof or hillside under the pointer instead of sinking to sea level. The world renderer draws areas and routes with `clampToGround`, so the height is dropped at finish in one place (`finishSpec`) rather than being carried downstream and discarded silently: what you get is the outline you drew, lying on the surface beneath it.
 - **Draped marks classify onto `ClassificationType.BOTH`** — terrain AND 3D tiles — not onto 3D tiles alone. With only `CESIUM_3D_TILE`, every area fill, area outline, route and arrow rendered to nothing on a keyless boot, where Cesium's own globe carries Esri/OSM imagery and there are no tiles to classify against; the labels appeared and the geometry did not. That hit spoken annotations exactly as hard as hand-drawn ones. `scripts/qa-draw-tool.mjs` counts the mark's own colour in the rendered frame before and after a shape is finished, on a keyed AND a keyless server, so "the board says there is a mark" can no longer pass for "the mark is on screen".

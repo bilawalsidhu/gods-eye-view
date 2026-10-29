@@ -1,4 +1,4 @@
-// Behavioral tests for DISPLAY ▸ Import: the controller is driven against
+// Behavioral tests for UTILITIES ▸ Import: the controller is driven against
 // fake DOM and viewer doubles with an injected loader, and its observable
 // effects are asserted — data sources added and removed, list rows, the hint,
 // drop handling, the file limit, and what destroy() gives back. Real parsing

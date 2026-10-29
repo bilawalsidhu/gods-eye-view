@@ -1478,7 +1478,8 @@ body.recording-mode #right-context-rail > [data-panel-id] {
   color: var(--text-primary);
 }
 
-/* Draw reads as on with the accent of an enabled layer row. */
+/* Draw marks its on state with an accent edge, like an active DISPLAY
+   button; Cyber swaps in its red edge (cyber.css). */
 #utilities-panel
   .utilities-tools
   .pp-toggle-btn:is([aria-pressed='true'], .active) {
@@ -1493,6 +1494,18 @@ body.recording-mode #right-context-rail > [data-panel-id] {
   margin-right: 10px;
 }
 
-#utilities-panel.collapsed .utilities-tools {
-  display: none;
+/* Draw's options sit flat under its name, like a layer row's controls, not
+   as the card that hangs under a DISPLAY button. DISPLAY's shared label
+   column means nothing here, so the Shape label takes its own width. */
+#utilities-panel .utilities-tools .pp-slider-row {
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#utilities-panel .utilities-tools .pp-slider-mini-label {
+  min-width: 0;
 }

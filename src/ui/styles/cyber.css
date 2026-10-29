@@ -519,6 +519,14 @@
   color: #f7f8f7;
 }
 
+:root[data-ui-theme='cyber']
+  #utilities-panel
+  .utilities-tools
+  .pp-toggle-btn:is([aria-pressed='true'], .active) {
+  background: rgba(64, 45, 46, 0.94);
+  box-shadow: 3px 0 0 var(--cyber-red) inset;
+}
+
 :root[data-ui-theme='cyber'] .pp-toggle-btn.active .pp-label {
   color: #f5f7f6;
 }
@@ -1662,9 +1670,7 @@
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
     #left-panel-stack:has(> [data-panel-id]:not(.collapsed))
-    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(
-      .collapsed
-    ) {
+    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(.collapsed) {
     flex: 1 1 auto;
     height: auto;
     max-height: none;

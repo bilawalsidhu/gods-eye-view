@@ -35,12 +35,14 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
-  await page.evaluate(() =>
-    window.__godsEyeView.styleManager.setPanelCollapsed('pp-toggles', false, {
-      persist: false,
-      syncShare: false,
-    }),
-  );
+  // DISPLAY holds most segmented controls; Draw's shape group is in UTILITIES.
+  await page.evaluate(() => {
+    for (const panel of ['pp-toggles', 'utilities-panel'])
+      window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
+        persist: false,
+        syncShare: false,
+      });
+  });
 
   const surface = await page.evaluate(() => {
     const groups = [...document.querySelectorAll('[role="radiogroup"]')];

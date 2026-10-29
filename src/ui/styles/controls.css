@@ -750,7 +750,7 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   min-width: 0;
 }
 
-/* DISPLAY ▸ Draw: shape segment, label field, colour, and the one-line hint */
+/* UTILITIES ▸ Draw: shape segment, label field, colour, and the one-line hint */
 #draw-mode-row {
   min-width: 184px;
 }
@@ -801,7 +801,7 @@ body.gev-drawing #cesiumContainer canvas {
   cursor: crosshair;
 }
 
-/* DISPLAY ▸ Import: one row per imported file, and the drop-target outline */
+/* UTILITIES ▸ Import: one row per imported file, and the drop-target outline */
 .geo-import-list {
   display: none;
   flex-direction: column;

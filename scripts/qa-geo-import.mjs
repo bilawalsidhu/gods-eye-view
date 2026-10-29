@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Rendered acceptance for DISPLAY ▸ Import: real files through the real file
+ * Rendered acceptance for UTILITIES ▸ Import: real files through the real file
  * input and a real drop, parsed by Cesium in the page.
  *
  * Proves: GeoJSON, KML, KMZ (with a packed icon and ground overlay) and GPX
@@ -285,7 +285,7 @@ try {
   );
   const before = await state();
   check(
-    'Import is on the DISPLAY rail with an empty, hidden list',
+    'Import is in the UTILITIES panel with an empty, hidden list',
     before.rows === 0 &&
       !(await page.evaluate(() =>
         document
