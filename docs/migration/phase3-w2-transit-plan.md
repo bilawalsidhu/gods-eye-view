@@ -34,3 +34,9 @@ Scope: finish the W2 transit layer without changing GTFS-RT ingestion, playback 
 ## 5. Whole-W2 performance handoff
 
 Use identical fixture payloads, visible populations, camera poses, canvas/DPR, style and keyless map sources. Separate warmed frame work (CPU submission), paced frame intervals, long frames, startup, idle and retained resources. One discarded warm context followed by three measured contexts per engine; freeze sources/builds and run serially. Preserve the existing1.10work-ratio and Cesium+2long-frame/10s gates where applicable. Report per-layer and combined results, including FIRMS/ALPR unresolved regressions. These measurements say nothing about paid Google3D loading performance.
+
+## Native extraction checkpoint — 2026-10-29
+
+The shared transit package has no Cesium dependency; application and standalone construction inject the native resource owner. Source, playback, height budgets and the native trail implementation remain unchanged. Registration/insertion failure cleanup is covered. Existing QA now requires an explicit permitted URL, always launches headless and blocks paid map requests before navigation.
+
+Validation:169 focused tests pass, package boundaries pass, scoped formatting passes1649 files. Native keyless dev heading checks pass5/5. Selected marker and trail recovery passes in621.6ms with7/8 stable positive trail controls (before extraction676.7ms,7/8; these are correctness runs, not a performance comparison). Raw logs:/private/tmp/gev-transit-extraction-regression.log,/private/tmp/gev-transit-extraction-boundaries.log,/private/tmp/gev-transit-extracted-heading.log,/private/tmp/gev-transit-extracted-recovery.log. Full gates, rebuilt preview, deterministic source acceptance, Navara rendering and performance comparison remain pending.

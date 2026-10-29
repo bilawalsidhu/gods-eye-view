@@ -27,6 +27,7 @@ import { TRANSIT_POLL_MS } from './policy.js';
 export function createTransitLayer({
   services,
   source = createTransitSource(),
+  rendererFactory,
 }) {
   if (!services?.overlays || !services?.render || !services?.sprites) {
     throw new TypeError(
@@ -43,7 +44,7 @@ export function createTransitLayer({
   }
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const context = { state, services, parts, source, rendererFactory };
   parts.trails = createTrails(context);
   parts.height = createHeight(context);
   parts.selection = createSelection(context);

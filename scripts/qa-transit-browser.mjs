@@ -1,3 +1,13 @@
+export function transitQaBase(value) {
+  if (!value) throw new Error('Transit QA requires an explicit QA_BASE_URL');
+  const url = new URL(value);
+  if (
+    ['4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(url.port)
+  )
+    throw new Error('Transit QA may not use a reserved port');
+  return url.href.replace(/\/$/, '');
+}
+
 /** Bound page promises as well as CDP itself; labels identify a stalled section. */
 export function boundPageEvaluations(page, defaultTimeoutMs = 30000) {
   const evaluate = page.evaluate.bind(page);

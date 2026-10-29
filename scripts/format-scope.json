@@ -828,6 +828,8 @@
   "src/layers/transit/policy.js",
   "src/layers/transit/queries.js",
   "src/layers/transit/rendering.js",
+  "src/layers/transit/render/cesium.js",
+  "src/layers/transit/render/cesium.test.mjs",
   "src/layers/transit/selection.js",
   "src/layers/transit/state.js",
   "src/layers/transit/testing.js",

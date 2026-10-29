@@ -6,7 +6,6 @@ import {
   FIX_FLAGS,
   mergeHistory,
 } from '../../data/contactPlayback.js';
-import { createContactTrailRenderer } from '../../data/contactTrailRenderer.js';
 import { fixDistanceM } from './movement.js';
 import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 
@@ -33,8 +32,8 @@ export function createTrails({ state, services, parts, source }) {
     fadeTimer = null,
     revision = 0;
   function ensureRenderer() {
-    if (!renderer && state._viewer)
-      renderer = createContactTrailRenderer(state._viewer.scene);
+    if (!renderer && parts.renderer?.ready)
+      renderer = parts.renderer.createTrailRenderer();
     return renderer;
   }
   function style() {
