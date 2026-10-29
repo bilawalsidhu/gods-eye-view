@@ -105,7 +105,6 @@ test('visual styles retain Cyber through real preset application without droppin
     'normal',
     'noir',
     'anime',
-    'snow',
     'thermal',
     'retro',
   ]) {
@@ -162,8 +161,8 @@ test('a preset explicitly selected in Cyber survives exit and resets for re-entr
   owner.setStyle('noir');
 
   owner._setHudVariant('cyber', { applyVisualDefaults: true });
-  owner.setStyle('snow', { userInitiated: true });
-  assert.equal(owner.activeStyle, 'snow');
+  owner.setStyle('anime', { userInitiated: true });
+  assert.equal(owner.activeStyle, 'anime');
   assert.equal(owner._preCyberStyle, 'noir');
   assert.equal(owner._cyberStyleUserSelected, true);
 
@@ -172,16 +171,16 @@ test('a preset explicitly selected in Cyber survives exit and resets for re-entr
   assert.equal(owner._preCyberStyle, 'noir');
   owner._setHudVariant('operator', { applyVisualDefaults: true });
   assert.equal(hud.getVariant(), 'operator');
-  assert.equal(owner.activeStyle, 'snow');
+  assert.equal(owner.activeStyle, 'anime');
   assert.equal(owner._preCyberStyle, null);
   assert.equal(owner._cyberStyleUserSelected, false);
 
   // A later untouched Cyber round trip restores the new pre-Cyber preset.
   owner._setHudVariant('cyber', { applyVisualDefaults: true });
   assert.equal(owner.activeStyle, 'thermal');
-  assert.equal(owner._preCyberStyle, 'snow');
+  assert.equal(owner._preCyberStyle, 'anime');
   owner._setHudVariant('minimal', { applyVisualDefaults: true });
-  assert.equal(owner.activeStyle, 'snow');
+  assert.equal(owner.activeStyle, 'anime');
 });
 
 test('an explicit same-value FLIR choice is preserved on Cyber exit', (t) => {
@@ -200,15 +199,15 @@ test('an authoritative same-Cyber reset clears local preset ownership', (t) => {
   const { owner } = styleOwner(t, 'tactical');
   owner.setStyle('noir');
   owner._setHudVariant('cyber', { applyVisualDefaults: true });
-  owner.setStyle('snow', { userInitiated: true });
+  owner.setStyle('anime', { userInitiated: true });
   assert.equal(owner._cyberStyleUserSelected, true);
 
   owner._setHudVariant('cyber');
-  assert.equal(owner.activeStyle, 'snow');
+  assert.equal(owner.activeStyle, 'anime');
   assert.equal(owner._preCyberStyle, null);
   assert.equal(owner._cyberStyleUserSelected, false);
   owner._setHudVariant('operator', { applyVisualDefaults: true });
-  assert.equal(owner.activeStyle, 'snow');
+  assert.equal(owner.activeStyle, 'anime');
 });
 
 test('Display and voice HUD routes preserve explicit Cyber entry and exit authority', async (t) => {
@@ -226,10 +225,10 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
   const display = makeOwner();
   const hudLayout = new EventTarget();
   hudLayout.value = 'cyber';
-  const snowButton = new EventTarget();
-  snowButton.dataset = { style: 'snow' };
+  const animeButton = new EventTarget();
+  animeButton.dataset = { style: 'anime' };
   const controls = bindDisplayControls({
-    elements: { hudLayout, styleButtons: [snowButton] },
+    elements: { hudLayout, styleButtons: [animeButton] },
     actions: {
       setHudLayout: (value) => display.owner.setHudLayout(value),
       setStyle: (value) =>
@@ -239,12 +238,12 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
   hudLayout.dispatchEvent(new Event('change'));
   assert.equal(display.hud.getVariant(), 'cyber');
   assert.equal(display.owner.activeStyle, 'thermal');
-  snowButton.dispatchEvent(new Event('click'));
-  assert.equal(display.owner.activeStyle, 'snow');
+  animeButton.dispatchEvent(new Event('click'));
+  assert.equal(display.owner.activeStyle, 'anime');
   hudLayout.value = 'operator';
   hudLayout.dispatchEvent(new Event('change'));
   assert.equal(display.hud.getVariant(), 'operator');
-  assert.equal(display.owner.activeStyle, 'snow');
+  assert.equal(display.owner.activeStyle, 'anime');
   controls.destroy();
 
   const voice = makeOwner();
@@ -263,13 +262,13 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
   assert.equal(entered.ok, true);
   assert.equal(voice.hud.getVariant(), 'cyber');
   assert.equal(voice.owner.activeStyle, 'thermal');
-  const selected = await runVoiceAction('set_visual_style', { style: 'snow' });
+  const selected = await runVoiceAction('set_visual_style', { style: 'anime' });
   assert.equal(selected.ok, true);
-  assert.equal(voice.owner.activeStyle, 'snow');
+  assert.equal(voice.owner.activeStyle, 'anime');
   const exited = await runVoiceAction('set_hud', { layout: 'operator' });
   assert.equal(exited.ok, true);
   assert.equal(voice.hud.getVariant(), 'operator');
-  assert.equal(voice.owner.activeStyle, 'snow');
+  assert.equal(voice.owner.activeStyle, 'anime');
 });
 
 test('scope choice and expanded feather survive every HUD layout and both restore paths', async (t) => {
@@ -301,11 +300,18 @@ test('scope choice and expanded feather survive every HUD layout and both restor
   assert.equal(owner._scopeFeatherSlider.value, '200');
 });
 
+test('a scene shot saved with the retired Snow style plays on Normal', async (t) => {
+  const { owner } = styleOwner(t, 'tactical');
+  owner.setStyle('noir');
+  await owner.applyVisualState({ style: 'snow' });
+  assert.equal(owner.activeStyle, 'normal');
+});
+
 test('scene and share HUD transitions do not restore a local pre-Cyber preset', async (t) => {
   const { owner, hud } = styleOwner(t, 'tactical');
   owner.setStyle('noir');
   owner._setHudVariant('cyber', { applyVisualDefaults: true });
-  owner.setStyle('snow', { userInitiated: true });
+  owner.setStyle('anime', { userInitiated: true });
   assert.equal(owner._cyberStyleUserSelected, true);
 
   await owner.applyVisualState({ style: 'retro', hud: { variant: 'cyber' } });
@@ -319,7 +325,7 @@ test('scene and share HUD transitions do not restore a local pre-Cyber preset', 
   owner.setStyle('surveillance');
   owner._setHudVariant('cyber', { applyVisualDefaults: true });
   assert.equal(owner._preCyberStyle, 'surveillance');
-  owner.setStyle('snow', { userInitiated: true });
+  owner.setStyle('anime', { userInitiated: true });
   await owner.restoreShareState({
     style: 'thermal',
     hudVariant: 'cyber',

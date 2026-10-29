@@ -45,8 +45,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // S2 GhostMaps extends the generated layer enums.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
+    // Snow leaves the set_visual_style enum.
     // The layer alias hint leaves out aliases the layer id already spells.
-    '188e9eaaee1d5c21fc88493ba244569f4af9cfba61bb240c52ecd32b49b18caa',
+    'a693f712a3c4d34d6dea24fae51792d4ee7152b35f736f471d247d6151ca3315',
   );
 });
 
@@ -170,6 +171,18 @@ test('all legacy action arguments are byte-identical after removing the delibera
   // Cyber adds one HUD layout.
   const hud = property('set_hud').layout;
   hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
+  // Snow is retired from set_visual_style; restore it to keep the legacy pin.
+  const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')
+    .parameters.properties.style;
+  assert.deepEqual(visualStyle.enum, [
+    'normal',
+    'retro',
+    'surveillance',
+    'thermal',
+    'anime',
+    'noir',
+  ]);
+  visualStyle.enum = [...visualStyle.enum, 'snow'];
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),

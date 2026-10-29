@@ -1392,8 +1392,10 @@ and sharpen. Display supplies actions and renders settings; effect execution has
 no DOM dependency. Existing presets and the 500 ms transition remain unchanged.
 Stopping the controller revokes animation before asynchronous UI teardown; final
 destruction removes its stages and restores the borrowed bloom configuration.
-Snow's sideways sway stays within a fixed range at any session age; Wind scales
-its amplitude.
+Snow is no longer a visual preset. A share link that names it, in either the
+long or compact form, opens on Normal and drops the Snow shader parameters. A
+view passed to embed mode or `show_in_gods_eye_view`, and a saved scene shot,
+that names Snow also open on Normal.
 Sharpen runs only when enabled with intensity above 0.001. At slider zero its
 stage is disabled; raising the slider resumes it when sharpen is enabled.
 
@@ -2831,7 +2833,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   failed searches leave the current camera owner untouched, and Context Focus
 >   can return to the preserved Contact. Focus also restores the selected
 >   aircraft's canonical follow frame after a manual zoom-away.
->   Visual presets retain the order Normal, CRT, NVG, FLIR, Anime, Noir, Snow.
+>   Visual presets retain the order Normal, CRT, NVG, FLIR, Anime, Noir.
 >   Configurable preset selection—including same-style reselection—opens the
 >   shared Parameters surface directly below Detection and scrolls it into
 >   view; share-link restoration
@@ -2883,7 +2885,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   Inside Cockpit, the focused summary card is titled Contact in both visible
 >   copy and its accessible control labels.
 >   The top-center Cockpit vision cycle is the fixed, duplicate-free sequence
->   Normal, CRT, NVG, FLIR, Anime, Noir, and Snow. Entry selects the map preset
+>   Normal, CRT, NVG, FLIR, Anime, and Noir. Entry selects the map preset
 >   already in use, so a FLIR map opens on the existing FLIR item while
 >   Normal remains available exactly once. NONE is not offered. Cockpit choices
 >   temporarily override the map preset, while Exit Cockpit and Reset both restore
@@ -3782,7 +3784,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 
 ### Interface localization (October 2026)
 
-Shipped locales: **en** (source and fallback), **es**, **ru**, **uk**, **zh-CN** and **zh-Hant**. The code lives in
+Shipped locales: **en** (source and fallback), **es**, **fr**, **it**, **pt** (Brazilian Portuguese), **ru**, **uk**, **zh-CN** and **zh-Hant**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
 
@@ -3793,7 +3795,7 @@ Shipped locales: **en** (source and fallback), **es**, **ru**, **uk**, **zh-CN**
   value). English has no catalog; every other locale is
   `src/i18n/locales/<code>.json`, and a missing entry falls back to English.
 - **Locale choice.** `?lang=` → stored choice (`gev:locale:v1`) →
-  `navigator.languages` → English. Chinese tags default to `zh-CN`; Traditional Chinese tags
+  `navigator.languages` → English. Any `pt` tag (`pt-BR`, `pt-PT`) selects `pt`. Chinese tags default to `zh-CN`; Traditional Chinese tags
   select `zh-Hant`. Explicit `Hans` selects `zh-CN` regardless of region. `?lang=` is not stored, and share links drop
   it, so a recipient keeps their own language. The globe picker in the
   bottom-right corner (`src/ui/localePicker.js`) stores the choice, drops
@@ -5172,8 +5174,8 @@ and unreachable upstream (502/504) separately from road geometry.
   first, activates the Contacts sub-view, and returns the settled 250 km window.
   Its `aircraft` count is the exact civilian-plus-military total when both feeds
   can answer, or `unknown` when either component is unavailable.
-- Cockpit's top vision switch cycles all seven map looks: Normal, CRT, NVG,
-  FLIR, Anime, Noir, and Snow. Entry selects the matching map style without adding
+- Cockpit's top vision switch cycles all six map looks: Normal, CRT, NVG,
+  FLIR, Anime, and Noir. Entry selects the matching map style without adding
   a duplicate carousel item. There is no empty `NONE` entry.
 
 ### Live AIS Vessels (June 2026)
@@ -5659,7 +5661,7 @@ apply to `public/` assets or built-preview serving.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Scenes keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.
 - **Cockpit camera anchor:** first-person mode does not write feed-boundary corrections directly into the camera. A cockpit-only inertial anchor advances from the selected aircraft's displayed course and speed, then converges toward the authoritative delayed track with correction capped below forward motion. The displayed kinematics are derived from the same consecutive fix segment as the rendered position, with raw feed speed/course used only as fallback; a transient zero/missing feed speed therefore cannot freeze a visibly moving aircraft after layer enable or a map/cockpit handoff. Rendered altitude continues to come from that interpolated track position. Late ADS-B fixes and short render stalls can remove drift without accelerating or reversing the view. Camera placement runs before scene update/culling at a bounded 20 Hz so a moving cockpit does not force Photoreal 3D Tiles to retraverse on every display frame; textual instruments update at 10 Hz and context/layout work at 4 Hz. Every far Cockpit contact pip shares one stable Cesium texture-atlas entry and skips unused screen-projected course calculations, while only in-range 2D aircraft silhouettes pay the screen-projected rotation cost; ambient glTF collections are hidden/retained rather than synchronously destroyed at cockpit entry, and context rails lay out only on explicit content/state changes and viewport resize. The deliberate 15/30-second layer interpolation delays and per-Cesium-frame position caches remain unchanged.
-- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; its destination label rounds to whole degrees in 000–359, wrapping rounded north to 000° while the chevron continues to use the relative bearing independently of label rounding; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, `NOIR`, and `SNOW`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
+- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; its destination label rounds to whole degrees in 000–359, wrapping rounded north to 000° while the chevron continues to use the relative bearing independently of label rounding; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, and `NOIR`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
 - Cockpit wind-direction labels wrap after rounding to whole degrees, so a direction of 359.5° displays as `N · 0°` rather than `N · 360°`.
 - **Cockpit missing observations:** missing local weather observations remain unknown rather than being converted to zero or clear skies, in the briefing and in the cloud effects; a missing temperature drops the whole local weather record, including its wind and condition.
 - **Cockpit weather status:** the earlier multi-canvas atmospheric compositor remains fail-closed and is not attached to the live viewer. Cockpit clouds are a separate transparent WebGL pass with a capped 520×320 framebuffer, 24 ray steps, three FBM octaves, and a 12 FPS ceiling. It defaults off and starts only when local storage explicitly contains the persisted `WX ON` opt-in (`'1'`). When opted in, observations refresh after five minutes or 25 km of aircraft movement, fail transparent when unavailable or clear, and stop on exit or disable. `WX OFF` governs atmospheric rendering only: the briefing still fetches source-backed Natural Earth region, headline, and Open-Meteo local-information data, aborting and replacing any in-flight request when the selected aircraft changes. No weather effect runs in map mode and no synthetic fallback is shown.
