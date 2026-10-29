@@ -4259,5 +4259,8 @@
     "other": "{what} in der Region {place} anzeigen ({count} Elemente)"
   },
   "Go there": "Dorthin wechseln",
-  "Open draw options": "Zeichenoptionen öffnen"
+  "Open draw options": "Zeichenoptionen öffnen",
+  "Clean view: hide the controls": "Reine Ansicht: Steuerelemente ausblenden",
+  "Exit clean view: show the controls": "Reine Ansicht beenden: Steuerelemente anzeigen",
+  "{label} (V)": "{label} (V)"
 }

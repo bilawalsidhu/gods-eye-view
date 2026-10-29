@@ -4155,5 +4155,8 @@
     "other": "{place}の{what}を表示（{count}件）"
   },
   "Go there": "その場所に移動",
-  "Open draw options": "描画オプションを開く"
+  "Open draw options": "描画オプションを開く",
+  "Clean view: hide the controls": "クリーンビュー：操作を隠す",
+  "Exit clean view: show the controls": "クリーンビューを終了：操作を表示",
+  "{label} (V)": "{label} (V)"
 }

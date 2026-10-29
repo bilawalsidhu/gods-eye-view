@@ -4467,5 +4467,8 @@
     "other": "Показати {what} · {place} ({count} об’єкта)"
   },
   "Go there": "Перейти туди",
-  "Open draw options": "Відкрити параметри малювання"
+  "Open draw options": "Відкрити параметри малювання",
+  "Clean view: hide the controls": "Чистий інтерфейс: сховати елементи керування",
+  "Exit clean view: show the controls": "Повернути інтерфейс: показати елементи керування",
+  "{label} (V)": "{label} (V)"
 }

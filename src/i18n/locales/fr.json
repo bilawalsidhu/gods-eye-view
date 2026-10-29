@@ -4363,5 +4363,8 @@
     "other": "Afficher {what} dans la zone de {place} ({count} éléments)"
   },
   "Go there": "Y aller",
-  "Open draw options": "Ouvrir les options de dessin"
+  "Open draw options": "Ouvrir les options de dessin",
+  "Clean view: hide the controls": "Vue épurée : masquer les commandes",
+  "Exit clean view: show the controls": "Quitter la vue épurée : afficher les commandes",
+  "{label} (V)": "{label} (V)"
 }
