@@ -1751,7 +1751,7 @@ try {
     return state;
   }, { variantName: variant, kind: openKind });
 
-  for (const variant of ['off', 'minimal', 'tactical', 'operator']) {
+  for (const variant of ['off', 'minimal', 'tactical']) {
     for (const kind of ['display', 'radio']) {
       const state = await desktopState(variant, kind);
       check(
@@ -2081,7 +2081,7 @@ try {
       await page.screenshot({ path: path.join(shotsDir, `cyber-resize-${height}.png`) });
     }
   }
-  await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('operator'));
+  await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('tactical'));
 
   const signalTransition = await page.evaluate(() => {
     const manager = window.__godsEyeView.styleManager;

@@ -46,7 +46,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
-    'd2d0beae41f38e8a1e611e94002794b4582d12d32d87b668c15f277d4369e7aa',
+    // The Operator HUD layout leaves set_hud's layout enum.
+    'e04bdee9b71bcb669ac1a6bbd43b23967fdac42b5eb1af71f1d9332415c46462',
   );
 });
 
@@ -167,9 +168,10 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout.
+  // Cyber adds one HUD layout and Operator was retired.
   const hud = property('set_hud').layout;
-  hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
+  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
+  hud.enum = ['tactical', 'operator', 'minimal'];
   // Snow is retired from set_visual_style; restore it to keep the legacy pin.
   const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')
     .parameters.properties.style;

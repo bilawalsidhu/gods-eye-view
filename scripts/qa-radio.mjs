@@ -2158,11 +2158,13 @@ async function main() {
       for (let index = 0; index < 5; index += 1) {
         recordLayoutStep();
         if (index < 4) {
-          if (index < 2) {
-            hudLayout.value = index === 0 ? 'operator' : 'minimal';
-            hudLayout.dispatchEvent(new Event('change', { bubbles: true }));
-          } else {
+          // Off and back on in Minimal, so the toggle must restore a
+          // non-default layout before the cycle returns to Tactical.
+          if (index === 1 || index === 2) {
             hudToggle.click();
+          } else {
+            hudLayout.value = index === 0 ? 'minimal' : 'tactical';
+            hudLayout.dispatchEvent(new Event('change', { bubbles: true }));
           }
           await waitForHudSettle();
         }
@@ -2331,7 +2333,7 @@ async function main() {
         scenesHidden,
         mapProviderUtilityStable,
         hudInteractionsExact: layoutSteps.map((step) => step.hud).join('>')
-          === 'TACTICAL>OPERATOR>MINIMAL>OFF>MINIMAL',
+          === 'TACTICAL>MINIMAL>OFF>MINIMAL>TACTICAL',
         // The accordion clears the topline, Cockpit cards, and Cesium credits
         // across every HUD layout. Its list owns any overflow internally.
         leftLaneClearAcrossHudCycle: layoutSteps.every((step) => (

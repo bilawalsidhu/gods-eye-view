@@ -1557,10 +1557,6 @@
   clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
 }
 
-#intel-hud[data-variant='cyber'] .hud-top-bar {
-  display: none;
-}
-
 /* Cyber keeps the useful style and locality readouts, not fictional IDs. */
 #intel-hud[data-variant='cyber'] .hud-top-left .hud-classification,
 #intel-hud[data-variant='cyber'] .hud-top-left .hud-system {
@@ -1860,7 +1856,6 @@
     background-size: 78px 78px;
   }
 
-  #intel-hud[data-variant='cyber'] .hud-top-bar,
   #intel-hud[data-variant='cyber'] .hud-bottom-bar {
     display: none;
   }

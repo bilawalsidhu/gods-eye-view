@@ -688,6 +688,12 @@ html:not([lang='en']) .data-count {
   text-wrap: balance;
 }
 
+/* The status column keeps its width, so a wide chip (WIRD AKTIVIERT) never
+   overlaps the name; the name wraps in the room left beside it. */
+html:not([lang='en']) .data-toggle-right {
+  flex: none;
+}
+
 /* Row text pieces that must not break inside: a hyphenated code (ADS-B) and
    the space before a " · " separator (see setRowText in layerPanel.js). */
 html:not([lang='en']) .data-keep {
