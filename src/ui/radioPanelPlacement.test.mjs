@@ -94,6 +94,59 @@ test('all themes keep the same Radio controls nested in Context', () => {
   assert.equal(mini.parentElement, dock);
 });
 
+test('the compact launcher sits in the rail tool slot on desktop and in Context header on phones', () => {
+  const panel = node(),
+    context = node(),
+    dock = node(),
+    mini = node(),
+    slot = node();
+  const inner = node(),
+    header = node(),
+    collapse = node();
+  context.selectors['.global-context-panel-inner'] = inner;
+  context.selectors['.panel-header'] = header;
+  header.selectors['.panel-collapse-btn'] = collapse;
+  inner.append(panel);
+  header.append(dock);
+  header.append(collapse);
+  dock.append(mini);
+  const nodes = {
+    'radio-panel': panel,
+    'global-context-panel': context,
+    'context-radio-dock': dock,
+    'context-radio-mini': mini,
+    'right-rail-tools': slot,
+  };
+  let phone = false;
+  const doc = {
+    documentElement: { dataset: {} },
+    body: { classList: { contains: (name) => phone && name === 'mobile-shell' } },
+    getElementById: (id) => nodes[id],
+  };
+  syncRadioPanelPlacement(doc);
+  assert.deepEqual(slot.children, [dock], 'desktop: the launcher is in the slot');
+  assert.deepEqual(header.children, [collapse]);
+  assert.equal(mini.parentElement, dock);
+  const moves = [dock.moves, mini.moves];
+  syncRadioPanelPlacement(doc);
+  assert.deepEqual([dock.moves, mini.moves], moves, 'no mutation feedback loop');
+  phone = true;
+  syncRadioPanelPlacement(doc);
+  assert.deepEqual(slot.children, []);
+  assert.deepEqual(
+    header.children,
+    [dock, collapse],
+    'phone: back in the header, before the collapse button',
+  );
+  assert.equal(mini.parentElement, dock);
+  phone = false;
+  syncRadioPanelPlacement(doc);
+  assert.deepEqual(slot.children, [dock], 'desktop again: back in the slot');
+  delete nodes['right-rail-tools'];
+  syncRadioPanelPlacement(doc);
+  assert.deepEqual(header.children, [dock, collapse], 'no slot: the header');
+});
+
 test('placement is inert before the complete shell exists', () => {
   assert.doesNotThrow(() => syncRadioPanelPlacement(null));
   assert.doesNotThrow(() =>

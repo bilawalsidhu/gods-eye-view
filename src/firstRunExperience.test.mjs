@@ -981,18 +981,19 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
   assert.match(keyboard, /addEventListener\('keydown', onKeyDown, true\)/);
 });
 
-test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins', () => {
+test('the DISPLAY rail starts open on a first desktop run, and a stored choice wins', () => {
   const ui = fs.readFileSync(
     new URL('./ui/panelPositionControls.js', import.meta.url),
     'utf8',
   );
-  // The rail opened by default to advertise HUD / DETECT / 3D. Those default ON
-  // now, so it was opening to offer controls for things already happening —
-  // while competing with the mission card for the one first impression there is.
+  // The right rail is a strip of label tabs: with every panel closed nothing
+  // shows that the labels are launchers, so DISPLAY opens on a first desktop
+  // run to demonstrate the strip. Phones keep their sheets and a share link
+  // decides for itself.
   assert.match(
     ui,
-    /if \(panelId === 'pp-toggles' && stored === null\) collapsed = true;/,
-    'first run must leave DISPLAY collapsed',
+    /if \(panelId === 'pp-toggles' && stored === null\)\s+collapsed =\s+!allowStored \|\|\s+globalThis\.matchMedia\?\.\(MOBILE_SHELL_MEDIA_QUERY\)\?\.matches === true;/,
+    'first desktop run must open DISPLAY; phones and share links keep it closed',
   );
   // The first-run default may only apply when NOTHING is stored: a visitor who
   // opened the rail keeps it open, and one who closed it keeps it closed.

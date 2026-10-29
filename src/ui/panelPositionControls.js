@@ -1,5 +1,6 @@
 /** Own panel collapsed-state preferences and the one-time layout-reset notice. */
 import { t } from '../i18n/index.js';
+import { MOBILE_SHELL_MEDIA_QUERY } from './mobileShellContract.js';
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 /**
@@ -66,15 +67,15 @@ export class PanelPositionControls {
         // storage unavailable
       }
     }
-    // DISPLAY starts COLLAPSED for a first-time visitor, then respects the
-    // user's persisted choice like every other panel.
-    //
-    // It used to start expanded, to advertise the HUD / DETECT / 3D toggles.
-    // That reason expired when those became ON by default: the rail now opens
-    // to offer controls for things already happening, while competing with the
-    // first-run mission card for the one first impression there is. A stored
-    // choice still wins in both directions, so anyone who opens it keeps it.
-    if (panelId === 'pp-toggles' && stored === null) collapsed = true;
+    // DISPLAY starts EXPANDED for a first-time visitor on a desktop viewport:
+    // the right rail is a strip of label tabs (rightRailTabs.js), and with
+    // every panel closed nothing shows that the labels are launchers. Phones
+    // keep it collapsed (their sheets present the rail); a share link decides
+    // for itself. A stored choice wins in both directions.
+    if (panelId === 'pp-toggles' && stored === null)
+      collapsed =
+        !allowStored ||
+        globalThis.matchMedia?.(MOBILE_SHELL_MEDIA_QUERY)?.matches === true;
     panelEl.classList.toggle('collapsed', collapsed);
     // Bodies that expand themselves on first appearance must not override a
     // choice the user (or a share link) already made.

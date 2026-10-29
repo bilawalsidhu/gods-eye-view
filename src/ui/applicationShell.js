@@ -41,6 +41,7 @@ import {
 } from './shareFollow.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
+import { LAYER_RESTORE_ORIGINS } from '../data/layerState.js';
 
 import {
   describeUnsavedWork,
@@ -115,18 +116,14 @@ export class StyleManager extends ShellFacade {
     this._panelChrome = new PanelChrome({
       elements: {
         _contextRadioDetailsBtn: this._contextRadioDetailsBtn,
-        _contextRadioDock: this._contextRadioDock,
         _leftPanelStack: this._leftPanelStack,
         _locationSearch: this._locationSearch,
         _ppToggles: this._ppToggles,
         _rightPanelStack: this._rightPanelStack,
       },
       operations: {
-        _setRadioDisclosure: (...args) => this._setRadioDisclosure(...args),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
-        _syncContextRadioLauncherState: (...args) =>
-          this._syncContextRadioLauncherState(...args),
         _showToast: (...args) => this._showToast(...args),
       },
       readHud: () => this.hud,
@@ -1226,6 +1223,14 @@ export class StyleManager extends ShellFacade {
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
+        // Tells the panel whether a switch-on restores saved or shared state.
+        subscribeEnableRequests: (listener) =>
+          this._dataManager?.subscribeVisibilityRequests?.((change) => {
+            if (change?.layerId === 'cctv' && change.enabled)
+              listener(
+                Object.values(LAYER_RESTORE_ORIGINS).includes(change.origin),
+              );
+          }) || null,
         setSplitFlapText,
       },
     });

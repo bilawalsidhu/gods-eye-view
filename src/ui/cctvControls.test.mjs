@@ -221,3 +221,23 @@ test('disposing during camera enable prevents the delayed focus and future click
   assert.equal(enables, 1);
   assert.equal(focuses, 0);
 });
+
+test('a restored camera layer leaves its panel to the restored panel state', (t) => {
+  const { controls } = fixture(t);
+  let request;
+  const opened = [];
+  controls.actions.subscribeEnableRequests = (listener) => {
+    request = listener;
+    return () => {};
+  };
+  controls.actions.setPanelCollapsed = (...args) => opened.push(args);
+  controls.actions.syncViewport = () => {};
+  controls.connect();
+
+  request(true);
+  controls._renderCctvState({ enabled: true, activeCameraId: 'a' });
+  assert.deepEqual(opened, []);
+
+  controls._renderCctvState({ enabled: true, activeCameraId: 'b' });
+  assert.deepEqual(opened, [['cctv-panel', false, { explicit: false }]]);
+});

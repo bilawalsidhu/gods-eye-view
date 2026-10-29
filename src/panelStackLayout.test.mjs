@@ -162,11 +162,15 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   assert.match(ui, /this\._panelLayout\._rightStackPreferredPanelId = rightOwnerPanel\.id;/);
   assert.match(
     rightRail,
-    /panel\.id === preferredPanelId[\s\S]*?\[\s*preferredExpandedPanel,\s*\.\.\.expandedPanelsInDomOrder/,
-    'the latest explicitly opened right panel must receive primary allocation',
+    /expanded\.find\(\(panel\) => panel\.id === preferredPanelId\)/,
+    'the latest explicitly opened right panel must be the one expanded owner',
   );
   assert.match(ui, /panelId === 'radio-panel'[\s\S]*?document\.getElementById\('global-context-panel'\)/);
-  assert.match(rightRail, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\s*\(panel\) =>\s*panel\.contains\(documentRef\.activeElement\),?\s*\)/);
+  assert.match(
+    rightRail,
+    /expanded\.find\(\(panel\) => panel\.contains\(documentRef\?\.activeElement\)\)/,
+    'a focused right panel is the fallback owner so presentation collapse never strands focus',
+  );
   assert.match(ui, /setAttribute\('aria-expanded', String\(!collapsed\)\)/);
   assert.match(leftRail, /--left-panel-allocated-height/);
   assert.match(rightRail, /--right-panel-allocated-height/);
@@ -198,8 +202,8 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
 
   assert.match(
     ui,
-    /const collapsed =[\s\S]*?panelEl\.classList\.contains\('layout-auto-collapsed'\)[\s\S]*?panelEl\.classList\.contains\('cyber-accordion-collapsed'\)[\s\S]*?\? false\s*: panelEl\.classList\.contains\('collapsed'\);/,
-    'responsive auto-collapse must serialize the explicit expanded preference',
+    /const collapsed = panelEl\.classList\.contains\('layout-auto-collapsed'\)\s*\? false\s*: panelEl\.classList\.contains\('collapsed'\);/,
+    'the left rail\'s responsive auto-collapse serializes the expanded preference; a right-rail peer hidden behind the owner travels as collapsed',
   );
   assert.match(
     ui,

@@ -1860,8 +1860,6 @@
   "STATION UNAVAILABLE": "电台不可用",
   "Station unavailable after directory refresh": "目录刷新后该电台不可用",
   "Radio could not {action} cleanly": "电台未能正常{action}",
-  "Go to expanded Radio section": "前往展开的电台区域",
-  "Expand Radio section in Context": "在态势面板中展开电台区域",
   "Close compact Radio controls": "关闭精简电台控件",
   "Open compact Radio controls": "打开精简电台控件",
   "SYNC": "同步",

@@ -1119,5 +1119,8 @@
   "src/testSupport/shareViewFixtures.mjs",
   "src/ui/shareLinks.test.mjs",
   "src/ui/shareButton.test.mjs",
-  "src/share/shareLinkPath.test.mjs"
+  "src/share/shareLinkPath.test.mjs",
+  "src/ui/rightRailTabs.js",
+  "src/ui/rightRailTabs.test.mjs",
+  "src/ui/styles/right-rail-tabs.css"
 ]

@@ -32,7 +32,7 @@ test('Street Level is a collapsible right-rail panel that starts collapsed', () 
   assert.doesNotMatch(html, /sl-mark|mly-mark/);
   assert.match(
     html,
-    /<div class="street-level-panel-inner" data-rail-scroller>/,
+    /<div class="street-level-panel-inner" data-rail-scroller data-rail-card>/,
   );
   assert.doesNotMatch(
     html,

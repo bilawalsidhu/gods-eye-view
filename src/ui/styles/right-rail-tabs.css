@@ -1,0 +1,356 @@
+/* ── Right rail as vertical tabs ───────────────────────────────────────────
+   A strip of icon tabs (rightRailTabs.js) hugs the rail's right edge and the
+   open panel sits beside it. Panels keep their `collapsed` state; the rail's
+   exclusive layout (rightPanelRail.js) hides the collapsed ones, so the strip
+   is the only launcher. The compact Radio launcher, which rides in Context's
+   header, moves to a slot under the tabs so it survives a collapsed Context.
+   Phones keep the sheet shell (mobile-shell.css).
+
+   The open tab and its panel are one surface. The strip builds a join element
+   (.right-rail-join) under the panels: one path traces the panel with the tab
+   attached (rounded corners and concave fillets; Cyber's chamfered frame).
+   The glass layer blurs and tints the backdrop inside the path, one SVG
+   strokes the outline and another casts the shadow, so the junction has no
+   seam and no second blur region. The open panel and the tab draw no surface
+   of their own; the other tabs are plain icons. `data-rail-tabs` arrives on
+   the rail with the strip, so a rail without it keeps its plain geometry; the
+   selectors carry it to outrank the Cyber rail rules that follow this sheet. */
+
+#right-context-rail[data-rail-tabs] {
+  --right-rail-tabs-width: 34px;
+  /* The bridge the open tab reaches across to its panel. */
+  --right-rail-tabs-gap: 8px;
+  --right-rail-tabs-inset: calc(
+    var(--right-rail-tabs-width) + var(--right-rail-tabs-gap)
+  );
+  /* Join geometry, read by rightRailTabs.js: panel corner, the tab's outer
+     corners, the concave fillets, and round corners or Cyber's chamfers. */
+  --right-rail-corner: var(--panel-radius);
+  --right-rail-tab-radius: 10px;
+  --right-rail-fillet: 8px;
+  --right-rail-join-style: round;
+  --right-rail-join-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  /* Lower fillet, a short straight run, then the panel's corner, within the
+     rail's lane. */
+  --right-rail-panel-cover: min(
+    calc(
+      var(--rail-tab-bottom, 0px) + var(--right-rail-fillet) + 4px +
+        var(--right-rail-corner)
+    ),
+    var(--right-stack-max-height, 70vh)
+  );
+  /* The theme's rail width stays the panel width; the strip's column is
+     padding beside it. */
+  box-sizing: content-box;
+  padding-right: var(--right-rail-tabs-inset);
+}
+
+/* Just above the phone breakpoint the strip's column would push the rail into
+   the left rail: fold it into the panel width instead. */
+@media (min-width: 721px) and (max-width: 760px) {
+  #right-context-rail[data-rail-tabs] {
+    width: calc(330px - var(--right-rail-tabs-inset));
+  }
+
+  :root[data-ui-theme='cyber'] #right-context-rail[data-rail-tabs] {
+    width: calc(312px - var(--right-rail-tabs-inset));
+  }
+}
+
+/* The strip's column: the tablist, then a tool slot for the compact Radio
+   launcher (radioPanelPlacement.js). It keeps its natural height, so every
+   tab stays whole even past a short lane; only the strip and the slot take
+   the pointer. */
+#right-rail-column {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: var(--right-rail-tabs-inset);
+  pointer-events: none;
+}
+
+#right-rail-tabs {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  /* Room for the open tab's bridge on the left. */
+  padding-left: var(--right-rail-tabs-gap);
+  pointer-events: auto;
+}
+
+#right-rail-tools {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding-left: var(--right-rail-tabs-gap);
+  pointer-events: auto;
+}
+
+#right-rail-tools:empty {
+  display: none;
+}
+
+/* In the slot the launcher is one more icon in the column: no card, the
+   tab's corner, the accent while the radio plays. Its popover opens to the
+   left over the panel, bottom-aligned so it stays inside the lane. */
+#right-rail-tools .context-radio-dock {
+  width: var(--right-rail-tabs-width);
+}
+
+#right-rail-tools .context-radio-toggle {
+  width: var(--right-rail-tabs-width);
+  height: var(--right-rail-tabs-width);
+  border: 0;
+  border-radius: var(--right-rail-tab-radius);
+  color: var(--text-dim);
+  background: transparent;
+  box-shadow: none;
+}
+
+#right-rail-tools .context-radio-toggle .material-symbols-outlined {
+  color: inherit;
+  font-size: 19px;
+}
+
+#right-rail-tools .context-radio-toggle:hover,
+#right-rail-tools .context-radio-toggle[aria-expanded='true'] {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+#right-rail-tools .context-radio-toggle.active {
+  color: var(--accent);
+}
+
+#right-rail-tools .context-radio-mini {
+  top: auto;
+  right: calc(100% + var(--right-rail-tabs-gap) + 6px);
+  bottom: 0;
+}
+
+/* The tabs open and close the rail's panels; the headers' own collapse
+   buttons would only duplicate them. Phones keep the sheet shell's buttons. */
+body:not(.mobile-shell)
+  #right-context-rail[data-rail-tabs]
+  :is(
+    [data-collapse-target='pp-toggles'],
+    [data-collapse-target='cctv-panel'],
+    [data-collapse-target='street-level-panel'],
+    [data-collapse-target='global-context-panel'],
+    [data-collapse-target='weather-panel'],
+    [data-collapse-target='recent-imagery-panel']
+  ) {
+  display: none;
+}
+
+/* A square icon the strip's width; the panel's name is the tab's accessible
+   name and tooltip. */
+.right-rail-tab {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--right-rail-tabs-width);
+  height: var(--right-rail-tabs-width);
+  padding: 0;
+  border: 0;
+  border-radius: var(--right-rail-tab-radius);
+  background: transparent;
+  color: var(--text-dim);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.right-rail-tab-icon {
+  color: inherit;
+  font-size: 19px;
+}
+
+.right-rail-tab:not([aria-selected='true']):hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+/* The open tab is the icon and hit area over the join's surface; it spans
+   the bridge too, with the icon kept in the strip's column. */
+.right-rail-tab[aria-selected='true'] {
+  width: calc(var(--right-rail-tabs-width) + var(--right-rail-tabs-gap));
+  margin-left: calc(-1 * var(--right-rail-tabs-gap));
+  padding-left: var(--right-rail-tabs-gap);
+  border-radius: 0 var(--right-rail-tab-radius) var(--right-rail-tab-radius) 0;
+  color: var(--accent);
+  text-shadow: none;
+}
+
+/* ── The join: surface, outline and shadow of panel plus tab ──────────── */
+.right-rail-join {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: 100%;
+  pointer-events: none;
+}
+
+.right-rail-join[hidden],
+body.mobile-shell #right-context-rail > .right-rail-join {
+  display: none;
+}
+
+.right-rail-join > * {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* A black silhouette casts the shadow; its clip keeps only the outside. */
+.right-rail-join-shadow {
+  filter: drop-shadow(var(--right-rail-join-shadow));
+}
+
+.right-rail-join-shadow path {
+  fill: #000;
+}
+
+.right-rail-join-glass {
+  background-color: var(--glass-bg);
+  background-image: var(--panel-surface-detail);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+}
+
+.right-rail-join-outline path {
+  fill: none;
+  stroke: var(--glass-border);
+  stroke-width: 1;
+}
+
+/* The open panel's card leaves surface, outline and shadow to the join.
+   Cyber's Display and Context frames and the surface contract's card live on
+   a ::before. */
+body:not(.mobile-shell)
+  #right-context-rail[data-rail-tabs]
+  > #pp-toggles:not(.collapsed),
+body:not(.mobile-shell)
+  #right-context-rail[data-rail-tabs]
+  > #pp-toggles:not(.collapsed)::before,
+body:not(.mobile-shell)
+  #right-context-rail[data-rail-tabs]
+  > [data-panel-id]:not(.collapsed)
+  > :is([data-rail-card], [data-panel-surface]),
+body:not(.mobile-shell)
+  #right-context-rail[data-rail-tabs]
+  > [data-panel-id]:not(.collapsed)
+  > :is(.global-context-panel-inner, [data-panel-surface])::before {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* The glow's 0.25 is tuned to sit under the card's surface; without that
+   surface, 0.08 reads the same. */
+body:not(.mobile-shell)
+  #right-context-rail[data-rail-tabs]
+  > [data-panel-id]:not(.collapsed)
+  > .panel-glow {
+  opacity: 0.08;
+}
+
+/* The card reaches at least to its tab's lower fillet and corner. In the
+   focus layout the rail's allocation bounds the wrapper; the card's floor is
+   what the measuring pass sees. */
+body:not(.mobile-shell)
+  #right-context-rail[data-rail-tabs]
+  > [data-panel-id]:not(.collapsed)
+  > :is([data-rail-card], [data-panel-surface]) {
+  min-height: var(--right-rail-panel-cover);
+}
+
+/* ── Cyber skin ────────────────────────────────────────────────────────── */
+/* Cyber panels are chamfered frames (--cyber-panel-frame), not rounded
+   cards: square joins, no fillets, no blur, and the strip starts below the
+   frame's upper chamfer so the first tab meets a straight edge. The frame's
+   red edge bar moves onto the join's glass. */
+:root[data-ui-theme='cyber'] #right-context-rail[data-rail-tabs] {
+  --right-rail-tab-radius: 0px;
+  --right-rail-fillet: 0px;
+  --right-rail-corner: 10px;
+  --right-rail-join-style: chamfer;
+  --right-rail-join-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-ui-theme='cyber'] #right-rail-tabs {
+  padding-top: 10px;
+}
+
+/* Cyber's generic hover/selected button treatment (cyber.css) would paint
+   the tabs; the open tab stays an icon on the shared surface. */
+:root[data-ui-theme='cyber'] .right-rail-tab:not([aria-selected='true']):hover {
+  background-color: rgba(226, 235, 236, 0.08);
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] .right-rail-tab[aria-selected='true'],
+:root[data-ui-theme='cyber'] .right-rail-tab[aria-selected='true']:hover {
+  background-color: transparent;
+  box-shadow: -3px 0 0 var(--cyber-red) inset;
+  color: var(--cyber-red-bright);
+}
+
+:root[data-ui-theme='cyber'] #right-rail-tools .context-radio-toggle:hover,
+:root[data-ui-theme='cyber']
+  #right-rail-tools
+  .context-radio-toggle[aria-expanded='true'] {
+  background-color: rgba(226, 235, 236, 0.08);
+}
+
+:root[data-ui-theme='cyber'] #right-rail-tools .context-radio-toggle.active {
+  color: var(--cyber-red-bright);
+}
+
+/* Cyber gives every .panel-collapsible wrapper a surface with an inset ring
+   (cyber.css); beside the open tab that ring would show as a line. */
+:root[data-ui-theme='cyber']
+  body:not(.mobile-shell)
+  #right-context-rail[data-rail-tabs]
+  > [data-panel-id]:not(.collapsed) {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] .right-rail-join-glass {
+  box-shadow: 3px 0 0 rgba(196, 84, 84, 0.2) inset;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ── Phones keep the sheet shell ───────────────────────────────────────── */
+/* The content-box rail is a desktop measure; sheets size their box as before. */
+body.mobile-shell #right-context-rail {
+  box-sizing: border-box;
+  padding-right: 0;
+}
+
+/* The launcher is back in Context's header there (radioPanelPlacement.js). */
+body.mobile-shell #right-context-rail > #right-rail-column {
+  display: none;
+}

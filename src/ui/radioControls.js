@@ -59,37 +59,49 @@ export class RadioControls {
    * @returns {Promise<boolean>} Whether the internal scroller moved.
    */
   async _revealRadioControlsAfterExplicitEnable(trigger) {
+    const directory = this._radioPanel?.querySelector('.radio-directory-row');
+    const transport = this._radioPanel?.querySelector('.radio-transport');
+    if (!directory || !transport || !this._radioState?.enabled) return false;
+    return this._revealInsideContext(
+      directory,
+      transport,
+      () => this._radioState?.enabled && trigger?.isConnected,
+    );
+  }
+
+  /**
+   * Scroll Context so `top` through `bottom` show, preferring `bottom` when
+   * both do not fit, once the rail has laid out the opened panels.
+   * @param {HTMLElement} top
+   * @param {HTMLElement} bottom
+   * @param {() => boolean} stillWanted Rechecked after the layout frames.
+   * @returns {Promise<boolean>} Whether the internal scroller moved.
+   */
+  async _revealInsideContext(top, bottom, stillWanted) {
     const contextPanel = document.getElementById('global-context-panel');
     const scroller =
       (document.documentElement?.dataset.uiTheme === 'cyber' &&
         contextPanel?.querySelector('.cyber-panel-body')) ||
       contextPanel?.querySelector('.global-context-panel-inner');
-    const directory = this._radioPanel?.querySelector('.radio-directory-row');
-    const transport = this._radioPanel?.querySelector('.radio-transport');
     if (
       !contextPanel ||
       contextPanel.classList.contains('collapsed') ||
-      !scroller ||
-      !directory ||
-      !transport ||
-      !this._radioState?.enabled
+      !scroller
     )
       return false;
 
     await new Promise((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
     );
-    if (this.destroyed || !this._radioState?.enabled || !trigger?.isConnected)
-      return false;
+    if (this.destroyed || !stillWanted()) return false;
 
     const viewport = scroller.getBoundingClientRect();
-    const directoryRect = directory.getBoundingClientRect();
-    const transportRect = transport.getBoundingClientRect();
+    const topRect = top.getBoundingClientRect();
+    const bottomRect = bottom.getBoundingClientRect();
     const margin = 10;
     const minimum =
-      scroller.scrollTop + transportRect.bottom - (viewport.bottom - margin);
-    const maximum =
-      scroller.scrollTop + directoryRect.top - (viewport.top + margin);
+      scroller.scrollTop + bottomRect.bottom - (viewport.bottom - margin);
+    const maximum = scroller.scrollTop + topRect.top - (viewport.top + margin);
     const desired =
       minimum <= maximum
         ? Math.min(Math.max(scroller.scrollTop, minimum), maximum)
@@ -106,96 +118,37 @@ export class RadioControls {
       top: next,
       behavior: reducedMotion ? 'auto' : 'smooth',
     });
+    // A rail layout pass that measures the panels mid-scroll puts the scroll
+    // offset back where it was, which cancels the smooth scroll: land it when
+    // the scroll ends short, unless the user took the scroll over meanwhile.
+    if (!reducedMotion) {
+      const landing = new AbortController();
+      const signal = AbortSignal.any([
+        this.listeners.signal,
+        landing.signal,
+        AbortSignal.timeout(2000),
+      ]);
+      const cancel = () => landing.abort();
+      for (const type of ['keydown', 'wheel', 'pointerdown', 'touchstart'])
+        scroller.addEventListener(type, cancel, { signal, passive: true });
+      scroller.addEventListener(
+        'scrollend',
+        () => {
+          cancel();
+          if (Math.abs(scroller.scrollTop - next) >= 1)
+            scroller.scrollTop = next;
+        },
+        { signal },
+      );
+    }
     return true;
   }
 
-  /**
-   * Bring the embedded Radio section into the expanded Context scroller.
-   * This never changes Radio power, playback, selection, or Context mode.
-   * @param {{focusTarget?: HTMLElement|null}} [options]
-   * @returns {Promise<boolean>} Whether the internal scroller moved.
-   */
-  async _revealRadioPanelInsideContext({ focusTarget = null } = {}) {
-    const contextPanel = document.getElementById('global-context-panel');
-    const scroller =
-      (document.documentElement?.dataset.uiTheme === 'cyber' &&
-        contextPanel?.querySelector('.cyber-panel-body')) ||
-      contextPanel?.querySelector('.global-context-panel-inner');
-    if (
-      !contextPanel ||
-      contextPanel.classList.contains('collapsed') ||
-      !scroller ||
-      !this._radioPanel ||
-      this._radioPanel.classList.contains('collapsed')
-    )
-      return false;
-
-    await new Promise((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(resolve)),
-    );
-    if (
-      this.destroyed ||
-      contextPanel.classList.contains('collapsed') ||
-      this._radioPanel.classList.contains('collapsed')
-    )
-      return false;
-
-    const viewport = scroller.getBoundingClientRect();
-    const radioRect = this._radioPanel.getBoundingClientRect();
-    const desired = scroller.scrollTop + radioRect.top - viewport.top - 10;
-    const next = Math.min(
-      Math.max(0, scroller.scrollHeight - scroller.clientHeight),
-      Math.max(0, desired),
-    );
-    const moved = Math.abs(next - scroller.scrollTop) >= 1;
-    if (moved) {
-      const reducedMotion = window.matchMedia?.(
-        '(prefers-reduced-motion: reduce)',
-      )?.matches;
-      scroller.scrollTo({
-        top: next,
-        behavior: reducedMotion ? 'auto' : 'smooth',
-      });
-    }
-    focusTarget?.focus?.({ preventScroll: true });
-    return moved;
-  }
-
-  /** Keep the launcher truthful for the active theme and Context route. */
+  /** Keep the launcher's ARIA state matched to the compact player. */
   _syncContextRadioLauncherState() {
     if (this.destroyed || !this._contextRadioToggleBtn) return;
-    const contextPanel = globalThis.document?.getElementById(
-      'global-context-panel',
-    );
-    const contextExpanded = Boolean(
-      contextPanel && !contextPanel.classList.contains('collapsed'),
-    );
-    if (contextExpanded) {
-      const radioExpanded = Boolean(
-        this._radioPanel && !this._radioPanel.classList.contains('collapsed'),
-      );
-      this._contextRadioToggleBtn.setAttribute('aria-controls', 'radio-panel');
-      this._contextRadioToggleBtn.setAttribute(
-        'aria-expanded',
-        String(radioExpanded),
-      );
-      const label = t(
-        radioExpanded
-          ? msg('Go to expanded Radio section')
-          : msg('Expand Radio section in Context'),
-      );
-      this._contextRadioToggleBtn.setAttribute('aria-label', label);
-      this._contextRadioToggleBtn.title = label;
-      return;
-    }
-    // This launcher toggles the compact player even when the detailed panel
-    // is open elsewhere. Its ARIA state must describe that same disclosure.
     const compactOpen = Boolean(
       this._contextRadioDock?.classList.contains('disclosure-open'),
-    );
-    this._contextRadioToggleBtn.setAttribute(
-      'aria-controls',
-      'context-radio-mini',
     );
     this._contextRadioToggleBtn.setAttribute(
       'aria-expanded',

@@ -184,6 +184,12 @@ test('only the expanded Radio Enable gesture requests the contained post-enable 
   assert.match(radioControls, /if \(revealAfterEnable\)\s*await this\._revealRadioControlsAfterExplicitEnable\(trigger\)/);
   assert.equal((radioBindings.match(/_revealRadioControlsAfterExplicitEnable\(trigger\)/g) || []).length, 1);
   assert.match(radioControlsSource, /async _revealRadioControlsAfterExplicitEnable\(trigger\)/);
+  // A rail layout pass measuring the panels mid-scroll cancels the smooth
+  // reveal; the helper lands it at the target when the scroll ends short.
+  assert.match(
+    radioControlsSource,
+    /scroller\.addEventListener\(\s*'scrollend',[\s\S]*?Math\.abs\(scroller\.scrollTop - next\) >= 1\)\s*scroller\.scrollTop = next;/,
+  );
 });
 
 test('right-rail context entry is transactional: activation result gates the mode', () => {

@@ -361,32 +361,26 @@ test('panel collapse is presentation-only and Radio exposes explicit voice playb
   assert.match(enableMethod, /toggleRadio\(this\._contextRadioMiniEnableBtn\)/);
   assert.match(disclosureBindings, /contextRadioMiniCloseBtn[\s\S]*?setRadioDisclosure\(false, \{ returnFocus: true \}\)/);
   assert.match(disclosureBindings, /contextRadioDetailsBtn[\s\S]*?setPanelCollapsed\('radio-panel', false, \{ explicit: true \}\)/);
+  const launcherBinding = disclosureBindings.slice(0, disclosureBindings.indexOf('contextRadioMiniCloseBtn'));
   assert.match(
-    disclosureBindings,
-    /contextRadioToggleBtn[\s\S]*?!contextPanel\.classList\.contains\('collapsed'\)[\s\S]*?setRadioDisclosure\(false\)[\s\S]*?setPanelCollapsed\('radio-panel', false, \{ explicit: true \}\)[\s\S]*?_revealRadioPanelInsideContext/,
+    launcherBinding,
+    /setRadioDisclosure\(\s*!this\._contextRadioDock\?\.classList\.contains\('disclosure-open'\),?\s*\)/,
   );
+  assert.doesNotMatch(launcherBinding, /global-context-panel|setPanelCollapsed|_revealRadioPanelInsideContext/);
   assert.doesNotMatch(disclosureBindings, /setPanelCollapsed\('radio-panel', !/);
   assert.match(ui, /setAttribute\('aria-expanded', String\(/);
   assert.match(readFileSync(new URL('./ui/shellFeedback.js', import.meta.url), 'utf8'), /\.hidden = !/);
   assert.doesNotMatch(method, /panelId === 'global-context-panel'[\s\S]*?this\._radioState\?\.enabled[\s\S]*?setPanelCollapsed\('radio-panel', false\)/);
 });
 
-test('expanded Context routes its Radio icon to the embedded section and keeps collapsed Context compact', () => {
-  const revealStart = radioControlsSource.indexOf('\n  async _revealRadioPanelInsideContext');
-  const revealEnd = radioControlsSource.indexOf('\n  /**', revealStart + 10);
-  const revealMethod = radioControlsSource.slice(revealStart, revealEnd);
-  assert.ok(revealStart >= 0 && revealEnd > revealStart, 'embedded Radio reveal helper is missing');
-  assert.match(revealMethod, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
-  assert.match(revealMethod, /scroller\.scrollTo\(\{\s*top: next,\s*behavior: reducedMotion \? 'auto' : 'smooth',?\s*\}\)/);
-  assert.match(revealMethod, /focus\?\.\(\{ preventScroll: true \}\)/);
-  assert.doesNotMatch(revealMethod, /setEnabled|togglePlayback|selectStation|setContextMode/);
-
+test('the Radio launcher always toggles the compact player, whatever Context shows', () => {
+  assert.doesNotMatch(radioControlsSource, /_revealRadioPanelInsideContext/);
   const syncStart = radioControlsSource.indexOf('\n  _syncContextRadioLauncherState()');
   const syncEnd = radioControlsSource.indexOf('\n  destroy()', syncStart + 10);
   const syncMethod = radioControlsSource.slice(syncStart, syncEnd);
   assert.ok(syncStart >= 0 && syncEnd > syncStart, 'Context Radio launcher state sync is missing');
-  assert.match(syncMethod, /contextExpanded[\s\S]*?aria-controls', 'radio-panel'[\s\S]*?aria-expanded',\s*String\(radioExpanded\)/);
-  assert.match(syncMethod, /aria-controls',\s*'context-radio-mini'[\s\S]*?aria-expanded',\s*String\(compactOpen\)/);
+  assert.match(syncMethod, /aria-expanded',\s*String\(compactOpen\)/);
+  assert.doesNotMatch(syncMethod, /global-context-panel|radio-panel|aria-controls/);
   const renderMethod = radioPresentation;
   assert.match(renderMethod, /this\._syncContextRadioLauncherState\(\)/);
   assert.doesNotMatch(renderMethod, /compact Radio controls/);

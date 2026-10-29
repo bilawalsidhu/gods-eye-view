@@ -62,9 +62,14 @@ export function collapsePanelOnEscape(
   const disclosure =
     panel.querySelector(`[data-dock-toggle-target="${panel.id}"]`) ||
     panel.querySelector(`[data-collapse-target="${panel.id}"]`);
+  // A right-rail panel collapses out of view; its tab stays and takes focus.
+  const tab = panel.ownerDocument?.querySelector?.(
+    `[role="tab"][aria-controls="${panel.id}"]`,
+  );
   const escapedFromDisclosure =
     event.target === disclosure || disclosure?.contains?.(event.target);
-  if (escapedFromDisclosure) disclosure?.blur?.();
+  if (tab) tab.focus({ preventScroll: true });
+  else if (escapedFromDisclosure) disclosure?.blur?.();
   else disclosure?.focus?.({ preventScroll: true });
   return true;
 }

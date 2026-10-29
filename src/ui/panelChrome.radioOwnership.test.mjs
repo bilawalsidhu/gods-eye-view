@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { PanelChrome } from './panelChrome.js';
-import { PanelLayoutController } from './panelLayoutController.js';
 
 function classList(initial = []) {
   const values = new Set(initial);
@@ -20,7 +19,10 @@ function classList(initial = []) {
   };
 }
 
-test('opening an already-open Context still closes a stale compact Radio disclosure', (t) => {
+// The compact Radio player floats beside the strip and may stay open over an
+// expanded Context: opening Context, by request or by the adaptive rail
+// restore, leaves it alone.
+test('a repeated Context-open request leaves an open compact Radio player alone', (t) => {
   const priorDocument = globalThis.document;
   const contextPanel = {
     id: 'global-context-panel',
@@ -42,7 +44,6 @@ test('opening an already-open Context still closes a stale compact Radio disclos
     _contextRadioDock: radioDock,
     _setRadioDisclosure(open) {
       calls.push(open);
-      radioDock.classList.toggle('disclosure-open', open);
     },
     _leftPanelStack: null,
     _rightPanelStack: null,
@@ -63,76 +64,11 @@ test('opening an already-open Context still closes a stale compact Radio disclos
     false,
   );
 
-  assert.deepEqual(calls, [false]);
-  assert.equal(radioDock.classList.contains('disclosure-open'), false);
+  assert.deepEqual(calls, []);
+  assert.equal(radioDock.classList.contains('disclosure-open'), true);
 });
 
-test('adaptive rail restore hides compact Radio before revealing Context', (t) => {
-  const priorRaf = globalThis.requestAnimationFrame;
-  let nextFrame;
-  globalThis.requestAnimationFrame = (callback) => {
-    nextFrame = callback;
-    return 1;
-  };
-  t.after(() => {
-    globalThis.requestAnimationFrame = priorRaf;
-  });
-
-  // Valid starting state: the tactical rail automatically collapsed Context,
-  // and the user opened the compact Radio controls from its header.
-  const contextPanel = {
-    id: 'global-context-panel',
-    classList: classList(['collapsed', 'layout-auto-collapsed']),
-  };
-  const radioDock = { classList: classList(['disclosure-open']) };
-  const radioMini = { hidden: false };
-  const calls = [];
-  const chrome = {
-    _contextRadioDock: radioDock,
-    _setRadioDisclosure(open) {
-      calls.push(`disclosure:${open}`);
-      radioDock.classList.toggle('disclosure-open', open);
-      radioMini.hidden = !open;
-    },
-    _syncPanelCollapseButton(panel) {
-      calls.push(`button:${panel.id}`);
-    },
-  };
-  const layout = {
-    destroyed: false,
-    _rightStackLayoutFrame: null,
-    _rightStackReconsiderAutoCollapse: false,
-    _rightPanelStack: {
-      querySelectorAll: (selector) =>
-        selector === '.layout-auto-collapsed' ? [contextPanel] : [],
-    },
-    _syncPanelCollapseButton(panel) {
-      PanelChrome.prototype._syncRailPanelCollapseButton.call(chrome, panel);
-    },
-    _syncRightPanelAdaptiveLayout() {
-      calls.push('layout');
-    },
-  };
-
-  PanelLayoutController.prototype._scheduleRightPanelLayout.call(layout, {
-    reconsiderAutoCollapse: true,
-  });
-  assert.equal(contextPanel.classList.contains('collapsed'), true);
-  assert.equal(radioMini.hidden, false);
-  nextFrame();
-
-  assert.equal(contextPanel.classList.contains('collapsed'), false);
-  assert.equal(contextPanel.classList.contains('layout-auto-collapsed'), false);
-  assert.equal(radioDock.classList.contains('disclosure-open'), false);
-  assert.equal(radioMini.hidden, true);
-  assert.deepEqual(calls, [
-    'disclosure:false',
-    'button:global-context-panel',
-    'layout',
-  ]);
-});
-
-test('real PanelChrome constructor wires rail restore to compact Radio owner', (t) => {
+test('adaptive rail restore reveals Context without touching the compact player', (t) => {
   const priorDocument = globalThis.document;
   const priorRaf = globalThis.requestAnimationFrame;
   let nextFrame;
@@ -166,7 +102,6 @@ test('real PanelChrome constructor wires rail restore to compact Radio owner', (
     operations: {
       _setRadioDisclosure(open) {
         calls.push(`disclosure:${open}`);
-        dock.classList.toggle('disclosure-open', open);
       },
       _syncPanelCollapseButton(panel) {
         calls.push(`button:${panel.id}`);
@@ -187,14 +122,56 @@ test('real PanelChrome constructor wires rail restore to compact Radio owner', (
     reconsiderAutoCollapse: true,
   });
   assert.equal(typeof nextFrame, 'function');
-  assert.equal(dock.classList.contains('disclosure-open'), true);
   nextFrame();
 
   assert.equal(contextPanel.classList.contains('collapsed'), false);
-  assert.equal(dock.classList.contains('disclosure-open'), false);
-  assert.deepEqual(calls, [
-    'disclosure:false',
-    'button:global-context-panel',
-    'layout',
-  ]);
+  assert.equal(contextPanel.classList.contains('layout-auto-collapsed'), false);
+  assert.equal(dock.classList.contains('disclosure-open'), true);
+  assert.deepEqual(calls, ['button:global-context-panel', 'layout']);
 });
+
+// A globe station pick opens Radio, which may already be expanded inside a
+// closed Context.
+for (const theme of ['tactical', 'cyber']) {
+  test(`${theme}: a radio pick reopens the closed Context around an expanded Radio section`, (t) => {
+    const priorDocument = globalThis.document;
+    const contextPanel = {
+      id: 'global-context-panel',
+      classList: classList(['collapsed']),
+    };
+    const panels = {
+      'global-context-panel': contextPanel,
+      'radio-panel': { id: 'radio-panel', classList: classList() },
+    };
+    globalThis.document = {
+      documentElement: { dataset: { uiTheme: theme } },
+      body: { classList: classList() },
+      getElementById: (id) => panels[id] || null,
+    };
+    t.after(() => {
+      globalThis.document = priorDocument;
+    });
+    const owner = {
+      _leftPanelStack: null,
+      _rightPanelStack: { contains: (el) => el === contextPanel },
+      _panelLayout: {
+        _leftStackPreferredPanelId: null,
+        _rightStackPreferredPanelId: 'pp-toggles',
+      },
+      _syncPanelCollapseButton() {},
+      _scheduleLeftPanelLayout() {},
+      _scheduleRightPanelLayout() {},
+      _savePanelCollapsedState() {},
+      _syncCctvPanelViewport() {},
+      _updateCommandDockTrayStack() {},
+      _lifetime: { frame() {} },
+      shareLinkManager: null,
+      cockpitView: null,
+    };
+    owner.setPanelCollapsed = PanelChrome.prototype.setPanelCollapsed;
+
+    owner.setPanelCollapsed('radio-panel', false);
+
+    assert.equal(contextPanel.classList.contains('collapsed'), false);
+  });
+}

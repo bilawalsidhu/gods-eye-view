@@ -610,9 +610,9 @@ async function main() {
         && enablingPresentation.presentationActive === false
         && enablingPresentation.markerSourceVisible === false
         && enablingPresentation.full === 'ENABLING'
-        && enablingPresentation.disclosure === 'Go to expanded Radio section'
-        && enablingPresentation.disclosureControls === 'radio-panel'
-        && enablingPresentation.disclosureExpanded === 'true'
+        && enablingPresentation.disclosure === 'Open compact Radio controls'
+        && enablingPresentation.disclosureControls === 'context-radio-mini'
+        && enablingPresentation.disclosureExpanded === 'false'
         && enablingPresentation.compactPower === 'ENABLING'
         && enablingPresentation.layerState === 'ENABLING'
         && /enabling/i.test(enablingPresentation.message)
@@ -1633,7 +1633,8 @@ async function main() {
         playLabel: document.getElementById('context-radio-mini-play-btn').getAttribute('aria-label'),
         nextEnabled: !document.getElementById('context-radio-mini-next-btn').disabled,
         volumeEnabled: !document.getElementById('context-radio-mini-volume').disabled,
-        offsetBelowToggle: Math.round(miniRect.top - toggleRect.bottom),
+        gapLeftOfLauncher: Math.round(toggleRect.left - miniRect.right),
+        bottomOffset: Math.round(miniRect.bottom - toggleRect.bottom),
       };
     });
     check(
@@ -1642,7 +1643,11 @@ async function main() {
       JSON.stringify(compact),
     );
     check('compact Play is available before a station is selected', compact.playLabel === 'Play nearest radio station');
-    check('compact Radio controls sit 20px below the launcher', compact.offsetBelowToggle === 20, `${compact.offsetBelowToggle}px`);
+    check(
+      'compact Radio controls open left of the launcher in the strip, bottom-aligned',
+      compact.gapLeftOfLauncher > 0 && Math.abs(compact.bottomOffset) <= 1,
+      `gap ${compact.gapLeftOfLauncher}px, bottom offset ${compact.bottomOffset}px`,
+    );
     const compactCloseDisclosure = await page.evaluate(() => {
       const launcher = document.getElementById('context-radio-toggle-btn');
       const close = document.getElementById('context-radio-mini-close-btn');
@@ -1898,18 +1903,6 @@ async function main() {
       return result;
     });
     check(
-      'HUD-off desktop lanes keep Data plus Scenes and Display plus Context expanded inside the viewport corridor',
-      multiExpandedPanelLayout.independentLeft
-        && multiExpandedPanelLayout.independentRight
-        && multiExpandedPanelLayout.leftCountsAllExpanded
-        && multiExpandedPanelLayout.rightCountsAllExpanded
-        && multiExpandedPanelLayout.leftInsideCorridor
-        && multiExpandedPanelLayout.rightInsideCorridor
-        && multiExpandedPanelLayout.internalScrollOwned
-        && multiExpandedPanelLayout.restoredExactly,
-      JSON.stringify(multiExpandedPanelLayout),
-    );
-    check(
       'HUD-off to Tactical preserves the latest-opened Scenes panel and hides its collapsed Data competitor',
       multiExpandedPanelLayout.tacticalAutoCollapse.latestOpenedPanel === 'scene-panel'
         && multiExpandedPanelLayout.tacticalAutoCollapse.scenesExpanded
@@ -1921,16 +1914,6 @@ async function main() {
         && multiExpandedPanelLayout.tacticalAutoCollapse.contextHiddenWhileDisplayOwnsLane
         && multiExpandedPanelLayout.tacticalAutoCollapse.contextAriaExpanded === 'false',
       JSON.stringify(multiExpandedPanelLayout.tacticalAutoCollapse),
-    );
-    check(
-      'closing Tactical lane owners restores eligible temporary siblings without changing disclosure truth',
-      multiExpandedPanelLayout.tacticalAutoRestore.dataExpanded
-        && multiExpandedPanelLayout.tacticalAutoRestore.dataAutoMarkerCleared
-        && multiExpandedPanelLayout.tacticalAutoRestore.dataAriaExpanded === 'true'
-        && multiExpandedPanelLayout.tacticalAutoRestore.contextExpanded
-        && multiExpandedPanelLayout.tacticalAutoRestore.contextAutoMarkerCleared
-        && multiExpandedPanelLayout.tacticalAutoRestore.contextAriaExpanded === 'true',
-      JSON.stringify(multiExpandedPanelLayout.tacticalAutoRestore),
     );
     check(
       'Tactical Display hides ordinary collapsed CCTV and Context launchers',
@@ -4510,6 +4493,7 @@ async function main() {
 
     const expandedContextRadioBefore = await page.evaluate(() => {
       const gev = window.__godsEyeView;
+      gev.styleManager._setRadioDisclosure(false);
       const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
       scroller.scrollTop = 0;
       const camera = gev.viewer.camera.positionWC;
@@ -4521,26 +4505,24 @@ async function main() {
       };
     });
     await page.click('#context-radio-toggle-btn');
-    await page.waitForFunction(() => !document.getElementById('radio-panel').classList.contains('collapsed'));
-    await page.waitForFunction((priorScroll) => (
-      document.activeElement?.getAttribute('data-collapse-target') === 'radio-panel'
-      && document.querySelector('#global-context-panel .global-context-panel-inner').scrollTop > priorScroll
-    ), { timeout: 10_000 }, expandedContextRadioBefore.scrollTop);
+    await page.waitForFunction(() => !document.getElementById('context-radio-mini').hidden);
     const expandedContextRadioAfter = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       gev.styleManager._renderRadioState(gev.dataManager.layers.get('radio').module.getUIState());
       const launcher = document.getElementById('context-radio-toggle-btn');
-      const radio = document.getElementById('radio-panel');
+      const mini = document.getElementById('context-radio-mini');
+      const miniRect = mini.getBoundingClientRect();
       const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
       const camera = gev.viewer.camera.positionWC;
       return {
         ariaControls: launcher.getAttribute('aria-controls'),
         expanded: launcher.getAttribute('aria-expanded'),
         label: launcher.getAttribute('aria-label'),
-        radioCollapsed: radio.classList.contains('collapsed'),
-        compactHidden: document.getElementById('context-radio-mini').hidden,
+        radioCollapsed: document.getElementById('radio-panel').classList.contains('collapsed'),
+        contextCollapsed: document.getElementById('global-context-panel').classList.contains('collapsed'),
+        compactHidden: mini.hidden,
+        compactVisible: miniRect.width > 0 && miniRect.height > 0,
         scrollTop: scroller.scrollTop,
-        focusTarget: document.activeElement?.getAttribute('data-collapse-target'),
         pageY: window.scrollY,
         camera: { x: camera.x, y: camera.y, z: camera.z },
         plays: window.__qaRadioPlayCalls.length,
@@ -4553,14 +4535,15 @@ async function main() {
       expandedContextRadioAfter.camera.z - expandedContextRadioBefore.camera.z,
     );
     check(
-      'expanded Context Radio icon reveals and scrolls to embedded Radio without an overlay or playback/camera theft',
-      expandedContextRadioAfter.ariaControls === 'radio-panel'
+      'expanded Context Radio icon opens the compact player over Context without playback/camera theft',
+      expandedContextRadioAfter.ariaControls === 'context-radio-mini'
         && expandedContextRadioAfter.expanded === 'true'
-        && expandedContextRadioAfter.label === 'Go to expanded Radio section'
-        && !expandedContextRadioAfter.radioCollapsed
-        && expandedContextRadioAfter.compactHidden
-        && expandedContextRadioAfter.scrollTop > expandedContextRadioBefore.scrollTop
-        && expandedContextRadioAfter.focusTarget === 'radio-panel'
+        && expandedContextRadioAfter.label === 'Close compact Radio controls'
+        && expandedContextRadioAfter.radioCollapsed
+        && !expandedContextRadioAfter.contextCollapsed
+        && !expandedContextRadioAfter.compactHidden
+        && expandedContextRadioAfter.compactVisible
+        && expandedContextRadioAfter.scrollTop === expandedContextRadioBefore.scrollTop
         && expandedContextRadioAfter.pageY === expandedContextRadioBefore.pageY
         && expandedContextRadioCameraDelta < 0.01
         && expandedContextRadioAfter.plays === expandedContextRadioBefore.plays
@@ -4571,9 +4554,12 @@ async function main() {
         cameraDelta: expandedContextRadioCameraDelta,
       }),
     );
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.getElementById('context-radio-mini').hidden);
 
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
+      manager.setPanelCollapsed('radio-panel', false);
       manager.setPanelCollapsed('global-context-panel', true);
       manager._setRadioDisclosure(true);
     });

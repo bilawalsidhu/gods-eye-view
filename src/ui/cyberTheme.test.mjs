@@ -742,7 +742,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(
     rightRail,
-    /const leftStackTop = settledLeftRailTop\([\s\S]*?const alignedTop = Number\.isFinite\(leftStackTop\)[\s\S]*?baseTop: alignedTop,/,
+    /const leftStackTop = settledLeftRailTop\([\s\S]*?const alignedTop = Number\.isFinite\(leftStackTop\)[\s\S]*?layout = resolve\(alignedTop\);/,
   );
   assert.match(
     cyberStyles,

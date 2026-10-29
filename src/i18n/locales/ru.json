@@ -2483,8 +2483,6 @@
   "Exit cockpit to fly to a route": "Выйдите из кабины, чтобы перелететь к маршруту",
   "Exit cockpit to fly to a file": "Выйдите из кабины, чтобы перелететь к файлу",
   "Exit cockpit to fly to a scene": "Выйдите из кабины, чтобы перелететь к сцене",
-  "Go to expanded Radio section": "Перейти к развёрнутому разделу радио",
-  "Expand Radio section in Context": "Развернуть раздел «Радио» в панели «Контекст»",
   "New scene name": "Название новой сцены",
   "Delete scene \"{scene}\" and all shots?": "Удалить сцену «{scene}» и все кадры?",
   "Detailed outline unavailable": "Подробный контур недоступен",

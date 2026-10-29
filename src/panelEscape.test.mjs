@@ -71,6 +71,20 @@ test('Escape collapses an expanded panel and returns focus to its disclosure', (
   assert.equal(fixture.event.propagationStopped, true);
 });
 
+test('Escape hands focus to the rail tab that controls the panel when one exists', () => {
+  const fixture = panelFixture();
+  let tabFocused = false;
+  fixture.panel.ownerDocument = {
+    querySelector: (selector) => (
+      selector === '[role="tab"][aria-controls="data-panel"]' ? { focus: () => { tabFocused = true; } } : null
+    ),
+  };
+  assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'data-panel'), true);
+  assert.equal(fixture.collapsed(), true);
+  assert.equal(tabFocused, true);
+  assert.equal(fixture.focused(), false, 'the hidden in-panel disclosure is not focused');
+});
+
 test('Escape on an expanded panel disclosure closes it without retaining focus', () => {
   const fixture = panelFixture({ onDisclosure: true });
   assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'data-panel'), true);
