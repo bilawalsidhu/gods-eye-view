@@ -142,6 +142,19 @@
     "VS",
     "WHOT/BHOT"
   ],
+  "uk": [
+    "AIS: --",
+    "AIS: {name}",
+    "CCTV",
+    "CRT",
+    "FLIR",
+    "Ironbow",
+    "Landsat 8/9",
+    "NVG",
+    "REC",
+    "S2 GhostMaps",
+    "WHOT/BHOT"
+  ],
   "zh-CN": [
     "1090 MHz",
     "978 MHz UAT",
