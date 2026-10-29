@@ -1059,6 +1059,7 @@
   "LIVE · Roads: {source} · No flow roads in view": "实时 · 道路：{source} · 视野内没有带路况数据的道路",
   "LIVE · Roads: {source} · Flow {percent}%": "实时 · 道路：{source} · 路况 {percent}%",
   "SIMULATED · Roads: {source} · Flow {percent}%": "模拟 · 道路：{source} · 路况 {percent}%",
+  "STALE · Roads: {source} · Flow: cached TomTom tiles": "过期 · 道路：{source} · 路况：TomTom 缓存瓦片",
   "Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated": "正在同步路况 · 道路：OpenStreetMap · 路况：TomTom · 未匹配：模拟",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov · Unmatched: simulated": "实时 · 道路：OpenStreetMap · 路况：TomTom · 覆盖 {percent}% · 未匹配：模拟",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov": "实时 · 道路：OpenStreetMap · 路况：TomTom · 覆盖 {percent}%",
@@ -1202,6 +1203,8 @@
   "Some weather tiles unavailable": "部分天气瓦片不可用",
   "Malformed weather manifest": "天气清单格式错误",
   "Weather request timed out": "天气请求超时",
+  "Cyclone request timed out": "气旋请求超时",
+  "Malformed cyclone snapshot": "气旋快照格式错误",
   "Temperature field unavailable": "温度场不可用",
   "Mean sea level pressure field unavailable": "平均海平面气压场不可用",
   "Wind upstream unavailable": "风场上游数据源不可用",
@@ -1477,6 +1480,11 @@
   "LIVE SIGNALS": "实时信号",
   "CCTV layer unavailable": "CCTV 图层不可用",
   "Link copied!": "链接已复制！",
+  "Link shared": "链接已分享",
+  "This share link can't be opened": "无法打开此分享链接",
+  "{id} isn't reporting now — showing where it was at {time}": "{id} 目前没有发送信号——显示其在 {time} 的位置",
+  "{id} isn't reporting now — showing where it was last seen": "{id} 目前没有发送信号——显示其最后出现的位置",
+  "Shared vessel is unavailable": "分享的船只不可用",
   "Copy failed": "复制失败",
   "Return map to straight-down view": "将地图恢复为垂直俯视",
   "Tilt map to oblique view": "将地图倾斜至斜视角",
@@ -1618,7 +1626,6 @@
   "Thermal": "热成像",
   "Anime": "动漫",
   "Noir": "黑白",
-  "Snow": "雪景",
   "Current cockpit vision style: {style}. Activate for next style.": "当前座舱视觉样式：{style}。点击可切换到下一个样式。",
   "Current style: {style} — click for next": "当前样式：{style}——点击切换到下一个",
   "Collapse Contact panel": "收起目标面板",
@@ -1827,6 +1834,8 @@
   "ORBIT": "环绕",
   "Location not found": "未找到位置",
   "Search failed": "搜索失败",
+  "Check the spelling and press Enter to search again.": "请检查拼写，然后按 Enter 重新搜索。",
+  "Press Enter to try again.": "按 Enter 重试。",
   "Detailed outline unavailable": "无法获取详细轮廓",
   "Fly to a POI first": "请先飞往一个 POI",
   "Reset to full globe view": "重置为完整地球视图",
@@ -2540,7 +2549,6 @@
   "Simulate FLIR-style thermal contrast. Turn up Ironbow for color.": "模拟 FLIR 风格的热成像对比。调高 Ironbow 可显示色彩。",
   "Apply bright cel-shaded color and illustrated outlines.": "应用明亮的赛璐珞色彩和插画轮廓线。",
   "Apply high-contrast monochrome film-noir grading.": "应用高对比度的黑白电影风格调色。",
-  "Add a cold, snowy whiteout treatment to the scene.": "为场景添加寒冷的暴雪白化效果。",
   "MAP SOURCE": "地图源",
   "Map source": "地图源",
   "Style": "样式",
@@ -2869,5 +2877,7 @@
   "{count} placemarks": {
     "other": "{count} 个地标"
   },
-  "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 发布这些 KMZ 产品。新上传的内容会在数秒内被检测到，并自动替换旧版本。点击标记查看报告。"
+  "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 发布这些 KMZ 产品。新上传的内容会在数秒内被检测到，并自动替换旧版本。点击标记查看报告。",
+  "routing busy — too many routes at once": "路线服务繁忙：同时请求的路线过多",
+  "route proxy error": "路线代理出错"
 }

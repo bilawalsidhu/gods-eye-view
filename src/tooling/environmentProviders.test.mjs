@@ -411,3 +411,156 @@ test('terrain middleware retains successful chunks around a failure and retries 
   );
   assert.equal(requests.length, 4);
 });
+
+test('after a 429 the terrain proxy leaves the upstream alone and logs once', async (t) => {
+  isolate(t);
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('', { status: 429 });
+  });
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_000_000 });
+  const request = install(terrainHeightsProxy());
+  // The retries' backoff runs on mocked time.
+  let settled = false;
+  const first = request('/?points=1,2').then(() => {
+    settled = true;
+  });
+  for (let step = 0; step < 60 && !settled; step += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(1_000);
+  }
+  assert.ok(settled, 'the first request settles within its retry budget');
+  await first;
+  const afterFirst = calls;
+  assert.ok(afterFirst >= 1);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /HTTP 429; pausing upstream for 60 s/);
+  // New points during the pause: no upstream call, no new log line.
+  const paused = await request('/?points=3,4');
+  assert.equal(calls, afterFirst);
+  assert.equal(paused.status, 502);
+  assert.equal(warnings.length, 1);
+});
+
+test('a far-off Retry-After pauses the terrain upstream for at most 10 minutes', async (t) => {
+  isolate(t);
+  t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_000_000 });
+  let limited = true;
+  t.mock.method(globalThis, 'fetch', async () =>
+    limited
+      ? new Response('', { status: 429, headers: { 'retry-after': '86400' } })
+      : Response.json({ results: [{ ellipsoid: 100 }] }),
+  );
+  const request = install(terrainHeightsProxy());
+  // The first request spends its retry budget on 429s, then the pause begins.
+  let settled = false;
+  const first = request('/?points=1,2').then((res) => {
+    settled = true;
+    return res;
+  });
+  // Bounded: the retry budget is 10 s, so 60 simulated seconds is plenty.
+  for (let step = 0; step < 60 && !settled; step += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(1_000);
+  }
+  assert.ok(settled, 'the first request settles within its retry budget');
+  assert.equal((await first).status, 502);
+  limited = false;
+  const pausedAt = Date.now();
+  t.mock.timers.setTime(pausedAt + 9 * 60_000);
+  assert.equal((await request('/?points=3,4')).status, 502, 'still paused');
+  t.mock.timers.setTime(pausedAt + 10 * 60_000 + 1);
+  assert.equal((await request('/?points=3,4')).status, 200, 'pause over');
+});
+
+/** Drive mocked timers until `promise` settles; the retry budget is 10 s. */
+async function settleOnMockedTime(t, promise) {
+  let settled = false;
+  const tracked = promise.finally(() => {
+    settled = true;
+  });
+  for (let step = 0; step < 60 && !settled; step += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(1_000);
+  }
+  assert.ok(settled, 'the request settles within its retry budget');
+  return tracked;
+}
+
+test('during a terrain 429 pause fully cached points, even stale ones, are still served', async (t) => {
+  isolate(t);
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_000_000 });
+  let calls = 0;
+  let limited = false;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return limited
+      ? new Response('', { status: 429, headers: { 'retry-after': '300' } })
+      : Response.json({ results: [{ ellipsoid: 100 }] });
+  });
+  const request = install(terrainHeightsProxy());
+  assert.equal((await request('/?points=5,6')).status, 200);
+  // Past the 30-day TTL, so 5,6 is stale and would normally be refreshed.
+  t.mock.timers.setTime(Date.now() + 31 * 24 * 3600_000);
+  limited = true;
+  const first = await settleOnMockedTime(t, request('/?points=1,2'));
+  assert.equal(first.status, 502);
+  assert.equal(calls, 2, 'a Retry-After past the budget is not retried');
+  const stale = await request('/?points=5,6');
+  assert.equal(stale.status, 200);
+  assert.deepEqual(json(stale).results, [{ ellipsoid: 100 }]);
+  assert.equal((await request('/?points=5,6;7,8')).status, 502);
+  assert.equal(calls, 2, 'no upstream call during the pause');
+});
+
+test('a terrain upstream failure other than 429 does not pause later requests', async (t) => {
+  isolate(t);
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_000_000 });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response('', { status: 503 });
+  });
+  const request = install(terrainHeightsProxy());
+  const first = await settleOnMockedTime(t, request('/?points=1,2'));
+  assert.equal(first.status, 502);
+  const afterFirst = calls;
+  const second = await settleOnMockedTime(t, request('/?points=3,4'));
+  assert.equal(second.status, 502);
+  assert.ok(calls > afterFirst, 'new points still go upstream after a 503');
+});
+
+test('a shorter concurrent Retry-After never cuts a terrain 429 pause short', async (t) => {
+  isolate(t);
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_000_000 });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    calls += 1;
+    const points = new URL(raw).searchParams.get('points');
+    if (points.startsWith('0.'))
+      return Response.json({ results: [{ ellipsoid: 1 }] });
+    const retryAfter = points.startsWith('1.') ? '300' : '30';
+    return new Response('', {
+      status: 429,
+      headers: { 'retry-after': retryAfter },
+    });
+  });
+  const request = install(terrainHeightsProxy());
+  // Load the disk cache first so both requests below reach the upstream in
+  // order: the 300 s answer lands first, the 30 s answer after it.
+  assert.equal((await request('/?points=0,0')).status, 200);
+  const [long, short] = await settleOnMockedTime(
+    t,
+    Promise.all([request('/?points=1,2'), request('/?points=3,4')]),
+  );
+  assert.equal(long.status, 502);
+  assert.equal(short.status, 502);
+  const afterBoth = calls;
+  t.mock.timers.setTime(Date.now() + 120_000);
+  assert.equal((await request('/?points=5,6')).status, 502);
+  assert.equal(calls, afterBoth, 'still paused by the 300 s Retry-After');
+});

@@ -212,7 +212,6 @@
   "src/styles/thermal.js",
   "src/styles/anime.js",
   "src/styles/noir.js",
-  "src/styles/snow.js",
   "scripts/qa-visual-effects.mjs",
   "scripts/qa-draw-tool.mjs",
   "scripts/qa-geo-import.mjs",
@@ -1102,6 +1101,8 @@
   "src/cameraGlobeRotation.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs",
   "src/hudDms.test.mjs",
+  "src/hudSummaryGate.test.mjs",
+  "src/voice/hudPlaceLabels.test.mjs",
   "src/voice/panel/preferences.test.mjs",
   "src/voice/panel/host.test.mjs",
   "src/voice/panel/manualPanel.test.mjs",
@@ -1109,5 +1110,13 @@
   "src/voice/panel/inactivity.test.mjs",
   "src/voice/panel/actionObserver.test.mjs",
   "src/voice/panel/testDom.mjs",
-  "src/voice/realtimeCostPanel.test.mjs"
+  "src/voice/realtimeCostPanel.test.mjs",
+  "docs/SHARE-LINK-FORMAT.md",
+  "src/share/wire.test.mjs",
+  "src/share/viewCodec.test.mjs",
+  "src/share/legacyShareState.test.mjs",
+  "src/testSupport/shareViewFixtures.mjs",
+  "src/ui/shareLinks.test.mjs",
+  "src/ui/shareButton.test.mjs",
+  "src/share/shareLinkPath.test.mjs"
 ]

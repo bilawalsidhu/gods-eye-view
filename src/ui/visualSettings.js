@@ -1,6 +1,7 @@
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { syncScopeControls } from './displayControls.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import { syncSegmentedControl } from './segmentedControl.js';
 import { t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
@@ -75,13 +76,24 @@ export class VisualSettings {
       panelState,
       styleParams,
     } = state || {};
-    // Ignore the retired 'ai-edit' style from older share links.
-    if (style && style !== 'normal' && style !== 'ai-edit') {
+    // Ignore the retired 'ai-edit' style from older share links. Normal is
+    // the start-up style, but a share opened later in the tab must still leave
+    // a filtered style for it.
+    if (
+      style &&
+      style !== 'ai-edit' &&
+      (style !== 'normal' || this.activeStyle !== 'normal')
+    ) {
+      const alreadyActive = style === this.activeStyle;
       this.setStyle(style, {
         applyPreset: true,
         revealParameters: false,
         restore: true,
       });
+      // setStyle leaves an already-active style untouched; the incoming share
+      // still starts from that preset before its own parameters apply.
+      if (alreadyActive && style !== 'normal')
+        this._applyStylePresetDefaults(style);
     }
     if (styleParams && style && this.stages[style] && STYLES[style]?.uniforms) {
       for (const [uniformName, uniformValue] of Object.entries(styleParams)) {
@@ -1261,8 +1273,9 @@ export class VisualSettings {
     const superseded = () => typeof isCurrent === 'function' && !isCurrent();
     if (superseded()) return false;
 
-    if (state.style && state.style !== this.activeStyle) {
-      this.setStyle(state.style, { applyPreset: false });
+    const style = RETIRED_STYLES.includes(state.style) ? 'normal' : state.style;
+    if (style && style !== this.activeStyle) {
+      this.setStyle(style, { applyPreset: false });
     }
 
     const bloomState = state.bloom || {};

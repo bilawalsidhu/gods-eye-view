@@ -8,6 +8,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
+import { parseSharePath } from './share/shareLinkPath.js';
+import { decodeShareView } from './share/viewCodec.js';
+
+/** The decoded view of a copied `/share/<code>` link. */
+const sharedState = (href) =>
+  decodeShareView(parseSharePath(new URL(href).pathname).code).state;
 
 const uiSource = readShellSource();
 
@@ -310,8 +316,8 @@ test('copy adds a fresh ephemeral timestamp without aging the live URL', async (
 
   assert.equal(await manager.copyLink({ nowMs: 2_000_000 }), true);
   assert.equal(await manager.copyLink({ nowMs: 2_002_000 }), true);
-  assert.equal(new URL(copied[0]).hash.includes('at=2000'), true);
-  assert.equal(new URL(copied[1]).hash.includes('at=2002'), true);
+  assert.equal(sharedState(copied[0]).sharedAtMs, 2_000_000);
+  assert.equal(sharedState(copied[1]).sharedAtMs, 2_002_000);
   assert.equal(window.location.hash, liveHash);
   assert.equal(new URLSearchParams(window.location.hash.slice(1)).has('at'), false);
 });
@@ -323,8 +329,7 @@ test('copy snapshots current state while incoming hash writes are still suppress
   manager.parseInitialHash();
   assert.equal(manager._initialRestorePending, true);
   assert.equal(await manager.copyLink({ nowMs: 3_000_000 }), true);
-  const params = new URL(copied).hash.slice(1);
-  assert.equal(new URLSearchParams(params).get('at'), '3000');
+  assert.equal(sharedState(copied).sharedAtMs, 3_000_000);
   assert.equal(window.location.hash, '#v=2&lat=10&lon=20&l=e&at=100');
 });
 
