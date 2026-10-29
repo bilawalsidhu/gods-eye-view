@@ -45,7 +45,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // S2 GhostMaps extends the generated layer enums.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
-    '9ee82c4214499280c208c93751b19d7b724c81b7727a2d0c6dab0184749fbe15',
+    // The layer alias hint leaves out aliases the layer id already spells.
+    '188e9eaaee1d5c21fc88493ba244569f4af9cfba61bb240c52ecd32b49b18caa',
   );
 });
 
