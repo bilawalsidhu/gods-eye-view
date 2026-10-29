@@ -153,6 +153,8 @@ export class SceneDirector {
     this._runAbort = null;
     /** @type {AbortController|null} Aborts the in-flight LOAD's layer transitions */
     this._loadAbort = null;
+    /** @type {AbortController|null} Aborts a same-shot seek's layer reconcile */
+    this._seekAbort = null;
     this._clock = createPlaybackClock({
       isRunning: () => this._running,
       timingForShot: (scene, shot) => this._sceneTimingForShot(scene, shot),
@@ -234,7 +236,7 @@ export class SceneDirector {
   destroy() {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._visibilityUnsubscribe?.();
     this._cameraHandoffUnsubscribe?.();
     this._removeCameraInput?.();
@@ -1071,7 +1073,7 @@ export class SceneDirector {
   loadShot(sceneId, shotId, options) {
     if (this._destroyed)
       return Promise.resolve({ started: false, reason: 'destroyed' });
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._interactionTransitions = 0;
     const previousGeneration = this._loadGeneration;
     const work = this._loadShot(sceneId, shotId, options);
@@ -1516,9 +1518,30 @@ export class SceneDirector {
     return new Promise((resolve) => this._runIdleResolvers.add(resolve));
   }
 
-  /** Apply a new time inside the already-loaded shot without rebuilding its stack. */
-  _seekLoadedShot(scene, seekState) {
-    if (this._destroyed) return false;
+  /**
+   * Supersede any pending seek. Only a seek's own layer reconcile is aborted:
+   * a request that is later rejected must not cancel an in-flight LOAD.
+   */
+  _bumpSceneSeekGeneration() {
+    if (this._seekAbort) {
+      this._seekAbort.abort();
+      if (this._loadAbort === this._seekAbort) this._loadAbort = null;
+      this._seekAbort = null;
+    }
+    return ++this._sceneSeekGeneration;
+  }
+
+  /**
+   * Apply a new time inside the already-loaded shot without rebuilding its stack.
+   * @returns {Promise<boolean|null>} Null when the shortcut does not apply and
+   *   LOAD must rebuild the shot; otherwise whether the seek settled.
+   */
+  async _seekLoadedShot(
+    scene,
+    seekState,
+    seekGeneration = this._sceneSeekGeneration,
+  ) {
+    if (this._destroyed) return null;
     const shot = seekState?.shot;
     if (
       !scene ||
@@ -1528,17 +1551,77 @@ export class SceneDirector {
       this._loadedSceneId !== scene.id ||
       this._selectedShotId !== shot.id
     )
+      return null;
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
       return false;
     if (!this._claimCameraOwnership()) return false;
     this._cancelActiveSceneTravel();
     this._loadAbort?.abort();
     this._loadAbort = null;
-    this._loadGeneration += 1;
+    const generation = ++this._loadGeneration;
     this._clock.stopShot();
     const states = this._layerStatesForShot(scene, shot, {
       cameraSettled: seekState.cameraProgress >= 1,
       sceneSeek: seekState,
     });
+    // A manual toggle, or a superseded LOAD transition whose rollback is still
+    // settling, leaves declared layers off the shot's stack. Reconcile only
+    // those through the cancellable admission path.
+    const staleStates = Object.fromEntries(
+      Object.entries(states)
+        .filter(([id, state]) => {
+          const wantEnabled = !!state?.enabled;
+          const lifecycle = this.dataManager.getLayerLifecycleState(id);
+          return (
+            lifecycle &&
+            (lifecycle.enabled !== wantEnabled ||
+              lifecycle.lifecycleState === 'enabling' ||
+              lifecycle.lifecycleState === 'disabling' ||
+              lifecycle.uncertain ||
+              this.dataManager.isEffectivelyEnabled(id) !== wantEnabled)
+          );
+        })
+        .map(([id, state]) => [id, { enabled: !!state?.enabled }]),
+    );
+    if (Object.keys(staleStates).length) {
+      const previousEnabled = new Map(
+        Object.keys(staleStates).map((id) => [
+          id,
+          this.dataManager.isEffectivelyEnabled(id),
+        ]),
+      );
+      const controller = new AbortController();
+      this._loadAbort = controller;
+      this._seekAbort = controller;
+      const layerResult = await this._applyLayerStates(
+        staleStates,
+        this._loadToken(generation, controller.signal, seekGeneration),
+        { stopOnRefusal: true, exitContextMode: false },
+      );
+      if (this._loadAbort === controller) this._loadAbort = null;
+      if (this._seekAbort === controller) this._seekAbort = null;
+      const superseded = () =>
+        this._destroyed ||
+        this._loadAbort ||
+        this._running ||
+        seekGeneration !== this._sceneSeekGeneration;
+      if (layerResult.cancelled || superseded()) return false;
+      if (layerResult.refused.length) {
+        // Only a refusal rolls back. A cancelled reconcile leaves layer state
+        // to whatever superseded it, as a cancelled LOAD does.
+        for (const id of [...layerResult.applied].reverse()) {
+          if (superseded()) break;
+          await this.dataManager.setEnabled(
+            id,
+            previousEnabled.get(id) ?? false,
+            { origin: 'scene' },
+          );
+        }
+        return false;
+      }
+    }
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
+      return false;
     let applied = true;
     for (const [layerId, state] of Object.entries(states)) {
       if (!state?.enabled || !state.params) continue;
@@ -1550,7 +1633,9 @@ export class SceneDirector {
         applied = false;
       }
     }
-    if (!applied) return false;
+    if (!applied) return null;
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
+      return false;
     this._setCameraView(
       seekState.camera || resolveCameraPose(scene, shot.camera),
     );
@@ -1572,7 +1657,7 @@ export class SceneDirector {
   seekScene(sceneId, progress) {
     if (this._destroyed) return Promise.resolve(false);
     this.stopScene(msg('Seeking scene clock'));
-    const generation = ++this._sceneSeekGeneration;
+    const generation = this._bumpSceneSeekGeneration();
     return this._trackWork(this._seekScene(sceneId, progress, generation));
   }
 
@@ -1586,7 +1671,10 @@ export class SceneDirector {
       return false;
     const seekState = this._sceneSeekState(scene, progress);
     if (!seekState) return false;
-    if (this._seekLoadedShot(scene, seekState)) return true;
+    const seeked = await this._seekLoadedShot(scene, seekState, generation);
+    if (this._destroyed || generation !== this._sceneSeekGeneration)
+      return false;
+    if (seeked !== null) return seeked;
     const result = await this._loadShot(scene.id, seekState.shot.id, {
       sceneSeek: seekState,
     });
@@ -1606,15 +1694,17 @@ export class SceneDirector {
    * @param {AbortSignal} [signal] - Abort signal for this LOAD's manager calls
    * @returns {{ cancelled: boolean, signal: AbortSignal|undefined }}
    */
-  _loadToken(generation, signal = undefined) {
+  _loadToken(generation, signal = undefined, seekGeneration = null) {
     const director = this;
     return {
       signal,
       get cancelled() {
         return (
           director._destroyed ||
-          signal?.aborted ||
-          director._loadGeneration !== generation
+          Boolean(signal?.aborted) ||
+          director._loadGeneration !== generation ||
+          (seekGeneration !== null &&
+            director._sceneSeekGeneration !== seekGeneration)
         );
       },
     };
@@ -1753,7 +1843,7 @@ export class SceneDirector {
   startScene(sceneId, options) {
     if (this._destroyed)
       return Promise.resolve({ started: false, reason: 'destroyed' });
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     return this._trackWork(this._startScene(sceneId, options));
   }
 
@@ -1919,7 +2009,7 @@ export class SceneDirector {
     this._setSceneMediaPlayback();
     this._interactions?.clear();
     this._dataPacks?.clear();
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._loadAbort?.abort();
     this._loadAbort = null;
     this._loadGeneration++;
@@ -2165,7 +2255,11 @@ export class SceneDirector {
    *   the transition in flight.
    * @returns {Promise<{ applied: string[], refused: string[], cancelled: boolean }>}
    */
-  async _applyLayerStates(targetStates, token = null) {
+  async _applyLayerStates(
+    targetStates,
+    token = null,
+    { stopOnRefusal = false, exitContextMode = true } = {},
+  ) {
     const applied = [];
     const refused = [];
     const abort = () => ({ applied, refused, cancelled: true });
@@ -2175,8 +2269,10 @@ export class SceneDirector {
     // the operator's pre-mode state, which is exactly where a stopped scene
     // should come to rest. Tearing that transaction in half would strand
     // Context, so it completes and cancellation is honoured immediately after.
-    await this._exitIsolatingContextMode();
-    if (token?.cancelled) return abort();
+    if (exitContextMode) {
+      await this._exitIsolatingContextMode();
+      if (token?.cancelled) return abort();
+    }
 
     const signal = token?.signal;
     const registered = new Set(
@@ -2206,6 +2302,7 @@ export class SceneDirector {
         console.warn(
           `[Scenes] Layer refused: ${id} → ${enabled ? 'on' : 'off'}`,
         );
+        if (stopOnRefusal) break;
         continue;
       }
       if (params && typeof this.dataManager.restoreLayerState !== 'function') {

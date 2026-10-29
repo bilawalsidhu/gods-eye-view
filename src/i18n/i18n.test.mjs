@@ -33,14 +33,22 @@ function memoryStorage(initial = {}) {
 test('normalizeLocale folds regional variants and rejects unshipped tags', () => {
   assert.equal(normalizeLocale('ru-RU'), 'ru');
   assert.equal(normalizeLocale(' RU '), 'ru');
+  assert.equal(normalizeLocale('uk'), 'uk');
+  assert.equal(normalizeLocale('uk-UA'), 'uk');
   assert.equal(normalizeLocale('en_GB'), 'en');
   assert.equal(normalizeLocale('xx'), null);
-  // Simplified Chinese by default; Traditional tags wait for zh-TW.
+  // Explicit script tags take precedence over regional defaults.
   assert.equal(normalizeLocale('zh'), 'zh-CN');
   assert.equal(normalizeLocale('zh-CN'), 'zh-CN');
   assert.equal(normalizeLocale('zh-Hans-SG'), 'zh-CN');
-  assert.equal(normalizeLocale('zh-TW'), null);
-  assert.equal(normalizeLocale('zh-Hant-HK'), null);
+  assert.equal(normalizeLocale('zh-Hant'), 'zh-Hant');
+  assert.equal(normalizeLocale(' ZH_hant '), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-TW'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-Hant-HK'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-Hans-HK'), 'zh-CN');
+  assert.equal(normalizeLocale('zh-Hant-CN'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh_HK'), 'zh-Hant');
+  assert.equal(normalizeLocale('zh-MO'), 'zh-Hant');
   assert.equal(normalizeLocale(undefined), null);
 });
 
@@ -134,6 +142,22 @@ test('tn() picks English and Russian plural forms', () => {
   assert.match(label(3), / 3 КЛЮЧА(?![А-ЯЁ])/);
   assert.match(label(5), / 5 КЛЮЧЕЙ(?![А-ЯЁ])/);
   assert.match(label(21), / 21 КЛЮЧ(?![А-ЯЁ])/);
+});
+
+test('tn() picks the four Ukrainian plural forms', () => {
+  const label = (count) =>
+    tn(
+      count,
+      'POWER UP · {count} KEY WAITING',
+      'POWER UP · {count} KEYS WAITING',
+    );
+  setLocale('uk');
+  assert.match(label(1), / 1 КЛЮЧ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(3), / 3 КЛЮЧІ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(5), / 5 КЛЮЧІВ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(11), / 11 КЛЮЧІВ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(21), / 21 КЛЮЧ(?![А-ЯҐЄІЇ])/);
+  assert.match(label(1.5), / 1\.5 КЛЮЧА(?![А-ЯҐЄІЇ])/);
 });
 
 test('t() context separates identical English with different meanings', () => {

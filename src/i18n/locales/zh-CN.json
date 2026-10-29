@@ -1059,6 +1059,7 @@
   "LIVE · Roads: {source} · No flow roads in view": "实时 · 道路：{source} · 视野内没有带路况数据的道路",
   "LIVE · Roads: {source} · Flow {percent}%": "实时 · 道路：{source} · 路况 {percent}%",
   "SIMULATED · Roads: {source} · Flow {percent}%": "模拟 · 道路：{source} · 路况 {percent}%",
+  "STALE · Roads: {source} · Flow: cached TomTom tiles": "过期 · 道路：{source} · 路况：TomTom 缓存瓦片",
   "Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated": "正在同步路况 · 道路：OpenStreetMap · 路况：TomTom · 未匹配：模拟",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov · Unmatched: simulated": "实时 · 道路：OpenStreetMap · 路况：TomTom · 覆盖 {percent}% · 未匹配：模拟",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov": "实时 · 道路：OpenStreetMap · 路况：TomTom · 覆盖 {percent}%",
@@ -2875,5 +2876,7 @@
   "FAA prohibited and restricted special-use airspace only, not the UAS Facility Map or UAS flight restrictions. Informational only — not a substitute for official UAS flight-planning tools (B4UFLY / LAANC).": "仅包含 FAA 禁区和限制区特殊用途空域，不含 UAS Facility Map 和无人机飞行限制。仅供参考，不能替代官方无人机飞行规划工具（B4UFLY / LAANC）。",
   "Prohibited": "禁区",
   "Restricted": "限制区",
-  "Prohibited & Restricted Airspace": "禁区与限制区空域"
+  "Prohibited & Restricted Airspace": "禁区与限制区空域",
+  "routing busy — too many routes at once": "路线服务繁忙：同时请求的路线过多",
+  "route proxy error": "路线代理出错"
 }

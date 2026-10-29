@@ -39,6 +39,7 @@ import {
 } from './hudLayouts.js';
 import { formatNumber, msg, t } from './i18n/index.js';
 import { localizeLayerName } from './ui/layerPanel.js';
+import { isEmbeddedInline } from './app/embed.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -202,7 +203,13 @@ export class IntelHUD {
     this._dataManagerUnsubscribe = null;
     this._summaryDirty = true;
     this._summaryRequest = null;
+    this._summaryUnconfigured = false;
+    // The last place lookup and the view it answered for (see
+    // getBasemapLabelContext), reused until the view changes enough.
+    this._placeLabels = null;
     this._lastSummarySignature = '';
+    /** The reply painted for `_lastSummarySignature`, when it was accepted. */
+    this._lastSummaryText = null;
     this._summaryRevision = 0;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
@@ -363,9 +370,11 @@ export class IntelHUD {
         dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
     }, 800);
 
-    // Camera-derived data — 4 updates/second (250ms)
+    // Camera-derived data — 4 updates/second (250ms). Skipped in a hidden
+    // page, except an inline panel, whose host may report it hidden while it
+    // is on screen (see keepPanelRendering in app/embed.js).
     this._updateInterval = setInterval(() => {
-      if (!this._visible) return;
+      if (!this._visible || (document.hidden && !isEmbeddedInline())) return;
       this._updateCameraData();
     }, 250);
 
@@ -826,6 +835,15 @@ export class IntelHUD {
     if (this.summaryPolicy.canRequest?.() === false) return;
 
     const revision = this._summaryRevision;
+    // The place lookups below are paid Google requests made only to feed the
+    // AI summary, so a server without one must not be asked to make them.
+    if (!(await this._summaryAvailable())) {
+      if (revision !== this._summaryRevision) return;
+      this._summaryDirty = false;
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
+    if (revision !== this._summaryRevision) return;
     // Every caller invokes this as `void this._updateSummary(...)`, so nothing
     // owns the returned promise — a rejection escaping from here lands as an
     // unhandled rejection in the console. Building the context walks the live
@@ -848,6 +866,9 @@ export class IntelHUD {
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
       this._summaryDirty = false;
+      // A settle painted the fallback line over the reply this context
+      // already has; reused place labels make that common, so restore it.
+      if (this._lastSummaryText) this._setSummaryText(this._lastSummaryText);
       return;
     }
     if (this._summaryRequest) return;
@@ -855,6 +876,7 @@ export class IntelHUD {
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
+    this._lastSummaryText = null;
     const controller = new AbortController();
     let timedOut = false;
     const timeout = window.setTimeout(() => {
@@ -870,18 +892,16 @@ export class IntelHUD {
       const data = response.data;
       if (revision !== this._summaryRevision) return;
       if (isHudSummaryUnconfigured(response.status, data)) {
+        this._summaryUnconfigured = true;
         this._setSummaryText(fallbackText, animate);
         return;
       }
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      this._setSummaryText(
-        hudSummaryMatchesProvenance(data.summary, context.feedProvenance)
-          ? data.summary
-          : fallbackText,
-        animate,
-      );
+      if (hudSummaryMatchesProvenance(data.summary, context.feedProvenance))
+        this._lastSummaryText = data.summary;
+      this._setSummaryText(this._lastSummaryText || fallbackText, animate);
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
       // destroy's) is not.
@@ -915,12 +935,31 @@ export class IntelHUD {
     if (el) el.textContent = text;
   }
 
+  /**
+   * False once the summary service reports no AI summary: by its capability
+   * probe, when it has one, or by a deliberate unconfigured reply. Unknown
+   * stays available, as before.
+   */
+  async _summaryAvailable() {
+    if (this._summaryUnconfigured) return false;
+    try {
+      if ((await this.summaryService?.configured?.()) === false)
+        this._summaryUnconfigured = true;
+    } catch {
+      /* an unanswered probe leaves the summary as it was */
+    }
+    return !this._summaryUnconfigured;
+  }
+
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(
-      this.viewer,
-      this.placeSearch,
-      this.basemapContext,
-    );
+    const revision = this._summaryRevision;
+    const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, {
+      ...this.basemapContext,
+      previous: this._placeLabels,
+    });
+    // A slower build for a view the camera has left must not replace the
+    // newer view's lookup.
+    if (revision === this._summaryRevision) this._placeLabels = labels;
     const enabledLayers =
       this._dataManager
         ?.getAll?.()
