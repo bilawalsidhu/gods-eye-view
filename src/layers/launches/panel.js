@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { t } from '../../i18n/index.js';
+import { formatNumber, isolate, t } from '../../i18n/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
   MISSION_GLOBE_VIEW_RANGE_M,
@@ -232,7 +232,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
               ? payload.operator
               : null,
             Number.isFinite(payload.massKg)
-              ? `${payload.massKg.toLocaleString()} KG`
+              ? `${formatNumber(payload.massKg)} KG`
               : null,
           ]
             .filter(Boolean)
@@ -260,10 +260,10 @@ export function createPanel({ state: layerState, services, parts, source }) {
           ? launch.launchSite
           : t('UNAVAILABLE'));
       const position = endpoint
-        ? `${endpoint.lat.toFixed(2)}, ${endpoint.lon.toFixed(2)} · ${accuracyLabel(endpoint.accuracy)}`
+        ? `${isolate(`${endpoint.lat.toFixed(2)}, ${endpoint.lon.toFixed(2)}`)} · ${accuracyLabel(endpoint.accuracy)}`
         : stage.downrangeKm > 0
           ? t('{value} KM DOWNRANGE', {
-              value: stage.downrangeKm.toLocaleString(),
+              value: formatNumber(stage.downrangeKm),
             })
           : t('POSITION UNAVAILABLE');
       const stageDetail = [
@@ -394,7 +394,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
       '[data-mission-distance]',
       Number.isFinite(altitudeM)
         ? t('{value} KM', {
-            value: Math.max(0, altitudeM / 1000).toLocaleString(undefined, {
+            value: formatNumber(Math.max(0, altitudeM / 1000), {
               maximumFractionDigits: 0,
             }),
           })
@@ -407,14 +407,14 @@ export function createPanel({ state: layerState, services, parts, source }) {
       '[data-mission-speed]',
       Number.isFinite(speedMps)
         ? t('{value} KM/S', {
-            value: (speedMps / 1000).toLocaleString(undefined, {
+            value: formatNumber(speedMps / 1000, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             }),
           })
         : null,
       Number.isFinite(speedMps)
-        ? `${(speedMps * 3.6).toLocaleString(undefined, { maximumFractionDigits: 0 })} km/h`
+        ? `${formatNumber(speedMps * 3.6, { maximumFractionDigits: 0 })} km/h`
         : '',
     );
   }

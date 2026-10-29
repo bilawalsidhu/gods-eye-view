@@ -6,6 +6,7 @@ import {
   createBhoteKoshiEmbeddedMedia,
   createTrimmedYouTubePlayback,
   embeddedMediaFrameUrl,
+  placeCard,
   publicEmbeddedMediaUrl,
   resolveEmbeddedMediaSource,
 } from './bhoteKoshiEmbeddedMedia.js';
@@ -393,4 +394,26 @@ test('pausing cancels a mounted Facebook preload and rejects its late ready call
   ready({ type: 'video', instance: { play() { playerCalls.push('play'); }, pause() { playerCalls.push('pause'); } } });
   assert.deepEqual(playerCalls, []);
   media.destroy();
+});
+
+test('a media card stays between the panels when right-to-left swaps their sides', () => {
+  const rect = (left, right, top = 0, bottom = 900) => ({ left, right, top, bottom, width: right - left, height: bottom - top });
+  // Arabic: the scene panel sits on the right, the context rail on the left.
+  const panels = {
+    '#scene-panel': rect(1040, 1420),
+    '#right-context-rail': rect(20, 340),
+    '#command-dock': rect(500, 940, 820, 880),
+  };
+  const card = {
+    offsetWidth: 392,
+    offsetHeight: 360,
+    parentElement: { getBoundingClientRect: () => rect(0, 1440) },
+    ownerDocument: { querySelector: (selector) => ({ getBoundingClientRect: () => panels[selector] }) },
+    classList: { contains: () => false },
+    style: {},
+  };
+  placeCard(card, { querySelector: () => null }, { x: 700, y: 400, width: 1440, height: 900 });
+  const left = parseFloat(card.style.left);
+  assert.ok(left >= 340 + 18, `card at ${left}px lands on the context rail`);
+  assert.ok(left + 392 <= 1040 - 18, `card at ${left}px lands on the scene panel`);
 });

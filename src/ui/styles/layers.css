@@ -1059,7 +1059,7 @@
   position: absolute;
   z-index: 5;
   top: calc(100% + 20px);
-  right: -38px;
+  inset-inline-end: -38px;
   display: none;
   width: 244px;
   box-sizing: border-box;

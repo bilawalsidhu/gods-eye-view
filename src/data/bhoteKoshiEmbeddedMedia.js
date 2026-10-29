@@ -569,7 +569,8 @@ function anchorOnScreen(viewer, anchor, root) {
   return { x, y, width: rootBounds.width, height: rootBounds.height };
 }
 
-function placeCard(card, leader, anchor) {
+/** Place a media card beside its map anchor, in the lane between the panels. */
+export function placeCard(card, leader, anchor) {
   const margin = 18;
   const gap = 42;
   const width = card.offsetWidth || 392;
@@ -580,22 +581,22 @@ function placeCard(card, leader, anchor) {
   let laneRight = anchor.width - margin;
   let laneBottom = anchor.height - margin;
   if (rootBounds && documentRef?.querySelector) {
-    const leftPanel = documentRef
-      .querySelector('#scene-panel')
-      ?.getBoundingClientRect?.();
-    const rightRail = documentRef
-      .querySelector('#right-context-rail')
-      ?.getBoundingClientRect?.();
     const commandDock = documentRef
       .querySelector('#command-dock')
       ?.getBoundingClientRect?.();
-    if (leftPanel?.width > 0)
-      laneLeft = Math.max(laneLeft, leftPanel.right - rootBounds.left + margin);
-    if (rightRail?.width > 0)
-      laneRight = Math.min(
-        laneRight,
-        rightRail.left - rootBounds.left - margin,
-      );
+    // The scene panel and the context rail swap sides in right-to-left
+    // languages: each narrows the lane from the side it sits on.
+    for (const selector of ['#scene-panel', '#right-context-rail']) {
+      const panel = documentRef
+        .querySelector(selector)
+        ?.getBoundingClientRect?.();
+      if (!(panel?.width > 0)) continue;
+      const start = panel.left - rootBounds.left;
+      const end = panel.right - rootBounds.left;
+      if (start + end < rootBounds.width)
+        laneLeft = Math.max(laneLeft, end + margin);
+      else laneRight = Math.min(laneRight, start - margin);
+    }
     if (commandDock?.height > 0)
       laneBottom = Math.min(
         laneBottom,

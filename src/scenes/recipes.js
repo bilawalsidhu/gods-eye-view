@@ -1061,15 +1061,15 @@ export function displaySceneTitle(scene) {
  * (`sourcePackId`), so a typed title that matches a built-in one stays as
  * typed. Without `shot`, the title alone decides.
  * @param {string} title
- * @param {{sourcePackId?: string}} [shot]
- * @param {{id?: string}} [scene] The shot's scene, for projects saved before
- *   shots recorded their source pack.
+ * @param {{id?: string, sourcePackId?: string}} [shot]
+ * @param {{id?: string, appliedShotPacks?: object[]}} [scene] The shot's
+ *   scene, for projects saved before shots recorded their source pack.
  * @returns {string}
  */
 export function displayShotTitle(title, shot = undefined, scene = undefined) {
   const text = typeof title === 'string' ? title : '';
   const fromRecipe = shot
-    ? Boolean(shot.sourcePackId) || recipeDeclaresShotTitle(scene, text)
+    ? Boolean(shot.sourcePackId) || recipeDeclaresShotTitle(scene, shot, text)
     : true;
   if (fromRecipe && BUILTIN_SHOT_TITLES.has(text)) return t(text);
   const numbered = /^Shot ([1-9]\d*)$/.exec(text);
@@ -1078,21 +1078,19 @@ export function displayShotTitle(title, shot = undefined, scene = undefined) {
 
 /**
  * Whether the built-in recipe behind a scene declares a shot with this title:
- * its own keyframes, or the bootstrap shots of a shot pack applied to the
- * scene (those shots carry no sourcePackId; the scene's pack marker vouches
- * for them).
+ * its own keyframes, or a bootstrap shot of a shot pack applied to the scene.
+ * Those shots carry no sourcePackId; the pack marker binds the title to that
+ * very shot, so another shot typed with the same title stays as typed.
  */
-function recipeDeclaresShotTitle(scene, title) {
-  const declares = (cameraPath) =>
-    Boolean(cameraPath?.some((keyframe) => keyframe?.title === title));
+function recipeDeclaresShotTitle(scene, shot, title) {
   const recipe = scene?.id ? getSceneRecipeById(scene.id) : null;
-  if (declares(recipe?.cameraPath)) return true;
+  if (recipe?.cameraPath?.some((keyframe) => keyframe?.title === title))
+    return true;
   const packs = Array.isArray(scene?.appliedShotPacks)
     ? scene.appliedShotPacks
     : [];
-  return packs.some((marker) =>
-    declares(
-      getSceneAppendRecipeById(marker?.id)?.legacySceneBootstrap?.cameraPath,
-    ),
+  return (
+    Boolean(shot?.id) &&
+    packs.some((marker) => marker?.shotBindings?.[title] === shot.id)
   );
 }

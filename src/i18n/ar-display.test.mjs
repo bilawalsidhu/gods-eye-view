@@ -18,6 +18,7 @@ import {
 import { hudQuantity, LOCALIZED_LOCALITY } from '../hudLocalityFormat.js';
 import { formatCockpitDistance } from '../ui/cockpitPresentation.js';
 import { READOUT_WORDS } from '../layers/recentImagery/display.js';
+import { createPresentation as createCctvPresentation } from '../layers/cctv/presentation.js';
 import {
   formatQuantity,
   formatScaleLabel,
@@ -156,6 +157,49 @@ test('Arabic uses all six plural forms and spaced HUD units', () => {
     setLocale('ru');
     assert.equal(keepCodesWithValues('HDG 68°'), 'HDG 68°');
     assert.equal(formatCockpitDistance(14000), '14 КМ');
+  } finally {
+    setLocale(previous);
+  }
+});
+
+test('Arabic keeps each CCTV summary code beside its own value', () => {
+  const camera = {
+    id: 'cam-1',
+    city: 'Austin',
+    name: 'Congress Ave',
+    headingDeg: 68,
+    fovDeg: 44,
+    rangeM: 120,
+    feedType: 'image',
+  };
+  const active = { camera };
+  const presentation = createCctvPresentation({
+    state: {
+      _records: [active],
+      _healthById: new Map(),
+      _showProjection: true,
+      _coverageMode: 'sector',
+    },
+    parts: {
+      selection: { getActiveRecord: () => active },
+      model: {
+        sectorAreaKm2: () => 0.01,
+        currentViewContext: () => 'street:1',
+      },
+      geometry: { coverageNeighborCount: () => 0 },
+      calibration: { deriveCalBadge: () => 'auto' },
+    },
+  });
+  const previous = getLocale();
+  try {
+    setLocale('ar');
+    const parts = presentation.buildSummaryText().split(' · ');
+    // Each part is its own isolate: «HDG 68° · FOV 44°» cannot form one
+    // left-to-right run that hands 44° to the HDG side.
+    for (const part of parts) assert.match(part, /^\u2068[\s\S]*\u2069$/);
+    assert.ok(parts.includes('\u2068FOV \u206844\u2069°\u2069'), parts.join(' | '));
+    setLocale('en');
+    assert.doesNotMatch(presentation.buildSummaryText(), /[\u2068\u2069]/);
   } finally {
     setLocale(previous);
   }

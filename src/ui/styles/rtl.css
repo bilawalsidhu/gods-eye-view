@@ -77,6 +77,37 @@ html:lang(ar) :is(#intel-hud, #cockpit-hud) {
   }
 }
 
+/* The dock's wings swap sides (Location on the right, Visual presets on the
+   left), so each slide-up tray is anchored from the wing's outer edge and
+   centred on the whole dock from there, as it is in left-to-right. */
+html[dir='rtl'] #command-dock #location-bar .dock-popover-content {
+  right: calc((var(--dock-unified-width) - var(--dock-location-open)) / 2);
+  left: auto;
+  transform-origin: bottom right;
+}
+html[dir='rtl'] #command-dock #control-panel .dock-popover-content {
+  right: auto;
+  left: calc((var(--dock-unified-width) - var(--dock-presets-open)) / 2);
+  transform-origin: bottom left;
+}
+@media (max-width: 900px) {
+  html[dir='rtl'] #command-dock #location-bar .dock-popover-content {
+    right: calc(
+      (var(--dock-unified-width) - var(--dock-popover-mobile-width)) / 2
+    );
+  }
+  html[dir='rtl'] #command-dock #control-panel .dock-popover-content {
+    left: calc(
+      (var(--dock-unified-width) - var(--dock-popover-mobile-width)) / 2
+    );
+  }
+}
+/* The tray pin sits on the tray's top end corner: top-left here. */
+html[dir='rtl'] #command-dock :is(#location-bar, #control-panel) .dock-pin-btn {
+  right: auto;
+  left: -1rem;
+}
+
 /* The right rail sits on the left: its expand/collapse arrows point the
    other way, and the start window's "go" arrows point along the reading
    direction. */
@@ -165,7 +196,8 @@ html[dir='rtl'] .gev-anno-text {
 html[dir='rtl']
   :is(
     #bhote-koshi-event-panel [data-role='beat-index'],
-    #cockpit-brief-position
+    #cockpit-brief-position,
+    [data-mission-index]
   ) {
   direction: ltr;
   unicode-bidi: isolate;

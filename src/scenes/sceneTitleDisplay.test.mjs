@@ -92,10 +92,16 @@ test('bootstrap shots of an applied shot pack localize their built-in titles', (
   const title = 'Global Incident Context';
   const shot = { id: 'shot-1', title };
   // A legacy scene upgraded in place: its bootstrap shots have no
-  // sourcePackId, but the scene carries the pack marker.
+  // sourcePackId, but the scene's pack marker binds the title to the shot.
   const upgraded = {
     id: 'scene-legacy',
-    appliedShotPacks: [{ id: 'bhote-koshi-nepal-evidence-pack', version: 12 }],
+    appliedShotPacks: [
+      {
+        id: 'bhote-koshi-nepal-evidence-pack',
+        version: 12,
+        shotBindings: { [title]: 'shot-1' },
+      },
+    ],
   };
   assert.equal(
     displayShotTitle(title, shot, upgraded),

@@ -229,7 +229,7 @@
     width: 100%;
   }
   .context-radio-mini {
-    right: -38px;
+    inset-inline-end: -38px;
     width: min(244px, calc(100vw - 32px));
   }
 
