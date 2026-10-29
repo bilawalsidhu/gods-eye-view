@@ -1957,6 +1957,7 @@
       "src/hud.js",
       "src/hudLocality.js",
       "src/hudLocalityFormat.js",
+      "src/hudPlaceLookup.js",
       "src/hudSummaryResponse.js",
       "src/keySetup.js",
       "src/keySetupCore.mjs",

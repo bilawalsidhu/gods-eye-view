@@ -94,3 +94,24 @@ test('a failed probe is retried after its backoff, not on every query', async ()
     'GET /api/overpass/status',
   ]);
 });
+
+test('the summary capability probe is asked once and unknown when unanswered', async () => {
+  for (const [answer, expected] of [
+    [() => Response.json({ configured: false }), false],
+    [() => Response.json({ configured: true }), true],
+    [() => new Response('missing', { status: 404 }), null],
+    [() => Response.json({ configured: 'yes' }), null],
+    [() => { throw new TypeError('offline'); }, null],
+  ]) {
+    const seen = [];
+    const services = createApplicationRequestServices({
+      fetchImpl: async (url, init) => {
+        seen.push(`${init.method || 'GET'} ${url}`);
+        return answer();
+      },
+    });
+    assert.equal(await services.summary.configured(), expected);
+    assert.equal(await services.summary.configured(), expected);
+    assert.deepEqual(seen, ['GET /api/openai/hud-summary/status']);
+  }
+});

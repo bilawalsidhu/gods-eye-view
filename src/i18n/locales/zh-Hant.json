@@ -1054,6 +1054,7 @@
   "LIVE · Roads: {source} · No flow roads in view": "實時 · 道路：{source} · 視野內沒有帶路況數據的道路",
   "LIVE · Roads: {source} · Flow {percent}%": "實時 · 道路：{source} · 路況 {percent}%",
   "SIMULATED · Roads: {source} · Flow {percent}%": "模擬 · 道路：{source} · 路況 {percent}%",
+  "STALE · Roads: {source} · Flow: cached TomTom tiles": "過期 · 道路：{source} · 路況：TomTom 緩存瓦片",
   "Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated": "正在同步路況 · 道路：OpenStreetMap · 路況：TomTom · 未匹配：模擬",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov · Unmatched: simulated": "實時 · 道路：OpenStreetMap · 路況：TomTom · 覆蓋 {percent}% · 未匹配：模擬",
   "LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov": "實時 · 道路：OpenStreetMap · 路況：TomTom · 覆蓋 {percent}%",
