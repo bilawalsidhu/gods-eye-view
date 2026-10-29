@@ -300,8 +300,6 @@ try {
   // ── a pin, finished with Enter ──────────────────────────────────────────
   await page.click('#draw-toggle');
   await page.click('.pp-mode-btn[data-shape="pin"]');
-  await page.click('#draw-label-input');
-  await page.keyboard.type('Pin one');
   await clickWorld(520, 330);
   check(
     'the pointer is claimed while a session is open',
@@ -328,16 +326,9 @@ try {
     `${beforeBackspace} → ${afterBackspace}`,
   );
   await clickWorld(640, 500);
-  await page.click('#draw-label-input');
-  await page.keyboard.type('Market St');
   await page.keyboard.press('Enter');
-  check(
-    'a line finished from the label field lands on the board',
-    await waitForMarks(2),
-  );
-  const lineMark = (await marks()).find((mark) =>
-    mark.label?.startsWith('Market St'),
-  );
+  check('a line finished with Enter lands on the board', await waitForMarks(2));
+  const lineMark = (await marks()).find((mark) => mark.type === 'route');
   check(
     'a drawn line reports its length and never a travel time',
     Boolean(lineMark) &&
@@ -349,10 +340,8 @@ try {
 
   // ── an area, coloured and labelled, finished with a double-click ────────
   await page.click('.pp-mode-btn[data-shape="area"]');
-  await page.select('#draw-color-select', 'amber');
+  await page.click('.draw-color[data-color="amber"]');
   const amberBefore = await amberPixels();
-  await page.click('#draw-label-input');
-  await page.keyboard.type('Civic Center block');
   await clickWorld(400, 280);
   await clickWorld(700, 290);
   await clickWorld(720, 520);
@@ -375,13 +364,33 @@ try {
     afterDoubleClick === 3,
     `${afterDoubleClick} marks`,
   );
+  // ── each drawn shape gets a row: named, recoloured, hidden from there ──
+  const rowIds = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('#draw-mark-list [data-mark-id]')].map(
+        (row) => row.dataset.markId,
+      ),
+    );
+  const ids = await rowIds();
+  check('every drawn shape has a row under Draw', ids.length === 3, ids);
+  const areaId = ids[2];
+  const rowControl = (id, control) =>
+    `#draw-mark-list [data-mark-id="${id}"] [data-control="${control}"]`;
+  await page.click(rowControl(areaId, 'name'));
+  await page.keyboard.type('Civic Center block');
+  await page.keyboard.press('Enter');
+  await wait(300);
   const areaMark = (await marks()).find(
     (mark) => mark.label === 'Civic Center block',
   );
   check(
-    'the label and colour chosen in the panel are what is drawn',
+    'the name typed in its row and the colour picked before drawing are what is drawn',
     areaMark?.color === 'amber',
     JSON.stringify(areaMark),
+  );
+  check(
+    'naming a shape keeps Draw on and the shape in progress untouched',
+    (await drawState()).active === true,
   );
   await wait(1200);
   const amberAfter = await amberPixels();
@@ -391,6 +400,49 @@ try {
     `${amberBefore} → ${amberAfter} amber pixels (+${amberAfter - amberBefore})`,
   );
   await shot('01-area-with-label');
+
+  // ── the row's own controls: recolour, hide and show, fly to ─────────────
+  const markState = (id) =>
+    page.evaluate((id) => {
+      const mark = window.__gevAnnotations.list().find((m) => m.id === id);
+      return (
+        mark && { color: mark.color, hidden: mark.hidden, alpha: mark.alpha }
+      );
+    }, id);
+  await page.click(rowControl(areaId, 'swatch'));
+  await page.click(rowControl(areaId, 'color-green'));
+  await wait(300);
+  check(
+    'a colour picked in the row recolours that shape',
+    (await markState(areaId))?.color === 'green',
+  );
+  await page.click(rowControl(areaId, 'toggle'));
+  await wait(600);
+  const hidden = await markState(areaId);
+  check(
+    'hiding a shape keeps it on the board but draws it at zero alpha',
+    hidden?.hidden === true && hidden.alpha === 0,
+    JSON.stringify(hidden),
+  );
+  await page.click(rowControl(areaId, 'toggle'));
+  await wait(600);
+  check(
+    'showing it again brings it straight back',
+    (await markState(areaId))?.alpha === 1,
+  );
+  const cameraAt = () =>
+    page.evaluate(() => {
+      const p = window.__godsEyeView.viewer.camera.positionWC;
+      return [p.x, p.y, p.z];
+    });
+  const beforeFly = await cameraAt();
+  await page.click(rowControl(ids[1], 'fly'));
+  await wait(2600);
+  const afterFly = await cameraAt();
+  check(
+    'fly to frames that shape',
+    Math.hypot(...afterFly.map((v, i) => v - beforeFly[i])) > 1,
+  );
   await shot('03-pins-and-shapes');
 
   // ── Escape cancels the shape, a second Escape leaves draw mode ──────────
@@ -420,6 +472,12 @@ try {
     'cancelling never removes a mark already on the board',
     afterSecondEscape.marks === 3,
     `${afterSecondEscape.marks} marks`,
+  );
+  await page.click(rowControl(ids[0], 'remove'));
+  await waitForMarks(2);
+  check(
+    'remove in a row takes that one shape off the board and out of the list',
+    (await rowIds()).join() === ids.slice(1).join(),
   );
 
   // ── a click that would select something selects nothing while drawing ───

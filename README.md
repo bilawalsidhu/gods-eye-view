@@ -357,7 +357,7 @@ camera input stops rotation.
 
 > 🗣️ _"Outline the state of Texas."_ · _"Annotate the Texas State Capitol and its grounds"_ — it draws the **actual enclosing boundary**, not a circle. · _"How far is the Eiffel Tower from the Louvre?"_ — a connector arrow appears and it speaks the distance. Everything persists until you say _"clear the map."_
 
-**✍️ Or draw it yourself** — UTILITIES ▸ **Draw**: pick Area, Line or Pin, click the vertices on the real world, double-click to finish, label it. Same whiteboard, same persistence, no microphone needed.
+**✍️ Or draw it yourself** — UTILITIES ▸ **Draw**: pick Area, Line or Pin and a colour, click the vertices on the real world, double-click to finish, then name, recolour, hide or fly to each shape from its row. Same whiteboard, same persistence, no microphone needed.
 
 ![Zilker Park and Lady Bird Lake drawing onto the 3D city as persistent vector annotations, by voice](docs/media/01-voice-annotate-zilker.gif)
 

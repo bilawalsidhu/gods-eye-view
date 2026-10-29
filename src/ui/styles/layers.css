@@ -1495,8 +1495,7 @@ body.recording-mode #right-context-rail > [data-panel-id] {
 }
 
 /* Draw's options sit flat under its name, like a layer row's controls, not
-   as the card that hangs under a DISPLAY button. DISPLAY's shared label
-   column means nothing here, so the Shape label takes its own width. */
+   as the card that hangs under a DISPLAY button. */
 #utilities-panel .utilities-tools .pp-slider-row {
   padding: 4px 0;
   background: none;
@@ -1504,8 +1503,4 @@ body.recording-mode #right-context-rail > [data-panel-id] {
   border-radius: 0;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-}
-
-#utilities-panel .utilities-tools .pp-slider-mini-label {
-  min-width: 0;
 }

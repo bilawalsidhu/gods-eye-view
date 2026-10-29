@@ -105,8 +105,6 @@ test('Display and parameter rows keep their English layout', () => {
   assert.equal(unguardedRules(source, '#param-sliders').length, 0);
   const [row] = unguardedRules(source, '.param-slider-row');
   assert.equal(declaration(row, 'display'), 'flex');
-  const [color] = unguardedRules(source, '.draw-color-select');
-  assert.equal(declaration(color, 'flex'), '0 0 74px');
 });
 
 test('weather setting rows keep the 56px English label column', () => {

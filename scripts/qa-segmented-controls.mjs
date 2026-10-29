@@ -45,7 +45,11 @@ try {
   });
 
   const surface = await page.evaluate(() => {
-    const groups = [...document.querySelectorAll('[role="radiogroup"]')];
+    // Colour swatches are one-of-many too, but chips, not segments: they are
+    // checked on their own below.
+    const groups = [
+      ...document.querySelectorAll('[role="radiogroup"]:not(.draw-colors)'),
+    ];
     const buttons = groups.flatMap((group) => [
       ...group.querySelectorAll('[role="radio"]'),
     ]);
@@ -69,6 +73,31 @@ try {
     'all six one-of-many groups use the shared surface',
     surface.groups === 6 && surface.buttons === 15 && surface.shared,
     JSON.stringify(surface),
+  );
+
+  const swatches = await page.evaluate(() => {
+    const group = document.getElementById('draw-colors');
+    const chips = [...(group?.querySelectorAll('[role="radio"]') || [])];
+    return {
+      count: chips.length,
+      round: chips.every(
+        (chip) => getComputedStyle(chip).borderRadius === '50%',
+      ),
+      colours: new Set(
+        chips.map((chip) => getComputedStyle(chip).backgroundColor),
+      ).size,
+      checked: chips.filter(
+        (chip) => chip.getAttribute('aria-checked') === 'true',
+      ).length,
+    };
+  });
+  check(
+    "Draw's colour swatches are five round chips, one checked",
+    swatches.count === 5 &&
+      swatches.round &&
+      swatches.colours === 5 &&
+      swatches.checked === 1,
+    JSON.stringify(swatches),
   );
 
   await page.evaluate(() =>

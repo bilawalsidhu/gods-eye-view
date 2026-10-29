@@ -116,8 +116,7 @@ function fakeDom() {
     modeRow.children.push(button);
   }
   make('draw-label-row');
-  make('draw-label-input', 'INPUT');
-  make('draw-color-select', 'SELECT');
+  make('draw-colors');
   make('draw-clear', 'BUTTON');
   make('draw-hint', 'SPAN');
 

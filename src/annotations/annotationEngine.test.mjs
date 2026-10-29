@@ -730,3 +730,76 @@ test('only an explicit navigation request permits resolving distant annotation t
   assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
   engine.destroy();
 });
+
+// Draw's list works one hand-drawn mark at a time: hide, rename, recolour,
+// frame and remove it, and hear about every change to the board.
+test('hand-drawn marks: one mark can be hidden, renamed, recoloured, framed and removed', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer, calls } = fakeRenderer();
+  const flights = [];
+  const engine = createAnnotationEngine({
+    viewer: { camera: { heading: 0, flyToBoundingSphere: (sphere) => flights.push(sphere) } },
+    renderer,
+  });
+  let changes = 0;
+  const unsubscribe = engine.onChange(() => { changes += 1; });
+
+  const drawn = await engine.annotate([
+    { type: 'route', manual: true, path: [[-97.75, 30.26], [-97.73, 30.27]], label: '' },
+    { type: 'pin', manual: true, latitude: 30.27, longitude: -97.74, label: 'Camp', color: 'amber' },
+  ], { persist: true });
+  assert.equal(drawn.drawn, 2);
+  assert.equal(changes, 1, 'one annotate, one change');
+  const [line, pin] = engine.list();
+  assert.equal(line.manual, true);
+  assert.equal(line.name, null);
+  assert.match(line.label, /km|m$/, 'an unnamed line is labelled by its length');
+  assert.equal(pin.name, 'Camp');
+
+  assert.equal(engine.setHidden(pin.id, true), true);
+  assert.equal(pin.hidden, true);
+  assert.equal(changes, 2);
+
+  const addsBefore = calls.add;
+  assert.equal(engine.restyle(line.id, { name: 'Ridge walk', color: 'green' }), true);
+  assert.equal(line.name, 'Ridge walk');
+  assert.match(line.label, /^Ridge walk — /, 'a renamed line keeps its length');
+  assert.equal(line.color, 'green');
+  assert.equal(calls.add, addsBefore + 1, 'the new look is drawn again');
+  assert.equal(engine.restyle(line.id, { color: 'not-a-colour' }), true);
+  assert.equal(line.color, 'green', 'an unknown colour is ignored');
+
+  assert.equal(engine.frame(line.id), true);
+  assert.equal(flights.length, 1);
+  assert.equal(engine.frame('anno-missing'), false);
+
+  assert.equal(engine.remove(pin.id), true);
+  assert.deepEqual(engine.list().map(({ id }) => id), [line.id]);
+  assert.equal(engine.remove(pin.id), false);
+
+  engine.clear();
+  assert.equal(engine.list().length, 0);
+  const seen = changes;
+  unsubscribe();
+  await engine.annotate([{ type: 'pin', manual: true, latitude: 1, longitude: 1 }], { persist: true });
+  assert.equal(changes, seen, 'an unsubscribed listener hears nothing');
+});
+
+test('hand-drawn marks: only a manual mark can be restyled', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer } = fakeRenderer();
+  const engine = createAnnotationEngine({
+    viewer: {},
+    renderer,
+    resolveTarget: async () => ({ ...FIXED_POINT }),
+  });
+  await engine.annotate([{ type: 'point', target: 'Texas Capitol', label: 'Capitol' }]);
+  const [voiceMark] = engine.list();
+  assert.equal(voiceMark.manual, false);
+  assert.equal(engine.restyle(voiceMark.id, { name: 'Renamed' }), false);
+  assert.equal(voiceMark.label, 'Capitol');
+});

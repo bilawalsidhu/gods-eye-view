@@ -69,8 +69,8 @@ test('the Draw control markup carries the ids the tool binds to', () => {
     'draw-toggle',
     'draw-mode-row',
     'draw-label-row',
-    'draw-label-input',
-    'draw-color-select',
+    'draw-colors',
+    'draw-mark-list',
     'draw-clear',
     'draw-hint',
   ];
@@ -81,13 +81,25 @@ test('the Draw control markup carries the ids the tool binds to', () => {
       `#${id} missing from index.html`,
     );
   }
-  for (const shape of ['area', 'line', 'pin']) {
+  // Shapes are icons, named for screen readers and tooltips.
+  for (const [shape, name] of [
+    ['area', 'Area'],
+    ['line', 'Line'],
+    ['pin', 'Pin'],
+  ]) {
     assert.match(
       html,
-      new RegExp(`data-shape="${shape}"`),
+      new RegExp(
+        `data-shape="${shape}"[^>]*aria-label="${name}"[^>]*title="${name}"`,
+      ),
       `shape button ${shape} missing`,
     );
   }
+  for (const color of ['primary', 'amber', 'cyan', 'green', 'red'])
+    assert.match(
+      html,
+      new RegExp(`class="draw-color[^"]*" type="button" data-color="${color}"`),
+    );
   for (const id of ids) {
     assert.match(
       tool(),
@@ -108,14 +120,15 @@ test('the DISPLAY rail styles live in their current owner, not the shim', () => 
   );
   assert.doesNotMatch(
     shim,
-    /draw-hint|pp-text-input/,
+    /draw-hint|draw-color/,
     'draw styles belong to a component stylesheet',
   );
   const controls = read('src/ui/styles/controls.css');
   for (const rule of [
     '#draw-mode-row',
     '#draw-label-row',
-    '.pp-text-input',
+    '.draw-color',
+    '.draw-mark-name',
     '.draw-clear-btn',
     '.draw-hint',
     'body.gev-drawing',

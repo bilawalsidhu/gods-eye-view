@@ -144,6 +144,17 @@ export function createAnnotationEngine({
   // task with the FINAL outcome — resolved or failed — so narration that said
   // "tracing the boundary now" can later honestly confirm or correct itself.
   const outlineListeners = new Set();
+  // Told whenever the set of marks, or one mark's look, changes (Draw's list).
+  const changeListeners = new Set();
+  const notifyChange = () => {
+    for (const listener of changeListeners) {
+      try {
+        listener();
+      } catch {
+        /* one listener's failure must not stop the others */
+      }
+    }
+  };
 
   function emitOutlineEvent(evt) {
     for (const listener of outlineListeners) {
@@ -219,6 +230,7 @@ export function createAnnotationEngine({
       const now = performance.now();
       let changed = false;
       let pending = false; // any mark still fading in / out, or with a TTL fade ahead
+      let expired = false;
       for (const anno of annotations.values()) {
         const next = computeAlpha(anno, now);
         if (next !== anno.alpha) {
@@ -229,6 +241,7 @@ export function createAnnotationEngine({
           annotations.delete(anno.id);
           renderer.remove(anno);
           changed = true;
+          expired = true;
           continue;
         }
         if (pendingAnimation(anno, now)) pending = true;
@@ -237,6 +250,7 @@ export function createAnnotationEngine({
         renderer.sync(annotations);
         syncAnnotationHold();
       }
+      if (expired) notifyChange();
       // Stop once the board is STABLE — persistent marks (persist=true is the default)
       // finish fading in after ~260ms and never change again, so without this the loop
       // would spin O(N) every frame forever. ensureTicking() restarts on the next
@@ -466,6 +480,7 @@ export function createAnnotationEngine({
     if (ids.length) {
       renderer.sync(annotations);
       ensureTicking();
+      notifyChange();
     }
     if (opts.flyTo && firstAnchor) frameAnnotation(firstAnchor);
     else if (ids.length) ensureMarksVisible(ids);
@@ -885,6 +900,11 @@ export function createAnnotationEngine({
       alpha: 0, // animate in
       bornAt: now,
       expiring: false,
+      // Drawn by hand (drawTool.js): listed under Draw, renamed and recoloured
+      // there. `name` is the person's own label, before any distance is added.
+      manual: spec?.manual === true,
+      name: spec?.manual === true ? cleanLabel(spec?.label) || null : null,
+      hidden: false,
     };
 
     if (type === 'route') {
@@ -970,6 +990,85 @@ export function createAnnotationEngine({
     annotations.clear();
     renderer.sync(annotations);
     syncAnnotationHold();
+    notifyChange();
+  }
+
+  /** Take one mark off the board at once. */
+  function remove(id) {
+    const anno = annotations.get(id);
+    if (!anno) return false;
+    annotations.delete(id);
+    renderer.remove(anno);
+    renderer.sync(annotations);
+    syncAnnotationHold();
+    notifyChange();
+    return true;
+  }
+
+  /** Hide or show one mark; a hidden mark stays on the board at alpha 0. */
+  function setHidden(id, hidden) {
+    const anno = annotations.get(id);
+    if (!anno) return false;
+    anno.hidden = Boolean(hidden);
+    // Skip the fade-in, so showing it again is immediate.
+    anno.bornAt = Math.min(anno.bornAt, performance.now() - 260);
+    ensureTicking();
+    notifyChange();
+    return true;
+  }
+
+  /**
+   * Rename or recolour a hand-drawn mark. The renderers build a mark's look
+   * when it is added, so the mark is added again with the new look.
+   */
+  function restyle(id, { name, color } = {}) {
+    const anno = annotations.get(id);
+    if (!anno?.manual) return false;
+    if (name !== undefined) {
+      anno.name = cleanLabel(name) || null;
+      anno.label =
+        anno.type === 'route'
+          ? composeRouteLabel(anno.name, anno.distanceM, null, 'manual', false)
+          : anno.name;
+    }
+    if (color !== undefined && COLORS.has(color)) anno.color = color;
+    renderer.remove(anno);
+    try {
+      renderer.add(anno);
+    } catch (error) {
+      rollbackRendererState(anno);
+      annotations.delete(id);
+      syncAnnotationHold();
+      notifyChange();
+      throw error;
+    }
+    renderer.sync(annotations);
+    ensureTicking();
+    notifyChange();
+    return true;
+  }
+
+  /** Fly the camera to one mark; a line is framed whole, not by its start. */
+  function frame(id) {
+    const anno = annotations.get(id);
+    if (!anno) return false;
+    if (anno.type === 'route' && anno.path?.length) {
+      const ring = anno.path.map((p) => [p.lon, p.lat]);
+      const lons = ring.map(([lon]) => lon);
+      const lats = ring.map(([, lat]) => lat);
+      frameAnnotation({
+        ...anno,
+        to: null,
+        ring,
+        polygons: null,
+        anchor: {
+          lon: (Math.min(...lons) + Math.max(...lons)) / 2,
+          lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+          height: 0,
+        },
+      });
+    } else frameAnnotation(anno);
+    return true;
   }
 
   /** Begin a graceful fade-out of everything, then remove. */
@@ -1100,6 +1199,16 @@ export function createAnnotationEngine({
   const engine = {
     annotate,
     clear,
+    remove,
+    setHidden,
+    restyle,
+    frame,
+    /** Subscribe to board changes; returns an unsubscribe fn. */
+    onChange(listener) {
+      if (destroyed || typeof listener !== 'function') return () => {};
+      changeListeners.add(listener);
+      return () => changeListeners.delete(listener);
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -1109,6 +1218,7 @@ export function createAnnotationEngine({
         if (tickHandle != null) cancelAnimationFrame(tickHandle);
         tickHandle = null;
         outlineListeners.clear();
+        changeListeners.clear();
         releaseContinuousRender('annotations');
         renderer.destroy();
       }
@@ -1364,6 +1474,7 @@ function normalizeType(type) {
 }
 
 function computeAlpha(anno, now) {
+  if (anno.hidden) return 0;
   const inT = (now - anno.bornAt) / 260;
   const fadeIn = inT >= 1 ? 1 : Math.max(0, inT);
 
