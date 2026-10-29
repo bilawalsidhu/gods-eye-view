@@ -19,7 +19,11 @@ import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
 import { composeLocalityTag } from './hudLocality.js';
-import { hudQuantity, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
+import {
+  hudAltitude,
+  hudQuantity,
+  LOCALIZED_LOCALITY,
+} from './hudLocalityFormat.js';
 import {
   ellipsoidalToMslDisplayM,
   ensureGeoidReady,
@@ -755,10 +759,7 @@ export class IntelHUD {
     const altDisplayM = Number.isFinite(m.altMslM) ? m.altMslM : m.altM;
     // Display only: the AI summary request carries its own context, so this
     // line is built in the active language.
-    const altTag =
-      altDisplayM >= 1000
-        ? hudQuantity(altDisplayM / 1000, 'km', 1)
-        : hudQuantity(Math.round(altDisplayM), 'm');
+    const altTag = hudAltitude(altDisplayM);
     const winTag = window
       ? `${hudQuantity(Math.max(1, Math.round(window.widthKm)), '')}x${hudQuantity(Math.max(1, Math.round(window.heightKm)), 'km')}`
       : t('N/A');
