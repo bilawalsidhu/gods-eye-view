@@ -125,8 +125,9 @@ export function createTracking({
         speed: Number.isFinite(described.velocityMps)
           ? `${Math.round(described.velocityMps * 1.944)} kt`
           : '',
+        // 359.5° and above rounds to north; modulo keeps it from reading 360°.
         heading: Number.isFinite(described.track)
-          ? `${Math.round(described.track)}°`
+          ? `${Math.round(described.track) % 360}°`
           : '',
         route: route || '',
         icao24,
