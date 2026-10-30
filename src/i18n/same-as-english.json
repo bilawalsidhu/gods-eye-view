@@ -163,6 +163,7 @@
     "{value} KM/S",
     "ΔN",
     "Ⅱ PAUSE",
+    "≥ {value} MW",
     "▲ {frp} MW"
   ],
   "es": [
@@ -469,6 +470,7 @@
     "ΔE",
     "ΔN",
     "Ⅱ PAUSE",
+    "≥ {value} MW",
     "▲ {frp} MW"
   ],
   "it": [
@@ -688,6 +690,7 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "ΔE",
     "ΔN",
+    "≥ {value} MW",
     "▲ {frp} MW"
   ],
   "pt": [

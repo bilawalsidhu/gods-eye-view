@@ -2926,5 +2926,18 @@
   "Malformed cyclone snapshot": "Fehlerhafter Wirbelsturm-Snapshot",
   "STALE · Roads: {source} · Flow: cached TomTom tiles": "VERALTET · Straßen: {source} · Verkehrsfluss: TomTom-Kacheln aus dem Cache",
   "routing busy — too many routes at once": "Routing-Dienst ausgelastet – zu viele Routen gleichzeitig",
-  "route proxy error": "Fehler des Routen-Proxys"
+  "route proxy error": "Fehler des Routen-Proxys",
+  "fire confidence filter|All": "Alle",
+  "fire confidence filter|Nominal+": "Mittel+",
+  "fire confidence filter|High": "Hoch",
+  "Every detection — many of the strongest fires are rated low confidence": "Alle Erkennungen — viele der stärksten Brände haben eine niedrige Konfidenz",
+  "Nominal and high confidence detections": "Erkennungen mit mittlerer und hoher Konfidenz",
+  "High confidence detections only": "Nur Erkennungen mit hoher Konfidenz",
+  "Fire intensity (FRP)": "Intensität (FRP)",
+  "≥ {value} MW": "≥ {value} MW",
+  "Confidence": "Konfidenz",
+  "Minimum fire radiative power, megawatts": "Minimale Strahlungsleistung des Brandes in Megawatt",
+  "fire intensity filter|All": "Alle",
+  "Detection confidence": "Konfidenz der Erkennung",
+  "{shown} of {total} shown": "{shown} von {total} angezeigt"
 }
