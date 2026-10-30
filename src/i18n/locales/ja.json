@@ -3518,5 +3518,10 @@
   "Confirm: remove every added entry from Data Layers": "確認：追加したすべての項目をデータレイヤーから削除",
   "Remove every added entry from Data Layers": "追加したすべての項目をデータレイヤーから削除",
   "Showing {shown} of {total}": "{total}件中{shown}件を表示",
-  "BROWSE DATA LIBRARY": "データライブラリを見る"
+  "BROWSE DATA LIBRARY": "データライブラリを見る",
+  "Water": "水",
+  "Zoom in to a region to load river gauges": "地域にズームして河川観測所を読み込みます",
+  "USGS Springs": "USGS：湧水",
+  "USGS Rivers & Streams": "USGS：河川・小川",
+  "USGS Lakes & Reservoirs": "USGS：湖・貯水池"
 }
