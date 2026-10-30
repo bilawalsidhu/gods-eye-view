@@ -80,7 +80,7 @@ async function withLayer(failingUrls, body) {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve));
 
-// What the Radio panel, the compact Context player and Cockpit show for a state.
+// What the Radio panel and the Cockpit player show for a state.
 function render(state) {
   const el = () => {
     const classes = new Set();
@@ -102,7 +102,6 @@ function render(state) {
       _radioPlaybackState: el(),
       _radioPlayBtn: el(),
       _radioStopBtn: el(),
-      _contextRadioMiniPlayBtn: el(),
       _cockpitRadioPlayBtn: el(),
       _syncContextRadioLauncherState() {},
       actions: {
@@ -118,7 +117,6 @@ function render(state) {
       error: host._radioPlaybackState.classList.contains('error'),
       button: host._radioPlayBtn.textContent,
       stopDisabled: host._radioStopBtn.disabled,
-      mini: host._contextRadioMiniPlayBtn.textContent,
       cockpit: host._cockpitRadioPlayBtn.textContent,
     };
   } finally {
@@ -158,7 +156,6 @@ test('Next after a failed stream leaves the new station ready to play, without t
       error: false,
       button: 'PLAY',
       stopDisabled: true,
-      mini: '▶',
       cockpit: '▶',
     });
     await radioLayer.togglePlayback({ origin: 'user' });
@@ -184,7 +181,6 @@ test('Next while paused releases the paused stream, and Play starts the new stat
       error: false,
       button: 'PLAY',
       stopDisabled: true,
-      mini: '▶',
       cockpit: '▶',
     });
     await radioLayer.togglePlayback({ origin: 'user' });
@@ -272,7 +268,6 @@ test('while a stream connects the transport buttons offer Pause, because a click
   });
   assert.equal(shown.status, 'Connecting directly to broadcaster…');
   assert.equal(shown.button, 'PAUSE');
-  assert.equal(shown.mini, 'Ⅱ');
   assert.equal(shown.cockpit, 'Ⅱ');
 });
 
