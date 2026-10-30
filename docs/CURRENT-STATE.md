@@ -5876,9 +5876,11 @@ easier to meet (detection is now on more often), but does not create it.
   OSM choice), so Hybrid fill is never replayed as OSM roads. Failed flow
   refreshes clear old matches and report simulation. `flowCoveragePct` is the
   percentage of shown dots on roads with flow, including all unmatched dots in
-  the denominator and excluding dots hidden by closures. The OSM keyed status
-  reads `LIVE · Roads: OpenStreetMap · Flow: TomTom · N% cov`. Road fetch
-  coverage follows a 5×5 ellipsoid sample of the central screen square.
+  the denominator and excluding dots hidden by closures. It reads 1–99 whenever
+  both matched and simulated dots are shown, so rounding never turns a few
+  matches into `(no matches)` or a few simulated dots into full coverage. The
+  OSM keyed status reads `LIVE · Roads: OpenStreetMap · Flow: TomTom · N% cov`.
+  Road fetch coverage follows a 5×5 ellipsoid sample of the central screen square.
   Horizon rays are capped at 10 km from nadir (reduced if necessary to fit
   16 z12 tiles); polygon-intersecting tiles load nearest first. Up to 16 z14
   tiles provide near detail, with z12 roads beyond them. Cached tiles serve
