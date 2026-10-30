@@ -3175,5 +3175,10 @@
   "Maximum event age: {days}d; undated markers are kept": "Maximales Ereignisalter: {days} Tage; undatierte Markierungen bleiben",
   "event age filter|All": "Alle",
   "Event age": "Ereignisalter",
-  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben"
+  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben",
+  "Zoom in to a region to load river gauges": "Zoomen Sie in eine Region, um Pegelmessstellen zu laden",
+  "USGS Rivers & Streams": "USGS: Flüsse und Bäche",
+  "USGS Lakes & Reservoirs": "USGS: Seen und Stauseen",
+  "USGS Springs": "USGS: Quellen",
+  "Water": "Wasser"
 }
