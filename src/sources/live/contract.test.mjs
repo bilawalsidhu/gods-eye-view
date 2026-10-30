@@ -145,6 +145,20 @@ test('readsb units and position/contact ages are normalized once against the sou
   );
 });
 
+test('readsb vertical rate falls back to the GNSS rate when no baro rate is sent', () => {
+  // readsb reports the rate under geom_rate when the aircraft's source is
+  // GNSS; 26 of 157 positioned rows in a live /v2/mil fetch had only that.
+  const row = { hex: 'ae638d', lat: 20.3, lon: -158.5, geom_rate: -2432 };
+  assert.equal(
+    normalizeReadsbAircraft(row, now).verticalRateMps,
+    -2432 * 0.00508,
+  );
+  assert.equal(
+    normalizeReadsbAircraft({ ...row, baro_rate: -2400 }, now).verticalRateMps,
+    -2400 * 0.00508,
+  );
+});
+
 test('vessel identity, opaque reference and heading/course remain distinct, unknowns stay null', () => {
   const row = normalizeVesselObservation(
     {
