@@ -448,6 +448,18 @@ test('holds replay at the pad for a real-time countdown independent of replay sp
   assert.ok(liftoff.phaseProgress > 0);
 });
 
+test('runs the five-second tile hold before a full T-10 countdown', () => {
+  const launch = { launchTime: '2026-07-20T10:00:00Z', timeline: [] };
+  // REPLAY ASCENT puts liftoff 5 s (tile hold) + 10 s (countdown) ahead.
+  const hold = replayState(launch, 115000, 12, 28, 5400, 1, 104500, 5);
+  assert.equal(hold.preCountdownActive, true);
+  assert.equal(hold.countdownActive, false);
+  const countdown = replayState(launch, 115000, 12, 28, 5400, 1, 105000, 5);
+  assert.equal(countdown.preCountdownActive, false);
+  assert.equal(countdown.countdownActive, true);
+  assert.equal(countdown.countdownSeconds, 10);
+});
+
 test('hands replay directly from ascent into orbit', () => {
   const launch = { launchTime: '2026-07-20T10:00:00Z', timeline: [] };
   const orbit = replayState(launch, 0, 12, 28, 5400, 1, 16_000);

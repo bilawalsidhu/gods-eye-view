@@ -139,8 +139,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
       0,
       Number(preCountdownDurationSec) || 0,
     );
+    // The hold precedes the whole countdown; ending it at -hold cut T-10 to T-5.
     const preCountdownActive =
-      preCountdownDuration > 0 && realSecondsSinceStart < -preCountdownDuration;
+      preCountdownDuration > 0 &&
+      realSecondsSinceStart < -REPLAY_COUNTDOWN_DURATION_SEC;
     const countdownActive = realSecondsSinceStart < 0 && !preCountdownActive;
     const countdownSeconds = countdownActive
       ? Math.ceil(-realSecondsSinceStart)
