@@ -27,7 +27,8 @@ registerHooks({
 
 const { IntelHUD } = await import('./hud.js');
 const { setLocale } = await import('./i18n/index.js');
-const { hudSummaryInput } = await import('./hudSummaryResponse.js');
+const { hudSummaryHasEnglish, hudSummaryInput } =
+  await import('./hudSummaryResponse.js');
 
 const PARTIAL_FLIGHTS = {
   id: 'flights',
@@ -36,8 +37,11 @@ const PARTIAL_FLIGHTS = {
   stats: { count: 4, partial: true, source: 'opensky' },
 };
 
-/** A ru HUD over one partial Live Flights layer, answering with `reply`. */
-function createHud(t, reply) {
+/**
+ * A HUD over one partial Live Flights layer and `places`, answering with
+ * `reply`; ru unless `locale` says otherwise.
+ */
+function createHud(t, reply, { places = ['Остин'], locale = 'ru' } = {}) {
   const summary = { textContent: '' };
   const previous = { document: globalThis.document, window: globalThis.window };
   globalThis.document = {
@@ -84,9 +88,13 @@ function createHud(t, reply) {
       else globalThis[key] = value;
     }
   });
+  // The test viewer has no view target, so no place lookup runs.
+  const buildContext = hud._summaryContext.bind(hud);
+  hud._summaryContext = async () =>
+    Object.assign(await buildContext(), { placeLabels: places });
   hud._dataManager = { getAll: () => [PARTIAL_FLIGHTS] };
   hud._latestMetrics = { altM: 600 };
-  setLocale('ru');
+  setLocale(locale);
   return { hud, sent, shown: () => summary.textContent };
 }
 
@@ -133,13 +141,52 @@ test('a camera move during typing shows the plain line, not a fragment', (t) => 
   assert.equal(shown(), hud._composeSummary());
 });
 
-test('a view with no labels and no layers does not ask the model', async (t) => {
-  const { hud, sent, shown } = createHud(t, {
-    summary: 'пусто',
-    feedState: null,
-  });
-  hud._dataManager = { getAll: () => [] };
+test('a view with layers but no place label does not ask the model', async (t) => {
+  const { hud, sent, shown } = createHud(
+    t,
+    { summary: 'Москва Рейсы онлайн частично', feedState: 'partial' },
+    { places: [] },
+  );
   await hud._updateSummary(false, true);
   assert.equal(sent.length, 0);
   assert.equal(shown(), hud._composeSummary());
 });
+
+test('a ja request leaves the layer state ids to `overall`', async (t) => {
+  const { hud } = createHud(t, {}, { locale: 'ja' });
+  const context = await hud._summaryContext();
+  assert.equal(context.feedProvenance.overall, 'partial');
+  assert.ok(!('feedState' in context.enabledLayers[0]));
+  assert.ok(!('feedState' in context.feedProvenance.layers[0]));
+});
+
+for (const [locale, summary] of [
+  ['ja', '東京上空のstale航空情報'],
+  ['ja', '東京上空のLive Flights'],
+  ['zh-CN', '北京航班stale数据'],
+  ['ru', 'Остин Live-Flights частично'],
+]) {
+  test(`English flush against other text is an echo: ${summary}`, () => {
+    assert.ok(hudSummaryHasEnglish(summary, locale, ['stale', 'Live Flights']));
+  });
+}
+
+test('English inside a longer Latin word is not an echo', () => {
+  assert.ok(!hudSummaryHasEnglish('Datos stalesque', 'es', ['stale']));
+});
+
+for (const [locale, summary, places] of [
+  ['es', 'Tráfico aéreo nominal sobre Madrid', ['Madrid']],
+  ['de', 'Fallback Daten über Berlin', ['Berlin']],
+  ['ja', 'Live Flights Plaza周辺', ['Live Flights Plaza']],
+]) {
+  test(`a ${locale} word that is not an echo is shown: ${summary}`, async (t) => {
+    const { hud, shown } = createHud(
+      t,
+      { summary, feedState: 'partial' },
+      { places, locale },
+    );
+    await hud._updateSummary(false, true);
+    assert.ok(shown().includes(summary), shown());
+  });
+}

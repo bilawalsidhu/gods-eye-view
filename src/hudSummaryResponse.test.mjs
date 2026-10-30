@@ -381,6 +381,31 @@ test('a ja cap steps back to a space instead of cutting a Latin word', async () 
   assert.equal(response.body.summary, 'San Francisco Bay');
 });
 
+test('a ja cap keeps the text before a Latin word it would split', async () => {
+  const { response } = await postHudSummary(
+    { locale: 'ja', feedProvenance: { overall: 'stale' } },
+    JSON.stringify({
+      summary: '東京 羽田空港周辺のFlightAware航空情報',
+      feedState: 'stale',
+    }),
+  );
+  assert.equal(response.body.summary, '東京 羽田空港周辺の');
+});
+
+for (const [locale, summary] of [
+  ['ja', '東京 上空 の 航空 情報 は 古い'],
+  ['zh-CN', 'SFO 附近 4 架 航班 数据 过期'],
+  ['zh-Hant', 'SFO 附近 4 架 航班 數據 過期'],
+]) {
+  test(`a ${locale} phrase within the character cap is kept whole`, async () => {
+    const { response } = await postHudSummary(
+      { locale, feedProvenance: { overall: 'stale' } },
+      JSON.stringify({ summary, feedState: 'stale' }),
+    );
+    assert.equal(response.body.summary, summary);
+  });
+}
+
 test('a reply that skips the format carries no summary and no state', async () => {
   const { response } = await postHudSummary(
     { locale: 'ru', feedProvenance: { overall: 'stale' } },

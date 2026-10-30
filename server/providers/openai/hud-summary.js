@@ -49,7 +49,7 @@ function toFiveWordHudSummary(value, unspaced) {
   // Other languages keep five words, even around a Han place name.
   if (!unspaced) return words.slice(0, 5).join(' ');
   // Japanese and Chinese have no spaces to count words by: cap characters,
-  // stepping back to a space rather than cutting a Latin word in two.
+  // stepping back to the start of a Latin word rather than cutting it in two.
   const text = words.join(' ');
   const graphemes = [
     ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text),
@@ -59,8 +59,10 @@ function toFiveWordHudSummary(value, unspaced) {
   const next = graphemes[HUD_SUMMARY_MAX_UNSPACED_CHARS];
   const inWord = (g) => /^[\p{Script=Latin}\p{N}]/u.test(g ?? '');
   if (inWord(head.at(-1)) && inWord(next)) {
-    const space = head.lastIndexOf(' ');
-    if (space > 0) return head.slice(0, space).join('').trim();
+    let start = head.length - 1;
+    while (start > 0 && inWord(head[start - 1])) start -= 1;
+    // A Latin word longer than the cap is cut where the cap falls.
+    if (start > 0) return head.slice(0, start).join('').trim();
   }
   return head.join('').trim();
 }

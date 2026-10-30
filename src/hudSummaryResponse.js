@@ -108,26 +108,31 @@ const SUMMARY_LANGUAGES = Object.freeze({
 const UNSPACED_LOCALES = /^(?:ja|zh)(?:-|$)/;
 
 /**
- * Whether a summary for a non-English locale still carries English the HUD
- * sent only as data: a feed-state id (`stale`) or an English layer name that
- * has a translation (`Live Flights` in Russian).
+ * Whether a non-English summary echoes English the HUD does not show: a
+ * feed-state id or a translated layer's English name. Only Latin letters
+ * extend a word, so `stale` flush against kana or Han still counts.
  * @param {string} summary The model's words.
  * @param {unknown} locale The request locale.
- * @param {string[]} [englishNames] English layer names that the UI translates.
+ * @param {string[]} [words] The English words the summary must not carry.
  * @returns {boolean}
  */
-export function hudSummaryHasEnglish(summary, locale, englishNames = []) {
+export function hudSummaryHasEnglish(summary, locale, words = []) {
   if (hudSummaryLocale(locale) === DEFAULT_LOCALE) return false;
-  const text = String(summary || '').toLowerCase();
-  return [...HUD_SUMMARY_FEED_STATES, ...englishNames].some((word) => {
-    const needle = String(word).toLowerCase();
-    let at = text.indexOf(needle);
-    while (at >= 0) {
-      const before = text[at - 1];
-      const after = text[at + needle.length];
-      if (!/\p{L}/u.test(before ?? '') && !/\p{L}/u.test(after ?? ''))
-        return true;
-      at = text.indexOf(needle, at + 1);
+  const flat = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/-/g, ' ');
+  const text = flat(summary);
+  const latin = (char) => /\p{Script=Latin}/u.test(char ?? '');
+  return words.some((word) => {
+    const needle = flat(word);
+    if (!needle) return false;
+    for (
+      let at = text.indexOf(needle);
+      at >= 0;
+      at = text.indexOf(needle, at + 1)
+    ) {
+      if (!latin(text[at - 1]) && !latin(text[at + needle.length])) return true;
     }
     return false;
   });
