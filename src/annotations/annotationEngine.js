@@ -12,7 +12,11 @@ import {
   sampleGroundHeight,
 } from './annotationResolver.js';
 import { ringCentroid } from './drawMode.js';
-import { phaseTiming } from '../sources/phaseTiming.js';
+import {
+  createWorkTrace,
+  phaseTiming,
+  recordWorkSlice,
+} from '../sources/phaseTiming.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -140,6 +144,7 @@ export function createAnnotationEngine({
   // draw after a clear() (or after a newer clearPrevious) has wiped the board.
   let generation = 0;
   const activeControllers = new Set();
+  const buildingInstalls = new WeakMap();
   // Outline upgrades are intentionally narrower than the concurrent anchor phase:
   // points render immediately, then expensive Overpass continuations drain FIFO.
   const outlineQueue = [];
@@ -297,6 +302,23 @@ export function createAnnotationEngine({
     };
   }
 
+  function beginBuildingInstall(anno) {
+    let settle;
+    const record = {
+      settled: new Promise((resolve) => {
+        settle = resolve;
+      }),
+      accepted: false,
+      error: null,
+    };
+    buildingInstalls.set(anno, record);
+    record.finish = () => {
+      if (buildingInstalls.get(anno) === record) buildingInstalls.delete(anno);
+      settle();
+    };
+    return record;
+  }
+
   function installedOutcome(anno, outcome) {
     if (outcome?.status === 'cancelled')
       throw new Error('Annotation installation cancelled');
@@ -305,6 +327,7 @@ export function createAnnotationEngine({
       anno.ring = null;
       anno.polygons = null;
       anno.footprintKind = null;
+      anno.outlineCredit = null;
       anno.outlineUnavailable = true;
       renderer.update(anno);
     }
@@ -400,6 +423,7 @@ export function createAnnotationEngine({
       ensureTicking();
       const index = results.length;
       results.push(null);
+      const record = beginBuildingInstall(anno);
       installations.push(
         Promise.resolve(completion)
           .then((outcome) => {
@@ -420,8 +444,11 @@ export function createAnnotationEngine({
                 myGen,
                 controller,
               );
+            record.accepted = true;
           })
           .catch((error) => {
+            // i18n-ignore: structured annotation tool diagnostic, not UI text.
+            record.error = error?.message || 'Annotation installation failed';
             anno.pendingOutline = false;
             anno.outlineUnavailable = true;
             try {
@@ -436,7 +463,8 @@ export function createAnnotationEngine({
               spec,
               error?.message || 'Annotation installation failed',
             );
-          }),
+          })
+          .finally(record.finish),
       );
     };
     let firstAnchor = null;
@@ -501,6 +529,7 @@ export function createAnnotationEngine({
                 anno.footprintKind = dup.footprintKind || null;
                 anno.buildingHeight = dup.buildingHeight || null;
                 anno.synthesized = Boolean(dup.synthesized);
+                anno.outlineCredit = dup.outlineCredit || null;
                 anno.anchor = { ...dup.anchor };
               }
               if (anno.ring?.length >= 3 && anno.footprintKind === 'building') {
@@ -657,6 +686,38 @@ export function createAnnotationEngine({
               dup.fadeStart = null;
               ids.push(dup.id);
               if (!firstAnchor) firstAnchor = dup;
+              let record = buildingInstalls.get(dup);
+              if (record) {
+                const index = results.length;
+                results.push(null);
+                installations.push(
+                  (async () => {
+                    do {
+                      await record.settled;
+                      if (
+                        superseded() ||
+                        annotations.get(dup.id) !== dup ||
+                        !record.accepted
+                      ) {
+                        results[index] = failResult(
+                          spec,
+                          record.error ||
+                            'Annotation installation failed or superseded',
+                        );
+                        return;
+                      }
+                      // Follow only a physical install already started by the owner,
+                      // never its progressive network work or a replacement's task.
+                      record = buildingInstalls.get(dup);
+                    } while (record);
+                    results[index] = {
+                      ...okResult(dup, resolved, dup.id),
+                      duplicate: true,
+                    };
+                  })(),
+                );
+                continue;
+              }
               // A re-narration is also a RETRY: if the existing mark never got its outline
               // (transient Overpass miss), attach this call's deferred resolver to it.
               if (!dup.ring && typeof resolved.resolveOutline === 'function') {
@@ -973,6 +1034,9 @@ export function createAnnotationEngine({
 
   async function runOutlineUpgrade(task) {
     const { anno, resolveOutline, myGen, controller } = task;
+    let installRecord;
+    let workTrace;
+    let workStart = null;
     try {
       let fp = null;
       // Geometry upgrade is best-effort — the point stays on any failure. A TRANSIENT
@@ -996,10 +1060,18 @@ export function createAnnotationEngine({
       let completionStart = null;
       if (anno.outlineUnavailable) renderer.update(anno);
       if (fp && !anno.outlineUnavailable) {
+        if (import.meta.env?.DEV && fp.footprintKind === 'building') {
+          workTrace = createWorkTrace();
+          if (workTrace) {
+            workTrace.callerStart = installStart;
+            workStart = installStart;
+          }
+        }
         anno.pendingOutline = true;
         anno.ring = fp.ring;
         anno.polygons = fp.polygons || null;
         anno.footprintKind = fp.footprintKind || null;
+        anno.outlineCredit = fp.outlineCredit || null;
         anno.buildingHeight = fp.buildingHeight || null;
         anno.synthesized = Boolean(fp.synthesized);
         // Re-center on the footprint centroid, as the inline path always did.
@@ -1012,12 +1084,22 @@ export function createAnnotationEngine({
         }
         // Re-route: ring presence decides world-drape vs screen-space in the renderer.
         const ownership = installOptions(anno, controller, myGen);
+        if (workTrace) ownership.workTrace = workTrace;
         const completion = renderer.update(anno, ownership);
         if (completion?.then) {
+          installRecord = beginBuildingInstall(anno);
           schedulingMs = performance.now() - installStart;
+          if (workTrace) {
+            recordWorkSlice(workTrace, 'engine-schedule', workStart);
+            workStart = null;
+          }
           groundInstallation = await completion;
           completionStart = performance.now();
-          if (!ownership.isCurrent()) return;
+          if (workTrace) workStart = completionStart;
+          if (!ownership.isCurrent()) {
+            if (workTrace) workTrace.status = 'cancelled';
+            return;
+          }
           installedOutcome(anno, groundInstallation);
         } else anno.pendingOutline = false;
         // GEOMETRY dedup, now that geometry is known: two DIFFERENT targets can resolve
@@ -1083,6 +1165,10 @@ export function createAnnotationEngine({
       // Final outcome → the voice layer (place names ride as structured DATA fields).
       // 'failed' covers both the definitive no-polygon and an exhausted transient
       // retry — either way the mark honestly stays a point.
+      if (workTrace && workStart !== null) {
+        recordWorkSlice(workTrace, 'engine-process', workStart);
+        workStart = null;
+      }
       emitOutlineEvent({
         id: anno.id,
         label: anno.label || null,
@@ -1097,7 +1183,18 @@ export function createAnnotationEngine({
           : {}),
         ...(fp && anno.synthesized ? { approximate: true } : {}),
       });
+      if (workTrace) workStart = performance.now();
+      if (installRecord) installRecord.accepted = true;
     } catch (error) {
+      if (workTrace) {
+        if (workStart !== null)
+          recordWorkSlice(workTrace, 'engine-error', workStart);
+        workTrace.status = controller.signal.aborted ? 'cancelled' : 'failed';
+        workStart = performance.now();
+      }
+      if (installRecord)
+        // i18n-ignore: structured annotation tool diagnostic, not UI text.
+        installRecord.error = error?.message || 'Outline installation failed';
       if (
         myGen === generation &&
         !controller.signal.aborted &&
@@ -1110,7 +1207,9 @@ export function createAnnotationEngine({
           anno.ring = null;
           anno.polygons = null;
           anno.footprintKind = null;
+          anno.outlineCredit = null;
           renderer.add(anno);
+          if (installRecord) installRecord.accepted = true;
         } catch {
           try {
             removeRendered(anno);
@@ -1120,6 +1219,10 @@ export function createAnnotationEngine({
           }
           syncAnnotationHold();
         }
+        if (workTrace) {
+          recordWorkSlice(workTrace, 'engine-recovery', workStart);
+          workStart = null;
+        }
         emitOutlineEvent({
           id: anno.id,
           label: anno.label || null,
@@ -1127,12 +1230,54 @@ export function createAnnotationEngine({
           status: 'failed',
           message: 'Outline installation failed',
         });
+        if (workTrace) workStart = performance.now();
       }
     } finally {
+      if (workTrace && workStart === null) workStart = performance.now();
       if (anno._outlineTask === task) anno._outlineTask = null;
       releaseController(controller);
       activeOutlineUpgrades -= 1;
+      if (workTrace) {
+        recordWorkSlice(workTrace, 'engine-finalize', workStart);
+        workStart = null;
+      }
       drainOutlineQueue();
+      if (workTrace) workStart = performance.now();
+      installRecord?.finish();
+      if (workTrace) {
+        if (workTrace.status === 'pending') {
+          const rendererStatus =
+            workTrace.rendererStatus || workTrace.samplerStatus || 'failed';
+          workTrace.status =
+            rendererStatus !== 'installed'
+              ? rendererStatus
+              : installRecord?.accepted &&
+                  workTrace.samplerStatus === 'installed' &&
+                  !anno.outlineUnavailable &&
+                  !controller.signal.aborted &&
+                  myGen === generation &&
+                  annotations.get(anno.id) === anno
+                ? 'installed'
+                : 'cancelled';
+        }
+        workTrace.completedAt = performance.now();
+        recordWorkSlice(
+          workTrace,
+          'engine-settle',
+          workStart,
+          workTrace.completedAt,
+        );
+        try {
+          phaseTiming(
+            'install-work',
+            workTrace.callerStart,
+            workTrace,
+            'outlines',
+          );
+        } catch {
+          /* Development telemetry must not change the installation outcome. */
+        }
+      }
     }
   }
 
@@ -1328,6 +1473,7 @@ export function createAnnotationEngine({
       // more than the main ring (Hawaii's islands, Berlin inside Brandenburg).
       polygons: resolved.polygons || null,
       footprintKind: resolved.footprintKind || null, // 'building' | 'area'
+      outlineCredit: resolved.outlineCredit || null,
       buildingHeight: resolved.buildingHeight || null, // meters, for extruded volume
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
       // Progressive outline: the anchor is placed, the footprint is still resolving —

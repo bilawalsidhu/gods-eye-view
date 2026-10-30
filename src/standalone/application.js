@@ -3,6 +3,7 @@ import { createStandalonePlaceSearch } from './placeSearch.js';
 import { CITY_POIS } from '../cityPois.js';
 import { createApplication } from '../app/application.js';
 import { createStandaloneScene } from './scene.js';
+import { createGoogleTokenSource } from '../maps/googleTokens.js';
 import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
@@ -51,6 +52,7 @@ export function createStandaloneApplication({
       const scene = await createStandaloneScene({
         ...context,
         googleApiKey,
+        googleTokens: googleApiKey ? null : createGoogleTokenSource(),
         cesiumToken,
         loaderStatus,
       });

@@ -1,5 +1,5 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
-import { t } from '../../i18n/index.js';
+import { msg, t } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -7,6 +7,59 @@ import {
   specFovCapabilityToken,
   isDatasheetFov,
 } from './modelSpecs.js';
+
+// The summary line names the CAL badge, the source kind and the view band in
+// the page language; the codes underneath stay English.
+const CAL_BADGE_LABELS = Object.freeze({
+  calibrated: msg('CALIBRATED'),
+  curated: msg('CURATED'),
+  'raw-prior': msg('RAW PRIOR'),
+});
+
+// The same source-kind words as the CCTV panel (src/ui/cctvFrames.js).
+const SOURCE_KIND_LABELS = Object.freeze({
+  snapshot: msg('SNAPSHOT'),
+  live: msg('LIVE'),
+  fallback: msg('FALLBACK'),
+  upstream: msg('UPSTREAM'),
+  synthetic: msg('SYNTHETIC'),
+  configured: msg('CONFIGURED'),
+  seed: msg('SEED'),
+  image: msg('IMAGE'),
+  unknown: msg('UNKNOWN'),
+});
+
+/** CAL badge id ('raw-prior') as the summary shows it; unknown ids stay codes. */
+export function summaryCalLabel(badge) {
+  const key = String(badge || '');
+  return CAL_BADGE_LABELS[key]
+    ? t(CAL_BADGE_LABELS[key])
+    : key.replace('-', ' ').toUpperCase();
+}
+
+/** Source kind ('image', 'snapshot') for the summary; HLS, MJPEG… stay codes. */
+export function summarySourceLabel(kind) {
+  const key = String(kind || 'image').toLowerCase();
+  return SOURCE_KIND_LABELS[key]
+    ? t(SOURCE_KIND_LABELS[key])
+    : key.toUpperCase();
+}
+
+/** View band id ('street', 'city'…) as the HUD names it. */
+export function summaryViewBandLabel(band) {
+  switch (band) {
+    case 'street':
+      return t('STREET', { context: 'view band' });
+    case 'city':
+      return t('CITY', { context: 'view band' });
+    case 'regional':
+      return t('REGIONAL', { context: 'view band' });
+    case 'global':
+      return t('GLOBAL', { context: 'view band' });
+    default:
+      return String(band || '').toUpperCase();
+  }
+}
 
 export function createPresentation({
   state: layerState,
@@ -72,17 +125,13 @@ export function createPresentation({
         : t('ISOLATED VIEW'),
       layerState._showProjection ? t('PROJ MONITOR') : t('PROJ OFF'),
       layerState._coverageMode === 'viewshed' ? t('VIEWSHED') : null,
-      t('CAL {value}', {
-        value: calBadge.replace('-', ' ').toUpperCase(),
+      t('CAL {value}', { value: summaryCalLabel(calBadge) }),
+      t('SRC {value}', {
+        value: summarySourceLabel(
+          health?.sourceKind || active.camera.feedType || 'image',
+        ),
       }),
-      health?.sourceKind
-        ? t('SRC {value}', {
-            value: String(health.sourceKind).toUpperCase(),
-          })
-        : t('SRC {value}', {
-            value: String(active.camera.feedType || 'image').toUpperCase(),
-          }),
-      t('{value} CONTEXT', { value: viewBand.toUpperCase() }),
+      t('{value} CONTEXT', { value: summaryViewBandLabel(viewBand) }),
       // Identified hardware: append the model's datasheet specs + attribution.
       active.camera.spec
         ? t('{spec} · SPECS: CCTV-DATABASE.COM', {

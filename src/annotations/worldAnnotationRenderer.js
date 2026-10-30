@@ -1,3 +1,4 @@
+import { recordWorkSlice } from '../sources/phaseTiming.js';
 import * as Cesium from 'cesium';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 
@@ -60,6 +61,17 @@ export function createWorldAnnotationRenderer(viewer) {
     pendingGround.get(anno)?.finish('cancelled');
     return new Promise((resolve, reject) => {
       const started = performance.now();
+      const workTrace = options.workTrace;
+      if (workTrace) workTrace.samplerStart = started;
+      let groundDetailSlots = 0;
+      let groundDetailReady = true;
+      if (workTrace) {
+        try {
+          workTrace.groundDetailDropped = 0;
+        } catch {
+          groundDetailReady = false;
+        }
+      }
       const task = {
         anno,
         points: groundProbePositions(anno.ring),
@@ -89,67 +101,132 @@ export function createWorldAnnotationRenderer(viewer) {
           observingGround = false;
         }
         timing.elapsedMs = performance.now() - started;
+        if (workTrace) {
+          workTrace.probes = timing.probes;
+          workTrace.samplerStatus = status;
+        }
         if (error) reject(error);
         else resolve({ status, timing });
       };
       task.abort = () => task.finish('cancelled');
       task.step = () => {
-        if (!task.current()) return task.finish('cancelled');
-        if (performance.now() - started >= 2000) return task.finish('timeout');
-        const sliceStart = performance.now();
-        let error;
-        try {
-          if (
-            viewer.scene.clampToHeightSupported &&
-            typeof viewer.scene.clampToHeight === 'function'
-          ) {
-            const [lon, lat] = task.points[task.index++];
-            timing.probes += 1;
-            try {
-              const c = viewer.scene.clampToHeight(
-                Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-              );
-              if (c) {
-                const h = Cesium.Cartographic.fromCartesian(c).height;
-                if (Number.isFinite(h) && h > -430 && h < 9000)
-                  task.samples.push(h);
+        const workStart = workTrace ? performance.now() : 0;
+        // Nested call/commit wall-time only; the original parent remains the gate.
+        const detail =
+          workTrace && groundDetailSlots++ < 8
+            ? {
+                index: task.index,
+                status: groundDetailReady ? 'recorded' : 'missing',
+                clampStart: null,
+                clampEnd: null,
+                clampResult: 'not-run',
+                commitStart: null,
+                commitEnd: null,
+                commitStatus: 'not-run',
               }
-            } catch {
-              /* surface not ready: preserve the existing sample filter */
+            : undefined;
+        const note = detail
+          ? (key) => {
+              try {
+                const at = performance.now();
+                if (Number.isFinite(at)) detail[key] = at;
+                else detail.status = 'missing';
+              } catch {
+                detail.status = 'missing';
+              }
             }
-          } else task.index = task.points.length;
-          if (performance.now() - started >= 2000) {
-            task.finish('timeout');
-            return;
+          : null;
+        if (workTrace && !detail) {
+          try {
+            workTrace.groundDetailDropped += 1;
+          } catch {
+            // Missing attribution must not change the sampler outcome.
           }
+        }
+        try {
           if (!task.current()) return task.finish('cancelled');
-          if (task.index === task.points.length) {
-            task.samples.sort((a, b) => a - b);
-            const ground = task.samples.length
-              ? task.samples[Math.floor(task.samples.length * 0.3)]
-              : null;
-            add(anno, { sampledGroundHeight: ground, isCurrent: task.current });
-            if (performance.now() >= timing.deadlineMs) {
+          if (performance.now() - started >= 2000)
+            return task.finish('timeout');
+          const sliceStart = performance.now();
+          let error;
+          try {
+            if (
+              viewer.scene.clampToHeightSupported &&
+              typeof viewer.scene.clampToHeight === 'function'
+            ) {
+              const [lon, lat] = task.points[task.index++];
+              timing.probes += 1;
+              try {
+                const position = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+                let c;
+                note?.('clampStart');
+                if (detail) detail.clampResult = 'threw';
+                try {
+                  c = viewer.scene.clampToHeight(position);
+                  if (detail) detail.clampResult = 'returned';
+                } finally {
+                  note?.('clampEnd');
+                }
+                if (c) {
+                  const h = Cesium.Cartographic.fromCartesian(c).height;
+                  if (Number.isFinite(h) && h > -430 && h < 9000)
+                    task.samples.push(h);
+                }
+              } catch {
+                /* surface not ready: preserve the existing sample filter */
+              }
+            } else task.index = task.points.length;
+            if (performance.now() - started >= 2000) {
               task.finish('timeout');
-              remove(anno);
               return;
             }
+            if (!task.current()) return task.finish('cancelled');
+            if (task.index === task.points.length) {
+              if (detail) detail.commitStatus = 'attempted';
+              note?.('commitStart');
+              task.samples.sort((a, b) => a - b);
+              const ground = task.samples.length
+                ? task.samples[Math.floor(task.samples.length * 0.3)]
+                : null;
+              add(anno, {
+                sampledGroundHeight: ground,
+                isCurrent: task.current,
+              });
+              if (performance.now() >= timing.deadlineMs) {
+                task.finish('timeout');
+                remove(anno);
+                return;
+              }
+            }
+          } catch (caught) {
+            error = caught;
+          } finally {
+            timing.lastSliceMs = performance.now() - sliceStart;
+            timing.workMs += timing.lastSliceMs;
+            timing.maxSliceMs = Math.max(timing.maxSliceMs, timing.lastSliceMs);
           }
-        } catch (caught) {
-          error = caught;
+          if (error) {
+            task.finish('failed', error);
+            try {
+              remove(anno);
+            } catch {
+              /* retain the original commit error */
+            }
+          } else if (task.index === task.points.length)
+            task.finish('installed');
         } finally {
-          timing.lastSliceMs = performance.now() - sliceStart;
-          timing.workMs += timing.lastSliceMs;
-          timing.maxSliceMs = Math.max(timing.maxSliceMs, timing.lastSliceMs);
+          // Commit includes sort/selection/add/deadline/finish or rollback,
+          // including intervening bookkeeping; it is not exclusive entity cost.
+          if (detail?.commitStatus === 'attempted') note('commitEnd');
+          if (workTrace)
+            recordWorkSlice(
+              workTrace,
+              'ground-step',
+              workStart,
+              undefined,
+              detail,
+            );
         }
-        if (error) {
-          task.finish('failed', error);
-          try {
-            remove(anno);
-          } catch {
-            /* retain the original commit error */
-          }
-        } else if (task.index === task.points.length) task.finish('installed');
       };
       pendingGround.set(anno, task);
       groundQueue.push(task);
@@ -464,6 +541,19 @@ export function createWorldAnnotationRenderer(viewer) {
         );
       }
       entities.push(pointMarker(anno, base));
+    }
+    if (
+      entities.length &&
+      anno.ring?.length >= 3 &&
+      !anno.synthesized &&
+      (anno.outlineCredit === 'tiles' || anno.outlineCredit === 'osm') &&
+      (options.isCurrent?.() ?? true)
+    ) {
+      // The actual world proxy owns both geometry and credit, including rollback.
+      osmAnnotations.add(anno);
+      showOsmCredit(viewer, anno, {
+        openMapTiles: anno.outlineCredit === 'tiles',
+      });
     }
   }
 

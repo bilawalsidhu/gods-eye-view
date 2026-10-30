@@ -17,7 +17,7 @@ import {
   packLoads,
   parsePlaceQuery,
 } from './placeBoundaries.js';
-import { decodeRing, polygonsContain } from './adminBoundaries.js';
+import { decodeRing, geometryOf, polygonsContain } from './adminBoundaries.js';
 import {
   partIsValid,
   placeAliases,
@@ -354,6 +354,15 @@ test('places pack: every state file, unique ids, sane and valid rings', () => {
       assert.ok(!ids.has(feature.geoid), `duplicate ${feature.geoid}`);
       ids.add(feature.geoid);
       const parts = placeParts(feature, index.meta.decimals);
+      const geometry = geometryOf({ feature, decimals: index.meta.decimals });
+      assert.ok(
+        polygonsContain(
+          geometry.polygons,
+          geometry.label.lat,
+          geometry.label.lon,
+        ),
+        `${feature.geoid} ${feature.name}: label is in filled geometry`,
+      );
       assert.ok(parts.length >= 1);
       for (const part of parts) {
         assert.ok(partIsValid(part), `${feature.geoid} ${feature.name}`);
@@ -444,6 +453,8 @@ test('neighborhood pack ships only explicitly allowed and credited sources', () 
     'minitenders',
     'stpaulgov',
     'mapzen',
+    'can-ons',
+    'can-saskodp',
   ])
     assert.equal(sources[excluded], undefined, excluded);
   const listed = readFileSync(new URL('files.js', WOF), 'utf8');
@@ -455,6 +466,7 @@ test('neighborhood pack ships only explicitly allowed and credited sources', () 
     assert.ok(gunzipSync(gzipSync(bytes)).equals(bytes), 'gzip roundtrip');
     const { features } = JSON.parse(bytes);
     assert.equal(features.length, tile.count);
+    const union = [Infinity, Infinity, -Infinity, -Infinity];
     for (const [id, name, , type, bbox, , source, rings] of features) {
       assert.ok(!ids.has(id), `duplicate ${id}`);
       ids.add(id);
@@ -462,7 +474,10 @@ test('neighborhood pack ships only explicitly allowed and credited sources', () 
       assert.ok(['neighbourhood', 'macrohood', 'microhood'].includes(type));
       assert.ok(sources[source], `${id} source ${source} is listed`);
       used[source] = (used[source] || 0) + 1;
-      assert.ok(bbox[0] >= tile.bbox[0] && bbox[3] <= tile.bbox[3]);
+      union[0] = Math.min(union[0], bbox[0]);
+      union[1] = Math.min(union[1], bbox[1]);
+      union[2] = Math.max(union[2], bbox[2]);
+      union[3] = Math.max(union[3], bbox[3]);
       for (const poly of rings)
         for (const encoded of poly) {
           const ring = decodePolyline(encoded, index.meta.precision);
@@ -471,10 +486,31 @@ test('neighborhood pack ships only explicitly allowed and credited sources', () 
             assert.ok(Math.abs(lon) <= 180 && Math.abs(lat) <= 90, `${id}`);
         }
     }
+    assert.deepEqual(
+      tile.bbox,
+      union,
+      `${tile.key}: exact retained-row bounds`,
+    );
   }
   for (const [key, source] of Object.entries(sources))
     assert.equal(used[key], source.records, key);
-  assert.equal(ids.size, 61_755);
+  assert.deepEqual(index.meta.recordExclusions, {
+    'can-ons': 36,
+    'can-saskodp': 54,
+  });
+  const excludedIds = new Set();
+  for (const rule of Object.values(
+    WOF_LICENSE_POLICY.recordExclusions.sources,
+  )) {
+    assert.equal(rule.ids.length, rule.count);
+    for (const id of rule.ids) {
+      assert.ok(!excludedIds.has(id));
+      excludedIds.add(id);
+      assert.ok(!ids.has(id), `${id} excluded from shipped rows`);
+    }
+  }
+  assert.equal(excludedIds.size, 90);
+  assert.equal(ids.size, 61_665);
 });
 
 test('neighborhoods resolve near the view, in any script', async () => {

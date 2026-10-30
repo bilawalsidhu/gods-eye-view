@@ -34,14 +34,12 @@ Neighborhood boundaries from [Who's On First](https://whosonfirst.org/docs/licen
 | Denver Department of Community Planning and Development (`denvercpd`) | 77 | CC BY 3.0 | [terms](https://www.denvergov.org/opendata/termsofuse) |
 | Gatineau Service de l'urbanisme et du developpement durable (SUDD) (`can-gatsudd`) | 74 | CC BY (equivalent) | [terms](http://www3.gatineau.ca/Infoterritoire/WebInterface/help/fr/Content/1_About/1_About_FR.htm) |
 | City of New Orleans, Office of Information Technology and Innovation, Enterprise Information Team (`nolagis`) | 71 | CC0 | [terms](https://data.nola.gov/Geographic-Base-Layers/Neighborhoods/92zg-wzkq) |
-| City of Saskatoon Open Data Portal - Neighbourhood Areas (`can-saskodp`) | 54 | CC0 (equivalent) | [terms](http://opendata-saskatoon.cloudapp.net/TermsOfUse/TermsOfUse) |
 | Ciudad Autonoma de Buenos Aires, Iniciativa de Datos Publicos y Transparencia (`arg-caba`) | 48 | CC BY | [terms](https://data.buenosaires.gob.ar/tyc) |
 | Montreal Service de la Mise en Valeur du Territoire (`can-mtlsmvt`) | 48 | CC BY 4.0 | [terms](https://creativecommons.org/licenses/by/4.0/) |
 | City of Kuopio (`kuogov`) | 47 | CC BY 4.0 | [terms](https://www.avoindata.fi/data/fi/dataset/kuopion-kaupunginosat) |
 | Mesoshapes (`meso`) | 41 | CC BY | [terms](https://github.com/whosonfirst-data/whosonfirst-data/blob/master/LICENSE.md) |
 | City of Los Angeles Neighborhood Councils (Certified) (`lacity`) | 40 | CC0 | [terms](https://data.lacity.org/A-Well-Run-City/Neighborhood-Councils-Certified-/fu65-dz2f/about) |
 | District of North Vancouver Government (`can-dnvgov`) | 37 | Open Government Licence - British Columbia, v2.0 | [terms](http://geoweb.dnv.org/data/metadata.php?dataset=RegNeighbourhood) |
-| Ottawa Neighbourhood Study (ONS) (`can-ons`) | 36 | CC BY (equivalent) | [terms](http://neighbourhoodstudy.ca/ons-terms-of-use/) |
 | The City of Santa Barbara (`santabar`) | 32 | Public Domain | [terms](https://www.santabarbaraca.gov/howdoi/get/webhelp/policy.asp) |
 | City of Burnaby GIS Department (`can-bbygov`) | 31 | Open Government Licence - British Columbia, v2.0 | [terms](https://www.burnaby.ca/opendata/licence.html) |
 | Boston Redevelopment Authority (`bra`) | 27 | CC0 | [terms](https://data.cityofboston.gov/City-Services/Boston-Neighborhood-Shapefiles/af56-j7tb) |
@@ -264,3 +262,7 @@ Neighborhood boundaries from [Who's On First](https://whosonfirst.org/docs/licen
 
 - Global: flickr (This product uses the Flickr API but is not endorsed or certified by Flickr.) https://www.flickr.com/
 - United States: United States Census Bureau http://www.census.gov
+
+## Source-specific exclusions
+
+This derived pack excludes 36 `can-ons` records, 54 `can-saskodp` records. Original source-specific redistribution terms have not been established for these records in this derived pack. Original upstream notices remain unchanged.

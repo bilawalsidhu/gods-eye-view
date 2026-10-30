@@ -148,6 +148,7 @@ test('a street comes from tiles before the configured ladder, as merged ribbons'
   assert.equal(run.calls.base, 0, 'the ladder is not consulted');
   assert.deepEqual(run.calls.finished, ['street']);
   assert.deepEqual(credits, ['tiles']);
+  assert.equal(result.outlineCredit, 'tiles');
   assert.equal(tiles.asked[0].zoom, 14);
   assert.equal(nominatim.asks.length, 0, 'streets never reach Nominatim');
 });
@@ -180,6 +181,7 @@ test('"circle this building" picks the tile building at the point first', async 
     run,
   );
   assert.equal(result.footprintKind, 'building');
+  assert.equal(result.outlineCredit, 'tiles');
   assert.equal(run.calls.base, 0);
   assert.equal(nominatim.asks.length, 0);
   const primary = [square(CAPITOL.lat, CAPITOL.lon, 0.0002)];
@@ -208,8 +210,8 @@ test('"circle this building" picks the tile building at the point first', async 
   );
   assert.deepEqual(
     multipart.polygons,
-    [primary, other],
-    'the building rung retains all feature parts',
+    [primary],
+    'the building rung retains the selected component, not unrelated siblings',
   );
 });
 
@@ -227,6 +229,64 @@ test('a named building asks Nominatim, then falls back to the tile building', as
     ['building'],
   );
   assert.equal(result.footprintKind, 'building');
+});
+
+test('named building tile fallbacks require the anchor in filled geometry', async () => {
+  const nearby = {
+    anchor: { lat: 0, lon: 0.00035 },
+    rings: [square(0, 0, 0.0001)],
+  };
+  for (const { anchor, rings } of [
+    nearby,
+    {
+      anchor: { lat: 0, lon: 0 },
+      rings: [square(0, 0, 0.001), square(0, 0, 0.0002)],
+    },
+  ]) {
+    const credits = [];
+    const run = ladder(UNAVAILABLE);
+    const result = await createOutlineRungs({
+      tiles: {
+        fetchBounds: async () => ({
+          tiles: [{ buildings: [{ rings, heightM: null }] }],
+        }),
+      },
+      nominatim: fakeNominatim(null),
+    }).resolve(
+      ctx({
+        ...anchor,
+        view: anchor,
+        scope: 'building',
+        target: 'Gateville',
+        matchName: 'Gateville',
+        credit: (kind) => credits.push(kind),
+      }),
+      run,
+    );
+    assert.equal(result, UNAVAILABLE);
+    assert.deepEqual(run.calls.finished, []);
+    assert.deepEqual(credits, []);
+  }
+
+  const pointed = await createOutlineRungs({
+    tiles: {
+      fetchBounds: async () => ({
+        tiles: [{ buildings: [{ rings: nearby.rings, heightM: null }] }],
+      }),
+    },
+    nominatim: fakeNominatim(null),
+  }).resolve(
+    ctx({
+      ...nearby.anchor,
+      view: nearby.anchor,
+      scope: 'building',
+      target: 'this building',
+      fromName: false,
+    }),
+    ladder(UNAVAILABLE),
+  );
+  assert.equal(pointed.footprintKind, 'building');
+  assert.equal(pointed.outlineCredit, 'tiles');
 });
 
 test('a city with no configured Overpass is outlined by Nominatim', async () => {
@@ -249,6 +309,7 @@ test('a city with no configured Overpass is outlined by Nominatim', async () => 
     run,
   );
   assert.deepEqual(result.ring, ring);
+  assert.equal(result.outlineCredit, 'osm');
   assert.deepEqual(nominatim.asks[0], {
     query: 'Toulouse',
     kind: 'city',
@@ -721,6 +782,10 @@ test('default settings: outline, street and building asks send nothing to Overpa
     target: 'this building',
   });
   assert.equal(building.outline?.footprintKind, 'building');
+  assert.equal(building.outline.outlineCredit, 'tiles');
+  assert.equal(street.outline.outlineCredit, 'tiles');
+  assert.equal(paris.outline.outlineCredit, 'osm');
+  assert.equal(park.outline.outlineCredit, 'osm');
 
   assert.ok(
     upstream.every((url) =>

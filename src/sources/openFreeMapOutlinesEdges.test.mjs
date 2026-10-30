@@ -64,43 +64,53 @@ test('decoded polygons keep identity and mark tile-cut fragments', () => {
     });
   const multipart = decode(parts);
   assert.equal(multipart.buildings[0].id, null);
-  assert.equal(
-    multipart.buildings[0].featureParts,
-    multipart.buildings[1].featureParts,
-    'null ids do not split one feature into independent buildings',
-  );
   const picked = buildingFromTiles([multipart], { lon: 0.0035, lat: 0.0005 });
   assert.deepEqual(
     picked.polygons,
-    [parts[1], parts[0]],
-    'selected part first; all parts and holes retained',
+    [parts[1]],
+    'an anonymous tile feature does not certify sibling building identity',
+  );
+  assert.deepEqual(
+    buildingFromTiles([multipart], { lon: 0.0008, lat: 0.0008 }).polygons,
+    [parts[0]],
+    'the selected component retains its courtyard hole',
   );
   const clipped = decode(
     [parts[0], [square(-180 - 360 / 4096, 0, 0.001)]],
     true,
   );
-  assert.ok(clipped.buildings.every((part) => part.clipped));
+  assert.equal(clipped.buildings[0].clipped, false);
+  assert.equal(clipped.buildings[1].clipped, true);
+  assert.deepEqual(
+    buildingFromTiles([clipped], { lon: 0.0008, lat: 0.0008 }).polygons,
+    [parts[0]],
+    'a remote cut sibling cannot disqualify an intact component',
+  );
   assert.equal(
-    buildingFromTiles([clipped], { lon: 0.0008, lat: 0.0008 }),
+    buildingFromTiles([clipped], {
+      lon: -180 - 360 / 4096 + 0.0005,
+      lat: 0.0005,
+    }),
     null,
-    'a cut sibling prevents a partial exact footprint',
   );
   const malformed = decode([parts[0], [parts[1][0], null]]);
   const neighbor = {
-    rings: [square(0.0011, 0, 0.001)],
+    rings: [square(0.0041, 0, 0.001)],
     heightM: 20,
     clipped: false,
   };
-  assert.ok(
-    malformed.buildings.every((part) => part.clipped && part.incomplete),
+  assert.deepEqual(
+    buildingFromTiles([malformed], { lon: 0.0008, lat: 0.0008 }).polygons,
+    [parts[0]],
+    'a remote malformed sibling cannot disqualify an intact component',
   );
   assert.equal(
     buildingFromTiles(
       [{ ...malformed, buildings: [...malformed.buildings, neighbor] }],
-      { lon: 0.0008, lat: 0.0008 },
+      { lon: 0.0038, lat: 0.0008 },
     ),
     null,
-    'a malformed sibling cannot become a partial exact building',
+    'a selected malformed component never substitutes its neighbour',
   );
 });
 

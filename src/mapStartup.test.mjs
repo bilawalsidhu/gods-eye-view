@@ -84,7 +84,7 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
   return app.createScene({ signal: new AbortController().signal });
 }
 
-test('standalone ion configuration does not probe the optional server token route', async () => {
+test('standalone falls back to ion when the server token route is unavailable', async () => {
   const tileset = { id: 'ion' };
   const Cesium = fakeCesium([tileset]);
   const requests = [];
@@ -98,13 +98,14 @@ test('standalone ion configuration does not probe the optional server token rout
   );
   assert.equal(result.route, 'google-ion');
   assert.equal(result.tileset, tileset);
-  assert.deepEqual(requests, []);
-  assert.deepEqual(result.errors, []);
+  assert.deepEqual(requests, ['/api/google/tiles-token']);
+  assert.equal(result.errors.length, 1);
   assert.equal(Cesium.calls[0].assetId, 2275207);
 });
 
-test('standalone without configured credentials does not probe an unsupported token route', async () => {
-  const Cesium = fakeCesium();
+test('standalone uses server tokens without a browser key and preserves keyless fallback', async () => {
+  const tileset = { id: 'server-token' };
+  const Cesium = fakeCesium([tileset]);
   const requests = [];
   const result = await standaloneStartup(Cesium, {}, async (url) => {
     requests.push(url);
@@ -116,11 +117,19 @@ test('standalone without configured credentials does not probe an unsupported to
       }),
     };
   });
-  assert.equal(result.route, 'osm');
-  assert.equal(result.tileset, null);
-  assert.deepEqual(requests, []);
-  assert.deepEqual(Cesium.calls, []);
+  assert.equal(result.route, 'google-token');
+  assert.equal(result.tileset, tileset);
+  assert.deepEqual(requests, ['/api/google/tiles-token']);
+  assert.equal(
+    Cesium.calls[0].resource.headers.Authorization,
+    'Bearer server-fixture',
+  );
   assert.deepEqual(result.errors, []);
+  const fallback = await standaloneStartup(fakeCesium(), {}, async () => ({
+    status: 204,
+  }));
+  assert.equal(fallback.route, 'osm');
+  assert.equal(fallback.tileset, null);
 });
 
 test('map startup route reflects the best configured provider', () => {
@@ -143,13 +152,22 @@ test('no credentials skip photoreal loading and preserve keyless startup', async
 test('a direct Google key is preferred', async () => {
   const tileset = { id: 'direct' };
   const Cesium = fakeCesium([tileset]);
-  const result = await loadPhotorealisticTileset(Cesium, {
-    googleApiKey: 'google-secret',
-    cesiumToken: 'ion-secret',
-  });
+  let tokenRequests = 0;
+  const result = await standaloneStartup(
+    Cesium,
+    {
+      googleApiKey: 'google-secret',
+      cesiumToken: 'ion-secret',
+    },
+    async () => {
+      tokenRequests++;
+      return { status: 204 };
+    },
+  );
   assert.equal(result.tileset, tileset);
   assert.equal(result.route, 'google-direct');
   assert.equal(Cesium.calls[0].googleKey, 'google-secret');
+  assert.equal(tokenRequests, 0);
 });
 
 test('an ion-only setup loads the hosted Google 3D asset', async () => {

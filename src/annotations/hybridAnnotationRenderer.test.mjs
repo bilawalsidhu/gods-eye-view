@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
+import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 
 class FakeClassList {
   constructor(owner) {
@@ -213,6 +214,7 @@ function installBrowserGlobals(t) {
 
 /** A viewer whose scene/camera is just enough for both sub-renderers. */
 function fakeViewer(lon, lat) {
+  const credits = new Set();
   const camera = cameraLookingAt(lon, lat);
   const dataSources = [];
   const frames = controlledFrames();
@@ -229,6 +231,11 @@ function fakeViewer(lon, lat) {
     dataSources,
     frames,
     viewer: {
+      credits,
+      creditDisplay: {
+        addStaticCredit: (credit) => credits.add(credit),
+        removeStaticCredit: (credit) => credits.delete(credit),
+      },
       scene,
       camera,
       trackedEntity: null,
@@ -269,7 +276,7 @@ function buildingAnnotation(id, offset = 0) {
   return {
     id, type: 'area', color: 'primary', label: null, alpha: 1,
     anchor: { ...naiveRingCentroid(ring), height: 100 },
-    ring, footprintKind: 'building', buildingHeight: 20,
+    ring, footprintKind: 'building', buildingHeight: 20, outlineCredit: 'tiles',
   };
 }
 
@@ -591,6 +598,10 @@ test('a world add that fails mid-way leaves its landed entities removable', (t) 
   renderer.destroy();
 });
 
+function workTrace() {
+  return { timeOrigin: performance.timeOrigin, slices: [], dropped: 0 };
+}
+
 test('buildings share one probe per frame and preserve probe geometry, filtering and fallback', async (t) => {
   installBrowserGlobals(t);
   const { viewer, dataSources, frames } = fakeViewer(-99, 31);
@@ -598,6 +609,9 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
   t.after(() => renderer.destroy());
   const first = buildingAnnotation('sampled-building');
   const second = buildingAnnotation('fallback-building', 0.01);
+  second.outlineCredit = 'osm';
+  const otherOwner = {};
+  showOsmCredit(viewer, otherOwner);
   const probes = [];
   const outcomes = [-500, 120, 30, null, new Error('tile unavailable'), 60, 9001, 90];
   viewer.scene.clampToHeight = (position) => {
@@ -611,10 +625,23 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
   };
   // Suppress screen points: these counts concern the eight outside-building
   // probes, not the screen renderer's separate anchor-height sampling.
-  const firstCompletion = renderer.add(first, { pendingVisible: false });
-  const secondCompletion = renderer.add(second, { pendingVisible: false });
+  const firstTrace = workTrace();
+  const secondTrace = workTrace();
+  let diagnosticWriteFaults = 0;
+  Object.defineProperty(secondTrace, 'groundDetailDropped', {
+    get: () => 0,
+    set() {
+      diagnosticWriteFaults += 1;
+      throw new Error('diagnostic sink unavailable');
+    },
+    enumerable: true,
+  });
+  const firstCompletion = renderer.add(first, { pendingVisible: false, workTrace: firstTrace });
+  const secondCompletion = renderer.add(second, { pendingVisible: false, workTrace: secondTrace });
   assert.equal(probes.length, 0, 'enqueue must not probe synchronously');
   assert.equal(dataSources[0].entities.values.length, 0);
+  assert.equal([...viewer.credits].filter(c => c.showOnScreen).length, 1,
+    'pending outlines add no tile credit to the other owner');
   for (let frame = 0; frame < 16; frame += 1) {
     const before = probes.length;
     frames.emit();
@@ -624,8 +651,41 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
   const [installed, fallback] = await Promise.all([firstCompletion, secondCompletion]);
   assert.equal(installed.status, 'installed');
   assert.equal(fallback.status, 'installed');
+  assert.equal([...viewer.credits].filter(c => c.showOnScreen).length, 2);
   assert.equal(installed.timing.probes, 8);
   assert.equal(fallback.timing.probes, 8);
+  assert.ok(diagnosticWriteFaults > 0, 'the diagnostic failure was exercised');
+  for (const trace of [firstTrace, secondTrace]) {
+    assert.equal(trace.probes, 8);
+    assert.equal(trace.samplerStatus, 'installed');
+    assert.equal(trace.rendererStatus, 'installed');
+    assert.equal(trace.slices.filter(s => s.phase === 'ground-step').length, 8);
+    assert.equal(trace.slices.filter(s => s.phase === 'hybrid-complete').length, 1);
+    assert.equal(trace.dropped, 0);
+    assert.ok(trace.slices.every(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.end >= s.start));
+    assert.equal(trace.timeOrigin, performance.timeOrigin);
+    const parents = trace.slices.filter(s => s.phase === 'ground-step');
+    for (const [index, parent] of parents.entries()) {
+      const detail = parent.detail;
+      assert.equal(detail.index, index);
+      assert.equal(detail.status, trace === firstTrace ? 'recorded' : 'missing');
+      assert.equal(detail.clampResult,
+        trace === firstTrace && index === 4 ? 'threw' : 'returned');
+      assert.ok(Number.isFinite(detail.clampStart) && Number.isFinite(detail.clampEnd));
+      assert.ok(parent.start <= detail.clampStart && detail.clampStart <= detail.clampEnd && detail.clampEnd <= parent.end);
+      if (index === 7) {
+        assert.equal(detail.commitStatus, 'attempted');
+        assert.ok(Number.isFinite(detail.commitStart) && Number.isFinite(detail.commitEnd));
+        assert.ok(detail.clampEnd <= detail.commitStart && detail.commitStart <= detail.commitEnd && detail.commitEnd <= parent.end);
+      } else {
+        assert.equal(detail.commitStatus, 'not-run');
+        assert.equal(detail.commitStart, null);
+        assert.equal(detail.commitEnd, null);
+      }
+    }
+  }
+  assert.notEqual(firstTrace.slices, secondTrace.slices);
+  assert.ok(firstTrace.slices.filter(s => s.phase === 'ground-step').at(-1).end <= secondTrace.slices.find(s => s.phase === 'ground-step').start, 'each queued task records only its own sampling frames');
   const centroid = naiveRingCentroid(first.ring);
   const lonScale = 111320 * Math.cos(Cesium.Math.toRadians(centroid.lat));
   const radius = Math.max(...first.ring.map(([lon, lat]) =>
@@ -647,6 +707,13 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
   const afterCompletion = probes.length;
   frames.emit();
   assert.equal(probes.length, afterCompletion, 'completion releases the sampler');
+  renderer.remove(first);
+  assert.equal([...viewer.credits].filter(c => c.showOnScreen).length, 1,
+    'removing the last tile proxy retains the OSM building and other owner');
+  renderer.remove(second);
+  assert.equal([...viewer.credits].filter(c => c.showOnScreen).length, 1);
+  hideOsmCredit(viewer, otherOwner);
+  assert.equal(viewer.credits.size, 0);
 });
 
 test('building cancellation, queued deadline and destroy prevent saved callbacks from committing', async (t) => {
@@ -658,17 +725,23 @@ test('building cancellation, queued deadline and destroy prevent saved callbacks
   let probeCount = 0;
   viewer.scene.clampToHeight = (position) => { probeCount += 1; return position; };
   const cancelled = buildingAnnotation('cancelled-building');
-  const cancelledCompletion = renderer.add(cancelled, { pendingVisible: false });
+  const cancelledTrace = workTrace();
+  const cancelledCompletion = renderer.add(cancelled, { pendingVisible: false, workTrace: cancelledTrace });
   const savedCancelled = frames.snapshot();
   renderer.remove(cancelled);
   assert.equal((await cancelledCompletion).status, 'cancelled');
+  assert.equal(cancelledTrace.samplerStatus, 'cancelled');
+  assert.equal(cancelledTrace.rendererStatus, 'cancelled');
+  assert.equal(cancelledTrace.slices.filter(s => s.phase === 'ground-step').length, 0);
   for (const listener of savedCancelled) listener();
   assert.equal(probeCount, 0);
+  assert.equal(viewer.credits.size, 0);
 
   const head = buildingAnnotation('deadline-head');
   const tail = buildingAnnotation('deadline-tail', 0.01);
   const headCompletion = renderer.add(head, { pendingVisible: false });
-  const tailCompletion = renderer.add(tail, { pendingVisible: false });
+  const tailTrace = workTrace();
+  const tailCompletion = renderer.add(tail, { pendingVisible: false, workTrace: tailTrace });
   frames.emit();
   assert.equal(probeCount, 1);
   const savedTimeout = frames.snapshot();
@@ -679,6 +752,11 @@ test('building cancellation, queued deadline and destroy prevent saved callbacks
   const tailResult = await tailCompletion;
   assert.equal(tailResult.status, 'timeout');
   assert.equal(tailResult.timing.probes, 0);
+  assert.equal(tailTrace.samplerStatus, 'timeout');
+  assert.equal(tailTrace.rendererStatus, 'timeout');
+  assert.equal(tailTrace.slices.filter(s => s.phase === 'ground-step').length, 0);
+  assert.equal(tailTrace.slices.filter(s => s.phase === 'hybrid-complete').length, 1);
+  assert.equal(viewer.credits.size, 0);
   for (const listener of savedTimeout) listener();
   assert.equal(probeCount, 1, 'saved callbacks cannot revive timed-out tasks');
   assert.equal(dataSources[0].entities.values.length, 0);
@@ -693,6 +771,7 @@ test('building cancellation, queued deadline and destroy prevent saved callbacks
   assert.equal(probeCount, 1);
   assert.equal(dataSources.length, 0, 'destroy removes the owned data source');
   assert.equal(frames.size, 0, 'destroy removes frame listeners');
+  assert.equal(viewer.credits.size, 0);
 });
 
 test('a timed-out building upgrade keeps its existing pending screen group', async (t) => {
@@ -729,11 +808,13 @@ test('an asynchronous caption-conversion throw rolls back multipart world geomet
   const hole = anno.ring.map(([lon, lat]) => [lon + 0.0002, lat + 0.0002]);
   const island = anno.ring.map(([lon, lat]) => [lon + 0.002, lat]);
   anno.polygons = [[anno.ring, hole], [island]];
-  const completion = renderer.update(anno);
+  const captionTrace = workTrace();
+  const completion = renderer.update(anno, { workTrace: captionTrace });
   // Frame projection is still ordinary pending-point work. Arm the failure
   // only after sampling completes, before its promise converts the caption.
   for (let frame = 0; frame < 8; frame += 1) frames.emit();
   assert.ok(dataSources[0].entities.values.length > 0, 'multipart world geometry landed before caption conversion');
+  assert.equal(viewer.credits.size, 2, 'credit belongs to the committed world proxy');
   const originalSetAttribute = dot.setAttribute.bind(dot);
   const failure = new Error('caption conversion failed');
   dot.setAttribute = (name, value) => {
@@ -746,7 +827,12 @@ test('an asynchronous caption-conversion throw rolls back multipart world geomet
   globalThis.window.setTimeout = () => { throw new Error('teardown scheduling failed'); };
   const rejected = assert.rejects(completion, (error) => error === failure);
   await rejected;
+  assert.equal(captionTrace.rendererStatus, 'failed');
+  assert.equal(captionTrace.slices.filter(s => s.phase === 'ground-step').length, 8);
+  assert.equal(captionTrace.slices.filter(s => s.phase === 'hybrid-complete').length, 1);
+  assert.equal(captionTrace.slices.filter(s => s.phase === 'hybrid-rollback').length, 1);
   assert.equal(dataSources[0].entities.values.length, 0, 'all classification, cage and outline parts roll back');
+  assert.equal(viewer.credits.size, 0, 'caption rollback releases that same proxy');
   assert.equal(annotationGroups(svg).length, 1, 'failed screen cleanup remains addressable');
   globalThis.window.setTimeout = workingSetTimeout;
   dot.setAttribute = originalSetAttribute;

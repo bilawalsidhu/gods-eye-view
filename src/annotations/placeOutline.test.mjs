@@ -64,6 +64,11 @@ function assertBundledArea(resolved, label) {
   assert.equal(resolved.label, label);
   assert.equal(resolved.footprintKind, 'area');
   assert.equal(resolved.synthesized, false);
+  assert.equal(
+    resolved.outlineCredit || null,
+    null,
+    'bundled data is not an OSM outline',
+  );
   assert.equal(resolved.resolveOutline, undefined, 'drawn at once');
   assert.deepEqual(resolved.ring[0], resolved.ring.at(-1), 'ring closed');
   assert.ok(resolved.polygons.length >= 1);
@@ -333,6 +338,77 @@ test('a courtyard outline with no filled candidate anchor remains a point', asyn
   }
 });
 
+test('local dateline outlines share a frame for area, centering and filled anchors', async () => {
+  const ring = [
+    [179.9995, -0.0005],
+    [-179.9995, -0.0005],
+    [-179.9995, 0.0005],
+    [179.9995, 0.0005],
+    [179.9995, -0.0005],
+  ];
+  const hole = [
+    [179.9998, -0.0003],
+    [-179.9998, -0.0003],
+    [-179.9998, 0.0003],
+    [179.9998, 0.0003],
+    [179.9998, -0.0003],
+  ];
+  const polygons = [[ring, hole]];
+  const { resolve } = harness(null, {
+    outlineRungs: rungsAnswering({
+      ring,
+      polygons,
+      kind: 'building',
+      heightM: 20,
+    }),
+  });
+  for (const deferFootprint of [true, false]) {
+    for (const [lat, lon, filled] of [
+      [0.0004, 179.9996, true],
+      [0, 179.99999, false],
+      [0.0004, 0, false],
+    ]) {
+      const result = await resolve('this building', viewerAt(lat, lon, 1000), {
+        latitude: lat,
+        longitude: lon,
+        entityKind: 'building',
+        deferFootprint,
+      });
+      const outline = deferFootprint ? await result.resolveOutline() : result;
+      if (!filled) {
+        assert.equal(outline?.ring ?? null, null);
+        continue;
+      }
+      assert.equal(outline.ring, ring);
+      assert.equal(outline.polygons, polygons);
+      assert.deepEqual(
+        [outline.lat, outline.lon],
+        [lat, lon],
+        'keep the filled shell anchor',
+      );
+    }
+  }
+  const plain = harness(null, {
+    outlineRungs: rungsAnswering({ ring, kind: 'building', heightM: 20 }),
+  });
+  const pending = await plain.resolve(
+    'this building',
+    viewerAt(0, 179.9999, 1000),
+    {
+      latitude: 0,
+      longitude: 179.9999,
+      entityKind: 'building',
+    },
+  );
+  const centered = await pending.resolveOutline();
+  assert.equal(centered.ring, ring);
+  assert.ok(
+    Math.abs(centered.lon) > 179.999 &&
+      centered.lon >= -180 &&
+      centered.lon < 180,
+  );
+});
+
 test('a coarse bundled admin-1 city waits for a finer outline', async () => {
   const overParis = viewerAt(48.8566, 2.3522, 40_000);
   // The outer-ring vertex mean is in the hole; the resolved anchor is in
@@ -437,6 +513,11 @@ test('a campus ask reaches the campus, not the Census place of its town', async 
     const outline = await resolved.resolveOutline();
     assert.deepEqual(outline.ring, campus, ask);
     assert.equal(
+      outline.outlineCredit,
+      null,
+      'an injected outline is not inferred OSM',
+    );
+    assert.equal(
       rungs.asked[0].scope,
       'compound',
       `${ask}: past the Census rung`,
@@ -517,4 +598,41 @@ test('a grounds ask never takes the state the geocoder typed', async () => {
     assert.notEqual(outline?.adminArea, 'Texas', ask);
     assert.equal(rungs.asked[0].scope, 'compound', ask);
   }
+});
+
+test('configured OSM geometry retains its origin through inline, deferred and cached base results', async () => {
+  const ring = square(31, -99, 0.001);
+  let calls = 0;
+  const resolver = createAnnotationResolver({
+    boundarySource: {
+      query: async () => {
+        calls++;
+        return [
+          {
+            type: 'way',
+            id: 1,
+            tags: { name: 'Library', building: 'yes' },
+            geometry: ring.map(([lon, lat]) => ({ lon, lat })),
+          },
+        ];
+      },
+    },
+    outlineRungs: { resolve: (_ctx, { base }) => base() },
+  });
+  for (const deferFootprint of [false, true]) {
+    const result = await resolver.resolveAnnotationTarget({
+      viewer: viewerAt(31, -99, 3000),
+      latitude: 31,
+      longitude: -99,
+      target: 'Library',
+      entityKind: 'building',
+      footprint: true,
+      deferFootprint,
+    });
+    const outline = deferFootprint ? await result.resolveOutline() : result;
+    assert.equal(outline.footprintKind, 'building');
+    assert.equal(outline.outlineCredit, 'osm');
+    assert.deepEqual(outline.ring, ring);
+  }
+  assert.equal(calls, 1, 'cached geometry retains its original provider');
 });

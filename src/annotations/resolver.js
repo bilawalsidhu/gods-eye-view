@@ -45,6 +45,37 @@ import { createOutlineRungs } from './outlineRungs.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 
+/** Prepare only local dateline outlines for planar admission and centering. */
+function localOutlineFrame(fp) {
+  const original = { ring: fp?.ring, polygons: fp?.polygons, reference: null };
+  if (!Array.isArray(fp?.ring) || fp.ring.length < 3) return original;
+  let west = Infinity;
+  let east = -Infinity;
+  for (const [lon] of fp.ring) {
+    west = Math.min(west, lon);
+    east = Math.max(east, lon);
+  }
+  if (east - west <= 180) return original;
+  const reference = fp.ring[0][0];
+  west = Infinity;
+  east = -Infinity;
+  const shift = (ring) =>
+    ring.map(([lon, lat]) => {
+      const x = lon - 360 * Math.round((lon - reference) / 360);
+      west = Math.min(west, x);
+      east = Math.max(east, x);
+      return [x, lat];
+    });
+  const ring = shift(fp.ring);
+  const polygons = Array.isArray(fp.polygons)
+    ? fp.polygons.map((part) => part.map(shift))
+    : fp.polygons;
+  // Shapes still spanning half the globe retain their existing behavior. Source coordinates
+  // are never rewritten, including holes and unrelated multipart geometry.
+  if (!Number.isFinite(east - west) || east - west >= 180) return original;
+  return { ring, polygons, reference };
+}
+
 /** Ms the analyst region lookup waits on geocode + admin boundary. */
 const REGION_FALLBACK_BUDGET_MS = 3_000;
 
@@ -83,6 +114,8 @@ export function createAnnotationResolver({
   outlineRungs = createOutlineRungs(),
 } = {}) {
   requireFeatureSource(featureSource);
+  const featureOutlineCredit =
+    featureSource.outlineCredit === 'osm' ? 'osm' : null;
   lifetime?.throwIfAborted();
 
   /**
@@ -768,6 +801,7 @@ export function createAnnotationResolver({
 
     /** Validate a footprint for its scope and re-centre it (resolveOutline's patch). */
     const finishOutline = (fp, scope) => {
+      const frame = localOutlineFrame(fp);
       // Scope sanity: reject a real footprint whose area is wildly wrong for the asked
       // scope (a building/compound/neighborhood intent must never draw a state-sized
       // blob). Synthesized discs are deliberately sized and exempt.
@@ -776,25 +810,34 @@ export function createAnnotationResolver({
         !fp.synthesized &&
         Array.isArray(fp.ring) &&
         fp.ring.length >= 3 &&
-        exceedsScopeArea(fp, scope)
+        exceedsScopeArea(frame, scope)
       ) {
         fp = null;
       }
       if (isUnavailableCapability(fp) || isRateLimitedOutcome(fp)) return fp;
       if (fp === undefined) return undefined; // TRANSIENT — a backoff retry may still find it
       if (!fp || !Array.isArray(fp.ring) || fp.ring.length < 3) return null;
-      let centroid = ringCentroid(fp.ring);
+      let centroid = ringCentroid(frame.ring);
       if (!centroid) return null;
       // An outer-ring mean can lie in a hole or outside a concave part. Keep
       // a filled original anchor or decline, without changing ordinary centering
       // or inventing a new interior point.
       if (
-        Array.isArray(fp.polygons) &&
-        !polygonsContainPoint(fp.polygons, centroid.lat, centroid.lon)
+        Array.isArray(frame.polygons) &&
+        !polygonsContainPoint(frame.polygons, centroid.lat, centroid.lon)
       ) {
-        if (!polygonsContainPoint(fp.polygons, lat, lon)) return null;
+        const anchorLon =
+          frame.reference === null
+            ? lon
+            : lon - 360 * Math.round((lon - frame.reference) / 360);
+        if (!polygonsContainPoint(frame.polygons, lat, anchorLon)) return null;
         centroid = { lat, lon };
       }
+      if (
+        frame.reference !== null &&
+        (centroid.lon < -180 || centroid.lon >= 180)
+      )
+        centroid.lon = ((((centroid.lon + 180) % 360) + 360) % 360) - 180;
       // Same drift bound as the anchor gate: a polygon whose centroid would drag a good
       // anchor out of plausibility is the wrong feature — drop it, keep the point.
       if (
@@ -808,6 +851,7 @@ export function createAnnotationResolver({
         footprintKind: fp.kind,
         buildingHeight: fp.heightM,
         synthesized: Boolean(fp.synthesized),
+        outlineCredit: fp.outlineCredit || null,
         ...(Array.isArray(fp.polygons) ? { polygons: fp.polygons } : {}),
         lat: centroid.lat,
         lon: centroid.lon,
@@ -857,6 +901,7 @@ export function createAnnotationResolver({
     let outlineUnavailable = false;
     let synthesized = false; // true = buffered/approximate area, render dashed/feathered
     let polygons = null; // every part of a multi-part outline, when known
+    let outlineCredit = null;
     if (footprint && !deferFootprint) {
       const fp = await resolveOutline();
       outlineUnavailable = isUnavailableCapability(fp);
@@ -866,6 +911,7 @@ export function createAnnotationResolver({
         buildingHeight = fp.buildingHeight;
         synthesized = fp.synthesized;
         polygons = fp.polygons || null;
+        outlineCredit = fp.outlineCredit || null;
         // Re-center the anchor on the resolved footprint centroid.
         lat = fp.lat;
         lon = fp.lon;
@@ -893,6 +939,7 @@ export function createAnnotationResolver({
       source,
       synthesized,
       outlineUnavailable,
+      outlineCredit,
       ...(polygons ? { polygons } : {}),
       viewport: placeViewport,
       ...(footprint && deferFootprint ? { resolveOutline } : {}),
@@ -1517,7 +1564,12 @@ export function createAnnotationResolver({
               ? 40
               : 120;
       ring = simplifyRing(ring, tolM);
-      const fp = { ring, kind: 'area', heightM: null };
+      const fp = {
+        ring,
+        kind: 'area',
+        heightM: null,
+        outlineCredit: featureOutlineCredit,
+      };
 
       // Scope sanity BEFORE caching: a city-suffixed neighborhood name ("Downtown San
       // Francisco") can match the CITY admin. Caching an oversized ring would poison the
@@ -1601,7 +1653,14 @@ export function createAnnotationResolver({
         bestRing = closeRing(coords.map((p) => [p.lon, p.lat]));
       }
     }
-    return bestRing ? { ring: bestRing, kind: 'area', heightM: null } : null;
+    return bestRing
+      ? {
+          ring: bestRing,
+          kind: 'area',
+          heightM: null,
+          outlineCredit: featureOutlineCredit,
+        }
+      : null;
   }
 
   /**
@@ -1644,7 +1703,12 @@ export function createAnnotationResolver({
         }
       }
       if (bestRing) {
-        const fp = { ring: bestRing, kind: 'area', heightM: null };
+        const fp = {
+          ring: bestRing,
+          kind: 'area',
+          heightM: null,
+          outlineCredit: featureOutlineCredit,
+        };
         cacheWrite(footprintCache, cacheKey, fp);
         return fp;
       }
@@ -1675,6 +1739,7 @@ export function createAnnotationResolver({
             ring: bufferCorridor(line, 11),
             kind: 'area',
             heightM: null,
+            outlineCredit: featureOutlineCredit,
           };
           cacheWrite(footprintCache, cacheKey, fp);
           return fp;
@@ -1813,7 +1878,12 @@ export function createAnnotationResolver({
         areaM2 < bestArea * 0.999 ||
         (areaM2 <= bestArea * 1.05 && nameMatch && !bestNameMatch); // near-tie: name-match wins
       if (better) {
-        best = { ring: ringLonLat, kind: 'area', heightM: null };
+        best = {
+          ring: ringLonLat,
+          kind: 'area',
+          heightM: null,
+          outlineCredit: featureOutlineCredit,
+        };
         bestArea = areaM2;
         bestNameMatch = nameMatch;
       }
@@ -2075,6 +2145,7 @@ export function createAnnotationResolver({
         best = {
           ring: closeRing(coords.map((p) => [p.lon, p.lat])),
           kind: isBuilding ? 'building' : 'area',
+          outlineCredit: featureOutlineCredit,
           heightM: isBuilding
             ? (element.heightM ??
               Math.max(10, Math.min(70, Math.sqrt(Math.max(1, areaM2)) * 0.6)))

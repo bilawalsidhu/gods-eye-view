@@ -5,7 +5,7 @@
   "url": "https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_place_500k.zip",
   "sha256": "ce0e4019ecd4123d03d53aaa936eed0459b82e3e14b89a3dcd4d5e8b3308627d",
   "license": "Public domain (U.S. Government work, 17 U.S.C. § 105)",
-  "schema": "states[]: st (USPS), fips, name, count, bbox [w, s, e, n] (e > 180 across the antimeridian). <st>.json: st, state, fips, features[]: geoid, name (NAME), alt?[] (everyday names for formal records), full (NAMELSAD), lsad? (city, town, CDP, …), cdp? (census designated place), d? (decimals when not meta.decimals), polygons[][ring] (first ring outer, rest holes; each ring open and encoded as integers in 10^-d degrees, first vertex absolute then [dLon, dLat] deltas)",
+  "schema": "states[]: st (USPS), fips, name, count, bbox [w, s, e, n] (e > 180 across the antimeridian). <st>.json: st, state, fips, features[]: geoid, name (NAME), alt?[] (everyday names for formal records), full (NAMELSAD), lsad? (city, town, CDP, …), cdp? (census designated place), d? (decimals when not meta.decimals), label? [lon, lat] (verified filled anchor in degrees when the outer centroid is unfilled), polygons[][ring] (first ring outer, rest holes; each ring open and encoded as integers in 10^-d degrees, first vertex absolute then [dLon, dLat] deltas)",
   "decimals": 4,
   "curation": {
    "toleranceFactor": 0.003,

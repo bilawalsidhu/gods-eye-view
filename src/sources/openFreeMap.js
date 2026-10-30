@@ -295,21 +295,8 @@ function decodeSharedOpenFreeMapTile(bytes, z, x, y) {
   let baseBytes = 0;
   let projectionBytes = 0;
   let resizeCacheEntry = null;
-  let cacheBound = false;
-  const idleCallbacks = new Map();
-
-  const cancelIdleProjection = (name) => {
-    if (!idleCallbacks.has(name)) return;
-    const handle = idleCallbacks.get(name);
-    idleCallbacks.delete(name);
-    globalThis.cancelIdleCallback?.(handle);
-  };
-  const cancelIdleProjections = () => {
-    for (const name of [...idleCallbacks.keys()]) cancelIdleProjection(name);
-  };
   const project = (name) => {
     if (projections.has(name)) return projections.get(name);
-    cancelIdleProjection(name);
     const projector = TILE_PROJECTIONS.get(name);
     if (!projector)
       throw new Error(`Unknown OpenFreeMap tile projection: ${name}`);
@@ -320,45 +307,16 @@ function decodeSharedOpenFreeMapTile(bytes, z, x, y) {
     resizeCacheEntry?.(baseBytes + projectionBytes);
     return value;
   };
-  const scheduleIdleProjections = () => {
-    if (
-      !cacheBound ||
-      typeof globalThis.requestIdleCallback !== 'function' ||
-      typeof globalThis.cancelIdleCallback !== 'function'
-    )
-      return;
-    for (const name of TILE_PROJECTIONS.keys())
-      if (!projections.has(name) && !idleCallbacks.has(name)) {
-        const handle = globalThis.requestIdleCallback(
-          () => {
-            if (!cacheBound || idleCallbacks.get(name) !== handle) return;
-            idleCallbacks.delete(name);
-            try {
-              project(name);
-            } catch {
-              // The explicit consumer path retries and reports projection errors.
-            }
-          },
-          { timeout: 1000 },
-        );
-        idleCallbacks.set(name, handle);
-      }
-  };
 
   return {
     ...base,
     project,
     bindSharedCacheEntry(resize, initialBytes) {
-      cancelIdleProjections();
       resizeCacheEntry = resize;
       baseBytes = initialBytes;
-      cacheBound = true;
       resizeCacheEntry(baseBytes + projectionBytes);
-      scheduleIdleProjections();
     },
     releaseSharedCacheEntry() {
-      cacheBound = false;
-      cancelIdleProjections();
       projections.clear();
       baseBytes = 0;
       projectionBytes = 0;

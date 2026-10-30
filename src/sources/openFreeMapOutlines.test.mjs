@@ -59,6 +59,9 @@ test('street names compare with abbreviations and a leading direction only', () 
   assert.ok(!streetNameMatches('Congress Avenue', 'South Congress Avenue'));
   assert.ok(!streetNameMatches('Congress Street', 'Congress Avenue'));
   assert.ok(!streetNameMatches('East 11th Street', '11th'));
+  assert.ok(!streetNameMatches('कुल मार्ग', 'काली मार्ग'));
+  assert.ok(streetNameMatches('काली मार्ग', 'काली मार्ग'));
+  assert.ok(streetNameMatches('Champs-Élysées', 'Champs Elysees'));
 });
 
 test('same-name segments merge into polylines around the point (Congress Avenue)', () => {
@@ -153,7 +156,7 @@ test('tile enclosure alone does not identify the named Capitol grounds', () => {
   );
 });
 
-test('traffic idle preparation gives outlines the same decoded tile without another request', async () => {
+test('traffic projects outlines only on demand and shares the decoded tile', async () => {
   clearSharedOpenFreeMapTiles();
   const idle = [];
   const previousIdle = globalThis.requestIdleCallback;
@@ -163,6 +166,11 @@ test('traffic idle preparation gives outlines the same decoded tile without anot
     return idle.length;
   };
   globalThis.cancelIdleCallback = () => {};
+  let projectionRuns = 0;
+  registerOpenFreeMapProjection('requested-outlines-test', (...args) => {
+    projectionRuns++;
+    return decodeOpenFreeMapOutlineTile(...args);
+  });
   let requests = 0;
   const bytes = readFileSync(
     new URL(
@@ -183,16 +191,26 @@ test('traffic idle preparation gives outlines the same decoded tile without anot
       fetchImpl,
     });
     const outlines = createOpenFreeMapOutlineSource({
+      projection: 'requested-outlines-test',
       template:
         'https://tiles.openfreemap.org/planet/v/20250910_001001_pt/{z}/{x}/{y}.pbf',
       fetchImpl,
     });
-    await traffic.fetchBounds(box, { zoom: 14, tiles });
-    assert.ok(idle.length > 0, 'traffic schedules the registered projection');
-    for (const callback of idle)
-      callback({ didTimeout: false, timeRemaining: () => 50 });
+    const trafficResult = await traffic.fetchBounds(box, { zoom: 14, tiles });
+    assert.equal(idle.length, 0, 'traffic schedules no outline extraction');
+    assert.equal(projectionRuns, 0);
     const result = await outlines.fetchBounds(box, { zoom: 14, tiles });
     assert.ok(result.tiles[0].buildings.length > 0);
+    await outlines.fetchBounds(box, { zoom: 14, tiles });
+    assert.equal(
+      projectionRuns,
+      1,
+      'the first explicit request owns the cached projection',
+    );
+    assert.deepEqual(
+      (await traffic.fetchBounds(box, { zoom: 14, tiles })).tiles,
+      trafficResult.tiles,
+    );
     assert.equal(requests, 1);
   } finally {
     globalThis.requestIdleCallback = previousIdle;
@@ -201,20 +219,9 @@ test('traffic idle preparation gives outlines the same decoded tile without anot
   }
 });
 
-test('idle projections are retired on shared eviction, clear, and self-eviction', async () => {
-  const previousIdle = globalThis.requestIdleCallback;
-  const previousCancelIdle = globalThis.cancelIdleCallback;
-  const scheduled = new Map();
-  const cancelled = new Set();
-  let nextHandle = 1;
-  globalThis.requestIdleCallback = (callback) => {
-    const handle = nextHandle++;
-    scheduled.set(handle, callback);
-    return handle;
-  };
-  globalThis.cancelIdleCallback = (handle) => cancelled.add(handle);
+test('an explicitly requested over-budget projection releases its shared entry', async () => {
   let projectionRuns = 0;
-  registerOpenFreeMapProjection('idle-lifecycle-test', () => {
+  registerOpenFreeMapProjection('projection-lifecycle-test', () => {
     projectionRuns++;
     return { coordinates: Array.from({ length: 20_000 }, (_, i) => [i, i]) };
   });
@@ -224,23 +231,15 @@ test('idle projections are retired on shared eviction, clear, and self-eviction'
       import.meta.url,
     ),
   );
-  const secondBytes = readFileSync(
-    new URL(
-      '../data/fixtures/ofm-outlines-austin-14-3743-6746.pbf',
-      import.meta.url,
-    ),
-  );
   const sharedDecodedCache = createSharedDecodedTileCache({
     maxEntries: 1,
     maxCacheBytes: 100_000,
   });
   const source = createOpenFreeMapSource({
     template: 'https://tiles.openfreemap.org/planet/v/test/{z}/{x}/{y}.pbf',
+    projection: 'projection-lifecycle-test',
     sharedDecodedCache,
-    fetchImpl: async (url) =>
-      new Response(
-        String(url).includes('/6746.pbf') ? secondBytes : firstBytes,
-      ),
+    fetchImpl: async () => new Response(firstBytes),
   });
   const box = { south: 30.24, north: 30.29, west: -97.75, east: -97.73 };
   try {
@@ -248,55 +247,10 @@ test('idle projections are retired on shared eviction, clear, and self-eviction'
       zoom: 14,
       tiles: [{ z: 14, x: 3743, y: 6745 }],
     });
-    const firstHandles = [...scheduled.keys()];
-    assert.ok(firstHandles.length >= 2);
-
-    await source.fetchBounds(box, {
-      zoom: 14,
-      tiles: [{ z: 14, x: 3743, y: 6746 }],
-    });
-    assert.ok(firstHandles.every((handle) => cancelled.has(handle)));
-    for (const handle of firstHandles) scheduled.get(handle)();
-    assert.equal(projectionRuns, 0, 'late callbacks after eviction are inert');
-
-    const secondHandles = [...scheduled.keys()].filter(
-      (handle) => !firstHandles.includes(handle),
-    );
-    sharedDecodedCache.clear();
-    assert.ok(secondHandles.every((handle) => cancelled.has(handle)));
-    for (const handle of secondHandles) scheduled.get(handle)();
-    assert.equal(projectionRuns, 0, 'late callbacks after clear are inert');
-
-    const selfEvictingCache = createSharedDecodedTileCache({
-      maxEntries: 1,
-      maxCacheBytes: 100_000,
-    });
-    const selfEvictingSource = createOpenFreeMapSource({
-      template: 'https://tiles.openfreemap.org/planet/v/self/{z}/{x}/{y}.pbf',
-      sharedDecodedCache: selfEvictingCache,
-      fetchImpl: async () => new Response(firstBytes),
-    });
-    const beforeSelfEviction = nextHandle;
-    await selfEvictingSource.fetchBounds(box, {
-      zoom: 14,
-      tiles: [{ z: 14, x: 3743, y: 6745 }],
-    });
-    const selfEvictingHandles = [...scheduled.keys()].filter(
-      (handle) => handle >= beforeSelfEviction,
-    );
-    scheduled.get(selfEvictingHandles.at(-1))();
     assert.equal(projectionRuns, 1);
-    assert.deepEqual(selfEvictingCache.stats(), { entries: 0, bytes: 0 });
-    assert.ok(
-      selfEvictingHandles.slice(0, -1).every((handle) => cancelled.has(handle)),
-    );
-    for (const handle of selfEvictingHandles)
-      if (!cancelled.has(handle)) scheduled.get(handle)();
-    assert.equal(projectionRuns, 1, 'self-eviction retires sibling idle work');
+    assert.deepEqual(sharedDecodedCache.stats(), { entries: 0, bytes: 0 });
   } finally {
     source.clear();
     sharedDecodedCache.clear();
-    globalThis.requestIdleCallback = previousIdle;
-    globalThis.cancelIdleCallback = previousCancelIdle;
   }
 });

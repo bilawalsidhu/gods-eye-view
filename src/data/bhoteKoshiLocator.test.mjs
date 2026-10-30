@@ -728,6 +728,8 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
       viewer,
       _sceneSeekGeneration: 0,
       _loadGeneration: 0,
+      _bumpSceneSeekGeneration:
+        SceneDirector.prototype._bumpSceneSeekGeneration,
       _cancelActiveSceneTravel:
         SceneDirector.prototype._cancelActiveSceneTravel,
       _setSceneMediaPlayback: SceneDirector.prototype._setSceneMediaPlayback,

@@ -19,6 +19,11 @@
    "url": "https://raw.githubusercontent.com/whosonfirst/whosonfirst-sources/e17af153c144fe6e08aa8db2607b4bf8aecd448d/data/sources-spec-latest.json",
    "sha256": "d8a5dd873d26eee11583de4438185c046dec33848d5bde27047ca4bff44d9c39"
   },
+  "recordExclusions": {
+   "can-ons": 36,
+   "can-saskodp": 54
+  },
+  "recordExclusionReason": "Original source-specific redistribution terms have not been established for these records in this derived pack.",
   "license": "Per source; see sources and ATTRIBUTION.md",
   "format": "neighborhood-polylines-v1",
   "fields": [
@@ -127,12 +132,6 @@
     "terms": "http://opendata.newwestcity.ca/licence",
     "records": 9
    },
-   "can-ons": {
-    "name": "Ottawa Neighbourhood Study (ONS)",
-    "license": "CC BY (equivalent)",
-    "terms": "http://neighbourhoodstudy.ca/ons-terms-of-use/",
-    "records": 36
-   },
    "can-qcodp": {
     "name": "Quebec City Open Data Portal",
     "license": "CC BY 4.0",
@@ -144,12 +143,6 @@
     "license": "Open Government Licence - City of Regina",
     "terms": "http://www.regina.ca/residents/open-government/open-government-licence/",
     "records": 12
-   },
-   "can-saskodp": {
-    "name": "City of Saskatoon Open Data Portal - Neighbourhood Areas",
-    "license": "CC0 (equivalent)",
-    "terms": "http://opendata-saskatoon.cloudapp.net/TermsOfUse/TermsOfUse",
-    "records": 54
    },
    "can-surgis": {
     "name": "City of Surrey GIS Section",
@@ -827,7 +820,7 @@
   },
   {
    "key": "2211",
-   "count": 375,
+   "count": 321,
    "bbox": [
     -106.82496,
     44.98885,
@@ -837,7 +830,7 @@
   },
   {
    "key": "2300100",
-   "count": 20,
+   "count": 16,
    "bbox": [
     -76.35559,
     45.08001,
@@ -847,7 +840,7 @@
   },
   {
    "key": "2300101",
-   "count": 465,
+   "count": 433,
    "bbox": [
     -76.31305,
     44.96177,

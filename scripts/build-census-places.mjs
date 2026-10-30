@@ -361,7 +361,7 @@ async function build() {
       sha256: source.digest,
       license: 'Public domain (U.S. Government work, 17 U.S.C. § 105)',
       schema:
-        'states[]: st (USPS), fips, name, count, bbox [w, s, e, n] (e > 180 across the antimeridian). <st>.json: st, state, fips, features[]: geoid, name (NAME), alt?[] (everyday names for formal records), full (NAMELSAD), lsad? (city, town, CDP, …), cdp? (census designated place), d? (decimals when not meta.decimals), polygons[][ring] (first ring outer, rest holes; each ring open and encoded as integers in 10^-d degrees, first vertex absolute then [dLon, dLat] deltas)',
+        'states[]: st (USPS), fips, name, count, bbox [w, s, e, n] (e > 180 across the antimeridian). <st>.json: st, state, fips, features[]: geoid, name (NAME), alt?[] (everyday names for formal records), full (NAMELSAD), lsad? (city, town, CDP, …), cdp? (census designated place), d? (decimals when not meta.decimals), label? [lon, lat] (verified filled anchor in degrees when the outer centroid is unfilled), polygons[][ring] (first ring outer, rest holes; each ring open and encoded as integers in 10^-d degrees, first vertex absolute then [dLon, dLat] deltas)',
       decimals: params.decimals,
       curation: params,
       script: 'scripts/build-census-places.mjs',

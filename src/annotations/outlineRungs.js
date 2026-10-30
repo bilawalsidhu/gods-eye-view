@@ -159,7 +159,7 @@ export function createOutlineRungs({
     return street ? streetFootprint(street) : null;
   }
 
-  async function buildingRung(ctx) {
+  async function buildingRung(ctx, requireContainment = false) {
     const decoded = await tilesAround(
       ctx.lat,
       ctx.lon,
@@ -167,7 +167,8 @@ export function createOutlineRungs({
       ctx.signal,
     );
     const building = decoded && buildingFromTiles(decoded, ctx);
-    if (!building) return null;
+    if (!building || (requireContainment && building.contains !== true))
+      return null;
     return {
       ring: building.ring,
       polygons: building.polygons,
@@ -255,7 +256,8 @@ export function createOutlineRungs({
       if (!fp) return null;
       const patch = finish(fp, asScope);
       if (patch?.ring) {
-        ctx.credit?.(provider === 'openfreemap' ? 'tiles' : 'osm');
+        patch.outlineCredit = provider === 'openfreemap' ? 'tiles' : 'osm';
+        ctx.credit?.(patch.outlineCredit);
         // One line per answered outline, like the resolver's own trace.
         console.log(
           `[Outline] "${ctx.target || ''}": scope=${asScope} → ${provider}` +
@@ -316,11 +318,11 @@ export function createOutlineRungs({
       if (grounds) return grounds;
     }
 
-    // A named building nobody outlined: the footprint at its point. Never for
+    // A named building nobody outlined: the footprint holding its point. Never for
     // a grounds ask, where the building is the wrong shape.
     if (scope === 'building' && named && !ctx.around && !ctx.groundsLike) {
       const building = accept(
-        await buildingRung(ctx),
+        await buildingRung(ctx, true),
         'building',
         'openfreemap',
       );

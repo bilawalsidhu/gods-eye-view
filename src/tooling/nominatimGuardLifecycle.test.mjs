@@ -35,7 +35,7 @@ const tempDir = (t) => {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 };
-const quick = { sleep: async () => {} };
+const quick = { sleep: async () => {}, minSpacingMs: 0 };
 const json = (value) => Response.json(value);
 const square = (lon, lat, d) => [
   [
@@ -235,6 +235,49 @@ test('independent public gates sharing state enforce spacing and cap', async (t)
   starts.sort((a, b) => a - b);
   assert.ok(starts[1] - starts[0] >= 35, `${starts[1] - starts[0]}ms apart`);
 
+  // A slow durable write must move the next admission relative to the actual
+  // fetch invocation, not the timestamp reserved before that write.
+  const stalledFile = path.join(dir, 'stalled.json');
+  let clock = Date.UTC(2026, 8, 29, 12);
+  const actualStarts = [];
+  const renameSync = fs.renameSync;
+  let stalled = false;
+  const rename = t.mock.method(fs, 'renameSync', (...args) => {
+    if (args[1] === stalledFile && !stalled) {
+      stalled = true;
+      clock += 1500;
+    }
+    return renameSync(...args);
+  });
+  const delayedGate = () =>
+    createNominatimGate({
+      settings: PUBLIC,
+      usage: createGateStateStore({ file: stalledFile }),
+      now: () => clock,
+      sleep: async (ms) => {
+        clock += ms;
+      },
+      minSpacingMs: 1100,
+      fetchImpl: async () => {
+        actualStarts.push(clock);
+        return json([]);
+      },
+    });
+  try {
+    await Promise.all([
+      delayedGate().requestJson((endpoint) => `${endpoint}?q=delayed-one`),
+      delayedGate().requestJson((endpoint) => `${endpoint}?q=delayed-two`),
+    ]);
+  } finally {
+    rename.mock.restore();
+  }
+  assert.equal(actualStarts.length, 2);
+  assert.ok(actualStarts[1] - actualStarts[0] >= 1100);
+  assert.equal(
+    createGateStateStore({ file: stalledFile }).count('2026-09-29'),
+    2,
+  );
+
   const capFile = path.join(dir, 'cap.json');
   let sent = 0;
   const capGate = () =>
@@ -277,6 +320,78 @@ test('a persistence failure is reported and never lowers the count', (t) => {
   assert.equal(store.status().persisted, false);
   assert.ok(store.status().error);
   assert.equal(errors.length, 1, 'reported once, not per request');
+});
+
+test('a persistence failure after fetch invocation aborts it and blocks restarts', async (t) => {
+  const file = path.join(tempDir(t), 'state.json');
+  let clock = Date.UTC(2026, 8, 29, 12);
+  const markers = () =>
+    fs
+      .readdirSync(path.dirname(file))
+      .filter((name) => name.startsWith('state.json.dispatch.'));
+  const calls = [];
+  const renameSync = fs.renameSync;
+  let failStateWrite = false;
+  const rename = t.mock.method(fs, 'renameSync', (...args) => {
+    if (failStateWrite && args[1] === file) {
+      failStateWrite = false;
+      throw Object.assign(new Error('EIO'), { code: 'EIO' });
+    }
+    return renameSync(...args);
+  });
+  const make = (fetchImpl) =>
+    createNominatimGate({
+      settings: PUBLIC,
+      usage: createGateStateStore({ file, onError: () => {} }),
+      now: () => clock,
+      sleep: async (ms) => {
+        clock += ms;
+      },
+      minSpacingMs: 1100,
+      fetchImpl,
+    });
+  let durableAtInvocation;
+  let requestSignal;
+  const gate = make((url, { signal }) => {
+    calls.push(url);
+    durableAtInvocation = JSON.parse(fs.readFileSync(file, 'utf8')).count;
+    requestSignal = signal;
+    failStateWrite = true;
+    return new Promise((_, reject) =>
+      signal.addEventListener('abort', () => reject(signal.reason), {
+        once: true,
+      }),
+    );
+  });
+  try {
+    await assert.rejects(
+      gate.requestJson((endpoint) => `${endpoint}?q=x`),
+      {
+        code: 'NOMINATIM_STATE_UNAVAILABLE',
+      },
+    );
+  } finally {
+    rename.mock.restore();
+  }
+  assert.equal(durableAtInvocation, 1, 'the count persisted before invocation');
+  assert.ok(requestSignal.aborted);
+  const orphan = markers();
+  assert.equal(orphan.length, 1);
+  assert.equal(gate.stats().persistence.dispatchPending, true);
+  clock += 60_000;
+  const restarted = make(async (url) => {
+    calls.push(url);
+    return json([]);
+  });
+  await assert.rejects(
+    restarted.requestJson((endpoint) => `${endpoint}?q=y`),
+    {
+      code: 'NOMINATIM_STATE_UNAVAILABLE',
+    },
+  );
+  assert.equal(calls.length, 1);
+  assert.deepEqual(markers(), orphan);
+  assert.equal(createGateStateStore({ file }).count('2026-09-29'), 1);
 });
 
 test('parseable but invalid public usage state fails closed', async (t) => {

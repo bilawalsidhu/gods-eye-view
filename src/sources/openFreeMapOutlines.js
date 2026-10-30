@@ -17,9 +17,8 @@ import { normalizePlaceName } from '../data/placeBoundaries.js';
 /**
  * Street and building outlines from the same OpenFreeMap z14 vector tiles the
  * traffic layer reads. No new tile provider: the source below points at the
- * same immutable tile URLs and bounded decoded owner. Traffic prepares the
- * outline projection in idle time; nothing here starts provider I/O without
- * an explicit traffic or outline ask.
+ * same immutable tile URLs and bounded decoded owner. Outline extraction runs
+ * only when an outline consumer asks for it; traffic loading never warms it.
  */
 
 /** Tile zoom used for outlines (the highest OpenMapTiles zoom with buildings). */
@@ -120,6 +119,7 @@ export function decodeOpenFreeMapOutlineTile(
       const height = Number(props.render_height);
       return { heightM: Number.isFinite(height) && height > 0 ? height : null };
     },
+    true,
   );
   // Open areas that can enclose grounds: parks, landuse and park-like cover.
   const areas = [];
@@ -172,7 +172,15 @@ function pixelToLonLat(px, py, extent, z, x, y) {
  * and tile, and is marked `clipped` so it is never used as a whole outline. A
  * neighbouring tile may carry the same feature complete within its buffer.
  */
-function decodePolygons(layer, z, x, y, keep, describe) {
+function decodePolygons(
+  layer,
+  z,
+  x,
+  y,
+  keep,
+  describe,
+  componentLocal = false,
+) {
   if (!layer) return [];
   if (layer.length > LAYER_FEATURE_LIMIT)
     throw new Error('Vector tile feature limit exceeded');
@@ -210,41 +218,43 @@ function decodePolygons(layer, z, x, y, keep, describe) {
         : geometry.type === 'MultiPolygon'
           ? geometry.coordinates
           : [];
-    // Preserve one feature's complete topology, including features without an
-    // id. A cut or malformed part makes every part incomplete, not a smaller
-    // exact building that happens to contain the pointer.
-    const incomplete =
-      !polygons.length ||
-      polygons.some(
-        (rings) =>
-          !Array.isArray(rings) ||
-          !rings.length ||
-          rings.some(
-            (ring) =>
-              !Array.isArray(ring) ||
-              ring.length < 4 ||
-              ring.some(
-                (point) =>
-                  !Array.isArray(point) ||
-                  point.length < 2 ||
-                  !Number.isFinite(point[0]) ||
-                  !Number.isFinite(point[1]),
-              ),
-          ),
-      );
-    const clipped =
-      incomplete || polygons.some((rings) => rings[0].some(onCut));
+    // A tile building feature may aggregate unrelated structures. Validate its
+    // selected component independently; named grounds retain whole topology.
+    const incompleteParts = polygons.map(
+      (rings) =>
+        !Array.isArray(rings) ||
+        !rings.length ||
+        rings.some(
+          (ring) =>
+            !Array.isArray(ring) ||
+            ring.length < 4 ||
+            ring.some(
+              (point) =>
+                !Array.isArray(point) ||
+                point.length < 2 ||
+                !Number.isFinite(point[0]) ||
+                !Number.isFinite(point[1]),
+            ),
+        ),
+    );
+    const clippedParts = polygons.map(
+      (rings, part) => incompleteParts[part] || rings[0].some(onCut),
+    );
     for (let part = 0; part < polygons.length; part++) {
       const rings = polygons[part];
       if (!Array.isArray(rings?.[0]) || rings[0].length < 4) continue;
       out.push({
         rings,
-        featureParts: polygons,
+        featureParts: componentLocal ? null : polygons,
         id: feature.id ?? null,
         part,
         tile: `${z}/${x}/${y}`,
-        clipped,
-        incomplete,
+        clipped: componentLocal
+          ? clippedParts[part]
+          : clippedParts.some(Boolean),
+        incomplete: componentLocal
+          ? incompleteParts[part]
+          : incompleteParts.some(Boolean),
         ...describe(props),
       });
     }
@@ -297,12 +307,13 @@ const STREET_WORDS = Object.freeze({
 
 const DIRECTIONS = new Set(['north', 'south', 'east', 'west']);
 
-/** Comparable street name: accents off, abbreviations expanded. */
+/** Comparable street name: Latin accents off, abbreviations expanded. */
 export function normalizeStreetName(value) {
   return String(value ?? '')
     .split(',')[0]
     .normalize('NFKD')
-    .replace(/\p{M}+/gu, '')
+    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
+    .normalize('NFKC')
     .toLocaleLowerCase('en-US')
     .replace(/[\p{P}\p{S}]+/gu, ' ')
     .split(/\s+/)
@@ -470,8 +481,8 @@ function distanceToLineM(lon, lat, ring) {
  * The building at a point: the smallest footprint containing it, else the
  * nearest within `maxDistanceM`, else null.
  *
- * The selected part remains primary; `polygons` carries every part and hole
- * of the same complete feature, regardless of whether it has an id.
+ * Returns only the selected footprint component and its holes. A vector-tile
+ * feature id does not certify that disjoint siblings are one physical building.
  */
 export function buildingFromTiles(
   tiles,
@@ -521,11 +532,9 @@ export function buildingFromTiles(
   const pick =
     containing?.building || (fragmentContains ? null : nearest?.building);
   if (!pick) return null;
-  const parts = pick.featureParts || [pick.rings];
-  const polygons = [
-    pick.rings,
-    ...parts.filter((part) => part !== pick.rings),
-  ].map((part) => part.map((ring) => closeRing(ring.map((p) => [p[0], p[1]]))));
+  const polygons = [pick.rings].map((part) =>
+    part.map((ring) => closeRing(ring.map((p) => [p[0], p[1]]))),
+  );
   const rings = polygons[0];
   return {
     ring: rings[0],

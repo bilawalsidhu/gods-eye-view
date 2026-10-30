@@ -4,7 +4,7 @@
 Reads the pinned Who's On First neighbourhood, macrohood and microhood
 archives and the WOF sources registry, keeps current polygon records whose
 geometry source matches the reviewed open-licence allowlist, simplifies them
-to about 15 m, and
+to about 15 m, then applies pinned source/ID exclusions after partitioning, and
 writes src/data/local_data/wof_neighborhoods/:
 
   index.json      format, licences per source, tile list with boxes
@@ -68,6 +68,7 @@ TILE_MAX_DEPTH = 16
 LICENSE_POLICY = json.loads((ROOT / 'scripts/wof-open-licenses.json').read_text())
 ALLOWED_LICENSES = frozenset(LICENSE_POLICY['licenses'])
 REVIEWED_SOURCES = LICENSE_POLICY.get('reviewedSources', {})
+RECORD_EXCLUSIONS = LICENSE_POLICY['recordExclusions']
 FIELDS = ['id', 'name', 'country', 'type', 'bbox', 'aliases', 'source', 'rings', 'label']
 
 
@@ -250,6 +251,42 @@ def union_box(features):
     ]
 
 
+def exclude_records(partition):
+    """Filter approved source+IDs AFTER the original byte-sized partition."""
+    if RECORD_EXCLUSIONS['archives'] != {k: a['sha256'] for k, a in ARCHIVES.items()}:
+        raise ValueError('record exclusions do not match the pinned archives')
+    if RECORD_EXCLUSIONS['registrySha256'] != SOURCES['sha256']:
+        raise ValueError('record exclusions do not match the pinned registry')
+    expected = {}
+    for source, rule in RECORD_EXCLUSIONS['sources'].items():
+        if rule['count'] != len(rule['ids']) or len(set(rule['ids'])) != len(rule['ids']):
+            raise ValueError(f'{source}: invalid exclusion membership')
+        for record_id in rule['ids']:
+            if record_id in expected:
+                raise ValueError(f'{record_id}: duplicate exclusion')
+            expected[record_id] = source
+    seen = set()
+    kept = []
+    for key, members in partition:
+        retained = []
+        for row in members:
+            record_id, source = row[0], row[6]
+            if record_id in expected:
+                if source != expected[record_id] or record_id in seen:
+                    raise ValueError(f'{record_id}: exclusion source or membership changed')
+                seen.add(record_id)
+            elif source in RECORD_EXCLUSIONS['sources']:
+                raise ValueError(f'{record_id}: unreviewed exclusion-source member')
+            else:
+                retained.append(row)
+        if not retained:
+            raise ValueError(f'{key}: exclusion would change the tile layout')
+        kept.append((key, retained))
+    if seen != set(expected):
+        raise ValueError(f'missing excluded records: {sorted(set(expected) - seen)}')
+    return kept
+
+
 # ── credits ─────────────────────────────────────────────────────────────
 
 def licence_label(key, source):
@@ -260,6 +297,11 @@ def licence_label(key, source):
         'CC-BY': 'CC BY', 'Attribution 3.0 Unported': 'CC BY 3.0', 'Public domain': 'Public Domain',
         'Open Government License - British Columbia, v2.0': 'Open Government Licence - British Columbia, v2.0',
     }.get(licence, licence)
+
+
+def exclusion_note():
+    groups = ', '.join(f'{rule["count"]} `{key}` records' for key, rule in RECORD_EXCLUSIONS['sources'].items())
+    return f'This derived pack excludes {groups}. {RECORD_EXCLUSIONS["reason"]} Original upstream notices remain unchanged.'
 
 
 def attribution(counts, lookup):
@@ -288,6 +330,7 @@ def attribution(counts, lookup):
                 context = f'{v["context"]}: ' if v.get('context') else ''
                 lines.append(f'- {context}{v.get("source_name", "")}{note} {v.get("source_link", "")}'.rstrip())
             lines.append('')
+    lines += ['', '## Source-specific exclusions', '', exclusion_note()]
     return '\n'.join(lines).rstrip() + '\n'
 
 
@@ -311,7 +354,10 @@ def main():
 
     out = {}
     tile_list = []
-    for key, members in tiles(features):
+    # Partition the full pinned input first: early filtering can collapse tiles.
+    partition = exclude_records(list(tiles(features)))
+    features = [row for _, members in partition for row in members]
+    for key, members in partition:
         members.sort(key=lambda f: f[0])
         out[f'{key}.json'] = compact({'tile': key, 'features': members}) + '\n'
         tile_list.append({'key': key, 'count': len(members), 'bbox': union_box(members)})
@@ -321,6 +367,8 @@ def main():
             'title': "Who's On First neighbourhood, macrohood and microhood polygons",
             'archives': ARCHIVES,
             'sourcesRegistry': SOURCES,
+            'recordExclusions': {key: rule['count'] for key, rule in RECORD_EXCLUSIONS['sources'].items()},
+            'recordExclusionReason': RECORD_EXCLUSIONS['reason'],
             'license': 'Per source; see sources and ATTRIBUTION.md',
             'format': 'neighborhood-polylines-v1',
             'fields': FIELDS,
@@ -375,6 +423,7 @@ def main():
     for name, text in out.items():
         (PACK / name).write_text(text, encoding='utf-8')
     print(f'wof_neighborhoods: {len(features)} records in {len(tile_list)} tiles; '
+          f'{sum(rule["count"] for rule in RECORD_EXCLUSIONS["sources"].values())} source-specific record exclusions; '
           f'excluded {sum(excluded.values())} with an unapproved licence: {dict(excluded)}', flush=True)
 
 

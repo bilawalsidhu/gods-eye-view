@@ -15,6 +15,7 @@ Requires Shapely 2.1.2 on GEOS 3.13.1, pinned so repairs are reproducible.
 """
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -172,6 +173,50 @@ def census_polygons(feature):
     return [[decode_deltas(r) for r in poly] for poly in feature['polygons']]
 
 
+def census_degrees(feature, decimals):
+    factor = 10 ** feature.get('d', decimals)
+    return [[[(x / factor, y / factor) for x, y in ring]
+             for ring in poly] for poly in census_polygons(feature)]
+
+
+def ring_contains(ring, lat, lon):
+    """Match adminBoundaries.pointInRing on final degree-decoded vertices."""
+    inside = False
+    for i in range(len(ring)):
+        xi, yi = ring[i]
+        xj, yj = ring[i - 1]
+        if (yi > lat) != (yj > lat) and lon < (xj - xi) * (lat - yi) / (yj - yi) + xi:
+            inside = not inside
+    return inside
+
+
+def label_is_filled(polygons, label):
+    if not isinstance(label, (list, tuple)) or len(label) != 2:
+        return False
+    lon, lat = label
+    if not all(isinstance(n, (int, float)) and math.isfinite(n) for n in label):
+        return False
+    return any(ring_contains(poly[0], lat, lon)
+               and not any(ring_contains(hole, lat, lon) for hole in poly[1:])
+               for poly in polygons)
+
+
+def census_label(feature, polygons):
+    """The effective runtime label, including its area-weighted fallback."""
+    if isinstance(feature.get('label'), list):
+        return feature['label']
+    ring = polygons[0][0]
+    area = cx = cy = 0
+    for i in range(len(ring)):
+        x0, y0 = ring[i - 1]
+        x1, y1 = ring[i]
+        cross = x0 * y1 - x1 * y0
+        area += cross
+        cx += (x0 + x1) * cross
+        cy += (y0 + y1) * cross
+    return [cx / (3 * area), cy / (3 * area)] if area else list(ring[0])
+
+
 def wof_features():
     folder = DATA / 'wof_neighborhoods'
     index = json.loads((folder / 'index.json').read_text(encoding='utf-8'))
@@ -189,6 +234,10 @@ def check(pack):
             for feature in data['features']:
                 total += 1
                 why = problems(census_polygons(feature))
+                if not why:
+                    polygons = census_degrees(feature, decimals)
+                    if not label_is_filled(polygons, census_label(feature, polygons)):
+                        why = 'effective label is outside filled geometry'
                 if why:
                     bad.append((feature['geoid'], feature['name'], why))
     else:
@@ -206,27 +255,43 @@ def check(pack):
 
 def repair_census():
     repaired = 0
+    labelled = 0
     for path, data, decimals in census_features():
         changed = False
         for feature in data['features']:
             polygons = census_polygons(feature)
-            if not problems(polygons):
+            if problems(polygons):
+                geometry = MultiPolygon([Polygon(p[0], p[1:]) for p in polygons if len(set(p[0])) >= 3])
+                parts = ordered_parts(settle(geometry))
+                feature['polygons'] = [
+                    [encode_deltas(open_ring(p.exterior.coords))]
+                    + [encode_deltas(open_ring(r.coords)) for r in p.interiors]
+                    for p in parts
+                ]
+                feature.pop('label', None)
+                polygons = census_polygons(feature)
+                why = problems(polygons)
+                if why:
+                    raise ValueError(f'{feature["geoid"]} {feature["name"]}: still {why}')
+                repaired += 1
+                changed = True
+            decoded = census_degrees(feature, decimals)
+            if label_is_filled(decoded, census_label(feature, decoded)):
                 continue
-            geometry = MultiPolygon([Polygon(p[0], p[1:]) for p in polygons if len(set(p[0])) >= 3])
-            parts = ordered_parts(settle(geometry))
-            feature['polygons'] = [
-                [encode_deltas(open_ring(p.exterior.coords))]
-                + [encode_deltas(open_ring(r.coords)) for r in p.interiors]
-                for p in parts
-            ]
-            why = problems(census_polygons(feature))
-            if why:
-                raise ValueError(f'{feature["geoid"]} {feature["name"]}: still {why}')
-            repaired += 1
-            changed = True
+            factor = 10 ** feature.get('d', decimals)
+            for poly in polygons:
+                point = Polygon(poly[0], poly[1:]).representative_point()
+                label = [point.x / factor, point.y / factor]
+                if label_is_filled(decoded, label):
+                    feature['label'] = label
+                    labelled += 1
+                    changed = True
+                    break
+            else:
+                raise ValueError(f'{feature["geoid"]} {feature["name"]}: no verified filled label')
         if changed:
             path.write_text(compact(data) + '\n', encoding='utf-8')
-    print(f'us_census_places: {repaired} features repaired to valid GEOS topology')
+    print(f'us_census_places: {repaired} topology repairs, {labelled} verified interior labels added')
 
 
 def main():

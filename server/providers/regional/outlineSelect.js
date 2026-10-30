@@ -261,14 +261,10 @@ function queryWords(query) {
 }
 
 /**
- * Whether a result's names answer the query. Most of the query's words must
- * appear among one name's words, or one name must contain the whole query
- * (for scripts written without spaces).
+ * Settlements require one complete normalized name or explicit returned alias.
+ * Landmark/building asks retain their word-overlap and unspaced-script shorthand.
  */
-function outlineNameMatches(row, query) {
-  const words = queryWords(query);
-  if (!words.length) return false;
-  const whole = words.join(' ');
+function outlineNameMatches(row, query, kind) {
   const names = new Set();
   const add = (value) => {
     const name = normalizePlaceName(value);
@@ -278,6 +274,13 @@ function outlineNameMatches(row, query) {
   add(String(row?.display_name || '').split(',')[0]);
   if (row?.namedetails && typeof row.namedetails === 'object')
     for (const value of Object.values(row.namedetails)) add(value);
+  if (kind === 'city' || kind === 'admin' || kind === 'neighborhood') {
+    const head = normalizePlaceName(String(query ?? '').split(',')[0]);
+    return Boolean(head) && names.has(head);
+  }
+  const words = queryWords(query);
+  if (!words.length) return false;
+  const whole = words.join(' ');
   const unspaced = UNSPACED_SCRIPT_RE.test(whole);
   for (const name of names) {
     const nameWords = name.split(' ');
@@ -516,7 +519,7 @@ export function selectOutlineResult(rows, { kind, query }) {
       skipped.push(`${label}: level`);
       continue;
     }
-    if (!outlineNameMatches(row, query)) {
+    if (!outlineNameMatches(row, query, kind)) {
       skipped.push(`${label}: name`);
       continue;
     }

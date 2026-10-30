@@ -21,6 +21,7 @@ import { fetchRegionalJson } from '../../server/providers/regional/http.js';
 import {
   createNominatimGate,
   resolveNominatimSettings,
+  PUBLIC_NOMINATIM_SEARCH,
   setSharedNominatimGate,
 } from '../../server/providers/regional/nominatimGate.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
@@ -39,7 +40,9 @@ test.beforeEach(() => {
   activeUpstream = transport;
   setSharedNominatimGate(
     createNominatimGate({
-      settings: resolveNominatimSettings({}),
+      settings: resolveNominatimSettings({
+        NOMINATIM_URL: PUBLIC_NOMINATIM_SEARCH,
+      }),
       fetchImpl: (...args) => {
         if (!transport.fetch) throw new Error('No active test upstream');
         return transport.fetch(...args);

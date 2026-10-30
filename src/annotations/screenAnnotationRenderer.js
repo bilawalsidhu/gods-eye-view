@@ -653,6 +653,7 @@ export function createScreenAnnotationRenderer(
       }
     }
     if (placed.length > 1) decollideCallouts(placed);
+    placeCalloutsAboveVoicePreview(placed, svg, w, h);
 
     // Tracked-entity z-order — runs AFTER all geometry + callout de-collision so each
     // group's bbox reflects its final on-screen extent. Any mark whose bbox INTERSECTS
@@ -851,6 +852,70 @@ function decollideCallouts(callouts) {
           a._leader.setAttribute('y2', a._y.toFixed(1));
         }
       }
+    }
+  }
+}
+
+/** Keep an overlapping callout above the actual open Voice Preview, when it fits. */
+function placeCalloutsAboveVoicePreview(callouts, svg, width, height) {
+  if (!callouts.length) return;
+  const panel = document.getElementById('gev-voice-panel');
+  if (
+    !panel ||
+    panel.hidden ||
+    panel.dataset.view !== 'preview' ||
+    panel.checkVisibility?.({
+      opacityProperty: true,
+      visibilityProperty: true,
+    }) === false
+  )
+    return;
+  const rect = panel.getBoundingClientRect(),
+    bounds = svg.getBoundingClientRect();
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    bounds.width <= 0 ||
+    bounds.height <= 0
+  )
+    return;
+  // The overlay uses preserveAspectRatio="none": each axis scales independently.
+  const sx = width / bounds.width,
+    sy = height / bounds.height;
+  const blocked = {
+    _x: (rect.left - bounds.left) * sx,
+    _y: (rect.top - bounds.top) * sy,
+    width: rect.width * sx,
+    height: rect.height * sy,
+  };
+  const intersects = (a, b) =>
+    a._x < b._x + b.width &&
+    a._x + a.width > b._x &&
+    a._y < b._y + b.height &&
+    a._y + a.height > b._y;
+  for (const callout of callouts) {
+    if (!intersects(callout, blocked) || callout.width > width - 16) continue;
+    const candidate = {
+      _x: Math.max(8, Math.min(callout._x, width - callout.width - 8)),
+      _y: blocked._y - callout.height - 8,
+      width: callout.width,
+      height: callout.height,
+    };
+    if (
+      candidate._y < 8 ||
+      candidate._y + candidate.height > height - 8 ||
+      callouts.some(
+        (other) => other !== callout && intersects(candidate, other),
+      )
+    )
+      continue;
+    positionCallout(callout, candidate._x, candidate._y, false);
+    if (callout._leader) {
+      callout._leader.setAttribute('x2', candidate._x.toFixed(1));
+      callout._leader.setAttribute(
+        'y2',
+        (candidate._y + candidate.height).toFixed(1),
+      );
     }
   }
 }

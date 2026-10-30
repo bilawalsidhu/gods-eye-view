@@ -104,6 +104,10 @@ class FakeElement {
     return { x: 0, y: 0, width: 40, height: 16 };
   }
 
+  getBoundingClientRect() {
+    return this._rect ?? { left: 0, top: 0, width: 0, height: 0 };
+  }
+
   set innerHTML(value) {
     this._innerHTML = value;
   }
@@ -199,6 +203,86 @@ test('outline upgrade preserves the existing SVG group identity', (t) => {
   assert.equal(after.group.querySelector('.gev-anno-ring'), null, 'reticle rings are removed in place');
   assert.ok(after.group.querySelector('.gev-anno-callout'), 'the original callout remains in the group');
   renderer.destroy();
+});
+
+test('Preview avoids the map callout without moving its world anchor', (t) => {
+  const originals = {
+    document: globalThis.document,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    project: Cesium.SceneTransforms.worldToWindowCoordinates,
+  };
+  globalThis.document = fakeDocument();
+  globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
+  Cesium.SceneTransforms.worldToWindowCoordinates = (_scene, world) => {
+    const lon = Cesium.Math.toDegrees(Cesium.Cartographic.fromCartesian(world).longitude);
+    return { x: 400, y: lon > 0.0005 ? 166 : 200 };
+  };
+  t.after(() => {
+    Cesium.SceneTransforms.worldToWindowCoordinates = originals.project;
+    for (const key of ['document', 'requestAnimationFrame']) {
+      if (originals[key] === undefined) delete globalThis[key];
+      else globalThis[key] = originals[key];
+    }
+  });
+  const positionWC = Cesium.Cartesian3.fromDegrees(0, 0, 800);
+  const camera = {
+    positionWC,
+    directionWC: Cesium.Cartesian3.normalize(Cesium.Cartesian3.negate(positionWC, new Cesium.Cartesian3()), new Cesium.Cartesian3()),
+    positionCartographic: { height: 800 },
+  };
+  const scene = {
+    camera,
+    canvas: { clientWidth: 1280, clientHeight: 720, width: 1280, height: 720 },
+    clampToHeightSupported: false,
+    postRender: { addEventListener() {}, removeEventListener() {} },
+  };
+  const panel = new FakeElement('div');
+  panel.id = 'gev-voice-panel';
+  panel.dataset = { view: 'preview' };
+  panel.hidden = true;
+  panel.checkVisibility = () => true;
+  // Non-unit, independent axis scales and a nonzero client offset.
+  // The actual overlay uses preserveAspectRatio="none", not letterboxing.
+  panel._rect = { left: 210, top: 120, width: 100, height: 120 };
+  document.body.appendChild(panel);
+  const renderer = createScreenAnnotationRenderer({ scene, camera, trackedEntity: null });
+  t.after(() => renderer.destroy());
+  const anno = { id: 'preview-label', type: 'label', color: 'primary', label: 'Texas', alpha: 1, anchor: { lon: 0, lat: 0, height: 0 } };
+  renderer.add(anno);
+  const { svg, group } = findAnnotationGroup(document);
+  svg._rect = { left: 10, top: 20, width: 640, height: 400 };
+  const callout = group.querySelector('.gev-anno-callout');
+  const leader = group.querySelector('.gev-anno-leader');
+  const dot = group.querySelector('.gev-anno-dot');
+  const natural = callout.getAttribute('transform');
+  const anchor = structuredClone(anno.anchor);
+  panel.hidden = false;
+  renderer.sync();
+  assert.equal(callout.getAttribute('transform'), 'translate(418.0, 146.0)');
+  assert.equal(leader.getAttribute('x2'), '418.0');
+  assert.equal(leader.getAttribute('y2'), '172.0');
+  assert.equal(leader.getAttribute('x1'), '400.0');
+  assert.equal(leader.getAttribute('y1'), '200.0');
+  assert.equal(dot.getAttribute('cx'), '400.0');
+  assert.equal(dot.getAttribute('cy'), '200.0');
+  assert.deepEqual(anno.anchor, anchor);
+  assert.equal(findAnnotationGroup(document).group, group);
+  panel.hidden = true;
+  renderer.sync();
+  assert.equal(callout.getAttribute('transform'), natural, 'closing Preview restores natural placement');
+  for (const variant of ['settings', 'invisible', 'no-overlap', 'no-room', 'collision']) {
+    panel.hidden = false;
+    panel.dataset.view = variant === 'settings' ? 'settings' : 'preview';
+    panel.checkVisibility = () => variant !== 'invisible';
+    panel._rect = variant === 'no-overlap'
+      ? { left: 510, top: 120, width: 100, height: 120 }
+      : variant === 'no-room'
+        ? { left: 210, top: 25, width: 100, height: 180 }
+        : { left: 210, top: 120, width: 100, height: 120 };
+    if (variant === 'collision') renderer.add({ ...anno, id: 'above-slot', anchor: { lon: 0.001, lat: 0, height: 0 } });
+    renderer.sync();
+    assert.equal(callout.getAttribute('transform'), natural, variant);
+  }
 });
 
 test("annotation fade consumes the actual tracked host paint rectangle after layout", (t) => {

@@ -910,6 +910,100 @@ test('duplicate pending building results reflect final failure rather than a dea
   assert.equal(engine.count(), 0);
 });
 
+test('separate duplicate callers observe the original building install outcome', async (t) => {
+  installAnimationFrameStubs(t);
+  for (const outcome of ['installed', 'failed', 'timeout', 'clear']) {
+    const h = controlledBuildingRenderer();
+    const engine = createAnnotationEngine({
+      viewer: {},
+      renderer: h.renderer,
+      resolveTarget: async () => ({ ...BUILDING_FP }),
+    });
+    const spec = { type: 'area', target: 'Capitol', label: 'Same' };
+    const first = engine.annotate([spec]);
+    await flushMicrotasks();
+    let reported = false;
+    const second = engine.annotate([spec]).then((result) => {
+      reported = true;
+      return result;
+    });
+    await flushMicrotasks();
+    assert.equal(h.pending.length, 1);
+    assert.equal(
+      reported,
+      false,
+      'the observer cannot report before owner settlement',
+    );
+    assert.equal(h.pending[0].options.signal.aborted, false);
+    assert.equal(h.pending[0].options.isCurrent(), true);
+    if (outcome === 'clear') engine.clear();
+    else
+      h.pending[0].finish(
+        outcome,
+        outcome === 'failed' ? new Error('owner install failed') : undefined,
+      );
+    const results = await Promise.all([first, second]);
+    if (outcome === 'failed' || outcome === 'clear') {
+      for (const result of results) {
+        assert.equal(result.drawn, 0);
+        assert.deepEqual(result.ids, []);
+      }
+      assert.equal(engine.count(), 0);
+    } else {
+      assert.equal(results[0].drawn, 1);
+      assert.equal(results[1].drawn, 1);
+      assert.deepEqual(results[1].ids, results[0].ids);
+      assert.equal(results[1].results[0].duplicate, true);
+      if (outcome === 'timeout') {
+        for (const result of results)
+          assert.equal(result.results[0].outlineUnavailable, true);
+        assert.equal(engine.list()[0].ring, null);
+      }
+    }
+    engine.clear();
+  }
+});
+
+test('a duplicate joins the physical deferred install but not another outline lookup', async (t) => {
+  installAnimationFrameStubs(t);
+  const h = controlledBuildingRenderer();
+  let lookups = 0;
+  const engine = createAnnotationEngine({
+    viewer: {},
+    renderer: h.renderer,
+    resolveTarget: async () => ({
+      ...FIXED_POINT,
+      resolveOutline: async () => {
+        lookups++;
+        return { ...BUILDING_FP };
+      },
+    }),
+  });
+  const spec = { type: 'area', target: 'Capitol', label: 'Same' };
+  const initial = await engine.annotate([spec]);
+  await flushMicrotasks();
+  assert.equal(initial.drawn, 1, 'the progressive point already exists');
+  assert.equal(h.pending.length, 1);
+  let reported = false;
+  const duplicate = engine.annotate([spec]).then((result) => {
+    reported = true;
+    return result;
+  });
+  await flushMicrotasks();
+  assert.equal(reported, false);
+  assert.equal(h.pending.length, 1);
+  assert.equal(lookups, 1);
+  h.pending[0].finish('failed', new Error('deferred owner install failed'));
+  const result = await duplicate;
+  assert.equal(result.drawn, 1, 'the owner restored an honest point');
+  assert.deepEqual(result.ids, initial.ids);
+  assert.equal(result.results[0].outlineUnavailable, true);
+  assert.equal(engine.list()[0].ring, null);
+  assert.equal(lookups, 1);
+  assert.equal(h.pending.length, 1);
+  engine.clear();
+});
+
 test('duplicate-replacement: a renderer throw leaves no phantom mark and no leaked hold', async (t) => {
   installAnimationFrameStubs(t);
   _resetRenderGovernorForTest();
@@ -1121,4 +1215,24 @@ test('only an explicit navigation request permits resolving distant annotation t
   await engine.annotate([{ type: 'point', target: 'Remote landmark' }], { flyTo: true });
   assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
   engine.destroy();
+});
+
+
+test('recaption inherits outline credit from borrowed geometry rather than its new anchor', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer } = fakeRenderer();
+  let first = true;
+  const ring = [[-99,31],[-98.99,31],[-98.99,31.01],[-99,31]];
+  const engine = createAnnotationEngine({ viewer: {}, renderer,
+    resolveTarget: async () => {
+      if (first) { first = false; return { ...FIXED_POINT, ring, footprintKind: 'area', outlineCredit: 'tiles' }; }
+      return { ...FIXED_POINT, source: 'osm-local', resolveOutline: async () => null };
+    },
+  });
+  await engine.annotate([{ type: 'area', target: 'Library', label: 'Old' }]);
+  await engine.annotate([{ type: 'area', target: 'Library', label: 'New' }]);
+  await flushMicrotasks();
+  assert.equal(engine.list()[0].outlineCredit, 'tiles');
+  assert.equal(engine.list()[0].ring, ring);
+  engine.clear();
 });

@@ -163,10 +163,10 @@ const emptyCache = () => ({
 
 // ---------------------------------------------------------------- settings
 
-test('endpoint settings: unset is public, empty disables, operator URLs are not public', () => {
+test('endpoint settings: unset and empty disable, operator URLs are explicit', () => {
   assert.deepEqual(resolveNominatimSettings({}), {
-    endpoint: PUBLIC_NOMINATIM_SEARCH,
-    isPublic: true,
+    endpoint: null,
+    isPublic: false,
     dailyCap: 50,
   });
   for (const off of ['', ' ', 'off', 'none', 'disabled'])
@@ -860,6 +860,41 @@ test('the first polygon-bearing result of the right class is taken (Mumbai)', ()
 });
 
 test('a result whose name does not answer the ask is passed over', () => {
+  const city = (name, namedetails) =>
+    row({
+      category: 'place',
+      type: 'city',
+      addresstype: 'city',
+      name,
+      namedetails,
+    });
+  const york = { kind: 'city', query: 'York' };
+  assert.equal(selectOutlineResult([city('New York')], york).outline, null);
+  assert.ok(selectOutlineResult([city('York')], york).outline);
+  assert.equal(
+    selectOutlineResult([city('Le Havre')], { kind: 'city', query: 'Havre' })
+      .outline,
+    null,
+  );
+  assert.ok(
+    selectOutlineResult([city('Le Havre')], { kind: 'city', query: 'Le Havre' })
+      .outline,
+  );
+  assert.ok(
+    selectOutlineResult([city('City of York', { short_name: 'York' })], york)
+      .outline,
+  );
+  assert.equal(
+    selectOutlineResult([city('新東京')], { kind: 'city', query: '東京' })
+      .outline,
+    null,
+  );
+  const tokyo = { kind: 'city', query: '東京' };
+  assert.equal(selectOutlineResult([city('東京都')], tokyo).outline, null);
+  assert.ok(
+    selectOutlineResult([city('東京都', { short_name: '東京' })], tokyo)
+      .outline,
+  );
   const other = row({ category: 'leisure', type: 'park', name: 'Pease Park' });
   assert.equal(
     selectOutlineResult([other], { kind: 'landmark', query: 'Zilker Park' })

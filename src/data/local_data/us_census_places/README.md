@@ -35,7 +35,11 @@ village, CDP, …), `cdp` (census designated place), `d` (decimals when not
 4) and `polygons`. `polygons` is a list of parts, largest first, each
 `[outer, ...holes]`; every ring is open and stored as integers in units of
 10^-4 degrees (10^-`d` when present), the first vertex absolute and each
-later one as a `[dLon, dLat]` delta.
+later one as a `[dLon, dLat]` delta. An optional `label: [lon, lat]` in degrees
+supplies a verified filled anchor when the outer-ring centroid is outside the
+place or inside a hole. Already-filled anchors and polygon coordinates are
+preserved. The final repair pass checks labels against degree-decoded geometry;
+interior labels are not rounded back onto the vertex grid.
 
 **Curation:** the county pack's simplification (see
 `../us_census_counties/README.md`), keeping triangles. A place whose

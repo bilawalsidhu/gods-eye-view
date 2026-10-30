@@ -1,3 +1,4 @@
+import { recordWorkSlice } from '../sources/phaseTiming.js';
 import { createWorldAnnotationRenderer } from './worldAnnotationRenderer.js';
 import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
 
@@ -133,69 +134,89 @@ export function createHybridAnnotationRenderer(viewer) {
   }
 
   function finishBuilding(anno, entry, completion, options) {
+    const workTrace = options.workTrace;
     const proxy = entry.worldProxy;
     return completion
       .then((result) => {
-        if (
-          routed.get(anno.id) !== entry ||
-          entry.worldProxy !== proxy ||
-          options.signal?.aborted ||
-          !(options.isCurrent?.() ?? true)
-        ) {
-          world.remove(proxy);
-          if (routed.get(anno.id) === entry) remove(anno);
-          return { ...result, status: 'cancelled' };
-        }
-        if (result.status !== 'installed') {
-          world.remove(proxy);
-          entry.worldProxy = null;
-          return result;
-        }
-        if (performance.now() >= result.timing.deadlineMs) {
-          world.remove(proxy);
-          entry.worldProxy = null;
-          return { ...result, status: 'timeout' };
-        }
-        const at = performance.now();
+        const workStart = workTrace ? performance.now() : 0;
         try {
-          updateCaption(anno, entry);
-        } finally {
-          const ms = performance.now() - at;
-          result.timing.workMs += ms;
-          result.timing.lastSliceMs += ms;
-          result.timing.maxSliceMs = Math.max(
-            result.timing.maxSliceMs,
-            result.timing.lastSliceMs,
-          );
-        }
-        if (performance.now() >= result.timing.deadlineMs) {
-          world.remove(proxy);
-          entry.worldProxy = null;
-          if (options.pendingVisible === false) {
-            if (entry.screenProxy) screen.remove(entry.screenProxy);
-            entry.screenProxy = null;
-          } else {
-            const pending = liveProxy(anno, {
-              ring: null,
-              pendingOutline: true,
-            });
-            screen.update(pending);
-            entry.screenProxy = pending;
+          if (
+            routed.get(anno.id) !== entry ||
+            entry.worldProxy !== proxy ||
+            options.signal?.aborted ||
+            !(options.isCurrent?.() ?? true)
+          ) {
+            world.remove(proxy);
+            if (routed.get(anno.id) === entry) remove(anno);
+            if (workTrace) workTrace.rendererStatus = 'cancelled';
+            return { ...result, status: 'cancelled' };
           }
-          return { ...result, status: 'timeout' };
+          if (result.status !== 'installed') {
+            world.remove(proxy);
+            entry.worldProxy = null;
+            if (workTrace) workTrace.rendererStatus = result.status;
+            return result;
+          }
+          if (performance.now() >= result.timing.deadlineMs) {
+            world.remove(proxy);
+            entry.worldProxy = null;
+            if (workTrace) workTrace.rendererStatus = 'timeout';
+            return { ...result, status: 'timeout' };
+          }
+          const at = performance.now();
+          try {
+            updateCaption(anno, entry);
+          } finally {
+            const ms = performance.now() - at;
+            result.timing.workMs += ms;
+            result.timing.lastSliceMs += ms;
+            result.timing.maxSliceMs = Math.max(
+              result.timing.maxSliceMs,
+              result.timing.lastSliceMs,
+            );
+          }
+          if (performance.now() >= result.timing.deadlineMs) {
+            world.remove(proxy);
+            entry.worldProxy = null;
+            if (options.pendingVisible === false) {
+              if (entry.screenProxy) screen.remove(entry.screenProxy);
+              entry.screenProxy = null;
+            } else {
+              const pending = liveProxy(anno, {
+                ring: null,
+                pendingOutline: true,
+              });
+              screen.update(pending);
+              entry.screenProxy = pending;
+            }
+            if (workTrace) workTrace.rendererStatus = 'timeout';
+            return { ...result, status: 'timeout' };
+          }
+          if (workTrace) workTrace.rendererStatus = result.status;
+          return result;
+        } finally {
+          if (workTrace)
+            recordWorkSlice(workTrace, 'hybrid-complete', workStart);
         }
-        return result;
       })
       .catch((error) => {
-        // A later caption throw must roll back the already installed world parts too.
-        if (routed.get(anno.id) === entry) {
-          try {
-            remove(anno);
-          } catch {
-            /* original error wins; failed routes stay addressable */
+        const workStart = workTrace ? performance.now() : 0;
+        try {
+          // A later caption throw must roll back the already installed world parts too.
+          if (routed.get(anno.id) === entry) {
+            try {
+              remove(anno);
+            } catch {
+              /* original error wins; failed routes stay addressable */
+            }
+          } else world.remove(proxy);
+          throw error;
+        } finally {
+          if (workTrace) {
+            workTrace.rendererStatus = 'failed';
+            recordWorkSlice(workTrace, 'hybrid-rollback', workStart);
           }
-        } else world.remove(proxy);
-        throw error;
+        }
       });
   }
 

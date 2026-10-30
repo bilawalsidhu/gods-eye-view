@@ -6,11 +6,11 @@ import { readResponseJsonCapped } from '../common/http.js';
 /**
  * One gate for every request this server sends to a Nominatim instance.
  *
- * Place search and voice outlines share it. Public requests reserve one start
- * at a time across processes sharing this installation's state file, remain at
- * least 1.1 s apart, use a short queue and daily ceiling, and pause after the
- * server says to stop. Independent installations do not share one app-wide
- * limiter; each must identify itself and enforce the public policy locally.
+ * Place search and voice outlines share it. The service is off until an operator
+ * configures an endpoint. Explicit public requests coordinate fetch invocation
+ * across processes sharing this installation's state file, at least 1.1 s apart.
+ * Independent installations do not share an app-wide limiter; these local guards
+ * do not establish compliance for an application's combined public traffic.
  */
 
 /** The public instance. Only this host is subject to the public-use limits. */
@@ -56,8 +56,8 @@ const DISABLED_VALUES = new Set(['', 'off', 'none', 'disabled', '0']);
 /**
  * Read the search endpoint setting.
  *
- * Unset means the public instance under its guards. Set to empty (or `off`)
- * disables every Nominatim request. Any other value must be an http(s) URL
+ * Unset, empty or `off` disables every Nominatim request. An explicit endpoint
+ * must be an http(s) URL
  * without credentials, query or fragment; a bare host gets `/search`. A value
  * that is not usable disables the service rather than falling back to the
  * public instance.
@@ -68,8 +68,7 @@ const DISABLED_VALUES = new Set(['', 'off', 'none', 'disabled', '0']);
 export function resolveNominatimSettings(env = process.env) {
   const dailyCap = parseDailyCap(env.NOMINATIM_DAILY_CAP);
   const raw = env.NOMINATIM_URL;
-  if (raw === undefined)
-    return { endpoint: PUBLIC_NOMINATIM_SEARCH, isPublic: true, dailyCap };
+  if (raw === undefined) return { endpoint: null, isPublic: false, dailyCap };
   const value = String(raw).trim();
   if (DISABLED_VALUES.has(value.toLowerCase()))
     return { endpoint: null, isPublic: false, dailyCap };
@@ -255,6 +254,24 @@ export function createGateStateStore({
   };
 
   const pauseMarkerPrefix = file ? `${path.basename(file)}.pause.` : null;
+  const dispatchMarkerPrefix = file ? `${path.basename(file)}.dispatch.` : null;
+
+  // A crash or persistence failure during dispatch must never reopen admission
+  // using an older timestamp. Only this dispatch removes its own marker after
+  // persisting the post-invocation deadline; there is no timed stale reclaim.
+  function pendingDispatches({ strict = false } = {}) {
+    if (!file) return [];
+    try {
+      return fs
+        .readdirSync(path.dirname(file))
+        .filter((name) => name.startsWith(dispatchMarkerPrefix));
+    } catch (error) {
+      if (error?.code === 'ENOENT') return [];
+      report(error);
+      if (strict) throw error;
+      return [];
+    }
+  }
 
   /**
    * A refusal must remain visible even while another process owns the SQLite
@@ -483,6 +500,8 @@ export function createGateStateStore({
       try {
         let result;
         withLock(() => {
+          if (pendingDispatches({ strict: true }).length)
+            throw new Error('unfinished durable Nominatim dispatch');
           const disk = readDisk({ strict: true });
           if (disk) memory = merge(memory, disk);
           const pending = pendingPauses({ strict: true });
@@ -527,6 +546,101 @@ export function createGateStateStore({
         return { status: 'unavailable', error };
       }
     },
+    dispatch(
+      day,
+      { clock, dailyCap, minSpacingMs, latestStartAt = Infinity },
+      start,
+    ) {
+      if (!file) {
+        const error = new Error(
+          'no durable Nominatim usage state is configured',
+        );
+        report(error);
+        return { status: 'unavailable', error };
+      }
+      let value;
+      try {
+        let result;
+        withLock(() => {
+          if (pendingDispatches({ strict: true }).length)
+            throw new Error('unfinished durable Nominatim dispatch');
+          const disk = readDisk({ strict: true });
+          if (disk) memory = merge(memory, disk);
+          const pauses = pendingPauses({ strict: true });
+          const state = merge(memory, {
+            ...memory,
+            pausedUntil: Math.max(
+              memory.pausedUntil,
+              ...pauses.map((p) => p.pausedUntil),
+            ),
+          });
+          const at = clock();
+          if (at > latestStartAt) {
+            result = { status: 'abandoned' };
+            return;
+          }
+          if (state.pausedUntil > at) {
+            result = { status: 'paused', retryAfterMs: state.pausedUntil - at };
+            return;
+          }
+          const count = state.day === day ? state.count : 0;
+          if (count >= dailyCap) {
+            result = { status: 'cap' };
+            return;
+          }
+          if (state.nextStartAt > at) {
+            result =
+              state.nextStartAt > latestStartAt
+                ? { status: 'abandoned' }
+                : { status: 'wait', waitMs: state.nextStartAt - at };
+            return;
+          }
+          const marker = `${file}.dispatch.${process.pid}.${process.hrtime.bigint()}`;
+          fs.writeFileSync(marker, '', { flag: 'wx' });
+          const next = {
+            day,
+            count: count + 1,
+            pausedUntil: state.pausedUntil,
+            nextStartAt: at + minSpacingMs,
+          };
+          writeDisk(next);
+          memory = next;
+          const latePause = Math.max(
+            next.pausedUntil,
+            ...pendingPauses({ strict: true }).map((p) => p.pausedUntil),
+          );
+          if (clock() > latestStartAt) result = { status: 'abandoned' };
+          else if (latePause > clock())
+            result = { status: 'paused', retryAfterMs: latePause - clock() };
+          else {
+            // Invoke, but never await, the transport while still owning the lock.
+            try {
+              value = start();
+            } catch (error) {
+              value = Promise.reject(error);
+            }
+            result = { status: 'started', value };
+          }
+          const after = {
+            ...next,
+            pausedUntil: latePause,
+            nextStartAt: Math.max(next.nextStartAt, clock() + minSpacingMs),
+          };
+          writeDisk(after);
+          memory = after;
+          fs.unlinkSync(marker);
+          clearPersistedPauses(after.pausedUntil);
+          lastError = null;
+        });
+        return result;
+      } catch (error) {
+        // The caller aborts its transport on admission failure. Observe a started
+        // promise even when persistence failed, without masking the store error.
+        if (value?.then) Promise.resolve(value).catch(() => {});
+        report(error);
+        return { status: 'unavailable', error };
+      }
+    },
     pausedUntil() {
       return current().pausedUntil || 0;
     },
@@ -540,12 +654,20 @@ export function createGateStateStore({
       }
       update((state) => ({ ...state, pausedUntil: at }));
     },
-    status: () => ({
-      file,
-      durable: Boolean(file),
-      persisted: Boolean(file) && !lastError,
-      error: lastError ? String(lastError.message || lastError) : null,
-    }),
+    status: () => {
+      const dispatchPending = pendingDispatches().length > 0;
+      return {
+        file,
+        durable: Boolean(file),
+        persisted: Boolean(file) && !lastError && !dispatchPending,
+        dispatchPending,
+        error: lastError
+          ? String(lastError.message || lastError)
+          : dispatchPending
+            ? 'unfinished durable Nominatim dispatch'
+            : null,
+      };
+    },
   };
 }
 
@@ -614,30 +736,52 @@ export function createNominatimGate({
   }
 
   /** One upstream request; classifies refusals and pauses the gate. */
-  async function send(url, config, maxBytes, signal) {
-    upstreamRequests += 1;
+  async function send(url, config, maxBytes, signal, queuedAt) {
     const controller = new AbortController();
     const onAbort = () => controller.abort();
     signal?.addEventListener('abort', onAbort, { once: true });
     // One deadline covers the headers AND the body: a server that answers its
     // headers and then stalls must not hold the shared queue.
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let timer;
+    const start = () => {
+      upstreamRequests += 1;
+      timer = setTimeout(() => controller.abort(), timeoutMs);
+      return fetchImpl(url, {
+        headers: NOMINATIM_HEADERS,
+        redirect: 'error',
+        signal: controller.signal,
+      });
+    };
     try {
-      return await exchange(url, config, maxBytes, signal, controller.signal);
+      return await exchange(
+        config,
+        maxBytes,
+        signal,
+        controller.signal,
+        queuedAt,
+        start,
+      );
+    } catch (error) {
+      controller.abort();
+      throw error;
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
     }
   }
 
-  async function exchange(url, config, maxBytes, signal, requestSignal) {
+  async function exchange(
+    config,
+    maxBytes,
+    signal,
+    requestSignal,
+    queuedAt,
+    start,
+  ) {
+    const turn = await takeTurn(config, queuedAt, signal, start);
     let response;
     try {
-      response = await fetchImpl(url, {
-        headers: NOMINATIM_HEADERS,
-        redirect: 'error',
-        signal: requestSignal,
-      });
+      response = await turn.value;
     } catch (cause) {
       if (signal?.aborted) throw gateError('NOMINATIM_ABANDONED', 'Abandoned');
       throw gateError('NOMINATIM_TRANSPORT', 'Place service unreachable', {
@@ -684,45 +828,52 @@ export function createNominatimGate({
     }
   }
 
-  /** Atomically reserve the public slot, then wait until it may start. */
-  async function takeTurn(config, queuedAt, signal) {
-    if (signal?.aborted || now() - queuedAt > maxWaitMs)
-      throw gateError('NOMINATIM_ABANDONED', 'Place search was abandoned');
-    const refused = admissionError(config);
-    if (refused) throw refused;
-    // An operator-selected endpoint is not governed by the public instance's
-    // shared budget, pacing, or durable-state requirement.
-    if (!config.isPublic) return;
-    const reserved = usageStore.reserve(utcDay(now()), {
-      now: now(),
-      dailyCap: config.dailyCap,
-      minSpacingMs,
-      latestStartAt: queuedAt + maxWaitMs,
-    });
-    if (reserved.status === 'unavailable')
-      throw gateError(
-        'NOMINATIM_STATE_UNAVAILABLE',
-        'Public place service usage state is unavailable',
-        { cause: reserved.error },
+  /** Revalidate public dispatch under shared ownership after every wake. */
+  async function takeTurn(config, queuedAt, signal, start) {
+    while (true) {
+      if (signal?.aborted || now() - queuedAt > maxWaitMs)
+        throw gateError('NOMINATIM_ABANDONED', 'Place search was abandoned');
+      const refused = admissionError(config);
+      if (refused) throw refused;
+      // An operator-selected endpoint is not governed by the public instance's
+      // shared budget, pacing, or durable-state requirement.
+      if (!config.isPublic) {
+        try {
+          return { value: start() };
+        } catch (error) {
+          return { value: Promise.reject(error) };
+        }
+      }
+      const reserved = usageStore.dispatch(
+        utcDay(now()),
+        {
+          clock: now,
+          dailyCap: config.dailyCap,
+          minSpacingMs,
+          latestStartAt: queuedAt + maxWaitMs,
+        },
+        start,
       );
-    if (reserved.status === 'cap')
-      throw gateError(
-        'NOMINATIM_DAILY_CAP',
-        'Daily place lookup allowance is used',
-      );
-    if (reserved.status === 'paused')
-      throw gateError('NOMINATIM_PAUSED', 'Place service is pausing', {
-        retryAfterMs: reserved.retryAfterMs,
-      });
-    if (reserved.status === 'abandoned')
-      throw gateError('NOMINATIM_ABANDONED', 'Place search was abandoned');
-    const waitMs = Math.max(0, reserved.startAt - now());
-    if (waitMs) await sleep(waitMs);
-    if (signal?.aborted || now() - queuedAt > maxWaitMs)
-      throw gateError('NOMINATIM_ABANDONED', 'Place search was abandoned');
-    // A refusal from another process after this reservation still stops it.
-    // The reserved daily slot remains spent; it cannot safely be reassigned.
-    if (now() < pauseEnd(config)) throw pausedError(config);
+      if (reserved.status === 'unavailable')
+        throw gateError(
+          'NOMINATIM_STATE_UNAVAILABLE',
+          'Public place service usage state is unavailable',
+          { cause: reserved.error },
+        );
+      if (reserved.status === 'cap')
+        throw gateError(
+          'NOMINATIM_DAILY_CAP',
+          'Daily place lookup allowance is used',
+        );
+      if (reserved.status === 'paused')
+        throw gateError('NOMINATIM_PAUSED', 'Place service is pausing', {
+          retryAfterMs: reserved.retryAfterMs,
+        });
+      if (reserved.status === 'abandoned')
+        throw gateError('NOMINATIM_ABANDONED', 'Place search was abandoned');
+      if (reserved.status === 'started') return reserved;
+      if (reserved.status === 'wait') await sleep(reserved.waitMs);
+    }
   }
 
   /**
@@ -749,14 +900,12 @@ export function createNominatimGate({
     const url = buildUrl(config.endpoint);
     const task = queue.then(async () => {
       try {
-        await takeTurn(config, queuedAt, signal);
         try {
-          return await send(url, config, maxBytes, signal);
+          return await send(url, config, maxBytes, signal, queuedAt);
         } catch (error) {
           if (!error?.transport) throw error;
-          await takeTurn(config, now(), signal);
           try {
-            return await send(url, config, maxBytes, signal);
+            return await send(url, config, maxBytes, signal, now());
           } catch (retryError) {
             if (retryError?.transport) pause(OUTAGE_BACKOFF_MS, config);
             throw retryError;
