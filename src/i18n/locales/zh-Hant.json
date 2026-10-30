@@ -3518,5 +3518,10 @@
   "Confirm: remove every added entry from Data Layers": "確認：從數據圖層中移除所有已添加條目",
   "Remove every added entry from Data Layers": "從數據圖層中移除所有已添加條目",
   "Showing {shown} of {total}": "顯示 {shown} / {total}",
-  "BROWSE DATA LIBRARY": "瀏覽數據資源庫"
+  "BROWSE DATA LIBRARY": "瀏覽數據資源庫",
+  "USGS Rivers & Streams": "USGS：河流與溪流",
+  "USGS Springs": "USGS：泉水",
+  "Zoom in to a region to load river gauges": "放大到某個區域以載入河流水位站",
+  "Water": "水",
+  "USGS Lakes & Reservoirs": "USGS：湖泊與水庫"
 }
