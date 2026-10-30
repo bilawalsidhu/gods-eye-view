@@ -102,7 +102,18 @@ test('model fallback and subject changes clear station attribution and old measu
   }
 });
 
-for (const locale of ['es', 'it', 'pt', 'ru', 'uk', 'zh-CN', 'zh-Hant']) {
+for (const locale of [
+  'de',
+  'es',
+  'fr',
+  'it',
+  'ja',
+  'pt',
+  'ru',
+  'uk',
+  'zh-CN',
+  'zh-Hant',
+]) {
   test(`${locale}: station provenance follows the UI language without inventing a timezone`, () => {
     setLocale(locale);
     try {
@@ -121,7 +132,19 @@ for (const locale of ['es', 'it', 'pt', 'ru', 'uk', 'zh-CN', 'zh-Hant']) {
   });
 }
 
-for (const locale of ['en', 'es', 'it', 'pt', 'ru', 'uk', 'zh-CN', 'zh-Hant']) {
+for (const locale of [
+  'en',
+  'de',
+  'es',
+  'fr',
+  'it',
+  'ja',
+  'pt',
+  'ru',
+  'uk',
+  'zh-CN',
+  'zh-Hant',
+]) {
   test(`${locale}: simultaneous SMN and DMH readings keep values, clocks and clearing independent`, () => {
     setLocale(locale);
     try {

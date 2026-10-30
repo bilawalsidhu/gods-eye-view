@@ -18,9 +18,19 @@
 
 import * as Cesium from 'cesium';
 import { roadLabel } from '../../data/routeSteps.js';
-import { t, msg, formatNumber, translateKnown } from '../../i18n/index.js';
+import {
+  t,
+  msg,
+  formatNumber,
+  getLocale,
+  translateKnown,
+} from '../../i18n/index.js';
 import { pointerOwnerName } from '../../data/pointerOwnerNames.js';
-import { formatQuantity } from '../../ui/unitLabels.js';
+import {
+  formatQuantity,
+  quantitySeparator,
+  unitLabel,
+} from '../../ui/unitLabels.js';
 
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_ID = 'directions-step';
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -125,7 +135,9 @@ export function routeDurationText(seconds) {
   if (minutes < 60) return formatQuantity(minutes, 'min');
   const hours = formatQuantity(Math.floor(minutes / 60), 'h');
   const rest = minutes % 60;
-  return rest ? `${hours}\u00a0${formatQuantity(rest, 'min')}` : hours;
+  if (!rest) return hours;
+  // "1 h 5 min"; Japanese runs the parts together: 1時間5分.
+  return `${hours}${quantitySeparator(unitLabel('h'))}${formatQuantity(rest, 'min')}`;
 }
 
 /** "left", "slightly right", … as it reads inside a maneuver sentence. */
@@ -395,6 +407,16 @@ export function normalizeDirectionsParams(params = {}) {
 }
 
 /**
+ * A travel-mode word inside a sentence: lower case, except in German, where
+ * the words are nouns and keep their capital ("Auto", "Fahrrad").
+ * @param {string} word Translated mode word.
+ * @returns {string}
+ */
+function modeWordInSentence(word) {
+  return getLocale() === 'de' ? word : word.toLowerCase();
+}
+
+/**
  * Row chips for a given state. Pure so the chip logic is testable without a DOM.
  * @param {{mode:string, armed:null|'a'|'b', a:object|null, b:object|null, status:string, route:object|null}} state
  * @returns {{chips: object[], legend: object[]}}
@@ -409,7 +431,7 @@ export function directionsRowControls(state) {
     state: mode === id ? 'active' : 'idle',
     title: t('{mode} — reroute for {modeLower}', {
       mode: t(spec.word),
-      modeLower: t(spec.word).toLowerCase(),
+      modeLower: modeWordInSentence(t(spec.word)),
     }),
     params: { mode: id },
   }));

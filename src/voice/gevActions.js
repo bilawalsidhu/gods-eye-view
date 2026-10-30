@@ -66,7 +66,6 @@ const ALLOWED_STYLES = new Set([
   'thermal',
   'anime',
   'noir',
-  'snow',
 ]);
 const PANEL_ALIASES = new Map([
   ['data', 'data-panel'],

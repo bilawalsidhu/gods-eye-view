@@ -16,8 +16,11 @@ import {
   normalizeLocale,
   writeStoredLocale,
 } from './locale.js';
+import de from './locales/de.json' with { type: 'json' };
 import es from './locales/es.json' with { type: 'json' };
+import fr from './locales/fr.json' with { type: 'json' };
 import it from './locales/it.json' with { type: 'json' };
+import ja from './locales/ja.json' with { type: 'json' };
 import pt from './locales/pt.json' with { type: 'json' };
 import ru from './locales/ru.json' with { type: 'json' };
 import uk from './locales/uk.json' with { type: 'json' };
@@ -25,8 +28,11 @@ import zhCN from './locales/zh-CN.json' with { type: 'json' };
 import zhHant from './locales/zh-Hant.json' with { type: 'json' };
 
 const CATALOGS = Object.freeze({
+  de,
   es,
+  fr,
   it,
+  ja,
   pt,
   ru,
   uk,
@@ -212,13 +218,19 @@ export function formatUtcDayMonth(value) {
 
 /**
  * Locale-aware relative time (Intl.RelativeTimeFormat), e.g.
- * formatRelativeTime(-5, 'minute') → '5 minutes ago' / '5 минут назад'.
+ * formatRelativeTime(-5, 'minute') → '5 minutes ago' / '5 минут назад' /
+ * '5分前'.
  */
 export function formatRelativeTime(value, unit = 'second', options) {
-  return cachedFormatter('relative', Intl.RelativeTimeFormat, {
+  const text = cachedFormatter('relative', Intl.RelativeTimeFormat, {
     numeric: 'auto',
     ...options,
   }).format(value, unit);
+  // CLDR spaces Japanese (5 分前); the ja catalog writes the number and its
+  // unit together (5分前), so the two must not differ on one screen.
+  return currentLocale === 'ja'
+    ? text.replace(/(?<=\d) (?=\p{Script=Han})/gu, '')
+    : text;
 }
 
 /** Collapse markup whitespace so a message reads the same in HTML and JS. */

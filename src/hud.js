@@ -9,7 +9,7 @@ import { applicationServices } from './services/application.js';
  * real-time at configurable cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
- * selected and supports three layout variants: tactical, operator, minimal.
+ * selected and supports the layout variants: tactical, minimal, cyber.
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
@@ -76,7 +76,6 @@ const MODE_LABELS = Object.freeze({
   thermal: msg('FLIR'),
   anime: msg('ANIME'),
   noir: msg('NOIR'),
-  snow: msg('SNOW'),
 });
 
 /** Region ids from _regionLabel() and the name shown for each. */
@@ -287,12 +286,6 @@ export class IntelHUD {
     // i18n-ignore: sensor codes and a classification banner; the rest uses t()
     this._el.innerHTML = `
       <div class="hud-sonar" aria-hidden="true"></div>
-
-      <div class="hud-top-bar">
-        <span class="hud-readout"><span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span></span>
-        <span class="hud-readout"><span class="hud-top-bar-center">${this._missionId}</span></span>
-        <span class="hud-readout"><span class="hud-top-bar-right">PAGE 1/1</span></span>
-      </div>
 
       <div class="hud-corner hud-top-left">
         <div class="hud-bracket">┌</div>
@@ -1063,7 +1056,7 @@ export class IntelHUD {
    * Switch the HUD layout variant. Falls back to `'tactical'` if the
    * name is unrecognized. Cyber also applies a coordinated skin to the full
    * application shell; leaving Cyber restores the standard shell tokens.
-   * @param {string} variantName - One of `'tactical'`, `'operator'`, `'minimal'`, `'cyber'`.
+   * @param {string} variantName - One of `'tactical'`, `'minimal'`, `'cyber'`.
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);
