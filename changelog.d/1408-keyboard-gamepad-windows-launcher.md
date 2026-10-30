@@ -1,0 +1,1 @@
+- Add keyboard and Xbox gamepad globe navigation, plus a Windows launcher for local startup (@thecathousemp3, #1408).
