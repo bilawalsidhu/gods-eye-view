@@ -3706,5 +3706,20 @@
   "Cable car": "Tram a fune",
   "Monorail": "Monorotaia",
   "Funicular": "Funicolare",
-  "Gondola": "Cabinovia"
+  "Gondola": "Cabinovia",
+  "Tilt up toward the horizon": "Inclina verso l'orizzonte",
+  "Tilt down toward top-down view": "Inclina verso la vista dall'alto",
+  "Top-down view": "Vista dall'alto",
+  "Look left": "Guarda a sinistra",
+  "Look right": "Guarda a destra",
+  "Look up": "Guarda in alto",
+  "Look down": "Guarda in basso",
+  "Map navigation": "Navigazione della mappa",
+  "Tilt": "Inclinazione",
+  "Tilt: top-down (bottom) to near horizon (top)": "Inclinazione: vista dall'alto (in basso) fino quasi all'orizzonte (in alto)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Orientamento della mappa. Trascina per ruotare, le frecce girano, Home per il nord",
+  "North, 0 degrees": "Nord, 0 gradi",
+  "Look around": "Guarda intorno",
+  "{heading} degrees from north": "{heading} gradi dal nord",
+  "{tilt} degrees from top-down": "{tilt} gradi dalla vista dall'alto"
 }
