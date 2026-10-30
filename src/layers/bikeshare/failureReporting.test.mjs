@@ -60,7 +60,7 @@ test('the layer reports failure when a failed city left it with nothing', () => 
 });
 
 test('a layer with nothing to draw and nothing failed is not an error', () => {
-  const { state, methods } = makeLayer();
+  const { methods } = makeLayer();
 
   // Out of range of every city is empty, not broken.
   assert.equal(methods.getStats().error, undefined);

@@ -60,6 +60,10 @@ export function createMotion({
     publishFocusTargetFromCachedPosition,
   } = services.focus;
 
+  // Fixes leave the cache with their history; corrected positions invalidate
+  // the local frame even when the existing Cartesian is mutated in place.
+  const fixFrames = new WeakMap();
+
   // Round 5: the old `_warmGroundedAircraftSurfaceCache` (global exact-5-decimal
   // warm for every grounded contact on Earth) is GONE. Parked-aircraft GPS
   // jitter minted fresh keys every poll → thousands of upstream points per
@@ -124,7 +128,7 @@ export function createMotion({
    * @returns {Cesium.Cartesian3|null} Estimated ECEF position, or null if no history exists.
    */
 
-  function _deadReckon(icao24, result) {
+  function _deadReckon(icao24, result, sampledRenderTime) {
     const info = flightState.records.data.get(icao24);
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
       const position = flightState._billboards.get(icao24)?.position;
@@ -149,11 +153,13 @@ export function createMotion({
     const out = result || new Cesium.Cartesian3();
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
-    const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
-      -RENDER_DELAY_SEC,
-      flightState._scratchRenderTime,
-    );
+    const renderTime =
+      sampledRenderTime ??
+      Cesium.JulianDate.addSeconds(
+        Cesium.JulianDate.now(flightState._scratchRenderTime),
+        -RENDER_DELAY_SEC,
+        flightState._scratchRenderTime,
+      );
 
     // Bracketing pair: interpolate — no extrapolation error, no snap-back.
     for (let i = history.length - 1; i >= 1; i--) {
@@ -286,12 +292,31 @@ export function createMotion({
       0,
       flightState._scratchOffset,
     );
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
-      fix.position,
-      Cesium.Ellipsoid.WGS84,
-      flightState._scratchEnu,
+    let frame = fixFrames.get(fix);
+    if (!frame) {
+      frame = {
+        position: new Cesium.Cartesian3(),
+        matrix: new Cesium.Matrix4(),
+      };
+      fixFrames.set(fix, frame);
+    }
+    if (
+      !frame.valid ||
+      !Cesium.Cartesian3.equals(frame.position, fix.position)
+    ) {
+      Cesium.Transforms.eastNorthUpToFixedFrame(
+        fix.position,
+        Cesium.Ellipsoid.WGS84,
+        frame.matrix,
+      );
+      Cesium.Cartesian3.clone(fix.position, frame.position);
+      frame.valid = true;
+    }
+    return Cesium.Matrix4.multiplyByPoint(
+      frame.matrix,
+      flightState._scratchOffset,
+      out,
     );
-    return Cesium.Matrix4.multiplyByPoint(enu, flightState._scratchOffset, out);
   }
 
   /**

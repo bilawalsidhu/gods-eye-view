@@ -18,3 +18,30 @@ export function chromeExecutablePath({
   if (env.PUPPETEER_EXECUTABLE_PATH) return env.PUPPETEER_EXECUTABLE_PATH;
   return exists(MACOS_CHROME) ? MACOS_CHROME : undefined;
 }
+
+/** Restore an owned test window before capture: focus emulation alone does not
+ * unminimize the native compositor, so CDP screenshots can otherwise stall. */
+export async function captureQaScreenshot(
+  page,
+  options,
+  { headful = true } = {},
+) {
+  if (headful) {
+    const session = await page.createCDPSession();
+    try {
+      const { windowId, bounds } = await session.send(
+        'Browser.getWindowForTarget',
+      );
+      if (bounds.windowState === 'minimized') {
+        await session.send('Browser.setWindowBounds', {
+          windowId,
+          bounds: { windowState: 'normal' },
+        });
+      }
+      await page.bringToFront();
+    } finally {
+      await session.detach();
+    }
+  }
+  return page.screenshot(options);
+}

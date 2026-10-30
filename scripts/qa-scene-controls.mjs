@@ -66,7 +66,8 @@ try {
       );
     }),
   );
-  await page.click('#scene-capture-btn');
+  await page.focus('#scene-capture-btn');
+  await page.keyboard.press('Space');
   await page.waitForFunction(
     () => document.querySelectorAll('.scene-shot-row').length === 1,
   );
@@ -328,6 +329,9 @@ try {
   await page.keyboard.press('Escape');
   await page.screenshot({ path: path.join(shots, 'desktop.png') });
   await page.setViewport({ width: 390, height: 844 });
+  // Phones present Scenes in the Layers tab's sheet.
+  await page.click('#mobile-tab-bar [data-mobile-sheet="layers"]');
+  await new Promise((resolve) => setTimeout(resolve, 400));
   await page.screenshot({ path: path.join(shots, 'narrow.png') });
   check(
     'Scene controls stay inside the narrow viewport',

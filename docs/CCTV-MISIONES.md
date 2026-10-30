@@ -197,3 +197,9 @@ The general `qa-cctv-v2` gate was run headful with `CCTV_MAX_SOURCES=64`: 52
 checks passed and one failed because the keyless scene supplied no 3D mesh
 ground samples. The gate is not reported as green; its real-mesh assertion
 requires a configured 3D tile source. No CCTV ground/rendering code changed.
+
+## Relay dependency update — 2026-10-29
+
+The shared relay now follows main's proxy-compatible same-site and session/lease
+contract. #1267 is not a prerequisite; direct-socket ownership and per-peer quotas
+are not part of this integration. See CCTV-HLS-INTEGRATION.md for landing order.

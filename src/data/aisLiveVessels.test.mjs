@@ -1011,6 +1011,34 @@ test('vessel interaction wire: flights-owned pick preserves vessel selection', (
   }
 });
 
+test('vessel touch interaction yields to the first nearby flight behind map tiles', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia');
+  Object.defineProperty(globalThis, 'matchMedia', {
+    configurable: true,
+    value: () => ({ matches: true }),
+  });
+  registerPickOwner('flights', (pickedId) => pickedId === 'a1b2c3');
+  const tile = { primitive: { isCesium3DTileset: true } };
+  const harness = installWireHarness(tile);
+  let drills = 0;
+  harness.viewer.scene.drillPick = (_position, limit, width, height) => {
+    drills++;
+    assert.deepEqual([limit, width, height], [8, 14, 14]);
+    return [tile, { id: 'a1b2c3' }];
+  };
+  try {
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(drills, 1);
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(harness.trail.clearCalls, 0);
+  } finally {
+    harness.cleanup();
+    unregisterPickOwner('flights');
+    if (previous) Object.defineProperty(globalThis, 'matchMedia', previous);
+    else delete globalThis.matchMedia;
+  }
+});
+
 test('vessel interaction wire: CCTV-owned pick preserves vessel selection', () => {
   registerPickOwner('cctv', (pickedId) => pickedId === 'atx-cam-3');
   const harness = installWireHarness({ id: 'atx-cam-3' });
@@ -1690,4 +1718,51 @@ test('vessel selection passes the opaque source reference to optional history', 
     _setVesselStateForTest({ enabled: false });
     aisLiveVesselsLayer.setSource(createVesselSource());
   }
+});
+
+test('vessel focus wire skips hidden sprites at rest while a target is tracked', () => {
+  const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
+  const sprite = (show) => ({
+    position: { x: 1, y: 2, z: 3 },
+    show,
+    color: makeColor(1),
+  });
+  const visible = sprite(true);
+  const hidden = Array.from({ length: 50 }, () => sprite(false));
+  const records = [visible, ...hidden].map((billboard) => ({
+    position: billboard.position,
+    billboard,
+  }));
+  const target = {
+    screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
+    paddingPx: 0,
+    cameraDistance: 1000,
+  };
+  let projected = 0;
+  let measured = 0;
+  const apply = (nowMs) =>
+    applyVesselFocusDeemphasis({
+      records,
+      target,
+      nowMs,
+      screenPositionFor: () => {
+        projected += 1;
+        return { x: 50, y: 50 };
+      },
+      cameraDistanceFor: () => {
+        measured += 1;
+        return 1200;
+      },
+      params: { paddingPx: 0, dimFloor: 0.25, attackMs: 300 },
+    });
+
+  apply(0);
+  const result = apply(300);
+
+  // Only the on-screen sprite pays for projection and distance.
+  assert.equal(projected, 2);
+  assert.equal(measured, 2);
+  assert.equal(visible.color.alpha, 0.25);
+  assert.equal(result.activeCount, 1);
+  for (const billboard of hidden) assert.equal(billboard.color.alpha, 1);
 });
