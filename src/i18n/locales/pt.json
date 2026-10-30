@@ -2991,5 +2991,12 @@
   "Begin with a clean globe": "Comece com um globo limpo",
   "Don't show this again": "Não mostrar novamente",
   "ESC to dismiss": "ESC para fechar",
-  "Tip: the GEV MIC button in the dock lets you talk to the map.": "Dica: o botão GEV MIC no dock permite falar com o mapa."
+  "Tip: the GEV MIC button in the dock lets you talk to the map.": "Dica: o botão GEV MIC no dock permite falar com o mapa.",
+  "Approximate location; coverage not calibrated.": "Localização aproximada; cobertura não calibrada.",
+  "LOCATION · APPROXIMATE": "LOCALIZAÇÃO · APROXIMADA",
+  "Open official camera page ↗": "Abrir a página oficial da câmera ↗",
+  "PLAYER IN PANEL": "REPRODUTOR NO PAINEL",
+  "PUBLIC PLAYER · EXTERNAL": "REPRODUTOR PÚBLICO · EXTERNO",
+  "{camera} — public player": "{camera} — reprodutor público",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · REPRODUTOR PÚBLICO · LOCALIZAÇÃO APROXIMADA · COBERTURA NÃO CALIBRADA"
 }

@@ -2853,5 +2853,12 @@
   },
   "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 發布這些 KMZ 產品。新上傳的內容會在數秒內被檢測到，並自動替換舊版本。點擊標記查看報告。",
   "routing busy — too many routes at once": "路線服務繁忙：同時請求的路線過多",
-  "route proxy error": "路線代理出錯"
+  "route proxy error": "路線代理出錯",
+  "Approximate location; coverage not calibrated.": "位置為近似值；覆蓋範圍未校準。",
+  "LOCATION · APPROXIMATE": "位置 · 近似",
+  "Open official camera page ↗": "開啟攝影機官方頁面 ↗",
+  "PLAYER IN PANEL": "面板內播放器",
+  "PUBLIC PLAYER · EXTERNAL": "公開播放器 · 外部",
+  "{camera} — public player": "{camera} — 公開播放器",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · 公開播放器 · 近似位置 · 覆蓋範圍未校準"
 }

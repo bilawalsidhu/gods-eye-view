@@ -2922,5 +2922,12 @@
   "Malformed cyclone snapshot": "Fehlerhafter Wirbelsturm-Snapshot",
   "STALE · Roads: {source} · Flow: cached TomTom tiles": "VERALTET · Straßen: {source} · Verkehrsfluss: TomTom-Kacheln aus dem Cache",
   "routing busy — too many routes at once": "Routing-Dienst ausgelastet – zu viele Routen gleichzeitig",
-  "route proxy error": "Fehler des Routen-Proxys"
+  "route proxy error": "Fehler des Routen-Proxys",
+  "Approximate location; coverage not calibrated.": "Ungefährer Standort; Abdeckung nicht kalibriert.",
+  "LOCATION · APPROXIMATE": "STANDORT · UNGEFÄHR",
+  "Open official camera page ↗": "Offizielle Kameraseite öffnen ↗",
+  "PLAYER IN PANEL": "PLAYER IM PANEL",
+  "PUBLIC PLAYER · EXTERNAL": "ÖFFENTLICHER PLAYER · EXTERN",
+  "{camera} — public player": "{camera} — öffentlicher Player",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ÖFFENTLICHER PLAYER · UNGEFÄHRER STANDORT · ABDECKUNG NICHT KALIBRIERT"
 }

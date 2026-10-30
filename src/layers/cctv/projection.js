@@ -305,7 +305,7 @@ export function createProjection({
    */
 
   function ensureProjectionRuntime(record) {
-    if (!record) return null;
+    if (!record || record.camera?.feedType === 'embed') return null;
     if (record.projection && !record.projection.disposed)
       return record.projection;
     const runtime = createProjectionRuntime(record);

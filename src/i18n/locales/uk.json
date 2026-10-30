@@ -3060,5 +3060,12 @@
   "ESC to dismiss": "ESC — приховати",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Порада: кнопка МІК у доку дає змогу говорити з картою.",
   "Malformed cyclone snapshot": "Некоректний знімок циклонів",
-  "Cyclone request timed out": "Минув час очікування запиту циклонів"
+  "Cyclone request timed out": "Минув час очікування запиту циклонів",
+  "Approximate location; coverage not calibrated.": "Приблизне розташування; покриття не відкалібровано.",
+  "LOCATION · APPROXIMATE": "РОЗТАШУВАННЯ · ПРИБЛИЗНЕ",
+  "Open official camera page ↗": "Відкрити офіційну сторінку камери ↗",
+  "PLAYER IN PANEL": "ПРОГРАВАЧ НА ПАНЕЛІ",
+  "PUBLIC PLAYER · EXTERNAL": "ПУБЛІЧНИЙ ПРОГРАВАЧ · ЗОВНІШНІЙ",
+  "{camera} — public player": "{camera} — публічний програвач",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ПУБЛІЧНИЙ ПРОГРАВАЧ · ПРИБЛИЗНЕ РОЗТАШУВАННЯ · ПОКРИТТЯ НЕ ВІДКАЛІБРОВАНО"
 }

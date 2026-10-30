@@ -2853,5 +2853,12 @@
   "routing busy — too many routes at once": "ルート検索サービスが混雑しています。同時に要求されたルートが多すぎます",
   "route proxy error": "ルート検索プロキシでエラーが発生しました",
   "Malformed cyclone snapshot": "サイクロンのスナップショットの形式が不正です",
-  "Cyclone request timed out": "サイクロンのリクエストがタイムアウトしました"
+  "Cyclone request timed out": "サイクロンのリクエストがタイムアウトしました",
+  "Approximate location; coverage not calibrated.": "位置は概算です。撮影範囲は未校正です。",
+  "LOCATION · APPROXIMATE": "位置 · 概算",
+  "Open official camera page ↗": "カメラの公式ページを開く ↗",
+  "PLAYER IN PANEL": "パネル内プレーヤー",
+  "PUBLIC PLAYER · EXTERNAL": "公開プレーヤー · 外部",
+  "{camera} — public player": "{camera} — 公開プレーヤー",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · 公開プレーヤー · 概算位置 · 撮影範囲は未校正"
 }

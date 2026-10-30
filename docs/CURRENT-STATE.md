@@ -1230,6 +1230,99 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Public CCTV players
+
+CCTV's `embed` feed type accepts public HTTPS YouTube video URLs in
+`embedUrl`: `youtube.com/watch?v=VIDEO_ID`, `youtube.com/live/VIDEO_ID`,
+`youtu.be/VIDEO_ID`, `youtube.com/shorts/VIDEO_ID`, and the YouTube or
+YouTube-nocookie `/embed/VIDEO_ID` form. Canonicalization requires an exact
+allowlisted host and an eleven-character video ID, rejects credentials and
+nonstandard ports, and discards caller parameters. Every accepted link becomes
+`https://www.youtube-nocookie.com/embed/VIDEO_ID?playsinline=1`. The existing
+Bhote Koshi media callouts share the video-ID parser. No new dependency, API key,
+player SDK or server-side YouTube request is required.
+
+The same `embed` path also accepts public Twitch channels (`twitch.tv/CHANNEL`
+or `player.twitch.tv/?channel=CHANNEL`), Angelcam broadcasts
+(`v.angelcam.com/iframe?v=ID`, ten lowercase alphanumeric characters), and
+Roundshot panoramas (`NAME.roundshot.com/`). HTTPS, exact provider hosts and
+bounded paths/IDs are required. Caller player parameters are discarded.
+Twitch's required `parent` is set from the actual document hostname; its
+400-by-300 minimum viewport remains scrollable in narrow panels. Angelcam starts muted only while selected and visible; its current public
+player can get stuck without a usable Play control when autoplay is disabled. Roundshot retains the capture date, archives and panorama controls;
+it is periodically captured imagery, not necessarily continuous video. Only
+these provider frame origins are added to CSP; no provider script SDK is loaded
+into the app and no signed media URL is extracted or relayed.
+
+YouTube alone uses its privacy-enhanced host. Twitch, Angelcam and Roundshot
+load third-party players that may use cookies or analytics under their own
+policies; selecting a camera contacts that provider. The official-page link is
+a separate `noopener noreferrer` link outside the sandbox, so it remains the
+fallback when a provider popup cannot run inside the iframe sandbox.
+
+The original player retains its controls, branding and access restrictions.
+YouTube and Twitch require Play; consent, login, regional restrictions or disabled embedding
+remain provider-controlled. `sourcePageUrl` supplies the official-page link;
+when omitted for YouTube, the panel links to the canonical watch page. The iframe
+preserves an origin referrer and a minimum 200-by-200-pixel viewport. It loads
+only while selected and visible and is released on hide, collapse, switch,
+disable or destruction. The existing `EXTERNAL` status does not claim that a
+stream is currently live. Frame/media proxying, projection, calibration and
+ambient thumbnails stay disabled for these players.
+
+On phones (up to 720px), provider players exist only while the Cameras sheet
+and CCTV panel are visible. Closing the sheet with its tab, backdrop, Escape,
+or a downward swipe of at least 64px from non-control content at the top,
+switching sheets, or entering phone layout with the sheet closed unloads the
+iframe without changing the selected camera or the user's saved panel state.
+Reopening creates one fresh player; it does not resume the prior provider's
+playback position. Crossing back to desktop restores the prior panel state and
+keeps a player only if that panel is visible. Twitch retains its required
+400-by-300 viewport with horizontal scrolling inside the preview.
+
+Against a built preview (`npm run build`, then `npm run preview`),
+`node scripts/qa-camera-controls.mjs` covers native cameras and all four
+provider players at 390×844, including selection, Play, official-page links,
+iframe replacement, all sheet close paths, panel borrowing, page suspension,
+disable, UI disposal and the 720/721px desktop boundary. Native Chromium touch
+input covers downward swipe teardown (including detached frame/media contexts),
+single-player recreation, nested content scrolling, horizontal gestures, control
+taps, short pulls and cancelled gestures for all four providers at 390px and
+720px. At 721px a touch pull keeps the desktop player alive.
+`QA_GLOBE_RESOLUTION_SCALE=0.25` can reduce only globe rendering cost on software
+GPUs; DOM viewport and player sizes remain unchanged. Provider documents
+and their video are synthetic browser fixtures; this gate does not verify live broadcasts,
+provider availability, consent/login prompts or current embedding permission.
+
+Try the two attributed Argentine examples with:
+
+```bash
+CCTV_SOURCES_FILE=config/cctv_sources.youtube.json npm run dev
+```
+
+The custom catalog replaces the default camera packs; add `CCTV_FORCE_AUSTIN=1`
+to merge it with the defaults. The file contains Argentina News' Obelisco view
+and UADE's Campus Buenos Aires view, discovered through SkylineWebcams and
+verified against YouTube's public oEmbed metadata; UADE also embeds its stream
+on its own homepage. Their rounded landmark/campus anchors are approximate,
+not surveyed mounts. No video or thumbnails are bundled. Details and coordinate
+provenance are in `DATA_SOURCES.md`.
+
+Channel `/@handle/live` URLs and playlist-only URLs are not video IDs. When a
+broadcaster restarts under a new video ID, update `embedUrl`; this feature does
+not scrape channels or discover replacement streams. Skyline-owned streams and
+private/paywalled aggregator catalogs are not imported. A camera listed by an
+aggregator needs an independently public, authorized original player.
+
+Unit coverage: `src/sources/youtube.test.mjs`, `cctvEmbed.test.mjs`,
+`cctvYouTube.test.mjs` (catalog, API routes, geometry and public state), and existing
+Bhote Koshi tests. Browser gate: `node scripts/qa-cctv-v2.mjs --url
+http://localhost:4173`; real YouTube playback and provider restrictions require
+an additional browser check, as do Twitch, Angelcam and Roundshot.
+Confirm decoded dimensions and advancing playback time; Angelcam's connecting
+animation is not camera video. For Roundshot, verify the panorama's capture date
+instead of treating periodically captured imagery as continuous video.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT

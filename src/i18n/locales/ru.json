@@ -3060,5 +3060,12 @@
   "Preview is off.": "Предпросмотр отключён.",
   "Automatic stop is unavailable for this voice connection.": "Автоматическая остановка недоступна для этого голосового подключения.",
   "routing busy — too many routes at once": "сервис маршрутов занят: слишком много маршрутов одновременно",
-  "route proxy error": "ошибка прокси маршрутов"
+  "route proxy error": "ошибка прокси маршрутов",
+  "Approximate location; coverage not calibrated.": "Приблизительное местоположение; зона обзора не откалибрована.",
+  "LOCATION · APPROXIMATE": "МЕСТОПОЛОЖЕНИЕ · ПРИБЛИЗИТЕЛЬНОЕ",
+  "Open official camera page ↗": "Открыть официальную страницу камеры ↗",
+  "PLAYER IN PANEL": "ПРОИГРЫВАТЕЛЬ В ПАНЕЛИ",
+  "PUBLIC PLAYER · EXTERNAL": "ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ВНЕШНИЙ",
+  "{camera} — public player": "{camera} — общедоступный проигрыватель",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ПРИБЛИЗИТЕЛЬНОЕ МЕСТОПОЛОЖЕНИЕ · ЗОНА ОБЗОРА НЕ ОТКАЛИБРОВАНА"
 }
