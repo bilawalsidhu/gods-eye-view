@@ -310,6 +310,9 @@ export function initDrawTool({ viewer, annotations }) {
   };
   const onKey = (event) => {
     if (!active || destroyed || typingElsewhere(event)) return;
+    // Keys on the shape list's own controls are the list's (Esc closes a
+    // colour picker there), not the drawing's.
+    if (markListEl?.contains?.(event.target)) return;
     // Enter goes to finish() once a shape has been started; finish() owns the
     // decision and says WHY it refused. Swallowing the key on a degenerate
     // shape left the person pressing Enter at a silent panel. A focused button

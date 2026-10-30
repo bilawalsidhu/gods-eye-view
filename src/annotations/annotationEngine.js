@@ -828,6 +828,10 @@ export function createAnnotationEngine({
     };
     for (const ex of annotations.values()) {
       if (ex.type !== anno.type || !ex.anchor) continue;
+      // A shape drawn by hand and a voice mark are never the same mark: a
+      // match would let a voice TTL expire the drawn one, or replace it. A
+      // hidden mark is not refreshed either; a new shape there is new.
+      if (Boolean(ex.manual) !== Boolean(anno.manual) || ex.hidden) continue;
       // Identity is GEOMETRY, not label: "Marina" and "Marina District" resolve to the SAME
       // polygon/anchor and must collapse to one mark (the caller replaces label/color in place
       // so the latest caption wins). Resolution is deterministic, so the same place re-resolves
@@ -1054,15 +1058,21 @@ export function createAnnotationEngine({
     if (!anno) return false;
     if (anno.type === 'route' && anno.path?.length) {
       const ring = anno.path.map((p) => [p.lon, p.lat]);
-      const lons = ring.map(([lon]) => lon);
+      // Unwrap around the first vertex, as ringRange does, so a line across
+      // the antimeridian is centred on it, not on the far side of the globe.
+      const ref = ring[0][0];
+      const lons = ring.map(
+        ([lon]) => lon - 360 * Math.round((lon - ref) / 360),
+      );
       const lats = ring.map(([, lat]) => lat);
+      const midLon = (Math.min(...lons) + Math.max(...lons)) / 2;
       frameAnnotation({
         ...anno,
         to: null,
         ring,
         polygons: null,
         anchor: {
-          lon: (Math.min(...lons) + Math.max(...lons)) / 2,
+          lon: ((((midLon + 180) % 360) + 360) % 360) - 180,
           lat: (Math.min(...lats) + Math.max(...lats)) / 2,
           height: 0,
         },

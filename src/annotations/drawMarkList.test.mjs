@@ -47,14 +47,31 @@ function fakeDocument() {
       getAttribute(key) {
         return this.attributes.get(key) ?? null;
       },
+      get parentNode() {
+        return this.parent;
+      },
       append(...nodes) {
-        for (const child of nodes) {
-          child.parent = this;
-          this.children.push(child);
-        }
+        for (const child of nodes) this.insertBefore(child, null);
+      },
+      insertBefore(child, before) {
+        child.remove();
+        child.parent = this;
+        const at = before ? this.children.indexOf(before) : -1;
+        if (at < 0) this.children.push(child);
+        else this.children.splice(at, 0, child);
+      },
+      remove() {
+        // Like a browser, taking the focused node out of the page blurs it.
+        if (doc.activeElement && this.contains(doc.activeElement))
+          doc.activeElement = null;
+        if (this.parent)
+          this.parent.children = this.parent.children.filter(
+            (node) => node !== this,
+          );
+        this.parent = null;
       },
       replaceChildren(...nodes) {
-        this.children = [];
+        for (const child of [...this.children]) child.remove();
         this.append(...nodes);
       },
       closest(selector) {
@@ -136,7 +153,22 @@ function harness(initial) {
   const rows = () => listEl.children;
   const control = (row, name) => row.querySelector(`[data-control="${name}"]`);
   const click = (target) => listeners.click({ target });
-  return { list, listEl, listeners, rows, control, click, calls, changed };
+  const addMark = (mark) => {
+    marks = [...marks, { hidden: false, ...mark }];
+    changed();
+  };
+  return {
+    list,
+    listEl,
+    listeners,
+    rows,
+    control,
+    click,
+    calls,
+    changed,
+    addMark,
+    changeListeners,
+  };
 }
 
 const LINE = {
@@ -251,11 +283,14 @@ test('a name is committed on Enter or blur, and Escape undoes the edit without l
 });
 
 test('a re-render keeps focus on the same control, and destroy stops listening', () => {
-  const { rows, control, list, listEl, changed } = harness([LINE]);
+  const { rows, control, list, listEl, changed, changeListeners } = harness([
+    LINE,
+  ]);
   control(rows()[0], 'fly').focus();
   changed();
   assert.equal(listEl.ownerDocument.activeElement, control(rows()[0], 'fly'));
   list.destroy();
+  assert.equal(changeListeners.size, 0, 'destroy unsubscribes from the board');
   assert.equal(rows().length, 0);
   assert.ok(!listEl.classList.contains('visible'));
   changed();
@@ -277,4 +312,65 @@ test('an unnamed shape is called by its kind', () => {
     }),
     'Line',
   );
+});
+
+test('a board change while a name is being typed keeps the draft and the row', () => {
+  const { rows, control, listEl, addMark, calls } = harness([LINE, PIN]);
+  const name = control(rows()[0], 'name');
+  name.focus();
+  name.value = 'Half-typ';
+  // A voice mark lands, and another hand-drawn one: neither may wipe the draft.
+  addMark(VOICE);
+  addMark({ ...PIN, id: 'a4', name: null, label: '' });
+  assert.equal(control(rows()[0], 'name'), name, 'the row is not rebuilt');
+  assert.equal(name.value, 'Half-typ', 'the typed text survives');
+  assert.equal(listEl.ownerDocument.activeElement, name, 'focus stays');
+  assert.equal(calls.length, 0, 'nothing is committed early');
+  assert.deepEqual(
+    rows().map((row) => row.dataset.markId),
+    ['a1', 'a2', 'a4'],
+  );
+});
+
+test('a click right after typing a name still reaches its button', () => {
+  const { rows, control, listeners, click, calls } = harness([LINE, PIN]);
+  const name = control(rows()[0], 'name');
+  name.focus();
+  name.value = 'Home';
+  const hide = control(rows()[1], 'toggle');
+  const remove = control(rows()[0], 'remove');
+  // mousedown on a button blurs the field first, which commits the name.
+  name.blur();
+  listeners.focusout({ target: name });
+  assert.deepEqual(calls.at(-1), ['restyle', 'a1', { name: 'Home' }]);
+  assert.equal(control(rows()[1], 'toggle'), hide, 'the button is still there');
+  click(hide);
+  assert.deepEqual(calls.at(-1), ['hide', 'a2', true]);
+  click(remove);
+  assert.deepEqual(calls.at(-1), ['remove', 'a1']);
+});
+
+test('picking a colour returns focus to the swatch; Escape closes the picker', () => {
+  const { rows, control, click, listeners, listEl, calls } = harness([LINE]);
+  const doc = listEl.ownerDocument;
+  click(control(rows()[0], 'swatch'));
+  click(control(rows()[0], 'color-primary'));
+  assert.equal(calls.length, 0, 'the colour it already has costs nothing');
+  assert.equal(doc.activeElement, control(rows()[0], 'swatch'));
+
+  click(control(rows()[0], 'swatch'));
+  const amber = control(rows()[0], 'color-amber');
+  amber.focus();
+  let stopped = false;
+  listeners.keydown({
+    key: 'Escape',
+    target: amber,
+    preventDefault() {},
+    stopPropagation() {
+      stopped = true;
+    },
+  });
+  assert.ok(stopped, 'Escape does not reach Draw');
+  assert.equal(control(rows()[0], 'color-amber'), null, 'the picker closed');
+  assert.equal(doc.activeElement, control(rows()[0], 'swatch'));
 });
