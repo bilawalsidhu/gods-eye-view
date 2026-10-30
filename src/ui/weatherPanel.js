@@ -12,8 +12,23 @@ const ORDER = [
   'weather-satellite',
   'weather-lightning',
   'air-quality',
+  'copernicus-ems',
+  'entsoe-grid',
 ];
-const OBSERVED = new Set(ORDER.slice(2, 5));
+// The observed-history group and its timeline belong to the three products
+// that publish a frame history. Every other readout is a current state, not
+// a series, and follows the clock's "latest" mode.
+const OBSERVED = new Set([
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+]);
+// A layer the rail does not know about still gets a card, at the end of
+// its group rather than at the front.
+const orderOf = (id) => {
+  const index = ORDER.indexOf(id);
+  return index === -1 ? ORDER.length : index;
+};
 const utc = (time) =>
   Number.isFinite(Date.parse(time))
     ? `${formatUtcDayMonth(time)} ${utcClock(time)}`
@@ -136,7 +151,7 @@ export function createWeatherPanel({
     };
     const active = entries
       .filter(({ summary }) => summary)
-      .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+      .sort((a, b) => orderOf(a.id) - orderOf(b.id));
     const observed = active.filter(({ id }) => OBSERVED.has(id));
     const showTimeline = observed.length > 0;
     set(observedGroup, 'hidden', !showTimeline);
@@ -278,7 +293,7 @@ export function createWeatherPanel({
       entries = nextEntries.filter(({ summary }) => summary);
       const ids = new Set(entries.map(({ id }) => id));
       const ordered = [...entries].sort(
-        (a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id),
+        (a, b) => orderOf(a.id) - orderOf(b.id),
       );
       const added =
         previousIds && entries.filter(({ id }) => !previousIds.has(id));

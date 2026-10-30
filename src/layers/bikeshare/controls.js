@@ -1,5 +1,10 @@
-import { msg, t } from '../../i18n/index.js';
-import { STATUS_POLL_MS } from './policy.js';
+import { msg, t, tn } from '../../i18n/index.js';
+import {
+  BIKESHARE_AVAILABILITY_BANDS,
+  BIKESHARE_DESCRIPTION,
+  STATUS_POLL_MS,
+  bikeshareAvailabilityBand,
+} from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -53,6 +58,71 @@ export function createControls({ state: layerState, services, parts, source }) {
         });
       }
       return result;
+    },
+
+    /**
+     * The Bike Share row's own legend: the availability ramp the stations are
+     * drawn in, with the number of stations in each band.
+     *
+     * This is the SAME ramp for every city in the merged layer: Velib' is
+     * one more GBFS city, so its stations are coloured by the very function
+     * that colours New York's, and they land in these same bands. There is
+     * no second scheme for the French network.
+     *
+     * The band counts come from bikeshareAvailabilityBand, the one
+     * classification the renderer uses, so a point's colour and the band
+     * that counts it can never disagree.
+     */
+    getRowControls() {
+      let bikes = 0;
+      const counts = new Map(
+        BIKESHARE_AVAILABILITY_BANDS.map((band) => [band.id, 0]),
+      );
+      for (const record of layerState._stationRenderMap.values()) {
+        bikes += Number(record.bikesAvailable) || 0;
+        const band = bikeshareAvailabilityBand(
+          {
+            bikesAvailable: record.bikesAvailable,
+            isInstalled: record.isInstalled,
+            isRenting: record.isRenting,
+            isReturning: record.isReturning,
+          },
+          record.capacity,
+        );
+        counts.set(band, (counts.get(band) || 0) + 1);
+      }
+      const onTheGround = tn(
+        bikes,
+        '{count} bike on the ground',
+        '{count} bikes on the ground',
+      );
+      return {
+        chips: [],
+        legend: BIKESHARE_AVAILABILITY_BANDS.map((band, index) => ({
+          label: t(band.label),
+          color: band.color,
+          count: counts.get(band.id) || 0,
+          ...(index === 0
+            ? {
+                blurb: t(
+                  'Colour shows how much of the station capacity holds a bike, not how many bikes the city owns. A station with no status yet is drawn in the neutral colour.',
+                ),
+              }
+            : {}),
+        })),
+        info:
+          layerState._failedCityIds.size > 0
+            ? t('GBFS fetch error')
+            : layerState._count === 0
+              ? t(BIKESHARE_DESCRIPTION)
+              : t('{description} · {bikes}', {
+                  description: t(BIKESHARE_DESCRIPTION),
+                  bikes: onTheGround,
+                }),
+        infoTitle: t(
+          'Every city in this row is a GBFS feed read through the same proxy, Paris and Velib among them. Availability is per station, not per bike.',
+        ),
+      };
     },
 
     /**

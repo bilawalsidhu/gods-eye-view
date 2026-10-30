@@ -3,6 +3,7 @@ import {
   DEFAULT_CAPACITY,
   POINT_SIZE_MIN,
   POINT_SIZE_MAX,
+  bikeshareAvailabilityBand,
   COLOR_NEUTRAL,
   COLOR_MUTED,
   COLOR_GREEN,
@@ -72,18 +73,21 @@ export function createRendering({
    */
 
   function statusToColor(status, capacity) {
-    if (!status) return COLOR_NEUTRAL;
-    if (!status.isInstalled || !status.isRenting || !status.isReturning)
-      return COLOR_MUTED;
-
-    const bikes = parts.model.toNonNegativeInteger(status.bikesAvailable);
-    if (!Number.isFinite(bikes)) return COLOR_NEUTRAL;
-
-    const cap = Math.max(1, Number(capacity) || DEFAULT_CAPACITY);
-    const ratio = bikes / cap;
-    if (ratio > 0.6) return COLOR_GREEN;
-    if (ratio >= 0.3) return COLOR_YELLOW;
-    return COLOR_RED;
+    // The band function is the single classification: the row legend counts
+    // from it too, so a point's colour and the band that counts it cannot
+    // disagree.
+    switch (bikeshareAvailabilityBand(status, capacity)) {
+      case 'plenty':
+        return COLOR_GREEN;
+      case 'some':
+        return COLOR_YELLOW;
+      case 'few':
+        return COLOR_RED;
+      case 'offline':
+        return COLOR_MUTED;
+      default:
+        return COLOR_NEUTRAL;
+    }
   }
 
   /**

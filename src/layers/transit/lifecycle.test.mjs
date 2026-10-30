@@ -200,6 +200,7 @@ function harness(
   const originalWindow = globalThis.window;
   globalThis.window = new EventTarget();
 
+  const dataSources = [];
   const preRender = new Cesium.Event();
   const cameraChanged = new Cesium.Event();
   const viewer = {
@@ -218,6 +219,19 @@ function harness(
           viewRect.east,
           viewRect.north,
         );
+      },
+    },
+    // The Transit layer also owns the French passenger-station data source,
+    // so the harness gives it the collection the layer adds it to.
+    dataSources: {
+      add(value) {
+        dataSources.push(value);
+        return value;
+      },
+      remove(value) {
+        const index = dataSources.indexOf(value);
+        if (index >= 0) dataSources.splice(index, 1);
+        return index >= 0;
       },
     },
     scene: {
@@ -910,7 +924,9 @@ test('destroy releases every shared registration this layer took', async (t) => 
   await app.layer.update();
   assert.ok(app.sprites.has('transit'));
   assert.ok(app.pickOwners.has('transit'));
-  assert.equal(app.primitives.length, 2);
+  // Two billboard collections (the fleet and its motion pass) plus the
+  // station pin collection the Transit row owns.
+  assert.equal(app.primitives.length, 3);
 
   app.layer.destroy(app.viewer);
   assert.equal(
@@ -928,6 +944,23 @@ test('destroy releases every shared registration this layer took', async (t) => 
     0,
     'the primitive collection leaves the scene',
   );
+  // The station pin collection is a scene-level primitive like the fleet's
+  // billboard collections, so it has to leave the scene too, and its state
+  // slot has to be emptied: a layer that is destroyed and rebuilt must not
+  // inherit a collection the previous viewer owned.
+  assert.equal(
+    app.state()._stationPoints,
+    null,
+    'the station pin collection is released',
+  );
+  assert.equal(
+    app.overlaySources.has('transit-stations'),
+    false,
+    'the station label source is cleared',
+  );
+  assert.deepEqual(app.state()._stations, []);
+  assert.equal(app.state()._stationTotal, 0);
+  assert.equal(app.state()._stationError, null);
   assert.equal(app.holds().includes('transit'), false);
   assert.equal(app.state()._viewer, null);
   assert.equal(app.state()._dataManager, null);

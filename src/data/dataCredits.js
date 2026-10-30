@@ -99,6 +99,30 @@ export const NYC_DOT_DISCLAIMER =
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
 export const DATA_CREDITS = [
+  {
+    key: 'velib',
+    html: 'Paris bike share (Bike Share layer): <a href="https://velib-metropole.fr" target="_blank" rel="noopener">velib-metropole.fr</a> (Velib Metropole, GBFS open data)',
+  },
+  {
+    key: 'sncf',
+    html: 'SNCF station network (Transit layer): <a href="https://ressources.data.sncf.com" target="_blank" rel="noopener">ressources.data.sncf.com</a> (Open Data, SNCF)',
+  },
+  {
+    key: 'vigicrues',
+    html: 'Flood warnings and river levels: <a href="https://www.vigicrues.gouv.fr" target="_blank" rel="noopener">vigicrues.gouv.fr</a> (VIGIECRUES, Ministere de l Ecology)',
+  },
+  {
+    key: 'ign',
+    html: 'French topographic base map: <a href="https://data.geopf.fr" target="_blank" rel="noopener">data.geopf.fr</a> (IGN Geoplateforme, Plan IGN)',
+  },
+  {
+    key: 'entsoe',
+    html: 'European grid load: <a href="https://transparency.entsoe.eu" target="_blank" rel="noopener">transparency.entsoe.eu</a> (ENTSO-E Transparency Platform)',
+  },
+  {
+    key: 'copernicus-ems',
+    html: 'Active European hazards: <a href="https://emergency.copernicus.eu" target="_blank" rel="noopener">emergency.copernicus.eu</a> (Copernicus Emergency Management Service)',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',

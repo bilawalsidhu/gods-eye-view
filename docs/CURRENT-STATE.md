@@ -1678,6 +1678,83 @@ Sharing asks of clients of the Oslo, Bergen and Trondheim Bysykkel feeds
 their GBFS tree: `api.entur.io` to `/mobility/v2/gbfs/` and `api.cyclocity.fr`
 (Bysykkel Lillestrøm) to `/contracts/`.
 
+## French public-data layers (C3 data sources)
+
+Four toggleable layers read French and European open-data feeds: Flood
+Warnings (`vigicrues-floods`), European Grid (`entsoe-grid`), Copernicus EMS
+(`copernicus-ems`) and IGN Plan IGN (`ign-geoplateforme`). They sit in the
+Weather, Infrastructure, Events and Reference Maps groups respectively, and
+each one is off by default.
+
+The French public data that could have been two more rows is folded into the
+rows that already existed, so the Layers panel keeps one Transit row and one
+Bike Share row. The Transit row (`transit`) draws the live GTFS-RT fleet AND
+the SNCF passenger-station network (2 792 stations, a STATIC catalogue and not
+live train positions), and names both in its source line as
+`GTFS-RT · SNCF`. The station network is read from `/api/sncf/stations` and
+drawn as ground ellipses clamped to the terrain, with its labels under the
+overlay source `transit-stations`. Because the catalogue is static it loads
+with the layer, NOT on the fleet's camera-driven altitude gate: a national rail
+network that only appeared once the camera dropped into a live GTFS-RT
+coverage area would read as broken from any wider view.
+
+The Bike Share row (`bikeshare`) gains Paris and the Vélib' Métropole
+network (1 519 stations with live bike, e-bike and free-dock availability) as
+one more city entry in `src/layers/bikeshare/registry.js`. It is read through
+the SAME generic `/api/gbfs/<encoded-url>` proxy and the SAME GBFS parser every
+other city uses; the operator's documents match that parser exactly
+(`data.stations[]` with `station_id`, `lat`, `lon`, `name`, `capacity`, and
+`num_bikes_available` / `num_docks_available` in the status document), so no
+dedicated Vélib' provider or route is kept.
+
+Every one of these feeds is read through a server-side proxy. The browser
+names a local route (`/api/sncf/stations`, `/api/vigicrues/stations`,
+`/api/vigicrues/zones`, `/api/entsoe/load`,
+`/api/copernicus-ems/activations`,
+`/api/ign-geoplateforme/tiles/{layer}/{z}/{x}/{y}.png`) and the proxy
+resolves the upstream URL from its own server-side allow-list, so no upstream
+host is named in the client, per the rule in `SECURITY.md`. The IGN layer
+is an imagery overlay, so the globe asks the local proxy for each tile
+instead of a browser-direct tile template.
+
+The shared transport lives in `src/sources/openDataProxy.js`. It caps every
+upstream read by byte count before the body reaches the process heap, keeps a
+per-route in-memory cache with a TTL so a browser poll loop cannot hammer a
+public operator, bounds how often the process may ask the operator at all with
+a fixed-window admission limiter (per route and globally), pushes the next
+permitted attempt out on a failure backoff ladder (30 s, 60 s, 120 s, then
+5 minutes) and serves the last good body while a route is cooling down.
+Redirects are followed manually and must stay on the registered upstream's
+own https origin, so an upstream cannot bounce the proxy at a third party.
+
+The VIGICRUES station feed publishes its coordinates in Lambert-93 metres
+(EPSG:2154). `src/sources/lambert93.js` implements the inverse of that
+projection from the EPSG record (GRS80, two standard parallels, cone apex at
+the south pole) so the globe receives degrees; the conversion happens at the
+proxy boundary and the browser never sees projected coordinates. The
+implementation agrees with ten proj4 control points to better than 5e-10
+degrees.
+
+ENTSO-E is key-gated: without a token the proxy answers
+`503 {error:'no_key', keyRequired:true}` before making any upstream request,
+and the layer reports "needs a key" instead of an empty snapshot. The token
+is never hardcoded; it is read from `ENTSOE_TOKEN` and can be written from
+the Provider Settings panel. Copernicus EMS activation centroids arrive as WKT
+`POINT (lon lat)` with longitude first, and the proxy parses them in the
+upstream's own order so a hazard is not placed in the wrong hemisphere.
+
+The layer-state token allocation takes the next free tokens in reservation
+order: `vigicrues-floods`=6, `entsoe-grid`=7, `copernicus-ems`=8,
+`ign-geoplateforme`=9. The JSON token ledger and `LAYER_STATE_REGISTRY` agree,
+and the registry holds 36 reservations where upstream held 32.
+
+The four layers add 62 UI strings, translated into es, ru and zh-CN and
+appended to the catalogs in the existing order (the catalogs are ordered by
+code discovery, not alphabetically). The POWER UP panel lists the two
+key-gated transport providers, GTFS and PRIM, in the key registry; the three
+keyless sources deliberately get no row.
+
+
 ## Upstream body bounds
 
 FIRMS CSV, CelesTrak TLE groups, adsb.lol military responses, TomTom flow

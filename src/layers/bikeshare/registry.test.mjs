@@ -56,3 +56,31 @@ test('the Toronto center sits inside the system service area', () => {
   // half that from the center or downtown pans lose the outer stations.
   assert.ok(toronto.loadRadiusKm >= 25);
 });
+
+test("Vélib' Métropole is registered as the Paris city entry", () => {
+  const paris = CITY_BY_ID.get('paris-velib');
+  assert.ok(paris, 'paris-velib is missing from the registry');
+  assert.equal(paris.city, 'Paris, France');
+  assert.equal(paris.provider, "Vélib' Métropole");
+  assert.equal(
+    paris.stationInformationUrl,
+    'https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_information.json',
+  );
+  assert.equal(
+    paris.stationStatusUrl,
+    'https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_status.json',
+  );
+});
+
+test('the Paris centre and radius cover the Vélib network', () => {
+  const paris = CITY_BY_ID.get('paris-velib');
+  // The published network runs from the Paris proper stations out to the
+  // surrounding communes (Versailles, Saint-Germain-en-Laye, Marne-la-Vallée),
+  // so the centre sits on Paris and the radius reaches the conurbation.
+  assert.ok(paris.centerLat > 48.8 && paris.centerLat < 48.9);
+  assert.ok(paris.centerLon > 2.2 && paris.centerLon < 2.5);
+  assert.ok(
+    paris.loadRadiusKm >= 40,
+    'the Paris conurbation needs the metropolitan radius',
+  );
+});

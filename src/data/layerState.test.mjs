@@ -202,8 +202,10 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 32);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 32);
+  // The SNCF and Velib standalone rows were folded into Transit and
+  // Bike Share, so the registry shrank by those two layers.
+  assert.equal(REGISTERED_LAYER_IDS.length, 36);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 36);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -242,20 +244,19 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '6');
+  // Every single-character token is taken (upstream 0-5, ours 6-9) and no
+  // two-character token is, so the next free token is 00.
+  assert.equal(nextLayerStateToken(), '00');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '6',
-      bravo: '7',
+      alpha: '00',
+      bravo: '01',
     }),
-    '8',
+    '02',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries(
-      [...'6789'].map((digit) => [`prior-${digit}`, digit]),
-    ),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
@@ -299,16 +300,16 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   );
   assert.equal(
     validateLayerStateRegistry(
-      [{ id: 'future-layer', token: '01', disposition: 'enabled-only' }],
-      { retired: '00', 'future-layer': '01' },
+      [{ id: 'future-layer', token: '02', disposition: 'enabled-only' }],
+      { retired: '01', 'future-layer': '02' },
     ),
     true,
   );
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '6',
-      next: '7',
+      future: '00',
+      next: '01',
     }),
     true,
   );
@@ -316,35 +317,37 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     () =>
       validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
         ...LAYER_STATE_TOKEN_RESERVATIONS,
-        future: '00',
+        future: '01',
       }),
-    /next free token 6/,
+    /next free token 00/,
   );
+  // Freeing a digit makes it the next free token again: a retired row does
+  // not hold its digit for ever.
   const beforeLastDigit = { ...digitsExhausted };
-  delete beforeLastDigit['prior-9'];
+  delete beforeLastDigit['vigicrues-floods'];
+  beforeLastDigit['6'] = '7';
   assert.equal(
     validateLayerStateAllocations(beforeLastDigit, {
       ...beforeLastDigit,
-      futurePair: '00',
-      futureDigit: '9',
+      futureDigit: '6',
     }),
     true,
   );
   assert.equal(
     validateLayerStateAllocations(digitsExhausted, {
       ...digitsExhausted,
-      pairB: '01',
-      pairA: '00',
+      pairB: '00',
+      pairA: '01',
     }),
     true,
   );
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '6' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '6', competing: '6' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '00' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '00', competing: '00' },
       ),
-    /next free token 7/,
+    /next free token 01/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -500,7 +503,9 @@ test('unknown enabled-layer tokens reject the payload instead of becoming an emp
 });
 
 test('malformed enabled-layer lists reject the entire payload', () => {
-  for (const value of ['.c', 'c.', 'c..e', 'c.c', '00', 'c.00']) {
+  // '0z' is an unregistered two-character token: '00' is ours
+  // (ign-geoplateforme), so the probe moved to the next free pair.
+  for (const value of ['.c', 'c.', 'c..e', 'c.c', '0z', 'c.0z']) {
     assert.equal(
       decodeLayerStateParams(new URLSearchParams(`v=2&l=${value}`)),
       null,

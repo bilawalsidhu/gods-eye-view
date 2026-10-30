@@ -293,6 +293,80 @@ test('the admission gate refuses every non-local shape, one assertion per refusa
   assert.equal(noJson.status, 415);
 });
 
+test('the trusted-host list widens the authority set without weakening any other check', async () => {
+  const { admitKeySetupRequest } = await import('./keySetupCore.mjs');
+  // A browser on another machine reaches the dev instance under its real
+  // hostname, so the Host header is not a loopback name and the hard-coded
+  // list would refuse it. The operator declares that hostname instead.
+  const remote = {
+    method: 'POST',
+    remoteAddress: '100.86.11.19',
+    hostHeader: 'fridaynode.tail369be6.ts.net:4175',
+    origin: 'http://fridaynode.tail369be6.ts.net:4175',
+    contentType: 'application/json',
+  };
+  const trustedHosts = { GEV_KEY_SETUP_TRUSTED_HOSTS: 'fridaynode.tail369be6.ts.net,asa-local' };
+  const trustedPeers = { GEV_KEY_SETUP_TRUSTED_PEERS: '100.86.11.19' };
+  const env = { ...trustedHosts, ...trustedPeers };
+
+  // Unset: the default is byte-for-byte what it was — only the loopback
+  // names are accepted, so a remote hostname is refused.
+  const unset = admitKeySetupRequest({ ...remote, env: { ...trustedPeers } });
+  assert.equal(unset.ok, false, 'an unset host list trusts no remote hostname');
+  assert.equal(unset.code, 'not-local-host');
+  assert.equal(unset.status, 403);
+  // An empty or blank list is the same as unset: it trusts nothing.
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedPeers, GEV_KEY_SETUP_TRUSTED_HOSTS: '' } }).code, 'not-local-host', 'an empty list trusts nothing');
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedPeers, GEV_KEY_SETUP_TRUSTED_HOSTS: ' , , ' } }).code, 'not-local-host', 'blank entries trust nothing');
+
+  // Set: the named hostname is accepted, and the built-in names still are.
+  assert.equal(admitKeySetupRequest({ ...remote, env }).ok, true, 'a listed hostname is admitted');
+  assert.equal(admitKeySetupRequest({ ...remote, env, hostHeader: 'asa-local:4175', origin: 'http://asa-local:4175' }).ok, true, 'the second listed hostname is admitted');
+  assert.equal(admitKeySetupRequest({ ...remote, env, hostHeader: 'localhost:4175', origin: 'http://localhost:4175' }).ok, true, 'the built-in names stay accepted');
+  assert.equal(admitKeySetupRequest({ ...remote, env, hostHeader: '127.0.0.1:4175', origin: 'http://127.0.0.1:4175' }).ok, true, 'the built-in loopback names stay accepted');
+
+  // A hostname that is not in the list is still refused.
+  const unlisted = admitKeySetupRequest({
+    ...remote,
+    env,
+    hostHeader: 'other.tail369be6.ts.net:4175',
+    origin: 'http://other.tail369be6.ts.net:4175',
+  });
+  assert.equal(unlisted.ok, false, 'an unlisted hostname is still refused');
+  assert.equal(unlisted.code, 'not-local-host');
+
+  // The list cannot smuggle a wildcard or a prefix.
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedPeers, GEV_KEY_SETUP_TRUSTED_HOSTS: '*' } }).code, 'not-local-host', 'a wildcard is not a hostname');
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedPeers, GEV_KEY_SETUP_TRUSTED_HOSTS: '*.tail369be6.ts.net' } }).code, 'not-local-host', 'a wildcard suffix is not a hostname');
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedPeers, GEV_KEY_SETUP_TRUSTED_HOSTS: 'fridaynode' } , hostHeader: 'fridaynode.tail369be6.ts.net:4175', origin: 'http://fridaynode.tail369be6.ts.net:4175' }).code, 'not-local-host', 'a prefix is not a hostname');
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedPeers, GEV_KEY_SETUP_TRUSTED_HOSTS: 'tail369be6.ts.net' }, hostHeader: 'fridaynode.tail369be6.ts.net:4175', origin: 'http://fridaynode.tail369be6.ts.net:4175' }).code, 'not-local-host', 'a parent domain is not a hostname match');
+  // A hostname carrying a port is not a hostname either — the port belongs
+  // to the origin, which is compared exactly.
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedPeers, GEV_KEY_SETUP_TRUSTED_HOSTS: 'fridaynode.tail369be6.ts.net:4175' } }).code, 'not-local-host', 'a host:port entry matches nothing');
+
+  // Matching is case-insensitive and tolerates surrounding whitespace.
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedPeers, GEV_KEY_SETUP_TRUSTED_HOSTS: ' FRIDAYNODE.TAIL369BE6.TS.NET ' } }).ok, true, 'the match is case-insensitive and trimmed');
+
+  // Every other check still applies to a trusted remote peer.
+  const crossOrigin = admitKeySetupRequest({ ...remote, env, origin: 'http://evil.example:4175' });
+  assert.equal(crossOrigin.ok, false, 'a mismatched Origin is still refused');
+  assert.equal(crossOrigin.code, 'cross-origin');
+  assert.equal(admitKeySetupRequest({ ...remote, env, origin: undefined }).code, 'origin-required', 'a POST without Origin is still refused');
+  assert.equal(admitKeySetupRequest({ ...remote, env, origin: 'http://fridaynode.tail369be6.ts.net:4176' }).code, 'cross-origin', 'a cross-port Origin is still refused');
+  const wrongType = admitKeySetupRequest({ ...remote, env, contentType: 'text/plain' });
+  assert.equal(wrongType.ok, false, 'a non-JSON POST is still refused');
+  assert.equal(wrongType.status, 415);
+  const proxied = admitKeySetupRequest({ ...remote, env, proxyHeaders: { 'x-forwarded-for': '203.0.113.5' } });
+  assert.equal(proxied.ok, false, 'a proxied request is still refused');
+  assert.equal(proxied.code, 'proxied');
+  // The socket check is not relaxed by the hostname: a trusted host from an
+  // unlisted peer is still refused.
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...trustedHosts }, remoteAddress: '203.0.113.9' }).code, 'not-loopback', 'a trusted hostname does not admit an unlisted socket');
+  // Sharing disables the surface for a trusted host too.
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...env, PINOKIO_SHARE_LOCAL: '1' } }).code, 'sharing', 'sharing still disables the surface for a trusted host');
+  assert.equal(admitKeySetupRequest({ ...remote, env: { ...env, PINOKIO_SHARE_VAR: 'MY_TUNNEL_TOKEN' } }).code, 'sharing', 'a real tunnel var still disables the surface for a trusted host');
+});
+
 test('a null value validates as a removal; an empty string still does not', () => {
   const removal = validateKeySetupUpdates({ OPENAI_API_KEY: null });
   assert.equal(removal.ok, true);

@@ -265,6 +265,57 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'vigicrues-floods',
+    aliases: ['floods', 'flood warning', 'vigicrues', 'river sensors'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        river: ['t'],
+        commune: ['t'],
+        hasBulletin: ['f'],
+        lat: ['n'],
+        lon: ['n'],
+      },
+    },
+  },
+  {
+    id: 'entsoe-grid',
+    aliases: ['grid load', 'power grid', 'electricity', 'entsoe'],
+    context: false,
+    query: {
+      fields: {
+        value: ['n'],
+        unit: ['t'],
+        band: ['t'],
+        position: ['n'],
+      },
+    },
+  },
+  {
+    id: 'copernicus-ems',
+    aliases: ['ems', 'hazard', 'emergency', 'copernicus', 'disaster'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        code: ['t'],
+        category: ['t'],
+        phase: ['t'],
+        country: ['t'],
+        closed: ['f'],
+        lat: ['n'],
+        lon: ['n'],
+      },
+    },
+  },
+  {
+    id: 'ign-geoplateforme',
+    aliases: ['ign', 'ign map', 'plan ign', 'french basemap', 'geoplateforme'],
+    context: false,
+    noQuery: 'raster imagery overlay; no countable records',
+  },
+  {
     id: 'air-quality',
     aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
     context: false,
@@ -290,7 +341,16 @@ const layers = [
   },
   {
     id: 'transit',
-    aliases: ['buses', 'trains', 'public transit', 'trams', 'subway'],
+    aliases: [
+      'buses',
+      'trains',
+      'public transit',
+      'trams',
+      'subway',
+      'sncf',
+      'gares',
+      'train stations',
+    ],
     context: false,
     query: {
       fields: {
@@ -300,12 +360,24 @@ const layers = [
         courseDeg: ['n', 'deg'],
         status: ['t'],
         occupancy: ['t'],
+        name: ['t'],
+        shortCode: ['t'],
+        uic: ['t'],
+        segment: ['t'],
       },
     },
   },
   {
     id: 'bikeshare',
-    aliases: ['bike share', 'bikes', 'bike stations'],
+    aliases: [
+      'bike share',
+      'bikes',
+      'bike stations',
+      'velib',
+      'velib metropole',
+      'bike share paris',
+      'paris bikes',
+    ],
     context: false,
     query: {
       fields: {

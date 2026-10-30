@@ -1,5 +1,21 @@
 import * as Cesium from 'cesium';
 
+/**
+ * A portable export (package.json): no i18n here. The label stays English
+ * data; the Layers panel shows it translated.
+ */
+const msg = (text) => text;
+
+/**
+ * The Bike Share row's own description of what it shows. The row shows this,
+ * so the merged coverage is stated rather than implied: the city GBFS
+ * networks, Paris and Velib among them, each with live availability per
+ * station rather than per bike.
+ */
+export const BIKESHARE_DESCRIPTION = msg(
+  'City docked bike share, Paris and Velib among them — live availability per station, not per bike',
+);
+
 export const BIKESHARE_SELECTED_OVERLAY_SOURCE_ID = 'bikeshare-selected';
 
 export const BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -83,3 +99,74 @@ export const COLOR_MUTED =
 /** Outline color for all station points. */
 
 export const COLOR_OUTLINE = Cesium.Color.BLACK.withAlpha(0.25);
+
+/**
+ * The availability ramp as DATA, so the row legend and the map points are
+ * classified by the same function and cannot drift apart.
+ *
+ * Each band names the availability range it covers, the colour the point is
+ * drawn in and the plain-language label the row shows. The ramp is the one
+ * the layer has always used: more than 60% of the docks hold a bike (green),
+ * 30-60% (yellow), under 30% (red), a station with no status (neutral), and a
+ * station that is not renting or returning (muted).
+ *
+ * The colours are the CSS hex forms of COLOR_GREEN / COLOR_YELLOW / COLOR_RED
+ * / COLOR_NEUTRAL / COLOR_MUTED: the legend paints a CSS swatch, the point
+ * paints a Cesium colour, and they have to be the same colour.
+ */
+export const BIKESHARE_AVAILABILITY_BANDS = Object.freeze([
+  Object.freeze({
+    id: 'plenty',
+    label: msg('Over 60% bikes'),
+    color: '#00ff88',
+  }),
+  Object.freeze({
+    id: 'some',
+    label: msg('30-60% bikes'),
+    color: '#ffaa00',
+  }),
+  Object.freeze({
+    id: 'few',
+    label: msg('Under 30% bikes'),
+    color: '#ff4444',
+  }),
+  Object.freeze({
+    id: 'offline',
+    label: msg('Not renting or returning'),
+    color: '#687581',
+  }),
+  Object.freeze({
+    id: 'unknown',
+    label: msg('No status yet'),
+    color: '#91a4b4',
+  }),
+]);
+
+/**
+ * The availability band a station's status falls in.
+ *
+ * This is the ONE classification: the renderer colours a point from it and
+ * the row legend counts from it, so a station's colour and the band that
+ * counts it can never disagree.
+ *
+ * @param {object|null} status The station status record.
+ * @param {number} capacity The resolved dock capacity.
+ * @returns {string} A BIKESHARE_AVAILABILITY_BANDS id.
+ */
+export function bikeshareAvailabilityBand(status, capacity) {
+  if (!status) return 'unknown';
+  if (!status.isInstalled || !status.isRenting || !status.isReturning)
+    return 'offline';
+  // An UNKNOWN count is not zero: a feed that does not publish the number
+  // leaves it null, and null must stay unknown rather than reading as an
+  // empty station. Only a reported zero is empty.
+  const raw = status.bikesAvailable;
+  if (raw === null || raw === undefined || raw === '') return 'unknown';
+  const bikes = Number(raw);
+  if (!Number.isFinite(bikes)) return 'unknown';
+  const cap = Math.max(1, Number(capacity) || DEFAULT_CAPACITY);
+  const ratio = bikes / cap;
+  if (ratio > 0.6) return 'plenty';
+  if (ratio >= 0.3) return 'some';
+  return 'few';
+}

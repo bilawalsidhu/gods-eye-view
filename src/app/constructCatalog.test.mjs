@@ -1,7 +1,10 @@
 import { createSurfaceServices } from './surfaceServices.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApplicationCatalog } from './constructCatalog.js';
+import {
+  createApplicationCatalog,
+  APPLICATION_LAYER_METADATA,
+} from './constructCatalog.js';
 import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
@@ -40,7 +43,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 33);
+  assert.equal(first.layers.length, APPLICATION_LAYER_METADATA.length);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
@@ -155,7 +158,7 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     surface: fixtureSurface(lifetime.signal),
   };
   const catalog = createApplicationCatalog(options);
-  assert.equal(catalog.layers.length, 33);
+  assert.equal(catalog.layers.length, APPLICATION_LAYER_METADATA.length);
   assert.deepEqual(catalog.get('street-level').providerIds, []);
   assert.equal(
     catalogControlServices(catalog).streetLevelLayer,

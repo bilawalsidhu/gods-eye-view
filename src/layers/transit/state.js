@@ -27,6 +27,24 @@ export function createState({ services }) {
   /** @type {Cesium.BillboardCollection|null} */
   state._markers = null;
   state._animatedMarkers = null;
+
+  /**
+   * The French passenger-station network this layer also draws, as point
+   * pins in a scene-level collection.
+   *
+   * @type {Cesium.PointPrimitiveCollection|null}
+   */
+  state._stationPoints = null;
+  /** The station rows currently drawn. @type {Array<object>} */
+  state._stations = [];
+  /** How many stations the catalogue published. @type {number} */
+  state._stationTotal = 0;
+  /** When the station catalogue was last read. @type {number|null} */
+  state._stationUpdatedAt = null;
+  /** The station catalogue's own failure, if any. @type {string|null} */
+  state._stationError = null;
+  /** The in-flight station request, so disable() can abort it. */
+  state._stationRequest = null;
   state._visible = new Set();
   state._visibilityTimer = null;
   state._maintenanceTimer = null;
@@ -37,6 +55,15 @@ export function createState({ services }) {
   state._generation = 0;
 
   state._cameraChangedAttached = false;
+
+  /**
+   * Which half of the merged row the map draws: 'both' (the default), the
+   * live GTFS-RT fleet, or the static SNCF station network. The row's chips
+   * set it; the layer draws what it says.
+   *
+   * @type {'both'|'vehicles'|'stations'}
+   */
+  state._display = 'both';
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
   /** Camera sensitivity as we found it, so disable() can hand it back. */

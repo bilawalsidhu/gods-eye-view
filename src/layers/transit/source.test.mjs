@@ -44,3 +44,51 @@ test('feed catalog failures are reported', async () => {
     (error) => error.name === 'AbortError',
   );
 });
+
+test('the French passenger-station catalogue is read from the local proxy route', async () => {
+  const requested = [];
+  const source = createTransitSource({
+    fetchImpl: async (url) => {
+      requested.push(url);
+      return json({
+        total: 1,
+        stations: [
+          {
+            id: 'a',
+            name: 'Paris Gare du Nord',
+            shortCode: 'PV',
+            uic: '87747006',
+            lon: 2.3553,
+            lat: 48.8809,
+            segment: 'A',
+          },
+        ],
+      });
+    },
+  });
+  const snapshot = await source.getStations();
+  assert.equal(requested.length, 1);
+  // The browser names a route, never an upstream URL.
+  assert.match(requested[0], /^\/api\/sncf\/stations$/);
+  assert.equal(snapshot.total, 1);
+  assert.equal(snapshot.stations.length, 1);
+  assert.equal(snapshot.stations[0].name, 'Paris Gare du Nord');
+  assert.equal(snapshot.stations[0].segment, 'A');
+});
+
+test('a station catalogue failure is reported rather than swallowed', async () => {
+  const failing = createTransitSource({ fetchImpl: async () => json({}, 503) });
+  await assert.rejects(failing.getStations(), /SNCF stations HTTP 503/);
+  const malformed = createTransitSource({
+    fetchImpl: async () => json({ stations: 'nope' }),
+  });
+  await assert.rejects(malformed.getStations(), /Malformed station response/);
+  const aborted = new AbortController();
+  aborted.abort();
+  await assert.rejects(
+    createTransitSource({
+      fetchImpl: async () => json({ stations: [] }),
+    }).getStations({ signal: aborted.signal }),
+    (error) => error.name === 'AbortError',
+  );
+});

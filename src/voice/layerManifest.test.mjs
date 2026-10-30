@@ -97,7 +97,10 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
   };
   for (const [phrase, id] of Object.entries(legacy)) assert.equal(aliases.get(phrase), id, phrase);
   const added = {
-    buses: 'transit', trains: 'transit', hurricanes: 'weather-cyclones', cyclones: 'weather-cyclones',
+    buses: 'transit', trains: 'transit', sncf: 'transit', gares: 'transit',
+    'train stations': 'transit', velib: 'bikeshare', 'velib metropole': 'bikeshare',
+    'bike share paris': 'bikeshare', 'paris bikes': 'bikeshare',
+    hurricanes: 'weather-cyclones', cyclones: 'weather-cyclones',
     'weather radar': 'weather-radar', lightning: 'weather-lightning', 'military bases': 'military-installations',
     'recent imagery': 'recent-imagery', 'bike share': 'bikeshare', 'rocket launches': 'rocket-launches',
     'street level': 'street-level', mapillary: 'street-level',

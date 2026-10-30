@@ -50,7 +50,16 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
   'gnss-integrity': contract(['gnss-integrity'], ['getSnapshot']),
   's2-ghostmaps': contract(['s2-ghostmaps'], ['getCatalog', 'getFile']),
   cables: contract(['telegeography-submarine-cables'], ['fetch']),
-  transit: contract(['transit'], ['requestSnapshot', 'getHistory']),
+  'vigicrues-floods': contract(['vigicrues-floods'], ['getSnapshot']),
+  'ign-geoplateforme': contract(['ign-geoplateforme'], ['getDescriptor']),
+  'entsoe-grid': contract(['entsoe-grid'], ['getSnapshot']),
+  'copernicus-ems': contract(['copernicus-ems'], ['getSnapshot']),
+  // Transit owns the live GTFS-RT fleet AND the French passenger-station
+  // network, so its contract carries both acquisitions.
+  transit: contract(
+    ['transit'],
+    ['requestSnapshot', 'getHistory', 'getStations'],
+  ),
 });
 
 /** An omitted provider is unavailable, never an authoritative empty dataset. */

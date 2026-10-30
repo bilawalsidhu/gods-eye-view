@@ -31,6 +31,12 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
     ],
   );
   assert.equal(order.filter(({ id }) => id === 'transit').length, 1);
+  // Transit still sits between Street Traffic and Bike Share.
+  const movement = order
+    .filter(({ label }) => label === 'Movement')
+    .map(({ id }) => id);
+  assert.ok(movement.indexOf('transit') > movement.indexOf('traffic'));
+  assert.ok(movement.indexOf('transit') < movement.indexOf('bikeshare'));
 });
 
 test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
@@ -360,7 +366,7 @@ test('the unavailable chip may abbreviate, but its accessible name keeps the ful
   assert.match(attrs.get('aria-label'), /^Active Fires: UNAVAILABLE\./);
 });
 
-test('the Weather readout receives enabled air-quality alongside weather layers', async () => {
+test('the rail receives every enabled readout layer, not only the weather ones', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
   const layers = ['wind', 'air-quality', 'other'].map((id) => ({
     id,
@@ -379,11 +385,42 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
     },
   };
   panel._refreshWeatherPanel();
+  // The rail is the ONE host for the readout pattern, so a layer outside the
+  // weather group gets a card too. A DISABLED layer still gets none.
   assert.deepEqual(
     entries.map(({ id, summary }) => [id, summary.label]),
     [
       ['wind', 'wind'],
       ['air-quality', 'air-quality'],
+      ['other', 'other'],
     ],
+  );
+});
+
+test('a layer with no readout descriptor never reaches the rail', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const layers = [
+    { id: 'wind', icon: '*', enabled: true },
+    { id: 'transit', icon: '*', enabled: true },
+  ];
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    // The Transit row is a chips-and-legend row, not a readout: it has no
+    // summary, so it must not become a rail card.
+    getRowControls: (id) =>
+      id === 'wind'
+        ? { readout: true, summary: { label: id } }
+        : { chips: [{ id: 'vehicles', label: 'VEHICLES' }], legend: [] },
+  });
+  let entries = null;
+  panel._weatherPanel = {
+    update: (next) => {
+      entries = next;
+    },
+  };
+  panel._refreshWeatherPanel();
+  assert.deepEqual(
+    entries.map(({ id }) => id),
+    ['wind'],
   );
 });

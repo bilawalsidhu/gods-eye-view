@@ -15,6 +15,11 @@ import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
 import { localReceiversProxy } from './local-receivers.js';
 import { transitProxy } from './transit.js';
+import { sncfProxy } from './sncf.js';
+import { vigicruesProxy } from './vigicrues.js';
+import { ignGeoplateformeProxy } from './ignGeoplateforme.js';
+import { entsoeProxy } from './entsoe.js';
+import { copernicusEmsProxy } from './copernicusEms.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
@@ -53,6 +58,11 @@ function localProviderPlugins({ realtime, gemini } = {}) {
     gbfsProxy(),
     localReceiversProxy(),
     transitProxy(),
+    sncfProxy(),
+    vigicruesProxy(),
+    ignGeoplateformeProxy(),
+    entsoeProxy(),
+    copernicusEmsProxy(),
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),

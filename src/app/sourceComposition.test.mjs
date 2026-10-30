@@ -4,7 +4,10 @@ import {
   resolveCatalogSources,
   CATALOG_SOURCE_CONTRACTS,
 } from './sourceComposition.js';
-import { createApplicationCatalog } from './constructCatalog.js';
+import {
+  createApplicationCatalog,
+  APPLICATION_LAYER_METADATA,
+} from './constructCatalog.js';
 import { createSurfaceServices } from './surfaceServices.js';
 import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
@@ -37,7 +40,7 @@ test('every acquisition source can be omitted without losing catalog membership'
 
 test('all acquisition sources may be absent, and enable fails before initializing or fetching', async (t) => {
   const actual = catalog({}, t);
-  assert.equal(actual.layers.length, 33);
+  assert.equal(actual.layers.length, APPLICATION_LAYER_METADATA.length);
   const manager = new LayerLifecycle(
     {},
     { getSourceAvailability: actual.getSourceAvailability },
