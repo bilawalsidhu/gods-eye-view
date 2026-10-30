@@ -288,7 +288,9 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "HW {label}",
+    "{maker} (PTZ)"
   ],
   "fr": [
     "1090 MHz",
@@ -831,7 +833,8 @@
     "S2 GhostMaps",
     "S2 · {name}",
     "VS",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "{maker} (PTZ)"
   ],
   "uk": [
     "AIS: --",
@@ -901,7 +904,8 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "{maker} (PTZ)"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -958,6 +962,7 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "{maker} (PTZ)"
   ]
 }

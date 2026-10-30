@@ -7,6 +7,10 @@ import {
   specFovCapabilityToken,
   isDatasheetFov,
 } from './modelSpecs.js';
+import { hardwareHudToken, hardwareLabel } from './hardware.js';
+
+/** A PTZ-only product line's label, e.g. "Pelco Spectra Enhanced (PTZ)". */
+const hardwarePtzLabel = (maker) => t('{maker} (PTZ)', { maker });
 
 // The summary line names the CAL badge, the source kind and the view band in
 // the page language; the codes underneath stay English.
@@ -119,6 +123,12 @@ export function createPresentation({
       specFovCapabilityToken(active.camera, (span) =>
         t('SPEC FOV {span}° (CAPABILITY)', { span }),
       ),
+      // Maker / product line when the pack publishes it (Austin camera_mfg).
+      hardwareHudToken(
+        active.camera,
+        (label) => t('HW {label}', { label }),
+        hardwarePtzLabel,
+      ),
       t('COVERAGE {value}km²', { value: area.toFixed(2) }),
       overlapCount > 0
         ? t('OVERLAP {count} cams', { count: overlapCount })
@@ -200,6 +210,8 @@ export function createPresentation({
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
+      // Hardware maker label ('' when the pack names none); see hardware.js.
+      hardwareLabel: hardwareLabel(camera, hardwarePtzLabel),
       calibration: {
         ...parts.calibration.normalizeCalibration(camera.calibration),
       },

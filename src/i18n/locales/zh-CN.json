@@ -2817,6 +2817,8 @@
   "Search": "搜索",
   "More": "更多",
   "Panels": "面板",
+  "HW {label}": "硬件 {label}",
+  "{maker} (PTZ)": "{maker} (PTZ)",
   "Recent speech": "最近语音",
   "Voice Settings": "语音设置",
   "Preview": "预览",

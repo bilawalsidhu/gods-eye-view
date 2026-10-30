@@ -3051,6 +3051,8 @@
   "Search": "Поиск",
   "More": "Ещё",
   "Panels": "Панели",
+  "HW {label}": "ОБОРУД. {label}",
+  "{maker} (PTZ)": "{maker} (PTZ)",
   "Recent speech": "Недавняя речь",
   "Voice Settings": "Настройки голоса",
   "Preview": "Предпросмотр",
