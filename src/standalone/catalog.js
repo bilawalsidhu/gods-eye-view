@@ -8,6 +8,7 @@ export { createStandaloneReferenceSources } from './layerSources.js';
 export function createStandaloneCatalog({
   nepalBoundaryResolver,
   sources = {},
+  mapillaryToken,
   streetLevelProviders,
   signal = new AbortController().signal,
   surface = createSurfaceServices({
@@ -18,7 +19,7 @@ export function createStandaloneCatalog({
   return createApplicationCatalog({
     nepalBoundaryResolver,
     surface,
-    sources: createStandaloneLayerSources(sources),
+    sources: createStandaloneLayerSources(sources, { mapillaryToken }),
     streetLevelProviders,
     signal,
     vesselOptions: {

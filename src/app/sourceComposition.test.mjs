@@ -9,6 +9,30 @@ import { createSurfaceServices } from './surfaceServices.js';
 import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
 
+test('standalone Mapillary uses runtime configuration and preserves explicit source overrides', () => {
+  const configured = createStandaloneLayerSources(
+    {},
+    { mapillaryToken: 'runtime-mapillary-example' },
+  );
+  assert.equal(configured.mapillary.token, 'runtime-mapillary-example');
+  assert.equal(configured.mapillary.hasToken(), true);
+  const replacement = { hasToken: () => false };
+  assert.equal(
+    createStandaloneLayerSources(
+      { mapillary: replacement },
+      { mapillaryToken: 'runtime-mapillary-example' },
+    ).mapillary,
+    replacement,
+  );
+  assert.equal(
+    createStandaloneLayerSources(
+      { mapillary: null },
+      { mapillaryToken: 'runtime-mapillary-example' },
+    ).mapillary,
+    null,
+  );
+});
+
 function catalog(sources, t) {
   const lifetime = new AbortController();
   t.after(() => lifetime.abort());

@@ -8,6 +8,7 @@ import { apiNotFoundPlugin } from './api-not-found.js';
 import { googleTokenUnavailablePlugin } from './google-token-unavailable.js';
 import { standaloneVoiceTools } from './voiceTools.js';
 import { unwatchedRuntimeDirsPlugin } from './unwatched-cache.js';
+import { runtimeConfigPlugin } from './runtime-config.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -23,6 +24,7 @@ export default defineConfig(({ command, mode }) => {
       ...localProviderPlugins({ realtime: { tools }, gemini: { tools } }),
       localMcpPlugin(),
       googleTokenUnavailablePlugin(),
+      runtimeConfigPlugin(),
       apiNotFoundPlugin(),
       unwatchedRuntimeDirsPlugin(),
     ],

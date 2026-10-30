@@ -30,13 +30,20 @@ The golden rule: **secret-bearing API keys stay on the server side.** The dev/pr
 
 ### Three deliberately client-side keys — restrict them
 
+The standalone app also reads these same three values from `/api/runtime-config`
+on the existing dev/preview server. This is an explicit allowlist, never a dump of
+the environment. Treat the response as public: it uses `Cache-Control: no-store`
+and does not make browser credentials secret. Server credentials and settings
+are excluded. MCP panels retain their separately restricted build-time keys.
+
+
 These are designed to be used directly in the browser (like a Mapbox public token). They are injected into the client bundle via Vite's `define`, so they **will** be visible in browser devtools. Scope and restrict them rather than trying to hide them:
 
 1. **Google Maps API key** — loads Photorealistic 3D Tiles directly and powers Street View (Maps JavaScript API; add it to the key's API restrictions). **Restrict it** (HTTP referrer + API restriction to the required Google APIs) in the Google Cloud Console. An unrestricted key in a public deployment can be abused and billed to you. Restrict it to the **Map Tiles API and Maps JavaScript API only**: a referrer restriction applies to the Maps JavaScript API and the client SDKs, not to the web services, so a key carrying Geocoding under one is refused with `API keys with referer restrictions cannot be used with this API`. Search does not need it — geocoding goes through the server proxies above (#363).
 2. **Cesium ion token** (`CESIUM_ION_TOKEN`, optional — for ion-hosted Google Photorealistic 3D Tiles, Bing world imagery, and world terrain) — used as `Cesium.Ion.defaultAccessToken` client-side. Use a public **`assets:read`** token with **URL restrictions** for any hosted deployment. The Community plan has eligibility and usage limits; a public token is not a secret, but it can still consume the account's quota.
 3. **Mapillary client token** (`MAPILLARY_CLIENT_TOKEN`, optional, Street Level) — used by the MapillaryJS viewer and Graph API lookups in the browser, and by the server's coverage-tile proxy, which sends it only to `tiles.mapillary.com` over HTTPS (an upstream redirect is refused and answered 502, never followed) and caches tiles in memory only. Mapillary client tokens are meant for browser use.
 
-> The explicit browser `define` block in `build/vite.js` controls exactly what reaches the client: only these three keys. Everything else stays server-side.
+> The explicit browser `define` block in `build/vite.js` and the runtime endpoint allowlist expose only these three keys. Everything else stays server-side.
 
 **Places, Geocoding and the Street View Static fallback never needed to be on that list** (#33, #363): they're called from the server-side proxies in the table above, which use `GOOGLE_MAPS_SERVER_API_KEY` when it's set. Splitting it from the browser-exposed key lets each key's Google Cloud restriction actually match what it does — the browser key referrer-restricted to Map Tiles + Maps JavaScript API, the server key IP-restricted (never a referrer, since it never leaves your server) to Places + Geocoding + Street View Static — instead of one key that has to be either over-permissioned or broken for one of its jobs. A single shared `GOOGLE_MAPS_API_KEY` still works if you don't split them, but then it cannot carry a referrer restriction at all: the web services refuse one, and search would be the half that breaks.
 
