@@ -53,6 +53,13 @@ broader suffix variants. Follow-ups retain boundary provenance, and cancelled
 lookups preserve the previous analyst cohort and boundary source. Navigation
 search keeps a successful geocode, with no search or view-based region recovery.
 
+All CCTV requests pass main's keyless same-site gate before catalog or upstream
+work, including behind a reverse proxy. HLS media and initialization reads
+require active session and lease tokens. At most two sessions and eight leases
+per session are allowed; no direct-socket ownership or per-peer quota is imposed.
+Cross-site requests remain refused, including when forwarding headers are present.
+Native same-origin video and range requests remain supported.
+
 Manager-owned periodic network updates pause while the document is hidden. Returning to a visible tab runs one overdue update per enabled layer without overlapping an active refresh and restarts that layer's polling schedule from the return, so the next poll follows one interval later whether or not the catch-up update succeeds; explicit refresh requests remain available. Transit also defers camera-driven feed admission while hidden and rechecks coverage on return. Visibility listeners are released with their polling intervals.
 
 Terrain height requests accept at most 64 points, matching the browser service's
@@ -6287,11 +6294,49 @@ inactive. The panel paints the same video at at most 640px/15 fps; collapse stop
 its paint loop. Camera deactivation destroys the decoder, and fatal playback
 errors revert to the labeled frame fallback. Camera changes clear the old panel
 frame. hls.js is imported only when an HLS camera starts. Two live sessions may
-coexist with at most eight independent consumer leases each; no-access lease
-expiry is 15 seconds. Closing one consumer leaves other consumers running. Lease
+coexist with at most eight independent consumer leases each. The proxy-compatible
+keyless same-site gate precedes catalog I/O. Media and init reads require the
+active session and consumer lease; refresh and release use that lease without
+binding it to the direct socket address. No-access lease expiry is 15 seconds. Closing one consumer leaves other consumers running. Lease
 ids use `crypto.randomUUID` where the page is a secure context and an equivalent
-v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
-closed. Performance and live agency reliability require recorded validation.
+v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Clear whole-file
+fMP4 playlists are supported with same-origin `EXT-X-MAP` initialization files,
+local MP4 routes and shared init bytes counted in the 24 MiB session budget.
+Encrypted, byte-range and mixed-container playlists fail closed. HEVC decoding
+remains browser/device-dependent. Performance and live agency reliability
+require recorded validation.
+
+Cold and restarted relay sessions start with the newest two segments; subsequent
+polls fetch newly advertised segments without downloading the older DVR tail.
+The relay accepts at most 12 MiB per incoming segment and retains at most
+24 MiB per session. A playlist may advertise already-expired segments: 404s
+older than its newest two entries are skipped once while advertised, and only
+the next retained segment marks that gap as a discontinuity. A 404 in that
+newest pair, access failures, redirects, TLS errors and oversized responses
+retain the existing retry/failure behavior. Init files are capped independently
+at 256 KiB; their errors are never treated as expired media. Every remembered
+upstream entry includes both media and init URIs, including startup omissions
+and skipped 404s. Encoder restarts and discontinuities refresh init ownership
+without invalidating maps still used by retained segments. Two 12 MiB media
+files plus an init do not fit the session budget, so those fMP4 streams remain
+unready rather than exceeding the cap.
+This accommodates Mendoza's expired live-window entries and Tandil's roughly
+8 MB 1080p segments without changing origin registration or storing recordings.
+
+The Misiones source pack is opt-in (`CCTV_MISIONES_ENABLED=1`) and uses the eight
+bundled installation coordinates in `config/cctv_misiones_locations.json`.
+They were finalized by the contributor on 2026-10-15 through screenshot/OSM
+review, with method and confirmation timestamps retained. An optional
+`CCTV_MISIONES_LOCATIONS_FILE` replaces the default. The earlier preliminary
+research remains separate: place references and unconfirmed candidates are
+never promoted to camera positions. Without a valid configured position, the
+pack makes no Misiones upstream request.
+Only the pinned cam01–cam08 HLS paths are accepted, with no covers or external
+players. The real Node client read media from seven cameras on 2026-10-15;
+cam05 timed out. Firefox 157 played cam02 in both application surfaces for two
+minutes and released the lease on disable. Chrome HEVC failed on the tested
+Linux AMD path; reuse authorization and long-term availability remain unverified.
+See [CCTV-MISIONES.md](CCTV-MISIONES.md) for the exact validation limits.
 
 ## Wind forecast models
 
