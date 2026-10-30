@@ -163,7 +163,8 @@
     "{value} KM/S",
     "ΔN",
     "Ⅱ PAUSE",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "NATURAL EARTH · OPEN-METEO · UTC"
   ],
   "es": [
     "1090 MHz",
@@ -467,7 +468,8 @@
     "ΔE",
     "ΔN",
     "Ⅱ PAUSE",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "NATURAL EARTH · OPEN-METEO · UTC"
   ],
   "it": [
     "1090 MHz",
@@ -542,6 +544,7 @@
     "MSG/S",
     "Metal",
     "NASA FIRMS · LIVE",
+    "NATURAL EARTH · OPEN-METEO · UTC",
     "NAV",
     "NE",
     "NNE",
@@ -573,6 +576,7 @@
     "SAR",
     "SE",
     "SIG",
+    "SMN · {station} · {distance}",
     "SNAPSHOT",
     "SQUAWK {code} · {status}",
     "SSE",
@@ -685,7 +689,8 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "NATURAL EARTH · OPEN-METEO · UTC"
   ],
   "pt": [
     "1090 MHz",
@@ -750,6 +755,7 @@
     "MONITOR",
     "MSG/S",
     "Metal",
+    "NATURAL EARTH · OPEN-METEO · UTC",
     "NAV",
     "NE",
     "NNE",
@@ -773,6 +779,7 @@
     "SAR",
     "SE",
     "SIG",
+    "SMN · {station} · {distance}",
     "SNAPSHOT",
     "SQUAWK {code} · {status}",
     "SSE",
@@ -841,9 +848,11 @@
     "FLIR",
     "Ironbow",
     "Landsat 8/9",
+    "NATURAL EARTH · OPEN-METEO · UTC",
     "NVG",
     "REC",
     "S2 GhostMaps",
+    "SMN · {station} · {distance}",
     "WHOT/BHOT"
   ],
   "zh-CN": [
@@ -870,8 +879,10 @@
     "KTS",
     "Landsat 8/9",
     "MM",
+    "NATURAL EARTH · OPEN-METEO · UTC",
     "NVG",
     "REC",
+    "SMN · {station} · {distance}",
     "SRC {value}",
     "S2 GhostMaps",
     "S2 · {name}",
@@ -927,8 +938,10 @@
     "KTS",
     "Landsat 8/9",
     "MM",
+    "NATURAL EARTH · OPEN-METEO · UTC",
     "NVG",
     "REC",
+    "SMN · {station} · {distance}",
     "SRC {value}",
     "S2 GhostMaps",
     "S2 · {name}",

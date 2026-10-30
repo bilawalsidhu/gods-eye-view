@@ -1,5 +1,6 @@
 /** Regional briefing requests, pages and rotation for the Cockpit controller. */
-import { formatNumber, t, msg } from '../i18n/index.js';
+import { isRecentDmhObservation } from '../data/regionalModel.js';
+import { formatDate, formatNumber, t, msg } from '../i18n/index.js';
 import {
   COCKPIT_BRIEF_ROTATE_MS,
   COCKPIT_BRIEF_CYCLE_OFF_HELP,
@@ -12,6 +13,26 @@ import {
   formatCockpitWindDirection,
 } from './cockpitPresentation.js';
 
+function localWeatherFooter(weather, observation) {
+  const base =
+    weather?.source === 'smn'
+      ? t('NATURAL EARTH · SMN STATION OBSERVATION')
+      : weather
+        ? t('NATURAL EARTH · OPEN-METEO · UTC')
+        : t('NATURAL EARTH · WEATHER UNAVAILABLE');
+  return usableDmhObservation(observation)
+    ? `${base} · ${t('DMH / DINAC · STATION OBSERVATION')}`
+    : base;
+}
+
+function usableDmhObservation(observation) {
+  return (
+    isRecentDmhObservation(observation) &&
+    Number.isFinite(observation?.distanceM) &&
+    observation.distanceM >= 0 &&
+    observation.distanceM <= 50_000
+  );
+}
 // regionalModel.weatherCodeLabel is shared with node code and returns
 // English; translate it here.
 const WEATHER_CONDITION_KEYS = Object.freeze({
@@ -54,9 +75,15 @@ export function showBriefPage(index, { manual = false } = {}) {
   if (this.briefPosition)
     this.briefPosition.textContent = `${this.briefPageIndex + 1} / ${count}`;
   if (this.briefSource)
-    this.briefSource.textContent = page.sourceKey
-      ? t(page.sourceKey, { source: page.sourceName })
-      : page.source;
+    this.briefSource.textContent =
+      page.id === 'local'
+        ? localWeatherFooter(
+            this.regionalBrief?.weather,
+            this.regionalBrief?.stationObservation,
+          )
+        : page.sourceKey
+          ? t(page.sourceKey, { source: page.sourceName })
+          : page.source;
   if (this.signalStream) this.signalStream.dataset.briefPage = page.id;
   if (manual && this.briefAutoRotateEnabled)
     this.startBriefRotation({ reset: true });
@@ -208,6 +235,12 @@ export function maybeRefreshRegionalBrief(info) {
 }
 
 export function renderRegionalBriefStatus(status, info) {
+  if (this.localObservation) {
+    this.localObservation.hidden = true;
+    this.localObservation.textContent = '';
+  }
+  this.regionalBrief = null;
+  renderLocalWeather.call(this, null);
   if (this.newsStatus) {
     this.newsStatus.hidden = false;
     this.newsStatus.dataset.state = status;
@@ -222,6 +255,7 @@ export function renderRegionalBriefStatus(status, info) {
   if (this.localPlace && status === 'unavailable')
     this.localPlace.textContent = t('REGION UNAVAILABLE');
   this.updateLocalPosition(info);
+  this.scheduleContextLayout();
 }
 
 export function renderRegionalBrief(payload, info) {
@@ -260,7 +294,55 @@ export function renderRegionalBrief(payload, info) {
     payload?.place?.label || payload?.place?.country || t('REGION UNAVAILABLE');
   if (this.localPlace) this.localPlace.textContent = placeLabel.toUpperCase();
   this.updateLocalPosition(info);
-  const weather = payload?.weather;
+  if (this.localObservation) {
+    const observation = payload?.stationObservation;
+    const usable = usableDmhObservation(observation);
+    this.localObservation.hidden = !usable;
+    const values = [];
+    if (Number.isFinite(observation?.temperatureC))
+      values.push(
+        `${formatNumber(observation.temperatureC, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}°C`,
+      );
+    if (Number.isFinite(observation?.humidityPct))
+      values.push(
+        t('RH {percent}%', {
+          percent: formatNumber(Math.round(observation.humidityPct)),
+        }),
+      );
+    if (Number.isFinite(observation?.windKph))
+      values.push(
+        t('WIND {speed} KM/H {direction}', {
+          speed: formatNumber(Math.round(observation.windKph)),
+          direction: formatCockpitWindDirection(observation.windDirectionDeg),
+        }),
+      );
+    this.localObservation.textContent = usable
+      ? [
+          t('DMH / DINAC · STATION OBSERVATION'),
+          t('{station} · {distance} KM FROM LOCATION', {
+            station: observation.stationName,
+            distance: formatNumber(observation.distanceM / 1000, {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            }),
+          }),
+          values.join(' · '),
+          `${formatDate(new Date(observation.observedAt), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} UTC · ${formatCockpitBriefAge(observation.observedAt)}`,
+        ].join('\n')
+      : '';
+  }
+  renderLocalWeather.call(this, payload?.weather, payload?.stationObservation);
+  if (this.signalStream)
+    this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
+  if (this.briefPageIndex === 1 && this.briefSource) {
+    this.briefSource.textContent = t('{source} · LOCATION QUERY', {
+      source: String(payload?.newsSource || t('REGIONAL NEWS')).toUpperCase(),
+    });
+  }
+  this.scheduleContextLayout();
+}
+
+function renderLocalWeather(weather, observation) {
   if (this.localTemperature) {
     this.localTemperature.textContent = Number.isFinite(weather?.temperatureC)
       ? `${Math.round(weather.temperatureC)}°C`
@@ -277,7 +359,9 @@ export function renderRegionalBrief(payload, info) {
     );
   }
   if (this.localCondition) {
-    const condition = this.services.weatherCodeLabel(weather?.weatherCode);
+    const condition =
+      weather?.conditionText ||
+      this.services.weatherCodeLabel(weather?.weatherCode);
     const conditionKey = WEATHER_CONDITION_KEYS[condition];
     this.localCondition.textContent = conditionKey
       ? t(conditionKey)
@@ -301,12 +385,56 @@ export function renderRegionalBrief(payload, info) {
         })
       : '—';
   }
-  if (this.signalStream)
-    this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
-  if (this.briefPageIndex === 1 && this.briefSource) {
-    this.briefSource.textContent = t('{source} · LOCATION QUERY', {
-      source: String(payload?.newsSource || t('REGIONAL NEWS')).toUpperCase(),
-    });
+  const isSmn = weather?.source === 'smn';
+  if (this.localWeatherSource)
+    // i18n-ignore: OPEN-METEO is the provider brand; other branches use t().
+    this.localWeatherSource.textContent = isSmn
+      ? t('SMN OBS')
+      : weather
+        ? 'OPEN-METEO'
+        : t('UNAVAILABLE');
+  if (this.localWeatherStation) {
+    this.localWeatherStation.hidden = !isSmn;
+    const station = weather?.station;
+    const distance = Number.isFinite(station?.distanceKm)
+      ? t('{distance} KM FROM QUERY', {
+          distance: formatNumber(station.distanceKm, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          }),
+        })
+      : t('DISTANCE UNKNOWN');
+    this.localWeatherStation.textContent = isSmn
+      ? t('SMN · {station} · {distance}', {
+          station: station?.name || t('UNKNOWN STATION'),
+          distance,
+        })
+      : '';
+    this.localWeatherStation.title = isSmn
+      ? t(
+          'Ground station {id}; conditions may differ at the selected position and flight altitude.',
+          { id: station?.id || '' },
+        )
+      : '';
   }
-  this.scheduleContextLayout();
+  if (this.localWeatherTime) {
+    this.localWeatherTime.hidden = !weather;
+    this.localWeatherTime.textContent = isSmn
+      ? t('REPORTED {time} · TIME ZONE UNSPECIFIED', {
+          time: weather.reportedAt?.replace('T', ' ') || t('UNKNOWN'),
+        })
+      : weather?.observedAt
+        ? t('MODEL {time} UTC', {
+            time: weather.observedAt
+              .replace('T', ' ')
+              .replace(/:00(?:\.000)?Z$/, ''),
+          })
+        : t('TIME UNKNOWN');
+  }
+  if (this.localWeatherCredit)
+    this.localWeatherCredit.textContent = isSmn
+      ? t('Atmospheric model by Open-Meteo.com')
+      : t('Weather data by Open-Meteo.com');
+  if (this.briefPageIndex === 2 && this.briefSource)
+    this.briefSource.textContent = localWeatherFooter(weather, observation);
 }
