@@ -192,3 +192,72 @@ test('only a user step to another station tells voice to drop its prepared playb
     assert.deepEqual(controls.map(({ action, origin }) => [action, origin]), [['select', 'user']]);
   });
 });
+
+test('an unavailable tuner release stops the paused stream once, and Play still falls back', async () => {
+  setLocale('en');
+  const failing = [];
+  await withLayer(failing, async ({ playUrls, catalog }) => {
+    radioLayer.selectStation(ids[2], { autoplay: true, origin: 'user' });
+    await settle();
+    assert.equal(radioLayer.beginTuning(), true);
+    radioLayer.previewTuningStation(ids[1], { rotate: false });
+    // A directory refresh changes the station under the needle mid-drag.
+    catalog.rows = stations.map((row) => row.id === ids[1]
+      ? { ...row, streamUrl: 'https://radio.example.com/b2.mp3' }
+      : row);
+    catalog.generation = 2;
+    await radioLayer.update();
+    const states = [];
+    const controls = [];
+    const unsubscribe = radioLayer.subscribe((state) => states.push(state));
+    const unsubscribeControls = radioLayer.subscribePlaybackControls((event) => controls.push(event));
+    states.length = 0;
+    try {
+      assert.equal(radioLayer.commitTuningStation(ids[1], { origin: 'user' }).reason, 'station-unavailable');
+    } finally {
+      unsubscribe();
+      unsubscribeControls();
+    }
+    assert.equal(states.length, 1);
+    assert.equal(states[0].tuningUnavailableStationId, ids[1]);
+    assert.deepEqual(controls.map(({ action, origin }) => [action, origin]), [['stop', 'user']]);
+    const state = radioLayer.getUIState();
+    assert.equal(state.selected, null);
+    assert.equal(state.audioState, 'stopped');
+    assert.equal(state.playingStationId, null);
+    assert.equal(render(state).button, 'PLAY');
+    playUrls.length = 0;
+    // Play picks the nearest station; its broadcaster fails.
+    const play = globalThis.Audio.prototype.play;
+    globalThis.Audio.prototype.play = function playFirstFails() {
+      if (!failing.length) failing.push(this.src);
+      return play.call(this);
+    };
+    try {
+      await radioLayer.togglePlayback({ origin: 'user' });
+      await settle();
+      await settle();
+    } finally {
+      globalThis.Audio.prototype.play = play;
+    }
+    assert.equal(playUrls.length, 2);
+    assert.equal(radioLayer.getUIState().audioState, 'playing');
+  });
+});
+
+test('while a stream connects the transport buttons offer Pause, because a click pauses', () => {
+  setLocale('en');
+  const shown = render({
+    enabled: true,
+    audioState: 'loading',
+    audioError: null,
+    selected: { id: 'a', name: 'Station A' },
+    selectedIndex: 0,
+    filteredCount: 1,
+    stationCount: 1,
+    volume: 1,
+  });
+  assert.equal(shown.status, 'Connecting directly to broadcaster…');
+  assert.equal(shown.button, 'PAUSE');
+  assert.equal(shown.cockpit, 'Ⅱ');
+});

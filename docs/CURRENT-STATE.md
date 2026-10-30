@@ -4774,7 +4774,8 @@ result reads enabled state from the manager and audio state from the Radio
 module. Voice Pause is a playback-only no-op while the layer is disabled; it
 never enables Radio and reports a fulfilled-false pause as failure. A
 newer-response or user-origin Stop still cancels stale handoff work, as do a
-user Pause and a user Previous/Next that only selects another station.
+user Pause, a user Previous/Next that only selects another station, and a tuner
+release onto a station the directory no longer has.
 Only a newer user turn or session teardown aborts the complete active-tool set.
 A cancelled turn cannot publish a late Radio playback request. Dedicated Radio
 controls and generic layer-visibility commands both forward cancellation.
