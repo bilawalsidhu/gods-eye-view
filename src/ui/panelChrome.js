@@ -291,6 +291,11 @@ export class PanelChrome {
     return this._panelLayout._scheduleLeftPanelLayout(options0);
   }
 
+  /** Clean view hides both rails: hold their layout until it ends. */
+  holdPanelLayout(held) {
+    return this._panelLayout.setLayoutHeld(held);
+  }
+
   _syncPanelCollapseButton(panelEl) {
     const isRightRail = [
       'pp-toggles',

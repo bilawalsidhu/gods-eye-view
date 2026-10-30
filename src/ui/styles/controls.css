@@ -1113,6 +1113,125 @@ body.ui-clean-view #scene-runtime.active {
   visibility: visible;
 }
 
+/* ── Clean-view eye ───────────────────────────────
+   Always-reachable corner toggle for clean view (same action as V and Clean
+   UI). Bottom-right, inside the notch and gesture-bar insets, a 44 px touch
+   target. In clean view it is the only control left and fades while idle
+   (cleanViewEye.js sets data-idle); any input brings it back. */
+#clean-view-eye {
+  position: fixed;
+  right: max(12px, calc(env(safe-area-inset-right, 0px) + 8px));
+  bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 8px));
+  z-index: 300;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  background: rgba(8, 10, 14, 0.5);
+  color: #d9f7ff;
+  opacity: 0.75;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: opacity 0.4s ease;
+}
+
+#clean-view-eye:hover,
+#clean-view-eye:focus-visible {
+  opacity: 1;
+}
+
+#clean-view-eye:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+#clean-view-eye[aria-pressed='true'] {
+  border-color: rgba(120, 200, 255, 0.6);
+}
+
+/* Idle beats hover: a touch leaves :hover on the tapped eye. */
+body.ui-clean-view #clean-view-eye[data-idle='true'] {
+  opacity: 0.2;
+}
+
+.clean-view-eye-icon {
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 5C6.5 5 2.7 9.1 1.5 12c1.2 2.9 5 7 10.5 7s9.3-4.1 10.5-7C21.3 9.1 17.5 5 12 5zm0 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 5C6.5 5 2.7 9.1 1.5 12c1.2 2.9 5 7 10.5 7s9.3-4.1 10.5-7C21.3 9.1 17.5 5 12 5zm0 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* Wider screens: the key-setup chip owns the bottom-right corner
+   (provider-settings.css), so the eye sits just above it. */
+@media (min-width: 721px) and (min-height: 521px) {
+  #clean-view-eye {
+    bottom: max(58px, calc(env(safe-area-inset-bottom, 0px) + 58px));
+  }
+}
+
+/* Short landscape phones: the dock and the key-setup chip fill the bottom
+   edge, so the eye takes the top-right corner, just below the active-style
+   label (#style-indicator: 32-70 px from the top). */
+@media (max-height: 520px) {
+  #clean-view-eye {
+    top: max(78px, calc(env(safe-area-inset-top, 0px) + 74px));
+    bottom: auto;
+  }
+}
+
+/* The cockpit, scene playback, recording and embeds own the screen. */
+body:is(.cockpit-mode, .scene-playback-mode, .recording-mode, .ui-embed)
+  #clean-view-eye {
+  display: none !important;
+}
+
+/* Phones: the eye replaces the EXIT CLEAN VIEW pill, so only the map, the
+   eye and the attribution stay on screen. */
+@media (max-width: 720px), (max-height: 520px) {
+  body.ui-clean-view #clean-view-exit {
+    display: none;
+  }
+}
+
+/* The HUD is chrome too. Visibility keeps every box, so nothing reflows. */
+body.ui-clean-view #intel-hud {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition-property: none !important;
+}
+
+/* Clean view keeps the complete attribution readable: the credit line wraps
+   inside the screen (clear of the eye) instead of running off the edge. */
+body.ui-clean-view #cesium-credits .cesium-widget-credits {
+  width: max-content;
+  max-width: calc(
+    100vw - 112px - env(safe-area-inset-left, 0px) -
+      env(safe-area-inset-right, 0px)
+  );
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.ui-clean-view #cesium-credits .cesium-widget-credits * {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #clean-view-eye {
+    transition: none;
+  }
+}
+
 /* ── Detection Toggle States ─────────────────── */
 #detection-toggle.active {
   border-color: rgba(0, 255, 80, 0.6);

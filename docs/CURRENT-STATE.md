@@ -1446,6 +1446,25 @@ Feature owners retain bounds, steps, formatted values, input/change timing and
 listener cleanup. The radio tuning dial, imagery comparison divider and event
 comparison/progression controls keep their specialized presentation and behavior.
 
+## Clean view corner eye
+
+`#clean-view-eye` (`src/ui/cleanViewEye.js`) is a 44 px, semi-transparent,
+safe-area aware corner button (bottom right; top right on short landscape
+screens) that calls the same `toggleCleanView()` as V, Display > Clean UI and
+EXIT CLEAN VIEW, so all of them share one state; the eye and Clean UI carry
+`aria-pressed`. In clean view the eye is the only control left and fades after
+3 s without input; any pointer, touch, wheel or key input brings it back
+(passive capture listeners). On phones (max-width 720 px or max-height 520 px)
+the eye replaces the EXIT CLEAN VIEW pill; larger screens keep the pill.
+
+Clean view also hides the HUD (visibility only, so nothing reflows), and holds
+the side-rail layout while it is on, so entering and leaving it neither
+re-measures nor resizes the rails. The attribution line stays complete in
+clean view: it wraps inside the screen, clear of the eye. Escape leaves clean
+view (not while typing in a form control), and a held V toggles once. The eye
+is hidden in Cockpit, Scene playback, recording and embeds. Its labels are
+translated (es, ru).
+
 ## Shared control CSS ownership
 
 Shared styles own ordinary control surfaces and interaction states; feature CSS

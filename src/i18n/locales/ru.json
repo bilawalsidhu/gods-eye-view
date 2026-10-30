@@ -3083,5 +3083,9 @@
   "Play from this scene through the rest of the project": "Воспроизвести с этой сцены и далее по всему проекту",
   "Play the shot after the selected one, moving on to the next scene when needed": "Воспроизвести кадр после выбранного, при необходимости перейдя к следующей сцене",
   "Edit anchors, data packs and shot details": "Изменить якоря, пакеты данных и параметры кадров",
-  "Download this scene as JSON or an asset bundle": "Скачать эту сцену в формате JSON или архивом ресурсов"
+  "Download this scene as JSON or an asset bundle": "Скачать эту сцену в формате JSON или архивом ресурсов",
+  "Clean view: hide the controls": "Чистый вид: скрыть элементы управления",
+  "Exit clean view: show the controls": "Выйти из чистого вида: показать элементы управления",
+  "Clean view: hide the controls (V)": "Чистый вид: скрыть элементы управления (V)",
+  "{label} (V)": "{label} (V)"
 }

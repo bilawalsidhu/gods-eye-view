@@ -2943,5 +2943,9 @@
   "Load scenes from an exported JSON file": "Szenen aus einer exportierten JSON-Datei laden",
   "Download the timing log of the last play": "Zeitprotokoll der letzten Wiedergabe herunterladen",
   "Edit anchors, data packs and shot details": "Anker, Datenpakete und Aufnahmedetails bearbeiten",
-  "Download this scene as JSON or an asset bundle": "Diese Szene als JSON oder Asset-Bundle herunterladen"
+  "Download this scene as JSON or an asset bundle": "Diese Szene als JSON oder Asset-Bundle herunterladen",
+  "Clean view: hide the controls": "Reine Ansicht: Steuerelemente ausblenden",
+  "Exit clean view: show the controls": "Reine Ansicht beenden: Steuerelemente anzeigen",
+  "Clean view: hide the controls (V)": "Reine Ansicht: Steuerelemente ausblenden (V)",
+  "{label} (V)": "{label} (V)"
 }
