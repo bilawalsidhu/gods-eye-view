@@ -298,7 +298,9 @@
       "server/providers/overpass/transport.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
