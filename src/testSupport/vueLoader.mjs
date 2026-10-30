@@ -14,16 +14,19 @@ export function compileVueModule(source, filename) {
     return compileScript(descriptor, { id, inlineTemplate: true }).content;
   }
   const script = descriptor.script
-    ? compileScript(descriptor, { id }).content.replace(
-        'export default',
-        'const __sfc__ =',
-      )
+    ? compileScript(descriptor, { id, genDefaultAs: '__sfc__' }).content
     : 'const __sfc__ = {};';
-  const template = descriptor.template
-    ? compileTemplate({ source: descriptor.template.content, filename, id })
-        .code
-    : '';
-  return `${script}\n${template}\n__sfc__.render = typeof render === 'function' ? render : __sfc__.render;\nexport default __sfc__;\n`;
+  let template = '';
+  if (descriptor.template) {
+    const compiled = compileTemplate({
+      source: descriptor.template.content,
+      filename,
+      id,
+    });
+    if (compiled.errors.length) throw compiled.errors[0];
+    template = compiled.code;
+  }
+  return `${script}\n${template}\nif (typeof render === 'function') __sfc__.render = render;\nexport default __sfc__;\n`;
 }
 
 /** Node module hook: load `.vue` files as compiled modules. */
