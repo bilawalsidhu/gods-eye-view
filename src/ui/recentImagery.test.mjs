@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRecentImageryPanel } from './recentImagery.js';
+import { getCatalog, setLocale } from '../i18n/index.js';
+import { LOCALES } from '../i18n/locale.js';
 import { createRecentImageryLayer } from '../layers/recentImagery/index.js';
 import {
   BOX,
@@ -219,7 +221,12 @@ function fakeDocument() {
 }
 
 // ---- the real layer, with fakes for everything it injects ------------------
-function fixture({ fetchImpl, controller = fakeController() } = {}) {
+function fixture({
+  fetchImpl,
+  controller = fakeController(),
+  analyzeSnapshot,
+  analysisTimeoutMs,
+} = {}) {
   const dom = fakeDocument();
   const renderer = fakeRenderer();
   const thumbnails = fakeThumbnails();
@@ -292,6 +299,8 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
       return 'blob:export';
     },
     revokeObjectUrl: (url) => urls.revoked.push(url),
+    analyzeSnapshot,
+    analysisTimeoutMs,
   });
   const root = readout.root;
   const byId = (id) => root.find((node) => node.id === id);
@@ -1185,4 +1194,203 @@ test('destroy returns every listener, the divider and the panel state', async ()
   f.layer.setMode('ab');
   assert.equal(f.splits.length, 1, 'no renders after destroy');
   f.readout.destroy();
+});
+
+test('ANALYZE compares the pinned A/B imagery and reports site area', async () => {
+  const calls = [];
+  const f = fixture({
+    analyzeSnapshot: async (snapshot) => {
+      calls.push(snapshot);
+      return {
+        ok: true,
+        changedPct: 12.5,
+        hotspot: 'north-east',
+        site: { ok: true, hectares: 42.25 },
+      };
+    },
+  });
+  await f.ready();
+  f.layer.setMode('ab');
+  f.layer.setAssignment('a', S18);
+  f.layer.setAssignment('b', L16);
+
+  const analyze = f.byAction('analyze');
+  assert.equal(analyze.disabled, false);
+  analyze.click();
+  await settle();
+
+  assert.equal(calls.length, 1);
+  assert.match(f.byId('ri-notice-text').textContent, /12.5%/);
+  assert.match(f.byId('ri-notice-text').textContent, /42.25 hectares/);
+
+  f.layer.setAssignment('b', V21);
+  await settle();
+  assert.doesNotMatch(f.byId('ri-notice-text').textContent, /12.5%/);
+});
+
+test('changing away from A/B clears a completed analysis result', async () => {
+  const f = fixture({
+    analyzeSnapshot: async () => ({
+      ok: true,
+      changedPct: 8,
+      hotspot: 'centre',
+      site: { ok: true, hectares: 3 },
+    }),
+  });
+  await f.ready();
+  f.layer.setMode('ab');
+  f.layer.setAssignment('a', S18);
+  f.layer.setAssignment('b', L16);
+  f.byAction('analyze').click();
+  await settle();
+  assert.match(f.byId('ri-notice-text').textContent, /8%/);
+
+  f.layer.setMode('image');
+  assert.doesNotMatch(f.byId('ri-notice-text').textContent, /8%/);
+});
+
+test('selection and mode changes abort stale analysis and allow a replacement', async () => {
+  const pending = [];
+  const f = fixture({
+    analyzeSnapshot: (_snapshot, { signal }) =>
+      new Promise((resolve) => pending.push({ signal, resolve })),
+  });
+  await f.ready();
+  f.layer.setMode('ab');
+  f.layer.setAssignment('a', S18);
+  f.layer.setAssignment('b', L16);
+  f.byAction('analyze').click();
+  assert.equal(pending[0].signal.aborted, false);
+
+  f.layer.setAssignment('b', V21);
+  assert.equal(pending[0].signal.aborted, true);
+  assert.equal(
+    f.byAction('analyze').disabled,
+    false,
+    'aborting releases ANALYZE',
+  );
+  f.byAction('analyze').click();
+  assert.equal(pending.length, 2);
+  f.layer.setMode('image');
+  assert.equal(pending[1].signal.aborted, true);
+  pending[0].resolve({ ok: true, changedPct: 91, site: { hectares: 1 } });
+  pending[1].resolve({ ok: true, changedPct: 92, site: { hectares: 1 } });
+  await settle();
+  assert.doesNotMatch(f.byId('ri-notice-text').textContent, /9[12]%/);
+
+  f.layer.setMode('ab');
+  assert.equal(
+    f.byAction('analyze').disabled,
+    false,
+    'old finally cannot leave it stuck',
+  );
+});
+
+test('analysis deadline aborts pending work and releases ANALYZE', async () => {
+  let signal;
+  const f = fixture({
+    analysisTimeoutMs: 1,
+    analyzeSnapshot: (_snapshot, options) => {
+      signal = options.signal;
+      return new Promise(() => {});
+    },
+  });
+  await f.ready();
+  f.layer.setMode('ab');
+  f.layer.setAssignment('a', S18);
+  f.layer.setAssignment('b', L16);
+  f.byAction('analyze').click();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  await settle();
+
+  assert.equal(signal.aborted, true);
+  assert.equal(f.byAction('analyze').disabled, false);
+  assert.equal(f.byId('ri-notice-text').textContent, 'Analysis timed out');
+});
+
+test('destroy aborts a pending analysis request', async () => {
+  let signal;
+  const f = fixture({
+    analyzeSnapshot: (_snapshot, options) => {
+      signal = options.signal;
+      return new Promise(() => {});
+    },
+  });
+  await f.ready();
+  f.layer.setMode('ab');
+  f.layer.setAssignment('a', S18);
+  f.layer.setAssignment('b', L16);
+  f.byAction('analyze').click();
+  f.readout.destroy();
+  assert.equal(signal.aborted, true);
+});
+
+test('analysis results and errors are localized in every shipped locale', async () => {
+  const keys = [
+    'Pin two imagery days in A / B first',
+    'Image comparison unavailable',
+    'The imagery frames have different sizes',
+    'The imagery frames could not be compared',
+    'Imagery analysis failed',
+    'Analysis timed out',
+    'Imagery unavailable ({status})',
+    '{percent}% changed · strongest change {hotspot} · {area} hectares',
+    'north-west',
+    'north',
+    'north-east',
+    'west',
+    'centre',
+    'east',
+    'south-west',
+    'south',
+    'south-east',
+  ];
+  try {
+    for (const locale of LOCALES.filter((candidate) => candidate !== 'en')) {
+      setLocale(locale);
+      const catalog = getCatalog(locale);
+      assert.deepEqual(
+        keys.filter((key) => !String(catalog[key] || '').trim()),
+        [],
+        `${locale} analysis catalog`,
+      );
+      const f = fixture({
+        analyzeSnapshot: async () => ({
+          ok: true,
+          changedPct: 8,
+          hotspot: 'centre',
+          site: { ok: true, hectares: 3 },
+        }),
+      });
+      await f.ready();
+      f.layer.setMode('ab');
+      f.layer.setAssignment('a', S18);
+      f.layer.setAssignment('b', L16);
+      f.byAction('analyze').click();
+      await settle();
+      const result = f.byId('ri-notice-text').textContent;
+      assert.notEqual(result, '8% · centre · 3 ha', locale);
+      assert.ok(result.includes(catalog.centre), locale);
+
+      const failed = fixture({
+        analyzeSnapshot: async () => ({
+          ok: false,
+          error: 'Imagery analysis failed',
+        }),
+      });
+      await failed.ready();
+      failed.layer.setMode('ab');
+      failed.layer.setAssignment('a', S18);
+      failed.layer.setAssignment('b', L16);
+      failed.byAction('analyze').click();
+      await settle();
+      assert.notEqual(
+        failed.byId('ri-notice-text').textContent,
+        'Imagery analysis failed',
+        locale,
+      );
+    }
+  } finally {
+    setLocale('en');
+  }
 });
