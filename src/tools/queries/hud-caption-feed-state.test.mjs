@@ -2,9 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { composeCatalog, coreTools } from '../index.js';
 
-// The proxy returns the feed state as its own field ({ summary, feedState });
-// the five words no longer carry STALE, so get_hud_caption adds the app's own
-// state tag and keeps only the place when the reply names another state.
+// get_hud_caption shows the app's own feed state, not the model's words.
 async function staleCaption(reply) {
   const conditions = {
     observedAt: '2026-10-01T19:15:00.000Z',
@@ -53,7 +51,10 @@ test('get_hud_caption keeps the canonical feed state of a stale view', async () 
     feedState: 'stale',
   });
   assert.equal(data.feedState, 'stale');
-  assert.equal(data.caption, 'Austin weather across the area | STALE WEATHER');
+  assert.equal(
+    data.caption,
+    'STALE | Austin weather across the area | WEATHER',
+  );
 });
 
 test('get_hud_caption drops words whose feed state is not the app one', async () => {
@@ -62,5 +63,5 @@ test('get_hud_caption drops words whose feed state is not the app one', async ()
     feedState: 'nominal',
   });
   assert.equal(data.feedState, 'stale');
-  assert.equal(data.caption, 'Austin, Texas | STALE WEATHER');
+  assert.equal(data.caption, 'STALE | Austin, Texas | WEATHER');
 });

@@ -59,6 +59,7 @@ export const HUD_SUMMARY_INSTRUCTIONS = [
   "Write one concise intelligence-HUD summary for God's Eye View.",
   'Use only the supplied place, street, nearby-place, enabled-layer labels, and feedProvenance.',
   'Prefer the clearest named place and include a relevant enabled layer only when useful.',
+  'Name layers only as in enabledLayerLabels; never copy layer names or state words from feedProvenance or its note.',
   'Set feedState to feedProvenance.overall exactly as given, or none when it is null.',
   'If feedProvenance.overall is partial, do not present the coverage as complete; if it is any other state but nominal, do not present the view as live or healthy.',
   'Do not infer from coordinates or invent a place or feed state.',
@@ -95,7 +96,6 @@ export function hudSummaryLocale(value) {
   return normalizeLocale(value) || DEFAULT_LOCALE;
 }
 
-/** The language a request's summary is written in, named in English. */
 // Names Intl.DisplayNames gets wrong for the shipped catalogs: pt is the
 // Brazilian variant, and zh-Hant is the zh-CN wording in Traditional script.
 const SUMMARY_LANGUAGES = Object.freeze({
@@ -107,6 +107,12 @@ const SUMMARY_LANGUAGES = Object.freeze({
 /** Scripts written without spaces, where five words do not apply. */
 const UNSPACED_LOCALES = /^(?:ja|zh)(?:-|$)/;
 
+/** Whether the summary for this locale is capped in characters, not words. */
+export function hudSummaryIsUnspaced(locale) {
+  return UNSPACED_LOCALES.test(hudSummaryLocale(locale));
+}
+
+/** The language a request's summary is written in, named in English. */
 function summaryLanguage(tag) {
   if (SUMMARY_LANGUAGES[tag]) return SUMMARY_LANGUAGES[tag];
   try {
@@ -125,7 +131,7 @@ export function hudSummaryInstructions(locale) {
   const tag = hudSummaryLocale(locale);
   if (tag === DEFAULT_LOCALE) return HUD_SUMMARY_INSTRUCTIONS;
   const language = summaryLanguage(tag);
-  const length = UNSPACED_LOCALES.test(tag)
+  const length = hudSummaryIsUnspaced(tag)
     ? ` Instead of five words, write one phrase of at most ${HUD_SUMMARY_MAX_UNSPACED_CHARS} characters.`
     : '';
   return `${HUD_SUMMARY_INSTRUCTIONS} Write the summary in ${language} (${tag}), not English, giving places their usual ${language} names and layers the names in enabledLayerLabels; feedState stays the English value.${length}`;
@@ -172,7 +178,7 @@ export function hudSummaryLayerContext(layers = [], options) {
 }
 
 /**
- * The feed-state tag for the HUD telemetry suffix when an enabled feed is not
+ * The warning for the HUD telemetry line when an enabled feed is not
  * nominal.
  * @param {Array<object>} [layers]
  * @param {{ now?: number }} [options]

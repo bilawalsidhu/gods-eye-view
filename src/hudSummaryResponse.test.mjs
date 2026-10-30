@@ -164,6 +164,9 @@ test('the installed keyless HUD route stays successful after the voice quota is 
   } finally {
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
+    if (previousLimit === undefined)
+      delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
+    else process.env.GEV_RATELIMIT_OPENAI_PER_MIN = previousLimit;
   }
 });
 
@@ -263,10 +266,20 @@ test('the HUD sends its UI locale inside the context it signs for dedupe', () =>
   );
 });
 
-test('the state tag leads the one-line summary so clipping cannot hide it', () => {
+test('the state word leads and the layer names trail the one-line summary', () => {
   const hud = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
-  assert.match(hud, /tag \? `\$\{tag\} \| \$\{data\.summary\}`/);
-  assert.match(hud, /provenance \? `\$\{provenance\} \| \$\{line\}`/);
+  assert.match(
+    hud,
+    /return \[state, text, layers\]\.filter\(Boolean\)\.join\(' \| '\);/,
+  );
+  assert.match(hud, /withProvenance\(\s*data\.summary,/);
+  assert.match(hud, /return withProvenance\(line, provenance\);/);
+  // The model sees only the layer names the user sees.
+  assert.match(hud, /name: localizeLayerName\(layer\.name\)/);
+  assert.match(
+    HUD_SUMMARY_INSTRUCTIONS,
+    /Name layers only as in enabledLayerLabels/,
+  );
 });
 
 test('shipped catalogs get their exact language, and CJK a character limit', () => {
@@ -369,6 +382,20 @@ test('a Japanese summary is capped in characters, not words', async () => {
     [...long].slice(0, HUD_SUMMARY_MAX_UNSPACED_CHARS).join(''),
   );
 });
+
+for (const [locale, summary] of [
+  ['en', 'Shibuya 渋谷 live flights overhead'],
+  ['es', 'Vuelos sobre 東京駅 datos antiguos'],
+  ['ru', 'Башня Тайбэй 101 台北101 рейсы'],
+]) {
+  test(`a ${locale} summary with a Han place name keeps its five words`, async () => {
+    const { response } = await postHudSummary(
+      { locale, feedProvenance: { overall: 'stale' } },
+      JSON.stringify({ summary, feedState: 'stale' }),
+    );
+    assert.equal(response.body.summary, summary);
+  });
+}
 
 test('a reply that skips the format carries no summary and no state', async () => {
   const { response } = await postHudSummary(

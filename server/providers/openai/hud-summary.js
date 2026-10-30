@@ -4,6 +4,7 @@ import {
   HUD_SUMMARY_RESPONSE_FORMAT,
   hudSummaryInput,
   hudSummaryInstructions,
+  hudSummaryIsUnspaced,
   keylessHudSummaryResponse,
 } from '../../../src/hudSummaryResponse.js';
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
@@ -23,7 +24,7 @@ function extractOpenAiResponseText(data) {
 }
 
 /** Parse the summary and normalize the canonical feed state. */
-function parseHudSummaryReply(text) {
+function parseHudSummaryReply(text, locale) {
   let reply = null;
   try {
     reply = JSON.parse(text);
@@ -34,12 +35,12 @@ function parseHudSummaryReply(text) {
     ? reply.feedState
     : null;
   return {
-    summary: toFiveWordHudSummary(reply?.summary),
+    summary: toFiveWordHudSummary(reply?.summary, hudSummaryIsUnspaced(locale)),
     feedState: feedState === 'none' ? null : feedState,
   };
 }
 
-function toFiveWordHudSummary(value) {
+function toFiveWordHudSummary(value, unspaced) {
   const words = String(value || '')
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .trim()
@@ -48,8 +49,8 @@ function toFiveWordHudSummary(value) {
     .slice(0, 5)
     .join(' ');
   // Japanese and Chinese have no spaces to count words by: cap characters.
-  if (!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(words))
-    return words;
+  // Other languages keep five words, even around a Han place name.
+  if (!unspaced) return words;
   const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
   return [...graphemes.segment(words)]
     .slice(0, HUD_SUMMARY_MAX_UNSPACED_CHARS)
@@ -117,6 +118,7 @@ async function handleHudSummary(req, res) {
     const data = await response.json().catch(() => ({}));
     const { summary, feedState } = parseHudSummaryReply(
       extractOpenAiResponseText(data),
+      context?.locale,
     );
     res.statusCode = response.ok && summary ? 200 : response.status || 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');

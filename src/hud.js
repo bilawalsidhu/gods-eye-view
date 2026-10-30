@@ -104,22 +104,21 @@ const FEED_STATE_LABELS = Object.freeze({
 });
 
 /**
- * The summary's feed-state suffix in the active language, e.g.
- * `UNAVAILABLE: LIVE AIS VESSELS`. State ids and layer names stay English in
- * layer data; only this line translates them.
+ * A summary line with its feed-state warning in the active language, e.g.
+ * `UNAVAILABLE | <text> | LIVE AIS VESSELS`. The state word leads so the
+ * one-line readout never clips it; the layer names trail so they never push
+ * the text out. State ids and layer names stay English in layer data; only
+ * this line translates them.
  */
-function localizedProvenanceTag(provenance) {
-  if (!provenance) return null;
+function withProvenance(text, provenance) {
+  if (!provenance) return text;
   const state = FEED_STATE_LABELS[provenance.state]
     ? t(FEED_STATE_LABELS[provenance.state])
     : provenance.state.toUpperCase();
-  if (!provenance.names.length) return state;
-  return t('{state} {layers}', {
-    state,
-    layers: provenance.names
-      .map((name) => localizeLayerName(name).toUpperCase())
-      .join('/'),
-  });
+  const layers = provenance.names
+    .map((name) => localizeLayerName(name).toUpperCase())
+    .join('/');
+  return [state, text, layers].filter(Boolean).join(' | ');
 }
 
 /** The name shown for a _viewBand() id. */
@@ -764,8 +763,8 @@ export class IntelHUD {
       LOCALIZED_LOCALITY,
     );
 
-    const provenance = localizedProvenanceTag(
-      hudTelemetryProvenance(this._dataManager?.getAll?.() || []),
+    const provenance = hudTelemetryProvenance(
+      this._dataManager?.getAll?.() || [],
     );
     // ALT, SUN and ONA are sensor codes, as in the corner readouts.
     const line = t(
@@ -782,8 +781,7 @@ export class IntelHUD {
         zone: localTag,
       },
     );
-    // The feed state leads: the one-line readout clips its end.
-    return provenance ? `${provenance} | ${line}` : line;
+    return withProvenance(line, provenance);
   }
 
   /** Stop a summary still typing out, leaving what it has typed so far. */
@@ -895,12 +893,11 @@ export class IntelHUD {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
       if (hudSummaryMatchesProvenance(data, context.feedProvenance)) {
-        // The warning is the HUD's own translated tag, not the model's
-        // words, and it leads so the one-line readout never clips it.
-        const tag = localizedProvenanceTag(
+        // The warning is the HUD's own translated state, not the model's words.
+        this._lastSummaryText = withProvenance(
+          data.summary,
           provenanceTag(context.feedProvenance),
         );
-        this._lastSummaryText = tag ? `${tag} | ${data.summary}` : data.summary;
       }
       this._setSummaryText(this._lastSummaryText || fallbackText, animate);
     } catch (error) {
@@ -973,6 +970,10 @@ export class IntelHUD {
       // The names the user sees; feedProvenance keeps the English ids.
       enabledLayerLabels:
         layerContext.enabledLayerLabels.map(localizeLayerName),
+      enabledLayers: layerContext.enabledLayers.map((layer) => ({
+        ...layer,
+        name: localizeLayerName(layer.name),
+      })),
     };
   }
 

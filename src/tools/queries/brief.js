@@ -256,14 +256,16 @@ export const getHudCaption = defineTool({
     const words = response?.data?.summary;
     if (!response?.ok || typeof words !== 'string' || !words)
       throw new ToolError('unavailable', 'The caption service did not answer');
-    // As on the HUD: the warning is the app's own state tag, and a reply that
-    // names another state than the app's keeps only the place.
+    // As on the HUD: the app's own state leads and its layers trail, and a
+    // reply that names another state than the app's keeps only the place.
     const tag = provenanceTag(feedProvenance);
     const text = hudSummaryMatchesProvenance(response.data, feedProvenance)
       ? words
       : area.label;
     const caption = tag
-      ? `${text} | ${[tag.state, ...tag.names].join(' ').toUpperCase()}`
+      ? [tag.state.toUpperCase(), text, tag.names.join('/').toUpperCase()]
+          .filter(Boolean)
+          .join(' | ')
       : text;
     return {
       summary: caption,
