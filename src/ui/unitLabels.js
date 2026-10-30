@@ -1,4 +1,4 @@
-import { formatNumber, msg, t } from '../i18n/index.js';
+import { formatNumber, getLocale, msg, t } from '../i18n/index.js';
 
 // Unit ids stay English in data, params and AI-tool readings; only the label
 // shown on the page is translated. dBZ and °C read the same in every language.
@@ -24,13 +24,24 @@ export function unitLabel(unit) {
 }
 
 /**
+ * What goes between a number and its unit label: a no-break space, except
+ * before a Japanese unit word, which follows the number directly (5分, 1時間).
+ */
+export function quantitySeparator(label) {
+  return getLocale() === 'ja' &&
+    /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(label)
+    ? ''
+    : '\u00a0';
+}
+
+/**
  * A number and its unit that never break apart: "22,0 км/ч". Readings carry
  * no digit grouping ("1008 hPa"), as on weather charts.
  */
 export function formatQuantity(value, unit, options) {
   const label = unitLabel(unit);
   const number = formatNumber(value, { useGrouping: false, ...options });
-  return label ? `${number}\u00a0${label}` : number;
+  return label ? `${number}${quantitySeparator(label)}${label}` : number;
 }
 
 /**

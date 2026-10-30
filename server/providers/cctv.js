@@ -15,7 +15,6 @@ import {
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
-import { admitSameSite } from './common/same-site.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
@@ -144,13 +143,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     server.middlewares.use('/api/cctv', async (req, res) => {
       try {
         const url = new URL(req.url || '/', 'http://localhost');
-        // Refuse before catalog I/O, session creation, renewal or release.
-        if (url.pathname.startsWith('/media/') && admitSameSite(req, res))
-          return;
-        const clientId = String(req.socket?.remoteAddress || 'unknown').replace(
-          /^::ffff:/,
-          '',
-        );
         // Refuse cross-site requests before any catalog or upstream work. The
         // keyless gate keeps the routes reachable behind a reverse proxy; the
         // key-bearing Street View fallback below has its own check.
@@ -258,7 +250,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             return;
           }
           if (req.method === 'DELETE') {
-            if (leaseId) puller.release(cameraId, leaseId, clientId);
+            if (leaseId) puller.release(cameraId, leaseId);
             res.writeHead(204);
             res.end();
             return;
@@ -288,7 +280,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 url.searchParams.get('session'),
                 match[2],
                 leaseId,
-                clientId,
               );
               res.writeHead(asset ? 200 : 404, {
                 'Content-Type':
@@ -301,15 +292,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             const downstream = watchDownstreamClose(res);
             let entry;
             const cancelPending = () => {
-              if (entry) puller.release(cameraId, leaseId, clientId);
+              if (entry) puller.release(cameraId, leaseId);
             };
             try {
-              entry = await puller.ensure(
-                cameraId,
-                mediaUrl,
-                leaseId,
-                clientId,
-              );
+              entry = await puller.ensure(cameraId, mediaUrl, leaseId);
               if (downstream.closed) {
                 cancelPending();
                 return;
@@ -323,7 +309,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 entry,
                 cameraId,
                 leaseId,
-                clientId,
               );
               if (downstream.closed) return;
               if (!playlist) throw new Error('Stream unavailable');

@@ -1,6 +1,6 @@
 /** Contact readouts and nearby-signal presentation for the Cockpit controller. */
 import * as Cesium from 'cesium';
-import { formatNumber, getLocale, t, tn } from '../i18n/index.js';
+import { formatNumber, t, tn } from '../i18n/index.js';
 import { unitLabel } from './unitLabels.js';
 import {
   bearingBetweenCoordinates,
@@ -8,14 +8,17 @@ import {
   relativeBearing,
   resolveCockpitContextReadout,
 } from '../cockpitMath.js';
-import { formatCockpitDistance } from './cockpitPresentation.js';
+import {
+  cockpitUnitCase,
+  formatCockpitDistance,
+} from './cockpitPresentation.js';
 
 /** The Context scope line in the active language (see cockpitMath.js). */
 const LOCALIZED_CONTEXT_SCOPE = Object.freeze({
   window: ({ label, radiusKm }) =>
     t('{label} · {radius} AIR/SEA WINDOW', {
       label,
-      radius: `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${getLocale().startsWith('zh-') ? unitLabel('km') : unitLabel('km').toUpperCase()}`,
+      radius: `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${cockpitUnitCase(unitLabel('km'))}`,
     }),
   installations: ({ scope, coverage }) =>
     t('{scope} · INSTALLATIONS {coverage}', { scope, coverage }),

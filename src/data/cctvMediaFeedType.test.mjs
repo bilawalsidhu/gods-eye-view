@@ -304,8 +304,8 @@ test('cross-site media creation, segment reads and release fail before any catal
     { origin: 'null' },
     { 'sec-fetch-site': 'cross-site' },
     { 'sec-fetch-site': 'same-site' },
-    { 'x-forwarded-for': '192.0.2.1' },
-    { forwarded: 'for=192.0.2.1' },
+    { 'sec-fetch-site': 'cross-site', 'x-forwarded-for': '192.0.2.1' },
+    { origin: 'https://foreign.example', forwarded: 'for=192.0.2.1' },
   ]) {
     for (const [method, url] of [
       ['GET', '/media/camera?lease=test'],
@@ -546,9 +546,7 @@ test('a forwarded same-origin request reaches every CCTV route but not the Stree
     const label = JSON.stringify(forwarded);
     assert.equal((await app.call('/sources', headers)).statusCode, 200, label);
     const media = await app.call(`/media/${VIDEO.id}`, headers);
-    // Media retains #1267's direct-peer admission, including non-HLS feeds.
-    const hasProxyIdentity = Object.values(forwarded).some((value) => value.trim());
-    assert.equal(media.statusCode, hasProxyIdentity ? 403 : 200, label);
+    assert.equal(media.statusCode, 200, label);
     const frame = await app.call(`/frame/${STILL.id}`, headers);
     assert.equal(frame.statusCode, 200, label);
     assert.equal(frame.headers['X-CCTV-Source'], 'synthetic', label);

@@ -61,7 +61,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🎯 Click-to-track anything:** Camera locks on, draws a fading trail, surfaces full metadata — and a tracked fire or vessel hands you off to the nearest live camera in one click.
 - **🖊️ Voice whiteboard:** Speak annotations onto the world — real boundary polygons, marks, and routes.
 - **🛫 3D hangar:** Real per-class aircraft models — 787, ATR-72, Citation, Bell 206, MQ-9 — and a tracked contact swaps from glyph to 3D model as you close in.
-- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir, Snow.
+- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir.
 - **🟩 Detection overlay:** Screen-space bounding boxes and IDs on everything in view.
 - **🎖️ Military HUD:** Tactical heads-up display with intelligence-style telemetry.
 - **🌐 Global Context:** Stage the full situational picture with one switch — and get your exact view back when you leave.
@@ -294,14 +294,14 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Tracking the ISS along its orbital path as it crosses over Ukraine](docs/media/14-iss-over-ukraine.gif)
 
-6. **Switch the optics.** Tap `1`–`7` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
+6. **Switch the optics.** Tap `1`–`6` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
 7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
 
-**Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
+**Keyboard:** `1`–`6` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
 
 ---
 
@@ -604,13 +604,11 @@ files are supported; HEVC playback depends on the browser and device. Init
 files are capped independently at 256 KiB and share the 24 MiB session budget.
 Two maximum-size 12 MiB media files plus an init cannot fit that budget; such
 fMP4 streams cannot reach the two-segment readiness threshold.
-Each decoder has its own lease, including native HLS: at most eight per session
-and eight per direct socket peer across both sessions. Media requests pass the
-same-site gate before catalog or session work; refreshes, TS/fMP4 media reads,
-init reads and release require the owning peer. IPv4-mapped IPv6 addresses are
-normalized; clients sharing a NAT share the peer budget. Forwarding headers are
-refused by this gate, not used as peer identity. This is resource admission, not
-user authentication. Closing a decoder releases only its lease; abandoned leases expire after
+Each decoder has its own lease, including native HLS, at most eight per session.
+All CCTV requests pass main's keyless same-site gate before catalog or upstream
+work, including behind a reverse proxy. TS/fMP4 media and initialization reads
+require active session and lease tokens; these are resource capabilities, not
+user authentication. No socket-IP ownership or per-peer quota is imposed. Closing a decoder releases only its lease; abandoned leases expire after
 15 seconds without access. The last release stops upstream work. Failed live video
 uses the existing still/Street View/synthetic fallback, which is not live video.
 Cold or restarted sessions begin with the newest two segments; later polls fetch
