@@ -328,8 +328,7 @@ export function bindRadioControls() {
     const pool = this._radioTunerPool.length
       ? this._radioTunerPool
       : this._radioTunerStations;
-    // Keep the step silent unless a stream is active. An active stream follows
-    // the selection, so the station label matches the broadcaster.
+    // Silent unless a stream is active; an active stream follows the selection.
     const { audioState } = this.radio.getUIState();
     const cycled = this.radio.cycleStation(direction, {
       rotate,

@@ -73,22 +73,14 @@ export function createSelection({
     return { filter: layerState._filter, volume: layerState._userVolume };
   }
 
-  // Selecting another station without playing retires a paused or failed
-  // stream, so no control can resume or report a broadcaster that is no longer
-  // the selection. Stop clears fallbacks; the caller may have armed one for
-  // this selection, so it survives.
+  // A paused or failed stream of another station would outlive its selection.
   function releaseStaleRadioStream(stationId) {
     if (
-      !layerState._audioStationId ||
-      layerState._audioStationId === stationId ||
-      !['paused', 'error'].includes(layerState._audioState)
+      layerState._audioStationId &&
+      layerState._audioStationId !== stationId &&
+      ['paused', 'error'].includes(layerState._audioState)
     )
-      return;
-    const fallbackId = layerState._playFallbackId;
-    const fallbackFocus = layerState._playFallbackFocus;
-    parts.playback.stopRadioPlayback();
-    layerState._playFallbackId = fallbackId;
-    layerState._playFallbackFocus = fallbackFocus;
+      parts.playback.stopRadioPlayback();
   }
 
   /** Select a station. Playback occurs only when autoplay is explicitly true. */
@@ -101,12 +93,18 @@ export function createSelection({
       origin = 'programmatic',
       attemptId = null,
       cameraNavigation = null,
+      playFallback = null,
     } = {},
   ) {
     if (!parts.interaction.radioPresentationAllowed()) return false;
     const station = layerState._stationById.get(String(id));
     if (!station) return false;
     if (!autoplay) releaseStaleRadioStream(station.id);
+    // Set after the release, which clears fallbacks.
+    if (playFallback) {
+      layerState._playFallbackId = playFallback.id;
+      layerState._playFallbackFocus = playFallback.focus;
+    }
     layerState._tuningUnavailableStationId = null;
     if (
       !parts.navigation.radioCameraNavigationOwnsSelection(
@@ -184,7 +182,7 @@ export function createSelection({
         ? 0
         : (current + (direction < 0 ? -1 : 1) + ranked.length) % ranked.length;
     // Voice defers playback, so its silent step needs a fallback; UI steps do not.
-    layerState._playFallbackId =
+    const fallbackId =
       fallback && ranked.length > 1
         ? ranked[(nextIndex + 1) % ranked.length].id
         : null;
@@ -194,7 +192,7 @@ export function createSelection({
     const rotationNavigation = rotate
       ? parts.navigation.beginRadioCameraNavigation(rotationCameraState)
       : null;
-    layerState._playFallbackFocus =
+    const fallbackFocus =
       fallback && rotate
         ? (fallbackStation) => {
             parts.navigation.rotateRadioStationIntoView(
@@ -219,6 +217,7 @@ export function createSelection({
       focus: false,
       origin,
       cameraNavigation: rotationNavigation,
+      playFallback: { id: fallbackId, focus: fallbackFocus },
     });
   }
 
@@ -245,9 +244,12 @@ export function createSelection({
       },
     );
     if (!ranked.length) return null;
-    layerState._playFallbackId = ranked[1]?.id || null;
-    layerState._playFallbackFocus = false;
-    selectRadioStation(ranked[0].id, { autoplay, focus: false, origin });
+    selectRadioStation(ranked[0].id, {
+      autoplay,
+      focus: false,
+      origin,
+      playFallback: { id: ranked[1]?.id || null, focus: false },
+    });
     return ranked[0];
   }
 
