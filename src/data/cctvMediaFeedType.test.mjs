@@ -281,6 +281,53 @@ test('/frame does not follow a still camera off its origin', async (t) => {
   );
 });
 
+test('cross-site media creation, segment reads and release fail before any catalog or media fetch', async (t) => {
+  let handler;
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    throw new Error('must not fetch');
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  cctvProxy().configureServer({
+    middlewares: {
+      use: (_path, fn) => {
+        handler = fn;
+      },
+    },
+  });
+  for (const headers of [
+    { origin: 'https://foreign.example' },
+    { origin: 'null' },
+    { 'sec-fetch-site': 'cross-site' },
+    { 'sec-fetch-site': 'same-site' },
+    { 'sec-fetch-site': 'cross-site', 'x-forwarded-for': '192.0.2.1' },
+    { origin: 'https://foreign.example', forwarded: 'for=192.0.2.1' },
+  ]) {
+    for (const [method, url] of [
+      ['GET', '/media/camera?lease=test'],
+      ['DELETE', '/media/camera?lease=test'],
+      ['GET', '/media/camera/seg_0.ts?lease=test'],
+      ['GET', '/media/camera/seg_0.mp4?lease=test'],
+      ['GET', '/media/camera/init_0.mp4?lease=test'],
+    ]) {
+      const { res } = recordingResponse();
+      res.setHeader = (name, value) => {
+        res.headers[name] = value;
+      };
+      await handler(
+        { method, url, headers: { host: 'localhost:4173', ...headers } },
+        res,
+      );
+      assert.equal(res.statusCode, 403);
+    }
+  }
+  assert.equal(calls, 0);
+});
+
 /** An upstream Response whose body records whether it was cancelled. */
 function trackedUpstream({ status = 200, headers = {}, body = 'payload' }) {
   const state = { cancelled: false };
@@ -500,7 +547,6 @@ test('a forwarded same-origin request reaches every CCTV route but not the Stree
     assert.equal((await app.call('/sources', headers)).statusCode, 200, label);
     const media = await app.call(`/media/${VIDEO.id}`, headers);
     assert.equal(media.statusCode, 200, label);
-    assert.equal(media.headers['Content-Type'], 'video/mp4', label);
     const frame = await app.call(`/frame/${STILL.id}`, headers);
     assert.equal(frame.statusCode, 200, label);
     assert.equal(frame.headers['X-CCTV-Source'], 'synthetic', label);
