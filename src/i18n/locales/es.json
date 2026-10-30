@@ -369,6 +369,11 @@
     "many": "{count} de cámaras cargadas · activa CCTV para activarlas",
     "other": "{count} cámaras cargadas · activa CCTV para activarlas"
   },
+  "{count} more cameras outside this view · pan or zoom out": {
+    "one": "{count} cámara más fuera de esta vista · desplaza o aleja",
+    "many": "{count} de cámaras más fuera de esta vista · desplaza o aleja",
+    "other": "{count} cámaras más fuera de esta vista · desplaza o aleja"
+  },
   "No summary available.": "No hay resumen disponible.",
   "Celestial ring — available in Normal style": "Anillo celestial — disponible en el estilo Normal",
   "Detection overlay: {mode}": "Superposición de detección: {mode}",

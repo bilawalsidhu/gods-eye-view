@@ -342,6 +342,12 @@
     "many": "Загружено {count} камер · включите CCTV, чтобы активировать",
     "other": "Загружено {count} камеры · включите CCTV, чтобы активировать"
   },
+  "{count} more cameras outside this view · pan or zoom out": {
+    "one": "Ещё {count} камера вне этого вида · сдвиньте или отдалите",
+    "few": "Ещё {count} камеры вне этого вида · сдвиньте или отдалите",
+    "many": "Ещё {count} камер вне этого вида · сдвиньте или отдалите",
+    "other": "Ещё {count} камеры вне этого вида · сдвиньте или отдалите"
+  },
   "Enable CCTV to load camera intersections": "Включите CCTV, чтобы загрузить камеры на перекрёстках",
   "Enable CCTV to start camera-linked intelligence summaries.": "Включите CCTV, чтобы запускать сводки по камерам.",
   "No summary available.": "Сводка недоступна.",

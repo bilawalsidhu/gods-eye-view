@@ -1647,6 +1647,12 @@
     "many": "{count} камер завантажено · увімкніть CCTV, щоб активувати",
     "other": "{count} камери завантажено · увімкніть CCTV, щоб активувати"
   },
+  "{count} more cameras outside this view · pan or zoom out": {
+    "one": "Ще {count} камера поза цим видом · посуньте або віддаліть",
+    "few": "Ще {count} камери поза цим видом · посуньте або віддаліть",
+    "many": "Ще {count} камер поза цим видом · посуньте або віддаліть",
+    "other": "Ще {count} камери поза цим видом · посуньте або віддаліть"
+  },
   "Enable CCTV to load camera intersections": "Увімкніть CCTV, щоб завантажити камери на перехрестях",
   "Enable CCTV to start camera-linked intelligence summaries.": "Увімкніть CCTV, щоб отримувати розвідувальні зведення за даними камер.",
   "No summary available.": "Зведення недоступне.",

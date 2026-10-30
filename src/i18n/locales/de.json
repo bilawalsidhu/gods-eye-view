@@ -372,6 +372,10 @@
     "one": "{count} Kamera geladen · CCTV aktivieren",
     "other": "{count} Kameras geladen · CCTV aktivieren"
   },
+  "{count} more cameras outside this view · pan or zoom out": {
+    "one": "{count} weitere Kamera außerhalb dieser Ansicht · verschieben oder herauszoomen",
+    "other": "{count} weitere Kameras außerhalb dieser Ansicht · verschieben oder herauszoomen"
+  },
   "Enable CCTV to load camera intersections": "CCTV aktivieren, um Kreuzungskameras zu laden",
   "Enable CCTV to start camera-linked intelligence summaries.": "CCTV aktivieren, um kameragestützte Lagezusammenfassungen zu starten.",
   "No summary available.": "Keine Zusammenfassung verfügbar.",

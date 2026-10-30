@@ -1543,6 +1543,9 @@
   "{count} cameras loaded · enable CCTV to activate": {
     "other": "已加載 {count} 個攝像頭 · 啟用 CCTV 以激活"
   },
+  "{count} more cameras outside this view · pan or zoom out": {
+    "other": "此視圖外還有 {count} 個攝像頭 · 平移或縮小"
+  },
   "Enable CCTV to load camera intersections": "啟用 CCTV 以加載路口攝像頭",
   "Enable CCTV to start camera-linked intelligence summaries.": "啟用 CCTV 以開始生成與攝像頭關聯的情報摘要。",
   "No summary available.": "暫無摘要。",

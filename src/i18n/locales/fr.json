@@ -1625,6 +1625,11 @@
     "many": "{count} de caméras chargées · activer CCTV pour les utiliser",
     "other": "{count} caméras chargées · activer CCTV pour les utiliser"
   },
+  "{count} more cameras outside this view · pan or zoom out": {
+    "one": "{count} autre caméra hors de cette vue · déplacer ou dézoomer",
+    "many": "{count} d'autres caméras hors de cette vue · déplacer ou dézoomer",
+    "other": "{count} autres caméras hors de cette vue · déplacer ou dézoomer"
+  },
   "Enable CCTV to load camera intersections": "Activez CCTV pour charger les carrefours équipés de caméras",
   "Enable CCTV to start camera-linked intelligence summaries.": "Activez CCTV pour lancer les résumés de renseignement liés aux caméras.",
   "No summary available.": "Aucun résumé disponible.",

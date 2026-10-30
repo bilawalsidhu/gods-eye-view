@@ -1579,6 +1579,9 @@
   "{count} cameras loaded · enable CCTV to activate": {
     "other": "カメラ {count}台を読込済み · CCTVを有効にして使用"
   },
+  "{count} more cameras outside this view · pan or zoom out": {
+    "other": "この表示範囲外にさらに {count}台のカメラ · 移動またはズームアウト"
+  },
   "Enable CCTV to load camera intersections": "CCTVを有効にすると、カメラのある交差点を読み込みます",
   "Enable CCTV to start camera-linked intelligence summaries.": "CCTVを有効にすると、カメラ連動のインテリジェンス概要を開始します。",
   "No summary available.": "利用できる概要はありません。",

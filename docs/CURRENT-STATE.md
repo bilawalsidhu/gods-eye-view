@@ -978,6 +978,15 @@ directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
 request skips the key-bearing Street View fallback and gets the placeholder.
 
+The CCTV layer draws only the cameras on or near the screen. Zoomed out, it
+keeps one camera per ground cell sized to the view, preferring a healthy feed,
+and the cells are anchored to the ground so a pan keeps the same cameras. The
+active camera always shows. Ground placement and coverage geometry load only
+for the cameras in view, with at most two attempts per camera and view regime.
+The view pass reruns while the camera moves, paced by its own cost. The camera
+picker lists the cameras in view, active camera first, and closes with the
+count of cameras outside the view.
+
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames.
 
 Traffic and bikeshare expose factories through `./layers/traffic` and
