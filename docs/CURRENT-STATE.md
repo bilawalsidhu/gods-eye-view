@@ -530,7 +530,9 @@ those reports arrive as 102.3 knots and 360 degrees. Both are stored as unknown,
 and vessel cards, the HUD and analyst queries show a missing measurement rather
 than a reading. Heading keeps its existing separate check for its own sentinel.
 Genuine readings are unchanged, including a stopped vessel's zero and the
-highest speed and course the fields can encode.
+highest speed and course the fields can encode. Vessel cards and the HUD wrap
+the direction after rounding to whole degrees, so a course of 359.5° or more
+reads `0°` (`0DEG` in the HUD) rather than `360°`.
 
 For an already tracked vessel, AISStream static messages update name, type,
 destination and IMO without changing its position, motion, fix timestamps,

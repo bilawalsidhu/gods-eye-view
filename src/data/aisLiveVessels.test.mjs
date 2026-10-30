@@ -1322,6 +1322,27 @@ test('buildVesselCard: heading falls back to course; missing parts are omitted',
   assert.deepEqual(bare.details, []);
 });
 
+test('vessel cards read a course that rounds to north as 0°, not 360°', () => {
+  const card = (course) => buildVesselCard(makeRecord({ heading: null, course })).details[0];
+  assert.equal(card(359.4), 'CONTAINER SHIP · 14.5KT · 359°');
+  assert.equal(card(359.7), 'CONTAINER SHIP · 14.5KT · 0°');
+  assert.equal(
+    buildSelectedVesselCard(makeRecord({ heading: null, course: 359.7 })).details[0],
+    'CONTAINER SHIP · 14.5KT · 0°',
+  );
+});
+
+test('the vessel HUD reads a course that rounds to north as HDG 0DEG', () => {
+  const harness = installWireHarness(undefined, { selectedRecord: null });
+  try {
+    Object.assign(harness.record, { heading: null, course: 359.7 });
+    assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
+    assert.match(harness.hud.textContent, /HDG: 0DEG/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test('buildVesselCard: unnamed vessels title as MMSI; long names truncate', () => {
   const unnamed = buildVesselCard(makeRecord({ name: 'VESSEL' }));
   assert.equal(unnamed.title, 'MMSI 353136000');
