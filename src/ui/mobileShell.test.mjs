@@ -499,6 +499,16 @@ test('the phone shell keeps the required attribution visible', () => {
     idleCredit,
     /display:\s*none|visibility:\s*hidden|opacity:\s*0/,
   );
+  // A long credit line (map plus outline credits) wraps inside the screen:
+  // the box needs a real width for Cesium's absolutely positioned credit
+  // block, set before the 0.8 scale, so it is divided by it.
+  assert.match(idleCredit, /white-space: normal;/);
+  assert.match(
+    idleCredit,
+    /[^-]width: calc\(\(100vw - 20px\) \/ 0\.8\) !important;/,
+  );
+  assert.match(idleCredit, /max-width: none !important;/);
+  assert.match(idleCredit, /scale: 0\.8;/);
   // Open sheet: above everything the sheet covers, drawn above the sheets.
   const sheetCredit = rule(
     'body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view) #cesium-credits',

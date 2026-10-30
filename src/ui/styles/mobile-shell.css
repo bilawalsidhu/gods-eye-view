@@ -378,7 +378,15 @@ body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   right: auto;
   bottom: calc(var(--mobile-tab-space) + 106px) !important;
   left: 10px;
-  max-width: calc(100vw - 20px);
+  /* Cesium's credit block is absolutely positioned inside this box, so the
+     box needs a real width (a max-width alone leaves it 0 wide) for the
+     credits to wrap at the screen width rather than one word per line. The
+     width applies before the 0.8 scale, keeping the scaled line 10px from the
+     right edge, so every credit and "Data attribution" stay on screen. Like
+     the offset above, it must beat the dock's width: auto !important. */
+  width: calc((100vw - 20px) / 0.8) !important;
+  max-width: none !important;
+  white-space: normal;
   transform-origin: left bottom;
   scale: 0.8;
 }

@@ -30,3 +30,6 @@
 - Skip Nominatim place and outline lookups when the server reports that no
   Nominatim endpoint is configured, so a default install sends no request it
   would refuse (Manjunath, #842).
+- Keep the phone credit line on screen when map and outline credits make it
+  longer, wrapping it within the screen instead of running off the edge
+  (Manjunath, #842).
