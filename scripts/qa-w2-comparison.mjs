@@ -20,6 +20,13 @@ const base = arg('base-url'),
   mode = arg('mode') || 'uncapped';
 const diagnostic = process.argv.includes('--diagnostic');
 const baselineSampling = process.argv.includes('--baseline-sampling');
+const baselineStencil = process.argv.includes('--baseline-stencil');
+const stencilPairs = process.argv.includes('--stencil-pairs');
+if (
+  (baselineSampling && baselineStencil) ||
+  (stencilPairs && (baselineSampling || baselineStencil))
+)
+  throw new Error('Choose one baseline override');
 const denseQuakes = process.argv.includes('--dense-quakes');
 const look = arg('look') || 'minimal';
 if (!['minimal', 'cinematic'].includes(look)) throw new Error('Unknown look');
@@ -53,6 +60,7 @@ const all = [
 ];
 const sets = {
   empty: [],
+  installations: ['military-installations'],
   firms: ['local-firms'],
   alpr: ['alpr-cameras'],
   cctv: ['cctv'],
@@ -77,6 +85,8 @@ const report = {
   look,
   diagnostic,
   baselineSampling,
+  baselineStencil,
+  stencilPairs,
   denseQuakes,
   workload: denseQuakes
     ? '500 co-located earthquake discs: pathological overlap stress'
@@ -142,9 +152,21 @@ const browser = await puppeteer.launch({
 try {
   report.browser = await browser.version();
   for (let run = diagnostic ? 0 : -1; run < (diagnostic ? 1 : 3); run++)
-    for (const kind of engines) {
+    for (const { kind, stencilOriginal } of engines.flatMap((kind) =>
+      stencilPairs && kind === 'navara'
+        ? (run % 2 === 1 ? [false, true] : [true, false]).map(
+            (stencilOriginal) => ({ kind, stencilOriginal }),
+          )
+        : [{ kind, stencilOriginal: baselineStencil }],
+    )) {
       const context = await browser.createBrowserContext(),
-        entry = { engine: kind, run, discarded: run < 0, scenes: {} };
+        entry = {
+          engine: stencilPairs && stencilOriginal ? 'navara-original' : kind,
+          baselineStencil: kind === 'navara' && stencilOriginal,
+          run,
+          discarded: run < 0,
+          scenes: {},
+        };
       report.runs.push(entry);
       try {
         const page = await context.newPage();
@@ -157,7 +179,7 @@ try {
         const tileCache = await installTileCache(page);
         const fixture = await installCombinedFixture(page, { denseQuakes });
         watchW1Page(page, report, {
-          name: `${kind}-${run}`,
+          name: `${entry.engine}-${run}`,
           baseUrl: base,
           preview: process.argv.includes('--preview'),
         });
@@ -175,6 +197,24 @@ try {
                 }
                 return add(config);
               };
+            };
+          });
+        if (stencilOriginal)
+          await page.evaluateOnNewDocument(() => {
+            window.__gevW2NativeProbe = ({ view }) => {
+              const register = view.registerEffect.bind(view);
+              view.registerEffect = (key, Class) =>
+                register(
+                  key,
+                  key === 'gevInstallationsDrape'
+                    ? class extends Class {
+                        constructor(...args) {
+                          super(...args);
+                          window.__qaStencilOwner = this.owner;
+                        }
+                      }
+                    : Class,
+                );
             };
           });
         const target = new URL(base);
@@ -235,7 +275,7 @@ try {
         );
         entry.startupMs = Date.now() - started;
         for (const name of scenarios) {
-          console.log(`START ${kind} ${run} ${name}`);
+          console.log(`START ${entry.engine} ${run} ${name}`);
           const count = name === 'transit3000' ? 3000 : 800;
           await page.evaluate(
             async ({ ids, origin, count, name }) => {
@@ -337,6 +377,23 @@ try {
                   ),
               { count, origin: COMBINED_ORIGIN },
             );
+          if (
+            stencilOriginal &&
+            kind === 'navara' &&
+            sets[name].includes('military-installations')
+          )
+            entry.baselineStencilMeshes = await page.evaluate(() => {
+              const meshes = [...(window.__qaStencilOwner?.meshes ?? [])];
+              if (!meshes.length)
+                throw new Error('Stencil baseline found no meshes');
+              for (const mesh of meshes) {
+                const original = Object.getPrototypeOf(mesh).process;
+                if (typeof original !== 'function')
+                  throw new Error('Native stencil process absent');
+                mesh.process = original;
+              }
+              return meshes.length;
+            });
           const cdp = await page.createCDPSession();
           await cdp.send('HeapProfiler.collectGarbage');
           const before = await cdp.send('Runtime.getHeapUsage');
@@ -463,11 +520,14 @@ try {
           };
           delete entry.lastSample;
           await page.screenshot({
-            path: output.replace(/\.json$/, `-${kind}-${run}-${name}.png`),
+            path: output.replace(
+              /\.json$/,
+              `-${entry.engine}-${run}-${name}.png`,
+            ),
           });
           await fs.writeFile(output, JSON.stringify(report, null, 2));
           console.log(
-            `DONE ${kind} ${run} ${name} ${entry.scenes[name].workP95.toFixed(2)}ms`,
+            `DONE ${entry.engine} ${run} ${name} ${entry.scenes[name].workP95.toFixed(2)}ms`,
           );
         }
         entry.requests = fixture.requests.length;
@@ -518,6 +578,8 @@ try {
           ratio <= 1.1 &&
           (mode === 'uncapped' || n.longFrames33 <= c.longFrames33 + 2),
       };
+      if (stencilPairs && engines.includes('navara'))
+        report.comparison[name].originalNavara = summary('navara-original');
     }
 } catch (error) {
   report.failure = error.stack;

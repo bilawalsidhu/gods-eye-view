@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
+import { installTileCache } from './qa/tileCache.mjs';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { watchW1Page } from './qa-browserEvidence.mjs';
 import { installCombinedFixture } from './fixtures/w2/combined.mjs';
@@ -29,6 +30,7 @@ const browser = await puppeteer.launch({
 try {
   const page = await browser.newPage();
   await blockPaidQaMaps(page);
+  await installTileCache(page);
   await page.setViewport({ width: 1280, height: 800 });
   watchW1Page(page, report, { name: 'batch', baseUrl: base, preview: true });
   const fixture = await installCombinedFixture(page);

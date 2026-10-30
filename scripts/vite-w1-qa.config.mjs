@@ -26,6 +26,7 @@ const modules = [
   'src/bench/w2GroundProbe.js',
   'src/layers/firms/index.js',
   'scripts/qa-w2-firms-renderer-entry.mjs',
+  'scripts/qa-installation-stencil-entry.mjs',
 ];
 export default async (env) => {
   const config = await standalone(env);
@@ -69,7 +70,7 @@ export default async (env) => {
       return code.replace(
         marker,
         marker +
-          '\n globalThis.__gevW2NativeProbe?.({ view, EffectDesc, NavaraEffect });',
+          '\n globalThis.__gevW2NativeProbe?.({ view, EffectDesc, NavaraEffect, DrapedMesh, setupMaterialForDrape });',
       );
     },
     configurePreviewServer(server) {
