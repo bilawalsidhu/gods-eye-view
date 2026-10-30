@@ -27,8 +27,6 @@ export default defineConfig(({ command, mode }) => {
       unwatchedRuntimeDirsPlugin(),
     ],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
-    cesiumToken: process.env.CESIUM_ION_TOKEN,
-    mapillaryToken: process.env.MAPILLARY_CLIENT_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
     allowedHosts: resolveAllowedHosts(process.env.GEV_ALLOWED_HOSTS),

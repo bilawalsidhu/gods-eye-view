@@ -55,9 +55,7 @@ export function createStandaloneLayerSources(overrides = {}) {
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),
-    mapillary: createMapillarySource({
-      token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',
-    }),
+    mapillary: createMapillarySource(),
   };
   for (const name of Object.keys(overrides)) {
     if (!Object.hasOwn(defaults, name))
