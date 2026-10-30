@@ -1,0 +1,728 @@
+{
+  "runtimeCommit": "e60f668cd5372e9ac759e5b4e351f231bfa5e1b6",
+  "previewManifestSha256": "de92bc548c2b130388e9b465dc8c4de9612d511a77b9953419b80de34e5dd87d",
+  "sourceSha256": {
+    "src/layers/installations/render/navaraStencilBatch.js": "96bec34a0b1aa2410a7a16a8c445ab495d75622e0ff2553d52bbf87c199e0960",
+    "src/layers/installations/render/navaraGeometry.js": "c78d365948bd82c98def8b1dc5dac1f0976fc580b704e3f8fed7193a5062fcde",
+    "scripts/qa-installation-stencil.mjs": "9a106f95b7a14b2c8fd0ad07d78af509bcd8f0467bced300c33dd11f9c05931a",
+    "scripts/qa-w2-comparison.mjs": "9e671809983066cf8c4b5c7a4b47510365adeda8c1f921c0c6858ad9068372be"
+  },
+  "gates": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 102.0
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 11.4
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 10.5
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 9.9
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 11.3
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 11.3
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.3
+    }
+  ],
+  "unit": {
+    "ordinaryPassed": 7349,
+    "ordinarySkipped": 1,
+    "allocationPassed": 15
+  },
+  "browserRuns": [
+    {
+      "check": "pixels",
+      "code": 0,
+      "seconds": 17.2
+    },
+    {
+      "check": "batch",
+      "code": 0,
+      "seconds": 13.1
+    },
+    {
+      "check": "layer-navara",
+      "code": 0,
+      "seconds": 11.9
+    },
+    {
+      "check": "layer-cesium",
+      "code": 0,
+      "seconds": 10.5
+    },
+    {
+      "check": "sampling",
+      "code": 0,
+      "seconds": 13.5
+    },
+    {
+      "check": "contract",
+      "code": 0,
+      "seconds": 52.6
+    }
+  ],
+  "checks": {
+    "pixels": {
+      "checks": [
+        {
+          "name": "catalog: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "catalog: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "catalog: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 40,
+              "draws": 247
+            },
+            "slow": {
+              "renders": 42,
+              "draws": 247
+            }
+          }
+        },
+        {
+          "name": "removing contours fails the pixel oracle",
+          "pass": true,
+          "detail": {
+            "changed": 5692,
+            "max": 131
+          }
+        },
+        {
+          "name": "holes-nadir: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-nadir: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-nadir: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 41,
+              "draws": 70
+            },
+            "slow": {
+              "renders": 47,
+              "draws": 70
+            }
+          }
+        },
+        {
+          "name": "holes-nadir: custom geometry visible",
+          "pass": true,
+          "detail": {
+            "changed": 77953,
+            "max": 133
+          }
+        },
+        {
+          "name": "filling the hole fails the same pixel oracle",
+          "pass": true,
+          "detail": {
+            "changed": 5002,
+            "max": 50
+          }
+        },
+        {
+          "name": "holes-oblique: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-oblique: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-oblique: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 42,
+              "draws": 121
+            },
+            "slow": {
+              "renders": 50,
+              "draws": 121
+            }
+          }
+        },
+        {
+          "name": "holes-oblique: custom geometry visible",
+          "pass": true,
+          "detail": {
+            "changed": 36199,
+            "max": 145
+          }
+        },
+        {
+          "name": "holes-reverse: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-reverse: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-reverse: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 42,
+              "draws": 89
+            },
+            "slow": {
+              "renders": 50,
+              "draws": 89
+            }
+          }
+        },
+        {
+          "name": "holes-reverse: custom geometry visible",
+          "pass": true,
+          "detail": {
+            "changed": 57974,
+            "max": 158
+          }
+        },
+        {
+          "name": "no unexpected browser errors",
+          "pass": true,
+          "detail": []
+        }
+      ],
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "failedResponses": [],
+      "runtimePages": [
+        "batch"
+      ]
+    },
+    "batch": {
+      "checks": [
+        {
+          "name": "twenty contours retain all identities in fewer stencil batches",
+          "pass": true,
+          "detail": [
+            [
+              "osm:way:980000",
+              "osm:way:980001",
+              "osm:way:980002",
+              "osm:way:980003",
+              "osm:way:980004",
+              "osm:way:980005",
+              "osm:way:980006",
+              "osm:way:980007",
+              "osm:way:980008",
+              "osm:way:980009",
+              "osm:way:980010",
+              "osm:way:980011",
+              "osm:way:980012",
+              "osm:way:980013",
+              "osm:way:980014",
+              "osm:way:980015",
+              "osm:way:980016",
+              "osm:way:980017",
+              "osm:way:980018",
+              "osm:way:980019"
+            ]
+          ]
+        },
+        {
+          "name": "restoring the batch preserves pixels",
+          "pass": true,
+          "detail": {
+            "pixels": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "the compared contours have real visible pixels",
+          "pass": true,
+          "detail": {
+            "pixels": 4029,
+            "max": 147
+          }
+        },
+        {
+          "name": "batch preserves every painted contour pixel with less than one percent colour error",
+          "pass": true,
+          "detail": {
+            "coverageChanges": 0,
+            "relativeColourError": 0.002657782713307422
+          }
+        },
+        {
+          "name": "the same pixel gate rejects a missing contour",
+          "pass": true,
+          "detail": {
+            "coverageChanges": 47,
+            "relativeColourError": 0.009722006292800296
+          }
+        },
+        {
+          "name": "imagery activated last remains below ground classification and glyphs",
+          "pass": true,
+          "detail": [
+            "gevRecentImagery",
+            "gevEarthquakeGround",
+            "gevPreSharpenOverlay"
+          ]
+        },
+        {
+          "name": "ground colour renders before FIRMS glyphs",
+          "pass": true,
+          "detail": [
+            "gevRecentImagery",
+            "gevEarthquakeGround",
+            "gevPreSharpenOverlay"
+          ]
+        }
+      ],
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "failedResponses": [],
+      "runtimePages": [
+        "batch"
+      ],
+      "exactPixelDifference": {
+        "pixels": 21,
+        "max": 65
+      },
+      "pass": true
+    },
+    "layer-navara": {
+      "engine": "navara",
+      "fixtureId": "osm:way:980001",
+      "checks": [
+        {
+          "name": "navara startup with keyless OSM stack",
+          "pass": true,
+          "detail": {
+            "engine": "navara",
+            "map": "osm"
+          }
+        },
+        {
+          "name": "OSM source attribution is visible with mapped records",
+          "pass": true
+        },
+        {
+          "name": "ordinary outline paints beyond the point marker",
+          "pass": true,
+          "detail": 3419
+        },
+        {
+          "name": "real pointer selection paints the selected footprint",
+          "pass": true,
+          "detail": 1416
+        },
+        {
+          "name": "selection retains canonical installation identity",
+          "pass": true,
+          "detail": "osm:way:980001"
+        },
+        {
+          "name": "Places candidates retain visible Google Maps attribution",
+          "pass": true
+        },
+        {
+          "name": "no unexpected page errors",
+          "pass": true
+        }
+      ],
+      "runtimeErrors": 0,
+      "runtimeErrorPaths": [],
+      "expectedBlockedExternalErrors": 654,
+      "blockedGoogleTileRequests": 0,
+      "blockedExternalRequests": 655,
+      "images": {
+        "baseline": "/private/tmp/installations-navara-off.png",
+        "outline": "/private/tmp/installations-navara-outline.png",
+        "selected": "/private/tmp/installations-navara-selected.png"
+      },
+      "blockedExternalHosts": [
+        "fonts.googleapis.com",
+        "",
+        "services.arcgisonline.com",
+        "terrain.reearth.land",
+        "tile.openstreetmap.org"
+      ],
+      "pass": true
+    },
+    "layer-cesium": {
+      "engine": "cesium",
+      "fixtureId": "osm:way:980001",
+      "checks": [
+        {
+          "name": "cesium startup with keyless OSM stack",
+          "pass": true,
+          "detail": {
+            "engine": "cesium",
+            "map": "osm"
+          }
+        },
+        {
+          "name": "Cesium ground-height bounds use the packaged local fixture",
+          "pass": true,
+          "detail": 1
+        },
+        {
+          "name": "Cesium base tiles settle before capture",
+          "pass": true
+        },
+        {
+          "name": "Cesium ground tiles settle with installations",
+          "pass": true
+        },
+        {
+          "name": "OSM source attribution is visible with mapped records",
+          "pass": true
+        },
+        {
+          "name": "Cesium receives deterministic local imagery",
+          "pass": true,
+          "detail": {
+            "type": "EC",
+            "tileWidth": 256,
+            "tileHeight": 256
+          }
+        },
+        {
+          "name": "ordinary outline paints beyond the point marker",
+          "pass": true,
+          "detail": 1468
+        },
+        {
+          "name": "Cesium viewer-entity GPU pick control",
+          "pass": true,
+          "detail": "qa-native-pick-probe"
+        },
+        {
+          "name": "real pointer selection paints the selected footprint",
+          "pass": true,
+          "detail": 2157
+        },
+        {
+          "name": "selection retains canonical installation identity",
+          "pass": true,
+          "detail": "osm:way:980001"
+        },
+        {
+          "name": "Places candidates retain visible Google Maps attribution",
+          "pass": true
+        },
+        {
+          "name": "no unexpected page errors",
+          "pass": true
+        }
+      ],
+      "runtimeErrors": 0,
+      "runtimeErrorPaths": [],
+      "expectedBlockedExternalErrors": 264,
+      "blockedGoogleTileRequests": 0,
+      "blockedExternalRequests": 264,
+      "cesiumScene": {
+        "globeTilesLoaded": true,
+        "terrainProvider": "mZ"
+      },
+      "cesiumSelectedGround": {
+        "entities": [
+          {
+            "show": true,
+            "hierarchy": true
+          }
+        ]
+      },
+      "images": {
+        "baseline": "/private/tmp/installations-cesium-off.png",
+        "outline": "/private/tmp/installations-cesium-outline.png",
+        "selected": "/private/tmp/installations-cesium-selected.png"
+      },
+      "blockedExternalHosts": [
+        "fonts.googleapis.com",
+        "services.arcgisonline.com",
+        "terrain.reearth.land",
+        "tile.openstreetmap.org"
+      ],
+      "pass": true
+    },
+    "sampling": {
+      "checks": [
+        {
+          "name": "post buffers single-sampled, geometry and overlays retain four samples",
+          "pass": true,
+          "detail": {
+            "post": 0,
+            "geometry": 4,
+            "forward": 4
+          }
+        },
+        {
+          "name": "frozen map, contours, viewsheds and points keep exact pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0,
+            "sum": 0
+          }
+        },
+        {
+          "name": "removing contours fails the pixel oracle",
+          "pass": true,
+          "detail": {
+            "changed": 5584,
+            "max": 138,
+            "sum": 1070946
+          }
+        },
+        {
+          "name": "no unexpected browser errors",
+          "pass": true,
+          "detail": []
+        }
+      ],
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "failedResponses": [],
+      "runtimePages": [
+        "batch"
+      ],
+      "buffers": {
+        "post": 0,
+        "geometry": 4,
+        "forward": 4
+      },
+      "delta": {
+        "changed": 0,
+        "max": 0,
+        "sum": 0
+      }
+    }
+  },
+  "contract": {
+    "passed": 76,
+    "total": 76,
+    "log": "/private/tmp/gev-stencil-final-contract.log",
+    "sha256": "6ecf0f447728fdbfa153080db98e8e087f207107cd653b2b47e938af72d8369d"
+  },
+  "benchmarkExitCodes": {
+    "uncapped": 1,
+    "paced": 0
+  },
+  "qualityOracle": {
+    "canvas": [
+      1280,
+      800
+    ],
+    "region": {
+      "x": 200,
+      "y": 190,
+      "width": 850,
+      "height": 460
+    },
+    "tolerance": "exact RGB; no threshold relaxed"
+  },
+  "earlierRejectedOracle": {
+    "path": "/private/tmp/gev-stencil-matrix-v3.json",
+    "sha256": "c2aff808d9723bd5714145080e484160be1b49f220c00d12a592389de9f89586",
+    "result": {
+      "checks": [
+        {
+          "name": "catalog: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "catalog: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 40,
+              "draws": 249
+            },
+            "slow": {
+              "renders": 42,
+              "draws": 249
+            }
+          }
+        },
+        {
+          "name": "removing contours fails the pixel oracle",
+          "pass": true,
+          "detail": {
+            "changed": 5489,
+            "max": 131
+          }
+        },
+        {
+          "name": "holes-nadir: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-nadir: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 41,
+              "draws": 72
+            },
+            "slow": {
+              "renders": 47,
+              "draws": 72
+            }
+          }
+        },
+        {
+          "name": "filling the hole fails the same pixel oracle",
+          "pass": true,
+          "detail": {
+            "changed": 5002,
+            "max": 50
+          }
+        },
+        {
+          "name": "holes-oblique: exact original pixels",
+          "pass": false,
+          "detail": {
+            "changed": 260,
+            "max": 1
+          }
+        },
+        {
+          "name": "holes-oblique: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 42,
+              "draws": 115
+            },
+            "slow": {
+              "renders": 50,
+              "draws": 115
+            }
+          }
+        },
+        {
+          "name": "holes-reverse: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-reverse: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 42,
+              "draws": 91
+            },
+            "slow": {
+              "renders": 50,
+              "draws": 91
+            }
+          }
+        },
+        {
+          "name": "no unexpected browser errors",
+          "pass": true,
+          "detail": []
+        }
+      ],
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "failedResponses": [],
+      "runtimePages": [
+        "batch"
+      ]
+    },
+    "disposition": "Oblique camera looked away from custom geometry; whole-page capture mixed canvas and DOM. One case differed by 260 pixels at RGB delta 1, cause not established. Fixed camera targeting; canvas-only capture; strict A/A stability and visible-geometry negative checks. Final strict comparison passes without a tolerance change."
+  },
+  "buildAttemptNote": "A direct geometry QA entry failed the initial-chunk guard. Replaced with a lazy QA-only entry; all final build guards pass. Two captures without a working preview were excluded. Short prototype measurements are diagnostic only.",
+  "screenshots": [
+    {
+      "file": "phase3-w2-stencil-holes-oblique-optimized.webp",
+      "sha256": "e415deeb923f4b9ea9b0adbbce3e5308b187490679384b316a11b0e4005f5c86",
+      "source": "/private/tmp/gev-stencil-final-pixels-holes-oblique-optimized.png"
+    },
+    {
+      "file": "phase3-w2-stencil-catalog-optimized.webp",
+      "sha256": "99cf6f6cdc57d4c1084d30fcefcc535b67adc90fdc272c6c0a0d0249b39bc75a",
+      "source": "/private/tmp/gev-stencil-final-pixels-catalog-optimized.png"
+    }
+  ],
+  "limits": [
+    "Keyless free OSM/terrain; no paid photoreal geometry tested.",
+    "preRender to postRender is CPU/submission/backpressure, not a GPU timer.",
+    "Cinematic Navara and Cesium use their existing different effect chains.",
+    "W2 1.10 uncapped budget and previously documented broader gaps remain open."
+  ]
+}

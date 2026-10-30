@@ -1,5 +1,7 @@
 # Navara render-cost investigation — 2026-10-30
 
+Follow-up: [stencil optimization and fresh Cesium comparison](phase3-w2-stencil-performance.md) reduces combined work p95 from 11.9 to 9.1 ms against its same-build control, with exact pixels in the tested regions. The historical measurements below remain unchanged.
+
 The optimization reduces median uncapped Navara work p95 from **18.1 to 14.6 ms (19.3%)** against the original pipeline rerun on the same build. Cesium measures **4.2 ms**, so Navara remains **3.476×** slower on this metric. The required 1.10 gate still **FAILS**. At normal pacing both engines deliver **600 frames/10 s**, with no measured frames above 33.4 ms.
 
 The previous report's 15.7 ms Navara / 4.2 ms Cesium result was a different session. Against that historical number the reduction is only **7.0%**, from 3.738× to 3.476×. Do not substitute the fresh 18.1 ms control for the historical result or describe the 19.3% as a controlled cross-day improvement. All three fresh optimized samples are faster than all three fresh original-pipeline samples, but the run order and desktop-load variation limit causal precision.
