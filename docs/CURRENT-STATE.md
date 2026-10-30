@@ -2710,6 +2710,20 @@ isCurrent })` gates BOTH halves of the map-stack switch, which is its only
 >   name the panel (`#location-bar` / `#control-panel`) to reach (2,5,0). Adding
 >   a new tray rule means checking it against the pinned variants, not just
 >   against the base rule.
+> - **Dock wings are icon-only from 900px down to 721px (2026-10-28):** at
+>   ≤900px `--dock-side-compact` shrinks the Location and Visual Presets wings
+>   to 4.25rem, open or closed (an open tray pops out above the dock), which is
+>   too narrow for their text labels. The labels used to spill over the voice
+>   control, and the LOCATION label captured taps on the left half of the mic
+>   button (HAL-728). `src/ui/styles/command-dock-trays.css` now sets the
+>   labels to `font-size: 0` and drops their `›`/`‹` chevrons in that band, so
+>   each wing shows only its icon. The text node is unchanged, so
+>   `panelChrome.js` still builds the toggles' "Expand/Collapse …" `aria-label`
+>   and `title` from it; the browser tooltip is the only visible name on hover.
+>   The Cyber HUD layout is excluded: it sets `--dock-side-compact` to
+>   9–9.75rem, which fits its labels. The former ≤620px ellipsis clip is gone:
+>   the phone shell takes over at 720px, so it never applied to a visible
+>   dock.
 > - **LOCATION mini-status is data-only today (2026-08-20):** the collapsed
 >   readout now follows a free-text geocode search as well as preset pills
 >   (`src/locationStatus.js` owns the copy for both), and every other camera
