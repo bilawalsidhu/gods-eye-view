@@ -23,6 +23,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { installTileCache } from './qa/tileCache.mjs';
 import { redact, isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 import sharp from 'sharp';
 import { frozenClockScript } from '../src/tooling/w1Baseline.js';
@@ -107,6 +109,8 @@ async function capture(browser, engineKind) {
   // Its own context: no layer state carried over from the other engine.
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
+  await blockPaidQaMaps(page);
+  await installTileCache(page);
   await page.setViewport({ width: WIDTH, height: HEIGHT });
   const errors = [];
   const expectedPreviewErrors = [];

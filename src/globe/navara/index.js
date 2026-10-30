@@ -22,6 +22,7 @@ import { createNavaraSharpen } from './sharpen.js';
 import { createNavaraMovers } from './movers/index.js';
 import { createNavaraLines } from './lines/index.js';
 import { createNavaraOverlay } from './overlay.js';
+import { createPostSampling } from './postSampling.js';
 import {
   NAVARA_CONTEXT_ATTRIBUTES,
   ACES_FILMIC,
@@ -108,6 +109,7 @@ export async function createNavaraGlobe({
   let engine;
   let overlay = null;
   let removeLook = null;
+  let removePostSampling = null;
   try {
     view = new ThreeView(navaraViewOptions({ container, canvas, pixelRatio }));
     const plugin = new DefaultPlugin();
@@ -127,6 +129,7 @@ export async function createNavaraGlobe({
     );
     // The look's shadowed sun leaked a light per frame (internals.js).
     keepCascadedLightIds(view);
+    removePostSampling = createPostSampling(view);
     // Screen overlays and model display colour after tone mapping (overlay.js).
     overlay = createNavaraOverlay(view);
     engine = createNavaraEngine(view, {
@@ -182,6 +185,7 @@ export async function createNavaraGlobe({
     removeLook = () => removers.forEach((remove) => remove());
   } catch (error) {
     removeLook?.();
+    removePostSampling?.();
     engine?.destroy();
     overlay?.destroy();
     view?.dispose();
@@ -201,6 +205,7 @@ export async function createNavaraGlobe({
       if (destroyed) return;
       destroyed = true;
       removeLook();
+      removePostSampling();
       engine.destroy();
       overlay.destroy();
       view.dispose();

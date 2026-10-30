@@ -9,6 +9,7 @@ import sharp from 'sharp';
 import { installCctvFixture } from './fixtures/w2/cctv.mjs';
 import { watchW1Page, redact } from './qa-browserEvidence.mjs';
 import { computeFrustumGeometry } from '../src/data/cctv.js';
+import { installTileCache } from './qa/tileCache.mjs';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 
 const args = process.argv.slice(2);
@@ -320,6 +321,7 @@ try {
   });
   page = await browser.newPage();
   await blockPaidQaMaps(page, mapPolicy);
+  await installTileCache(page);
   report.browser = await browser.version();
   await page.setViewport({ width: 1440, height: 900 });
   watchW1Page(page, report, {

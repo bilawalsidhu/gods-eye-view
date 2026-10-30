@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import puppeteer from 'puppeteer';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { installTileCache } from './qa/tileCache.mjs';
 import { watchW1Page } from './qa-browserEvidence.mjs';
 import {
   combinedPayloads,
@@ -18,6 +19,7 @@ const base = arg('base-url'),
   output = arg('out'),
   mode = arg('mode') || 'uncapped';
 const diagnostic = process.argv.includes('--diagnostic');
+const baselineSampling = process.argv.includes('--baseline-sampling');
 const denseQuakes = process.argv.includes('--dense-quakes');
 const look = arg('look') || 'minimal';
 if (!['minimal', 'cinematic'].includes(look)) throw new Error('Unknown look');
@@ -74,6 +76,7 @@ const report = {
   mode,
   look,
   diagnostic,
+  baselineSampling,
   denseQuakes,
   workload: denseQuakes
     ? '500 co-located earthquake discs: pathological overlap stress'
@@ -151,6 +154,7 @@ try {
           deviceScaleFactor: 1,
         });
         await blockPaidQaMaps(page);
+        const tileCache = await installTileCache(page);
         const fixture = await installCombinedFixture(page, { denseQuakes });
         watchW1Page(page, report, {
           name: `${kind}-${run}`,
@@ -160,6 +164,19 @@ try {
         await page.evaluateOnNewDocument(() =>
           localStorage.setItem('gev:first-run-mission:v1', 'suppressed'),
         );
+        if (baselineSampling)
+          await page.evaluateOnNewDocument(() => {
+            window.__gevW2NativeProbe = ({ view }) => {
+              const add = view.addEffect.bind(view);
+              view.addEffect = (config) => {
+                if (config.gevPostSampling) {
+                  window.__qaBaselineSampling = true;
+                  return { delete() {} };
+                }
+                return add(config);
+              };
+            };
+          });
         const target = new URL(base);
         target.searchParams.set('engine', kind);
         target.searchParams.set('look', look);
@@ -187,6 +204,12 @@ try {
           ))
         )
           throw new Error('Comparison requires a keyless build');
+        if (
+          baselineSampling &&
+          kind === 'navara' &&
+          !(await page.evaluate(() => window.__qaBaselineSampling === true))
+        )
+          throw new Error('Baseline sampling override did not run');
         await page.evaluate(async (epoch) => {
           const a = window.__godsEyeView;
           await a.styleManager.initialRestorePromise;
@@ -448,6 +471,7 @@ try {
           );
         }
         entry.requests = fixture.requests.length;
+        entry.tileCache = { ...tileCache };
         await fixture.dispose();
       } catch (error) {
         entry.error = error.stack;

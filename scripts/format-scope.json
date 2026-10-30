@@ -1270,5 +1270,7 @@
   "src/layers/recentImagery/render/tiles.test.mjs",
   "src/layers/recentImagery/render/navara.test.mjs",
   "src/ui/imageryBoxNavara.test.mjs",
-  "scripts/qa-w2-imagery.mjs"
+  "scripts/qa-w2-imagery.mjs",
+  "src/globe/navara/postSamplingPass.test.mjs",
+  "scripts/qa-post-sampling.mjs"
 ]
