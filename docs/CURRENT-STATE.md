@@ -1311,6 +1311,33 @@ the low-confidence heading prior. `CCTV_TAIWAN_ENABLED=0` disables the pack;
 `CCTV_TAIWAN_URL` overrides the table URL.
 Gate: `src/data/cctvTaiwan.test.mjs`.
 
+## MnDOT CCTV source pack
+
+The CCTV catalog includes Minnesota DOT cameras statewide. One keyless request
+reads MnDOT's IRIS public camera list (`data.dot.state.mn.us/iris/camera_pub`,
+~1,800 cameras). The request refuses redirects and has a 15-second deadline and
+a 2 MiB response cap. A camera is kept only when the list marks both `publish`
+and `streamable` as literal `true` and its coordinates fall inside Minnesota.
+Cameras are deduplicated by name, ignoring case. The list has no URL field, so each still is
+rebuilt from the validated camera name on the fixed origin
+`https://video.dot.state.mn.us/video/image/metro/<camera>?size=l`. That path
+also serves outstate cameras. The servlet requires `size` and returns its
+native 720×480 frame whatever size is asked for. Names come from MnDOT's
+location text (for example "T.H.36 WB @ Cleveland Ave"), cleaned and capped at
+160 characters. Headings use the carriageway direction (NB/SB/EB/WB) as a
+low-confidence prior, because MnDOT's cameras pan. Other values use the shared
+id-hash prior.
+
+Cameras are ordered nearest downtown Minneapolis and St Paul first.
+`CCTV_MNDOT_MAX_SOURCES` sets the pack cap (default 1,000, bounded to 1–2000).
+The pack shares the 4,000 catalog-wide ceiling round-robin with the other
+packs, so in a default install that share, not the pack cap, decides how many
+load, nearest the two downtowns first. Loading every camera also needs a higher
+`CCTV_MAX_SOURCES` and other packs lowered or switched off. A failed list contributes an empty pack until the next catalog
+refresh. `CCTV_MNDOT_ENABLED=0` disables the pack, and `CCTV_MNDOT_URL`
+overrides the list URL.
+Gate: `src/data/cctvMndot.test.mjs`.
+
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the
