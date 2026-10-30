@@ -238,10 +238,17 @@ export function createUsgsWaterStore({
 } = {}) {
   const requestTimes = [];
   /** Log a failure with the API key (if any) masked out of its message. */
-  function warn(label, error) {
+  function redact(text) {
     const key = usgsWaterApiKey(env);
-    const message = String(error?.message || error);
-    log.warn?.(label, key ? message.split(key).join('[redacted]') : message);
+    if (!key) return text;
+    return text
+      .split(key)
+      .join('[redacted]')
+      .split(encodeURIComponent(key))
+      .join('[redacted]');
+  }
+  function warn(label, error) {
+    log.warn?.(label, redact(String(error?.message || error)));
   }
   const names = new Map();
   let namesLoaded = false;
@@ -284,7 +291,7 @@ export function createUsgsWaterStore({
         /* no readable detail */
       }
       throw new Error(
-        `USGS HTTP ${response.status}${detail ? `: ${String(detail).slice(0, 160)}` : ''}`,
+        `USGS HTTP ${response.status}${detail ? `: ${redact(String(detail)).slice(0, 160)}` : ''}`,
       );
     }
     // Throws when the body passes maxBytes (the stream is cancelled).
