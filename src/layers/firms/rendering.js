@@ -1,7 +1,14 @@
 import * as Cesium from 'cesium';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
-import { LOD_LEVELS, CONTEXT_TOP_N } from './policy.js';
+import { buildHeatRaster } from '../../data/firmsHeatRaster.js';
+import {
+  LOD_LEVELS,
+  CONTEXT_TOP_N,
+  HEAT_RASTER,
+  HEAT_REBUILD_MS,
+} from './policy.js';
+import { createHeatImagery } from './heatImagery.js';
 
 export function createRendering({
   layerState,
@@ -29,8 +36,11 @@ export function createRendering({
       !layerState._dataSource ||
       !layerState._fires.length ||
       !layerState._viewer
-    )
+    ) {
+      // A filter that leaves nothing shown must not leave the old heat behind.
+      if (!layerState._fires.length) layerState._heatImagery?.setShow(false);
       return false;
+    }
     const lodIndex = components.viewport.selectLodIndex(
       components.viewport.cameraHeight(),
     );
@@ -54,7 +64,7 @@ export function createRendering({
     if (lod.mode === 'detections') {
       renderDetections(lod, bounds);
     } else {
-      renderCells(aggregateFires(lod, bounds), lod, bounds);
+      renderHeat(lod, bounds);
     }
     return true;
   }
@@ -118,65 +128,89 @@ export function createRendering({
     return clipped;
   }
 
+  /** The heat imagery adapter, created on first use. */
+
+  function heatImagery() {
+    if (!layerState._heatImagery) {
+      layerState._heatImagery = createHeatImagery({
+        cesium: Cesium,
+        getHost: () =>
+          layerState._imageryHost?.() ?? {
+            collection: layerState._viewer?.imageryLayers ?? null,
+            kind: 'globe',
+          },
+      });
+    }
+    return layerState._heatImagery;
+  }
+
+  /** Build the heat raster from the shown set and drape it. */
+
+  function rebuildHeatRaster() {
+    clearTimeout(layerState._heatRebuildTimer);
+    layerState._heatRebuildTimer = null;
+    if (layerState._destroyed) return;
+    layerState._heatRaster = buildHeatRaster(layerState._fires, HEAT_RASTER);
+    heatImagery().setRaster(layerState._heatRaster);
+  }
+
   /**
-   * Render aggregated heat cells (global/regional bands) as ground-clamped
-   * rectangles. Cell labels do NOT live on the entities anymore — they go
-   * through the same unclamped, screen-space-decluttered label pipeline as
-   * detections (see {@link rebuildAmbientLabels}).
-   * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
+   * Make sure the draped heatmap matches the shown set. The first paint is
+   * immediate; later rebuilds (filter drags, refreshes) trail by
+   * HEAT_REBUILD_MS and keep the previous heatmap on screen meanwhile.
+   */
+
+  function ensureHeatRaster() {
+    if (layerState._heatRaster) return;
+    if (!heatImagery().hasRaster()) {
+      rebuildHeatRaster();
+      return;
+    }
+    clearTimeout(layerState._heatRebuildTimer);
+    layerState._heatRebuildTimer = setTimeout(
+      rebuildHeatRaster,
+      HEAT_REBUILD_MS,
+    );
+  }
+
+  /**
+   * Far bands (global/regional): a Snap Map–style heatmap draped over the
+   * globe, transparent where nothing burns, plus the decluttered "N FIRES"
+   * cards from the coarse aggregation. No entities and no sprites are drawn;
+   * cards go through the same screen-space label pipeline as detections
+   * (see {@link rebuildAmbientLabels}).
    * @param {Object} lod - Active LOD descriptor.
    * @param {?Object} bounds - Padded view bounds in degrees, or null.
    */
 
-  function renderCells(cells, lod, bounds) {
+  function renderHeat(lod, bounds) {
     ensureDetectionCollections();
     layerState._dataSource.entities.removeAll();
     if (layerState._billboards) layerState._billboards.removeAll();
     layerState._pickIndexById.clear();
     layerState._cullPositions.length = 0;
-    layerState._cellCount = cells.length;
-    const maxScore = Math.max(1, ...cells.map(components.model.heatScore));
 
+    const imagery = heatImagery();
+    // The map stack may have changed since the last far render.
+    imagery.rehome();
+    ensureHeatRaster();
+    imagery.setShow(layerState._enabled);
+
+    const cells = aggregateFires(lod, bounds);
+    layerState._cellCount = cells.length;
     layerState._labelCandidates = [];
     layerState._labelLodDistance = lod.labelDistance;
 
+    // Cells arrive heat-sorted, so candidate order doubles as label priority.
     for (const cell of cells) {
-      const score = components.model.heatScore(cell);
-      const normalized = Math.min(1, Math.sqrt(score / maxScore));
-      const alpha = 0.16 + normalized * 0.5;
-      const color = components.model.heatColor(normalized, alpha);
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
-      const position = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0);
-
-      layerState._dataSource.entities.add({
-        rectangle: {
-          coordinates: Cesium.Rectangle.fromDegrees(
-            cell.lonCell,
-            cell.latCell,
-            cell.lonCell + lod.gridDegrees,
-            cell.latCell + lod.gridDegrees,
-          ),
-          material: new Cesium.ColorMaterialProperty(color),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        },
-        position,
-        properties: {
-          count: cell.count,
-          intensity: score,
-          maxFrp: cell.maxFrp,
-          night: cell.night,
-        },
-      });
-
-      // Cells arrive heat-sorted, so candidate order doubles as label priority.
-      // Accent is resolved here because `normalized` only exists in this walk.
       layerState._labelCandidates.push({
-        position,
+        position: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0),
         cullPosition: components.model.cellCullPosition(centerLon, centerLat),
         fire: null,
         cell,
-        accent: components.model.cellAccent(normalized),
+        accent: components.model.cellCardAccent(cell),
       });
     }
 
@@ -202,6 +236,7 @@ export function createRendering({
    */
 
   function renderDetections(lod, bounds) {
+    layerState._heatImagery?.setShow(false);
     ensureDetectionCollections();
     layerState._dataSource.entities.removeAll();
     if (!layerState._billboards) return;
@@ -345,7 +380,7 @@ export function createRendering({
   return {
     renderCurrentLod,
     aggregateFires,
-    renderCells,
+    renderHeat,
     renderDetections,
     ensureDetectionCollections,
     removeDetectionCollections,

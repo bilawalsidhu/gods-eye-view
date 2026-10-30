@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { DEFAULT_FIRE_FILTER } from '../../data/firmsIntensity.js';
 
 export function createFirmsState({ services, config }) {
   const layerState = {};
@@ -39,11 +40,38 @@ export function createFirmsState({ services, config }) {
 
   layerState._error = null;
 
+  /** Every adapted detection in the current payload, before the filter. */
+
+  layerState._allFires = [];
+
+  /** `_allFires` sorted by FRP descending, once per payload. */
+
+  layerState._allFiresByFrp = [];
+
+  /**
+   * The detections that pass the intensity filter — the ONLY set rendering,
+   * selection, cells, the top-fires query and the analyst records ever walk.
+   */
+
   layerState._fires = [];
 
   layerState._firesByFrp = [];
 
+  /** Shown (filtered) detection count. */
+
   layerState._count = 0;
+
+  /** Loaded detection count before the filter ("N of M shown"). */
+
+  layerState._totalCount = 0;
+
+  /** Minimum FRP (MW) and confidence mode; see firmsIntensity.js. */
+
+  layerState._filter = { ...DEFAULT_FIRE_FILTER };
+
+  /** Panel callback: repaint the row controls (counter) after a load. */
+
+  layerState._rowControlsListener = null;
 
   layerState._cellCount = 0;
 
@@ -102,6 +130,25 @@ export function createFirmsState({ services, config }) {
    */
 
   layerState._cellCacheByGrid = new Map();
+
+  /**
+   * Heat raster for the far bands (firmsHeatRaster.js); null = stale, rebuilt
+   * on the next far render. Cleared with the cell cache on every new shown set.
+   */
+
+  layerState._heatRaster = null;
+
+  /** Pending debounced heat rebuild (see HEAT_REBUILD_MS). */
+
+  layerState._heatRebuildTimer = null;
+
+  /** Imagery adapter (heatImagery.js), created on the first far render. */
+
+  layerState._heatImagery = null;
+
+  /** Shell-provided imagery host resolver; falls back to viewer.imageryLayers. */
+
+  layerState._imageryHost = null;
 
   /** Camera idle snapshot so the throttled LOD check is ~free when parked. */
 

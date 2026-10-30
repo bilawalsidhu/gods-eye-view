@@ -2102,6 +2102,45 @@ Generated style sliders use the same name as their visible parameter label.
 The first-run suppression checkbox keeps its native wrapping label, so its
 accessible name remains "Don't show this again". Control behavior is unchanged.
 
+## Active Fires intensity filter and color ramp
+
+Every FIRMS detection is colored by fire radiative power on a six-stop cold →
+hot ramp: blue from 0 MW, teal from 5, lime from 20, amber from 50, orange from
+100 and red from 300 MW (`FRP_RAMP` in `src/data/firmsIntensity.js`). Glow
+sprites and fire-card accents read that ramp; confidence and brightness do
+not affect the color.
+
+At far zoom (camera above ~3,000 km) the layer drapes a Snap Map–style
+heatmap instead of individual markers: the shown detections are binned on a
+global 2048 × 1024 grid, each weighted by its FRP in megawatts (so heat is
+radiated power, and raising the FRP slider does not dim areas where strong fires
+burn), Gaussian-blurred,
+normalized on a log scale against the 99.5th percentile and mapped from blue
+through cyan, green, yellow and orange to red. Nothing is painted where
+nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
+tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
+on each data refresh or filter change (the first paint at once, later ones
+150 ms after the last change) and hidden once markers take over below
+~750 km. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
+areas; their accent is the strongest fire's FRP color.
+
+The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale
+whose track is painted with the ramp and ticked at the same six values (its
+value reads "All" or "≥ N MW"), a "Confidence" switch with All / Nominal+ /
+High, and an "N of M shown" counter. The default is 0 MW and
+All, because many of the strongest detections are rated low confidence. The
+filter runs once in `ingestion.applyFilter()` before rendering, so markers,
+cards, the heatmap, the shared context store, the top-fires query and the
+analyst records all see one filtered set; a selected fire that no longer passes
+is deselected. The layer state keeps both options under the `w` (`local-firms`)
+share token as `f` (whole megawatts, 0–10,000) and `c` (`a`, `n`, `h`),
+including the short share codec; a link without them restores the defaults.
+
+The `get_active_fires` tool accepts its own `min_frp_mw` and `confidence`
+(`all`, `nominal`, `high`) arguments, independent of the panel's setting, and
+names the applied criteria in its notes. Stale-snapshot and missing-source
+reporting are unchanged.
+
 ## FIRMS source status
 
 The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.

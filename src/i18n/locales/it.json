@@ -2996,5 +2996,18 @@
   "ESC to dismiss": "ESC per chiudere",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Suggerimento: il pulsante GEV MIC nel dock ti permette di parlare con la mappa.",
   "Malformed cyclone snapshot": "Snapshot dei cicloni non valido",
-  "Cyclone request timed out": "La richiesta dei cicloni è andata in timeout"
+  "Cyclone request timed out": "La richiesta dei cicloni è andata in timeout",
+  "fire confidence filter|All": "Tutti",
+  "fire confidence filter|Nominal+": "Nominale+",
+  "fire confidence filter|High": "Alta",
+  "Every detection — many of the strongest fires are rated low confidence": "Tutti i rilevamenti — molti degli incendi più intensi hanno confidenza bassa",
+  "Nominal and high confidence detections": "Rilevamenti con confidenza nominale e alta",
+  "High confidence detections only": "Solo rilevamenti con confidenza alta",
+  "Fire intensity (FRP)": "Intensità (FRP)",
+  "≥ {value} MW": "≥ {value} MW",
+  "Confidence": "Confidenza",
+  "Minimum fire radiative power, megawatts": "Potenza radiativa minima dell'incendio, in megawatt",
+  "fire intensity filter|All": "Tutti",
+  "Detection confidence": "Confidenza del rilevamento",
+  "{shown} of {total} shown": "{shown} di {total} mostrati"
 }

@@ -68,11 +68,27 @@ test('buildFireCard: power that rounds to 10 MW drops the decimal', () => {
   assert.equal(selected.title, 'FIRE · 10 MW');
 });
 
-test('buildFireCard: SNPP satellite code renders as SNPP, weak fire is not red', () => {
+test('buildFireCard: SNPP satellite code renders as SNPP, weak fire is blue', () => {
   const card = buildFireCard({ fire: fire({ satellite: 'N', frp: 0.8, confidence: 0.3 }), position: {} }, NOW);
   assert.match(card.details[0], /SNPP$/);
   assert.equal(card.title, '▲ 0.8 MW');
-  assert.notEqual(card.accent, accentForSeverity('red'));
+  assert.equal(card.accent, accentForSeverity('blue'));
+});
+
+test('buildFireCard: accent steps through the FRP ramp at 5 · 20 · 50 · 100 · 300 MW', () => {
+  const accentAt = (frp) =>
+    buildFireCard({ fire: fire({ frp }), position: {} }, NOW).accent;
+  assert.equal(accentAt(4.9), accentForSeverity('blue'));
+  assert.equal(accentAt(5), accentForSeverity('teal'));
+  assert.equal(accentAt(20), accentForSeverity('lime'));
+  assert.equal(accentAt(50), accentForSeverity('amber'));
+  assert.equal(accentAt(100), accentForSeverity('orange'));
+  assert.equal(accentAt(300), accentForSeverity('red'));
+  // Confidence never moves the color: a low-confidence 864 MW fire stays red.
+  assert.equal(
+    buildFireCard({ fire: fire({ frp: 864, confidence: 0.3 }), position: {} }, NOW).accent,
+    accentForSeverity('red'),
+  );
 });
 
 test('buildSelectedFireCard: full detail card with coords, selected flag, no fade', () => {
@@ -125,7 +141,7 @@ test('buildCellCard: singular noun and missing-age omission', () => {
   const card = buildCellCard(candidate, NOW);
   assert.equal(card.title, '1 FIRE');
   assert.equal(card.details[0], 'max 9.9 MW');
-  assert.equal(card.accent, accentForSeverity('yellow'), 'missing accent defaults to yellow');
+  assert.equal(card.accent, accentForSeverity('blue'), 'missing accent defaults to the coldest stop');
 });
 
 test('FIRMS host policy keeps ambient cards bounded and selected cards protected', () => {

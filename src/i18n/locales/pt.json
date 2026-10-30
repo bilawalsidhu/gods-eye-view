@@ -2996,5 +2996,18 @@
   "Begin with a clean globe": "Comece com um globo limpo",
   "Don't show this again": "Não mostrar novamente",
   "ESC to dismiss": "ESC para fechar",
-  "Tip: the GEV MIC button in the dock lets you talk to the map.": "Dica: o botão GEV MIC no dock permite falar com o mapa."
+  "Tip: the GEV MIC button in the dock lets you talk to the map.": "Dica: o botão GEV MIC no dock permite falar com o mapa.",
+  "fire confidence filter|All": "Todas",
+  "fire confidence filter|Nominal+": "Nominal+",
+  "fire confidence filter|High": "Alta",
+  "Every detection — many of the strongest fires are rated low confidence": "Todas as detecções — muitos dos incêndios mais intensos têm confiança baixa",
+  "Nominal and high confidence detections": "Detecções de confiança nominal e alta",
+  "High confidence detections only": "Somente detecções de confiança alta",
+  "Fire intensity (FRP)": "Intensidade (FRP)",
+  "≥ {value} MW": "≥ {value} MW",
+  "Confidence": "Confiança",
+  "Minimum fire radiative power, megawatts": "Potência radiativa mínima do fogo, em megawatts",
+  "fire intensity filter|All": "Todas",
+  "Detection confidence": "Confiança da detecção",
+  "{shown} of {total} shown": "{shown} de {total} exibidas"
 }

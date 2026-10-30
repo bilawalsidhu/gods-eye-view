@@ -1043,6 +1043,118 @@ html:not([lang='en']) .data-row-list-text {
   padding-top: 3px;
   overflow-wrap: anywhere;
 }
+
+/* Optional per-layer one-of-many switch (Active Fires confidence). The shared
+   .gev-segmented surface, sized to the chip row. */
+.data-toggle-controls .data-toggle-segmented {
+  flex-basis: 100%;
+  max-width: 220px;
+}
+
+.data-toggle-segmented-label {
+  flex-basis: 100%;
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.data-toggle-controls .data-toggle-segment {
+  min-height: 20px;
+  padding: 3px 6px;
+  font-size: 8px;
+  letter-spacing: 0.8px;
+}
+
+/* Optional per-layer quantitative slider (Active Fires minimum FRP). The
+   track is painted by the layer (`--slider-track`, a stepped color ramp), so
+   the slider doubles as the marker legend; ticks sit under their thresholds. */
+.data-toggle-slider {
+  flex-basis: 100%;
+  display: grid;
+  gap: 2px;
+  padding-top: 2px;
+}
+
+.data-toggle-slider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.data-toggle-slider-value {
+  min-width: 0;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: none;
+}
+
+.data-toggle-slider-input {
+  height: 14px;
+}
+
+.data-toggle-slider-input::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--slider-track, rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.data-toggle-slider-input::-moz-range-track,
+.data-toggle-slider-input::-moz-range-progress {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--slider-track, rgba(255, 255, 255, 0.08));
+}
+
+.data-toggle-slider-input::-webkit-slider-thumb {
+  width: 11px;
+  height: 11px;
+  margin-top: -3px;
+  background: var(--text-primary);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 0 6px rgba(255, 255, 255, 0.35);
+}
+
+.data-toggle-slider-input::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  background: var(--text-primary);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 0 6px rgba(255, 255, 255, 0.35);
+}
+
+.data-toggle-slider-ticks {
+  position: relative;
+  height: 10px;
+  margin: 0 5px;
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+}
+
+.data-toggle-slider-tick {
+  position: absolute;
+  top: 0;
+  left: var(--at);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.data-toggle-slider-tick:first-child {
+  transform: none;
+}
 /* ── Local RTL-SDR card (FM + Local ADS-B receiver) ── */
 .sdr-radio-card {
   display: grid;

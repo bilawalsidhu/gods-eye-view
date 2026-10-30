@@ -1,4 +1,5 @@
 import { syncChipGroup } from './chipGroup.js';
+import { syncSegmentedGroup, syncSliderBlock } from './rowFilterControls.js';
 import { syncRowList } from './rowList.js';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
@@ -390,17 +391,41 @@ export class LayerPanel {
           const controls = document.createElement('div');
           controls.className = 'data-toggle-controls';
           this._bind(controls, 'click', (event) => {
-            const button = event.target?.closest?.('.data-toggle-chip');
+            const button =
+              event.target?.closest?.('.data-toggle-chip') ||
+              event.target?.closest?.('.data-toggle-segment');
             if (!button || button.disabled) return;
             // Re-read the live descriptor rather than trusting the rendered
             // chip, so a stale row can never apply an inverted toggle.
-            const chip = this._rowControlsFor(layer.id)?.chips?.find(
-              (entry) => entry.id === button.dataset.chipId,
-            );
+            const live = this._rowControlsFor(layer.id);
+            const chip =
+              live?.chips?.find(
+                (entry) => entry.id === button.dataset.chipId,
+              ) ||
+              live?.segmented?.options?.find(
+                (entry) => entry.id === button.dataset.chipId,
+              );
             if (!chip || chip.disabled || !this.isEnabled(layer.id)) return;
             if (typeof chip.onClick === 'function') chip.onClick();
             else if (chip.params)
               this.setLayerParams(layer.id, chip.params, { origin: 'user' });
+          });
+          // A row slider (e.g. the Active Fires minimum-FRP filter) maps its
+          // position to params through the live descriptor on every tick.
+          this._bind(controls, 'input', (event) => {
+            const input = event.target;
+            if (!input?.matches?.('.data-toggle-slider-input')) return;
+            const slider = this._rowControlsFor(layer.id)?.slider;
+            if (
+              !slider ||
+              slider.id !== input.dataset.sliderId ||
+              typeof slider.params !== 'function' ||
+              !this.isEnabled(layer.id)
+            )
+              return;
+            this.setLayerParams(layer.id, slider.params(input.value), {
+              origin: 'user',
+            });
           });
           row.appendChild(controls);
           // An ordered list below the chips, for a layer whose row carries a
@@ -523,13 +548,30 @@ export class LayerPanel {
     const chips = controls?.chips || [];
     const legend = controls?.legend || [];
     const infoText = controls?.info;
+    const slider = controls?.slider || null;
+    const segmented = controls?.segmented || null;
     this._syncRowList(listContainer, controls?.list || null);
-    container.hidden = chips.length === 0 && legend.length === 0 && !infoText;
+    container.hidden =
+      chips.length === 0 &&
+      legend.length === 0 &&
+      !infoText &&
+      !slider &&
+      !segmented;
 
     const info = container._rowControlsInfo || null;
     const firstLegend = container.querySelector('.data-toggle-legend-item');
 
-    syncChipGroup(container, chips, { before: firstLegend || info });
+    // Order: chips, switch, slider, legend, info.
+    syncSegmentedGroup(container, segmented, { before: firstLegend || info });
+    const switchNode = container.querySelector('.data-toggle-segmented');
+    syncSliderBlock(container, slider, {
+      before: switchNode?.nextSibling || firstLegend || info,
+    });
+    const firstControl =
+      switchNode || container.querySelector('.data-toggle-slider');
+    syncChipGroup(container, chips, {
+      before: firstControl || firstLegend || info,
+    });
 
     const legendSignature = JSON.stringify(
       legend.map(({ label, color, count, blurb }) => [

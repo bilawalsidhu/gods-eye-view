@@ -2855,6 +2855,19 @@
     "other": "{count} 个地标"
   },
   "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 发布这些 KMZ 产品。新上传的内容会在数秒内被检测到，并自动替换旧版本。点击标记查看报告。",
+  "fire confidence filter|All": "全部",
+  "fire confidence filter|Nominal+": "标称+",
+  "fire confidence filter|High": "高",
+  "Every detection — many of the strongest fires are rated low confidence": "所有检测——许多最强的火点置信度为低",
+  "Nominal and high confidence detections": "标称和高置信度的检测",
+  "High confidence detections only": "仅高置信度的检测",
+  "Fire intensity (FRP)": "火势强度 (FRP)",
+  "≥ {value} MW": "≥ {value} MW",
+  "Confidence": "置信度",
+  "Minimum fire radiative power, megawatts": "最小火辐射功率（兆瓦）",
+  "fire intensity filter|All": "全部",
+  "Detection confidence": "检测置信度",
+  "{shown} of {total} shown": "显示 {shown} / {total}",
   "routing busy — too many routes at once": "路线服务繁忙：同时请求的路线过多",
   "route proxy error": "路线代理出错"
 }

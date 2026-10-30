@@ -392,3 +392,78 @@ test('disable cancels a pending source and a late response cannot repopulate the
     assert.equal(h.layer.getStats().loading, false);
   } finally { h.layer.destroy(h.viewer); h.cleanup(); }
 });
+
+test('far zoom drapes one heatmap and draws no rectangles; markers and disable hide it', () => {
+  // A canvas stub for the heat drape and the detection glow sprites.
+  const priorDocument = globalThis.document;
+  const restoreDocument = () => {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  };
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({
+        createImageData: (w, hh) => ({
+          data: new Uint8ClampedArray(w * hh * 4),
+        }),
+        putImageData() {},
+        createRadialGradient: () => ({ addColorStop() {} }),
+        fillRect() {},
+      }),
+      toDataURL: () => 'data:image/png;base64,AAAA',
+    }),
+  };
+  const h = harness({
+    fires: [makeFire(), makeFire({ index: 8, lat: 30.6, lon: -98.3, frp: 12 })],
+    withDataSource: true,
+    cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 12_000_000),
+  });
+  const added = [];
+  const removed = [];
+  h.viewer.scene.primitives = {
+    add() {},
+    remove() {},
+    raiseToTop() {},
+    contains: () => true,
+  };
+  h.viewer.scene.frameState = { mode: Cesium.SceneMode.SCENE3D };
+  try {
+    const collection = {
+      addImageryProvider: (provider) => {
+        const layer = { provider, show: true };
+        added.push(layer);
+        return layer;
+      },
+      remove: (layer, destroy) => removed.push({ layer, destroy }),
+      raiseToTop() {},
+    };
+    h.layer.attachShellServices({
+      imageryHost: () => ({ kind: 'globe', collection }),
+    });
+    h.layer._renderLodForTest('global');
+    assert.equal(added.length, 1, 'one heat imagery layer');
+    assert.equal(added[0].show, true);
+    assert.equal(h.layer._entityCountForTest(), 0, 'no rectangle entities');
+    assert.ok(h.published.length > 0, 'the far band still paints cards');
+
+    h.layer._renderLodForTest('regional');
+    assert.equal(added.length, 1, 'switching far bands reuses the raster');
+
+    h.layer._renderLodForTest('close');
+    assert.equal(added[0].show, false, 'the markers band hides the heatmap');
+
+    h.layer._renderLodForTest('global');
+    assert.equal(added[0].show, true);
+    h.layer.disable();
+    assert.equal(added[0].show, false, 'disable hides the heatmap');
+
+    h.layer.destroy(h.viewer);
+    assert.deepEqual(
+      removed.map((entry) => [entry.layer, entry.destroy]),
+      [[added[0], true]],
+    );
+  } finally {
+    h.cleanup();
+    restoreDocument();
+  }
+});

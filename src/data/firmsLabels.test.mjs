@@ -9,11 +9,16 @@ import {
   formatFrpMw,
 } from './firmsLabels.js';
 
-test('FIRMS formatting helpers retain the shipped severity palette', () => {
-  assert.equal(accentForSeverity('red'), '224, 82, 82');
-  assert.equal(accentForSeverity('orange'), '240, 178, 62');
-  assert.equal(accentForSeverity('yellow'), '244, 227, 108');
-  assert.equal(accentForSeverity('chartreuse'), accentForSeverity('yellow'));
+test('FIRMS card accents are the six FRP ramp stops, coldest as the fallback', () => {
+  // Portolan hue order; blue #4a5bd4 … red #d1382a (HAL-675).
+  assert.equal(accentForSeverity('blue'), '74, 91, 212');
+  assert.equal(accentForSeverity('teal'), '57, 160, 168');
+  assert.equal(accentForSeverity('lime'), '201, 207, 74');
+  assert.equal(accentForSeverity('amber'), '242, 177, 52');
+  assert.equal(accentForSeverity('orange'), '232, 114, 44');
+  assert.equal(accentForSeverity('red'), '209, 56, 42');
+  assert.equal(accentForSeverity('yellow'), accentForSeverity('blue'));
+  assert.equal(accentForSeverity('chartreuse'), accentForSeverity('blue'));
 });
 
 test('FIRMS power that rounds to 10 MW drops the decimal', () => {

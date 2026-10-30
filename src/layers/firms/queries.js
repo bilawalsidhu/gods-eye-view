@@ -1,6 +1,18 @@
 import { fireDetectionKey } from '../../data/firmsLabels.js';
-import { t } from '../../i18n/index.js';
-import { REFRESH_INTERVAL_MS } from './policy.js';
+import {
+  FIRMS_CONFIDENCE_MODES,
+  FRP_SLIDER_TICKS,
+  firePassesFilter,
+  frpForSliderPosition,
+  normalizeFireFilter,
+  rampTrackGradient,
+  sliderPositionForFrp,
+} from '../../data/firmsIntensity.js';
+import { formatNumber, t } from '../../i18n/index.js';
+import { LOD_LEVELS, REFRESH_INTERVAL_MS } from './policy.js';
+
+/** Slider resolution: whole-percent positions along the log axis. */
+const SLIDER_STEPS = 1000;
 
 export function createQueries({
   layerState,
@@ -10,6 +22,25 @@ export function createQueries({
   feed,
 }) {
   const { id, name, icon, source } = config;
+
+  /** Whole-megawatt label for a slider value or tick ("0", "20", "1 000"). */
+  function frpLabel(frp) {
+    return formatNumber(frp, { maximumFractionDigits: 0 });
+  }
+
+  const confidenceLabels = () => ({
+    all: t('All', { context: 'fire confidence filter' }),
+    nominal: t('Nominal+', { context: 'fire confidence filter' }),
+    high: t('High', { context: 'fire confidence filter' }),
+  });
+
+  const confidenceTitles = () => ({
+    all: t(
+      'Every detection — many of the strongest fires are rated low confidence',
+    ),
+    nominal: t('Nominal and high confidence detections'),
+    high: t('High confidence detections only'),
+  });
 
   const methods = {
     /** Return the selected detection as a plain record for application consumers. */
@@ -52,6 +83,110 @@ export function createQueries({
     updateInterval: REFRESH_INTERVAL_MS,
 
     /**
+     * The intensity filter as layer options (share token `w`, owner
+     * `local-firms` in layerState.js).
+     * @returns {{minFrp: number, confidence: string}}
+     */
+    getParams() {
+      return { ...layerState._filter };
+    },
+
+    /**
+     * Apply a (partial) intensity filter. Invalid fields keep their current
+     * value. The filter runs in one place (ingestion.applyFilter) and the LOD
+     * rebuild re-derives markers, cells, cards and context registrations from
+     * the shown set; a selected fire that no longer passes is deselected.
+     * @param {{minFrp?: number, confidence?: string}} params
+     * @returns {boolean} True — the request is always accepted.
+     */
+    setParams(params = {}) {
+      const next = normalizeFireFilter(params, layerState._filter);
+      if (
+        next.minFrp === layerState._filter.minFrp &&
+        next.confidence === layerState._filter.confidence
+      )
+        return true;
+      layerState._filter = next;
+      if (!layerState._allFires.length) return true;
+      components.ingestion.applyFilter();
+      if (
+        layerState._selectedFire &&
+        !firePassesFilter(layerState._selectedFire, next)
+      ) {
+        components.selection.clearFireSelection();
+      }
+      if (layerState._enabled) components.rendering.renderCurrentLod(true);
+      layerState._rowControlsListener?.();
+      return true;
+    },
+
+    /**
+     * Row controls under the Active Fires row: the log-scale minimum-FRP
+     * slider whose track is painted with the intensity ramp (so it doubles as
+     * the legend), the All / Nominal+ / High confidence switch, and the
+     * "N of M shown" counter.
+     */
+    getRowControls() {
+      const { minFrp, confidence } = layerState._filter;
+      const labels = confidenceLabels();
+      const titles = confidenceTitles();
+      const shown = layerState._count;
+      const total = layerState._totalCount;
+      return {
+        slider: {
+          id: 'min-frp',
+          label: t('Fire intensity (FRP)'),
+          ariaLabel: t('Minimum fire radiative power, megawatts'),
+          valueText:
+            minFrp > 0
+              ? t('≥ {value} MW', { value: frpLabel(minFrp) })
+              : t('All', { context: 'fire intensity filter' }),
+          min: 0,
+          max: SLIDER_STEPS,
+          step: 1,
+          value: Math.round(sliderPositionForFrp(minFrp) * SLIDER_STEPS),
+          track: rampTrackGradient(),
+          ticks: FRP_SLIDER_TICKS.map((frp) => ({
+            at: sliderPositionForFrp(frp),
+            label: frpLabel(frp),
+          })),
+          params: (value) => ({
+            minFrp: frpForSliderPosition(Number(value) / SLIDER_STEPS),
+          }),
+        },
+        segmented: {
+          id: 'confidence',
+          label: t('Confidence'),
+          ariaLabel: t('Detection confidence'),
+          options: FIRMS_CONFIDENCE_MODES.map((mode) => ({
+            id: `confidence-${mode}`,
+            label: labels[mode],
+            title: titles[mode],
+            active: mode === confidence,
+            params: { confidence: mode },
+          })),
+        },
+        info: total
+          ? t('{shown} of {total} shown', {
+              shown: formatNumber(shown),
+              total: formatNumber(total),
+            })
+          : '',
+      };
+    },
+
+    /**
+     * Install the panel's "row controls changed" callback: a load or a filter
+     * change moves the counter, and nothing else repaints the row before the
+     * next scheduled refresh.
+     * @param {(() => void)|null} listener
+     */
+    setRowControlsListener(listener) {
+      layerState._rowControlsListener =
+        typeof listener === 'function' ? listener : null;
+    },
+
+    /**
      * Layer stats for the data panel. Degraded feed states surface through
      * `error` (established qa-failstate pattern: a dead feed must never look
      * like a healthy empty layer) with a matching human `loadingLabel`:
@@ -84,7 +219,9 @@ export function createQueries({
         });
       }
       return {
+        // Shown (filtered) detections; `total` is the loaded payload.
         count: layerState._count,
+        total: layerState._totalCount,
         cells: layerState._cellCount,
         lastUpdate: layerState._lastUpdate,
         loading: layerState._loading,
@@ -172,12 +309,29 @@ export function createQueries({
       return result;
     },
 
+    /** Test seam: render one named LOD band against a near-global view. */
+    _renderLodForTest(lodId) {
+      const lod = LOD_LEVELS.find((level) => level.id === lodId);
+      if (lod.mode === 'detections')
+        components.rendering.renderDetections(lod, null);
+      else components.rendering.renderHeat(lod, null);
+    },
+
+    /** Test seam: entities drawn by the layer's data source. */
+    _entityCountForTest() {
+      return layerState._dataSource?.entities?.values?.length ?? 0;
+    },
+
     /** Test seam that binds the production click path and indexes. */
     _bindInteractionForTest(viewer, fires = []) {
       layerState._viewer = viewer;
       layerState._enabled = true;
+      layerState._allFires = fires;
+      layerState._allFiresByFrp = [...fires];
       layerState._fires = fires;
       layerState._firesByFrp = [...fires];
+      layerState._count = fires.length;
+      layerState._totalCount = fires.length;
       layerState._pickIndexById.clear();
       layerState._labelLodDistance = 1e7;
       layerState._labelCandidates = fires.map((fire) => {

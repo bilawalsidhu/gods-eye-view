@@ -4,6 +4,8 @@
  * dedicated card canvas moved into the shared world-overlay host.
  */
 
+import { FRP_RAMP, hexToRgb } from './firmsIntensity.js';
+
 /** Shipped ambient FIRMS card ceiling. Selected fires bypass this cohort. */
 export const FIRMS_AMBIENT_COHORT_LIMIT = 18;
 export const FIRMS_OVERLAY_SOURCE_ID = 'firms';
@@ -23,20 +25,23 @@ export function fireDetectionKey(fire) {
   return `firms:${lat}:${lon}:${acq}:${source}`;
 }
 
-/** Severity accent palette — matches the FIRMS glow-sprite color stops. */
-const ACCENT_RGB = Object.freeze({
-  red: '224, 82, 82',
-  orange: '240, 178, 62',
-  yellow: '244, 227, 108',
-});
+/**
+ * Severity accent palette — the FIRMS glow-sprite color stops (the six-stop
+ * FRP ramp in firmsIntensity.js) as "r, g, b" strings for card accents.
+ */
+const ACCENT_RGB = Object.freeze(
+  Object.fromEntries(
+    FRP_RAMP.map((stop) => [stop.name, hexToRgb(stop.hex).join(', ')]),
+  ),
+);
 
 /**
- * Severity stop name → "r, g, b" accent string (defaults to yellow).
- * @param {string} stopName - 'red' | 'orange' | 'yellow'.
+ * Severity stop name → "r, g, b" accent string (defaults to the coldest stop).
+ * @param {string} stopName - A FRP_RAMP stop name ('blue' … 'red').
  * @returns {string}
  */
 export function accentForSeverity(stopName) {
-  return ACCENT_RGB[stopName] || ACCENT_RGB.yellow;
+  return ACCENT_RGB[stopName] || ACCENT_RGB[FRP_RAMP[0].name];
 }
 
 /**
