@@ -86,8 +86,12 @@ body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
 
 /* ── Top bar: logo left, globe actions right ───────────────────────────── */
 body.mobile-shell #title-bar {
-  top: calc(var(--mobile-top-inset) + 12px);
+  top: calc(var(--mobile-top-inset) + 10px);
   left: 14px;
+}
+
+body.mobile-shell #title-bar .title-logo {
+  width: 58px;
 }
 
 body.mobile-shell #title-bar h1 > :not(.title-logo),
@@ -103,7 +107,6 @@ body.mobile-shell #top-center-actions {
 /* ── HUD: one compact readout under the top bar ────────────────────────── */
 body.mobile-shell #intel-hud .hud-edge,
 body.mobile-shell #intel-hud .hud-corner,
-body.mobile-shell #intel-hud .hud-top-bar,
 body.mobile-shell #intel-hud .hud-bottom-bar {
   display: none;
 }

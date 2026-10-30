@@ -8,6 +8,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
+import { parseSharePath } from './share/shareLinkPath.js';
+import { decodeShareView } from './share/viewCodec.js';
+
+/** The decoded view of a copied `/share/<code>` link. */
+const sharedState = (href) =>
+  decodeShareView(parseSharePath(new URL(href).pathname).code).state;
 
 const uiSource = readShellSource();
 
@@ -97,6 +103,22 @@ test('Nepal locator token is valid in v2 share links', () => {
   const parsed = makeManager('#v=2&lat=10&lon=20&l=z').parseInitialHash();
   assert.deepEqual(parsed.layerState.enabledLayerIds, ['bhote-koshi-locator']);
   assert.equal(parsed.layerStateInvalid, false);
+});
+
+test('scope feather above 100% survives share parsing and serialization', () => {
+  const manager = makeManager('#v=2&lat=10&lon=20&sc=0&scf=200');
+  const parsed = manager.parseInitialHash();
+  assert.equal(parsed.scopeEnabled, false);
+  assert.equal(parsed.scopeFeatherPct, 200);
+  assert.equal(makeManager('#lat=10&lon=20&scf=175').parseInitialHash().scopeFeatherPct, 175);
+  assert.equal(makeManager('#lat=10&lon=20&scf=999').parseInitialHash().scopeFeatherPct, 200);
+  manager.onToggleChange(false, true, { scopeEnabled: false, scopeFeatherPct: 200 });
+  const params = manager._buildHashParams();
+  assert.equal(params.get('sc'), '0');
+  assert.equal(params.get('scf'), '200');
+  manager.onToggleChange(false, true, { scopeFeatherPct: 999 });
+  assert.equal(manager._buildHashParams().get('scf'), '200');
+  clearTimeout(manager._debounceTimer);
 });
 
 test('share-link serialization emits the current celestial state', () => {
@@ -294,8 +316,8 @@ test('copy adds a fresh ephemeral timestamp without aging the live URL', async (
 
   assert.equal(await manager.copyLink({ nowMs: 2_000_000 }), true);
   assert.equal(await manager.copyLink({ nowMs: 2_002_000 }), true);
-  assert.equal(new URL(copied[0]).hash.includes('at=2000'), true);
-  assert.equal(new URL(copied[1]).hash.includes('at=2002'), true);
+  assert.equal(sharedState(copied[0]).sharedAtMs, 2_000_000);
+  assert.equal(sharedState(copied[1]).sharedAtMs, 2_002_000);
   assert.equal(window.location.hash, liveHash);
   assert.equal(new URLSearchParams(window.location.hash.slice(1)).has('at'), false);
 });
@@ -307,8 +329,7 @@ test('copy snapshots current state while incoming hash writes are still suppress
   manager.parseInitialHash();
   assert.equal(manager._initialRestorePending, true);
   assert.equal(await manager.copyLink({ nowMs: 3_000_000 }), true);
-  const params = new URL(copied).hash.slice(1);
-  assert.equal(new URLSearchParams(params).get('at'), '3000');
+  assert.equal(sharedState(copied).sharedAtMs, 3_000_000);
   assert.equal(window.location.hash, '#v=2&lat=10&lon=20&l=e&at=100');
 });
 
@@ -498,8 +519,8 @@ test('every explicit visual UI gesture claims restore authority before it mutate
     ['cycleDetection: () => {', 'toggleCctv: () =>', 'cycleDetectionMode()', 'detection hotkey'],
     ['toggleBloom:', 'setBloomIntensity:', 'this._setBloomEnabled(', 'toggleBloom control'],
     ['setBloomIntensity:', 'toggleSharpen:', 'this._setBloomIntensity(', 'setBloomIntensity control'],
-    ['toggleSharpen:', 'toggleScope:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
-    ['toggleScope:', 'setScopeFeather:', 'setScopeMaskEnabled(', 'toggleScope control'],
+    ['toggleSharpen:', 'setScopeEnabled:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
+    ['setScopeEnabled:', 'setScopeFeather:', 'setScopeMaskEnabled(', 'setScopeEnabled control'],
     ['setScopeFeather:', 'setSharpenIntensity:', 'setScopeMaskFeather(', 'setScopeFeather control'],
     ['setSharpenIntensity:', 'setHudLayout:', 'this._applySharpenIntensity(', 'setSharpenIntensity control'],
     ['setHudLayout:', 'toggleCleanView:', 'this._setHudVariant(', 'setHudLayout control'],

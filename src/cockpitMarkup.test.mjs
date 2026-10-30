@@ -151,7 +151,7 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
   );
   assert.match(
     setVisionMode.toString(),
-    /const labels = \{\s*optical: t\('NORMAL'\),\s*crt: t\('CRT'\),\s*nvg: t\('NVG'\),\s*thermal: t\('FLIR'\),\s*anime: t\('ANIME'\),\s*noir: t\('NOIR'\),\s*snow: t\('SNOW'\),?\s*\};/,
+    /const labels = \{\s*optical: t\('NORMAL'\),\s*crt: t\('CRT'\),\s*nvg: t\('NVG'\),\s*thermal: t\('FLIR'\),\s*anime: t\('ANIME'\),\s*noir: t\('NOIR'\),?\s*\};/,
   );
   assert.doesNotMatch(setVisionMode.toString(), /none: 'NONE'/);
   assert.doesNotMatch(ui, /getInheritedVisionLabel/);
@@ -227,13 +227,9 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
   );
 });
 
-test('Cockpit shortcut failures do not leak and open Radio owns the first Escape', () => {
+test('Cockpit shortcut failures do not leak and open utilities own the first Escape', () => {
   const keydown = cockpitKeyDown.toString();
   assert.ok(keydown, 'Cockpit keyboard handler is missing');
-  assert.match(
-    keydown,
-    /document\s*\.getElementById\('context-radio-dock'\)\s*\?\.classList\.contains\('disclosure-open'\)/,
-  );
   assert.match(keydown, /#cockpit-utility-controls \[aria-expanded="true"\]/);
   assert.match(
     keydown,
@@ -443,7 +439,7 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.ok(cockpitRadio, 'Cockpit compact Radio controls are missing');
   assert.doesNotMatch(
     cockpitRadio[0],
-    /context-radio-details-btn|radio-filter|radio-tuner/,
+    /radio-filter|radio-tuner/,
   );
   assert.match(
     css,
@@ -898,7 +894,7 @@ test('Cockpit Radio station changes preserve first-person camera ownership', () 
   );
   assert.match(
     radioBindings,
-    /listen\(this\._contextRadioMiniNextBtn, 'click', \(\) => cycleRadio\(1\)\)/,
+    /listen\(this\._radioNextBtn, 'click', \(\) => cycleRadio\(1\)\)/,
   );
   assert.match(
     radioBindings,

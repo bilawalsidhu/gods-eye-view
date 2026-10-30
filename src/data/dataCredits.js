@@ -355,6 +355,13 @@ export const DATA_CREDITS = [
     html: 'Street Level: imagery © <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> contributors, licence per picture',
   },
   {
+    key: 'a22-cctv',
+    html:
+      'Motorway webcams (A22 Brennero–Modena): images © ' +
+      '<a href="https://www.autobrennero.it/" target="_blank" rel="noopener">Autostrada del Brennero S.p.A.</a>, ' +
+      'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
+  },
+  {
     key: 'gbfs',
     html:
       'Bikeshare availability: GBFS operator feeds ' +
@@ -458,6 +465,14 @@ export const DATA_CREDITS = [
       'from NASA’s Fire Information for Resource Management System ' +
       '(<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>), ' +
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
+  },
+  {
+    key: 's2-ghostmaps',
+    html:
+      'S2 GhostMaps intel products: S2 Underground © by S2A1, ' +
+      '<a href="https://github.com/s2underground/GhostMaps" target="_blank" rel="noopener">github.com/s2underground/GhostMaps</a>, ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. ' +
+      'Shown as published; reports are S2 assessments, not verified fact.',
   },
   {
     key: 'drivebc-cctv',
