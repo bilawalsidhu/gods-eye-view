@@ -433,9 +433,16 @@ html:not([lang='en']) .recent-imagery-readout .ri-swap {
 }
 .recent-imagery-readout .ri-exports .rail-card-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   margin: 0;
+}
+.recent-imagery-readout .ri-exports button {
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: 1px;
+  font-size: 7px;
+  letter-spacing: 0;
 }
 
 /* 6. DETAILS: a collapsed rail card at the bottom, for every note. */

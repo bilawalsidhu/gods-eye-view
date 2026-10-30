@@ -11,6 +11,7 @@ import { EventEmitter, once } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { geminiLiveProxy } from '../server/providers/gemini.js';
 import { createGeminiTokenHandler } from '../server/providers/gemini/realtime.js';
+import { isGeminiRequestOriginAllowed } from '../server/providers/gemini/request.js';
 import {
   GEMINI_TOKEN_ENDPOINT,
   GEMINI_LIVE_WEBSOCKET_URL,
@@ -111,8 +112,6 @@ test('dev and preview install the same bounded Gemini token endpoint', () => {
 
 test('mounted token handler completes synchronous resolver failures without exposing details', async (t) => {
   for (const resolver of [
-    'resolveHost',
-    'resolveAllowedHosts',
     'resolveApiKey',
     'resolveModel',
     'resolveRateLimit',
@@ -331,7 +330,29 @@ test('other methods, missing/cross origins, hostile hosts and cross-site metadat
   assert.equal((await f.send()).status, 200);
 });
 
-test('same-origin local and explicitly bound hosts work without trusting forwarded authority', async (t) => {
+test('Gemini minting requires a loopback socket and exact local Host plus Origin', () => {
+  const request = (remoteAddress, host = 'localhost:4173') => ({
+    method: 'POST',
+    headers: {
+      host,
+      origin: `http://${host}`,
+      'content-type': 'application/json',
+    },
+    socket: { remoteAddress },
+  });
+  assert.equal(isGeminiRequestOriginAllowed(request('127.0.0.1')), true);
+  assert.equal(isGeminiRequestOriginAllowed(request('::1')), true);
+  assert.equal(isGeminiRequestOriginAllowed(request('192.168.1.20')), false);
+  assert.equal(
+    isGeminiRequestOriginAllowed(
+      request('127.0.0.1', 'demo.example:4173'),
+      'demo.example',
+    ),
+    false,
+  );
+});
+
+test('configured non-local hosts stay excluded from the local Gemini boundary', async (t) => {
   const f = await fixture(t, { resolveHost: () => 'demo.example' });
   assert.equal(
     (
@@ -342,7 +363,7 @@ test('same-origin local and explicitly bound hosts work without trusting forward
         },
       })
     ).status,
-    200,
+    403,
   );
   assert.equal(
     (
@@ -405,7 +426,7 @@ test('all shared proxy signals and same-site cross-origin metadata fail before m
   assert.equal(f.calls.length, 1);
 });
 
-test('LAN binding, exact configured hosts, IPs, and localhost subdomains follow the app host policy', async (t) => {
+test('LAN binding cannot widen the Gemini endpoint beyond loopback hosts', async (t) => {
   const f = await fixture(t, {
     resolveHost: () => '0.0.0.0',
     resolveAllowedHosts: () => 'gev.local, demo.example',
@@ -414,16 +435,23 @@ test('LAN binding, exact configured hosts, IPs, and localhost subdomains follow 
     'gev.local:4173',
     'demo.example:4173',
     '192.168.1.20:4173',
-    '[::1]:4173',
     'demo.localhost:4173',
   ]) {
     assert.equal(
       (await f.sendRaw({ headers: { Host: host, Origin: `http://${host}` } }))
         .status,
-      200,
+      403,
       host,
     );
   }
+  assert.equal(
+    (
+      await f.sendRaw({
+        headers: { Host: '[::1]:4173', Origin: 'http://[::1]:4173' },
+      })
+    ).status,
+    200,
+  );
   for (const host of ['arbitrary.local:4173', 'child.demo.example:4173']) {
     assert.equal(
       (await f.sendRaw({ headers: { Host: host, Origin: `http://${host}` } }))
@@ -432,7 +460,7 @@ test('LAN binding, exact configured hosts, IPs, and localhost subdomains follow 
       host,
     );
   }
-  assert.equal(f.calls.length, 5);
+  assert.equal(f.calls.length, 1);
 });
 
 test('unset, blank, malformed and negative rate limits keep the 30-per-minute cap', async (t) => {
@@ -449,15 +477,18 @@ test('unset, blank, malformed and negative rate limits keep the 30-per-minute ca
   }
 });
 
-test('a positive fraction applies a real cap and only explicit zero disables it', async (t) => {
+test('Gemini rate limiting cannot be disabled or raised above the fixed cap', async (t) => {
   const fractional = await fixture(t, { resolveRateLimit: () => '0.5' });
   assert.equal((await fractional.send()).status, 200);
   assert.equal((await fractional.send()).status, 429);
   assert.equal(fractional.calls.length, 1);
-  const unlimited = await fixture(t, { resolveRateLimit: () => '0' });
-  for (let index = 0; index < 31; index++)
-    assert.equal((await unlimited.send()).status, 200);
-  assert.equal(unlimited.calls.length, 31);
+  for (const value of ['0', '31', '1000']) {
+    const capped = await fixture(t, { resolveRateLimit: () => value });
+    for (let index = 0; index < 30; index++)
+      assert.equal((await capped.send()).status, 200);
+    assert.equal((await capped.send()).status, 429);
+    assert.equal(capped.calls.length, 30);
+  }
 });
 
 test('client bodies cannot override model or locked settings and stay byte bounded', async (t) => {
@@ -1005,10 +1036,17 @@ test('real Vite dev and preview reject hostile hosts before the Gemini middlewar
           'demo.localhost:4173',
         ]) {
           const response = await request(host);
-          assert.equal(response.status, 503);
-          assert.match(response.body, /Add a Gemini API key/);
+          assert.equal(response.status, 403);
+          assert.match(
+            response.body,
+            /Gemini voice requires a same-origin app request/,
+          );
         }
-        assert.equal(credentialReads, 3);
+        assert.equal(credentialReads, 0);
+        const local = await request(new URL(origin).host);
+        assert.equal(local.status, 503);
+        assert.match(local.body, /Add a Gemini API key/);
+        assert.equal(credentialReads, 1);
         assert.equal(upstreamCalls, 0);
       } finally {
         try {

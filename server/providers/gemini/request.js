@@ -1,45 +1,29 @@
 import { readRequestBody } from '../common/request.js';
+import { admitKeySetupRequest } from '../../../src/keySetupCore.mjs';
 import { admitSameSiteRequest } from '../../../src/localRequestGate.mjs';
-import {
-  isAllowedHost,
-  resolveAllowedHosts,
-} from '../../../build/allowedHosts.js';
 
 /** Use the app's Host and request policies, with a required browser Origin. */
-export function isGeminiRequestOriginAllowed(
-  req,
-  configuredHost = '',
-  configuredAllowedHosts,
-) {
-  const host = req.headers?.host;
-  const origin = req.headers?.origin;
-  if (
-    typeof host !== 'string' ||
-    typeof origin !== 'string' ||
-    !host ||
-    !origin ||
-    /[\s/?#@\\]/.test(host)
-  )
-    return false;
+export function isGeminiRequestOriginAllowed(req) {
   const protocol = req.socket?.encrypted ? 'https:' : 'http:';
-  if (
-    !admitSameSiteRequest({
-      hostHeader: host,
+  const local = admitKeySetupRequest({
+    method: 'POST',
+    remoteAddress: req.socket?.remoteAddress,
+    hostHeader: req.headers?.host,
+    protocol,
+    origin: req.headers?.origin,
+    contentType: 'application/json',
+    proxyHeaders: req.headers || {},
+  }).ok;
+  return (
+    local &&
+    admitSameSiteRequest({
+      hostHeader: req.headers?.host,
       protocol,
-      origin,
+      origin: req.headers?.origin,
       secFetchSite: req.headers?.['sec-fetch-site'],
       proxyHeaders: req.headers || {},
     }).ok
-  )
-    return false;
-  // The shared gate compares a present Origin exactly with this authority;
-  // this route also requires the Origin and an allowed Host.
-  const boundHost = String(configuredHost || '')
-    .trim()
-    .toLowerCase();
-  return isAllowedHost(host, resolveAllowedHosts(configuredAllowedHosts), [
-    boundHost,
-  ]);
+  );
 }
 
 /** Admit only the existing input gesture; callers cannot supply model/setup. */

@@ -22,6 +22,7 @@ import {
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
 import { formatQuantity } from './unitLabels.js';
 import { pointerOwnerName } from '../data/pointerOwnerNames.js';
+import { analyzeRecentImagerySnapshot } from '../layers/recentImagery/analysis.js';
 
 const PANEL_ID = 'recent-imagery-panel';
 const OVERVIEW_MIN_BOX_KM = 25;
@@ -44,6 +45,50 @@ const LAYER_NOTICES = new Set([
 const TOO_LARGE = /^(Box|View) is ([\d,]+) km wide · limit ([\d,]+) km$/;
 const POLAR = /^Imagery stops at ±([\d.]+)° latitude$/;
 const POINTER_BUSY = /^(.+) is using the pointer — close it first$/;
+const ANALYSIS_UNAVAILABLE = /^Imagery unavailable \((.+)\)$/;
+const ANALYSIS_ERRORS = new Set([
+  msg('Pin two imagery days in A / B first'),
+  msg('Image comparison unavailable'),
+  msg('The imagery frames have different sizes'),
+  msg('The imagery frames could not be compared'),
+  msg('Imagery analysis failed'),
+  msg('Analysis timed out'),
+]);
+const ANALYSIS_HOTSPOTS = Object.freeze({
+  'north-west': msg('north-west'),
+  north: msg('north'),
+  'north-east': msg('north-east'),
+  west: msg('west'),
+  centre: msg('centre'),
+  east: msg('east'),
+  'south-west': msg('south-west'),
+  south: msg('south'),
+  'south-east': msg('south-east'),
+});
+
+function localizeAnalysis(analysis) {
+  if (!analysis) return '';
+  if (analysis.ok) {
+    const hotspot = ANALYSIS_HOTSPOTS[analysis.hotspot];
+    return t(
+      '{percent}% changed · strongest change {hotspot} · {area} hectares',
+      {
+        percent: formatNumber(analysis.changedPct, {
+          maximumFractionDigits: 2,
+        }),
+        hotspot: hotspot ? t(hotspot) : '—',
+        area: formatNumber(analysis.site?.hectares || 0, {
+          maximumFractionDigits: 2,
+        }),
+      },
+    );
+  }
+  const error = String(analysis.error || '');
+  const unavailable = ANALYSIS_UNAVAILABLE.exec(error);
+  if (unavailable)
+    return t('Imagery unavailable ({status})', { status: unavailable[1] });
+  return t(ANALYSIS_ERRORS.has(error) ? error : 'Imagery analysis failed');
+}
 
 /**
  * The notice line in the UI language: notices and box refusals arrive in
@@ -198,7 +243,7 @@ function findIn(root, predicate) {
 
 /**
  * Mount the readout into the panel body.
- * @param {{ container: HTMLElement, layer: object, viewer?: object, tool?: object, createSplit?: Function, fetchImpl?: typeof fetch, createObjectUrl?: Function, revokeObjectUrl?: Function, requestRender?: Function }} deps
+ * @param {{ container: HTMLElement, layer: object, viewer?: object, tool?: object, createSplit?: Function, fetchImpl?: typeof fetch, createObjectUrl?: Function, revokeObjectUrl?: Function, requestRender?: Function, analysisTimeoutMs?: number }} deps
  * @returns {{ root: HTMLElement, exportImage: (slot?: 'a' | 'b') => Promise<boolean>, destroy: () => void } | null}
  */
 export function createRecentImageryPanel({
@@ -211,6 +256,8 @@ export function createRecentImageryPanel({
   createObjectUrl = (blob) => URL.createObjectURL(blob),
   revokeObjectUrl = (url) => URL.revokeObjectURL(url),
   requestRender = () => viewer?.scene?.requestRender?.(),
+  analyzeSnapshot = analyzeRecentImagerySnapshot,
+  analysisTimeoutMs = 15_000,
 } = {}) {
   const document = container?.ownerDocument;
   if (!document?.createElement || !layer) return null;
@@ -378,7 +425,25 @@ export function createRecentImageryPanel({
   let splitSignature = '';
   let exportError = null;
   const exporting = new Set();
+  let analyzing = false;
+  let analysisController = null;
+  let analysis = null;
+  let analyzedSelection = '';
   let destroyed = false;
+  const analysisSelection = () =>
+    JSON.stringify([
+      snapshot.mode,
+      snapshot.box,
+      snapshot.pins?.a?.key,
+      snapshot.pins?.b?.key,
+    ]);
+  const cancelAnalysis = () => {
+    if (!analysisController) return;
+    const controller = analysisController;
+    analysisController = null;
+    analyzing = false;
+    controller.abort();
+  };
 
   /**
    * The body is the scroll container and no render may move it: a
@@ -450,12 +515,16 @@ export function createRecentImageryPanel({
   // ---- notice -----------------------------------------------------------
   function renderNotice() {
     const warning = snapshot.boxError || snapshot.error || exportError;
-    const text = localizeNotice(
-      warning || snapshot.notice || (snapshot.borrowedEsri ? ESRI_NOTE : ''),
-    );
+    const analysisText = localizeAnalysis(analysis);
+    const text = warning
+      ? localizeNotice(warning)
+      : analysisText ||
+        localizeNotice(
+          snapshot.notice || (snapshot.borrowedEsri ? ESRI_NOTE : ''),
+        );
     set(noticeText, 'textContent', text);
     attribute(noticeText, 'title', text);
-    toggle(notice, 'warn', Boolean(warning));
+    toggle(notice, 'warn', Boolean(warning || analysis?.ok === false));
     toggle(notice, 'info', !warning && Boolean(text));
     // ZOOM IN only for the oversized box or view the notice is showing.
     const fit = Boolean(snapshot.zoomToFit);
@@ -756,17 +825,29 @@ export function createRecentImageryPanel({
       {
         id: 'export',
         type: 'actions',
-        actions: ['a', 'b'].map((slotId) => ({
-          id: `export-${slotId}`,
-          label: ab
-            ? t('EXPORT {slot}', { slot: slotId.toUpperCase() })
-            : t('EXPORT'),
-          title: ab
-            ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
-            : t('Download the image as a PNG'),
-          disabled: !exportTarget(slotId) || exporting.has(slotId),
-          onClick: () => void exportImage(slotId),
-        })),
+        actions: ['a', 'b']
+          .map((slotId) => ({
+            id: `export-${slotId}`,
+            label: ab
+              ? t('EXPORT {slot}', { slot: slotId.toUpperCase() })
+              : t('EXPORT'),
+            title: ab
+              ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
+              : t('Download the image as a PNG'),
+            disabled: !exportTarget(slotId) || exporting.has(slotId),
+            onClick: () => void exportImage(slotId),
+          }))
+          .concat({
+            id: 'analyze',
+            label: t('ANALYZE'),
+            title: t('Details'),
+            disabled:
+              analyzing ||
+              snapshot.mode !== 'ab' ||
+              !snapshot.pins.a.key ||
+              !snapshot.pins.b.key,
+            onClick: () => void analyze(),
+          }),
       },
     ]);
     const exportB = findIn(
@@ -776,6 +857,63 @@ export function createRecentImageryPanel({
     if (exportB) {
       toggle(exportB, 'is-reserved', !ab);
       attribute(exportB, 'aria-hidden', String(!ab));
+    }
+  }
+
+  async function analyze() {
+    if (analyzing) return;
+    const selection = analysisSelection();
+    const controller = new AbortController();
+    analysisController = controller;
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(analysisTimeoutMs),
+    ]);
+    analyzing = true;
+    analysis = null;
+    preserveScroll(renderControls);
+    try {
+      const aborted = new Promise((_, reject) => {
+        const stop = () => reject(signal.reason);
+        if (signal.aborted) stop();
+        else signal.addEventListener('abort', stop, { once: true });
+      });
+      const result = await Promise.race([
+        analyzeSnapshot(snapshot, { signal }),
+        aborted,
+      ]);
+      signal.throwIfAborted();
+      if (
+        analysisController === controller &&
+        analysisSelection() === selection
+      ) {
+        analysis = result;
+        analyzedSelection = selection;
+      }
+    } catch (error) {
+      if (
+        analysisController === controller &&
+        analysisSelection() === selection
+      ) {
+        analysis = {
+          ok: false,
+          error:
+            signal.reason?.name === 'TimeoutError'
+              ? 'Analysis timed out'
+              : error?.message || 'Imagery analysis failed',
+        };
+        analyzedSelection = selection;
+      }
+    } finally {
+      if (analysisController !== controller) return;
+      analysisController = null;
+      analyzing = false;
+      if (!destroyed)
+        preserveScroll(() => {
+          renderControls();
+          renderNotice();
+          renderDetails();
+        });
     }
   }
 
@@ -1145,7 +1283,13 @@ export function createRecentImageryPanel({
   });
   const unsubscribe = layer.subscribe((next, reason) => {
     if (destroyed) return;
+    const previousSelection = analysisSelection();
     snapshot = next || layer.getSnapshot();
+    if (previousSelection !== analysisSelection()) {
+      cancelAnalysis();
+      analysis = null;
+      analyzedSelection = '';
+    }
     if (reason === 'split') {
       split?.setValue(snapshot.split);
     } else if (reason === 'alpha') {
@@ -1173,6 +1317,7 @@ export function createRecentImageryPanel({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      cancelAnalysis();
       unsubscribe();
       layer.setToolHandler?.(null);
       split?.destroy();

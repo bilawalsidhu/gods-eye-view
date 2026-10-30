@@ -1,5 +1,9 @@
 import { waitForSignal } from '../../../src/sources/requestDeadline.js';
-import { clientKey, makeCostRateLimiter } from '../common/rate-limit.js';
+import {
+  clientKey,
+  makeCostRateLimiter,
+  resolvePerMinuteCap,
+} from '../common/rate-limit.js';
 import { readResponseJsonCapped } from '../../../src/sources/httpBody.js';
 import {
   GEMINI_TOKEN_ENDPOINT,
@@ -23,8 +27,6 @@ export function createGeminiTokenHandler({
   resolveApiKey = () => process.env.GEMINI_API_KEY,
   resolveModel = () =>
     process.env.GEMINI_LIVE_MODEL || GEMINI_LIVE_MODEL_DEFAULT,
-  resolveHost = () => process.env.HOST,
-  resolveAllowedHosts = () => process.env.GEV_ALLOWED_HOSTS,
   resolveRateLimit = () => process.env.GEV_RATELIMIT_GEMINI_PER_MIN ?? '30',
   now = Date.now,
   timeoutMs = 15_000,
@@ -54,9 +56,7 @@ export function createGeminiTokenHandler({
     let apiKey;
     let model;
     try {
-      if (
-        !isGeminiRequestOriginAllowed(req, resolveHost(), resolveAllowedHosts())
-      )
+      if (!isGeminiRequestOriginAllowed(req))
         return reply(403, 'Gemini voice requires a same-origin app request');
       apiKey = String(resolveApiKey() || '').trim();
       if (!apiKey)
@@ -65,7 +65,10 @@ export function createGeminiTokenHandler({
       if (!model)
         return reply(503, 'The Gemini Live model configuration is invalid');
       if (limiter === undefined)
-        limiter = makeCostRateLimiter(resolveRateLimit(), 30);
+        limiter = makeCostRateLimiter(
+          Math.min(resolvePerMinuteCap(resolveRateLimit(), 30) || 30, 30),
+          30,
+        );
       if (limiter && !limiter(clientKey(req))) {
         res.setHeader('Retry-After', '60');
         return reply(

@@ -434,3 +434,105 @@
   .frame-rate-readout {
   margin-top: 6px;
 }
+
+#place-label-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 149;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#place-label-layer button {
+  position: absolute;
+  max-width: 180px;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid rgba(0, 212, 255, 0.38);
+  border-radius: 999px;
+  background: rgba(4, 10, 16, 0.72);
+  color: var(--text-primary);
+  font: 10px/1.3 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#place-label-layer button:is(:hover, :focus-visible),
+#place-peek-panel button:is(:hover, :focus-visible) {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.16);
+}
+
+#place-peek-panel {
+  position: fixed;
+  z-index: 260;
+  display: grid;
+  width: min(320px, calc(100vw - 16px));
+  max-height: min(440px, calc(100vh - 16px));
+  gap: 6px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid rgba(0, 212, 255, 0.5);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  backdrop-filter: blur(24px) saturate(1.4);
+}
+
+#place-peek-panel h2 {
+  margin: 0 0 4px;
+  color: var(--accent-cyan);
+  font: 11px/1.35 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#place-peek-panel button,
+#place-peek-panel a {
+  display: block;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font: 10px/1.4 var(--font-mono);
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+#place-peek-panel .place-peek-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  padding: 3px;
+  font-size: 16px;
+  line-height: 20px;
+  text-align: center;
+}
+
+#place-peek-panel .place-peek-news {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+
+@media (max-width: 720px) {
+  #place-label-layer button {
+    max-width: 120px;
+  }
+
+  #place-peek-panel {
+    inset: auto 8px calc(var(--mobile-tab-space) + 8px) 8px;
+    width: auto;
+    max-height: min(50dvh, 420px);
+    border-radius: 12px;
+  }
+}

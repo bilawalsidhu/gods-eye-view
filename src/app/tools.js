@@ -4,6 +4,13 @@ import { initDrawTool } from '../annotations/drawTool.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
+import { initPlacePeek } from '../ui/placePeek.js';
+import { flyToLandmark } from '../locations.js';
+import {
+  isPointerFree,
+  subscribePointerOwnership,
+} from '../data/inputOwnership.js';
+import * as Cesium from 'cesium';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
@@ -68,6 +75,17 @@ export function createApplicationTools({
     subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
   });
   defer(() => geoFileImport?.destroy());
+  const placePeek = initPlacePeek({
+    viewer,
+    placeSearch,
+    navigation: styleManager,
+    fetchRegionalBrief: operations.requests.regional.getBrief,
+    cesium: Cesium,
+    flyTo: flyToLandmark,
+    pointerFree: isPointerFree,
+    subscribePointerOwnership,
+  });
+  defer(() => placePeek?.destroy());
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
   // panel lives on the right rail, so both belong to the application
   // lifetime. The tileset lets the layer drape while the globe is hidden.

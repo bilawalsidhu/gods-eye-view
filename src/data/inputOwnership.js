@@ -34,6 +34,24 @@
 /** @type {PointerLease|null} */
 let currentLease = null;
 let nextLeaseId = 1;
+const ownershipListeners = new Set();
+let publishingOwnership = false;
+
+function publishOwnership() {
+  publishingOwnership = true;
+  try {
+    for (const listener of [...ownershipListeners]) {
+      if (!ownershipListeners.has(listener)) continue;
+      try {
+        listener();
+      } catch {
+        console.error('Pointer ownership listener failed');
+      }
+    }
+  } finally {
+    publishingOwnership = false;
+  }
+}
 
 /**
  * Take the pointer for `owner`.
@@ -42,11 +60,14 @@ let nextLeaseId = 1;
  *   pointer is already held — including by another instance of the same tool.
  */
 export function claimPointer(owner) {
+  if (publishingOwnership) return null;
   const name = normalizeOwner(owner);
   if (!name) return null;
   if (currentLease !== null) return null;
-  currentLease = Object.freeze({ owner: name, id: nextLeaseId++ });
-  return currentLease;
+  const lease = Object.freeze({ owner: name, id: nextLeaseId++ });
+  currentLease = lease;
+  publishOwnership();
+  return currentLease === lease ? lease : null;
 }
 
 /**
@@ -56,9 +77,20 @@ export function claimPointer(owner) {
  * @returns {boolean} Whether this call released the claim.
  */
 export function releasePointer(lease) {
-  if (!currentLease || !lease || lease.id !== currentLease.id) return false;
+  if (publishingOwnership) return false;
+  if (currentLease === null || lease !== currentLease) return false;
   currentLease = null;
+  publishOwnership();
   return true;
+}
+
+/**
+ * Observe successful claim, release and reset transitions synchronously.
+ * Observers cannot mutate ownership while a transition is being published.
+ */
+export function subscribePointerOwnership(listener) {
+  ownershipListeners.add(listener);
+  return () => ownershipListeners.delete(listener);
 }
 
 /** @returns {string|null} The current owner's name, or null when free. */
@@ -85,7 +117,7 @@ export function isPointerOwnedBy(owner) {
  * @returns {boolean} True when THIS lease is the live one.
  */
 export function isLeaseCurrent(lease) {
-  return Boolean(currentLease && lease && lease.id === currentLease.id);
+  return currentLease !== null && lease === currentLease;
 }
 
 /**
@@ -94,8 +126,10 @@ export function isLeaseCurrent(lease) {
  * @returns {string|null} The owner that was holding it, if any.
  */
 export function resetPointerOwnership() {
+  if (publishingOwnership) return null;
   const previous = pointerOwner();
   currentLease = null;
+  if (previous !== null) publishOwnership();
   return previous;
 }
 

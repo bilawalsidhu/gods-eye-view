@@ -11,6 +11,7 @@ import {
   pointerOwner,
   releasePointer,
   resetPointerOwnership,
+  subscribePointerOwnership,
 } from './inputOwnership.js';
 
 const ROOT = path.resolve(
@@ -88,6 +89,21 @@ test('release ignores anything that is not the live lease', () => {
   }
   assert.equal(releasePointer(lease), true);
   assert.equal(releasePointer(lease), false, 'releasing twice changes nothing');
+  assert.equal(
+    releasePointer(null),
+    false,
+    'null cannot release a free pointer',
+  );
+});
+
+test('only the exact opaque lease object is current and can release', () => {
+  const lease = claimPointer('draw');
+  const forgedCopy = { ...lease };
+
+  assert.equal(isLeaseCurrent(forgedCopy), false);
+  assert.equal(releasePointer(forgedCopy), false);
+  assert.equal(isLeaseCurrent(lease), true);
+  assert.equal(releasePointer(lease), true);
 });
 
 test('a claim needs a real owner id', () => {
@@ -107,6 +123,126 @@ test('reset reports who was holding it, for teardown', () => {
   assert.equal(resetPointerOwnership(), 'draw');
   assert.equal(isPointerFree(), true);
   assert.equal(isLeaseCurrent(lease), false);
+});
+
+test('throwing subscribers are isolated from ownership APIs and later subscribers', () => {
+  const calls = [];
+  const originalError = console.error;
+  console.error = () => {};
+  const unsubscribeThrowing = subscribePointerOwnership(() => {
+    calls.push('throwing');
+    throw new Error('subscriber failed');
+  });
+  const unsubscribeLater = subscribePointerOwnership(() =>
+    calls.push(pointerOwner()),
+  );
+
+  try {
+    let lease;
+    assert.doesNotThrow(() => {
+      lease = claimPointer('draw');
+    });
+    assert.equal(isLeaseCurrent(lease), true);
+    assert.doesNotThrow(() => assert.equal(releasePointer(lease), true));
+    const resetLease = claimPointer('directions');
+    assert.doesNotThrow(() =>
+      assert.equal(resetPointerOwnership(), 'directions'),
+    );
+    assert.equal(isLeaseCurrent(resetLease), false);
+    assert.deepEqual(calls, [
+      'throwing',
+      'draw',
+      'throwing',
+      null,
+      'throwing',
+      'directions',
+      'throwing',
+      null,
+    ]);
+  } finally {
+    unsubscribeThrowing();
+    unsubscribeLater();
+    console.error = originalError;
+  }
+});
+
+test('an ownership observer cannot reentrantly claim or release', () => {
+  const lease = claimPointer('first');
+  let successor;
+  let released;
+  let calls = 0;
+  const unsubscribe = subscribePointerOwnership(() => {
+    calls += 1;
+    if (calls !== 1) return;
+    successor = claimPointer('successor');
+    released = releasePointer(successor);
+  });
+
+  try {
+    assert.equal(releasePointer(lease), true);
+    assert.equal(successor, null, 'observers cannot claim during notification');
+    assert.equal(
+      released,
+      false,
+      'observers cannot release during notification',
+    );
+    assert.equal(isPointerFree(), true);
+    assert.equal(
+      calls,
+      1,
+      'reentrant mutation cannot queue another publication',
+    );
+  } finally {
+    unsubscribe();
+  }
+});
+
+test('an ownership observer cannot reentrantly reset', () => {
+  let resetResult;
+  let calls = 0;
+  const unsubscribe = subscribePointerOwnership(() => {
+    calls += 1;
+    resetResult = resetPointerOwnership();
+  });
+
+  try {
+    const lease = claimPointer('first');
+    assert.ok(lease, 'the outer claim succeeds');
+    assert.equal(
+      resetResult,
+      null,
+      'an observer reports its reset no-op truthfully',
+    );
+    assert.equal(isLeaseCurrent(lease), true);
+    assert.equal(
+      calls,
+      1,
+      'a continuous reset observer cannot publish forever',
+    );
+  } finally {
+    unsubscribe();
+  }
+});
+
+test('unsubscribe is immediate and idempotent during publication', () => {
+  const calls = [];
+  let unsubscribeLater;
+  const unsubscribeFirst = subscribePointerOwnership(() => {
+    calls.push('first');
+    unsubscribeLater();
+    unsubscribeLater();
+  });
+  unsubscribeLater = subscribePointerOwnership(() => calls.push('later'));
+
+  try {
+    const lease = claimPointer('draw');
+    assert.deepEqual(calls, ['first']);
+    assert.equal(releasePointer(lease), true);
+    assert.deepEqual(calls, ['first', 'first']);
+  } finally {
+    unsubscribeFirst();
+    unsubscribeLater();
+  }
 });
 
 test('every scene click handler consults ownership before it picks', () => {
