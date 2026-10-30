@@ -4233,7 +4233,9 @@ animate). Disable clears all state.
 
 At the metre/kilometre boundary, route distance labels use the rounded
 ten-metre value to select the unit, switching to kilometres at 995 metres;
-a 996-metre leg displays as `1.0 km` rather than `1000 m`.
+a 996-metre leg displays as `1.0 km` rather than `1000 m`. Whole kilometres
+start where the label would round to 10.0 km, so a 9.96 km route displays as
+`10 km` rather than `10.0 km`.
 
 **Keys needed: none.** Directions works on a keyless boot, and the layer is off
 until the operator turns it on.
