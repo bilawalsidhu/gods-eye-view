@@ -345,3 +345,30 @@ test('a line that rounds up to a kilometre reads 1.0 km, not 1000 m', () => {
   assert.equal(formatMeasure(line), '1.0 km');
   assert.match(drawHint(line), /^1\.0 km · /);
 });
+
+test('an area that rounds up to the next unit reads in that unit', () => {
+  // A square on the equator whose shoelace area is about `m2`.
+  const square = (m2) => {
+    const side = Math.sqrt(m2) / 111320;
+    const area = createDrawSession('area');
+    for (const [lon, lat] of [
+      [0, 0],
+      [side, 0],
+      [side, side],
+      [0, side],
+    ])
+      addVertex(area, { lon, lat });
+    return area;
+  };
+  const almostHectare = square(9999.6);
+  const metres = ringAreaM2(almostHectare.vertices);
+  assert.ok(
+    metres >= 9999.5 && metres < 1e4,
+    `area should round to 10000 m², got ${metres}`,
+  );
+  assert.equal(formatMeasure(almostHectare), '1.0 ha');
+  assert.match(drawHint(almostHectare), /^1\.0 ha · /);
+  assert.equal(formatMeasure(square(9999.4)), '9999 m²');
+  assert.equal(formatMeasure(square(999_960)), '1.00 km²');
+  assert.equal(formatMeasure(square(999_400)), '99.9 ha');
+});
