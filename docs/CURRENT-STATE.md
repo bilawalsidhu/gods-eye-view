@@ -6205,7 +6205,9 @@ Receivers publish one record shape from `src/sources/adsbRecords.js`
 `lastMessageAt`, `messageCount`, `rssiDbfs`, `band`, `source`). `band` is `1090` or `978`; `source` is
 `webusb` (browser SDR) or `feed` (decoder feed).
 `normalizeDump1090Aircraft(json, nowMs, { band })` maps a dump1090/readsb/
-skyaware978 `aircraft.json` document into the same records. Voice
+skyaware978 `aircraft.json` document into the same records; a row without
+`baro_rate` reads its vertical rate from `geom_rate`, where a GNSS-sourced rate
+is sent. Voice
 `set_layer_visibility` accepts `local-adsb` ("local ADS-B", "my receiver",
 "my antenna").
 
