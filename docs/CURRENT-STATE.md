@@ -1791,6 +1791,28 @@ does not claim the image is current. The `current_view` field distinguishes came
 provenance from historical fallback imagery; it does not measure capture time or
 image freshness.
 
+## CCTV location-only cameras
+
+Some published cameras have no public picture (for example a TxDOT district
+whose images live on another operator's site). Instead of an endless
+"upstream unavailable" placeholder, the CCTV proxy learns this from real
+upstream answers (`server/providers/cctv/feedAvailability.js`) and serves those
+cameras from `/api/cctv/sources` with `feedType: 'none'`:
+
+- Per camera: two consecutive failed frame fetches mark a camera; any success
+  clears it. A mark expires after 24 h, so the browser tries the feed again and
+  the camera heals by itself when the provider fixes it.
+- Per TxDOT district: up to three evenly spaced cameras are probed, one request
+  at a time. One all-fail probe makes the district suspect and it is probed
+  again after 10 minutes; only a second consecutive all-fail probe makes it
+  location-only, for 6 h. One upstream blip does not hide a working district.
+- State persists in `.gev-cache/cctv-feed-availability.json`, so a restart does
+  not re-learn it.
+
+In the browser a location-only camera keeps its icon and position but gets no
+ambient or hover card, no projection runtime and no frame fetch, and its status
+reads "no public feed".
+
 ## CCTV missing numeric fields
 
 CCTV numbers are read as missing when they are absent, null, blank or boolean,
