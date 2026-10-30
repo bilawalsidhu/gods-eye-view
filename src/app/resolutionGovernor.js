@@ -22,8 +22,9 @@
  * The policy watches the smoothed frame interval while frames are
  * back-to-back (continuous render, or the camera is moving). Discrete
  * request-mode frames and pauses longer than `gapMs` say nothing about GPU
- * cost and are skipped, so an idle globe never changes resolution. Its
- * windows count sampled frame time, not wall time: on-time frames from
+ * cost and are skipped, so an idle globe never changes resolution. A
+ * `viewer.targetFrameRate` below 1000 / `budgetMs` is skipped too: the cap
+ * sets the interval then, not the GPU. Its windows count sampled frame time, not wall time: on-time frames from
  * several short pans add up to a step back up. The first `warmupMs` after
  * the viewer starts are skipped, because loading, not drawing, sets the
  * frame time then.
@@ -39,6 +40,10 @@
  *   restarts at the new ceiling. A resize keeps the current ratio between the
  *   new floor and ceiling, and follows the ceiling when it was not stepped
  *   down.
+ *
+ * The viewport is read in `cesiumWidget.resize()`, before Cesium sizes the
+ * canvas for the frame. Read any later, a window grown past the texture limit
+ * has already thrown.
  *
  * The governor has no timers. Its listeners live on the viewer's scene and
  * camera and end with the viewer.
@@ -325,8 +330,10 @@ export function installResolutionGovernor(
 ) {
   const scene = viewer?.scene;
   const camera = scene?.camera;
-  if (!scene?.postRender || !camera?.moveStart)
+  const widget = viewer?.cesiumWidget;
+  if (!scene?.postRender || !camera?.moveStart || !widget?.resize)
     throw new TypeError('installResolutionGovernor requires a Cesium viewer');
+  installed.get(viewer)?.dispose();
   const readDpr = () => Number(windowRef?.devicePixelRatio) || 1;
   const readWidth = () => Number(viewer.canvas?.clientWidth) || 0;
   const readHeight = () => Number(viewer.canvas?.clientHeight) || 0;
@@ -361,6 +368,33 @@ export function installResolutionGovernor(
   const startedAt = now();
   let cameraMoving = false;
   let lastFrameAt = null;
+
+  const syncViewport = () => {
+    const nextDpr = readDpr();
+    const nextWidth = readWidth();
+    const nextHeight = readHeight();
+    if (nextDpr === dpr && nextWidth === cssWidth && nextHeight === cssHeight)
+      return;
+    dpr = nextDpr;
+    cssWidth = nextWidth;
+    cssHeight = nextHeight;
+    policy.setViewport({ devicePixelRatio: dpr, cssWidth, cssHeight });
+    lastFrameAt = null;
+    apply();
+  };
+  // Both of Cesium's resize paths (the render loop and Viewer.resize) end here.
+  const resize = widget.resize;
+  const resizeInBounds = function () {
+    syncViewport();
+    return resize.call(this);
+  };
+  widget.resize = resizeInBounds;
+
+  const frameRateCapHidesCost = () => {
+    const rate = Number(viewer.targetFrameRate);
+    return rate > 0 && 1000 / rate > RESOLUTION_POLICY.budgetMs;
+  };
+
   const removers = [
     camera.moveStart.addEventListener(() => {
       cameraMoving = true;
@@ -371,24 +405,12 @@ export function installResolutionGovernor(
     }),
     scene.postRender.addEventListener(() => {
       const at = now();
-      const nextDpr = readDpr();
-      const nextWidth = readWidth();
-      const nextHeight = readHeight();
+      // Request-mode frames arrive on demand, and a low frame-rate cap paces
+      // them; in both cases their spacing is not cost.
       if (
-        nextDpr !== dpr ||
-        nextWidth !== cssWidth ||
-        nextHeight !== cssHeight
+        (scene.requestRenderMode && !cameraMoving) ||
+        frameRateCapHidesCost()
       ) {
-        dpr = nextDpr;
-        cssWidth = nextWidth;
-        cssHeight = nextHeight;
-        policy.setViewport({ devicePixelRatio: dpr, cssWidth, cssHeight });
-        lastFrameAt = null;
-        apply();
-        return;
-      }
-      // Request-mode frames arrive on demand; their spacing is not cost.
-      if (scene.requestRenderMode && !cameraMoving) {
         lastFrameAt = null;
         policy.pause();
         return;
@@ -408,9 +430,9 @@ export function installResolutionGovernor(
     if (installed.get(viewer) !== entry) return;
     installed.delete(viewer);
     for (const remove of removers) remove();
+    if (widget.resize === resizeInBounds) widget.resize = resize;
   };
   const entry = { policy, dispose };
-  installed.get(viewer)?.dispose();
   installed.set(viewer, entry);
   return dispose;
 }

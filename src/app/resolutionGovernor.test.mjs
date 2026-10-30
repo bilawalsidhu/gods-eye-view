@@ -308,15 +308,27 @@ function makeViewer() {
     postRender: makeEvent(),
     camera: { moveStart: makeEvent(), moveEnd: makeEvent() },
   };
-  return {
+  const viewer = {
     scene,
     resolutionScale: 1,
+    targetFrameRate: 60,
     canvas: {
       clientWidth: 1200,
       clientHeight: 800,
       style: { imageRendering: 'pixelated' },
     },
+    // What Cesium's resize() sizes the canvas from, one entry per call.
+    resizes: [],
+    cesiumWidget: {
+      resize() {
+        viewer.resizes.push({
+          cssWidth: viewer.canvas.clientWidth,
+          scale: viewer.resolutionScale,
+        });
+      },
+    },
   };
+  return viewer;
 }
 
 /** Frames that land inside the start-up warm-up; they never count. */
@@ -328,6 +340,8 @@ function frames(viewer, clock, interval, ms) {
   const end = clock.t + ms;
   while (clock.t < end) {
     clock.t += interval;
+    // Cesium's order: resize, render, then postRender.
+    viewer.cesiumWidget.resize();
     viewer.scene.postRender.raise();
   }
 }
@@ -482,6 +496,53 @@ test('install keeps the drawing buffer inside the texture limit', () => {
   viewer.canvas.clientHeight = 1080;
   frames(viewer, clock, ON_TIME, ON_TIME);
   assert.equal(viewer.resolutionScale, 1);
+});
+
+test('a window grown past the texture limit is clamped before Cesium resizes', () => {
+  const viewer = makeViewer();
+  viewer.canvas.clientWidth = 1900;
+  viewer.canvas.clientHeight = 1000;
+  installResolutionGovernor(viewer, {
+    windowRef: { devicePixelRatio: 1 },
+    maxTextureSize: 2048,
+    now: () => 0,
+  });
+  assert.equal(viewer.resolutionScale, 1);
+  viewer.canvas.clientWidth = 2560;
+  viewer.canvas.clientHeight = 1440;
+  viewer.cesiumWidget.resize();
+  const { cssWidth, scale } = viewer.resizes.at(-1);
+  assert.equal(cssWidth, 2560);
+  assert.ok(cssWidth * scale <= 2048, 'in bounds on the first resize');
+});
+
+test('a frame-rate cap under the budget is not read as a slow GPU (#1422)', () => {
+  const viewer = makeViewer();
+  const clock = { t: 0 };
+  installResolutionGovernor(viewer, {
+    windowRef: { devicePixelRatio: 2 },
+    now: () => clock.t,
+  });
+  warmUp(viewer, clock);
+  viewer.targetFrameRate = 30;
+  frames(viewer, clock, SLOW, 30_000);
+  assert.equal(viewer.resolutionScale, 1, '33 ms is the cap, not the cost');
+  assert.equal(getResolutionDiagnostics(viewer).stepsDown, 0);
+  // Once the cap lifts, slow frames count again.
+  viewer.targetFrameRate = 60;
+  frames(viewer, clock, SLOW, 2_300);
+  assert.equal(viewer.resolutionScale, 0.875);
+});
+
+test('dispose gives Cesium its own resize back', () => {
+  const viewer = makeViewer();
+  const { resize } = viewer.cesiumWidget;
+  const dispose = installResolutionGovernor(viewer, {
+    windowRef: { devicePixelRatio: 2 },
+  });
+  assert.notEqual(viewer.cesiumWidget.resize, resize);
+  dispose();
+  assert.equal(viewer.cesiumWidget.resize, resize);
 });
 
 test('install rejects a non-viewer and replaces an earlier governor', () => {

@@ -1359,7 +1359,10 @@ Neither drawing-buffer side may exceed
 `min(ContextLimits.maximumTextureSize, maximumRenderbufferSize)`: past it Cesium
 throws `Width must be less than or equal to the maximum texture size` and stops
 rendering (#905). That limit wins over the 1x floor, so a 2560 px window on a
-2048-limit GPU draws at 0.8 instead of crashing. Framebuffer memory grows about 150 bytes
+2048-limit GPU draws at 0.8 instead of crashing. The governor wraps
+`cesiumWidget.resize()` and reads the viewport there, before Cesium sizes the
+canvas, because `postRender` is too late: a window grown past the limit has
+already thrown by then. Framebuffer memory grows about 150 bytes
 per drawn pixel (`docs/PERFORMANCE.md`), which is what the budget bounds. Tile
 detail does not change with the ratio: Cesium divides screen-space error by the
 pixel ratio.
@@ -1367,7 +1370,9 @@ pixel ratio.
 - **Governor.** It reads the smoothed interval between back-to-back frames:
   continuous render, or a moving camera. Request-mode frames on a parked camera
   carry no cost signal and are skipped, so an idle globe never changes
-  resolution and the governor never requests a frame. The first 5 s after
+  resolution and the governor never requests a frame. Frames under a
+  `viewer.targetFrameRate` below 50 are skipped for the same reason: the cap
+  sets their interval, not the GPU. The first 5 s after
   start-up are skipped as well. Over 20 ms, without getting back to 18 ms, for
   2 s of frames steps the ratio down by 0.25, never below 1; the gap keeps a
   frame time that hovers at the budget from resetting that window. 8 s of
