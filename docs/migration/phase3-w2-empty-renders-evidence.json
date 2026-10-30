@@ -1,0 +1,694 @@
+{
+  "runtimeCommit": "e6b87a12f1c7e63cf3a181a8271db419a4d95a89",
+  "previewManifestSha256": "387b49aa410105572b06d85c14297037e9cbf99a0e55caf05c514274b7c404a3",
+  "sourceSha256": {
+    "src/globe/navara/emptySceneRender.js": "1bd3fd8ff137fa9707cdc73912b15966ff7bb67286b3ae504669a2275149949f",
+    "src/globe/navara/postSamplingPass.js": "6f60eb5f7d8234547bc9673719a0d92da40a75d26fb355b3bb95a9ed6d72b22c",
+    "scripts/qa-installation-stencil.mjs": "d92dc377f43e6495ffa2d0699e996d3f14b877316cd3acd6f0ac4b0006ca55f6",
+    "scripts/qa-w2-comparison.mjs": "c294382223ee9407a8088d4657404c7e4eda4f3be436f59eac23bc22806c2ec4"
+  },
+  "gates": [
+    {
+      "gate": "unit",
+      "code": 0,
+      "seconds": 89.8
+    },
+    {
+      "gate": "boundaries",
+      "code": 0,
+      "seconds": 10.1
+    },
+    {
+      "gate": "format",
+      "code": 0,
+      "seconds": 9.8
+    },
+    {
+      "gate": "build",
+      "code": 0,
+      "seconds": 8.5
+    },
+    {
+      "gate": "panel",
+      "code": 0,
+      "seconds": 9.9
+    },
+    {
+      "gate": "qa-build",
+      "code": 0,
+      "seconds": 8.3
+    },
+    {
+      "gate": "main",
+      "code": 0,
+      "seconds": 0.3
+    }
+  ],
+  "unit": {
+    "ordinaryPassed": 7354,
+    "ordinarySkipped": 1,
+    "allocationPassed": 15
+  },
+  "browserRuns": [
+    {
+      "check": "pixels",
+      "code": 0,
+      "seconds": 17.1
+    },
+    {
+      "check": "ground",
+      "code": 0,
+      "seconds": 28.8
+    },
+    {
+      "check": "layer-navara",
+      "code": 0,
+      "seconds": 10.5
+    },
+    {
+      "check": "layer-cesium",
+      "code": 0,
+      "seconds": 10.3
+    },
+    {
+      "check": "sampling",
+      "code": 0,
+      "seconds": 11.5
+    },
+    {
+      "check": "contract",
+      "code": 0,
+      "seconds": 51.0
+    }
+  ],
+  "checks": {
+    "pixels": {
+      "emptyRenders": true,
+      "checks": [
+        {
+          "name": "catalog: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "catalog: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "catalog: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 39,
+              "draws": 247
+            },
+            "slow": {
+              "renders": 40,
+              "draws": 247
+            }
+          }
+        },
+        {
+          "name": "removing contours fails the pixel oracle",
+          "pass": true,
+          "detail": {
+            "changed": 5692,
+            "max": 131
+          }
+        },
+        {
+          "name": "holes-nadir: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-nadir: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-nadir: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 40,
+              "draws": 70
+            },
+            "slow": {
+              "renders": 41,
+              "draws": 70
+            }
+          }
+        },
+        {
+          "name": "holes-nadir: custom geometry visible",
+          "pass": true,
+          "detail": {
+            "changed": 77953,
+            "max": 133
+          }
+        },
+        {
+          "name": "filling the hole fails the same pixel oracle",
+          "pass": true,
+          "detail": {
+            "changed": 5002,
+            "max": 50
+          }
+        },
+        {
+          "name": "holes-oblique: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-oblique: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-oblique: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 41,
+              "draws": 121
+            },
+            "slow": {
+              "renders": 42,
+              "draws": 121
+            }
+          }
+        },
+        {
+          "name": "holes-oblique: custom geometry visible",
+          "pass": true,
+          "detail": {
+            "changed": 36199,
+            "max": 145
+          }
+        },
+        {
+          "name": "holes-reverse: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-reverse: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "holes-reverse: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 41,
+              "draws": 89
+            },
+            "slow": {
+              "renders": 42,
+              "draws": 89
+            }
+          }
+        },
+        {
+          "name": "holes-reverse: custom geometry visible",
+          "pass": true,
+          "detail": {
+            "changed": 57974,
+            "max": 158
+          }
+        },
+        {
+          "name": "empty: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "empty: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "empty: same draws with fewer render submissions",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 35,
+              "draws": 74
+            },
+            "slow": {
+              "renders": 36,
+              "draws": 74
+            }
+          }
+        },
+        {
+          "name": "empty-depth-clear: stable original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "empty-depth-clear: exact original pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "empty-depth-clear: preserves required clear resolves",
+          "pass": true,
+          "detail": {
+            "fast": {
+              "renders": 38,
+              "draws": 76
+            },
+            "slow": {
+              "renders": 38,
+              "draws": 76
+            }
+          }
+        },
+        {
+          "name": "no unexpected browser errors",
+          "pass": true,
+          "detail": []
+        }
+      ],
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "failedResponses": [],
+      "runtimePages": [
+        "batch"
+      ]
+    },
+    "ground": {
+      "checks": [
+        {
+          "name": "nonempty real keyless ground scene",
+          "pass": true,
+          "detail": {
+            "records": 15,
+            "mode": "source-fed-earthquakes",
+            "photoreal": false,
+            "settled": true
+          }
+        },
+        {
+          "name": "classification actually paints unobstructed terrain",
+          "pass": true,
+          "detail": {
+            "maxDelta": 0,
+            "contrast": 95,
+            "groundContrast": 136
+          }
+        },
+        {
+          "name": "a real opaque box covers the classified surface",
+          "pass": true,
+          "detail": {
+            "maxDelta": 0,
+            "contrast": 95,
+            "groundContrast": 136
+          }
+        },
+        {
+          "name": "forward mesh pixels remain unclassified",
+          "pass": true,
+          "detail": {
+            "maxDelta": 0,
+            "contrast": 95,
+            "groundContrast": 136
+          }
+        },
+        {
+          "name": "always-visible point paints through the opaque box",
+          "pass": true,
+          "detail": {
+            "alwaysContrast": 140,
+            "normalContrast": 0
+          }
+        },
+        {
+          "name": "normal point stays hidden after an always-visible shader was compiled",
+          "pass": true,
+          "detail": {
+            "alwaysContrast": 140,
+            "normalContrast": 0
+          }
+        },
+        {
+          "name": "probe disposal and disabled layer settle to zero frames",
+          "pass": true,
+          "detail": 0
+        },
+        {
+          "name": "all observed pages have no runtime errors",
+          "pass": true,
+          "detail": []
+        }
+      ],
+      "browserErrors": [],
+      "negative": false,
+      "negativeMesh": false,
+      "keyless": true,
+      "layer": "earthquakes",
+      "driverSha256": "2b257c568b52eab3bd9ccbe9e0924943995ae9f7190a3f36a1a9cfe06d1de72d",
+      "expectedPreviewErrors": [
+        "/api/setup/status: 404"
+      ],
+      "failedResponses": [
+        {
+          "page": "main",
+          "status": 404,
+          "resource": "http://127.0.0.1:4207/api/setup/status"
+        }
+      ],
+      "runtimePages": [
+        "main"
+      ],
+      "forward": {
+        "maxDelta": 0,
+        "contrast": 95,
+        "groundContrast": 136
+      },
+      "moverDepth": {
+        "alwaysContrast": 140,
+        "normalContrast": 0
+      },
+      "pass": true
+    },
+    "layer-navara": {
+      "engine": "navara",
+      "fixtureId": "osm:way:980001",
+      "checks": [
+        {
+          "name": "navara startup with keyless OSM stack",
+          "pass": true,
+          "detail": {
+            "engine": "navara",
+            "map": "osm"
+          }
+        },
+        {
+          "name": "OSM source attribution is visible with mapped records",
+          "pass": true
+        },
+        {
+          "name": "ordinary outline paints beyond the point marker",
+          "pass": true,
+          "detail": 3419
+        },
+        {
+          "name": "real pointer selection paints the selected footprint",
+          "pass": true,
+          "detail": 1416
+        },
+        {
+          "name": "selection retains canonical installation identity",
+          "pass": true,
+          "detail": "osm:way:980001"
+        },
+        {
+          "name": "Places candidates retain visible Google Maps attribution",
+          "pass": true
+        },
+        {
+          "name": "no unexpected page errors",
+          "pass": true
+        }
+      ],
+      "runtimeErrors": 0,
+      "runtimeErrorPaths": [],
+      "expectedBlockedExternalErrors": 699,
+      "blockedGoogleTileRequests": 0,
+      "blockedExternalRequests": 700,
+      "images": {
+        "baseline": "/private/tmp/installations-navara-off.png",
+        "outline": "/private/tmp/installations-navara-outline.png",
+        "selected": "/private/tmp/installations-navara-selected.png"
+      },
+      "blockedExternalHosts": [
+        "fonts.googleapis.com",
+        "",
+        "services.arcgisonline.com",
+        "terrain.reearth.land",
+        "tile.openstreetmap.org"
+      ],
+      "pass": true
+    },
+    "layer-cesium": {
+      "engine": "cesium",
+      "fixtureId": "osm:way:980001",
+      "checks": [
+        {
+          "name": "cesium startup with keyless OSM stack",
+          "pass": true,
+          "detail": {
+            "engine": "cesium",
+            "map": "osm"
+          }
+        },
+        {
+          "name": "Cesium ground-height bounds use the packaged local fixture",
+          "pass": true,
+          "detail": 1
+        },
+        {
+          "name": "Cesium base tiles settle before capture",
+          "pass": true
+        },
+        {
+          "name": "Cesium ground tiles settle with installations",
+          "pass": true
+        },
+        {
+          "name": "OSM source attribution is visible with mapped records",
+          "pass": true
+        },
+        {
+          "name": "Cesium receives deterministic local imagery",
+          "pass": true,
+          "detail": {
+            "type": "EC",
+            "tileWidth": 256,
+            "tileHeight": 256
+          }
+        },
+        {
+          "name": "ordinary outline paints beyond the point marker",
+          "pass": true,
+          "detail": 1467
+        },
+        {
+          "name": "Cesium viewer-entity GPU pick control",
+          "pass": true,
+          "detail": "qa-native-pick-probe"
+        },
+        {
+          "name": "real pointer selection paints the selected footprint",
+          "pass": true,
+          "detail": 2157
+        },
+        {
+          "name": "selection retains canonical installation identity",
+          "pass": true,
+          "detail": "osm:way:980001"
+        },
+        {
+          "name": "Places candidates retain visible Google Maps attribution",
+          "pass": true
+        },
+        {
+          "name": "no unexpected page errors",
+          "pass": true
+        }
+      ],
+      "runtimeErrors": 0,
+      "runtimeErrorPaths": [],
+      "expectedBlockedExternalErrors": 264,
+      "blockedGoogleTileRequests": 0,
+      "blockedExternalRequests": 264,
+      "cesiumScene": {
+        "globeTilesLoaded": true,
+        "terrainProvider": "mZ"
+      },
+      "cesiumSelectedGround": {
+        "entities": [
+          {
+            "show": true,
+            "hierarchy": true
+          }
+        ]
+      },
+      "images": {
+        "baseline": "/private/tmp/installations-cesium-off.png",
+        "outline": "/private/tmp/installations-cesium-outline.png",
+        "selected": "/private/tmp/installations-cesium-selected.png"
+      },
+      "blockedExternalHosts": [
+        "fonts.googleapis.com",
+        "services.arcgisonline.com",
+        "terrain.reearth.land",
+        "tile.openstreetmap.org"
+      ],
+      "pass": true
+    },
+    "sampling": {
+      "checks": [
+        {
+          "name": "post buffers single-sampled, geometry and overlays retain four samples",
+          "pass": true,
+          "detail": {
+            "post": 0,
+            "geometry": 4,
+            "forward": 4
+          }
+        },
+        {
+          "name": "frozen map, contours, viewsheds and points keep exact pixels",
+          "pass": true,
+          "detail": {
+            "changed": 0,
+            "max": 0,
+            "sum": 0
+          }
+        },
+        {
+          "name": "removing contours fails the pixel oracle",
+          "pass": true,
+          "detail": {
+            "changed": 5499,
+            "max": 114,
+            "sum": 477973
+          }
+        },
+        {
+          "name": "no unexpected browser errors",
+          "pass": true,
+          "detail": []
+        }
+      ],
+      "browserErrors": [],
+      "expectedPreviewErrors": [],
+      "failedResponses": [],
+      "runtimePages": [
+        "batch"
+      ],
+      "buffers": {
+        "post": 0,
+        "geometry": 4,
+        "forward": 4
+      },
+      "delta": {
+        "changed": 0,
+        "max": 0,
+        "sum": 0
+      }
+    }
+  },
+  "contract": {
+    "passed": 76,
+    "total": 76,
+    "log": "/private/tmp/gev-empty-final2-contract.log",
+    "sha256": "2d4d19d9450b9c5f1c6b8b9f7953d6a963f79739463bbe8443fa9ba80defe349"
+  },
+  "diagnostics": [
+    {
+      "name": "baseline",
+      "path": "/private/tmp/gev-next-profile-baseline.json",
+      "sha256": "7b63847fe8b62e118da2bde04d834bfcf0cca8819a1e87da5918c500016efe59",
+      "browserErrors": [],
+      "workP95": {
+        "empty": 4.899999618530273,
+        "combined": 9.399999618530273
+      },
+      "acceptedBenchmark": false
+    },
+    {
+      "name": "empty-renders",
+      "path": "/private/tmp/gev-next-profile-empty-renders.json",
+      "sha256": "9d615b3a7ebf2c81331bade590e16836469a6903ce466fe2ef7b9470eb88230b",
+      "browserErrors": [],
+      "workP95": {
+        "empty": 4.099999904632568,
+        "combined": 8.800000190734863
+      },
+      "acceptedBenchmark": false
+    },
+    {
+      "name": "no-flare",
+      "path": "/private/tmp/gev-next-profile-no-flare.json",
+      "sha256": "80df5bbbf564c3514514416d87994cbc758ab616ff5c1017b5f7642ce4625948",
+      "browserErrors": [],
+      "workP95": {
+        "empty": 4.400000095367432,
+        "combined": 9.300000190734863
+      },
+      "acceptedBenchmark": false
+    }
+  ],
+  "reviewFix": "The first prototype did not retain a pending explicit depth/stencil clear. A regression reproduced the missing render before the fix. The final implementation tracks pending clears by render target and preserves their resolving render, then restores both borrowed renderer methods even on exceptions.",
+  "correctedQaExpectation": {
+    "path": "/private/tmp/gev-empty-fixed-pixels.json",
+    "sha256": "4d6bc2309e9dbda593c10cc0da0bc088a96ac1e13abe67c625083f9abd646d99",
+    "note": "All pixel checks passed. The new depth-clear case correctly kept the same render count; its initial generic fewer-renders assertion was incorrect. Final QA explicitly requires equal renders for this clear-preservation case. Pixel tolerance remains zero."
+  },
+  "qualityOracle": {
+    "canvas": [
+      1280,
+      800
+    ],
+    "region": [
+      200,
+      190,
+      850,
+      460
+    ],
+    "exactOriginalCases": 6,
+    "checks": 24,
+    "tolerance": "zero changed RGB pixels",
+    "depthClearLimitation": "With hideUnderground=false this fixture shows plain sky in both original and optimized paths. This case validates required render/resolve preservation and equal output, not visible-terrain quality. Terrain/opaque-object quality is covered by the normal-mode pixel and separate ground checks."
+  },
+  "benchmarkExitCodes": {
+    "uncapped": 1,
+    "paced": 0
+  },
+  "comparisonControl": "No-op callbacks select the original render path. Clear tracking/helper overhead is shared by both variants. This isolates resolve suppression, not two independently built revisions."
+}
