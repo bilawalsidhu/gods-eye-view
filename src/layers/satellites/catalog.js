@@ -114,6 +114,8 @@ export function createCatalog({ state: layerState, services, parts, source }) {
           const entry = entries[i];
           const satrec = twoline2satrec(entry.line1, entry.line2);
           if (!satrec || satrec.error !== 0) continue;
+          // satellite.js omits the designator the launch-year match reads.
+          satrec.intldesg = entry.line1.slice(9, 17).trim();
           const noradId = noradIdFromSatnum(satrec.satnum);
           if (layerState._catalog.has(noradId)) continue; // core catalog keeps priority
           const pos = parts.orbits.propagatePosition(satrec, now);

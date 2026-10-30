@@ -235,6 +235,20 @@ test('dense provenance belongs to its admitted records and clears on removal', a
   );
 });
 
+test('dense extras keep their launch year for mission orbit matching', async (t) => {
+  const f = await fixture(t);
+  await f.update();
+  f.state._params.catalog = 'dense';
+  assert.equal((await f.parts.catalog._loadDenseCatalog()).status, 'ready');
+  // Every fixture set carries the 1998-067A designator.
+  const track = (launchTime) =>
+    f.parts.orbits.getSatelliteOrbitTrack('OWNED ORBIT FIXTURE 25551', {
+      launchTime,
+    });
+  assert.equal(track('1998-11-20T06:40:00Z')?.noradId, 25551);
+  assert.equal(track('2026-06-29T02:25:00Z'), null);
+});
+
 test('cancelling dense replacement preserves admitted stale extras until rebuild', async (t) => {
   const f = await fixture(t);
   await f.update();

@@ -119,6 +119,8 @@ export function createIngestion({
         for (const entry of allEntries) {
           const satrec = twoline2satrec(entry.line1, entry.line2);
           if (!satrec || satrec.error !== 0) continue;
+          // satellite.js omits the designator the launch-year match reads.
+          satrec.intldesg = entry.line1.slice(9, 17).trim();
 
           const noradId = noradIdFromSatnum(satrec.satnum);
           if (seen.has(noradId)) continue;
