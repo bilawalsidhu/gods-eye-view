@@ -256,6 +256,33 @@ test('an error that quotes the API key never reaches the log', async (t) => {
   );
 });
 
+test('a key quoted across the 160-character cut or URL-encoded is still masked', async (t) => {
+  const key = 'synthetic/key+Zq81xT7';
+  const lines = [];
+  let n = 0;
+  const store = createUsgsWaterStore({
+    fetchImpl: async () => {
+      n += 1;
+      const quoted = n % 2 ? key : encodeURIComponent(key);
+      // The key starts a few characters before the 160-character cut.
+      return new Response(
+        JSON.stringify({ description: `${'x'.repeat(150)}${quoted}` }),
+        { status: 403 },
+      );
+    },
+    cacheFile: tmpCache(t),
+    env: { USGS_WATER_API_KEY: key },
+    now: () => 1_000_000,
+    log: { warn: (...args) => lines.push(args.join(' ')) },
+  });
+  assert.equal(await store.current(), null);
+  assert.ok(lines.length > 0, 'the failure is logged');
+  for (const line of lines) {
+    assert.ok(!line.includes('synthetic'), 'no key prefix survives');
+    assert.ok(!line.includes('Zq81'), 'no key suffix survives');
+  }
+});
+
 test('the route serves the files, refreshes hourly and keeps serving through a failure', async (t) => {
   let now = 1_000_000;
   let fail = false;
