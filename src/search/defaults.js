@@ -80,11 +80,12 @@ export function createDefaultPlaceSearch({
             createGoogleGeocoder({
               async request(query, { bias, signal }) {
                 // The app's own route says up front when Nominatim is off.
-                if (
-                  nominatimConfigured &&
-                  (await nominatimConfigured()) === false
-                )
-                  return null;
+                const capability = nominatimConfigured
+                  ? await nominatimConfigured()
+                  : null;
+                // A search cancelled during the probe starts no request.
+                signal?.throwIfAborted();
+                if (capability === false) return null;
                 const params = new URLSearchParams({ q: query });
                 if (bias) params.set('bounds', bias);
                 return fetchImpl(

@@ -96,8 +96,10 @@ export function createNominatimOutlineClient({
     if (remembered.has(key)) return remembered.get(key);
     // A cancelled ask spends nothing.
     signal?.throwIfAborted();
-    if (configured && (await configured()) === false) {
-      signal?.throwIfAborted();
+    const capability = configured ? await configured() : null;
+    // The probe may have waited: an ask cancelled meanwhile still spends nothing.
+    signal?.throwIfAborted();
+    if (capability === false) {
       unavailable = {
         unavailable: true,
         retryable: false,

@@ -179,3 +179,34 @@ test('a configured server is asked as usual after one probe', async () => {
   assert.equal(calls.length, 2);
   assert.equal(probes.length, 1);
 });
+
+test('an ask cancelled while the capability probe is pending spends nothing', async () => {
+  for (const [label, answer] of [
+    ['configured', () => reply(200, { configured: true })],
+    ['unknown', () => reply(404, { error: 'Not Found' })],
+    ['unconfigured', () => reply(200, { configured: false })],
+  ]) {
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { calls, lookup } = client(
+      () => reply(200, { status: 'ZERO_RESULTS', outline: null }),
+      {
+        status: async () => {
+          await held;
+          return answer();
+        },
+      },
+    );
+    const controller = new AbortController();
+    const pending = lookup(
+      { query: 'Paris', kind: 'city' },
+      { signal: controller.signal },
+    );
+    controller.abort();
+    release();
+    await assert.rejects(pending, { name: 'AbortError' }, label);
+    assert.equal(calls.length, 0, `${label}: no outline request`);
+  }
+});

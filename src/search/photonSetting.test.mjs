@@ -53,3 +53,31 @@ test('the last-resort route is skipped when the server reports Nominatim unconfi
   const on = await run(true);
   assert.ok(on.includes('/api/geocode'), on.join(','));
 });
+
+test('a search cancelled while the Nominatim probe is pending starts no last-resort request', async () => {
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  const asked = [];
+  const controller = new AbortController();
+  const search = createDefaultPlaceSearch({
+    endpoints: { photon: null },
+    fetchImpl: async (url) => {
+      const path = new URL(String(url), 'http://local.test').pathname;
+      asked.push(path);
+      if (path === '/api/geocode/status') {
+        controller.abort();
+        await held;
+        return Response.json({ configured: true });
+      }
+      return Response.json({ status: 'ZERO_RESULTS', results: [] });
+    },
+  });
+  const pending = search.geocode('nowhere-cancelled', {
+    signal: controller.signal,
+  });
+  release();
+  await pending.catch(() => null);
+  assert.ok(!asked.includes('/api/geocode'), asked.join(','));
+});
