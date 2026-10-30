@@ -1827,6 +1827,8 @@ limit, as well as when a tile decodes or the source resets.
 GBFS null or empty availability counts retain an unknown value through station
 parsing and rendering; they use the neutral station color rather than reporting
 an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
+A station whose `station_information` publishes no capacity takes bikes plus
+docks from each status poll (15 until its status arrives), not from the first.
 
 ## Terrain height cache bound
 
