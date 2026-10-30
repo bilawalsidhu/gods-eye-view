@@ -91,11 +91,12 @@ function contenderScript(stateFile, lockWaitMs) {
       onError: () => {},
     });
     process.stdout.write('ATTEMPTING\\n', () => {
-      const result = store.reserve('2026-10-01', {
-        now: 1000,
-        dailyCap: 50,
-        minSpacingMs: 1100,
-      });
+      const result = store.dispatch(
+        '2026-10-01',
+        { clock: () => 1000, dailyCap: 50, minSpacingMs: 1100 },
+        () => Promise.resolve(),
+      );
+      delete result.value;
       process.stdout.write('RESULT:' + JSON.stringify(result) + '\\n');
     });
   `;
@@ -153,16 +154,14 @@ test('a crashed lock owner cannot delete or bypass a successor lock', async (t) 
   successorOwner.child.stdin.end('release\n');
   await successorOwner.waitFor('RELEASED');
   assert.equal((await successorOwner.exited).code, 0);
-  const afterRelease = createGateStateStore({ file: stateFile }).reserve(
+  const released = createGateStateStore({ file: stateFile });
+  const afterRelease = released.dispatch(
     '2026-10-01',
-    {
-      now: 2200,
-      dailyCap: 50,
-      minSpacingMs: 1100,
-    },
+    { clock: () => 2200, dailyCap: 50, minSpacingMs: 1100 },
+    () => Promise.resolve(),
   );
-  assert.equal(afterRelease.status, 'reserved');
-  assert.equal(afterRelease.count, 1);
+  assert.equal(afterRelease.status, 'started');
+  assert.equal(released.count('2026-10-01'), 1);
   assert.equal(fs.statSync(lockFile).ino, originalLock.ino);
 });
 
@@ -211,22 +210,29 @@ test('a public pause stays authoritative while another process owns the lock', a
   assert.equal((await owner.exited).code, 0);
 
   const successor = createGateStateStore({ file: stateFile });
+  let sent = 0;
+  const send = () => {
+    sent += 1;
+    return Promise.resolve();
+  };
   assert.deepEqual(
-    successor.reserve('2026-10-01', {
-      now: 1000,
-      dailyCap: 50,
-      minSpacingMs: 1100,
-    }),
+    successor.dispatch(
+      '2026-10-01',
+      { clock: () => 1000, dailyCap: 50, minSpacingMs: 1100 },
+      send,
+    ),
     { status: 'paused', retryAfterMs: 8000 },
     'a fresh process observes the pending refusal pause',
   );
-  const resumed = successor.reserve('2026-10-01', {
-    now: 9001,
-    dailyCap: 50,
-    minSpacingMs: 1100,
-  });
-  assert.equal(resumed.status, 'reserved');
-  assert.equal(resumed.count, 2);
+  assert.equal(sent, 0, 'a paused dispatch never starts the transport');
+  const resumed = successor.dispatch(
+    '2026-10-01',
+    { clock: () => 9001, dailyCap: 50, minSpacingMs: 1100 },
+    send,
+  );
+  assert.equal(resumed.status, 'started');
+  assert.equal(sent, 1);
+  assert.equal(successor.count('2026-10-01'), 2);
   assert.equal(
     fs.readdirSync(dir).some((name) => name.startsWith('state.json.pause.')),
     false,

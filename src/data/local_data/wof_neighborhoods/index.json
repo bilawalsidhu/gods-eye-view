@@ -19,11 +19,8 @@
    "url": "https://raw.githubusercontent.com/whosonfirst/whosonfirst-sources/e17af153c144fe6e08aa8db2607b4bf8aecd448d/data/sources-spec-latest.json",
    "sha256": "d8a5dd873d26eee11583de4438185c046dec33848d5bde27047ca4bff44d9c39"
   },
-  "recordExclusions": {
-   "can-ons": 36,
-   "can-saskodp": 54
-  },
-  "recordExclusionReason": "Original source-specific redistribution terms have not been established for these records in this derived pack.",
+  "recordExclusions": {},
+  "recordExclusionReason": "Sources whose pinned registry licence is only an \"equivalent\" designation (for example \"CC BY (equivalent)\" or \"CC0 (equivalent)\"), including can-ons, can-saskodp, can-gatsudd and esp-aytomad, are not admitted: their redistribution terms have not been established for this derived pack.",
   "license": "Per source; see sources and ATTRIBUTION.md",
   "format": "neighborhood-polylines-v1",
   "fields": [
@@ -108,12 +105,6 @@
     "terms": "https://www.edmonton.ca/city_government/documents/Web-version2.1-OpenDataAgreement.pdf",
     "records": 332
    },
-   "can-gatsudd": {
-    "name": "Gatineau Service de l'urbanisme et du developpement durable (SUDD)",
-    "license": "CC BY (equivalent)",
-    "terms": "http://www3.gatineau.ca/Infoterritoire/WebInterface/help/fr/Content/1_About/1_About_FR.htm",
-    "records": 74
-   },
    "can-lvlsu": {
     "name": "Laval Service de l'urbanisme",
     "license": "CC BY",
@@ -173,12 +164,6 @@
     "license": "CC BY 3.0",
     "terms": "https://www.denvergov.org/opendata/termsofuse",
     "records": 77
-   },
-   "esp-aytomad": {
-    "name": "Portal de datos abiertos del Ayuntamiento de Madrid",
-    "license": "CC0 (equivalent)",
-    "terms": "http://datos.madrid.es/egob/catalogo/aviso-legal",
-    "records": 150
    },
    "esp-cartobcn": {
     "name": "CartoBCN",
@@ -770,7 +755,7 @@
   },
   {
    "key": "213",
-   "count": 445,
+   "count": 295,
    "bbox": [
     -9.8565,
     37.09996,
@@ -829,20 +814,10 @@
    ]
   },
   {
-   "key": "2300100",
-   "count": 16,
+   "key": "230010",
+   "count": 375,
    "bbox": [
     -76.35559,
-    45.08001,
-    -75.87256,
-    45.51661
-   ]
-  },
-  {
-   "key": "2300101",
-   "count": 433,
-   "bbox": [
-    -76.31305,
     44.96177,
     -73.33863,
     45.71368

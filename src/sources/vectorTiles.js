@@ -40,8 +40,8 @@ function tileJsonOrigin(tileJsonUrl) {
 const DECODER_IDS = new WeakMap();
 let nextDecoderId = 1;
 
-// Shared completion must not run every consumer's selection in one task.
-const nextTask = () =>
+/** Give the page a turn; shared completion must not run every consumer's selection in one task. */
+export const nextTask = () =>
   globalThis.scheduler?.yield
     ? globalThis.scheduler.yield()
     : new Promise((resolve) => setTimeout(resolve, 0));
@@ -198,6 +198,7 @@ export function createVectorTileSource({
   now = Date.now,
   sharedDecodedCache = null,
   selectDecoded = (value) => value,
+  selectedSize = null,
 }) {
   const cache = new Map();
   const active = new Set();
@@ -498,7 +499,16 @@ export function createVectorTileSource({
         const selected = selectDecoded(decodedEntry.value, tile);
         // Shared entries stay authoritative; consumers own their nested arrays.
         const value = sharedDecodedCache ? structuredClone(selected) : selected;
-        const size = decodedEntry.size;
+        // A consumer of a shared tile retains only its own slice; charge that,
+        // not the whole decoded tile, which the shared cache already counts.
+        let size = decodedEntry.size;
+        if (sharedDecodedCache && selectedSize) {
+          try {
+            size = selectedSize(value);
+          } catch {
+            size = decodedEntry.size;
+          }
+        }
         if (epoch === generation && size <= maxCacheBytes) {
           if (cache.has(key)) cacheBytes -= cache.get(key).size;
           cache.delete(key);

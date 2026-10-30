@@ -42,6 +42,7 @@ import {
   rank,
 } from './adminBoundaries.js';
 import { loadBundledJson } from './bundledJson.js';
+import { foldPlaceName } from './placeNames.js';
 import { createRetryableLoader } from './retryableLoad.js';
 import * as placeFiles from './local_data/us_census_places/files.js';
 import * as neighborhoodFiles from './local_data/wof_neighborhoods/files.js';
@@ -63,17 +64,6 @@ export const packLoads = {
   neighborhoodTiles: [],
 };
 
-const FOLD = {
-  ß: 'ss',
-  ø: 'o',
-  æ: 'ae',
-  ł: 'l',
-  đ: 'd',
-  ı: 'i',
-  œ: 'oe',
-  þ: 'th',
-};
-
 /**
  * A name as spelled: case and punctuation only. Every mark is kept, so
  * "की" and "क", "Й" and "И" stay distinct.
@@ -87,20 +77,11 @@ export function exactPlaceName(value) {
 }
 
 /**
- * Fold a name for matching: case, punctuation, accents on Latin letters
- * only, a leading "the", "saint". Other scripts keep their marks
- * ("渋谷", "Кунцево", "बांद्रा").
+ * Fold a name for matching (see `foldPlaceName`), with "saint" and "sainte"
+ * shortened the way US place names abbreviate them.
  */
 export function normalizePlaceName(value) {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[ßøæłđıœþ]/g, (c) => FOLD[c])
-    .normalize('NFD')
-    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
-    .normalize('NFC')
-    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
-    .trim()
-    .replace(/^the /, '')
+  return foldPlaceName(value)
     .replace(/\bsaint\b/g, 'st')
     .replace(/\bsainte\b/g, 'ste');
 }

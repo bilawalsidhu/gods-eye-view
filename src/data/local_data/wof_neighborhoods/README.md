@@ -12,7 +12,7 @@ DataSF pack in `../neighborhoods/` is used first inside San Francisco.
 | `files.js` | every file's URL, so bundlers emit them (generated) |
 | `whosonfirst-LICENSE.md`, `quattroshapes-LICENSE.md` | upstream notices, unchanged |
 
-61,665 named neighbourhood, macrohood and microhood polygons in 218 tiles.
+61,441 named neighbourhood, macrohood and microhood polygons in 217 tiles.
 
 **Source:** [Who's On First](https://whosonfirst.org/) and contributors:
 `whosonfirst-data-{neighbourhood,macrohood,microhood}-latest.tar.bz2` from
@@ -46,10 +46,13 @@ a `[lon, lat]` point inside the largest polygon. A ring is an encoded
 polyline string: longitude then latitude at 10^-5 degrees, zigzag varint
 deltas, 5-bit groups offset by 63.
 
-**Source-specific exclusions:** This derived pack excludes 36 `can-ons` records, 54 `can-saskodp` records. Original source-specific redistribution terms have not been established for these records in this derived pack. Original upstream notices remain unchanged.
-
-The original pinned records are partitioned first; exact source/ID exclusions
-are then applied within those tiles, preserving every remaining tile path.
+**Licence exclusions:** only sources whose exact registry licence is on the
+reviewed allowlist in `scripts/wof-open-licenses.json` are admitted. A licence
+listed only as an "equivalent" of an open licence ("CC BY (equivalent)",
+"CC0 (equivalent)") is not admitted, so `can-ons`, `can-saskodp`,
+`can-gatsudd` and `esp-aytomad` records are not in this pack: their
+redistribution terms have not been established for this derived pack.
+Original upstream notices remain unchanged.
 
 **Curation:** current, non-deprecated, named polygon records; simplified to
 about 15 m, snapped to 5 decimals and kept valid under GEOS (checked on the

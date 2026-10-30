@@ -489,63 +489,6 @@ export function createGateStateStore({
         nextStartAt: state.nextStartAt,
       })).count;
     },
-    reserve(day, { now, dailyCap, minSpacingMs, latestStartAt = Infinity }) {
-      if (!file) {
-        const error = new Error(
-          'no durable Nominatim usage state is configured',
-        );
-        report(error);
-        return { status: 'unavailable', error };
-      }
-      try {
-        let result;
-        withLock(() => {
-          if (pendingDispatches({ strict: true }).length)
-            throw new Error('unfinished durable Nominatim dispatch');
-          const disk = readDisk({ strict: true });
-          if (disk) memory = merge(memory, disk);
-          const pending = pendingPauses({ strict: true });
-          if (pending.length)
-            memory = merge(memory, {
-              ...memory,
-              pausedUntil: Math.max(...pending.map((item) => item.pausedUntil)),
-            });
-          const state = memory;
-          if ((state.pausedUntil || 0) > now) {
-            result = {
-              status: 'paused',
-              retryAfterMs: state.pausedUntil - now,
-            };
-            return;
-          }
-          const count = state.day === day ? state.count : 0;
-          if (count >= dailyCap) {
-            result = { status: 'cap' };
-            return;
-          }
-          const startAt = Math.max(now, state.nextStartAt || 0);
-          if (startAt > latestStartAt) {
-            result = { status: 'abandoned' };
-            return;
-          }
-          const next = {
-            day,
-            count: count + 1,
-            pausedUntil: state.pausedUntil || 0,
-            nextStartAt: startAt + minSpacingMs,
-          };
-          writeDisk(next);
-          memory = next;
-          clearPersistedPauses(next.pausedUntil);
-          lastError = null;
-          result = { status: 'reserved', startAt, count: next.count };
-        });
-        return result;
-      } catch (error) {
-        report(error);
-        return { status: 'unavailable', error };
-      }
-    },
     dispatch(
       day,
       { clock, dailyCap, minSpacingMs, latestStartAt = Infinity },

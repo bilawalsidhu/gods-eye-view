@@ -12,14 +12,12 @@
   "licenses": [
     "Attribution 3.0 Unported",
     "CC BY",
-    "CC BY (equivalent)",
     "CC BY 2.0",
     "CC BY 3.0",
     "CC BY 3.0 US",
     "CC BY 4.0",
     "CC-BY",
     "CC0",
-    "CC0 (equivalent)",
     "CC0 1.0 Universal",
     "ODC-By, v1.0",
     "ODC-By v1.0",
@@ -41,42 +39,13 @@
     "Singapore Open Data Licence v1"
   ],
   "recordExclusions": {
-    "reason": "Original source-specific redistribution terms have not been established for these records in this derived pack.",
+    "reason": "Sources whose pinned registry licence is only an \"equivalent\" designation (for example \"CC BY (equivalent)\" or \"CC0 (equivalent)\"), including can-ons, can-saskodp, can-gatsudd and esp-aytomad, are not admitted: their redistribution terms have not been established for this derived pack.",
     "archives": {
       "neighbourhood": "8e5e413aacf2244e4e4167fbd9be860bc407ae6de8b733e47f13abe6d3d10455",
       "macrohood": "f5fbfabcb8229b83242dbd38530c27e61867e8b3b097e3393d9c841962a99679",
       "microhood": "e8197fa576e8831be8f091ac7e219d29224d89404ab0c56d377339e42a8f29ac"
     },
     "registrySha256": "d8a5dd873d26eee11583de4438185c046dec33848d5bde27047ca4bff44d9c39",
-    "sources": {
-      "can-ons": {
-        "count": 36,
-        "ids": [
-          85874435, 85874449, 85874467, 420782209, 420782213, 420782221,
-          420782223, 420782233, 1108978003, 1108978007, 1108978009, 1108978013,
-          1108978037, 1108978041, 1108978055, 1108978063, 1108978067,
-          1108978075, 1108978077, 1108978091, 1108978097, 1108978105,
-          1108978109, 1108978115, 1108978127, 1108978129, 1108978131,
-          1108978133, 1108978135, 1108978139, 1108978141, 1108978143,
-          1108978147, 1108978167, 1108978175, 1108978187
-        ]
-      },
-      "can-saskodp": {
-        "count": 54,
-        "ids": [
-          1126113991, 1126113995, 1126113997, 1126113999, 1126114003,
-          1126114007, 1126114009, 1126114013, 1126114015, 1126114017,
-          1126114019, 1126114023, 1126114025, 1126114027, 1126114031,
-          1126114033, 1126114035, 1126114037, 1126114039, 1126114043,
-          1126114045, 1126114049, 1126114055, 1126114057, 1126114059,
-          1126114061, 1126114063, 1126114067, 1126114069, 1126114071,
-          1126114075, 1126114077, 1126114081, 1126114085, 1126114087,
-          1126114089, 1126114093, 1126114095, 1126114097, 1126114105,
-          1126114107, 1126114111, 1126114115, 1126114121, 1126114125,
-          1126114127, 1126114129, 1126114131, 1126114135, 1126114141,
-          1126114149, 1126114151, 1126114153, 1126114159
-        ]
-      }
-    }
+    "sources": {}
   }
 }

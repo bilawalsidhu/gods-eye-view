@@ -6,6 +6,7 @@ import {
   buildingFromTiles,
   decodeOpenFreeMapOutlineTile,
   enclosingAreaFromTiles,
+  groundsClassesFor,
   streetFromTiles,
 } from './openFreeMapOutlines.js';
 
@@ -235,5 +236,211 @@ test('street proximity uses segments and clips to the search extent', () => {
       radiusM: 500,
     }),
     null,
+  );
+});
+
+test('unnamed school, hospital and campus grounds answer only an ask of that kind', () => {
+  assert.deepEqual(
+    [...groundsClassesFor('Lincoln High School grounds')],
+    ['school'],
+  );
+  assert.deepEqual(
+    [...groundsClassesFor('Lincoln High School campus')],
+    ['school'],
+  );
+  assert.deepEqual([...groundsClassesFor('City College campus site')].sort(), [
+    'college',
+    'university',
+  ]);
+  assert.deepEqual(
+    [...groundsClassesFor('St. Mary Medical Center')],
+    ['hospital'],
+  );
+  assert.deepEqual([...groundsClassesFor('Texas Capitol grounds')], []);
+  assert.deepEqual(
+    [...groundsClassesFor('University of Texas grounds')].sort(),
+    ['college', 'university'],
+  );
+  for (const name of [
+    'University Avenue Park grounds',
+    'Zoo Lake grounds',
+    'School Street Playground grounds',
+    'Academy of Sciences grounds',
+    'Stadium Station',
+    'Google campus',
+    'Mayo Clinic campus',
+    'Google campus',
+    'Mayo Clinic campus',
+  ])
+    assert.deepEqual([...groundsClassesFor(name)], [], name);
+  // About 1.2 km on a side: grounds-sized.
+  const school = {
+    rings: [square(0, 0, 0.01)],
+    clipped: false,
+    class: 'school',
+    name: null,
+  };
+  const otherSchool = {
+    ...school,
+    rings: [square(-0.001, -0.001, 0.02)],
+    name: 'Other Academy',
+  };
+  const park = { ...school, class: 'park' };
+  const at = { lat: 0.005, lon: 0.005, name: 'Lincoln High School' };
+  const asked = {
+    ...at,
+    unnamedClasses: groundsClassesFor('Lincoln High School grounds'),
+  };
+  assert.deepEqual(
+    enclosingAreaFromTiles([{ areas: [school] }], asked)?.class,
+    'school',
+  );
+  assert.equal(
+    enclosingAreaFromTiles([{ areas: [school] }], at),
+    null,
+    'no class from the ask, no unnamed answer',
+  );
+  assert.equal(
+    enclosingAreaFromTiles([{ areas: [park] }], asked),
+    null,
+    'another class never answers',
+  );
+  assert.equal(
+    enclosingAreaFromTiles([{ areas: [otherSchool] }], asked),
+    null,
+    'a differently named school never answers',
+  );
+  const named = {
+    ...school,
+    rings: [square(-0.002, -0.002, 0.03)],
+    name: 'Lincoln High School',
+  };
+  assert.equal(
+    enclosingAreaFromTiles([{ areas: [school, named] }], asked).name,
+    'Lincoln High School',
+    'a named match answers first',
+  );
+  assert.equal(
+    enclosingAreaFromTiles([{ areas: [{ ...school, clipped: true }] }], asked),
+    null,
+    'clipped unnamed grounds are not grounds',
+  );
+});
+
+test('an unnamed class match is only the part holding the point', () => {
+  // A school feature with a second, distant part: only a name could tie them.
+  const near = square(0, 0, 0.002); // about 49,000 m²
+  const far = square(0.02, 0.02, 0.002);
+  const tiny = square(0, 0, 0.0005); // about 3,000 m², below the floor
+  const ask = {
+    lat: 0.001,
+    lon: 0.001,
+    name: 'Lincoln High School',
+    unnamedClasses: groundsClassesFor('Lincoln High School grounds'),
+  };
+  // As decoded: `rings` is the same array as its entry in `featureParts`.
+  const area = (rings, others) => ({
+    rings,
+    featureParts: [rings, ...others],
+    clipped: false,
+    class: 'school',
+    name: null,
+  });
+  const found = enclosingAreaFromTiles(
+    [{ areas: [area([near], [[far]])] }],
+    ask,
+  );
+  assert.deepEqual(
+    found.polygons,
+    [[near]],
+    'the distant part is not included',
+  );
+  assert.equal(
+    enclosingAreaFromTiles(
+      [{ areas: [area([tiny], [[far], [square(-0.02, 0, 0.003)]])] }],
+      { ...ask, lat: 0.0002, lon: 0.0002 },
+    ),
+    null,
+    'other parts cannot lift a small part over the size floor',
+  );
+  const named = enclosingAreaFromTiles(
+    [
+      {
+        areas: [{ ...area([near], [[far]]), name: 'Lincoln High School' }],
+      },
+    ],
+    ask,
+  );
+  assert.equal(named.polygons.length, 2, 'a named feature keeps its parts');
+});
+
+test('grounds names keep their own grounds words; possessives and part cuts', () => {
+  assert.deepEqual(
+    [...groundsClassesFor("Lincoln School's grounds")],
+    ['school'],
+  );
+  const complex = {
+    rings: [square(0, 0, 0.002)],
+    clipped: false,
+    class: 'pitch',
+    name: 'Mueller Sports Complex',
+  };
+  const named = (name) => ({
+    rings: [square(0, 0, 0.002)],
+    clipped: false,
+    class: 'park',
+    name,
+  });
+  const at = { lat: 0.001, lon: 0.001 };
+  for (const [ask, area] of [
+    ["Lincoln School's", 'Lincoln School'],
+    ['Martius Park', 'Campus Martius Park'],
+    ['Mueller Sports Field', 'Mueller Sports Complex Field'],
+  ])
+    assert.equal(
+      enclosingAreaFromTiles([{ areas: [named(area)] }], { ...at, name: ask })
+        ?.name,
+      area,
+      `${ask} → ${area}`,
+    );
+  assert.equal(
+    enclosingAreaFromTiles([{ areas: [named('Lincoln Park Zoo')] }], {
+      ...at,
+      name: 'Lincoln Park',
+    }),
+    null,
+    'a longer, different name never answers',
+  );
+  // The ask arrives with its grounds words cut by the rung.
+  assert.equal(
+    enclosingAreaFromTiles([{ areas: [complex] }], {
+      lat: 0.001,
+      lon: 0.001,
+      name: 'Mueller Sports',
+    })?.name,
+    'Mueller Sports Complex',
+  );
+  // A sibling part cut at the tile edge does not refuse a class match's own part.
+  const school = {
+    rings: [square(0, 0, 0.002)],
+    clipped: true,
+    partClipped: false,
+    class: 'school',
+    name: null,
+  };
+  const ask = {
+    lat: 0.001,
+    lon: 0.001,
+    name: 'Lincoln High School',
+    unnamedClasses: groundsClassesFor('Lincoln High School grounds'),
+  };
+  assert.ok(enclosingAreaFromTiles([{ areas: [school] }], ask));
+  assert.equal(
+    enclosingAreaFromTiles(
+      [{ areas: [{ ...school, partClipped: true }] }],
+      ask,
+    ),
+    null,
+    'its own cut part is still refused',
   );
 });

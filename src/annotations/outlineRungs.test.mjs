@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import {
+  containsAnchor,
   createOutlineRungs,
   isNamedAsk,
   nominatimKindFor,
@@ -324,6 +325,71 @@ test('a city with no configured Overpass is outlined by Nominatim', async () => 
   assert.deepEqual(credits, ['osm']);
 });
 
+test('a Nominatim outline across the antimeridian still holds its anchor', async () => {
+  const ring = [
+    [179.9, -16.9],
+    [-179.9, -16.9],
+    [-179.9, -16.7],
+    [179.9, -16.7],
+    [179.9, -16.9],
+  ];
+  const hole = [
+    [179.99, -16.81],
+    [-179.99, -16.81],
+    [-179.99, -16.79],
+    [179.99, -16.79],
+    [179.99, -16.81],
+  ];
+  assert.ok(containsAnchor([[ring]], -16.8, 179.95));
+  assert.ok(
+    containsAnchor([[ring]], -16.8, -179.95),
+    'either side of the line',
+  );
+  assert.ok(!containsAnchor([[ring, hole]], -16.8, 180), 'holes still exclude');
+  assert.ok(!containsAnchor([[ring]], -16.8, 179.5), 'outside stays outside');
+  assert.ok(
+    !containsAnchor([[ring]], -16.8, 0),
+    'far side of the globe is outside',
+  );
+  const steps = [-170, -130, -90, -50, -10, 20];
+  const wide = [
+    ...steps.map((x) => [x, 10]),
+    ...steps.toReversed().map((x) => [x, 20]),
+    [-170, 10],
+  ];
+  assert.ok(
+    containsAnchor([[wide]], 15, 5),
+    'a ring wider than 180° is read as stored',
+  );
+  const polar = [
+    [-180, -60],
+    [180, -60],
+    [180, -90],
+    [-180, -90],
+    [-180, -60],
+  ];
+  assert.ok(
+    containsAnchor([[polar]], -80, 30),
+    'a polar ring spanning every longitude',
+  );
+  const nominatim = fakeNominatim({ polygons: [[ring]], class: 'boundary' });
+  const result = await createOutlineRungs({
+    tiles: fixtureTiles(),
+    nominatim,
+  }).resolve(
+    ctx({
+      scope: 'city',
+      target: 'Dateline Town',
+      matchName: 'Dateline Town',
+      lat: -16.8,
+      lon: 179.95,
+    }),
+    ladder(UNAVAILABLE),
+  );
+  assert.deepEqual(result.ring, ring, 'the outline is accepted, not refused');
+  assert.equal(result.outlineCredit, 'osm');
+});
+
 test('an empty Nominatim polygon list falls back without throwing', async () => {
   const nominatim = fakeNominatim({ polygons: [], class: 'boundary' });
   const result = await createOutlineRungs({
@@ -396,6 +462,40 @@ test('named outlines must contain the resolved anchor outside holes', async () =
     valid.ring,
     ring,
     'the containing named building remains valid',
+  );
+});
+
+test('an unnamed school landuse answers a school grounds ask from tiles', async () => {
+  const schoolRing = square(CAPITOL.lat, CAPITOL.lon, 0.002);
+  const tiles = {
+    fetchBounds: async () => ({
+      tiles: [
+        {
+          areas: [
+            {
+              name: null,
+              rings: [schoolRing],
+              class: 'school',
+              clipped: false,
+            },
+          ],
+        },
+      ],
+    }),
+  };
+  const ask = (target) =>
+    createOutlineRungs({ tiles, nominatim: fakeNominatim(null) }).resolve(
+      ctx({ scope: 'building', target, groundsLike: true }),
+      ladder(UNAVAILABLE),
+    );
+  const school = await ask('Lincoln High School grounds');
+  assert.equal(school.footprintKind, 'area');
+  assert.deepEqual(school.polygons, [[schoolRing]]);
+  assert.equal(school.outlineCredit, 'tiles');
+  assert.equal(
+    await ask('Texas Capitol grounds'),
+    UNAVAILABLE,
+    'other asks still need a name',
   );
 });
 

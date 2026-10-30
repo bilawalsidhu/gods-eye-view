@@ -1040,11 +1040,12 @@ export function createAnnotationResolver({
     // Outside a district ask, an alternate name unrelated to the name is too
     // weak: Se in Sao Paulo lists "Sao Paulo" among its names, and "outline
     // Sao Paulo" means the city ("Richmond" for Richmond District still counts).
+    // Whole words: an alias hit on "York" does not keep "Yorkville".
     if (
       !district &&
       hood?.byAlias &&
-      !normalizePlaceName(hood.name).includes(
-        normalizePlaceName(stripQualifiers(query)),
+      !` ${normalizePlaceName(hood.name)} `.includes(
+        ` ${normalizePlaceName(stripQualifiers(query))} `,
       )
     )
       hood = null;

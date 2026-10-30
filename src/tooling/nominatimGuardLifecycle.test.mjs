@@ -147,7 +147,7 @@ test('a sweep removes expired and corrupt entries, never ones it could not read'
   );
 });
 
-test('processes sharing state reserve public spacing and cap atomically', async (t) => {
+test('processes sharing state space public sends and cap atomically', async (t) => {
   const dir = tempDir(t);
   const module = new URL(
     '../../server/providers/regional/nominatimGate.js',
@@ -157,12 +157,24 @@ test('processes sharing state reserve public spacing and cap atomically', async 
     const script = `
     const { createGateStateStore } = await import(${JSON.stringify(module)});
     const store = createGateStateStore({ file: ${JSON.stringify(file)} });
-    console.log(JSON.stringify(store.reserve('2026-09-29', {
-      now: 1000,
-      dailyCap: ${dailyCap},
-      minSpacingMs: 1100,
-      latestStartAt: 10000,
-    })));
+    const latestStartAt = Date.now() + 10000;
+    let sentAt = null;
+    for (;;) {
+      const result = store.dispatch(
+        '2026-09-29',
+        { clock: Date.now, dailyCap: ${dailyCap}, minSpacingMs: 300, latestStartAt },
+        () => {
+          sentAt = Date.now();
+          return Promise.resolve();
+        },
+      );
+      if (result.status === 'wait') {
+        await new Promise((resolve) => setTimeout(resolve, result.waitMs));
+        continue;
+      }
+      console.log(JSON.stringify({ status: result.status, sentAt }));
+      break;
+    }
   `;
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [
@@ -183,19 +195,22 @@ test('processes sharing state reserve public spacing and cap atomically', async 
   };
 
   const spacedFile = path.join(dir, 'spaced.json');
-  const reservations = await Promise.all([
+  const sends = await Promise.all([
     run(spacedFile, 3),
     run(spacedFile, 3),
     run(spacedFile, 3),
   ]);
   assert.deepEqual(
-    reservations.map((result) => result.status),
-    ['reserved', 'reserved', 'reserved'],
+    sends.map((result) => result.status),
+    ['started', 'started', 'started'],
   );
-  assert.deepEqual(
-    reservations.map((result) => result.startAt).sort((a, b) => a - b),
-    [1000, 2100, 3200],
-  );
+  // Spacing is measured between actual transport invocations.
+  const sentAt = sends.map((result) => result.sentAt).sort((a, b) => a - b);
+  for (let i = 1; i < sentAt.length; i += 1)
+    assert.ok(
+      sentAt[i] - sentAt[i - 1] >= 300,
+      `${sentAt[i] - sentAt[i - 1]}ms apart`,
+    );
   assert.equal(
     createGateStateStore({ file: spacedFile }).count('2026-09-29'),
     3,
@@ -205,7 +220,7 @@ test('processes sharing state reserve public spacing and cap atomically', async 
   const capped = await Promise.all([run(cappedFile, 1), run(cappedFile, 1)]);
   assert.deepEqual(capped.map((result) => result.status).sort(), [
     'cap',
-    'reserved',
+    'started',
   ]);
   assert.equal(
     createGateStateStore({ file: cappedFile }).count('2026-09-29'),
@@ -427,12 +442,12 @@ test('parseable but invalid public usage state fails closed', async (t) => {
   );
   const migrated = createGateStateStore({ file });
   assert.equal(
-    migrated.reserve('2026-09-30', {
-      now: 1000,
-      dailyCap: 50,
-      minSpacingMs: 1100,
-    }).status,
-    'reserved',
+    migrated.dispatch(
+      '2026-09-30',
+      { clock: () => 1000, dailyCap: 50, minSpacingMs: 1100 },
+      () => Promise.resolve(),
+    ).status,
+    'started',
     'the original state format without nextStartAt remains supported',
   );
 });

@@ -379,6 +379,7 @@ test('places pack: every state file, unique ids, sane and valid rings', () => {
 });
 
 const WOF_LICENSE_POLICY = readJson(WOF_LICENSES);
+const WOF_RECORD_COUNT = 61_441;
 const ALLOWED_WOF_LICENSES = new Set(WOF_LICENSE_POLICY.licenses);
 const licenceAllowed = (value) =>
   typeof value === 'string' && ALLOWED_WOF_LICENSES.has(value);
@@ -455,6 +456,8 @@ test('neighborhood pack ships only explicitly allowed and credited sources', () 
     'mapzen',
     'can-ons',
     'can-saskodp',
+    'can-gatsudd',
+    'esp-aytomad',
   ])
     assert.equal(sources[excluded], undefined, excluded);
   const listed = readFileSync(new URL('files.js', WOF), 'utf8');
@@ -494,23 +497,15 @@ test('neighborhood pack ships only explicitly allowed and credited sources', () 
   }
   for (const [key, source] of Object.entries(sources))
     assert.equal(used[key], source.records, key);
-  assert.deepEqual(index.meta.recordExclusions, {
-    'can-ons': 36,
-    'can-saskodp': 54,
-  });
-  const excludedIds = new Set();
-  for (const rule of Object.values(
-    WOF_LICENSE_POLICY.recordExclusions.sources,
-  )) {
-    assert.equal(rule.ids.length, rule.count);
-    for (const id of rule.ids) {
-      assert.ok(!excludedIds.has(id));
-      excludedIds.add(id);
-      assert.ok(!ids.has(id), `${id} excluded from shipped rows`);
-    }
-  }
-  assert.equal(excludedIds.size, 90);
-  assert.equal(ids.size, 61_665);
+  // A licence listed only as an "equivalent" of an open licence is not one.
+  for (const [key, source] of Object.entries(sources))
+    assert.doesNotMatch(source.license, /equivalent/i, key);
+  assert.ok(
+    WOF_LICENSE_POLICY.licenses.every((value) => !/equivalent/i.test(value)),
+  );
+  assert.deepEqual(index.meta.recordExclusions, {});
+  assert.deepEqual(WOF_LICENSE_POLICY.recordExclusions.sources, {});
+  assert.equal(ids.size, WOF_RECORD_COUNT);
 });
 
 test('neighborhoods resolve near the view, in any script', async () => {

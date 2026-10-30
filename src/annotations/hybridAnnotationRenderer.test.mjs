@@ -225,7 +225,10 @@ function fakeViewer(lon, lat) {
     clampToHeightSupported: true,
     clampToHeight: (world) => world,
     postRender: frames.event,
-    requestRender() {},
+    renderRequests: 0,
+    requestRender() {
+      scene.renderRequests += 1;
+    },
   };
   return {
     dataSources,
@@ -716,6 +719,32 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
   assert.equal(viewer.credits.size, 0);
 });
 
+test('a building queued behind others gets its full budget on a slow device', async (t) => {
+  installBrowserGlobals(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  t.after(() => t.mock.timers.reset());
+  const { viewer, frames } = fakeViewer(-99, 31);
+  const renderer = createHybridAnnotationRenderer(viewer);
+  viewer.scene.clampToHeight = (position) => position;
+  const traces = [workTrace(), workTrace(), workTrace()];
+  const completions = [0, 0.01, 0.02].map((offset, index) =>
+    renderer.add(buildingAnnotation(`queued-${index}`, offset), {
+      pendingVisible: false,
+      workTrace: traces[index],
+    }));
+  // Eight probes per building at one probe per frame; 1.5 s passes while
+  // each of the first two buildings samples, so the third waits 3 s in line.
+  for (let building = 0; building < 3; building += 1) {
+    for (let frame = 0; frame < 8; frame += 1) frames.emit();
+    if (building < 2) t.mock.timers.tick(1500);
+  }
+  const results = await Promise.all(completions);
+  assert.deepEqual(results.map((result) => result.status), ['installed', 'installed', 'installed']);
+  assert.deepEqual(traces.map((trace) => trace.samplerStatus), ['installed', 'installed', 'installed']);
+  assert.ok(traces[2].samplerHeadAt >= traces[1].samplerHeadAt);
+  assert.ok(traces[2].samplerHeadAt >= traces[2].samplerStart);
+});
+
 test('building cancellation, queued deadline and destroy prevent saved callbacks from committing', async (t) => {
   installBrowserGlobals(t);
   t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -745,10 +774,16 @@ test('building cancellation, queued deadline and destroy prevent saved callbacks
   frames.emit();
   assert.equal(probeCount, 1);
   const savedTimeout = frames.snapshot();
-  // No further renderer frames arrive: both enqueue deadlines must still fire,
-  // including the tail task that has never had a chance to sample.
+  // No further renderer frames arrive: the head's deadline fires, then the
+  // tail gets its own budget from the moment it reaches the head and still
+  // times out without frames, even though it never had a chance to sample.
+  const rendersBefore = viewer.scene.renderRequests;
   t.mock.timers.tick(2000);
   assert.equal((await headCompletion).status, 'timeout');
+  assert.ok(viewer.scene.renderRequests > rendersBefore, 'a promoted tail asks for a frame');
+  assert.equal(tailTrace.samplerStatus, undefined, 'queue wait does not spend the tail budget');
+  assert.ok(Number.isFinite(tailTrace.samplerHeadAt), 'the tail starts its own budget at the head');
+  t.mock.timers.tick(2000);
   const tailResult = await tailCompletion;
   assert.equal(tailResult.status, 'timeout');
   assert.equal(tailResult.timing.probes, 0);

@@ -10,9 +10,12 @@ import {
   approximateDistanceM,
   ringAreaM2,
   closeRing,
+  stitchLines,
 } from './featureGeometry.js';
 import { phaseTiming } from './phaseTiming.js';
 import { normalizePlaceName } from '../data/placeBoundaries.js';
+import { foldPlaceName } from '../data/placeNames.js';
+import { pointInRing, polygonsContain } from '../data/adminBoundaries.js';
 
 /**
  * Street and building outlines from the same OpenFreeMap z14 vector tiles the
@@ -219,7 +222,8 @@ function decodePolygons(
           ? geometry.coordinates
           : [];
     // A tile building feature may aggregate unrelated structures. Validate its
-    // selected component independently; named grounds retain whole topology.
+    // selected component independently; grounds keep the feature's parts, and
+    // a match by class alone is narrowed to its own part when selected.
     const incompleteParts = polygons.map(
       (rings) =>
         !Array.isArray(rings) ||
@@ -252,6 +256,7 @@ function decodePolygons(
         clipped: componentLocal
           ? clippedParts[part]
           : clippedParts.some(Boolean),
+        partClipped: clippedParts[part],
         incomplete: componentLocal
           ? incompleteParts[part]
           : incompleteParts.some(Boolean),
@@ -267,7 +272,7 @@ export function createOpenFreeMapOutlineSource(options = {}) {
   return createOpenFreeMapSource({
     projection: 'outlines',
     maxEntries: 32,
-    maxCacheBytes: 16 * 1024 * 1024,
+    maxCacheBytes: 8 * 1024 * 1024,
     ...options,
   });
 }
@@ -307,18 +312,11 @@ const STREET_WORDS = Object.freeze({
 
 const DIRECTIONS = new Set(['north', 'south', 'east', 'west']);
 
-/** Comparable street name: Latin accents off, abbreviations expanded. */
+/** Comparable street name: the shared place-name fold, abbreviations expanded. */
 export function normalizeStreetName(value) {
-  return String(value ?? '')
-    .split(',')[0]
-    .normalize('NFKD')
-    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
-    .normalize('NFKC')
-    .toLocaleLowerCase('en-US')
-    .replace(/[\p{P}\p{S}]+/gu, ' ')
-    .split(/\s+/)
+  return foldPlaceName(String(value ?? '').split(',')[0])
+    .split(' ')
     .filter(Boolean)
-    .filter((word, index) => !(index === 0 && word === 'the'))
     .map((word) => STREET_WORDS[word] || word)
     .join(' ');
 }
@@ -349,39 +347,6 @@ const lengthM = (line) => {
     );
   return total;
 };
-
-const near = (a, b) =>
-  approximateDistanceM(a[1], a[0], b[1], b[0]) <= JOIN_TOLERANCE_M;
-
-/** Join line pieces whose ends meet into as few chains as possible. */
-export function mergeLineSegments(segments) {
-  const pending = segments.filter((s) => s.length >= 2).map((s) => s.slice());
-  const chains = [];
-  while (pending.length) {
-    let chain = pending.shift();
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (let i = 0; i < pending.length; i++) {
-        const s = pending[i];
-        const head = chain[0];
-        const tail = chain[chain.length - 1];
-        if (near(tail, s[0])) chain = chain.concat(s.slice(1));
-        else if (near(tail, s[s.length - 1]))
-          chain = chain.concat(s.slice(0, -1).reverse());
-        else if (near(head, s[s.length - 1]))
-          chain = s.slice(0, -1).concat(chain);
-        else if (near(head, s[0])) chain = s.slice(1).reverse().concat(chain);
-        else continue;
-        pending.splice(i, 1);
-        grew = true;
-        break;
-      }
-    }
-    chains.push(chain);
-  }
-  return chains;
-}
 
 /**
  * The asked street near a point as a bounded set of merged polylines, longest
@@ -416,7 +381,10 @@ export function streetFromTiles(
     }
   }
   if (!pieces.length) return null;
-  const chains = mergeLineSegments(pieces)
+  const chains = stitchLines(
+    pieces.filter((piece) => piece.length >= 2),
+    { toleranceM: JOIN_TOLERANCE_M },
+  )
     .map((line) => ({ line, length: lengthM(line) }))
     .filter((entry) => entry.length >= STREET_MIN_CHAIN_M)
     .sort((a, b) => b.length - a.length)
@@ -429,28 +397,6 @@ export function streetFromTiles(
     points += line.length;
   }
   return lines.length ? { name: matchedName, lines } : null;
-}
-
-function insideRing(lon, lat, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    if (
-      yi > lat !== yj > lat &&
-      lon < ((xj - xi) * (lat - yi)) / (yj - yi || Number.EPSILON) + xi
-    )
-      inside = !inside;
-  }
-  return inside;
-}
-
-/** Inside the outer ring and outside every hole. */
-function insidePolygon(lon, lat, rings) {
-  if (!insideRing(lon, lat, rings[0])) return false;
-  for (let i = 1; i < rings.length; i++)
-    if (insideRing(lon, lat, rings[i])) return false;
-  return true;
 }
 
 /** Distance (m) from a point to the nearest edge of any ring of a polygon. */
@@ -504,12 +450,12 @@ export function buildingFromTiles(
               Number.isFinite(point[0]) &&
               Number.isFinite(point[1]),
           ) &&
-          insideRing(lon, lat, outer)
+          pointInRing(outer, lat, lon)
         )
           fragmentContains = true;
         continue;
       }
-      if (insidePolygon(lon, lat, building.rings)) {
+      if (polygonsContain([building.rings], lat, lon)) {
         // A fragment cut at a tile edge is never the whole footprint.
         if (building.clipped) {
           fragmentContains = true;
@@ -545,28 +491,102 @@ export function buildingFromTiles(
   };
 }
 
+/** Head nouns that say what kind of grounds is meant, and the classes that answer them. */
+const GROUNDS_CLASS_HEADS = Object.freeze([
+  [/\b(?:school|academy|elementary)$/, ['school']],
+  [
+    /\b(?:university|college)$|^(?:university|college) of\b/,
+    ['university', 'college'],
+  ],
+  [/\b(?:hospital|medical cent(?:er|re))$/, ['hospital']],
+  [/\b(?:cemetery|graveyard)$/, ['cemetery']],
+  [/\bstadium$/, ['stadium']],
+  [/\bzoo$/, ['zoo']],
+]);
+
+/**
+ * A grounds name for comparison: folded, possessive " s" dropped and grounds
+ * words removed wherever they stand, as the outline rung cuts them from the ask
+ * ("Mueller Sports Complex", "Campus Martius Park", "Lincoln School's").
+ */
+function groundsKey(value) {
+  return normalizePlaceName(value)
+    .replace(/ s(?= |$)/g, '')
+    .replace(GROUNDS_WORDS_RE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const GROUNDS_WORDS_RE =
+  /\b(?:grounds|campus|compound|premises|property|site|area|complex)\b/g;
+
+/** Words that describe grounds rather than name the place. */
+const GROUNDS_SUFFIX_RE =
+  /(?:\s+(?:grounds|campus|compound|premises|property|site|area|complex))+$/;
+
+/**
+ * Area classes an unnamed tile feature may answer for a grounds ask, from the
+ * kind of place the ask names: its head noun once grounds words are removed
+ * ("Lincoln High School campus" → school, "University of Texas grounds" →
+ * university). "Campus" alone names no kind ("Google campus"), and a class word
+ * elsewhere in a name ("University Avenue Park", "Zoo Lake") does not count.
+ * Tile landuse for schools, hospitals and universities is usually unnamed.
+ *
+ * @param {string} text
+ * @returns {Set<string>}
+ */
+export function groundsClassesFor(text) {
+  // "Lincoln School's grounds" folds to "lincoln school s grounds".
+  const head = foldPlaceName(String(text ?? '').split(',')[0])
+    .replace(/ s(?= |$)/g, '')
+    .replace(GROUNDS_SUFFIX_RE, '');
+  const classes = new Set();
+  for (const [pattern, matches] of GROUNDS_CLASS_HEADS)
+    if (pattern.test(head)) for (const c of matches) classes.add(c);
+  return classes;
+}
+
 /**
  * The open area enclosing grounds at a point: the smallest park, landuse or
  * park-like cover feature that contains it and is at least grounds-sized.
- * Containment alone is not identity: only a matching named feature can be an
- * exact answer to the requested grounds, and holes are not filled grounds.
+ * Containment alone is not identity: a feature named as asked answers first;
+ * otherwise only an unnamed feature of a class the ask itself names (a school
+ * for "… School grounds") may answer. A differently named feature never does,
+ * and holes are not filled grounds.
  */
 export function enclosingAreaFromTiles(
   tiles,
-  { lat, lon, name, minAreaM2 = 20_000, maxAreaM2 = 60e6 },
+  {
+    lat,
+    lon,
+    name,
+    unnamedClasses = null,
+    minAreaM2 = 20_000,
+    maxAreaM2 = 60e6,
+  },
 ) {
-  const query = normalizePlaceName(name);
+  const query = groundsKey(name);
   if (!query) return null;
-  let best = null;
+  let named = null;
+  let unnamed = null;
   for (const tile of tiles || []) {
     for (const area of tile?.areas || []) {
+      const isNamed = Boolean(area.name) && groundsKey(area.name) === query;
+      const isClassed = !area.name && Boolean(unnamedClasses?.has(area.class));
+      // A class match stands for its own part, so only that part's cut counts.
+      const clipped = isNamed
+        ? area.clipped
+        : (area.partClipped ?? area.clipped);
       if (
-        area.clipped ||
-        normalizePlaceName(area.name) !== query ||
-        !insidePolygon(lon, lat, area.rings)
+        clipped ||
+        !(isNamed || isClassed) ||
+        !polygonsContain([area.rings], lat, lon)
       )
         continue;
-      const size = (area.featureParts || [area.rings]).reduce(
+      // Only a name ties a feature's other parts to the asked place; an
+      // unnamed class match stands for the part holding the point.
+      const parts = isNamed ? area.featureParts || [area.rings] : [area.rings];
+      const size = parts.reduce(
         (sum, [outer, ...holes]) =>
           sum +
           ringAreaM2(outer) -
@@ -574,11 +594,15 @@ export function enclosingAreaFromTiles(
         0,
       );
       if (size < minAreaM2 || size > maxAreaM2) continue;
-      if (!best || size < best.size) best = { area, size };
+      if (isNamed) {
+        if (!named || size < named.size) named = { area, size, parts };
+      } else if (!unnamed || size < unnamed.size)
+        unnamed = { area, size, parts };
     }
   }
+  const best = named || unnamed;
   if (!best) return null;
-  const parts = best.area.featureParts || [best.area.rings];
+  const parts = best.parts;
   const polygons = [
     best.area.rings,
     ...parts.filter((part) => part !== best.area.rings),

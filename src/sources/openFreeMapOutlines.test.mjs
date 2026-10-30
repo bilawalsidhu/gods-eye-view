@@ -8,7 +8,6 @@ import {
   createOpenFreeMapOutlineSource,
   decodeOpenFreeMapOutlineTile,
   enclosingAreaFromTiles,
-  mergeLineSegments,
   normalizeStreetName,
   streetFromTiles,
   streetNameMatches,
@@ -19,7 +18,7 @@ import {
   registerOpenFreeMapProjection,
 } from './openFreeMap.js';
 import { createSharedDecodedTileCache } from './vectorTiles.js';
-import { approximateDistanceM } from './featureGeometry.js';
+import { approximateDistanceM, stitchLines } from './featureGeometry.js';
 
 const fixture = (y) =>
   decodeOpenFreeMapOutlineTile(
@@ -112,7 +111,7 @@ test('merge joins reversed and out-of-order pieces and keeps gaps apart', () => 
     [0.01, 0],
     [0.011, 0],
   ]; // separate
-  const chains = mergeLineSegments([b, c, a]);
+  const chains = stitchLines([b, c, a], { toleranceM: 3 });
   assert.equal(chains.length, 2);
   assert.equal(chains.find((ch) => ch.length === 3).length, 3);
 });

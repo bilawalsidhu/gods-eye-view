@@ -60,9 +60,12 @@ export function createWorldAnnotationRenderer(viewer) {
   function sampleBuilding(anno, options) {
     pendingGround.get(anno)?.finish('cancelled');
     return new Promise((resolve, reject) => {
-      const started = performance.now();
+      const queuedAt = performance.now();
+      // The 2 s budget starts when this task reaches the head of the queue, so
+      // waiting behind other buildings on a slow device never spends it.
+      let started = null;
       const workTrace = options.workTrace;
-      if (workTrace) workTrace.samplerStart = started;
+      if (workTrace) workTrace.samplerStart = queuedAt;
       let groundDetailSlots = 0;
       let groundDetailReady = true;
       if (workTrace) {
@@ -83,24 +86,42 @@ export function createWorldAnnotationRenderer(viewer) {
         maxSliceMs: 0,
         lastSliceMs: 0,
         probes: 0,
-        deadlineMs: started + 2000,
+        queuedMs: 0,
+        deadlineMs: null,
       };
       task.current = () =>
         !destroyed &&
         !options.signal?.aborted &&
         pendingGround.get(anno) === task &&
         (options.isCurrent?.() ?? true);
+      task.begin = () => {
+        if (started !== null) return;
+        started = performance.now();
+        timing.queuedMs = started - queuedAt;
+        timing.deadlineMs = started + 2000;
+        if (workTrace) workTrace.samplerHeadAt = started;
+        task.timer = setTimeout(() => task.finish('timeout'), 2000);
+        // A task promoted outside a frame (its predecessor timed out or was
+        // cancelled) still needs frames in request-render mode.
+        try {
+          viewer.scene.requestRender?.();
+        } catch {
+          /* the enqueue path reports render failures */
+        }
+      };
       task.finish = (status, error) => {
         if (pendingGround.get(anno) !== task) return;
         pendingGround.delete(anno);
-        groundQueue.splice(groundQueue.indexOf(task), 1);
+        const position = groundQueue.indexOf(task);
+        groundQueue.splice(position, 1);
         clearTimeout(task.timer);
+        if (position === 0) groundQueue[0]?.begin();
         options.signal?.removeEventListener('abort', task.abort);
         if (!groundQueue.length && observingGround) {
           viewer.scene.postRender.removeEventListener(onGroundFrame);
           observingGround = false;
         }
-        timing.elapsedMs = performance.now() - started;
+        timing.elapsedMs = performance.now() - (started ?? queuedAt);
         if (workTrace) {
           workTrace.probes = timing.probes;
           workTrace.samplerStatus = status;
@@ -230,7 +251,7 @@ export function createWorldAnnotationRenderer(viewer) {
       };
       pendingGround.set(anno, task);
       groundQueue.push(task);
-      task.timer = setTimeout(() => task.finish('timeout'), 2000);
+      if (groundQueue[0] === task) task.begin();
       options.signal?.addEventListener('abort', task.abort, { once: true });
       if (!task.current()) return task.finish('cancelled');
       if (!observingGround) {

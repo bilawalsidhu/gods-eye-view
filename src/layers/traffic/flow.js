@@ -12,11 +12,7 @@ import {
   roadDotBudget,
 } from './policy.js';
 import { msg } from '../../i18n/index.js';
-
-const nextTask = () =>
-  globalThis.scheduler?.yield
-    ? globalThis.scheduler.yield()
-    : new Promise((resolve) => setTimeout(resolve, 0));
+import { nextTask } from '../../sources/vectorTiles.js';
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;

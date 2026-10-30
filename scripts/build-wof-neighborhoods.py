@@ -301,7 +301,8 @@ def licence_label(key, source):
 
 def exclusion_note():
     groups = ', '.join(f'{rule["count"]} `{key}` records' for key, rule in RECORD_EXCLUSIONS['sources'].items())
-    return f'This derived pack excludes {groups}. {RECORD_EXCLUSIONS["reason"]} Original upstream notices remain unchanged.'
+    lead = f'This derived pack excludes {groups}. ' if groups else ''
+    return f'{lead}{RECORD_EXCLUSIONS["reason"]} Original upstream notices remain unchanged.'
 
 
 def attribution(counts, lookup):
@@ -330,6 +331,8 @@ def attribution(counts, lookup):
                 context = f'{v["context"]}: ' if v.get('context') else ''
                 lines.append(f'- {context}{v.get("source_name", "")}{note} {v.get("source_link", "")}'.rstrip())
             lines.append('')
+    while lines[-1] == '':
+        lines.pop()
     lines += ['', '## Source-specific exclusions', '', exclusion_note()]
     return '\n'.join(lines).rstrip() + '\n'
 

@@ -30,7 +30,11 @@ export const OUTLINE_POLYGON_THRESHOLD = Object.freeze({
   building: 0.00005,
 });
 
-/** Total vertices returned for one outline, and parts/holes kept. */
+/**
+ * Size limits for one outline. Vertices beyond the budget are simplified away;
+ * more parts, or more holes in one part, than these limits refuse the outline
+ * whole, because a truncated multipart place would misrepresent it.
+ */
 const OUTLINE_MAX_VERTICES = 6000;
 const OUTLINE_MAX_PARTS = 24;
 const OUTLINE_MAX_HOLES = 16;

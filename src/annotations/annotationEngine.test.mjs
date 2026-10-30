@@ -774,7 +774,8 @@ test('replacement cleanup failure still removes the old route and retains failed
   const old = engine.list()[0];
   const refresh = engine.annotate([{ type: 'area', target: 'Capitol', label: 'New' }]);
   await flushMicrotasks();
-  const replacement = h.pending.at(-1).anno;
+  const replacementTask = h.pending.at(-1);
+  const replacement = replacementTask.anno;
   const originalRemove = h.renderer.remove;
   const removals = [];
   let fail = true;
@@ -785,16 +786,22 @@ test('replacement cleanup failure still removes the old route and retains failed
   };
   assert.throws(() => engine.clear(), /replacement cleanup failed/);
   assert.ok(removals.includes(old), 'old removal is attempted even when replacement removal throws');
-  assert.equal(old._pendingReplacement, null, 'cleanup failure cannot retain install authority');
-  assert.ok(old._retiredRoutes.has(replacement));
+  assert.equal(replacementTask.options.isCurrent(), false, 'cleanup failure cannot retain install authority');
   assert.equal(engine.list()[0], old, 'failed cleanup remains reachable');
   await flushMicrotasks();
   fail = false;
+  const attempts = removals.filter((anno) => anno === replacement).length;
   engine.clear();
+  assert.ok(
+    removals.filter((anno) => anno === replacement).length > attempts,
+    'the failed replacement route is retried on the next clear',
+  );
   await refresh;
   assert.equal(engine.count(), 0);
   assert.equal(h.live.size, 0);
-  assert.equal(old._pendingReplacement, null);
+  replacementTask.finish();
+  await flushMicrotasks();
+  assert.equal(h.live.size, 0, 'a revoked install cannot commit after cleanup');
 });
 
 
@@ -840,8 +847,10 @@ test('successful replacement survives failed old-route retirement and keeps clea
   await flushMicrotasks(); h.pending[0].finish(); await initial;
   const old = engine.list()[0];
   const remove = h.renderer.remove;
+  const removals = [];
   let fail = true;
   h.renderer.remove = (anno) => {
+    removals.push(anno);
     if (anno === old && fail) throw new Error('retirement failed');
     remove(anno);
   };
@@ -853,10 +862,14 @@ test('successful replacement survives failed old-route retirement and keeps clea
   assert.equal(completed.results[0].cleanupPending, true);
   assert.equal(current.label, 'New');
   assert.ok(h.live.has(current.id), 'valid installed replacement is not rolled back by old teardown failure');
-  assert.equal(current._pendingReplacement, undefined);
-  assert.ok(current._retiredRoutes.has(old));
+  assert.equal(h.pending.filter((task) => task.options.isCurrent()).length, 0, 'no install is left pending');
   fail = false;
+  const attempts = removals.filter((anno) => anno === old).length;
   engine.clear();
+  assert.ok(
+    removals.filter((anno) => anno === old).length > attempts,
+    'the old route that failed to retire is retried on clear',
+  );
   assert.equal(engine.count(), 0);
   assert.equal(h.live.size, 0);
 });

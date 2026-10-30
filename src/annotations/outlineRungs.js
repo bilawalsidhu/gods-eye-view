@@ -13,6 +13,7 @@ import {
   buildingFromTiles,
   createOpenFreeMapOutlineSource,
   enclosingAreaFromTiles,
+  groundsClassesFor,
   streetFromTiles,
 } from '../sources/openFreeMapOutlines.js';
 import { createNominatimOutlineClient } from '../sources/nominatimOutlines.js';
@@ -81,6 +82,46 @@ export function nominatimKindFor({ scope, groundsLike, pointLike, around }) {
 }
 
 /**
+ * Whether polygons contain a point. A part whose outer ring crosses the
+ * antimeridian ([179.99, …], [-179.99, …]) is read contiguously in its own
+ * longitude frame, with the point moved into that frame; every other part,
+ * including one genuinely wider than 180°, is tested as stored. Crossing is
+ * read from an edge jumping more than 180°, which assumes densely noded rings
+ * (OSM, Nominatim, tiles); a ring that is both wider than 180° and crossing, or
+ * a non-crossing ring with a single edge over 180°, is not supported.
+ */
+export function containsAnchor(polygons, lat, lon) {
+  if (!Number.isFinite(lon)) return false;
+  for (const part of polygons || []) {
+    const outer = part?.[0];
+    if (!Array.isArray(outer) || !outer.length) continue;
+    const reference = outer[0][0];
+    const shift = (x) => x - 360 * Math.round((x - reference) / 360);
+    const span = (ring, f) => {
+      let west = Infinity;
+      let east = -Infinity;
+      for (const [x] of ring) {
+        west = Math.min(west, f(x));
+        east = Math.max(east, f(x));
+      }
+      return east - west;
+    };
+    // An edge jumping more than 180° wraps the line; a polar ring whose
+    // edges run along ±180 collapses when reframed and is read as stored.
+    const jumps = outer.some(
+      ([x], i) => i > 0 && Math.abs(x - outer[i - 1][0]) > 180,
+    );
+    const framedSpan = jumps ? span(outer, shift) : 0;
+    const crosses = framedSpan > 0 && framedSpan < 180;
+    const framed = crosses
+      ? part.map((ring) => ring.map(([x, y]) => [shift(x), y]))
+      : part;
+    if (polygonsContain([framed], lat, crosses ? shift(lon) : lon)) return true;
+  }
+  return false;
+}
+
+/**
  * Parts with the one holding the anchor outside its holes first. A boundary
  * can be largest at sea (Tokyo's island municipalities), so size alone does
  * not pick the part the ask is about; with no part holding the anchor, the
@@ -90,7 +131,7 @@ export function anchorPartFirst(polygons, points) {
   for (const { lat, lon } of points) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     const at = polygons.findIndex((polygon) =>
-      polygonsContain([polygon], lat, lon),
+      containsAnchor([polygon], lat, lon),
     );
     if (at > 0) return [polygons[at], ...polygons.filter((_, i) => i !== at)];
     if (at === 0) return polygons;
@@ -188,9 +229,12 @@ export function createOutlineRungs({
         lat: at.lat,
         lon: at.lon,
         name: outlineQueryText(ctx.target || ctx.matchName),
+        // The kind the ask names ("… School grounds") lets unnamed tile
+        // landuse of that class answer; read before grounds words are cut.
+        unnamedClasses: groundsClassesFor(ctx.target || ctx.matchName),
         minAreaM2: GROUNDS_MIN_AREA_M2,
       });
-    if (!area || !polygonsContain(area.polygons, ctx.lat, ctx.lon)) return null;
+    if (!area || !containsAnchor(area.polygons, ctx.lat, ctx.lon)) return null;
     return {
       ring: area.ring,
       polygons: area.polygons,
@@ -215,7 +259,7 @@ export function createOutlineRungs({
     if (!outline?.polygons?.length) return outline; // null | undefined | unavailable | rateLimited
     // Named outlines must retain the resolved place's authority,
     // including holes; a nearby same-name polygon is not the selected place.
-    if (!polygonsContain(outline.polygons, ctx.lat, ctx.lon)) return null;
+    if (!containsAnchor(outline.polygons, ctx.lat, ctx.lon)) return null;
     const polygons = anchorPartFirst(outline.polygons, [
       { lat: ctx.lat, lon: ctx.lon },
       outline.center || {},

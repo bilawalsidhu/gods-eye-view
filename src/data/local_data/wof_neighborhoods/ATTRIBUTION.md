@@ -19,7 +19,6 @@ Neighborhood boundaries from [Who's On First](https://whosonfirst.org/docs/licen
 | Zolk Chicago Neighborhoods Map (`zolk`) | 207 | CC BY 3.0 US | [terms](http://chicagomap.zolk.com/about.html) |
 | Azavea, Inc. (`azavea`) | 157 | CC BY 3.0 US | [terms](https://www.opendataphilly.org/dataset/philadelphia-neighborhoods) |
 | City of Calgary, Corporate Analytics and Innovation (`can-calcai`) | 151 | Open Government Licence - City of Calgary | [terms](https://data.calgary.ca/stories/s/u45n-7awa) |
-| Portal de datos abiertos del Ayuntamiento de Madrid (`esp-aytomad`) | 150 | CC0 (equivalent) | [terms](http://datos.madrid.es/egob/catalogo/aviso-legal) |
 | City of Winnipeg Department of Planning, Property, and Development (`can-wpgppd`) | 132 | Open Government License - Winnipeg | [terms](https://data.winnipeg.ca/open-data-licence) |
 | Atlanta Department of Planning and Community Development (`atldpcd`) | 130 | CC BY 4.0 | [terms](https://www.arcgis.com/home/item.html?id=716f417a1990446389ef7fd2c381d09f) |
 | Turku City Government (`tkugov`) | 129 | CC BY 4.0 | [terms](http://www.lounaistieto.fi/blog/2015/08/18/turun-palvelualuejakotilastoalueet/) |
@@ -32,7 +31,6 @@ Neighborhood boundaries from [Who's On First](https://whosonfirst.org/docs/licen
 | CartoBCN (`esp-cartobcn`) | 83 | CC BY | [terms](http://w133.bcn.cat/geoportal/descargas/en_gb_cond_us_carto.pdf) |
 | Toronto Social Development, Finance & Administration Department (`torsdfa`) | 83 | Open Government Licence - Ontario, v1.0 | [terms](http://www1.toronto.ca/wps/portal/contentonly?vgnextoid=4a37e03bb8d1e310VgnVCM10000071d60f89RCRD) |
 | Denver Department of Community Planning and Development (`denvercpd`) | 77 | CC BY 3.0 | [terms](https://www.denvergov.org/opendata/termsofuse) |
-| Gatineau Service de l'urbanisme et du developpement durable (SUDD) (`can-gatsudd`) | 74 | CC BY (equivalent) | [terms](http://www3.gatineau.ca/Infoterritoire/WebInterface/help/fr/Content/1_About/1_About_FR.htm) |
 | City of New Orleans, Office of Information Technology and Innovation, Enterprise Information Team (`nolagis`) | 71 | CC0 | [terms](https://data.nola.gov/Geographic-Base-Layers/Neighborhoods/92zg-wzkq) |
 | Ciudad Autonoma de Buenos Aires, Iniciativa de Datos Publicos y Transparencia (`arg-caba`) | 48 | CC BY | [terms](https://data.buenosaires.gob.ar/tyc) |
 | Montreal Service de la Mise en Valeur du Territoire (`can-mtlsmvt`) | 48 | CC BY 4.0 | [terms](https://creativecommons.org/licenses/by/4.0/) |
@@ -265,4 +263,4 @@ Neighborhood boundaries from [Who's On First](https://whosonfirst.org/docs/licen
 
 ## Source-specific exclusions
 
-This derived pack excludes 36 `can-ons` records, 54 `can-saskodp` records. Original source-specific redistribution terms have not been established for these records in this derived pack. Original upstream notices remain unchanged.
+Sources whose pinned registry licence is only an "equivalent" designation (for example "CC BY (equivalent)" or "CC0 (equivalent)"), including can-ons, can-saskodp, can-gatsudd and esp-aytomad, are not admitted: their redistribution terms have not been established for this derived pack. Original upstream notices remain unchanged.

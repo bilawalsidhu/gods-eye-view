@@ -23,7 +23,7 @@ const ROAD_TYPES = Object.freeze({
 
 const SHARED_DECODED_TILES = createSharedDecodedTileCache({
   maxEntries: 192,
-  maxCacheBytes: 64 * 1024 * 1024,
+  maxCacheBytes: 32 * 1024 * 1024,
 });
 const TILE_PROJECTIONS = new Map();
 const MAX_PROJECTED_NUMBERS = 500_000;
@@ -343,6 +343,10 @@ export function createOpenFreeMapSource(options = {}) {
     ...sourceOptions
   } = options;
   const shared = !decode;
+  // Shared consumers hold only their slice of each tile. The shared decode
+  // (32 MiB) plus traffic and installations (12 MiB each) and outlines
+  // (8 MiB) are charged 64 MiB together, the budget of the single OpenFreeMap
+  // source traffic and installations shared before; charges are estimates.
   return createVectorTileSource({
     tileJsonUrl: 'https://tiles.openfreemap.org/planet',
     decode: shared
@@ -351,6 +355,7 @@ export function createOpenFreeMapSource(options = {}) {
     ...(shared
       ? {
           sharedDecodedCache: sharedDecodedCache || SHARED_DECODED_TILES,
+          selectedSize: estimateOpenFreeMapProjectionBytes,
           selectDecoded:
             selectDecoded ||
             (projection
@@ -362,7 +367,7 @@ export function createOpenFreeMapSource(options = {}) {
           ...(selectDecoded ? { selectDecoded } : {}),
         }),
     maxEntries: 192,
-    maxCacheBytes: 64 * 1024 * 1024,
+    maxCacheBytes: (shared ? 12 : 64) * 1024 * 1024,
     ...sourceOptions,
   });
 }

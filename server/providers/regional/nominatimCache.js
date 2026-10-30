@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { foldPlaceName } from '../../../src/data/placeNames.js';
 
 const DAY_MS = 86_400_000;
 
@@ -15,24 +16,14 @@ export const NOMINATIM_CACHE_TTL_MS = Object.freeze({
 });
 
 /**
- * Comparable form of a place name: Unicode-normalized (NFKC), Latin accents
- * removed, case folded, punctuation and symbols collapsed to single spaces,
- * and a leading article dropped. Non-Latin scripts are kept as they are:
- * "東京" stays "東京", while "São Paulo", "sao paulo" and "SÃO PAULO!" meet.
+ * Comparable form of a place name for matching results to the ask: the
+ * shared fold (see `foldPlaceName`), bounded in length.
  *
  * @param {string} value
  * @returns {string}
  */
 export function normalizePlaceName(value) {
-  return String(value ?? '')
-    .normalize('NFKD')
-    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
-    .normalize('NFKC')
-    .toLocaleLowerCase('en-US')
-    .replace(/[\p{P}\p{S}\p{Z}\s]+/gu, ' ')
-    .trim()
-    .replace(/^(?:the) /, '')
-    .slice(0, 200);
+  return foldPlaceName(value).slice(0, 200);
 }
 
 /**

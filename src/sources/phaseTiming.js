@@ -18,6 +18,7 @@ export function createWorkTrace() {
       dropped: 0,
       probes: 0,
       samplerStart: null,
+      samplerHeadAt: null,
       samplerStatus: null,
       rendererStatus: null,
       status: 'pending',

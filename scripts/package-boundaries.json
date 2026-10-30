@@ -334,7 +334,8 @@
       "server/providers/regional/nominatimCache.js",
       "server/providers/regional/outlineSelect.js",
       "src/localRequestGate.mjs",
-      "src/data/adminBoundaries.js"
+      "src/data/adminBoundaries.js",
+      "src/data/placeNames.js"
     ],
     "external": []
   },
@@ -2822,6 +2823,7 @@
       "src/sources/openFreeMapOutlines.js",
       "src/sources/nominatimOutlines.js",
       "src/data/placeBoundaries.js",
+      "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
       "src/data/local_data/wof_neighborhoods/files.js"
     ],
@@ -3412,6 +3414,7 @@
       "src/sources/openFreeMapOutlines.js",
       "src/sources/nominatimOutlines.js",
       "src/data/placeBoundaries.js",
+      "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
       "src/data/local_data/wof_neighborhoods/files.js"
     ],
@@ -3494,6 +3497,7 @@
       "src/sources/openFreeMapOutlines.js",
       "src/sources/nominatimOutlines.js",
       "src/data/placeBoundaries.js",
+      "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
       "src/data/local_data/wof_neighborhoods/files.js"
     ],
