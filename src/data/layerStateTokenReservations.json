@@ -11,6 +11,7 @@
   ["fire-perimeters", "2"],
   ["flights", "f"],
   ["gnss-integrity", "3"],
+  ["local-airports", "6"],
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],

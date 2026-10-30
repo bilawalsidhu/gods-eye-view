@@ -39,7 +39,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality (ECCC AQHI) extends the manifest.
+    // Air quality (ECCC AQHI) and Airports extend the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // S2 GhostMaps extends the generated layer enums.
@@ -47,7 +47,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
-    'f47a7f78f13b1f79978fa524fad2618e32bd813e1a5dfd746bf35d29909fc91b',
+    'e04bdee9b71bcb669ac1a6bbd43b23967fdac42b5eb1af71f1d9332415c46462',
   );
 });
 
