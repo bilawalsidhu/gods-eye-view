@@ -1,4 +1,4 @@
-// Behavioral tests for DISPLAY ▸ Import: the controller is driven against
+// Behavioral tests for UTILITIES ▸ Import: the controller is driven against
 // fake DOM and viewer doubles with an injected loader, and its observable
 // effects are asserted — data sources added and removed, list rows, the hint,
 // drop handling, the file limit, and what destroy() gives back. Real parsing
@@ -439,7 +439,7 @@ test('the application composition wires the import and owns its teardown', () =>
   );
   assert.ok(tools.indexOf('defer(() => geoFileImport?.destroy());') > importAt);
   const markup = fs.readFileSync(
-    new URL('./templates/display-controls.html', import.meta.url),
+    new URL('./templates/layer-panels.html', import.meta.url),
     'utf8',
   );
   for (const id of [
@@ -450,7 +450,7 @@ test('the application composition wires the import and owns its teardown', () =>
   ])
     assert.ok(
       markup.includes(`id="${id}"`),
-      `${id} missing from the DISPLAY template`,
+      `${id} missing from the UTILITIES template`,
     );
 });
 

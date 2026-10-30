@@ -62,15 +62,15 @@ test('the engine resolves manual geometry before any name resolution', () => {
 });
 
 test('the Draw control markup carries the ids the tool binds to', () => {
-  // The DISPLAY rail is a component template now, assembled into index.html at
+  // UTILITIES is a component template now, assembled into index.html at
   // build time — the markup is not in index.html any more.
-  const html = read('src/ui/templates/display-controls.html');
+  const html = read('src/ui/templates/layer-panels.html');
   const ids = [
     'draw-toggle',
     'draw-mode-row',
     'draw-label-row',
-    'draw-label-input',
-    'draw-color-select',
+    'draw-colors',
+    'draw-mark-list',
     'draw-clear',
     'draw-hint',
   ];
@@ -81,13 +81,25 @@ test('the Draw control markup carries the ids the tool binds to', () => {
       `#${id} missing from index.html`,
     );
   }
-  for (const shape of ['area', 'line', 'pin']) {
+  // Shapes are icons, named for screen readers and tooltips.
+  for (const [shape, name] of [
+    ['area', 'Area'],
+    ['line', 'Line'],
+    ['pin', 'Pin'],
+  ]) {
     assert.match(
       html,
-      new RegExp(`data-shape="${shape}"`),
+      new RegExp(
+        `data-shape="${shape}"[^>]*aria-label="${name}"[^>]*title="${name}"`,
+      ),
       `shape button ${shape} missing`,
     );
   }
+  for (const color of ['primary', 'amber', 'cyan', 'green', 'red'])
+    assert.match(
+      html,
+      new RegExp(`class="draw-color[^"]*" type="button" data-color="${color}"`),
+    );
   for (const id of ids) {
     assert.match(
       tool(),
@@ -108,14 +120,15 @@ test('the DISPLAY rail styles live in their current owner, not the shim', () => 
   );
   assert.doesNotMatch(
     shim,
-    /draw-hint|pp-text-input/,
+    /draw-hint|draw-color/,
     'draw styles belong to a component stylesheet',
   );
   const controls = read('src/ui/styles/controls.css');
   for (const rule of [
     '#draw-mode-row',
     '#draw-label-row',
-    '.pp-text-input',
+    '.draw-color',
+    '.draw-mark-name',
     '.draw-clear-btn',
     '.draw-hint',
     'body.gev-drawing',
@@ -138,10 +151,14 @@ test('nothing promises a GeoJSON export for drawn shapes', () => {
       `${file} still claims a GeoJSON export`,
     );
   }
-  for (const file of ['README.md', 'CHANGELOG.md', 'docs/CURRENT-STATE.md']) {
+  // Draw lives in UTILITIES; only the changelog's history still says DISPLAY.
+  for (const [file, heading] of [
+    ['README.md', 'UTILITIES ▸ **Draw**'],
+    ['CHANGELOG.md', 'DISPLAY ▸ Draw'],
+    ['docs/CURRENT-STATE.md', 'UTILITIES ▸ **Draw**'],
+  ]) {
     const source = read(file);
-    const at = source.indexOf('DISPLAY ▸ **Draw**');
-    const start = at >= 0 ? at : source.indexOf('DISPLAY ▸ Draw');
+    const start = source.indexOf(heading);
     assert.ok(start >= 0, `${file} should describe the Draw control`);
     const section = source.slice(start, start + 1200);
     assert.doesNotMatch(

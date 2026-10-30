@@ -294,3 +294,16 @@ test('expanded right panels highlight the title divider without changing collaps
     /#param-slider-panel:not\(\.collapsed\) \.param-panel-divider\s*\{[\s\S]*?linear-gradient\(\s*90deg,\s*rgb\(0 212 255 \/ 28%\),\s*rgba\(0, 212, 255, 0\.18\) 58%,\s*transparent\s*\);/,
   );
 });
+
+test('Utilities sits between Data Layers and Scenes and follows the left panels through every mode', () => {
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
+  const order = (id) => Number(new RegExp(`#left-panel-stack > #${id} \\{\\s*order: (\\d+);`).exec(css)?.[1]);
+  assert.ok(order('data-panel') < order('utilities-panel'));
+  assert.ok(order('utilities-panel') < order('scene-panel'));
+  assert.match(css, /body\.ui-clean-view #utilities-panel,/);
+  assert.match(css, /body\.recording-mode #utilities-panel,/);
+  // Directions stays reachable in Cockpit; only Draw and Import step aside.
+  assert.match(css, /body\.cockpit-mode #utilities-panel \.utilities-tools \{\s*display: none !important;/);
+  assert.doesNotMatch(css, /body\.cockpit-mode #left-panel-stack > #utilities-panel[,\s{]/);
+  assert.match(css, /body\.mobile-shell\[data-mobile-sheet='layers'\]\s+#left-panel-stack\s+> #utilities-panel,/);
+});

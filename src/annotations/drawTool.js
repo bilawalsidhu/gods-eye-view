@@ -1,9 +1,10 @@
 /**
  * Manual whiteboard drawing: the Cesium + DOM half.
  *
- * DISPLAY ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
+ * UTILITIES ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
  * shape (area, line or pin), click the vertices on the real world, double-click
- * or press Enter to finish, type a label. Each finished shape goes through the
+ * or press Enter to finish, then name and colour it in its row. Each finished
+ * shape goes through the
  * SAME `annotationEngine.annotate()` the voice agent uses, with its geometry
  * supplied and `manual: true`, so it renders with the whiteboard look,
  * persists, de-dups, shows up in `.list()`, and clears with the board.
@@ -50,19 +51,18 @@ import {
   removeLastVertex,
 } from './drawMode.js';
 
+import {
+  DRAW_COLORS,
+  DRAW_COLOR_CSS,
+  createDrawMarkList,
+} from './drawMarkList.js';
+
 import { msg, registerUnsavedWork, t, translateKnown } from '../i18n/index.js';
 /** The id this tool claims the pointer under. */
 const DRAW_POINTER_OWNER = 'draw';
 const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
 
-const COLORS = ['primary', 'amber', 'cyan', 'green', 'red'];
-const PREVIEW = {
-  primary: '#8be9ff',
-  amber: '#ffb547',
-  cyan: '#39d0ff',
-  green: '#5dff9f',
-  red: '#ff6b6b',
-};
+const PREVIEW = DRAW_COLOR_CSS;
 
 /**
  * Wire the Draw control. Returns a handle with a `destroy()` the application
@@ -74,8 +74,8 @@ export function initDrawTool({ viewer, annotations }) {
   const toggle = document.getElementById('draw-toggle');
   const modeRow = document.getElementById('draw-mode-row');
   const labelRow = document.getElementById('draw-label-row');
-  const labelInput = document.getElementById('draw-label-input');
-  const colorSelect = document.getElementById('draw-color-select');
+  const colorRow = document.getElementById('draw-colors');
+  const markListEl = document.getElementById('draw-mark-list');
   const clearButton = document.getElementById('draw-clear');
   const hint = document.getElementById('draw-hint');
   if (!viewer || !annotations || !toggle) return null;
@@ -238,14 +238,14 @@ export function initDrawTool({ viewer, annotations }) {
       if (reason !== 'too-few') setHint(drawHint(session));
       return null;
     }
-    const spec = finishSpec(session, { label: labelInput?.value || '', color });
+    // Named afterwards, in the shape's row.
+    const spec = finishSpec(session, { label: '', color });
     if (!spec) return null;
     // Start a fresh session BEFORE awaiting, so a second Enter or the second
     // half of a double-click cannot submit the same shape twice.
     session = createDrawSession(shape);
     cursor = null;
     syncPreview();
-    if (labelInput) labelInput.value = '';
     const attempt = generation;
     try {
       const result = await annotations.annotate([spec], {
@@ -285,7 +285,7 @@ export function initDrawTool({ viewer, annotations }) {
   // ---- keys: only while drawing, never while typing in another field ----
   const typingElsewhere = (event) => {
     const t = event.target;
-    if (!t || t === labelInput) return false;
+    if (!t) return false;
     return (
       t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable
     );
@@ -293,12 +293,12 @@ export function initDrawTool({ viewer, annotations }) {
   /**
    * Enter is the finish key, but on a focused control Enter means "press this
    * control". Keyboard-focusing Clear and pressing Enter must clear the board,
-   * not finish the shape — so the finish key is only taken from the canvas,
-   * the page body, or the label field this tool owns.
+   * not finish the shape — so the finish key is only taken from the canvas or
+   * the page body.
    */
   const enterBelongsToDrawing = (event) => {
     const t = event.target;
-    if (!t || t === labelInput) return true;
+    if (!t) return true;
     if (
       typeof t.closest === 'function' &&
       t.closest('button, a, select, [role="button"], [role="radio"]')
@@ -310,6 +310,9 @@ export function initDrawTool({ viewer, annotations }) {
   };
   const onKey = (event) => {
     if (!active || destroyed || typingElsewhere(event)) return;
+    // Keys on the shape list's own controls are the list's (Esc closes a
+    // colour picker there), not the drawing's.
+    if (markListEl?.contains?.(event.target)) return;
     // Enter goes to finish() once a shape has been started; finish() owns the
     // decision and says WHY it refused. Swallowing the key on a degenerate
     // shape left the person pressing Enter at a silent panel. A focused button
@@ -328,7 +331,7 @@ export function initDrawTool({ viewer, annotations }) {
       else setActive(false);
       return;
     }
-    if (event.key === 'Backspace' && event.target !== labelInput) {
+    if (event.key === 'Backspace') {
       if (removeLastVertex(session)) {
         event.preventDefault();
         syncPreview();
@@ -448,18 +451,21 @@ export function initDrawTool({ viewer, annotations }) {
       }
     },
   });
-  listen(colorSelect, 'change', () => {
-    color = COLORS.includes(colorSelect.value) ? colorSelect.value : 'primary';
-    syncPreview();
+  const colorControl = createSegmentedControl({
+    buttons: [...(colorRow?.querySelectorAll('.draw-color[data-color]') || [])],
+    valueOf: (button) => button.dataset.color,
+    listen,
+    onChange: (value) => {
+      color = DRAW_COLORS.includes(value) ? value : 'primary';
+      colorControl.update(color);
+      syncPreview();
+    },
   });
   listen(clearButton, 'click', clearAll);
-  listen(labelInput, 'keydown', (event) => {
-    if (event.key === 'Enter' && session?.vertices?.length) {
-      event.preventDefault();
-      void finish();
-    }
-  });
   setHint(drawHint(null));
+  const markList = markListEl
+    ? createDrawMarkList({ listEl: markListEl, annotations, listen })
+    : null;
 
   const api = {
     get active() {
@@ -488,6 +494,11 @@ export function initDrawTool({ viewer, annotations }) {
     finish,
     cancel,
     clearAll,
+    /** The hand-drawn marks the list shows. */
+    marks: () => markList?.marks() || [],
+    setColor(next) {
+      colorRow?.querySelector(`.draw-color[data-color="${next}"]`)?.click();
+    },
     shapes: DRAW_SHAPES,
     /** What this tool currently holds — for teardown and leak assertions. */
     diagnostics() {
@@ -527,6 +538,7 @@ export function initDrawTool({ viewer, annotations }) {
       if (active) setActive(false);
       destroyed = true;
       unregisterUnsavedWork();
+      markList?.destroy();
       releaseSceneHandler();
       releasePointer(lease);
       lease = null;

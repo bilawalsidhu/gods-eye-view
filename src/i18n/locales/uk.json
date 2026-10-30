@@ -2962,14 +2962,10 @@
   "Scope edge feather": "Розмиття краю прицілу",
   "Scope edge feather as a percentage of the keyhole radius": "Розмиття краю прицілу у відсотках від його радіуса",
   "Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel": "Малювати на карті світу — клацайте вершини, подвійне клацання або Enter — завершити, Esc — скасувати",
-  "Shape": "Фігура",
   "Shape to draw": "Фігура для малювання",
   "Area": "Зона",
   "Line": "Лінія",
   "Pin": "Мітка",
-  "Label (optional)": "Підпис (необовʼязково)",
-  "Label for the drawn shape": "Підпис намальованої фігури",
-  "Colour of the drawn shape": "Колір намальованої фігури",
   "Primary": "Основний",
   "Amber": "Бурштиновий",
   "Cyan": "Блакитний",
@@ -3066,5 +3062,12 @@
   "ESC to dismiss": "ESC — приховати",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Порада: кнопка МІК у доку дає змогу говорити з картою.",
   "Malformed cyclone snapshot": "Некоректний знімок циклонів",
-  "Cyclone request timed out": "Минув час очікування запиту циклонів"
+  "Cyclone request timed out": "Минув час очікування запиту циклонів",
+  "Colour of {name}": "Колір: {name}",
+  "Change the colour of {name}": "Змінити колір: {name}",
+  "Name of {name}": "Назва: {name}",
+  "Audio": "Аудіо",
+  "UTILITIES": "ІНСТРУМЕНТИ",
+  "Colour of the next shape": "Колір наступної фігури",
+  "Drawn shapes": "Намальовані фігури"
 }

@@ -2894,14 +2894,10 @@
   "Scope edge feather": "Suavização da borda da mira",
   "Scope edge feather as a percentage of the keyhole radius": "Suavização da borda da mira, em porcentagem do raio do visor",
   "Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel": "Desenhar sobre o mundo — clique nos vértices, clique duplo ou Enter para concluir, Esc para cancelar",
-  "Shape": "Forma",
   "Shape to draw": "Forma a desenhar",
   "Area": "Área",
   "Line": "Linha",
   "Pin": "Marcador",
-  "Label (optional)": "Rótulo (opcional)",
-  "Label for the drawn shape": "Rótulo da forma desenhada",
-  "Colour of the drawn shape": "Cor da forma desenhada",
   "Primary": "Principal",
   "Amber": "Âmbar",
   "Cyan": "Ciano",
@@ -2996,5 +2992,12 @@
   "Begin with a clean globe": "Comece com um globo limpo",
   "Don't show this again": "Não mostrar novamente",
   "ESC to dismiss": "ESC para fechar",
-  "Tip: the GEV MIC button in the dock lets you talk to the map.": "Dica: o botão GEV MIC no dock permite falar com o mapa."
+  "Tip: the GEV MIC button in the dock lets you talk to the map.": "Dica: o botão GEV MIC no dock permite falar com o mapa.",
+  "Colour of {name}": "Cor de {name}",
+  "Change the colour of {name}": "Mudar a cor de {name}",
+  "Name of {name}": "Nome de {name}",
+  "Audio": "Áudio",
+  "UTILITIES": "UTILITÁRIOS",
+  "Colour of the next shape": "Cor da próxima forma",
+  "Drawn shapes": "Formas desenhadas"
 }

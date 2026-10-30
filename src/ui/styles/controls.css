@@ -750,38 +750,117 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   min-width: 0;
 }
 
-/* DISPLAY ▸ Draw: shape segment, label field, colour, and the one-line hint */
+/* UTILITIES ▸ Draw: shape icons and colour swatches for the next shape, the
+   hint with Clear, then one row per drawn shape (named and recoloured there) */
 #draw-mode-row {
-  min-width: 184px;
-}
-#draw-label-row {
   flex-wrap: wrap;
   row-gap: 6px;
+  column-gap: 10px;
 }
-.pp-text-input {
-  flex: 1 1 110px;
-  min-width: 0;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.6px;
-  padding: 2px 6px;
+#draw-mode-row .draw-shape-seg {
+  flex: 0 0 auto;
+}
+#draw-mode-row .draw-shape-seg .gev-segment {
+  min-width: 30px;
+  padding: 3px 6px;
+}
+.draw-shape-seg .material-symbols-outlined {
+  display: block;
+  font-size: 16px;
+  line-height: 1;
+}
+.draw-colors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#utilities-panel .draw-color {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-radius: 50%;
+  cursor: pointer;
+}
+#utilities-panel .draw-color[data-color='primary'] {
+  background: #8be9ff;
+}
+#utilities-panel .draw-color[data-color='amber'] {
+  background: #ffb547;
+}
+#utilities-panel .draw-color[data-color='cyan'] {
+  background: #39d0ff;
+}
+#utilities-panel .draw-color[data-color='green'] {
+  background: #5dff9f;
+}
+#utilities-panel .draw-color[data-color='red'] {
+  background: #ff6b6b;
+}
+/* The swatch keeps its own colour in every theme; only a ring marks it. */
+#utilities-panel .draw-color:is(.active, :hover, :focus-visible) {
+  border-color: rgba(0, 0, 0, 0.45);
+  box-shadow: none;
+}
+#utilities-panel .draw-color.active,
+#utilities-panel .draw-color:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+#draw-label-row {
+  justify-content: space-between;
+  gap: 8px;
+}
+#draw-label-row .draw-hint {
+  flex: 1 1 auto;
+}
+.draw-mark-row {
+  flex-wrap: wrap;
+}
+.draw-mark-swatch {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.draw-mark-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* The name reads as text until it is clicked into, and gives way so the
+   row's buttons stay on its line. */
+.draw-mark-row .draw-mark-name {
+  flex: 1 1 0;
+  width: 0;
+  height: 22px;
+  padding: 0 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
   outline: none;
 }
-.pp-text-input:focus {
+.draw-mark-name::placeholder {
+  color: var(--text-primary);
+  opacity: 0.85;
+}
+.draw-mark-name:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.draw-mark-name:focus {
   border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
 }
-.draw-color-select {
-  flex: 0 0 74px;
+.draw-mark-row.hidden-mark .draw-mark-name,
+.draw-mark-row.hidden-mark .draw-mark-swatch {
+  opacity: 0.45;
 }
-/* Sized to its longest colour name so a translated one is never clipped. */
-html:not([lang='en']) .draw-color-select {
-  flex: 0 0 auto;
-  min-width: 74px;
+.draw-mark-colors {
+  flex-basis: 100%;
+  padding: 2px 0 4px 16px;
 }
 .draw-clear-btn {
   flex: 0 0 auto;
@@ -801,7 +880,7 @@ body.gev-drawing #cesiumContainer canvas {
   cursor: crosshair;
 }
 
-/* DISPLAY ▸ Import: one row per imported file, and the drop-target outline */
+/* UTILITIES ▸ Import: one row per imported file, and the drop-target outline */
 .geo-import-list {
   display: none;
   flex-direction: column;
@@ -960,6 +1039,7 @@ body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
+body.ui-clean-view #utilities-panel,
 body.ui-clean-view #scene-panel {
   opacity: 0 !important;
   visibility: hidden !important;

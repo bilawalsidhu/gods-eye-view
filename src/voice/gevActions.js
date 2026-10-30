@@ -1045,15 +1045,18 @@ export function createGevActionRunner({
 
     if (name === 'show_data_layers_menu') {
       const layerId = normalizeLayerId(args.layerId || args.layer);
-      setPanelOpen(styleManager, 'data-panel', true);
-      const focusedLayer =
+      const row =
         layerId && dataManager.layers.has(layerId)
-          ? focusDataLayerRow(layerId)
+          ? findDataLayerRow(layerId)
           : null;
+      // Open the panel that holds the row: Directions lives in Utilities.
+      const panelId = row?.closest('[data-panel-id]')?.id || 'data-panel';
+      setPanelOpen(styleManager, panelId, true);
+      const focusedLayer = row ? focusDataLayerRow(row, layerId) : null;
       return {
         ok: true,
         action: 'show_data_layers_menu',
-        panelId: 'data-panel',
+        panelId,
         focusedLayer,
         layers: dataManager
           .getAll()
@@ -3188,11 +3191,14 @@ function normalizeCockpitAction(value) {
   return null;
 }
 
-function focusDataLayerRow(layerId) {
-  const row = document.querySelector(
-    `#data-toggles [data-layer-id="${CSS.escape(layerId)}"]`,
+function findDataLayerRow(layerId) {
+  const selector = `[data-layer-id="${CSS.escape(layerId)}"]`;
+  return document.querySelector(
+    `#data-toggles ${selector}, #utilities-toggles ${selector}`,
   );
-  if (!row) return null;
+}
+
+function focusDataLayerRow(row, layerId) {
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;

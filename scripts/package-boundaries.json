@@ -2544,6 +2544,7 @@
       "src/layers/vessels/recordPolicy.js",
       "src/layers/vessels/snapshotRenderer.js",
       "src/data/inputOwnership.js",
+      "src/annotations/drawMarkList.js",
       "src/annotations/drawMode.js",
       "src/annotations/drawTool.js",
       "src/data/geoFileImport.js",

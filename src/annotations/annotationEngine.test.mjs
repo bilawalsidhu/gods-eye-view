@@ -12,6 +12,7 @@ import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 //
 // Run with: npm test   (node --test)
 import { test } from 'node:test';
+import * as Cesium from 'cesium';
 import assert from 'node:assert/strict';
 import {
   createAnnotationEngine,
@@ -729,4 +730,244 @@ test('only an explicit navigation request permits resolving distant annotation t
   await engine.annotate([{ type: 'point', target: 'Remote landmark' }], { flyTo: true });
   assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
   engine.destroy();
+});
+
+// Draw's list works one hand-drawn mark at a time: hide, rename, recolour,
+// frame and remove it, and hear about every change to the board.
+test('hand-drawn marks: one mark can be hidden, renamed, recoloured, framed and removed', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer, calls } = fakeRenderer();
+  const flights = [];
+  const engine = createAnnotationEngine({
+    viewer: { camera: { heading: 0, flyToBoundingSphere: (sphere) => flights.push(sphere) } },
+    renderer,
+  });
+  let changes = 0;
+  const unsubscribe = engine.onChange(() => { changes += 1; });
+
+  const drawn = await engine.annotate([
+    { type: 'route', manual: true, path: [[-97.75, 30.26], [-97.73, 30.27]], label: '' },
+    { type: 'pin', manual: true, latitude: 30.27, longitude: -97.74, label: 'Camp', color: 'amber' },
+  ], { persist: true });
+  assert.equal(drawn.drawn, 2);
+  assert.equal(changes, 1, 'one annotate, one change');
+  const [line, pin] = engine.list();
+  assert.equal(line.manual, true);
+  assert.equal(line.name, null);
+  assert.match(line.label, /km|m$/, 'an unnamed line is labelled by its length');
+  assert.equal(pin.name, 'Camp');
+
+  assert.equal(engine.setHidden(pin.id, true), true);
+  assert.equal(pin.hidden, true);
+  assert.equal(changes, 2);
+
+  const addsBefore = calls.add;
+  assert.equal(engine.restyle(line.id, { name: 'Ridge walk', color: 'green' }), true);
+  assert.equal(line.name, 'Ridge walk');
+  assert.match(line.label, /^Ridge walk — /, 'a renamed line keeps its length');
+  assert.equal(line.color, 'green');
+  assert.equal(calls.add, addsBefore + 1, 'the new look is drawn again');
+  assert.equal(engine.restyle(line.id, { color: 'not-a-colour' }), true);
+  assert.equal(line.color, 'green', 'an unknown colour is ignored');
+
+  assert.equal(engine.frame(line.id), true);
+  assert.equal(flights.length, 1);
+  assert.equal(engine.frame('anno-missing'), false);
+
+  assert.equal(engine.remove(pin.id), true);
+  assert.deepEqual(engine.list().map(({ id }) => id), [line.id]);
+  assert.equal(engine.remove(pin.id), false);
+
+  engine.clear();
+  assert.equal(engine.list().length, 0);
+  const seen = changes;
+  unsubscribe();
+  await engine.annotate([{ type: 'pin', manual: true, latitude: 1, longitude: 1 }], { persist: true });
+  assert.equal(changes, seen, 'an unsubscribed listener hears nothing');
+});
+
+// The list trusts these calls to change the globe, not just the list: each
+// is checked by its effect (renderer calls, alpha, camera, notifications).
+test('hand-drawn marks: remove, hide, clear, expiry and framing have their effect', async (t) => {
+  const frames = [];
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => frames.push(callback);
+  globalThis.cancelAnimationFrame = () => {};
+  let now = 1_000_000;
+  t.mock.method(performance, 'now', () => now);
+  _resetRenderGovernorForTest();
+  t.after(() => {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+    _resetRenderGovernorForTest();
+  });
+  const runFrames = () => {
+    for (let i = 0; i < 5 && frames.length; i += 1) frames.shift()();
+  };
+  const { renderer, calls } = fakeRenderer();
+  const flights = [];
+  const engine = createAnnotationEngine({
+    viewer: {
+      camera: {
+        heading: 0,
+        flyToBoundingSphere: (sphere) => flights.push(sphere),
+      },
+    },
+    renderer,
+  });
+  let changes = 0;
+  engine.onChange(() => {
+    changes += 1;
+  });
+
+  await engine.annotate(
+    [
+      {
+        type: 'pin',
+        manual: true,
+        latitude: 30.27,
+        longitude: -97.74,
+        label: 'Camp',
+      },
+      {
+        type: 'pin',
+        manual: true,
+        latitude: 30.3,
+        longitude: -97.7,
+        label: 'Base',
+      },
+    ],
+    { persist: true },
+  );
+  now += 1000;
+  runFrames();
+  const [camp, base] = engine.list();
+  assert.equal(camp.alpha, 1);
+
+  engine.setHidden(camp.id, true);
+  runFrames();
+  assert.equal(camp.alpha, 0, 'a hidden mark is drawn at alpha 0');
+  assert.ok(engine.list().includes(camp), 'and stays on the board');
+  engine.setHidden(camp.id, false);
+  runFrames();
+  assert.equal(camp.alpha, 1, 'showing it again is immediate, with no fade-in');
+
+  const removes = calls.remove;
+  let seen = changes;
+  engine.remove(base.id);
+  assert.equal(calls.remove, removes + 1, 'remove takes it off the globe');
+  assert.equal(changes, seen + 1, 'and tells the list');
+
+  seen = changes;
+  engine.clear();
+  assert.equal(changes, seen + 1, 'a clear tells the list');
+
+  // A voice mark with a TTL: its expiry must reach the list too.
+  await engine.annotate(
+    [{ type: 'pin', latitude: 1, longitude: 1, label: 'Brief' }],
+    {
+      persist: false,
+      ttlMs: 2000,
+    },
+  );
+  seen = changes;
+  now += 60_000;
+  runFrames();
+  assert.equal(engine.list().length, 0, 'the mark expired');
+  assert.equal(changes, seen + 1, 'expiry tells the list');
+
+  // A line across the antimeridian is framed there, not on the far side.
+  await engine.annotate(
+    [
+      {
+        type: 'route',
+        manual: true,
+        path: [
+          [179.9, -17],
+          [-179.9, -17.1],
+        ],
+        label: '',
+      },
+    ],
+    { persist: true },
+  );
+  const [line] = engine.list();
+  engine.frame(line.id);
+  const centre = Cesium.Cartographic.fromCartesian(flights.at(-1).center);
+  assert.ok(
+    Math.abs(Math.abs(Cesium.Math.toDegrees(centre.longitude)) - 180) < 0.5,
+    `framed at ${Cesium.Math.toDegrees(centre.longitude)}°, not near 180°`,
+  );
+});
+
+test('hand-drawn marks: a voice mark or a hidden mark is not taken as their duplicate', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer } = fakeRenderer();
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  await engine.annotate(
+    [
+      {
+        type: 'pin',
+        manual: true,
+        latitude: 30.27,
+        longitude: -97.74,
+        label: 'Camp',
+      },
+    ],
+    { persist: true },
+  );
+  const [drawn] = engine.list();
+  // The agent marks the same spot with the same label, briefly.
+  await engine.annotate(
+    [{ type: 'pin', latitude: 30.27, longitude: -97.74, label: 'Camp' }],
+    {
+      persist: false,
+    },
+  );
+  assert.equal(engine.list().length, 2, 'the voice mark is its own mark');
+  assert.equal(drawn.ttlMs, null, 'the drawn pin keeps persisting');
+  assert.equal(drawn.manual, true);
+
+  engine.setHidden(drawn.id, true);
+  const again = await engine.annotate(
+    [
+      {
+        type: 'pin',
+        manual: true,
+        latitude: 30.27,
+        longitude: -97.74,
+        label: 'Camp',
+      },
+    ],
+    { persist: true },
+  );
+  assert.equal(again.drawn, 1);
+  const visible = engine.list().filter((mark) => mark.manual && !mark.hidden);
+  assert.equal(
+    visible.length,
+    1,
+    'a pin dropped on a hidden one is a new, visible pin',
+  );
+});
+
+test('hand-drawn marks: only a manual mark can be restyled', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer } = fakeRenderer();
+  const engine = createAnnotationEngine({
+    viewer: {},
+    renderer,
+    resolveTarget: async () => ({ ...FIXED_POINT }),
+  });
+  await engine.annotate([{ type: 'point', target: 'Texas Capitol', label: 'Capitol' }]);
+  const [voiceMark] = engine.list();
+  assert.equal(voiceMark.manual, false);
+  assert.equal(engine.restyle(voiceMark.id, { name: 'Renamed' }), false);
+  assert.equal(voiceMark.label, 'Capitol');
 });

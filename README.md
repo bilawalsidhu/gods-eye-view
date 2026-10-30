@@ -357,7 +357,7 @@ camera input stops rotation.
 
 > 🗣️ _"Outline the state of Texas."_ · _"Annotate the Texas State Capitol and its grounds"_ — it draws the **actual enclosing boundary**, not a circle. · _"How far is the Eiffel Tower from the Louvre?"_ — a connector arrow appears and it speaks the distance. Everything persists until you say _"clear the map."_
 
-**✍️ Or draw it yourself** — DISPLAY ▸ **Draw**: pick Area, Line or Pin, click the vertices on the real world, double-click to finish, label it. Same whiteboard, same persistence, no microphone needed.
+**✍️ Or draw it yourself** — UTILITIES ▸ **Draw**: pick Area, Line or Pin and a colour, click the vertices on the real world, double-click to finish, then name, recolour, hide or fly to each shape from its row. Same whiteboard, same persistence, no microphone needed.
 
 ![Zilker Park and Lady Bird Lake drawing onto the 3D city as persistent vector annotations, by voice](docs/media/01-voice-annotate-zilker.gif)
 
@@ -415,7 +415,7 @@ Twenty layers and map sources. **Eighteen have a keyless path.** Some offer addi
 
 **Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline in the **WEATHER** panel (step back, **Play**, **Latest**); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
 
-In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Utilities.
+In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions sits in the separate **Utilities** panel with Draw and Import.
 
 **The basemap ladder — what each tier buys you:**
 

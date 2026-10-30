@@ -2892,14 +2892,10 @@
   "Scope edge feather": "Sfumatura del bordo dello scope",
   "Scope edge feather as a percentage of the keyhole radius": "Sfumatura del bordo dello scope, come percentuale del raggio del foro",
   "Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel": "Disegna sul mondo: fai clic sui vertici, doppio clic o Enter per finire, Esc per annullare",
-  "Shape": "Forma",
   "Shape to draw": "Forma da disegnare",
   "Area": "Area",
   "Line": "Linea",
   "Pin": "Segnaposto",
-  "Label (optional)": "Etichetta (opzionale)",
-  "Label for the drawn shape": "Etichetta della forma disegnata",
-  "Colour of the drawn shape": "Colore della forma disegnata",
   "Primary": "Principale",
   "Amber": "Ambra",
   "Cyan": "Ciano",
@@ -2996,5 +2992,12 @@
   "ESC to dismiss": "ESC per chiudere",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Suggerimento: il pulsante GEV MIC nel dock ti permette di parlare con la mappa.",
   "Malformed cyclone snapshot": "Snapshot dei cicloni non valido",
-  "Cyclone request timed out": "La richiesta dei cicloni è andata in timeout"
+  "Cyclone request timed out": "La richiesta dei cicloni è andata in timeout",
+  "Colour of {name}": "Colore di {name}",
+  "Change the colour of {name}": "Cambia il colore di {name}",
+  "Name of {name}": "Nome di {name}",
+  "Audio": "Audio",
+  "UTILITIES": "STRUMENTI",
+  "Colour of the next shape": "Colore della prossima forma",
+  "Drawn shapes": "Forme disegnate"
 }

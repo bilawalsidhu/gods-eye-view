@@ -2879,14 +2879,10 @@
   "Sector": "Sektor",
   "Sonar sector width": "Breite des Sonarsektors",
   "Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel": "Auf die Welt zeichnen – Eckpunkte anklicken, Doppelklick oder Enter zum Beenden, Esc zum Abbrechen",
-  "Shape": "Form",
   "Shape to draw": "Zu zeichnende Form",
   "Area": "Fläche",
   "Line": "Linie",
   "Pin": "Pin",
-  "Label (optional)": "Beschriftung (optional)",
-  "Label for the drawn shape": "Beschriftung der gezeichneten Form",
-  "Colour of the drawn shape": "Farbe der gezeichneten Form",
   "Primary": "Primär",
   "Amber": "Bernstein",
   "Cyan": "Cyan",
@@ -2926,5 +2922,12 @@
   "Malformed cyclone snapshot": "Fehlerhafter Wirbelsturm-Snapshot",
   "STALE · Roads: {source} · Flow: cached TomTom tiles": "VERALTET · Straßen: {source} · Verkehrsfluss: TomTom-Kacheln aus dem Cache",
   "routing busy — too many routes at once": "Routing-Dienst ausgelastet – zu viele Routen gleichzeitig",
-  "route proxy error": "Fehler des Routen-Proxys"
+  "route proxy error": "Fehler des Routen-Proxys",
+  "Colour of {name}": "Farbe von {name}",
+  "Change the colour of {name}": "Farbe von {name} ändern",
+  "Name of {name}": "Name von {name}",
+  "Audio": "Audio",
+  "UTILITIES": "WERKZEUGE",
+  "Colour of the next shape": "Farbe der nächsten Form",
+  "Drawn shapes": "Gezeichnete Formen"
 }

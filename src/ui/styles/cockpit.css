@@ -2011,6 +2011,11 @@ body.cockpit-mode #left-panel-stack {
 body.cockpit-mode #left-panel-stack > #scene-panel {
   display: none !important;
 }
+/* Directions stays reachable in Cockpit, as in Data Layers; Draw and Import
+   were never there (DISPLAY sits in the hidden right rail). */
+body.cockpit-mode #utilities-panel .utilities-tools {
+  display: none !important;
+}
 body.cockpit-mode #right-context-rail {
   display: none !important;
 }

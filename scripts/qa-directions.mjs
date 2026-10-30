@@ -107,7 +107,7 @@ const layerState = () =>
     const manager = gev.dataManager;
     const module = manager.layers.get('directions').module;
     const row = document.querySelector(
-      '#data-toggles [data-layer-id="directions"]',
+      '#utilities-toggles [data-layer-id="directions"]',
     );
     const controls = module.getRowControls();
     const viewer = gev.viewer;
@@ -152,7 +152,7 @@ const layerState = () =>
 const clickChip = async (chipId) => {
   const clicked = await page.evaluate((id) => {
     const row = document.querySelector(
-      '#data-toggles [data-layer-id="directions"]',
+      '#utilities-toggles [data-layer-id="directions"]',
     );
     const button = row?.querySelector(`button[data-chip-id="${id}"]`);
     if (!button || button.disabled) return false;
@@ -232,24 +232,26 @@ try {
   });
   await sleep(3000);
 
-  // ── 1. Open the DATA LAYERS panel, then toggle the row on. ──────────────
+  // ── 1. Open the UTILITIES panel, then toggle the row on. ────────────────
   const opened = await page.evaluate(() => {
-    const panel = document.getElementById('data-panel');
+    const panel = document.getElementById('utilities-panel');
     if (!panel) return false;
     if (panel.classList.contains('collapsed')) {
       panel
-        .querySelector('.panel-collapse-btn[data-collapse-target="data-panel"]')
+        .querySelector(
+          '.panel-collapse-btn[data-collapse-target="utilities-panel"]',
+        )
         ?.click();
     }
     return !document
-      .getElementById('data-panel')
+      .getElementById('utilities-panel')
       .classList.contains('collapsed');
   });
   await sleep(700);
-  check('the DATA LAYERS panel opens from its own header control', opened);
+  check('the UTILITIES panel opens from its own header control', opened);
   const toggled = await page.evaluate(() => {
     const row = document.querySelector(
-      '#data-toggles [data-layer-id="directions"]',
+      '#utilities-toggles [data-layer-id="directions"]',
     );
     const button = row?.querySelector('.data-toggle-btn');
     if (!button) return false;
@@ -397,7 +399,7 @@ try {
   );
   const focused = await page.evaluate(() => {
     const row = document.querySelector(
-      '#data-toggles [data-layer-id="directions"]',
+      '#utilities-toggles [data-layer-id="directions"]',
     );
     const items = row.querySelectorAll('.data-row-list-item');
     items[2]?.focus();
@@ -776,7 +778,7 @@ try {
       }
     }
     const row = document.querySelector(
-      '#data-toggles [data-layer-id="directions"]',
+      '#utilities-toggles [data-layer-id="directions"]',
     );
     return {
       entities: left.length,

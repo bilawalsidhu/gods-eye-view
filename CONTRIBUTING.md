@@ -170,8 +170,9 @@ template has a section for them.
    instead of attaching it.
 3. **The proposed category.** Say which layer-panel group the layer belongs in.
    The groups are defined in `PANEL_GROUPS` in `src/ui/layerPanel.js` (today:
-   Movement, Cameras, Infrastructure, Events, Weather and Utilities). A layer
-   that isn't listed there falls under "Other layers". If none of the groups
+   Movement, Cameras, Infrastructure, Events, Weather and Audio, plus Utilities,
+   whose rows render in the separate UTILITIES panel). A layer that isn't
+   listed there falls under "Other layers". If none of the groups
    fits, propose a new one and explain why.
 4. **The data source and licence.** Name the provider and endpoint, link its
    licence or terms, give the attribution shown in the app, and say whether it

@@ -542,11 +542,11 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
   assert.match(
     cyberStyles,
-    /#left-panel-stack\s*> :is\(#data-panel, #scene-panel\)\.collapsed \{\s*width: var\(--cyber-panel-collapsed-width\);/,
+    /#left-panel-stack\s*> :is\(#data-panel, #utilities-panel, #scene-panel\)\.collapsed \{\s*width: var\(--cyber-panel-collapsed-width\);/,
   );
   assert.match(
     cyberStyles,
-    /:is\(#data-panel, #scene-panel\)\.collapsed\s+:is\(\.data-panel-inner, \.scene-panel-inner\) \{[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
+    /:is\(#data-panel, #utilities-panel, #scene-panel\)\.collapsed\s+:is\(\.data-panel-inner, \.scene-panel-inner\) \{[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/,
   );
   assert.match(
     cyberStyles,

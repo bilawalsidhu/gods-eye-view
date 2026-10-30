@@ -743,6 +743,53 @@ test('Data Layers voice inventory hides the Context coordinator while current-vi
   assert.deepEqual(current.cockpit, { active: false, entryAllowed: true });
 });
 
+test('showing a layer opens the panel that holds its row: Directions lives in Utilities', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const previous = { document: globalThis.document, CSS: globalThis.CSS };
+  const focused = [];
+  const rowIn = (panelId) => ({
+    dataset: { layerName: panelId === 'utilities-panel' ? 'Directions' : 'Live Flights' },
+    classList: { add: (name) => focused.push(name), remove() {} },
+    scrollIntoView() {},
+    closest: (selector) => (selector === '[data-panel-id]' ? { id: panelId } : null),
+  });
+  const rows = { directions: rowIn('utilities-panel'), flights: rowIn('data-panel') };
+  globalThis.CSS = { escape: (value) => value };
+  globalThis.document = {
+    querySelector: (selector) => rows[/data-layer-id="([^"]+)"/.exec(selector)?.[1]] || null,
+  };
+  try {
+    const opened = [];
+    const layers = [
+      { id: 'flights', name: 'Live Flights', enabled: false, showInTogglePanel: true, stats: {} },
+      { id: 'directions', name: 'Directions', enabled: false, showInTogglePanel: true, stats: {} },
+    ];
+    const dataManager = {
+      layers: new Map(layers.map((layer) => [layer.id, { module: {} }])),
+      getAll: () => layers,
+    };
+    const styleManager = {
+      setPanelCollapsed: (panelId, collapsed) => opened.push([panelId, collapsed]),
+    };
+    const viewer = {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    };
+    const runner = createGevActionRunner({ viewer, styleManager, dataManager });
+    const directions = await runner('show_data_layers_menu', { layerId: 'directions' });
+    assert.equal(directions.panelId, 'utilities-panel');
+    assert.deepEqual(directions.focusedLayer, { id: 'directions', name: 'Directions' });
+    const flights = await runner('show_data_layers_menu', { layerId: 'flights' });
+    assert.equal(flights.panelId, 'data-panel');
+    assert.deepEqual(opened, [['utilities-panel', false], ['data-panel', false]]);
+    assert.deepEqual(focused, ['gev-voice-focus', 'gev-voice-focus']);
+  } finally {
+    globalThis.document = previous.document;
+    globalThis.CSS = previous.CSS;
+  }
+});
+
 test('generic layer visibility forwards cancellation and reports semantic failure', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = {
