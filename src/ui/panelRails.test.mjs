@@ -20,61 +20,57 @@ test('Display uses an inner scroll body only in Cyber', () => {
   assert.equal(displayPanelScroller(null), null);
 });
 
-test('Cyber restores one expanded owner, keeps launchers, and restores other theme preferences', () => {
-  for (const mobile of [false]) {
-    const f = fixture('right', {
-      mobile,
-      hud: { visible: true, variant: 'cyber' },
-    });
+for (const side of ['left', 'right']) {
+  test(`${side} desktop rail keeps one expanded owner in every HUD layout`, () => {
+    for (const variant of ['tactical', 'minimal', 'cyber']) {
+      const f = fixture(side, { hud: { visible: true, variant } });
+      f.expand(f.first, 250);
+      f.expand(f.second, 250);
+      f.options.preferredPanelId = f.second.id;
+      f.run();
+      assert.equal(f.first.classList.contains('accordion-collapsed'), true);
+      assert.equal(f.second.classList.contains('collapsed'), false);
+      assert.equal(f.stack.classList.contains('layout-exclusive'), true);
+      assert.equal(f.first.getAttribute('aria-hidden'), 'true');
+      assert.equal(f.retries(), 0, 'the accordion needs no auto-collapse pass');
+      f.run();
+      assert.equal(
+        f.first.classList.contains('collapsed'),
+        true,
+        'layout does not reopen a peer',
+      );
+      // Phone sheets restore the presentation-only collapse.
+      f.options.windowRef.matchMedia = () => ({ matches: true });
+      f.run();
+      assert.equal(f.first.classList.contains('collapsed'), false);
+      assert.equal(f.first.classList.contains('accordion-collapsed'), false);
+      assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+    }
+  });
+
+  test(`${side} rail keeps no accordion on phones, where it is presented as tab sheets`, () => {
+    // A sheet (for example Cameras: CCTV with Street Level) shows several of the
+    // rail's panels at once; the accordion would collapse all but one.
+    const f = fixture(side, { mobile: true });
     f.expand(f.first, 250);
     f.expand(f.second, 250);
     f.options.preferredPanelId = f.second.id;
     f.run();
-    assert.equal(f.first.classList.contains('cyber-accordion-collapsed'), true);
-    assert.equal(f.second.classList.contains('collapsed'), false);
-    assert.equal(f.first.getAttribute('aria-hidden'), undefined);
-    f.run();
-    assert.equal(
-      f.first.classList.contains('collapsed'),
-      true,
-      'layout does not reopen a peer',
-    );
-    f.options.hud.variant = 'minimal';
-    f.run();
     assert.equal(f.first.classList.contains('collapsed'), false);
-    assert.equal(
-      f.first.classList.contains('cyber-accordion-collapsed'),
-      false,
-    );
+    assert.equal(f.first.classList.contains('accordion-collapsed'), false);
     assert.equal(f.second.classList.contains('collapsed'), false);
-  }
-});
-
-test('Cyber keeps no accordion on phones, where the rail is presented as tab sheets', () => {
-  // A sheet (for example Cameras: CCTV with Street Level) shows several of the
-  // rail's panels at once; the accordion would collapse all but one.
-  const f = fixture('right', {
-    mobile: true,
-    hud: { visible: true, variant: 'cyber' },
   });
-  f.expand(f.first, 250);
-  f.expand(f.second, 250);
-  f.options.preferredPanelId = f.second.id;
-  f.run();
-  assert.equal(f.first.classList.contains('collapsed'), false);
-  assert.equal(f.first.classList.contains('cyber-accordion-collapsed'), false);
-  assert.equal(f.second.classList.contains('collapsed'), false);
-});
 
-test('Cyber restored accordion prefers keyboard focus when no explicit owner exists', () => {
-  const f = fixture('right', { hud: { visible: true, variant: 'cyber' } });
-  f.expand(f.first, 250);
-  f.expand(f.second, 250);
-  f.options.documentRef.activeElement = f.second;
-  f.run();
-  assert.equal(f.first.classList.contains('collapsed'), true);
-  assert.equal(f.second.classList.contains('collapsed'), false);
-});
+  test(`${side} restored accordion prefers keyboard focus when no explicit owner exists`, () => {
+    const f = fixture(side);
+    f.expand(f.first, 250);
+    f.expand(f.second, 250);
+    f.options.documentRef.activeElement = f.second;
+    f.run();
+    assert.equal(f.first.classList.contains('collapsed'), true);
+    assert.equal(f.second.classList.contains('collapsed'), false);
+  });
+}
 
 function element(
   id,
@@ -250,16 +246,16 @@ for (const side of ['left', 'right']) {
     );
     assert.equal(f.first.getAttribute('aria-hidden'), undefined);
   });
-  test(`${side} constrained layout preserves the preferred panel and requests another pass`, () => {
+  test(`${side} constrained layout keeps the preferred panel without another pass`, () => {
     const f = fixture(side);
     f.expand(f.first, 900);
     f.expand(f.second, 900);
     f.options.preferredPanelId = 'second';
     f.run();
     assert.equal(f.second.classList.contains('collapsed'), false);
-    assert.equal(f.first.classList.contains('layout-auto-collapsed'), true);
+    assert.equal(f.first.classList.contains('accordion-collapsed'), true);
     assert.deepEqual(f.collapsed, ['first']);
-    assert.equal(f.retries(), 1);
+    assert.equal(f.retries(), 0);
   });
   test(`${side} hidden HUD restores automatic collapse without altering manual collapse`, () => {
     const f = fixture(side, { hud: { visible: false, variant: 'tactical' } });
@@ -277,7 +273,7 @@ test('right layout uses keyboard focus when there is no preferred panel', () => 
   f.expand(f.second, 900);
   f.options.documentRef.activeElement = f.second;
   f.run();
-  assert.equal(f.first.classList.contains('layout-auto-collapsed'), true);
+  assert.equal(f.first.classList.contains('accordion-collapsed'), true);
   assert.equal(f.second.classList.contains('collapsed'), false);
 });
 
@@ -532,26 +528,27 @@ test('right rail enters focus only above available height and leaves below the f
   assert.equal(f.stack.classList.contains('layout-focus'), false);
 });
 
-test('right rail auto-collapse requests only one retry and settles within two passes', () => {
+test('right rail settles a second tall panel through the accordion in one pass', () => {
   const f = thrashingRightRail({ weatherOpen: true });
   const modes = [];
   for (let pass = 0; pass < 10; pass++) {
     f.run();
-    modes.push(f.stack.classList.contains('layout-focus'));
+    modes.push(f.stack.dataset.layoutMode);
   }
   assert.deepEqual(f.collapsed, ['weather-panel']);
-  assert.equal(f.retries(), 1);
-  assert.deepEqual(modes.slice(1), Array(9).fill(true));
+  assert.equal(f.weather.classList.contains('accordion-collapsed'), true);
+  assert.equal(f.retries(), 0);
+  assert.deepEqual(modes.slice(1), Array(9).fill(modes[0]));
 });
 
-test('right rail retry cannot enqueue another retry even if disclosure changes before it runs', () => {
+test('right rail reopening a peer outside the rail keeps one owner without retrying', () => {
   const f = thrashingRightRail({ weatherOpen: true });
   f.run();
-  assert.equal(f.retries(), 1);
-  f.weather.classList.remove('collapsed', 'layout-auto-collapsed');
+  f.weather.classList.remove('collapsed', 'accordion-collapsed');
   f.run();
-  assert.equal(f.retries(), 1);
-  assert.equal(f.stack.dataset.layoutMode, 'focus');
+  assert.equal(f.retries(), 0);
+  assert.equal(f.weather.classList.contains('collapsed'), true);
+  assert.equal(f.cctv.classList.contains('collapsed'), false);
 });
 
 test('right rail restores presentation even when intrinsic measurement throws', () => {
@@ -595,14 +592,14 @@ test('right rail measuring pass keeps an opted-in scroller position', () => {
 });
 
 for (const variant of ['minimal', 'full']) {
-  test(`right rail does not retry collapse that the ${variant} HUD immediately restores`, () => {
+  test(`right rail settles two tall panels without retrying in the ${variant} HUD`, () => {
     const f = fixture('right', { hud: { visible: true, variant } });
     f.expand(f.first, 900);
     f.expand(f.second, 900);
     for (let pass = 0; pass < 10; pass++) f.run();
     assert.equal(f.retries(), 0);
     assert.equal(f.first.classList.contains('collapsed'), false);
-    assert.equal(f.second.classList.contains('collapsed'), false);
+    assert.equal(f.second.classList.contains('accordion-collapsed'), true);
   });
 }
 // ── Narrow-screen rail overflow pin ──────────────────────────────────────────
@@ -699,10 +696,11 @@ test('right layout ignores a CSS-hidden expanded panel when deciding exclusivity
 
   f.run();
 
-  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  // The rail lists the collapsed panels; the CSS-hidden one claims nothing.
+  assert.equal(f.stack.classList.contains('layout-exclusive'), true);
   assert.equal(f.stack.dataset.expandedCount, '0');
-  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
-  assert.equal(f.second.getAttribute('aria-hidden'), undefined);
+  assert.equal(weather.classList.contains('collapsed'), false);
+  assert.equal(weather.getAttribute('aria-hidden'), undefined);
   assert.equal(
     weather.style.getPropertyValue('--right-panel-allocated-height'),
     '',
@@ -730,9 +728,10 @@ test('right layout still restores panels that exclusive presentation hides', () 
 
   f.options.hud.visible = false;
   f.run();
-  assert.equal(f.second.classList.contains('collapsed'), false);
+  // Restored from the space-based collapse, it yields to the accordion owner.
   assert.equal(f.second.classList.contains('layout-auto-collapsed'), false);
-  assert.deepEqual(f.collapsed, ['second']);
+  assert.equal(f.second.classList.contains('accordion-collapsed'), true);
+  assert.equal(f.first.classList.contains('collapsed'), false);
 });
 
 test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', () => {
@@ -766,10 +765,10 @@ test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', (
   const retriesBefore = f.retries();
   f.run();
   assert.ok(
-    f.collapsed.includes('recent-imagery-panel'),
-    'focus mode collapses the later panel and asks for another pass',
+    imagery.classList.contains('accordion-collapsed'),
+    'the accordion keeps the first panel and collapses the later one',
   );
-  assert.equal(f.retries(), retriesBefore + 1);
+  assert.equal(f.retries(), retriesBefore);
   f.run();
   assert.equal(f.stack.dataset.expandedCount, '1');
   assert.ok(

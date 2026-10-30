@@ -362,7 +362,7 @@ export class PanelChrome {
       // restore the user's explicit expanded preference at its own viewport.
       const collapsed =
         panelEl.classList.contains('layout-auto-collapsed') ||
-        panelEl.classList.contains('cyber-accordion-collapsed')
+        panelEl.classList.contains('accordion-collapsed')
           ? false
           : panelEl.classList.contains('collapsed');
       // A panel the phone shell only borrowed for a sheet shares its own state.
@@ -420,19 +420,22 @@ export class PanelChrome {
     const nextCollapsed = Boolean(collapsed);
     const wasAutoCollapsed =
       panelEl.classList.contains('layout-auto-collapsed') ||
-      panelEl.classList.contains('cyber-accordion-collapsed');
-    // A user opening a Cyber rail panel owns the whole accordion, including
-    // peers that were only presentation-collapsed during a saved-state restore.
+      panelEl.classList.contains('accordion-collapsed');
+    // One panel is open per desktop side: a user opening a side panel owns
+    // the whole accordion, including peers that were only
+    // presentation-collapsed during a saved-state restore.
+    const sideStack = [this._leftPanelStack, this._rightPanelStack].find(
+      (stack) => stack && panelEl.parentElement === stack,
+    );
     if (
       explicit &&
       !restore &&
       !nextCollapsed &&
-      document.documentElement?.dataset.uiTheme === 'cyber' &&
-      panelEl.parentElement === this._rightPanelStack &&
+      sideStack &&
       // Phone sheets show several rail panels at once.
       !document.body?.classList?.contains('mobile-shell')
     ) {
-      for (const peer of this._rightPanelStack.children) {
+      for (const peer of sideStack.children) {
         if (
           peer !== panelEl &&
           peer.matches('[data-panel-id]') &&
@@ -480,7 +483,6 @@ export class PanelChrome {
     // Reveal Radio's owner before the no-op check: the nested section may
     // already be expanded while its Context parent is closed.
     if (
-      document.documentElement?.dataset.uiTheme === 'cyber' &&
       !nextCollapsed &&
       panelId === 'radio-panel' &&
       document
@@ -507,10 +509,7 @@ export class PanelChrome {
       }
       return;
     }
-    panelEl.classList.remove(
-      'layout-auto-collapsed',
-      'cyber-accordion-collapsed',
-    );
+    panelEl.classList.remove('layout-auto-collapsed', 'accordion-collapsed');
     if (
       !nextCollapsed &&
       this.cockpitView?.active &&
@@ -521,20 +520,6 @@ export class PanelChrome {
       if (this._cockpitContextCollapsedForDataPanel) {
         this.cockpitView.setContextCollapsed(true);
       }
-    }
-    if (
-      !nextCollapsed &&
-      panelId === 'radio-panel' &&
-      document.documentElement?.dataset.uiTheme !== 'cyber' &&
-      document
-        .getElementById('global-context-panel')
-        ?.classList.contains('collapsed')
-    ) {
-      this.setPanelCollapsed('global-context-panel', false, {
-        restore,
-        persist,
-        syncShare,
-      });
     }
     if (!nextCollapsed && !restore && panelId === 'location-bar') {
       const otherPanel = document.getElementById('control-panel');

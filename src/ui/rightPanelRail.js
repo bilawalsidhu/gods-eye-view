@@ -2,10 +2,7 @@ import {
   allocatePanelStackHeights,
   panelStackAutoCollapseIndices,
 } from '../panelStackLayout.js';
-import {
-  resolveHudRailLayout,
-  shouldHideCollapsedRightPanels,
-} from './panelRailGeometry.js';
+import { resolveHudRailLayout } from './panelRailGeometry.js';
 
 import { displayPanelScroller } from './displayPanelScroll.js';
 
@@ -89,11 +86,12 @@ export function layoutRightPanelRail({
       onCollapse(panel);
     }
   }
-  // Normalize restored state and theme entry without overwriting saved panel
-  // preferences. This marker is distinct from Tactical's space-based collapse.
-  // Phones present the rail as tab sheets that show several panels at once.
+  // One panel is open per desktop side. Normalize restored state without
+  // overwriting saved panel preferences; this marker is distinct from
+  // Tactical's space-based collapse. Phones present the rail as tab sheets
+  // that show several panels at once.
   const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
-  if (hud.variant === 'cyber' && !isMobile) {
+  if (!isMobile) {
     const expanded = panels.filter(
       (panel) => !panel.classList.contains('collapsed'),
     );
@@ -103,29 +101,20 @@ export function layoutRightPanelRail({
       expanded[0];
     for (const panel of expanded) {
       if (panel === owner) continue;
-      panel.classList.add('collapsed', 'cyber-accordion-collapsed');
+      panel.classList.add('collapsed', 'accordion-collapsed');
       onCollapse(panel);
     }
   } else {
     for (const panel of panels) {
-      if (!panel.classList.contains('cyber-accordion-collapsed')) continue;
-      panel.classList.remove('collapsed', 'cyber-accordion-collapsed');
+      if (!panel.classList.contains('accordion-collapsed')) continue;
+      panel.classList.remove('collapsed', 'accordion-collapsed');
       onCollapse(panel);
     }
   }
-  const hasExpandedPanel = panels.some(
-    (panel) =>
-      !panel.classList.contains('collapsed') &&
-      (!isMobile || panel.id !== 'pp-toggles'),
-  );
+  // The desktop panel rail lists every panel, so collapsed ones are hidden.
   // Phones present the rail as tab sheets (mobileShell.js), which choose what
   // shows; hiding collapsed siblings would empty a sheet and its a11y tree.
-  const exclusive =
-    !isMobile &&
-    shouldHideCollapsedRightPanels({
-      hudVariant: hud.variant,
-      hasExpandedPanel,
-    });
+  const exclusive = !isMobile;
   stack.classList.toggle('layout-exclusive', exclusive);
   for (const panel of panels) {
     if (exclusive && panel.classList.contains('collapsed'))

@@ -21,6 +21,7 @@ import { measurePanelNaturalHeight } from './panelMeasurement.js';
  * @param {Function} [options.getComputedStyle] Optional DOM style reader override.
  * @param {Map<string, number>} options.collapsedHeights Caller-owned measurement cache.
  * @param {Function} options.onAligned Notify the caller after the left rail moves.
+ * @param {Document} [options.documentRef] Document supplying current keyboard focus.
  */
 export function layoutLeftPanelRail({
   stack,
@@ -32,6 +33,7 @@ export function layoutLeftPanelRail({
   onRetry,
   collapsedHeights,
   onAligned,
+  documentRef = stack?.ownerDocument,
   getComputedStyle = (element) => windowRef.getComputedStyle(element),
 }) {
   if (!stack) return;
@@ -49,19 +51,48 @@ export function layoutLeftPanelRail({
 
   // The existing narrow-screen composition has its own full-width stack.
   // Keep this desktop lane engine from fighting those dedicated rules.
-  if (windowRef.matchMedia('(max-width: 720px)').matches) {
+  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  if (isMobile) {
     stack.classList.remove('layout-focus');
     stack.classList.remove('layout-tail');
     stack.style.removeProperty('--left-stack-safe-top');
     stack.style.removeProperty('--left-stack-safe-bottom');
     stack.style.removeProperty('--left-stack-centered-height');
+    stack.classList.remove('layout-exclusive');
     stack.dataset.layoutMode = 'mobile';
     for (const panel of panels) {
+      if (panel.classList.contains('accordion-collapsed')) {
+        panel.classList.remove('collapsed', 'accordion-collapsed');
+        onCollapse(panel);
+      }
       panel.removeAttribute('aria-hidden');
       panel.style.removeProperty('--left-panel-allocated-height');
     }
     return;
   }
+
+  // One panel is open per desktop side and the panel rail lists the others,
+  // so collapsed panels are hidden. Normalize restored state without
+  // overwriting saved panel preferences.
+  const expandedBeforeAccordion = panels.filter(
+    (panel) => !panel.classList.contains('collapsed'),
+  );
+  const accordionOwner =
+    expandedBeforeAccordion.find((panel) => panel.id === preferredPanelId) ||
+    expandedBeforeAccordion.find((panel) =>
+      panel.contains(documentRef?.activeElement),
+    ) ||
+    expandedBeforeAccordion[0];
+  for (const panel of expandedBeforeAccordion) {
+    if (panel === accordionOwner) continue;
+    panel.classList.add('collapsed', 'accordion-collapsed');
+    onCollapse(panel);
+  }
+  const exclusive = !isMobile;
+  stack.classList.toggle('layout-exclusive', exclusive);
+  const laidOutPanels = panels.filter(
+    (panel) => !exclusive || !panel.classList.contains('collapsed'),
+  );
 
   const viewportHeight = Math.max(1, windowRef.innerHeight);
   const stackRect = stack.getBoundingClientRect();
@@ -162,7 +193,7 @@ export function layoutLeftPanelRail({
     (sum, height) => sum + height,
     0,
   );
-  const siblingHeight = panels.reduce((total, panel) => {
+  const siblingHeight = laidOutPanels.reduce((total, panel) => {
     if (!panel.classList.contains('collapsed')) return total;
     const measured = collapsedHeights.get(panel.id);
     return total + (measured || panel.getBoundingClientRect().height || 0);
@@ -170,12 +201,8 @@ export function layoutLeftPanelRail({
   let requiredHeight = siblingHeight;
 
   const rowGap = parseFloat(getComputedStyle(stack).rowGap) || 0;
-  if (expandedPanels.length) {
-    requiredHeight += naturalExpandedHeight;
-    requiredHeight += rowGap * Math.max(0, panels.length - 1);
-  } else {
-    requiredHeight += rowGap * Math.max(0, panels.length - 1);
-  }
+  if (expandedPanels.length) requiredHeight += naturalExpandedHeight;
+  requiredHeight += rowGap * Math.max(0, laidOutPanels.length - 1);
 
   const wasFocused = stack.classList.contains('layout-focus');
   const wasTail = stack.classList.contains('layout-tail');
@@ -189,7 +216,7 @@ export function layoutLeftPanelRail({
   const tailRequiredHeight =
     naturalExpandedHeight +
     siblingHeight +
-    rowGap * Math.max(0, panels.length - 1);
+    rowGap * Math.max(0, laidOutPanels.length - 1);
   // A compact expansion should not make the whole control stack jump down
   // merely to center a few short rows. Preserve the normal top anchor when
   // the centered stack would begin below it; tall stacks can still grow
@@ -296,8 +323,8 @@ export function layoutLeftPanelRail({
   // CockpitView.syncSignalLayout() owns `--cockpit-utility-top` instead.
 
   for (const panel of panels) {
-    const hiddenSibling = shouldFocus && panel.classList.contains('collapsed');
-    if (hiddenSibling) panel.setAttribute('aria-hidden', 'true');
+    if (exclusive && panel.classList.contains('collapsed'))
+      panel.setAttribute('aria-hidden', 'true');
     else panel.removeAttribute('aria-hidden');
   }
   // The right controls share this top baseline; update them after the left

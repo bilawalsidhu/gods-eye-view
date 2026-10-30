@@ -188,7 +188,7 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     'focus mode must hide every collapsed sibling, including presentation-only auto-collapses',
   );
   assert.doesNotMatch(css, /layout-focus > \[data-panel-id\]\.collapsed:not\(\.layout-auto-collapsed\)/);
-  assert.match(leftRail, /const hiddenSibling =\s*shouldFocus && panel\.classList\.contains\('collapsed'\);/);
+  assert.match(leftRail, /if \(exclusive && panel\.classList\.contains\('collapsed'\)\)\s*panel\.setAttribute\('aria-hidden', 'true'\)/);
 });
 
 test('share-panel state excludes responsive collapse and preserves recipient preferences', () => {
@@ -198,7 +198,7 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
 
   assert.match(
     ui,
-    /const collapsed =[\s\S]*?panelEl\.classList\.contains\('layout-auto-collapsed'\)[\s\S]*?panelEl\.classList\.contains\('cyber-accordion-collapsed'\)[\s\S]*?\? false\s*: panelEl\.classList\.contains\('collapsed'\);/,
+    /const collapsed =[\s\S]*?panelEl\.classList\.contains\('layout-auto-collapsed'\)[\s\S]*?panelEl\.classList\.contains\('accordion-collapsed'\)[\s\S]*?\? false\s*: panelEl\.classList\.contains\('collapsed'\);/,
     'responsive auto-collapse must serialize the explicit expanded preference',
   );
   assert.match(

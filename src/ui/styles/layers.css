@@ -260,6 +260,9 @@
 #right-context-rail.layout-exclusive > [data-panel-id].collapsed {
   display: none;
 }
+#left-panel-stack.layout-exclusive > [data-panel-id].collapsed {
+  display: none;
+}
 #right-context-rail.layout-focus > [data-panel-id].collapsed {
   display: block;
   flex: 0 0 auto;

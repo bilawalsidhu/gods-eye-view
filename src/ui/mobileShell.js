@@ -208,7 +208,7 @@ export function initMobileShell({
     return (
       classes.contains('collapsed') &&
       !classes.contains('layout-auto-collapsed') &&
-      !classes.contains('cyber-accordion-collapsed')
+      !classes.contains('accordion-collapsed')
     );
   };
 

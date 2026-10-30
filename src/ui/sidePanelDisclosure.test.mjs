@@ -19,6 +19,10 @@ function fixture(theme = 'cyber') {
     nodes.set(id, value);
     return value;
   };
+  const left = node('left-stack');
+  const layers = node('data-panel', false), scenes = node('scene-panel');
+  left.children = [layers, scenes];
+  for (const panel of left.children) panel.parentElement = left;
   const rail = node('rail');
   const display = node('pp-toggles'), context = node('global-context-panel'), cctv = node('cctv-panel'), radio = node('radio-panel');
   rail.children = [display, context, cctv];
@@ -27,6 +31,7 @@ function fixture(theme = 'cyber') {
   radio.parentElement = context;
   const saved = [], claimed = [];
   const owner = {
+    _leftPanelStack: left,
     _rightPanelStack: rail,
     _panelLayout: {},
     _lifetime: { frame() {} },
@@ -36,29 +41,36 @@ function fixture(theme = 'cyber') {
     shareLinkManager: { claimRestoreLane: (...args) => claimed.push(args), onPanelStateChange() {} },
   };
   owner.setPanelCollapsed = PanelChrome.prototype.setPanelCollapsed.bind(owner);
-  return { display, context, cctv, radio, owner, saved, claimed,
+  return { layers, scenes, display, context, cctv, radio, owner, saved, claimed,
     doc: { documentElement: { dataset: { uiTheme: theme } }, getElementById: (id) => nodes.get(id) },
   };
 }
 
-test('explicit Cyber opening collapses peers and claims their restoration lanes', () => {
-  const f = fixture(), prior = globalThis.document;
-  globalThis.document = f.doc;
-  try {
-    f.owner.setPanelCollapsed('global-context-panel', false, { explicit: true });
-    f.owner.setPanelCollapsed('pp-toggles', false, { explicit: true });
-    assert.equal(f.display.classList.contains('collapsed'), false);
-    assert.equal(f.context.classList.contains('collapsed'), true);
-    assert.ok(f.saved.some(([id, collapsed]) => id === 'global-context-panel' && collapsed));
-    assert.ok(f.claimed.some(([, id]) => id === 'global-context-panel'));
-    f.cctv.classList.add('cyber-accordion-collapsed');
-    f.owner.setPanelCollapsed('cctv-panel', true, { explicit: true });
-    assert.equal(f.cctv.classList.contains('cyber-accordion-collapsed'), false);
-  } finally { globalThis.document = prior; }
+test('explicit opening collapses side peers and claims their restoration lanes in every theme', () => {
+  for (const theme of ['tactical', 'minimal', 'cyber']) {
+    const f = fixture(theme), prior = globalThis.document;
+    globalThis.document = f.doc;
+    try {
+      f.owner.setPanelCollapsed('global-context-panel', false, { explicit: true });
+      f.owner.setPanelCollapsed('pp-toggles', false, { explicit: true });
+      assert.equal(f.display.classList.contains('collapsed'), false);
+      assert.equal(f.context.classList.contains('collapsed'), true);
+      assert.ok(f.saved.some(([id, collapsed]) => id === 'global-context-panel' && collapsed));
+      assert.ok(f.claimed.some(([, id]) => id === 'global-context-panel'));
+      f.cctv.classList.add('accordion-collapsed');
+      f.owner.setPanelCollapsed('cctv-panel', true, { explicit: true });
+      assert.equal(f.cctv.classList.contains('accordion-collapsed'), false);
+      // The left side has its own accordion; the right side is untouched.
+      f.owner.setPanelCollapsed('scene-panel', false, { explicit: true });
+      assert.equal(f.scenes.classList.contains('collapsed'), false);
+      assert.equal(f.layers.classList.contains('collapsed'), true);
+      assert.equal(f.display.classList.contains('collapsed'), false);
+    } finally { globalThis.document = prior; }
+  }
 });
 
 test('opening already-expanded Radio reveals Context and closes Display', () => {
-  const f = fixture(), prior = globalThis.document;
+  const f = fixture('tactical'), prior = globalThis.document;
   globalThis.document = f.doc;
   try {
     f.owner.setPanelCollapsed('radio-panel', false, { explicit: true });
@@ -71,17 +83,17 @@ test('opening already-expanded Radio reveals Context and closes Display', () => 
   } finally { globalThis.document = prior; }
 });
 
-test('non-Cyber explicit panels and restored preferences retain their existing policy', () => {
+test('restored preferences keep every saved panel open for the layout to normalize', () => {
   for (const theme of ['tactical', 'minimal', 'cyber']) {
     const f = fixture(theme), prior = globalThis.document;
     globalThis.document = f.doc;
     try {
-      const options = theme === 'cyber' ? { restore: true, persist: false } : { explicit: true };
+      const options = { restore: true, persist: false };
       f.owner.setPanelCollapsed('pp-toggles', false, options);
       f.owner.setPanelCollapsed('cctv-panel', false, options);
       assert.equal(f.display.classList.contains('collapsed'), false);
       assert.equal(f.cctv.classList.contains('collapsed'), false);
-      if (theme === 'cyber') assert.deepEqual(f.saved, []);
+      assert.deepEqual(f.saved, []);
     } finally { globalThis.document = prior; }
   }
 });
