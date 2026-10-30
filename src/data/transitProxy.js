@@ -225,6 +225,25 @@ export function repairVehicleTimestamps(vehicles, headerTimestamp, fetchedAtS) {
 }
 
 /**
+ * Bring a feed's speeds to the m/s the spec requires. A feed registered with
+ * `speedUnit: 'kmh'` publishes km/h in `Position.speed`, and read as m/s a
+ * 44 km/h bus would be reported at 158 km/h. Converting here, once, keeps every
+ * consumer of `speedMps` honest without each one knowing about the feed.
+ *
+ * @param {object} feed Registry entry.
+ * @param {object[]} vehicles Normalized vehicle records.
+ * @returns {object[]}
+ */
+export function normalizeFeedSpeeds(feed, vehicles) {
+  if (feed?.speedUnit !== 'kmh') return vehicles;
+  return vehicles.map((vehicle) =>
+    Number.isFinite(vehicle.speedMps)
+      ? { ...vehicle, speedMps: vehicle.speedMps / 3.6 }
+      : vehicle,
+  );
+}
+
+/**
  * Decode upstream bytes into the JSON snapshot the browser consumes.
  *
  * A DIFFERENTIAL feed is refused outright. Differential GTFS-Realtime carries
@@ -257,7 +276,7 @@ export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
     truncated: decoded.truncated,
     count: decoded.vehicles.length,
     vehicles: repairVehicleTimestamps(
-      decoded.vehicles,
+      normalizeFeedSpeeds(feed, decoded.vehicles),
       decoded.timestamp,
       Math.floor(now / 1000),
     ),

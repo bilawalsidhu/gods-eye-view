@@ -482,3 +482,46 @@ test('Burlington is live and carries its terms link, which its licence requires'
   assert.match(bur.licenseUrl, /Open%20Data%20Terms%20of%20Use\.pdf$/);
   assert.match(bur.url, /^https:\/\//, 'port 80 has no listener at all');
 });
+
+test('Rio buses and BRT cover the city from Centro to Santa Cruz, and not São Paulo', () => {
+  const ids = (lat, lon) =>
+    transitFeedsInRange(lat, lon).map((feed) => feed.id);
+  for (const [place, lat, lon] of [
+    ['Centro', -22.9068, -43.1729],
+    ['Barra da Tijuca', -23.0004, -43.3659],
+    ['Santa Cruz', -22.9194, -43.6847],
+  ]) {
+    assert.ok(
+      ids(lat, lon).includes('smtr-rio-onibus'),
+      `buses reach ${place}`,
+    );
+    assert.ok(ids(lat, lon).includes('smtr-rio-brt'), `BRT reaches ${place}`);
+  }
+  assert.deepEqual(
+    ids(-23.5505, -46.6333).filter((id) => id.startsWith('smtr-rio')),
+    [],
+    'São Paulo, 360 km away, never polls Rio',
+  );
+});
+
+test('Rio feeds are CC BY 4.0, live, and declare the km/h speeds they publish', () => {
+  for (const id of ['smtr-rio-onibus', 'smtr-rio-brt']) {
+    const feed = getTransitFeed(id);
+    assert.equal(feed.defaultEnabled, true, `${id} is live`);
+    assert.equal(feed.license, 'CC BY 4.0');
+    assert.match(feed.licenseUrl, /^https:\/\/www\.data\.rio\/documents\//);
+    assert.match(feed.attribution, /Prefeitura da Cidade do Rio de Janeiro/);
+    assert.equal(feed.speedUnit, 'kmh', `${id} publishes km/h`);
+    assert.equal(transitModeFor(feed, null), 'bus');
+  }
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources
+      .split('\n')
+      .some((line) => line.startsWith('| **SMTR Rio de Janeiro')),
+    'Rio has a DATA_SOURCES row',
+  );
+});
