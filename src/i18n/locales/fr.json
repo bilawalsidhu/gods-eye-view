@@ -3015,5 +3015,20 @@
   "Load scenes from an exported JSON file": "Charger des scènes depuis un fichier JSON exporté",
   "Download the timing log of the last play": "Télécharger le journal de minutage de la dernière lecture",
   "Edit anchors, data packs and shot details": "Modifier les ancres, les paquets de données et les détails des plans",
-  "Download this scene as JSON or an asset bundle": "Télécharger cette scène en JSON ou en archive de ressources"
+  "Download this scene as JSON or an asset bundle": "Télécharger cette scène en JSON ou en archive de ressources",
+  "Tilt up toward the horizon": "Incliner vers l'horizon",
+  "Tilt down toward top-down view": "Incliner vers la vue du dessus",
+  "Top-down view": "Vue du dessus",
+  "Look left": "Regarder à gauche",
+  "Look right": "Regarder à droite",
+  "Look up": "Regarder vers le haut",
+  "Look down": "Regarder vers le bas",
+  "Map navigation": "Navigation de la carte",
+  "Tilt": "Inclinaison",
+  "Tilt: top-down (bottom) to near horizon (top)": "Inclinaison : vue du dessus (bas) à presque l'horizon (haut)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Cap de la carte. Faites glisser pour tourner, les flèches font pivoter, Origine pour le nord",
+  "North, 0 degrees": "Nord, 0 degré",
+  "Look around": "Regarder autour",
+  "{heading} degrees from north": "{heading} degrés depuis le nord",
+  "{tilt} degrees from top-down": "{tilt} degrés depuis la vue du dessus"
 }
