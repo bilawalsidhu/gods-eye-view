@@ -1,13 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { Readable } from 'node:stream';
 import {
+  HUD_SUMMARY_FEED_STATES,
   HUD_SUMMARY_INSTRUCTIONS,
+  HUD_SUMMARY_RESPONSE_FORMAT,
   HUD_SUMMARY_UNCONFIGURED_CODE,
+  hudSummaryInput,
+  hudSummaryInstructions,
   hudSummaryLayerContext,
+  hudSummaryLocale,
+  hudSummaryMatchesProvenance,
   hudTelemetryProvenance,
   isHudSummaryUnconfigured,
   keylessHudSummaryResponse,
+  provenanceTag,
 } from './hudSummaryResponse.js';
 import { openAiRealtimeProxy } from '../vite.config.js';
 
@@ -206,46 +214,222 @@ test('HUD summary context and telemetry tag carry chip-identical feed-state', ()
   );
 });
 
-test('HUD summary instructions require non-nominal feedState in the five words', () => {
+test('HUD summary instructions ask for the canonical feedState as its own field', () => {
   assert.match(
     HUD_SUMMARY_INSTRUCTIONS,
-    /five words MUST include that feedState token/,
+    /Set feedState to feedProvenance\.overall exactly/,
   );
-  assert.match(
-    HUD_SUMMARY_INSTRUCTIONS,
-    /STALE, DEGRADED, FALLBACK, LOADING, or UNAVAILABLE/,
+  assert.match(HUD_SUMMARY_INSTRUCTIONS, /must not present the view as live/);
+  assert.deepEqual(HUD_SUMMARY_RESPONSE_FORMAT.schema.required, [
+    'summary',
+    'feedState',
+  ]);
+  assert.deepEqual(
+    HUD_SUMMARY_RESPONSE_FORMAT.schema.properties.feedState.enum,
+    [...HUD_SUMMARY_FEED_STATES],
   );
-  assert.match(HUD_SUMMARY_INSTRUCTIONS, /feedProvenance/);
+  assert.ok(HUD_SUMMARY_FEED_STATES.includes('partial'));
 });
 
-test('the HUD proxy uses the shared provenance instructions', () => {
+test('the instructions name the UI language, with English as the fallback', () => {
+  assert.match(hudSummaryInstructions('es'), /in Spanish \(es\)/);
+  assert.match(hudSummaryInstructions('ru-RU'), /in Russian \(ru\)/);
+  assert.equal(hudSummaryInstructions('en'), HUD_SUMMARY_INSTRUCTIONS);
+  assert.equal(hudSummaryInstructions('xx-YY'), HUD_SUMMARY_INSTRUCTIONS);
+  assert.equal(hudSummaryInstructions(undefined), HUD_SUMMARY_INSTRUCTIONS);
+  assert.equal(hudSummaryLocale('es-MX'), 'es');
+  const english = { locale: 'en', placeLabels: ['Austin'] };
+  assert.equal(hudSummaryInput(english), JSON.stringify(english));
+  assert.match(
+    hudSummaryInput({ locale: 'ru' }),
+    /^Summary language: Russian \(ru\)\.\n\{/,
+  );
+  assert.equal(hudSummaryLocale(42), 'en');
+});
+
+test('the HUD sends its UI locale inside the context it signs for dedupe', () => {
+  const hud = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
+  assert.match(hud, /locale: getLocale\(\),\s+placeLabels:/);
+  assert.match(hud, /const signature = JSON\.stringify\(context\);/);
+});
+
+let hudSummaryClient = 0;
+
+async function postHudSummary(context, reply) {
+  // A fresh address per request: the per-IP limiter outlives a single test.
+  hudSummaryClient += 1;
+  const previousKey = process.env.OPENAI_API_KEY;
+  const previousLimit = process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
+  const previousFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = 'test-key';
+  process.env.GEV_RATELIMIT_OPENAI_PER_MIN = '0';
+  let sent = null;
+  globalThis.fetch = async (url, init) => {
+    sent = JSON.parse(init.body);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ output_text: reply }),
+    };
+  };
+  try {
+    // The handler itself: the installed route adds a same-site gate that a
+    // bare test request does not pass.
+    const { handleHudSummary: hud } =
+      await import('../server/providers/openai/hud-summary.js');
+    const req = Object.assign(
+      Readable.from([Buffer.from(JSON.stringify(context))]),
+      {
+        method: 'POST',
+        url: '/',
+        headers: {},
+        socket: { remoteAddress: `10.0.0.${hudSummaryClient}` },
+      },
+    );
+    const response = await new Promise((resolve, reject) => {
+      const res = {
+        statusCode: 200,
+        setHeader() {},
+        end(body = '') {
+          resolve({ statusCode: this.statusCode, body: JSON.parse(body) });
+        },
+      };
+      Promise.resolve(hud(req, res)).catch(reject);
+    });
+    return { sent, response };
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+    if (previousLimit === undefined)
+      delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
+    else process.env.GEV_RATELIMIT_OPENAI_PER_MIN = previousLimit;
+  }
+}
+
+test('an es request reaches the model in Spanish and returns the canonical state', async () => {
+  const { sent, response } = await postHudSummary(
+    {
+      locale: 'es',
+      placeLabels: ['Austin'],
+      feedProvenance: { overall: 'stale' },
+    },
+    JSON.stringify({
+      summary: 'Austin vuelos con datos antiguos',
+      feedState: 'stale',
+    }),
+  );
+  assert.match(sent.instructions, /in Spanish \(es\)/);
+  assert.equal(sent.text.format.name, 'hud_summary');
+  const [lead, json] = sent.input.split('\n');
+  assert.equal(lead, 'Summary language: Spanish (es).');
+  assert.equal(JSON.parse(json).locale, 'es');
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    summary: 'Austin vuelos con datos antiguos',
+    feedState: 'stale',
+    error: null,
+  });
+});
+
+test('a reply that skips the format carries no summary and no state', async () => {
+  const { response } = await postHudSummary(
+    { locale: 'ru', feedProvenance: { overall: 'stale' } },
+    'Остин рейсы данные устарели сейчас',
+  );
+  assert.equal(response.body.summary, null);
+  assert.equal(response.body.feedState, null);
+  const unknown = await postHudSummary(
+    { locale: 'ru', feedProvenance: { overall: 'stale' } },
+    JSON.stringify({ summary: 'Остин рейсы', feedState: 'fine' }),
+  );
+  assert.equal(unknown.response.body.feedState, null);
+});
+
+test('the HUD proxy builds its instructions from the shared contract', () => {
   const local = readFileSync(
     new URL('../server/providers/openai/hud-summary.js', import.meta.url),
     'utf8',
   );
-  assert.match(local, /HUD_SUMMARY_INSTRUCTIONS/);
+  assert.match(local, /hudSummaryInstructions\(context\?\.locale\)/);
+  assert.match(local, /hudSummaryInput\(context\)/);
+  assert.match(local, /HUD_SUMMARY_RESPONSE_FORMAT/);
   assert.doesNotMatch(local, /enabled-layer text labels/);
 });
 
-test('AI summaries missing a non-nominal provenance token fall back deterministically', async () => {
-  const { hudSummaryMatchesProvenance } =
-    await import('./hudSummaryResponse.js');
+test("a localized summary is shown only with the HUD's own canonical state", () => {
+  const stale = { overall: 'stale' };
   assert.equal(
-    hudSummaryMatchesProvenance('Austin flights operating normally today', {
-      overall: 'stale',
-    }),
+    hudSummaryMatchesProvenance(
+      { summary: 'Остин рейсы данные устарели сейчас', feedState: 'stale' },
+      stale,
+    ),
+    true,
+  );
+  assert.equal(
+    hudSummaryMatchesProvenance(
+      { summary: 'Austin vuelos en vivo ahora', feedState: 'nominal' },
+      stale,
+    ),
     false,
   );
   assert.equal(
-    hudSummaryMatchesProvenance('Austin stale flights over downtown', {
-      overall: 'stale',
-    }),
-    true,
+    hudSummaryMatchesProvenance(
+      { summary: 'Austin stale flights over downtown', feedState: null },
+      stale,
+    ),
+    false,
   );
   assert.equal(
-    hudSummaryMatchesProvenance('Austin flights operating normally today', {
-      overall: 'nominal',
-    }),
+    hudSummaryMatchesProvenance(
+      { summary: 'Austin flights' },
+      { overall: 'partial' },
+    ),
+    false,
+  );
+  assert.equal(
+    hudSummaryMatchesProvenance(
+      { summary: 'Austin flights operating normally today' },
+      { overall: 'nominal' },
+    ),
     true,
   );
+  assert.equal(hudSummaryMatchesProvenance({ summary: 'x' }, null), true);
+});
+
+test('a partial view keeps its warning tag, translated in es and ru', async () => {
+  const now = 1_000_000;
+  const layers = [
+    {
+      id: 'flights',
+      name: 'Live Flights',
+      enabled: true,
+      stats: { partial: true, count: 4, lastUpdate: now },
+    },
+    {
+      id: 'vessels',
+      name: 'Live AIS Vessels',
+      enabled: true,
+      stats: { count: 9, lastUpdate: now },
+    },
+  ];
+  const context = hudSummaryLayerContext(layers, { now });
+  assert.equal(context.feedProvenance.overall, 'partial');
+  assert.deepEqual(provenanceTag(context.feedProvenance), {
+    state: 'partial',
+    names: ['Live Flights'],
+  });
+  assert.deepEqual(hudTelemetryProvenance(layers, { now }), {
+    state: 'partial',
+    names: ['Live Flights'],
+  });
+  const { setLocale, t } = await import('./i18n/index.js');
+  try {
+    for (const locale of ['es', 'ru']) {
+      setLocale(locale);
+      assert.notEqual(t('PARTIAL'), 'PARTIAL', locale);
+    }
+  } finally {
+    setLocale('en');
+  }
 });

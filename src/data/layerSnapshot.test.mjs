@@ -90,7 +90,15 @@ test('layerFeedState matches the chip classifier for every honesty class', () =>
 test('chip labels and severity cover every feed-state the envelope can emit', () => {
   assert.deepEqual(
     [...LAYER_FEED_STATES],
-    ['nominal', 'loading', 'degraded', 'stale', 'fallback', 'unavailable'],
+    [
+      'nominal',
+      'loading',
+      'degraded',
+      'stale',
+      'partial',
+      'fallback',
+      'unavailable',
+    ],
   );
   assert.deepEqual([...SNAPSHOT_FEED_STATES], [...LAYER_FEED_STATES, 'off']);
   for (const state of LAYER_FEED_STATES) {
@@ -105,6 +113,30 @@ test('chip labels and severity cover every feed-state the envelope can emit', ()
   assert.equal(worstFeedState(['nominal', 'stale', 'fallback']), 'stale');
   assert.equal(worstFeedState(['degraded', 'unavailable']), 'unavailable');
   assert.equal(worstFeedState([]), null);
+});
+
+test('partial is a feed-state of its own: above nominal, below every fault', () => {
+  const layer = (id, stats) => ({ id, name: id, enabled: true, stats });
+  const partial = layer('flights', {
+    partial: true,
+    count: 4,
+    lastUpdate: NOW,
+  });
+  const nominal = layer('vessels', { count: 9, lastUpdate: NOW });
+  const stale = layer('cctv', { stale: true, count: 2, lastUpdate: NOW });
+  const overall = (layers) =>
+    feedProvenanceEnvelope(layers, { now: NOW }).overall;
+  assert.equal(overall([partial]), 'partial');
+  assert.equal(overall([partial, nominal]), 'partial');
+  assert.equal(overall([nominal, partial]), 'partial');
+  assert.equal(overall([partial, stale]), 'stale');
+  assert.equal(overall([stale, partial]), 'stale');
+  assert.equal(LAYER_FEED_STATE_LABELS.partial, 'PARTIAL');
+  assert.equal(
+    FEED_STATE_SEVERITY.fallback < FEED_STATE_SEVERITY.partial &&
+      FEED_STATE_SEVERITY.partial < FEED_STATE_SEVERITY.nominal,
+    true,
+  );
 });
 
 test('a disabled layer is off even when leftover stats would read stale', () => {

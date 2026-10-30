@@ -31,13 +31,14 @@ import {
   hudSummaryLayerContext,
   hudTelemetryProvenance,
   isHudSummaryUnconfigured,
+  provenanceTag,
 } from './hudSummaryResponse.js';
 import {
   applyHudUiTheme,
   DEFAULT_HUD_LAYOUT,
   normalizeHudLayout,
 } from './hudLayouts.js';
-import { formatNumber, msg, t } from './i18n/index.js';
+import { formatNumber, getLocale, msg, t } from './i18n/index.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
 
@@ -892,8 +893,13 @@ export class IntelHUD {
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      if (hudSummaryMatchesProvenance(data.summary, context.feedProvenance))
-        this._lastSummaryText = data.summary;
+      if (hudSummaryMatchesProvenance(data, context.feedProvenance)) {
+        // The warning is the HUD's own translated tag, not the model's words.
+        const tag = localizedProvenanceTag(
+          provenanceTag(context.feedProvenance),
+        );
+        this._lastSummaryText = tag ? `${data.summary} | ${tag}` : data.summary;
+      }
       this._setSummaryText(this._lastSummaryText || fallbackText, animate);
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
@@ -959,6 +965,7 @@ export class IntelHUD {
         ?.filter((layer) => layer.enabled)
         .map((layer) => layer.name) || [];
     return {
+      locale: getLocale(),
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,

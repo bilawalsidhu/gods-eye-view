@@ -1,5 +1,8 @@
 import {
-  HUD_SUMMARY_INSTRUCTIONS,
+  HUD_SUMMARY_FEED_STATES,
+  HUD_SUMMARY_RESPONSE_FORMAT,
+  hudSummaryInput,
+  hudSummaryInstructions,
   keylessHudSummaryResponse,
 } from '../../../src/hudSummaryResponse.js';
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
@@ -16,6 +19,23 @@ function extractOpenAiResponseText(data) {
     .map((part) => part?.text || part?.output_text || '')
     .join(' ')
     .trim();
+}
+
+/** The structured reply, or nulls when the model did not follow the format. */
+function parseHudSummaryReply(text) {
+  let reply = null;
+  try {
+    reply = JSON.parse(text);
+  } catch {
+    /* not JSON: no summary */
+  }
+  const feedState = HUD_SUMMARY_FEED_STATES.includes(reply?.feedState)
+    ? reply.feedState
+    : null;
+  return {
+    summary: toFiveWordHudSummary(reply?.summary),
+    feedState: feedState === 'none' ? null : feedState,
+  };
 }
 
 function toFiveWordHudSummary(value) {
@@ -77,14 +97,17 @@ async function handleHudSummary(req, res) {
         model:
           process.env.OPENAI_HUD_SUMMARY_MODEL ||
           OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
-        instructions: HUD_SUMMARY_INSTRUCTIONS,
-        input: JSON.stringify(context),
+        instructions: hudSummaryInstructions(context?.locale),
+        input: hudSummaryInput(context),
+        text: { format: HUD_SUMMARY_RESPONSE_FORMAT },
         reasoning: { effort: 'minimal' },
-        max_output_tokens: 100,
+        max_output_tokens: 200,
       }),
     });
     const data = await response.json().catch(() => ({}));
-    const summary = toFiveWordHudSummary(extractOpenAiResponseText(data));
+    const { summary, feedState } = parseHudSummaryReply(
+      extractOpenAiResponseText(data),
+    );
     res.statusCode = response.ok && summary ? 200 : response.status || 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
@@ -93,6 +116,7 @@ async function handleHudSummary(req, res) {
     res.end(
       JSON.stringify({
         summary: summary || null,
+        feedState,
         // Never relay `data.error.message`: that is OpenAI's own wording, and
         // it carries request ids, organization hints and quota phrasing.
         error: response.ok ? null : 'OpenAI HUD summary request failed',
