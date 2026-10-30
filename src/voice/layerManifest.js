@@ -529,18 +529,29 @@ const SELF_EVIDENT_IDS = new Set([
   's2-ghostmaps',
 ]);
 
+/** Lower case with spaces and hyphens removed: "Data centers" → "datacenters". */
+const spelled = (text) => text.toLowerCase().replace(/[\s-]+/g, '');
+
 /**
  * Compact model-facing alias hint: "alias/alias→id; …" for toggleable layers
  * whose id is not already the spoken word. At most two aliases per layer keep
- * the tool JSON small; the runner accepts the full alias list.
+ * the tool JSON small; the runner accepts the full alias list. An alias the id
+ * already spells ("dams"→local-dams, "weather radar"→weather-radar) is left
+ * out, and so is a layer with no other alias.
  * @returns {string} One line for the layerId description.
  */
 export function voiceLayerAliasHint() {
   return VOICE_LAYER_MANIFEST.filter(
-    (entry) =>
-      entry.toggle && entry.aliases.length && !SELF_EVIDENT_IDS.has(entry.id),
+    (entry) => entry.toggle && !SELF_EVIDENT_IDS.has(entry.id),
   )
-    .map((entry) => `${entry.aliases.slice(0, 2).join('/')}→${entry.id}`)
+    .map((entry) => ({
+      id: entry.id,
+      aliases: entry.aliases
+        .slice(0, 2)
+        .filter((alias) => !spelled(entry.id).includes(spelled(alias))),
+    }))
+    .filter((entry) => entry.aliases.length)
+    .map((entry) => `${entry.aliases.join('/')}→${entry.id}`)
     .join(';');
 }
 
