@@ -4,6 +4,7 @@ import { StarrySky } from '../sky/starrySky.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
+const resolutionScaleStates = new WeakMap();
 
 function boundedPinchDelta(delta) {
   if (!Number.isFinite(delta) || delta === 0) return delta;
@@ -103,6 +104,116 @@ export function installTrackpadPinchZoom(
   };
 }
 
+/**
+ * Clamp viewer.resolutionScale so that the canvas dimensions never exceed the
+ * GPU's maximum texture size, preventing GlobeDepth and framebuffer texture
+ * allocation DeveloperErrors on 2K/4K and fullscreen displays (#905).
+ *
+ * Keeps requested scale and hardware ceiling separate (credit #940): applies
+ * min(requested, hardware ceiling) and restores the requested scale when the
+ * viewport shrinks.
+ */
+export function clampResolutionToTextureLimits(
+  viewer,
+  {
+    getLimit = () => Cesium?.ContextLimits?.maximumTextureSize ?? 0,
+    getRenderbufferLimit = () =>
+      Cesium?.ContextLimits?.maximumRenderbufferSize ?? 0,
+    getPixelRatio = () =>
+      (typeof window !== 'undefined' && window.devicePixelRatio) || 1.0,
+  } = {},
+) {
+  const maxSize = Math.min(
+    ...[getLimit(), getRenderbufferLimit()].filter(
+      (limit) => Number.isFinite(limit) && limit > 0,
+    ),
+  );
+  if (!Number.isFinite(maxSize)) return;
+
+  const canvas = viewer?.canvas;
+  if (!canvas) return;
+  const width =
+    canvas.clientWidth ||
+    (typeof window !== 'undefined' ? window.innerWidth : 0);
+  const height =
+    canvas.clientHeight ||
+    (typeof window !== 'undefined' ? window.innerHeight : 0);
+  const maxDim = Math.max(width, height);
+  if (maxDim <= 0) return;
+
+  const useBrowserRecommended = viewer?.useBrowserRecommendedResolution ?? true;
+  const pixelRatio = useBrowserRecommended ? 1.0 : getPixelRatio();
+  const effectiveMaxDim = maxDim * (pixelRatio > 0 ? pixelRatio : 1.0);
+  const maxAllowedScale = maxSize / effectiveMaxDim;
+
+  let state = resolutionScaleStates.get(viewer);
+  if (!state) {
+    state = { requestedScale: viewer.resolutionScale ?? 1.0 };
+    resolutionScaleStates.set(viewer, state);
+  } else if (
+    viewer.resolutionScale !== state.appliedScale &&
+    Number.isFinite(viewer.resolutionScale) &&
+    viewer.resolutionScale > 0
+  ) {
+    state.requestedScale = viewer.resolutionScale;
+  }
+
+  const clamped = Math.min(state.requestedScale, maxAllowedScale);
+  state.appliedScale = clamped;
+  viewer.resolutionScale = clamped;
+}
+
+/**
+ * Install a resize and fullscreen listener that continuously guarantees the
+ * drawing buffer fits within the GPU's texture and renderbuffer limits. Returns
+ * a disposer.
+ */
+export function installTextureLimitGuard(
+  viewer,
+  {
+    getLimit = () => Cesium?.ContextLimits?.maximumTextureSize ?? 0,
+    getRenderbufferLimit = () =>
+      Cesium?.ContextLimits?.maximumRenderbufferSize ?? 0,
+    getPixelRatio = () =>
+      (typeof window !== 'undefined' && window.devicePixelRatio) || 1.0,
+    windowTarget = globalThis.window,
+    createResizeObserver = (callback) =>
+      typeof globalThis.ResizeObserver === 'function'
+        ? new globalThis.ResizeObserver(callback)
+        : null,
+  } = {},
+) {
+  const enforce = () => {
+    clampResolutionToTextureLimits(viewer, {
+      getLimit,
+      getRenderbufferLimit,
+      getPixelRatio,
+    });
+  };
+  enforce();
+
+  let unlistenResize = null;
+  if (windowTarget?.addEventListener) {
+    windowTarget.addEventListener('resize', enforce);
+    unlistenResize = () => windowTarget.removeEventListener('resize', enforce);
+  }
+
+  let resizeObserver = null;
+  if (viewer?.canvas && createResizeObserver) {
+    resizeObserver = createResizeObserver(enforce);
+    resizeObserver?.observe(viewer.canvas);
+  }
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    unlistenResize?.();
+    resizeObserver?.disconnect();
+    if (viewer) resolutionScaleStates.delete(viewer);
+  };
+}
+
 /** Cesium.Viewer options of the standard globe viewer. */
 export function applicationViewerOptions(creditContainer) {
   return {
@@ -151,6 +262,7 @@ export function createApplicationViewer({ container, creditContainer }) {
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
     viewer.scene.skyAtmosphere.brightnessShift = -0.08;
+
     return viewer;
   } catch (error) {
     viewer.destroy();
