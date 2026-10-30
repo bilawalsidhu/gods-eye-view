@@ -2750,14 +2750,10 @@
   "Scope edge feather": "スコープ縁のぼかし",
   "Scope edge feather as a percentage of the keyhole radius": "スコープ縁のぼかし（キーホール半径に対する割合）",
   "Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel": "地球上に描画：クリックで頂点を追加、ダブルクリックまたはEnterで完了、Escでキャンセル",
-  "Shape": "図形",
   "Shape to draw": "描画する図形",
   "Area": "範囲",
   "Line": "線",
   "Pin": "ピン",
-  "Label (optional)": "ラベル（任意）",
-  "Label for the drawn shape": "描画した図形のラベル",
-  "Colour of the drawn shape": "描画した図形の色",
   "Primary": "プライマリー",
   "Amber": "アンバー",
   "Cyan": "シアン",
@@ -2856,5 +2852,12 @@
   "routing busy — too many routes at once": "ルート検索サービスが混雑しています。同時に要求されたルートが多すぎます",
   "route proxy error": "ルート検索プロキシでエラーが発生しました",
   "Malformed cyclone snapshot": "サイクロンのスナップショットの形式が不正です",
-  "Cyclone request timed out": "サイクロンのリクエストがタイムアウトしました"
+  "Cyclone request timed out": "サイクロンのリクエストがタイムアウトしました",
+  "Colour of {name}": "{name}の色",
+  "Change the colour of {name}": "{name}の色を変更",
+  "Name of {name}": "{name}の名前",
+  "Audio": "オーディオ",
+  "UTILITIES": "ユーティリティ",
+  "Colour of the next shape": "次の図形の色",
+  "Drawn shapes": "描いた図形"
 }
