@@ -1,5 +1,7 @@
 # W2: Navara / Cesium performance comparison
 
+**2026-10-30 follow-up:** [MSAA investigation and repeated measurements](phase3-w2-msaa-performance.md). The optimized combined result is 14.6 ms Navara / 4.2 ms Cesium (3.476×); the controlled original-pipeline rerun is 18.1 ms. The 1.10 work gate still fails. The historical measurements below are retained unchanged.
+
 Measured on 2026-10-29 after the W2 closure fixes. All nine W2 layers have implementation checkpoints. These measurements do **not** certify whole-wave acceptance: the original 1.10 limits remain binding and failed gates are listed below. Dioxus and the later migration phases are deferred.
 
 In the current standard modes, the combined scene takes 4.2 ms Cesium/15.7 ms Navara (median uncapped workp95, ratio 3.738). Navara has not demonstrated a rendering-speed win. The lighter Navara-minimal diagnostic is 9.9 ms versus 4.6 ms Cesium; the pre-fix Navara diagnostic was 35.3 ms. Delivered smoothness and JavaScript memory are reported separately below.

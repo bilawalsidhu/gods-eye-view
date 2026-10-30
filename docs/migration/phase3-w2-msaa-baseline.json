@@ -1,0 +1,861 @@
+{
+  "mode": "uncapped",
+  "look": "cinematic",
+  "diagnostic": false,
+  "baselineSampling": true,
+  "denseQuakes": false,
+  "workload": "500 worldwide earthquakes, five near the Boston camera; dense local W2 catalog fixtures",
+  "head": "c5a6ba1e133ec8c1e4a3bfcb55655b14b7fc37bb",
+  "trackedDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "host": {
+    "cpu": "Apple M2 Pro",
+    "cores": 12,
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "base": "http://127.0.0.1:4207",
+  "scenarios": [
+    "empty",
+    "combined"
+  ],
+  "fixtureSha256": "412e5250d74d1bd1940606425609279e308cf7d5e29a19c0b11d66e3a85af5de",
+  "fixtureSourceSha256": "3362ef99df6207a68f6ed87f047ee69b1b298f3cb9146f0becae987330e57e48",
+  "driverSha256": "2cebbb561871f2f4dc3274ac77deb6935a01da7928f4be15038099c4f1d96b8b",
+  "measurement": "preRender listener installed before W2 enable to postRender listener after W2 setup; CPU/submission, not GPU timer",
+  "warmMs": 3000,
+  "measureMs": 10000,
+  "runs": [
+    {
+      "engine": "navara",
+      "run": -1,
+      "discarded": true,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 1410,
+          "workP50": 5.799999952316284,
+          "workP95": 7,
+          "intervalP50": 6.8999998569488525,
+          "intervalP95": 8.200000047683716,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 37476340,
+          "heapAfter": 37722624
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793350396062,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 39h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793350396768,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793350396245,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793350396464,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793350406532,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793350399408,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793350396661,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 2,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 658,
+          "workP50": 13,
+          "workP95": 15.300000190734863,
+          "intervalP50": 15.099999904632568,
+          "intervalP95": 17.299999952316284,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 56888436,
+          "heapAfter": 57293476
+        }
+      },
+      "startupMs": 5859,
+      "requests": 97,
+      "tileCache": {
+        "hits": 611,
+        "fetched": 0,
+        "cancelled": 0,
+        "failed": 0,
+        "errors": {}
+      }
+    },
+    {
+      "engine": "navara",
+      "run": 0,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 1408,
+          "workP50": 5.700000047683716,
+          "workP95": 7.199999809265137,
+          "intervalP50": 6.900000095367432,
+          "intervalP95": 8.299999952316284,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 36741784,
+          "heapAfter": 36953964
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793350436053,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 39h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793350436736,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793350436224,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793350436434,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793350446512,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793350439370,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793350436628,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 2,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 656,
+          "workP50": 13,
+          "workP95": 15.5,
+          "intervalP50": 15.200000047683716,
+          "intervalP95": 17.5,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 56099856,
+          "heapAfter": 56549744
+        }
+      },
+      "startupMs": 5688,
+      "requests": 97,
+      "tileCache": {
+        "hits": 599,
+        "fetched": 0,
+        "cancelled": 0,
+        "failed": 0,
+        "errors": {}
+      }
+    },
+    {
+      "engine": "navara",
+      "run": 1,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 1339,
+          "workP50": 5.799999952316284,
+          "workP95": 7.6000001430511475,
+          "intervalP50": 7.1000001430511475,
+          "intervalP95": 9.299999952316284,
+          "longFrames33": 1,
+          "longFrames50": 0,
+          "heapBefore": 36933236,
+          "heapAfter": 37166036
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793350476363,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 39h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793350477152,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793350476559,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793350476794,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793350486888,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793350479782,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793350477021,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 2,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 552,
+          "workP50": 15.599999904632568,
+          "workP95": 18.299999952316284,
+          "intervalP50": 18,
+          "intervalP95": 20.700000047683716,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 56318020,
+          "heapAfter": 56829168
+        }
+      },
+      "startupMs": 5646,
+      "requests": 97,
+      "tileCache": {
+        "hits": 614,
+        "fetched": 0,
+        "cancelled": 0,
+        "failed": 0,
+        "errors": {}
+      }
+    },
+    {
+      "engine": "navara",
+      "run": 2,
+      "discarded": false,
+      "scenes": {
+        "empty": {
+          "counts": {},
+          "stats": {},
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": null,
+          "imagery": null,
+          "frames": 1119,
+          "workP50": 7.5,
+          "workP95": 9,
+          "intervalP50": 9.099999904632568,
+          "intervalP95": 10.599999904632568,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 36395464,
+          "heapAfter": 36844608
+        },
+        "combined": {
+          "counts": {
+            "earthquakes": 500,
+            "local-firms": 6000,
+            "military-installations": 20,
+            "bikeshare": 200,
+            "radio": 750,
+            "alpr-cameras": 325,
+            "cctv": 25,
+            "transit": 800,
+            "recent-imagery": 2
+          },
+          "stats": {
+            "earthquakes": {
+              "count": 500,
+              "lastUpdate": 1793350517449,
+              "error": null
+            },
+            "local-firms": {
+              "count": 6000,
+              "cells": 3000,
+              "lastUpdate": 1793210280000,
+              "loading": false,
+              "stale": false,
+              "keyRequired": false,
+              "error": null,
+              "loadingLabel": "LIVE · updated 39h ago"
+            },
+            "military-installations": {
+              "count": 20,
+              "namedInView": 0,
+              "wide": false,
+              "namedMarkers": 0,
+              "pointsOnScreen": 0,
+              "labelsOnScreen": 0,
+              "labelCap": 24,
+              "lastUpdate": 1793350517588,
+              "stale": false,
+              "saturated": false,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "failureReason": null,
+              "statusMessage": "20 mapped sites in view",
+              "loadingLabel": "",
+              "coverage": {
+                "kind": "viewport"
+              },
+              "coverageLabel": "CURRENT VIEWPORT ONLY"
+            },
+            "bikeshare": {
+              "count": 200,
+              "lastUpdate": 1793350517655,
+              "loading": false
+            },
+            "radio": {
+              "count": 750,
+              "filtered": 750,
+              "selected": null,
+              "playing": null,
+              "stale": false,
+              "degraded": false,
+              "loading": false,
+              "error": null,
+              "lastUpdate": 1793210400000,
+              "horizonScans": 2,
+              "overlayEntries": 63
+            },
+            "alpr-cameras": {
+              "count": 325,
+              "countLabel": "325 nearby · 325 on screen",
+              "noCoverage": false,
+              "lastUpdate": 1793350517884,
+              "stale": false,
+              "saturated": false,
+              "renderRevision": 1,
+              "onScreen": 325,
+              "shown": 325,
+              "error": null,
+              "status": "ready",
+              "loading": false,
+              "retryAt": 0,
+              "retrying": false,
+              "retryInSec": 0,
+              "loadingLabel": ""
+            },
+            "cctv": {
+              "count": 25,
+              "lastUpdate": 1793350527962,
+              "error": null,
+              "loading": false,
+              "loadingLoaded": 25,
+              "loadingTotal": 25
+            },
+            "transit": {
+              "count": 0,
+              "lastUpdate": 1793350520869,
+              "error": null,
+              "source": "GTFS-RT",
+              "status": "zoom-in",
+              "coverage": "No feed here yet · 7 regions available"
+            },
+            "recent-imagery": {
+              "count": 34,
+              "lastUpdate": 1793350518091,
+              "error": null
+            }
+          },
+          "canvas": {
+            "width": 1280,
+            "height": 800,
+            "dpr": 1
+          },
+          "transit": {
+            "count": 800,
+            "shown": 800,
+            "moving": 800
+          },
+          "imagery": {
+            "host": "globe",
+            "ownedCount": 2,
+            "renderer": {
+              "active": 0,
+              "queued": 0,
+              "peak": 2,
+              "slots": {
+                "a": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                },
+                "b": {
+                  "level": 12,
+                  "tiles": 2,
+                  "loaded": 2,
+                  "failed": 0
+                }
+              }
+            },
+            "lease": true,
+            "releasing": false,
+            "mode": "ab",
+            "pins": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27"
+            },
+            "preview": null,
+            "shown": {
+              "a": "S30:2026-10-28",
+              "b": "S30:2026-10-27",
+              "preview": null,
+              "swipe": "ab"
+            },
+            "following": null,
+            "splitFromLink": false
+          },
+          "frames": 562,
+          "workP50": 15.200000047683716,
+          "workP95": 18.09999990463257,
+          "intervalP50": 17.700000047683716,
+          "intervalP95": 20.5,
+          "longFrames33": 0,
+          "longFrames50": 0,
+          "heapBefore": 55908264,
+          "heapAfter": 56351640
+        }
+      },
+      "startupMs": 6064,
+      "requests": 96,
+      "tileCache": {
+        "hits": 623,
+        "fetched": 0,
+        "cancelled": 0,
+        "failed": 0,
+        "errors": {}
+      }
+    }
+  ],
+  "browserErrors": [],
+  "previewManifestSha256": "b09675751d2086df83f6badb9f6ea9c70d748fb69266d4afcf2ad43f5f4e1135",
+  "browser": "Chrome/152.0.7977.75",
+  "expectedPreviewErrors": [],
+  "failedResponses": [],
+  "runtimePages": [
+    "navara--1",
+    "navara-0",
+    "navara-1",
+    "navara-2"
+  ],
+  "comparison": {}
+}
