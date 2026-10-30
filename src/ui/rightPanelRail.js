@@ -3,6 +3,7 @@ import {
   panelStackAutoCollapseIndices,
 } from '../panelStackLayout.js';
 import {
+  MOBILE_SHELL_MEDIA_QUERY,
   resolveHudRailLayout,
   shouldHideCollapsedRightPanels,
 } from './panelRailGeometry.js';
@@ -92,7 +93,7 @@ export function layoutRightPanelRail({
   // Normalize restored state and theme entry without overwriting saved panel
   // preferences. This marker is distinct from Tactical's space-based collapse.
   // Phones present the rail as tab sheets that show several panels at once.
-  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  const isMobile = windowRef.matchMedia(MOBILE_SHELL_MEDIA_QUERY).matches;
   if (hud.variant === 'cyber' && !isMobile) {
     const expanded = panels.filter(
       (panel) => !panel.classList.contains('collapsed'),

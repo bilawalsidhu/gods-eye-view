@@ -491,8 +491,8 @@ test('the full-width rail cannot inherit a height that overrides its floor', () 
   // to a mobile mode at the SAME breakpoint and removes both the class and the
   // custom property. Pin that, or the exemption above is unearned.
   const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
-  const gate = rail.indexOf("windowRef.matchMedia('(max-width: 720px)')");
-  assert.ok(gate > 0, 'the rail layout pass no longer keys off (max-width: 720px)');
+  const gate = rail.indexOf('windowRef.matchMedia(MOBILE_SHELL_MEDIA_QUERY)');
+  assert.ok(gate > 0, 'the rail layout pass must share the phone shell breakpoint');
   const mobileBranch = rail.slice(gate, rail.indexOf("layoutMode = 'mobile'", gate) + 40);
   assert.match(mobileBranch, /stack\.classList\.remove\('layout-focus'\)/);
   assert.match(mobileBranch, /stack\.style\.removeProperty\('--right-stack-max-height'\)/);

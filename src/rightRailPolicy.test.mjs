@@ -35,7 +35,7 @@ test('other HUD layouts keep collapsed right-rail launchers visible', () => {
 test('desktop Display participates in Tactical exclusivity without changing mobile Display behavior', () => {
   const ui = readFileSync(new URL('./ui/rightPanelRail.js', import.meta.url), 'utf8');
   const css = readStylesheet(new URL('../style.css', import.meta.url));
-  assert.match(ui, /const isMobile = windowRef\.matchMedia\('\(max-width: 720px\)'\)\.matches/);
+  assert.match(ui, /const isMobile = windowRef\.matchMedia\(MOBILE_SHELL_MEDIA_QUERY\)\.matches/);
   assert.match(
     ui,
     /!panel\.classList\.contains\('collapsed'\)\s*&&\s*\(!isMobile \|\| panel\.id !== 'pp-toggles'\)/,

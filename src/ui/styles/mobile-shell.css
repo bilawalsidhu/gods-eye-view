@@ -1,4 +1,4 @@
-/* ── Phone shell (≤720px, body.mobile-shell; src/ui/mobileShell.js) ─────────
+/* ── Phone shell (body.mobile-shell; gate in src/ui/panelRailGeometry.js) ────
  * The globe is full screen. A bottom tab bar opens one sheet; the sheet shows
  * the panels of that tab from the rails or dock, everything else stays hidden.
  */
@@ -6,6 +6,8 @@
   --mobile-tab-height: 58px;
   --mobile-bottom-inset: env(safe-area-inset-bottom, 0px);
   --mobile-top-inset: env(safe-area-inset-top, 0px);
+  --mobile-left-inset: env(safe-area-inset-left, 0px);
+  --mobile-right-inset: env(safe-area-inset-right, 0px);
   --mobile-tab-space: calc(
     var(--mobile-tab-height) + var(--mobile-bottom-inset)
   );
@@ -27,6 +29,12 @@
 #mobile-tab-bar,
 #mobile-sheet-backdrop {
   display: none;
+}
+
+body.mobile-shell {
+  --mobile-tab-space: calc(
+    var(--mobile-tab-height) + var(--mobile-bottom-inset)
+  );
 }
 
 body.mobile-shell #mobile-tab-bar {
@@ -87,7 +95,7 @@ body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
 /* ── Top bar: logo left, globe actions right ───────────────────────────── */
 body.mobile-shell #title-bar {
   top: calc(var(--mobile-top-inset) + 10px);
-  left: 14px;
+  left: calc(var(--mobile-left-inset) + 14px);
 }
 
 body.mobile-shell #title-bar .title-logo {
@@ -101,7 +109,13 @@ body.mobile-shell #title-bar .subtitle {
 
 body.mobile-shell #top-center-actions {
   top: calc(var(--mobile-top-inset) + 10px);
-  right: 12px;
+  right: calc(var(--mobile-right-inset) + 12px);
+  left: auto;
+  transform: none;
+}
+
+body.mobile-shell #style-indicator {
+  display: none;
 }
 
 /* ── HUD: one compact readout under the top bar ────────────────────────── */
@@ -114,7 +128,7 @@ body.mobile-shell #intel-hud .hud-bottom-bar {
 body.mobile-shell #intel-hud .hud-bottom-left {
   top: calc(var(--mobile-top-inset) + 62px);
   bottom: auto;
-  left: 16px;
+  left: calc(var(--mobile-left-inset) + 16px);
   font-size: 9px;
   opacity: 0.8;
 }
@@ -123,6 +137,11 @@ body.mobile-shell #intel-hud .hud-bottom-left {
 body.mobile-shell #left-panel-stack,
 body.mobile-shell #right-context-rail {
   display: none;
+}
+
+body.mobile-shell #left-panel-stack .panel-glow,
+body.mobile-shell #right-context-rail .panel-glow {
+  inset: 0;
 }
 
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack,
@@ -142,7 +161,8 @@ body.mobile-shell[data-mobile-sheet='more'] #right-context-rail {
   width: auto;
   max-width: none;
   max-height: var(--mobile-sheet-max-height);
-  padding: 14px 10px 10px;
+  padding: 14px calc(var(--mobile-right-inset) + 10px) 10px
+    calc(var(--mobile-left-inset) + 10px);
   overflow-y: auto;
   overscroll-behavior: contain;
   pointer-events: auto;
@@ -204,7 +224,8 @@ body.mobile-shell #command-dock {
   height: auto;
   min-height: 0;
   max-height: none;
-  padding: 0 10px;
+  padding: 0 calc(var(--mobile-right-inset) + 10px) 0
+    calc(var(--mobile-left-inset) + 10px);
   pointer-events: none;
   background: none;
   border: 0;
@@ -258,7 +279,8 @@ body.mobile-shell[data-mobile-sheet='more'] #command-dock {
   bottom: calc(var(--mobile-tab-space) + var(--mobile-sheet-height, 0px));
   align-items: stretch;
   max-height: var(--mobile-dock-sheet-max-height);
-  padding: 14px 10px 8px;
+  padding: 14px calc(var(--mobile-right-inset) + 10px) 8px
+    calc(var(--mobile-left-inset) + 10px);
   overflow-x: hidden;
   overflow-y: auto;
   pointer-events: auto;
@@ -369,6 +391,55 @@ body.mobile-shell #command-dock #gev-voice-control {
   transform: none;
 }
 
+/* The desktop chooser clears pinned trays. Phone sheets hide voice entirely,
+   so there is no tray to clear: keep chooser and gear attached to the mic. */
+body.mobile-shell
+  #command-dock
+  > #gev-voice-control[data-provider-choice='true'] {
+  --gev-provider-lift: 0px;
+  --gev-voice-settings-gap: 8px;
+}
+
+body.mobile-shell
+  #command-dock
+  > #gev-voice-control[data-provider-choice='true']
+  > .gev-voice-provider-field:not([hidden]) {
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: auto;
+  box-sizing: border-box;
+}
+
+body.mobile-shell
+  #command-dock
+  > #gev-voice-control[data-provider-choice='true']
+  > .gev-voice-settings-button {
+  left: auto;
+  right: 7px;
+  top: auto;
+  bottom: calc(100% + 15px);
+}
+
+/* Only sizing changes with height; eligibility remains in panelRailGeometry.js. */
+@media (max-height: 520px) {
+  body.mobile-shell {
+    --mobile-tab-height: 48px;
+    --mobile-sheet-max-height: min(
+      62dvh,
+      calc(100dvh - var(--mobile-top-inset) - var(--mobile-tab-space) - 70px)
+    );
+    --mobile-dock-sheet-max-height: 30dvh;
+    --mobile-rail-under-dock-max-height: min(
+      38dvh,
+      calc(
+        100dvh - var(--mobile-tab-space) - var(--mobile-top-inset) - 90px -
+          var(--mobile-dock-sheet-max-height)
+      )
+    );
+  }
+}
+
 /* ── Credits and corner chips clear the tab bar ────────────────────────── */
 /* While the tab bar shows, the credit line sits above the voice bar. The
    dock's placements (including the Minimal HUD's :has() variant) outrank any
@@ -376,8 +447,8 @@ body.mobile-shell #command-dock #gev-voice-control {
 body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   #cesium-credits {
   right: auto;
-  bottom: calc(var(--mobile-tab-space) + 106px) !important;
-  left: 10px;
+  bottom: calc(var(--mobile-tab-space) + 160px) !important;
+  left: calc(var(--mobile-left-inset) + 10px);
   max-width: calc(100vw - 20px);
   transform-origin: left bottom;
   scale: 0.8;
@@ -392,15 +463,95 @@ body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
   z-index: 166;
 }
 
+/* Phone landscape has no height to spare for the voice bar: it collapses to
+   the mic in the bottom-right corner, the provider chooser (and its gear)
+   sits beside it as a pill, and its trays open above it, right-aligned. */
+@media (max-height: 520px) {
+  body.mobile-shell #command-dock {
+    align-items: flex-end;
+  }
+
+  body.mobile-shell #command-dock > #gev-voice-control,
+  body.mobile-shell #command-dock > #gev-voice-control[data-status='error'] {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    place-items: center;
+    align-self: flex-end;
+    width: 3.4rem;
+    height: 3.4rem;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-heading,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-visualizer,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-readout,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-help-tray,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-mic-label {
+    display: none;
+  }
+
+  body.mobile-shell #command-dock > #gev-voice-control #gev-voice-button {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+  }
+
+  body.mobile-shell
+    #command-dock
+    > #gev-voice-control[data-provider-choice='true']
+    > .gev-voice-provider-field:not([hidden]) {
+    right: calc(100% + 8px);
+    bottom: 50%;
+    left: auto;
+    width: 10.5rem;
+    translate: 0 50%;
+  }
+
+  body.mobile-shell
+    #command-dock
+    > #gev-voice-control[data-provider-choice='true']
+    > .gev-voice-settings-button {
+    right: calc(100% + 14px);
+    bottom: 50%;
+    translate: 0 50%;
+  }
+
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-card,
+  body.mobile-shell #command-dock > #gev-voice-control .gev-voice-panel,
+  body.mobile-shell
+    #command-dock
+    > #gev-voice-control[data-status]
+    .gev-voice-error-tray {
+    right: 0;
+    bottom: calc(100% + 0.7rem);
+    left: auto;
+    width: min(22rem, calc(100vw - var(--mobile-left-inset) - 20px - 3.4rem));
+    max-height: calc(
+      100dvh - var(--mobile-top-inset) - var(--mobile-tab-space) - 11rem
+    );
+    transform: none;
+    transform-origin: bottom right;
+  }
+
+  /* The dock no longer crosses the middle, so the credit drops to the bar. */
+  body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
+    #cesium-credits {
+    bottom: calc(var(--mobile-tab-space) + 8px) !important;
+  }
+}
+
 /* The view switcher clears the tab bar and the voice bar, opposite the credit. */
 body.mobile-shell:not(.cockpit-mode) #view-switcher {
-  right: 12px;
+  right: calc(var(--mobile-right-inset) + 12px);
   bottom: calc(var(--mobile-tab-space) + 106px);
 }
 
 body.mobile-shell #corner-actions {
   top: calc(var(--mobile-top-inset) + 60px);
-  right: 12px;
+  right: calc(var(--mobile-right-inset) + 12px);
   bottom: auto;
 }
 
