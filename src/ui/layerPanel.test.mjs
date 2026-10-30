@@ -324,6 +324,15 @@ test('row text keeps a hyphenated code whole and never starts a line with the se
     assert.equal(plain.textContent, 'Satellites');
     assert.equal(plain.children.length, 0);
 
+    const compound = element();
+    setRowText(compound, 'Kartierte ALPR-Kameras · ADS-B-Flüge');
+    assert.equal(text(compound), 'Kartierte ALPR-Kameras · ADS-B-Flüge');
+    assert.deepEqual(
+      kept(compound),
+      [' ·', 'ADS-B'],
+      'a compound may break at its hyphen; the code inside it stays whole',
+    );
+
     const long = element();
     setRowText(long, 'see https-proxy-endpoint-config-x');
     assert.deepEqual(kept(long), [], 'a long hyphenated run may still wrap');

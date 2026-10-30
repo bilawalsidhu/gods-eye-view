@@ -30,36 +30,6 @@
         <div class="panel-header">
           <span class="panel-title" data-i18n>CONTEXT</span>
           <span class="panel-divider"></span>
-          <div id="context-radio-dock" class="context-radio-dock">
-            <button id="context-radio-toggle-btn" class="context-radio-toggle" type="button" aria-expanded="false" aria-controls="context-radio-mini" aria-label="Open compact Radio controls" title="Open compact Radio controls" data-i18n-aria-label data-i18n-title>
-              <span class="material-symbols-outlined" aria-hidden="true">radio</span>
-            </button>
-            <div id="context-radio-mini" class="context-radio-mini" role="group" aria-label="Compact Radio controls" hidden data-i18n-aria-label>
-              <div class="context-radio-mini-heading">
-                <span data-i18n>RADIO</span>
-                <strong id="context-radio-mini-station" data-i18n>RADIO READY</strong>
-                <span class="context-radio-mini-actions">
-                  <button id="context-radio-details-btn" type="button" aria-label="Open detailed Radio controls" aria-expanded="false" aria-controls="radio-panel" title="Open detailed Radio controls" data-i18n-aria-label data-i18n-title>
-                    <span class="material-symbols-outlined" aria-hidden="true">open_in_full</span>
-                  </button>
-                  <button id="context-radio-mini-close-btn" type="button" aria-label="Close compact Radio controls" title="Close compact Radio controls" data-i18n-aria-label data-i18n-title>
-                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
-                  </button>
-                </span>
-              </div>
-              <button id="context-radio-mini-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false" data-i18n>ENABLE</button>
-              <div class="context-radio-mini-transport">
-                <button id="context-radio-mini-prev-btn" type="button" aria-label="Previous filtered radio station" title="Previous station" disabled data-i18n-aria-label data-i18n-title>◀◀</button>
-                <button id="context-radio-mini-play-btn" type="button" aria-label="Play selected radio station" title="Play" disabled data-i18n-aria-label data-i18n-title>▶</button>
-                <button id="context-radio-mini-next-btn" type="button" aria-label="Next filtered radio station" title="Next station" disabled data-i18n-aria-label data-i18n-title>▶▶</button>
-              </div>
-              <label class="context-radio-mini-volume" for="context-radio-mini-volume">
-                <span data-i18n>VOLUME</span>
-                <input id="context-radio-mini-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Compact Radio volume" disabled data-i18n-aria-label />
-                <output id="context-radio-mini-volume-value" class="gev-slider-value" for="context-radio-mini-volume">80%</output>
-              </label>
-            </div>
-          </div>
           <button class="panel-collapse-btn" data-collapse-target="global-context-panel" title="Expand panel" data-i18n-title>▶</button>
         </div>
         <div class="cyber-panel-body" data-rail-scroller>
@@ -122,7 +92,7 @@
               <button id="radio-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false" data-i18n>ENABLE</button>
               <label class="radio-filter-label" for="radio-filter" data-i18n>STATION TAG</label>
               <select class="gev-field" id="radio-filter" aria-label="Filter stations by station tag" disabled data-i18n-aria-label>
-                <option value="all" data-i18n>All</option>
+                <option value="all" data-i18n data-i18n-context="radio tag">All</option>
               </select>
             </div>
             <div id="radio-station-card" class="radio-station-card" aria-live="polite">

@@ -985,17 +985,16 @@
     animation: none;
   }
 }
+/* Context is read for longer than other panels; it carries no halo. */
 #global-context-panel .panel-glow {
-  position: absolute;
-  inset: -20px;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(98, 181, 255, 0.2) 0%,
-    transparent 62%
-  );
-  filter: blur(20px);
-  opacity: 0.24;
-  pointer-events: none;
+  display: none;
+}
+/* Expanded, its section titles (Context, Radio) stay legible over bright
+   imagery. Cyber keeps its own red titles; collapsed launchers match siblings. */
+:root:not([data-ui-theme='cyber'])
+  #global-context-panel:not(.collapsed)
+  .panel-title {
+  color: var(--text-secondary);
 }
 .global-context-panel-inner {
   position: relative;
@@ -1011,158 +1010,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
-}
-.context-radio-dock {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.context-radio-toggle {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid rgba(98, 181, 255, 0.22);
-  border-radius: 6px;
-  color: rgba(143, 207, 255, 0.58);
-  background: rgba(42, 113, 171, 0.08);
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
-}
-.context-radio-toggle .material-symbols-outlined {
-  font-size: 17px;
-}
-.context-radio-toggle:hover,
-.context-radio-toggle:focus-visible {
-  border-color: #79c2ff;
-  color: #fff;
-  outline: none;
-}
-.context-radio-toggle.active {
-  border-color: rgba(101, 247, 255, 0.82);
-  color: #eaffff;
-  background: rgba(0, 212, 255, 0.16);
-  box-shadow:
-    inset 0 0 12px rgba(0, 212, 255, 0.1),
-    0 0 12px rgba(0, 212, 255, 0.2);
-}
-.context-radio-toggle:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
-.context-radio-mini {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 20px);
-  right: -38px;
-  display: none;
-  width: 244px;
-  box-sizing: border-box;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid rgba(65, 220, 231, 0.28);
-  border-radius: 8px;
-  background: rgba(2, 15, 20, 0.96);
-  box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.62),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(22px) saturate(1.35);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
-}
-.context-radio-mini[hidden] {
-  display: none !important;
-}
-.context-radio-dock.disclosure-open .context-radio-mini {
-  display: grid;
-}
-.context-radio-mini-heading {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  color: #65f7ff;
-  font: 7px/1.2 var(--font-mono);
-  letter-spacing: 0.12em;
-}
-.context-radio-mini-heading button {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid rgba(65, 220, 231, 0.28);
-  border-radius: 5px;
-  color: #8feaf2;
-  background: rgba(14, 69, 78, 0.16);
-  cursor: pointer;
-}
-.context-radio-mini-heading button:hover,
-.context-radio-mini-heading button:focus-visible {
-  border-color: #65f7ff;
-  color: #fff;
-  outline: none;
-}
-.context-radio-mini-actions {
-  display: flex;
-  gap: 5px;
-}
-.context-radio-mini-heading .material-symbols-outlined {
-  font-size: 16px;
-}
-.context-radio-mini > .panel-layer-toggle {
-  width: 100%;
-}
-.context-radio-mini-heading strong {
-  overflow: hidden;
-  color: #e8feff;
-  font-size: 8px;
-  font-weight: 500;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.context-radio-mini-transport {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
-}
-.context-radio-mini-transport button {
-  min-height: 28px;
-  padding: 5px;
-  border: 1px solid rgba(65, 220, 231, 0.28);
-  border-radius: 5px;
-  color: #8feaf2;
-  background: rgba(14, 69, 78, 0.16);
-  font: 8px/1 var(--font-mono);
-  cursor: pointer;
-}
-.context-radio-mini-transport button:hover:not(:disabled),
-.context-radio-mini-transport button:focus-visible:not(:disabled),
-.context-radio-mini-transport button.active {
-  border-color: #65f7ff;
-  color: #fff;
-  outline: none;
-}
-.context-radio-mini-transport button:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-.context-radio-mini-volume {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 30px;
-  gap: 7px;
-  align-items: center;
-  color: var(--text-dim);
-  font: 7px/1 var(--font-mono);
-  letter-spacing: 0.08em;
-}
-.context-radio-mini-volume input {
-  width: 100%;
 }
 .global-context-actions {
   display: grid;
@@ -1229,40 +1076,44 @@
      rather than relying on the chrome alone. */
   filter: drop-shadow(0 0 5px rgba(150, 210, 255, 0.9));
 }
+/* One segmented control: the two modes read as a single choice. */
 .global-context-modes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  margin: 0 0 10px;
+  gap: 2px;
+  margin: 0 0 12px;
+  padding: 2px;
+  border: 1px solid rgba(98, 181, 255, 0.22);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.22);
 }
 .context-mode-button {
   display: flex;
   min-width: 0;
-  min-height: 36px;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 7px 8px;
-  border: 1px solid rgba(98, 181, 255, 0.28);
-  border-radius: 6px;
-  color: #8fcfff;
-  background: rgba(42, 113, 171, 0.09);
-  font: 8px/1.15 var(--font-mono);
-  letter-spacing: 0.09em;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: rgba(214, 236, 255, 0.72);
+  background: transparent;
+  font: 600 10px/1.2 var(--font-mono);
+  letter-spacing: 0.06em;
   cursor: pointer;
   transition:
     border-color 0.15s ease,
     color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
+    background 0.15s ease;
 }
 .context-mode-button .material-symbols-outlined {
   font-size: 16px;
 }
 .context-mode-button:hover,
 .context-mode-button:focus-visible {
-  border-color: #79c2ff;
   color: #fff;
+  background: rgba(98, 181, 255, 0.08);
   outline: none;
 }
 /* Keep focus distinct when the selected tab owns the accent colors. */
@@ -1272,12 +1123,9 @@
 }
 
 .context-mode-button.active {
-  border-color: rgba(0, 212, 255, 0.75);
-  color: #eaffff;
-  background: rgba(0, 212, 255, 0.14);
-  box-shadow:
-    inset 0 0 16px rgba(0, 212, 255, 0.08),
-    0 0 12px rgba(0, 212, 255, 0.12);
+  border-color: rgba(0, 212, 255, 0.55);
+  color: #fff;
+  background: rgba(0, 212, 255, 0.16);
 }
 .context-mode-button:disabled {
   opacity: 0.55;
@@ -1287,23 +1135,20 @@
 .context-mode-standby[hidden] {
   display: none !important;
 }
+/* Plain guidance under the tabs, not a placeholder box. */
 .context-mode-standby {
   display: grid;
-  min-height: 72px;
-  place-content: center;
   gap: 6px;
-  padding: 12px;
-  border: 1px dashed rgba(98, 181, 255, 0.2);
-  border-radius: 7px;
-  color: rgba(190, 230, 230, 0.5);
-  text-align: center;
-  font: 8px/1.45 var(--font-mono);
-  letter-spacing: 0.1em;
+  padding: 2px 2px 4px;
+  color: rgba(214, 236, 255, 0.72);
+  font: 10px/1.6 var(--font-mono);
+  letter-spacing: 0.02em;
 }
 .context-mode-standby strong {
-  color: #8fcfff;
-  font-size: 9px;
-  letter-spacing: 0.16em;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
 }
 .context-mode-view {
   min-height: 0;
@@ -1344,19 +1189,20 @@
 }
 .global-context-actions .panel-layer-toggle {
   width: 100%;
-  min-height: 30px;
+  min-height: 32px;
   padding: 6px 8px;
-  font-size: 8px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
 }
 #global-context-panel #cockpit-entry {
   position: static;
   z-index: auto;
   width: 100%;
-  min-height: 30px;
+  min-height: 32px;
   padding: 5px 8px;
   border-radius: 5px;
   justify-content: center;
-  font-size: 8px;
+  font-size: 10px;
   box-shadow: none;
 }
 #global-context-panel #cockpit-entry .material-symbols-outlined {

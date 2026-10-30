@@ -27,7 +27,6 @@ for (const lifecycleState of ['enabling', 'disabling']) {
         destroyed: false,
         _radioPanel: el(),
         _radioEnableBtn: enable,
-        _syncContextRadioLauncherState() {},
         actions: {
           getLifecycle: () => ({
             lifecycleState,

@@ -72,7 +72,7 @@ test('opening already-expanded Radio reveals Context and closes Display', () => 
 });
 
 test('non-Cyber explicit panels and restored preferences retain their existing policy', () => {
-  for (const theme of ['tactical', 'operator', 'minimal', 'cyber']) {
+  for (const theme of ['tactical', 'minimal', 'cyber']) {
     const f = fixture(theme), prior = globalThis.document;
     globalThis.document = f.doc;
     try {

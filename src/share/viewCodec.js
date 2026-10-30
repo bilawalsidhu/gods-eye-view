@@ -31,6 +31,7 @@ import {
 } from '../data/detectionPolicy.js';
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { VIEW_STYLES } from '../view/index.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
@@ -101,7 +102,7 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'thermal',
     'anime',
     'noir',
-    'snow',
+    'snow', // retired (RETIRED_STYLES): decodes as Normal
   ]),
   mapStack: Object.freeze([
     'photoreal',
@@ -220,10 +221,6 @@ export const SHARE_VIEW_STYLE_PARAMS = Object.freeze({
     { key: 'contrastAmt', token: 'c', min: 0, max: 2 },
     { key: 'grainAmt', token: 'g', min: 0, max: 1 },
     { key: 'vignetteAmt', token: 'v', min: 0, max: 1 },
-  ]),
-  snow: freezeAll([
-    { key: 'density', token: 'd', min: 0, max: 1 },
-    { key: 'wind', token: 'w', min: 0, max: 1 },
   ]),
 });
 
@@ -1321,8 +1318,12 @@ export function decodeShareView(code, { nowMs = Date.now() } = {}) {
         return { ok: false, reason: 'out-of-range' };
     }
 
+    // A retired style's code stays reserved: the view opens on Normal, and
+    // parameters written for it are dropped rather than reported as unknown.
+    const retiredStyle = RETIRED_STYLES.includes(raw.style);
     if (raw.style !== undefined && !VIEW_STYLES.includes(raw.style)) {
-      if (get('style').len) unknown.code('enum:style', raw.style);
+      if (get('style').len && !retiredStyle)
+        unknown.code('enum:style', raw.style);
       raw.style = undefined;
     }
     for (const key of ['hudVariant', 'mapStack']) {
@@ -1357,7 +1358,7 @@ export function decodeShareView(code, { nowMs = Date.now() } = {}) {
       unknown.code('layer-option', 'without-layers');
     if (get('panelState'))
       raw.panelState = decodePanels(get('panelState').len, unknown);
-    if (get('styleParams'))
+    if (get('styleParams') && !retiredStyle)
       raw.styleParams = decodeStyleParams(
         get('styleParams').len,
         raw.style ?? 'normal',
