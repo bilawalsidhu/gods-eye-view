@@ -1,0 +1,304 @@
+name: Docker release
+
+# Publishes the multi-arch image to GHCR on release. Each architecture builds on
+# a native runner (no QEMU), so esbuild and sharp are that platform's own; the
+# per-platform digests are then merged into one manifest.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to (re)build, for example v1.2.3'
+        required: true
+        type: string
+      latest:
+        description: 'Also move the `latest` tag to this build'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancel a release publish half way through.
+  group: docker-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Prepare
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out OCI labels
+        id: labels
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+          labels: |
+            org.opencontainers.image.title=God's Eye View
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: runtime
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.labels.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=docker-${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=docker-${{ env.PLATFORM_PAIR }}
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Publish multi-arch manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+      version: ${{ steps.ref.outputs.version }}
+      digest: ${{ steps.ref.outputs.digest }}
+      latest: ${{ steps.ref.outputs.latest }}
+    steps:
+      - name: Prepare
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Download digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out tags and annotations
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
+            type=sha
+            type=raw,value=latest,enable=${{ (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && inputs.latest) }}
+          annotations: |
+            org.opencontainers.image.title=God's Eye View
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          META_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          args=()
+          while IFS= read -r tag; do args+=(--tag "$tag"); done < <(jq -r '.tags[]' <<< "$META_JSON")
+          while IFS= read -r note; do args+=(--annotation "$note"); done < <(jq -r '.annotations[]' <<< "$META_JSON")
+          sources=()
+          for digest in *; do sources+=("${IMAGE}@sha256:${digest}"); done
+          docker buildx imagetools create "${args[@]}" "${sources[@]}"
+
+      - name: Inspect image
+        id: ref
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          META_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          docker buildx imagetools inspect "${IMAGE}:${VERSION}"
+          # Did this run move `latest`? The notes should only name tags that exist.
+          latest=false
+          if jq -e --arg t "${IMAGE}:latest" '.tags | index($t)' <<< "$META_JSON" > /dev/null; then latest=true; fi
+          digest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" --format '{{json .Manifest}}' | jq -r .digest)"
+          {
+            echo "image=${IMAGE}"
+            echo "version=${VERSION}"
+            echo "digest=${digest}"
+            echo "latest=${latest}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify provenance and SBOM attestations
+        # `imagetools create` must keep what build-push-action attached.
+        env:
+          DIGEST: ${{ steps.ref.outputs.digest }}
+        run: |
+          {
+            echo '### Attestations'
+            echo
+            echo '| Kind | linux/amd64 | linux/arm64 |'
+            echo '| --- | --- | --- |'
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for kind in Provenance SBOM; do
+            json="$(docker buildx imagetools inspect "${IMAGE}@${DIGEST}" --format "{{ json .${kind} }}")"
+            echo "${kind}: $(jq -c 'keys' <<< "$json")"
+            row="| ${kind} |"
+            for platform in linux/amd64 linux/arm64; do
+              if jq -e --arg p "$platform" '.[$p] | select(. != null and . != {})' <<< "$json" > /dev/null; then
+                row="${row} present |"
+              else
+                row="${row} MISSING |"
+                echo "::error::No ${kind} attestation for ${platform} on ${IMAGE}@${DIGEST}"
+                failed=1
+              fi
+            done
+            echo "$row" >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit "$failed"
+
+      - name: Scan the published image (informational)
+        id: scan
+        # Reports only: base-image CVEs are outside a release's control, so a
+        # finding never blocks publishing.
+        continue-on-error: true
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ steps.ref.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/trivy-cache" "${RUNNER_TEMP}/scan"
+          {
+            echo '### Vulnerability scan (informational, not blocking)'
+            echo
+            echo '| Platform | Critical | High | Medium | Low |'
+            echo '| --- | --- | --- | --- | --- |'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for platform in linux/amd64 linux/arm64; do
+            report="scan/${platform//\//-}.json"
+            docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+              -v "${RUNNER_TEMP}/trivy-cache:/root/.cache/trivy" -v "${RUNNER_TEMP}/scan:/work/scan" \
+              "$TRIVY_IMAGE" image --quiet --scanners vuln --image-src remote --platform "$platform" \
+              --format json --output "/work/${report}" "${IMAGE}@${DIGEST}"
+            count() { jq "[.Results[]?.Vulnerabilities[]? | select(.Severity == \"$1\")] | length" "${RUNNER_TEMP}/${report}"; }
+            echo "| ${platform} | $(count CRITICAL) | $(count HIGH) | $(count MEDIUM) | $(count LOW) |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  release-notes:
+    name: Add image details to release notes
+    if: github.event_name == 'release'
+    needs: merge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      IMAGE: ${{ needs.merge.outputs.image }}
+      VERSION: ${{ needs.merge.outputs.version }}
+      LATEST: ${{ needs.merge.outputs.latest }}
+    steps:
+      - name: Append release artifacts section
+        run: |
+          start='<!-- gev-container-image:start -->'
+          end='<!-- gev-container-image:end -->'
+
+          # Drop a section from an earlier run, so a re-run refreshes it
+          # instead of appending a second copy.
+          gh release view "$RELEASE_TAG" --json body --jq .body \
+            | awk -v s="$start" -v e="$end" '
+                index($0, s) { skip = 1 }
+                !skip { print }
+                index($0, e) { skip = 0 }
+              ' > body.md
+
+          latest_line=''
+          if [ "$LATEST" = true ]; then
+            latest_line="* **Docker Image (latest):** \`${IMAGE}:latest\`"
+          fi
+
+          cat >> body.md <<EOF
+
+          ${start}
+
+          ---
+
+          ### <img width="20" height="20" src="https://img.icons8.com/office/30/cloud.png" alt="cloud"/> Release Artifacts
+          This release has generated the following multi-arch artifacts.
+
+          ${latest_line}
+          * **Docker Image (versioned):** \`${IMAGE}:${VERSION}\`
+
+          #### <img width="20" height="20" src="https://img.icons8.com/fluency/48/docker.png" alt="docker"/> Supported Architectures
+          * <img width="20" height="20" src="https://img.icons8.com/color/48/linux--v1.png" alt="linux--v1"/> \`linux/amd64\` (standard 64-bit Linux servers)
+          * <img width="20" height="20" src="https://img.icons8.com/color/48/mac-logo.png" alt="mac-logo"/> \`linux/arm64\` (Apple Silicon, AWS Graviton, etc.)
+          ${end}
+          EOF
+
+          gh release edit "$RELEASE_TAG" --notes-file body.md

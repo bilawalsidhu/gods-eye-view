@@ -157,7 +157,81 @@ configured keys straight from the Keychain. It starts keyless too.
 
 ### Path 3 — Docker
 
-No Node install needed; the container publishes the same dev server.
+No Node install needed; the container publishes the same dev server. Pull the prebuilt image, or build it from a clone.
+
+#### Prebuilt image
+
+Every release is published to the GitHub Container Registry as one multi-arch image, so Docker picks the right build for your machine:
+
+| Platform | Runs on |
+| --- | --- |
+| `linux/amd64` | Intel/AMD PCs and servers; Windows via Docker Desktop with WSL2 |
+| `linux/arm64` | Apple Silicon Macs (native under Docker Desktop, no Rosetta), Raspberry Pi 4/5 on a 64-bit OS, AWS Graviton |
+
+```bash
+# To keep the data in a host folder instead, swap the volume for
+# -v /srv/gev-data:/data:Z  (the folder must belong to 1000:1000; :Z is for SELinux hosts and ignored elsewhere)
+docker run -d --name gods-eye-view \
+  --init --read-only --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --pids-limit 256 --user 1000:1000 \
+  --tmpfs /tmp \
+  --tmpfs /app/node_modules/.vite:uid=1000,gid=1000 \
+  --tmpfs /app/node_modules/.vite-temp:uid=1000,gid=1000 \
+  -v gev-data:/data \
+  -p 127.0.0.1:4173:4173 \
+  --env-file .env \
+  --restart unless-stopped \
+  ghcr.io/bilawalsidhu/gods-eye-view:latest
+```
+
+Open **`http://localhost:4173`**. Start keyless by dropping `--env-file .env` (`docker run` fails if the file is missing) and add keys from **POWER UP** afterwards. The port is published to `127.0.0.1` only, like the other paths; widening it is the [Sharing an instance](#-sharing-an-instance) opt-in.
+
+The image is hardened, and the flags above hold it to that: it runs as the unprivileged user `1000:1000`, the app's code is read-only even to that user, and it contains no `git`, `npm` or package manager. `--init` reaps stray processes and forwards signals so `docker stop` is quick.
+
+Everything the app keeps lives in one volume, `/data`: the `.env` that **SAVE KEYS** writes, downloaded map and satellite data (`.gev-cache`), and `.gev-logs`. Vite's dependency cache is the only other writable path, and it can be a tmpfs as above.
+
+Or as a `compose.yaml` (this is separate from the repo's own, which builds from source):
+
+```yaml
+services:
+  gods-eye-view:
+    image: ghcr.io/bilawalsidhu/gods-eye-view:latest
+    init: true
+    read_only: true
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    ports:
+      - "127.0.0.1:4173:4173"
+    env_file:
+      - path: .env
+        required: false
+    tmpfs:
+      - /tmp
+      - /app/node_modules/.vite:uid=1000,gid=1000
+      - /app/node_modules/.vite-temp:uid=1000,gid=1000
+    volumes:
+      - gev-data:/data
+      # or a host folder owned by 1000:1000; add :Z on SELinux hosts:
+      # - /srv/gev-data:/data:Z
+    restart: unless-stopped
+
+volumes:
+  gev-data:
+```
+
+The image has its own health check (an HTTP request to the app root every 30 seconds), so `docker ps` shows `healthy` once it is up.
+
+**Keys.** Provider Settings works in this image: keys you save land in `/data/.env`, so they survive `docker rm`, `docker pull` and recreating the container as long as you keep the `gev-data` volume. `--env-file` / `env_file` still works too, and a key supplied that way is shown as configured outside Provider Settings and stays read-only there, as everywhere else. Delete the volume (`docker volume rm gev-data`) to forget everything. If you bind-mount a host folder on `/data` instead of a named volume, make it writable by uid 1000 (`chown 1000:1000`).
+
+Every platform image carries SLSA build provenance and an SBOM as attestations in the registry. Check them with `docker buildx imagetools inspect ghcr.io/bilawalsidhu/gods-eye-view:1.2.3 --format '{{ json .Provenance }}'` and the same with `.SBOM`.
+
+Pin a version tag for reproducible installs (`ghcr.io/bilawalsidhu/gods-eye-view:1.2.3`, or `:1.2` for patch updates only). To update, `docker pull` the image and recreate the container (`docker compose pull && docker compose up -d`).
+
+#### From source
 
 ```bash
 git clone https://github.com/bilawalsidhu/gods-eye-view.git

@@ -7,6 +7,7 @@ import {
   upsertDotenvValues,
 } from '../../src/keySetupCore.mjs';
 import { defaultSourceRoot } from '../providers/common/source-root.js';
+import { dataDir } from '../providers/common/data-dir.js';
 import path from 'node:path';
 import { readEnvironmentSource as readPinokioEnvironmentSource } from '../../scripts/pinokio-environment.mjs';
 import fs from 'node:fs';
@@ -85,8 +86,9 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   // Which store this launch owns. A Pinokio-managed launch (marker set by
   // scripts/pinokio-start.mjs) writes the app-scoped pinokio/ENVIRONMENT that
   // applyPinokioEnvironment() treats as authoritative; every other launch
-  // writes the repo-root .env that Vite's loadEnv reads. The panel never
-  // touches a store some other workflow owns.
+  // writes the .env that Vite's loadEnv reads: in the repo root, or in
+  // GEV_DATA_DIR when that is set (Docker). The panel never touches a store
+  // some other workflow owns.
   // The launcher marker is read from the BOOT environment captured before
   // Vite's loadEnv merges dotenv files into process.env — otherwise a stray
   // `GEV_LAUNCHER=pinokio` line in someone's .env would silently redirect a
@@ -96,8 +98,9 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
     pinokioManaged() ? 'pinokio-environment' : 'env-file';
   const storePath = () =>
     path.join(
-      sourceRoot,
-      ...(pinokioManaged() ? ['pinokio', 'ENVIRONMENT'] : ['.env']),
+      ...(pinokioManaged()
+        ? [sourceRoot, 'pinokio', 'ENVIRONMENT']
+        : [dataDir(sourceRoot), '.env']),
     );
   // Read the store, distinguishing "no store yet" from "cannot read this
   // store". Only ENOENT means empty. Every other failure — a permission error,

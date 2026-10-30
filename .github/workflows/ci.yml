@@ -26,13 +26,13 @@ jobs:
       GEV_REQUIRE_ALLOCATION_GATE: ${{ matrix.node == '24.14.0' && '1' || '0' }}
     steps:
       - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
 
       - name: Use Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -69,12 +69,12 @@ jobs:
       GEV_REQUIRE_ALLOCATION_GATE: '0'
     steps:
       - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Use Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.14.0
           cache: npm
@@ -108,7 +108,7 @@ jobs:
 
       - name: Upload gate evidence
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-gate-evidence
           path: qa-artifacts/
@@ -124,12 +124,12 @@ jobs:
       GEV_REQUIRE_ALLOCATION_GATE: '0'
     steps:
       - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Use Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.14.0
           cache: npm
@@ -148,3 +148,153 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+
+  docker:
+    # Native runner per architecture, no QEMU. Nothing is pushed; that is
+    # docker-release.yml.
+    name: Docker image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            esbuild: linux-x64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            esbuild: linux-arm64
+    env:
+      IMAGE: gev-ci:${{ matrix.esbuild }}
+      TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Record build start
+        run: echo "BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          target: runtime
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=ci-docker-${{ matrix.esbuild }}
+          cache-to: type=gha,mode=max,scope=ci-docker-${{ matrix.esbuild }}
+
+      - name: Start the image and wait until it is healthy
+        run: |
+          echo "BUILD_SECONDS=$(( $(date +%s) - BUILD_START ))" >> "$GITHUB_ENV"
+          # The flags the README gives users, so the hardened image is tested under them.
+          docker run -d --name gev --init --read-only \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            --pids-limit 256 --user 1000:1000 \
+            --tmpfs /tmp \
+            --tmpfs /app/node_modules/.vite:uid=1000,gid=1000 \
+            --tmpfs /app/node_modules/.vite-temp:uid=1000,gid=1000 \
+            -v gev-ci-data:/data \
+            -p 127.0.0.1:4173:4173 "$IMAGE"
+          for attempt in $(seq 1 60); do
+            health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' gev)"
+            running="$(docker inspect --format '{{.State.Running}}' gev)"
+            if [ "$running" != 'true' ]; then
+              echo "Container exited before becoming healthy"
+              break
+            fi
+            if [ "$health" = 'healthy' ] && curl -fsS http://127.0.0.1:4173/ > /dev/null; then
+              echo "Healthy after about $(( attempt * 2 ))s"
+              echo "HEALTH=healthy" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "HEALTH=${health:-unknown}" >> "$GITHUB_ENV"
+          echo "Not healthy (status: ${health:-unknown})"
+          exit 1
+
+      - name: Check the native binaries match the platform
+        run: |
+          found="$(docker run --rm --entrypoint sh "$IMAGE" -c 'ls node_modules/@esbuild')"
+          echo "node_modules/@esbuild: $found"
+          echo "ESBUILD_DIRS=$found" >> "$GITHUB_ENV"
+          test "$found" = '${{ matrix.esbuild }}'
+
+      - name: Check the hardening
+        run: |
+          test "$(docker exec gev id -u)" = 1000
+          if docker exec gev touch /app/src/probe 2>/dev/null; then echo 'code is writable'; exit 1; fi
+          if docker exec gev touch /probe 2>/dev/null; then echo 'root filesystem is writable'; exit 1; fi
+          docker exec gev touch /data/probe
+          if docker exec gev sh -c 'command -v git || command -v npm || command -v apt-get'; then echo 'unexpected tooling in the image'; exit 1; fi
+          leftovers="$(docker run --rm --entrypoint sh "$IMAGE" -c "find / -xdev \\( -name '.env' -o -name '.env.*' \\) -not -path '*/node_modules/*' -not -name '.env.example' 2>/dev/null || true")"
+          test -z "$leftovers" || { echo "env files in image: $leftovers"; exit 1; }
+
+      - name: Save a key through Provider Settings and keep it
+        run: |
+          # From inside the container the peer is 127.0.0.1, which Provider Settings admits.
+          docker exec gev node -e "
+            fetch('http://127.0.0.1:4173/api/setup/keys', {
+              method: 'POST',
+              headers: { origin: 'http://127.0.0.1:4173', 'content-type': 'application/json' },
+              body: JSON.stringify({ OPENAI_API_KEY: 'sk-ci-smoke-test-value' }),
+            }).then(async (r) => { console.log(r.status, await r.text()); process.exit(r.status === 200 ? 0 : 1); });
+          "
+          test "$(docker exec gev stat -c %a /data/.env)" = 600
+          docker exec gev grep -q '^OPENAI_API_KEY=' /data/.env
+          if docker exec gev test -e /app/.env; then echo 'key was written beside the code'; exit 1; fi
+          docker rm -f gev
+          docker run --rm -v gev-ci-data:/data --entrypoint grep "$IMAGE" -q '^OPENAI_API_KEY=' /data/.env
+
+      - name: Scan for vulnerabilities (informational)
+        # Reports only: base-image CVEs are outside a pull request's control.
+        # Trivy runs from a pinned container on a saved tarball, with no Docker socket.
+        continue-on-error: true
+        run: |
+          docker save "$IMAGE" -o "${RUNNER_TEMP}/image.tar"
+          mkdir -p "${RUNNER_TEMP}/trivy-cache"
+          docker run --rm \
+            -v "${RUNNER_TEMP}:/work" -v "${RUNNER_TEMP}/trivy-cache:/root/.cache/trivy" \
+            "$TRIVY_IMAGE" image --quiet --scanners vuln --input /work/image.tar \
+            --format json --output /work/trivy.json
+          count() { jq "[.Results[]?.Vulnerabilities[]? | select(.Severity == \"$1\")] | length" "${RUNNER_TEMP}/trivy.json"; }
+          {
+            echo '### Vulnerability scan (informational, not blocking)'
+            echo
+            echo '| Platform | Critical | High | Medium | Low |'
+            echo '| --- | --- | --- | --- | --- |'
+            echo "| ${{ matrix.platform }} | $(count CRITICAL) | $(count HIGH) | $(count MEDIUM) | $(count LOW) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Container log
+        if: failure()
+        run: docker logs gev || true
+
+      - name: Summarise
+        if: always()
+        run: |
+          size="$(docker image inspect "$IMAGE" --format '{{.Size}}' 2>/dev/null | awk '{ printf "%.0f MB", $1 / 1000000 }')"
+          {
+            echo '### Docker image'
+            echo
+            echo '| Platform | Image size | Health | esbuild | Build time |'
+            echo '| --- | --- | --- | --- | --- |'
+            echo "| ${{ matrix.platform }} | ${size:-n/a} | ${HEALTH:-not run} | ${ESBUILD_DIRS:-n/a} | ${BUILD_SECONDS:-n/a}s |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove container
+        if: always()
+        run: |
+          docker rm -f gev || true
+          docker volume rm gev-ci-data || true

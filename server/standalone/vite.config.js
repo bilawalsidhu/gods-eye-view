@@ -8,12 +8,14 @@ import { apiNotFoundPlugin } from './api-not-found.js';
 import { googleTokenUnavailablePlugin } from './google-token-unavailable.js';
 import { standaloneVoiceTools } from './voiceTools.js';
 import { unwatchedRuntimeDirsPlugin } from './unwatched-cache.js';
+import { dataDir } from '../providers/common/data-dir.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
 /** Load this checkout's configuration and attach its local provider middleware. */
 export default defineConfig(({ command, mode }) => {
-  const loaded = loadEnv(mode, root, '');
+  // GEV_DATA_DIR (Docker) keeps the saved .env outside the read-only code.
+  const loaded = loadEnv(mode, dataDir(root), '');
   for (const [key, value] of Object.entries(loaded)) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
