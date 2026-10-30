@@ -90,6 +90,8 @@ async function createRealLocalLayerHarness({
   globalThis.window = { dispatchEvent() {} };
   let sampleHeightImpl = sampleHeight;
   const sampleCalls = { count: 0 };
+  // The camera frustum, reduced to the one answer ground sampling asks of it.
+  let baseVisibility = Cesium.Intersect.INSIDE;
   const overlayHost = {
     setVisible: (...args) => hostCalls.push(['visible', ...args]),
     setEntries: (...args) => hostCalls.push(['entries', ...args]),
@@ -107,7 +109,19 @@ async function createRealLocalLayerHarness({
     },
     camera: {
       positionWC: Cesium.Cartesian3.fromDegrees(-97.695, 30.205, 100_000),
-      frustum: { fov: Math.PI / 3 },
+      directionWC: new Cesium.Cartesian3(),
+      upWC: new Cesium.Cartesian3(),
+      frustum: {
+        fov: Math.PI / 3,
+        // No planes: everything is in view. One plane no point satisfies:
+        // nothing is.
+        computeCullingVolume: () => ({
+          planes:
+            baseVisibility === Cesium.Intersect.OUTSIDE
+              ? [new Cesium.Cartesian4(0, 0, 0, -1)]
+              : [],
+        }),
+      },
       moveEnd,
       flyTo() {},
     },
@@ -151,6 +165,10 @@ async function createRealLocalLayerHarness({
     sampleCalls,
     /** Swap scene.sampleHeight mid-test (e.g. tiles finally arrive). */
     setSampleHeight(next) { sampleHeightImpl = next; },
+    /** Put the feature's base inside (true) or outside the camera frustum. */
+    setBaseInView(inView) {
+      baseVisibility = inView ? Cesium.Intersect.INSIDE : Cesium.Intersect.OUTSIDE;
+    },
     cleanup() {
       if (originalWindow === undefined) delete globalThis.window;
       else globalThis.window = originalWindow;
@@ -734,6 +752,133 @@ test('ground sampling waits for visible globe tiles before caching a height', as
   env.preRender.raise();
   assert.equal(env.sampleCalls.count, 1, 'the existing retry must sample the settled scene');
   assert.ok(Math.abs(baseHeightM(env) - 117) < 0.01);
+});
+
+test('an unseen base is not sampled and arms no retry until it is in view', async (t) => {
+  // Out of view the scene has no surface under the base, so the depth sample
+  // would pass through the Earth (about -6,344 km) and fail on every retry.
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true, sampleHeight: () => 117,
+  });
+  _resetRenderGovernorForTest();
+  const governorScene = { renders: 0, requestRender() { this.renders += 1; } };
+  installRenderGovernor({ scene: governorScene });
+  governorScene.renders = 0; // discard the governor's own install settling frame
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const clock = installFakeClock(t);
+  t.after(() => {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+    _resetRenderGovernorForTest();
+  });
+  env.viewer.scene.globe = { show: true, tilesLoaded: true, getHeight: () => 117 };
+  setCameraAltitude(env, 20_000);
+  env.setBaseInView(false);
+  runArmedRetryChain(env, t, clock, 5);
+  assert.equal(env.sampleCalls.count, 0, 'an off-screen base must not be sampled');
+  assert.equal(governorScene.renders, 0, 'an off-screen base must not keep a parked camera rendering');
+  assert.ok(Math.abs(baseHeightM(env)) < 0.01);
+
+  // In the frustum but over the horizon: 50 m up, about 67 km away.
+  env.setBaseInView(true);
+  env.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(-97.0, 30.205, 50);
+  runArmedRetryChain(env, t, clock, 5);
+  assert.equal(env.sampleCalls.count, 0, 'a base over the horizon must not be sampled');
+  assert.equal(governorScene.renders, 0);
+
+  setCameraAltitude(env, 20_000);
+  env.preRender.raise();
+  assert.equal(env.sampleCalls.count, 1, 'the base is sampled on the first walk that sees it');
+  assert.ok(Math.abs(baseHeightM(env) - 117) < 0.01);
+});
+
+/**
+ * Give the harness a real Cesium camera `southM` metres south of the base at
+ * `cameraM` metres above the ellipsoid, looking at the base's ground at
+ * `groundM` (or directly away from it).
+ */
+function aimRealCamera(env, { groundM, cameraM, southM, away = false }) {
+  const entity = env.dataSources[0].entities.values[0];
+  const base = Cesium.Cartographic.fromCartesian(entity.__localBaseCartesian);
+  const ground = Cesium.Cartesian3.fromRadians(base.longitude, base.latitude, groundM);
+  const position = Cesium.Cartesian3.fromRadians(
+    base.longitude,
+    base.latitude - southM / 6_371_000,
+    cameraM,
+  );
+  const direction = Cesium.Cartesian3.normalize(
+    away
+      ? Cesium.Cartesian3.subtract(position, ground, new Cesium.Cartesian3())
+      : Cesium.Cartesian3.subtract(ground, position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const right = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(
+      direction,
+      Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(position),
+      new Cesium.Cartesian3(),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const up = Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3());
+  const frustum = new Cesium.PerspectiveFrustum({
+    fov: Math.PI / 3,
+    aspectRatio: 800 / 600,
+    near: 1,
+    far: 1e8,
+  });
+  Object.assign(env.viewer.camera, {
+    positionWC: position,
+    directionWC: direction,
+    upWC: up,
+    frustum,
+  });
+  return frustum
+    .computeCullingVolume(position, direction, up)
+    .computeVisibility(new Cesium.BoundingSphere(entity.__localBaseCartesian, 1));
+}
+
+const loadedTerrain = (height) => ({ show: true, tilesLoaded: true, getHeight: () => height });
+const hiddenGlobe = { show: false, tilesLoaded: true, getHeight: () => undefined };
+
+for (const { label, globe, groundM, cameraM, southM, baseOffScreen } of [
+  // 2,500 m terrain from 3 km away at a shallow angle: the ellipsoid-height
+  // base is far below the bottom of the screen.
+  { label: 'high ground with loaded terrain', globe: loadedTerrain(2_500), groundM: 2_500, cameraM: 3_500, southM: 3_000, baseOffScreen: true },
+  { label: 'high ground under a hidden globe', globe: hiddenGlobe, groundM: 2_500, cameraM: 3_500, southM: 3_000, baseOffScreen: true },
+  // A low-geoid coast (about -63 m near Mumbai) from a camera 50 m above the
+  // ellipsoid: the ellipsoidal horizon would hide the ground itself.
+  { label: 'ground below the ellipsoid', globe: loadedTerrain(-63), groundM: -63, cameraM: 50, southM: 2_000, baseOffScreen: false },
+]) {
+  test(`${label} in view is sampled`, async (t) => {
+    const env = await createRealLocalLayerHarness({
+      sampleHeightSupported: true, sampleHeight: () => groundM,
+    });
+    const clock = installFakeClock(t);
+    t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
+    env.viewer.scene.globe = globe;
+    const baseVisibility = aimRealCamera(env, { groundM, cameraM, southM });
+    if (baseOffScreen)
+      assert.equal(baseVisibility, Cesium.Intersect.OUTSIDE, 'precondition: the ellipsoid-height base is off screen');
+
+    clock.advance(2_100);
+    env.preRender.raise();
+    assert.equal(env.sampleCalls.count, 1, 'the ground in view is sampled');
+    assert.ok(Math.abs(baseHeightM(env) - groundM) < 0.01);
+  });
+}
+
+test('under a hidden globe, ground behind the camera is not sampled', async (t) => {
+  const env = await createRealLocalLayerHarness({
+    sampleHeightSupported: true, sampleHeight: () => 2_500,
+  });
+  const clock = installFakeClock(t);
+  t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
+  env.viewer.scene.globe = hiddenGlobe;
+  aimRealCamera(env, { groundM: 2_500, cameraM: 3_500, southM: 3_000, away: true });
+  clock.advance(2_100);
+  env.preRender.raise();
+  assert.equal(env.sampleCalls.count, 0);
 });
 
 test('settled terrain refinement lifts an already sampled stem without another GPU sample', async (t) => {
