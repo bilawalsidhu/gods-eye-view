@@ -180,3 +180,10 @@ test('numbered custom-labeled pins retain their resolved coordinates', () => {
   assert.deepEqual(resolveDeicticArgs('fly_to_location', { referent: 1 }, { referents }).args,
     { latitude: 30.27, longitude: -97.74 });
 });
+
+test('show_street_level: "street view of this" opens photos at the pointed ground point', () => {
+  const out = resolveDeicticArgs('show_street_level', { query: 'pointer', provider: 'google' }, { pointer: ground });
+  assert.deepEqual(out.args, { provider: 'google', latitude: 30.27, longitude: -97.74 });
+  assert.equal(out.used.source, 'pointer');
+  assert.deepEqual(resolveDeicticArgs('show_street_level', { query: 'Eiffel Tower' }, { pointer: ground }).args, { query: 'Eiffel Tower' });
+});

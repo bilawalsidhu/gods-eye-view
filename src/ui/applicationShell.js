@@ -1378,9 +1378,12 @@ export class StyleManager extends ShellFacade {
       };
     }
     if (!target.available) {
+      // The controller knows why (Google 3D: no Maps key; others: no ion token).
       return {
         ok: false,
-        error: `${target.label} requires a Cesium ion token`,
+        error:
+          target.unavailableReason ||
+          `${target.label} requires a Cesium ion token`,
         activeStack: this.mapStackController.getActiveId(),
       };
     }

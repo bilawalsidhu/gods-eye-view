@@ -126,6 +126,28 @@ test('a rejected key and a rate limit are told apart from other tile errors', as
   );
 });
 
+test('nearestImages asks the graph API around a point, its radius and limit clamped', async () => {
+  const { calls, fetchImpl } = fakeFetch(() =>
+    jsonResponse({ data: [{ id: '1', geometry: { coordinates: [1, 2] } }] }),
+  );
+  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const images = await source.nearestImages({
+    lat: 38.5,
+    lon: -121.5,
+    radius: 500,
+    limit: 500,
+  });
+  assert.equal(images.length, 1);
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, '/images');
+  assert.equal(url.searchParams.get('lat'), '38.5');
+  assert.equal(url.searchParams.get('lng'), '-121.5');
+  assert.equal(url.searchParams.get('radius'), '50', 'the API maximum');
+  assert.equal(url.searchParams.get('limit'), '100');
+  assert.match(url.searchParams.get('fields'), /computed_geometry/);
+  assert.match(url.searchParams.get('fields'), /is_pano/);
+});
+
 test('with a Graph endpoint, sequence lookups go there without a token', async () => {
   const { calls, fetchImpl } = fakeFetch(() =>
     jsonResponse({ data: [{ id: '1', geometry: { coordinates: [1, 2] } }] }),

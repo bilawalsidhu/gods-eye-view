@@ -101,6 +101,7 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
     'weather radar': 'weather-radar', lightning: 'weather-lightning', 'military bases': 'military-installations',
     'recent imagery': 'recent-imagery', 'bike share': 'bikeshare', 'rocket launches': 'rocket-launches',
     'street level': 'street-level', mapillary: 'street-level',
+    'street view': 'street-level',
     wind: 'wind', directions: 'directions', 'fire perimeters': 'fire-perimeters',
     'wildfire perimeters': 'fire-perimeters', 'burn areas': 'fire-perimeters',
   };
