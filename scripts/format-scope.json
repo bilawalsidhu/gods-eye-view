@@ -1,4 +1,7 @@
 [
+  "src/tooling/blenderCamera.test.mjs",
+  "tools/export-blender-camera.mjs",
+  "tools/blender/make_fixture.mjs",
   ".prettierrc.json",
   "package.json",
   "scripts/format-scope.json",
