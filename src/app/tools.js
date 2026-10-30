@@ -6,7 +6,10 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initPlacePeek } from '../ui/placePeek.js';
 import { flyToLandmark } from '../locations.js';
-import { isPointerFree } from '../data/inputOwnership.js';
+import {
+  isPointerFree,
+  subscribePointerOwnership,
+} from '../data/inputOwnership.js';
 import * as Cesium from 'cesium';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
@@ -80,6 +83,7 @@ export function createApplicationTools({
     cesium: Cesium,
     flyTo: flyToLandmark,
     pointerFree: isPointerFree,
+    subscribePointerOwnership,
   });
   defer(() => placePeek?.destroy());
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the

@@ -10,4 +10,5 @@ test('Place Peek is composed with current providers and camera authority', () =>
   assert.match(source, /navigation: styleManager/);
   assert.match(source, /fetchRegionalBrief: operations\.requests\.regional\.getBrief/);
   assert.match(source, /pointerFree: isPointerFree/);
+  assert.match(source, /subscribePointerOwnership,/);
 });

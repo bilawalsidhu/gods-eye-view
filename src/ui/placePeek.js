@@ -96,6 +96,7 @@ export function initPlacePeek({
   cesium,
   flyTo,
   pointerFree = () => true,
+  subscribePointerOwnership = () => () => {},
   documentRef = globalThis.document,
 } = {}) {
   if (!viewer?.scene || !placeSearch || !cesium || !flyTo || !documentRef?.body)
@@ -124,6 +125,12 @@ export function initPlacePeek({
     );
     closePeek();
   };
+  const syncPointerOwnership = () => {
+    const pointerEvents = pointerFree() ? 'auto' : 'none';
+    if (panel) panel.style.pointerEvents = pointerEvents;
+    for (const place of labels)
+      place.button.style.pointerEvents = pointerEvents;
+  };
   const renderLabels = () => {
     layer.replaceChildren();
     for (const place of labels) {
@@ -139,6 +146,7 @@ export function initPlacePeek({
       place.button = button;
       layer.append(button);
     }
+    syncPointerOwnership();
   };
   const paint = () => {
     if (!labels.length) return;
@@ -190,13 +198,11 @@ export function initPlacePeek({
       if (refreshController !== controller || controller.signal.aborted) return;
       labels = nextLabels;
       renderLabels();
-    } catch (error) {
-      if (
-        refreshController === controller &&
-        !controller.signal.aborted &&
-        error?.name !== 'AbortError'
-      )
+    } catch {
+      if (refreshController === controller && !controller.signal.aborted) {
         labels = [];
+        renderLabels();
+      }
     }
   };
   const showPeek = async (point) => {
@@ -217,7 +223,7 @@ export function initPlacePeek({
         signal: controller.signal,
       }),
     ]);
-    if (destroyed || controller.signal.aborted) return;
+    if (destroyed || controller.signal.aborted || !pointerFree()) return;
     const brief = results[2].status === 'fulfilled' ? results[2].value : null;
     const summary =
       (results[0].status === 'fulfilled' ? results[0].value : null) ||
@@ -264,6 +270,7 @@ export function initPlacePeek({
       }
       panel.append(news);
     }
+    syncPointerOwnership();
     documentRef.body.append(panel);
     panel.querySelector('button, a')?.focus({ preventScroll: true });
   };
@@ -274,6 +281,8 @@ export function initPlacePeek({
     if (point) void showPeek(point);
   }, cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
   const removeRender = viewer.scene.postRender.addEventListener(paint);
+  const removePointerOwnership =
+    subscribePointerOwnership(syncPointerOwnership);
   const onMoveEnd = () => void refresh();
   viewer.camera.moveEnd.addEventListener(onMoveEnd);
   void refresh();
@@ -286,6 +295,7 @@ export function initPlacePeek({
       refreshController?.abort();
       handler.destroy();
       removeRender?.();
+      removePointerOwnership?.();
       viewer.camera.moveEnd.removeEventListener(onMoveEnd);
       layer.remove();
     },
