@@ -6,6 +6,7 @@ import {
   Shape,
 } from 'three';
 import * as geo from '../../../geo/index.js';
+import { batchStencilDraws } from './navaraStencilBatch.js';
 
 export const INSTALLATION_DRAPE_DEPTH_M = 40000;
 
@@ -135,7 +136,7 @@ export function createInstallationDrapedMesh(
     side: DoubleSide,
   });
   setupMaterialForDrape?.(material, globeNormal, globeDepth);
-  const mesh = new DrapedMesh(geometry, material);
+  const mesh = batchStencilDraws(new DrapedMesh(geometry, material));
   mesh.matrix.fromArray(frame);
   mesh.matrixAutoUpdate = false;
   mesh.matrixWorldNeedsUpdate = true;
@@ -190,7 +191,7 @@ export function createInstallationOutlineDrapedMesh(
     side: DoubleSide,
   });
   setupMaterialForDrape?.(material, globeNormal, globeDepth);
-  const mesh = new DrapedMesh(geometry, material);
+  const mesh = batchStencilDraws(new DrapedMesh(geometry, material));
   mesh.matrix.fromArray(frame);
   mesh.matrixAutoUpdate = false;
   mesh.matrixWorldNeedsUpdate = true;

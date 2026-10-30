@@ -1272,5 +1272,8 @@
   "src/ui/imageryBoxNavara.test.mjs",
   "scripts/qa-w2-imagery.mjs",
   "src/globe/navara/postSamplingPass.test.mjs",
-  "scripts/qa-post-sampling.mjs"
+  "scripts/qa-post-sampling.mjs",
+  "scripts/qa-installation-stencil.mjs",
+  "scripts/qa-installation-stencil-entry.mjs",
+  "src/layers/installations/render/navaraStencilBatch.test.mjs"
 ]
