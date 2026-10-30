@@ -15,15 +15,18 @@ export function ringAreaM2(ring) {
 }
 
 /**
- * Join line pieces whose ends meet (within `toleranceM`) into as few chains as
- * possible. Each chain grows greedily from the first unused piece.
+ * Join line pieces whose ends meet (closer than `toleranceM`, or at most it
+ * when `inclusive`) into as few chains as possible. Each chain grows greedily
+ * from the first unused piece.
  */
 export function stitchLines(
   segments,
-  { toleranceM = 2, maxChains = Infinity } = {},
+  { toleranceM = 2, inclusive = false, maxChains = Infinity } = {},
 ) {
-  const same = (a, b) =>
-    approximateDistanceM(a[1], a[0], b[1], b[0]) < toleranceM;
+  const same = (a, b) => {
+    const d = approximateDistanceM(a[1], a[0], b[1], b[0]);
+    return inclusive ? d <= toleranceM : d < toleranceM;
+  };
   const remaining = segments.map((s) => s.slice());
   const chains = [];
   while (remaining.length && chains.length < maxChains) {

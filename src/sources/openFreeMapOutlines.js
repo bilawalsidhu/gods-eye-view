@@ -383,7 +383,7 @@ export function streetFromTiles(
   if (!pieces.length) return null;
   const chains = stitchLines(
     pieces.filter((piece) => piece.length >= 2),
-    { toleranceM: JOIN_TOLERANCE_M },
+    { toleranceM: JOIN_TOLERANCE_M, inclusive: true },
   )
     .map((line) => ({ line, length: lengthM(line) }))
     .filter((entry) => entry.length >= STREET_MIN_CHAIN_M)

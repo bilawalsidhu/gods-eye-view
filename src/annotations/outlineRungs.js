@@ -163,8 +163,14 @@ export function streetFootprint(street) {
   };
 }
 
+// Rungs built without their own tiles share one outline source, so a second
+// resolver instance cannot add another outline cache to the tile budget.
+let defaultOutlineTiles = null;
+const sharedOutlineTiles = () =>
+  (defaultOutlineTiles ??= createOpenFreeMapOutlineSource());
+
 export function createOutlineRungs({
-  tiles = createOpenFreeMapOutlineSource(),
+  tiles = sharedOutlineTiles(),
   nominatim = createNominatimOutlineClient(),
 } = {}) {
   /** Decoded tiles around a point, or null when the tiles cannot be read. */

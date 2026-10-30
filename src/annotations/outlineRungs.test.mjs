@@ -154,6 +154,56 @@ test('a street comes from tiles before the configured ladder, as merged ribbons'
   assert.equal(nominatim.asks.length, 0, 'streets never reach Nominatim');
 });
 
+test('rungs built without their own tiles share one outline tile cache', async (t) => {
+  const tileRequests = [];
+  const bytes = (y) =>
+    readFileSync(
+      new URL(
+        `../data/fixtures/ofm-outlines-austin-14-3743-${y}.pbf`,
+        import.meta.url,
+      ),
+    );
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const href = String(url);
+    if (href.endsWith('/planet'))
+      return Response.json({
+        tiles: [
+          'https://tiles.openfreemap.org/planet/shared-test/{z}/{x}/{y}.pbf',
+        ],
+      });
+    tileRequests.push(href);
+    const y = href.match(/\/(\d+)\.pbf$/)?.[1];
+    return new Response(y === '6746' ? bytes(6746) : bytes(6745));
+  });
+  const ask = () =>
+    ctx({
+      scope: 'street',
+      target: 'Congress Avenue',
+      matchName: 'Congress Avenue',
+    });
+  const first = await createOutlineRungs({
+    nominatim: fakeNominatim(null),
+  }).resolve(ask(), ladder(UNAVAILABLE));
+  assert.ok(first.ring.length > 6);
+  const fetched = tileRequests.length;
+  assert.ok(fetched > 0);
+  const second = await createOutlineRungs({
+    nominatim: fakeNominatim(null),
+  }).resolve(ask(), ladder(UNAVAILABLE));
+  assert.ok(second.ring.length > 6);
+  assert.equal(
+    tileRequests.length,
+    fetched,
+    'a second rung set reuses the shared outline tiles',
+  );
+  const own = fixtureTiles();
+  await createOutlineRungs({
+    tiles: own,
+    nominatim: fakeNominatim(null),
+  }).resolve(ask(), ladder(UNAVAILABLE));
+  assert.equal(own.asked.length, 1, 'explicit tiles are still used');
+});
+
 test('a street the tiles do not name falls through to the ladder', async () => {
   const run = ladder(UNAVAILABLE);
   const result = await createOutlineRungs({

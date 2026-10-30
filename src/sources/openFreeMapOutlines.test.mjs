@@ -61,6 +61,14 @@ test('street names compare with abbreviations and a leading direction only', () 
   assert.ok(!streetNameMatches('कुल मार्ग', 'काली मार्ग'));
   assert.ok(streetNameMatches('काली मार्ग', 'काली मार्ग'));
   assert.ok(streetNameMatches('Champs-Élysées', 'Champs Elysees'));
+  // Japanese: dakuten and handakuten are kept, so these stay distinct.
+  assert.ok(!streetNameMatches('ハシ通り', 'バシ通り'));
+  assert.ok(!streetNameMatches('ハシ通り', 'パシ通り'));
+  assert.ok(streetNameMatches('表参道', '表参道'));
+  // Thai: vowel and tone marks are kept.
+  assert.ok(!streetNameMatches('ถนนสุขุมวิท', 'ถนนสุขมวท'));
+  assert.ok(!streetNameMatches('ถนนข้าวสาร', 'ถนนขาวสาร'));
+  assert.ok(streetNameMatches('ถนนสุขุมวิท', 'ถนนสุขุมวิท'));
 });
 
 test('same-name segments merge into polylines around the point (Congress Avenue)', () => {
@@ -112,6 +120,23 @@ test('merge joins reversed and out-of-order pieces and keeps gaps apart', () => 
     [0.011, 0],
   ]; // separate
   const chains = stitchLines([b, c, a], { toleranceM: 3 });
+
+  test('stitchLines joins at exactly the tolerance only when inclusive', () => {
+    const a = [
+      [0, 0],
+      [0.001, 0],
+    ];
+    const b = [
+      [0.00102, 0],
+      [0.002, 0],
+    ];
+    const gap = approximateDistanceM(0, 0.001, 0, 0.00102);
+    assert.equal(
+      stitchLines([a, b], { toleranceM: gap, inclusive: true }).length,
+      1,
+    );
+    assert.equal(stitchLines([a, b], { toleranceM: gap }).length, 2);
+  });
   assert.equal(chains.length, 2);
   assert.equal(chains.find((ch) => ch.length === 3).length, 3);
 });
