@@ -191,6 +191,15 @@
   }
 }
 
+/* Wide screens: the POWER UP chip and language picker (#corner-actions,
+   z-index 150) own the bottom-right corner row, so the control sits just
+   above it instead of underneath. */
+@media (min-width: 901px) {
+  .gev-nav {
+    bottom: max(58px, calc(env(safe-area-inset-bottom, 0px) + 58px));
+  }
+}
+
 /* Narrow screens: tuck against the corner and sit above the command dock. */
 @media (max-width: 900px) {
   .gev-nav {
