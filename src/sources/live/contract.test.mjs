@@ -102,13 +102,34 @@ test('position-less OpenSky rows are seen, not missing; malformed rows stay inco
   assert.throws(() => openSkySnapshot({ states: [unpositioned] }), {
     code: 'malformed',
   });
-  // Military readsb admission keeps its existing semantics.
-  const military = readsbSnapshot(
-    { ac: [{ hex: 'abc123', lat: 30, lon: -97 }, { hex: 'def456' }] },
-    { observedAtMs: null },
-  );
-  assert.equal(military.complete, false);
-  assert.equal(military.retainIds.size, 0);
+});
+
+test('position-less readsb rows are seen, not missing; malformed rows stay incomplete', () => {
+  // readsb omits lat/lon for a contact heard without a current position; a
+  // live adsb.lol /v2/mil fetch had 82 such rows of 239.
+  const positioned = { hex: 'ae638d', lat: 20.3, lon: -158.5, seen_pos: 0.2 };
+  const heard = { hex: 'ADFAC3', type: 'mode_s', rr_lat: 19.9, seen: 24.2 };
+  const lastPosition = {
+    hex: '3b752d',
+    lastPosition: { lat: 45.3, lon: 5.98, seen_pos: 61.56 },
+  };
+  const read = (ac) => readsbSnapshot({ ac }, { observedAtMs: null });
+  const snapshot = read([positioned, heard, lastPosition]);
+  assert.equal(snapshot.records.length, 1);
+  assert.equal(snapshot.complete, true);
+  assert.deepEqual([...snapshot.retainIds], ['adfac3', '3b752d']);
+  assert.equal(snapshot.rejectedCount, 2);
+  // No usable id, only half a position, an unreadable one, or no row at all.
+  for (const row of [
+    { ...heard, hex: ' ' },
+    { ...heard, lat: 30 },
+    { ...heard, lon: -97 },
+    { ...heard, lat: 'x', lon: 'y' },
+    null,
+  ])
+    assert.equal(read([positioned, heard, row]).complete, false);
+  // A feed with no positions at all still cannot prove absence.
+  assert.throws(() => read([heard]), { code: 'malformed' });
 });
 
 test('readsb units and position/contact ages are normalized once against the source epoch', () => {
@@ -332,7 +353,8 @@ test('classification identities include positionless aircraft without admitting 
     snapshot.records.map((record) => record.id),
     ['def456'],
   );
-  assert.equal(snapshot.complete, false);
+  assert.equal(snapshot.complete, true);
+  assert.deepEqual([...snapshot.retainIds], ['abc123']);
 });
 
 test('identity lookup validates its response and honors body-parse cancellation', async () => {
