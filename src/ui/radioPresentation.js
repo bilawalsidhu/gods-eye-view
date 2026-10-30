@@ -20,7 +20,9 @@ export function renderRadioState(state) {
   const interactive = enabled && !transitioning && !uncertain;
   const selected = state.selected || null;
   const hasStations = state.filteredCount > 0;
-  const activePlayback = ['playing', 'buffering'].includes(state.audioState);
+  const activePlayback = ['loading', 'buffering', 'playing'].includes(
+    state.audioState,
+  );
   document
     .getElementById('title-bar')
     ?.classList.toggle('radio-broadcasting', state.audioState === 'playing');

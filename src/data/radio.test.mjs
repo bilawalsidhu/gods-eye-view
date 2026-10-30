@@ -51,6 +51,7 @@ import {
   radioViewIsGlobal,
   stationMatchesRadioCategory,
 } from './radio.js';
+import { radioStationRow, withRadioLayer } from '../testSupport/radioLayerHarness.mjs';
 
 const stations = [
   { id: 'news', tags: ['News', 'Weather Radio', 'air traffic'] },
@@ -883,88 +884,30 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
 });
 
 test('failed exact tuner release cannot consume a stale playback fallback', async () => {
-  const originalFetch = globalThis.fetch;
-  const originalAudio = globalThis.Audio;
-  const playUrls = [];
   const stationRows = [
-    {
+    radioStationRow({
       id: '00000000-0000-4000-8000-000000000071',
       name: 'Exact target',
-      lat: 30,
-      lon: -97,
       streamUrl: 'https://radio.example.com/exact.mp3',
-      homepage: null,
-      tags: ['news'],
-      languages: ['English'],
-      state: 'Texas',
-      country: 'United States',
-      countryCode: 'US',
-      metadataTrust: 'untrusted-community',
-      codec: 'MP3',
-      bitrate: 128,
-    },
-    {
+    }),
+    radioStationRow({
       id: '00000000-0000-4000-8000-000000000072',
       name: 'Stale fallback',
       lat: 31,
       lon: -98,
       streamUrl: 'https://radio.example.com/fallback.mp3',
-      homepage: null,
-      tags: ['news'],
-      languages: ['English'],
-      state: 'Texas',
-      country: 'United States',
-      countryCode: 'US',
-      metadataTrust: 'untrusted-community',
-      codec: 'MP3',
-      bitrate: 128,
-    },
+    }),
   ];
-  globalThis.Audio = class FakeAudio {
-    constructor() {
-      this.volume = 0.8;
-      this.src = '';
-    }
-
-    addEventListener() {}
-    pause() {}
-    play() {
-      playUrls.push(this.src);
-      if (this.src === stationRows[0].streamUrl) {
-        return Promise.reject(new DOMException('Exact target unavailable', 'NotSupportedError'));
-      }
-      return Promise.resolve();
-    }
-    removeAttribute() { this.src = ''; }
-    load() {}
-  };
-  globalThis.fetch = async (url) => String(url).startsWith('/api/radio/click/')
-    ? { ok: true }
-    : new Response(JSON.stringify({
-      stations: stationRows,
-      stale: false,
-      degraded: false,
-      acceptedGeneration: 1,
-      catalogInstance: 'qa-instance-a',
-      updatedAt: new Date().toISOString(),
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  const viewer = {
-    camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
-    scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
-  };
-
-  radioLayer.destroy();
-  try {
-    radioLayer.init(viewer);
-    radioLayer.enable();
-    await radioLayer.update();
+  await withRadioLayer({
+    stations: stationRows,
+    failingUrls: [stationRows[0].streamUrl],
+  }, async ({ playUrls }) => {
     assert.equal(radioLayer.selectStation(stationRows[0].id, { autoplay: false }), true);
     assert.equal(radioLayer.cycleStation(1, {
       stationIds: stationRows.map(({ id }) => id),
       autoplay: false,
-    }), true, 'non-playing cycle creates the stale-fallback precondition');
+      fallback: true,
+    }), true, 'a voice-style prepared cycle creates the stale-fallback precondition');
     assert.equal(radioLayer.beginTuning(), true);
     assert.equal(radioLayer.previewTuningStation(stationRows[0].id, { rotate: false }), true);
     assert.equal(radioLayer.commitTuningStation(stationRows[0].id, { origin: 'user' }).ok, true);
@@ -975,12 +918,7 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
     assert.equal(state.audioState, 'error');
     assert.equal(state.tuningStatic, true);
     assert.equal(state.tuningAwaitingStationId, stationRows[0].id);
-  } finally {
-    globalThis.fetch = originalFetch;
-    if (originalAudio === undefined) delete globalThis.Audio;
-    else globalThis.Audio = originalAudio;
-    radioLayer.destroy();
-  }
+  });
 });
 
 test('tuner cancellation restores the frozen start marker after catalog removal', async () => {
