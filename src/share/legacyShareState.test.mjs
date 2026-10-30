@@ -107,6 +107,13 @@ test('the HAL example survives the round trip and shrinks to 39 characters', () 
   );
 });
 
+test('a long-form link to the retired Snow style opens as Normal', () => {
+  const snow = parseLegacy('v=2&lat=1&lon=2&style=snow&sp=d.90_w.20');
+  const normal = parseLegacy('v=2&lat=1&lon=2');
+  assert.equal(snow.style, 'normal');
+  assert.deepEqual(snow.styleParams, normal.styleParams);
+});
+
 test('links from earlier long-form versions keep their historical meaning', () => {
   for (const hash of [
     'lat=10&lon=20',

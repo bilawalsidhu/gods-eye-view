@@ -12,7 +12,6 @@ const STYLE_LABELS = Object.freeze({
   thermal: msg('FLIR'),
   anime: msg('ANIME'),
   noir: msg('NOIR'),
-  snow: msg('SNOW'),
 });
 
 const DETECTION_MODE_LABELS = Object.freeze({

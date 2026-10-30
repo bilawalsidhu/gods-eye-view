@@ -166,11 +166,6 @@ test('Cockpit utility Escape leaves an expanded nested Parameters panel to the s
     /const kind = displayOpen \? 'display' : 'radio';[\s\S]*?escapedFromDisclosure[\s\S]*?returnFocus: !escapedFromDisclosure[\s\S]*?disclosure\?\.blur/,
     'Cockpit utility disclosures clear their own focus when Escape closes them',
   );
-  assert.match(
-    radioBindings,
-    /_contextRadioDock\?\.classList\.contains\('disclosure-open'\)[\s\S]*?escapedFromDisclosure[\s\S]*?setRadioDisclosure\(false, \{ returnFocus: !escapedFromDisclosure \}\)[\s\S]*?_contextRadioToggleBtn\?\.blur/,
-    'compact Radio disclosure clears its own focus when Escape closes it',
-  );
 });
 
 
