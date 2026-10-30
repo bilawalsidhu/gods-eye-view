@@ -2,6 +2,7 @@ import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
 import {
   createApplicationViewer,
+  installTextureLimitGuard,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
@@ -53,7 +54,15 @@ export async function createApplicationScene({
     container: 'cesiumContainer',
     creditContainer,
   });
+  let uninstallTextureLimitGuard;
+  try {
+    uninstallTextureLimitGuard = installTextureLimitGuard(viewer);
+  } catch (error) {
+    viewer.destroy();
+    throw error;
+  }
   defer(() => {
+    uninstallTextureLimitGuard();
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });

@@ -4,6 +4,7 @@ import { StarrySky } from '../sky/starrySky.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
+const resolutionScaleStates = new WeakMap();
 
 function boundedPinchDelta(delta) {
   if (!Number.isFinite(delta) || delta === 0) return delta;
@@ -116,19 +117,26 @@ export function clampResolutionToTextureLimits(
   viewer,
   {
     getLimit = () => Cesium?.ContextLimits?.maximumTextureSize ?? 0,
+    getRenderbufferLimit = () =>
+      Cesium?.ContextLimits?.maximumRenderbufferSize ?? 0,
     getPixelRatio = () =>
       (typeof window !== 'undefined' && window.devicePixelRatio) || 1.0,
   } = {},
 ) {
-  const maxTextureSize = getLimit();
-  if (!Number.isFinite(maxTextureSize) || maxTextureSize <= 0) return;
+  const maxSize = Math.min(
+    ...[getLimit(), getRenderbufferLimit()].filter(
+      (limit) => Number.isFinite(limit) && limit > 0,
+    ),
+  );
+  if (!Number.isFinite(maxSize)) return;
 
   const canvas = viewer?.canvas;
+  if (!canvas) return;
   const width =
-    canvas?.clientWidth ||
+    canvas.clientWidth ||
     (typeof window !== 'undefined' ? window.innerWidth : 0);
   const height =
-    canvas?.clientHeight ||
+    canvas.clientHeight ||
     (typeof window !== 'undefined' ? window.innerHeight : 0);
   const maxDim = Math.max(width, height);
   if (maxDim <= 0) return;
@@ -136,88 +144,53 @@ export function clampResolutionToTextureLimits(
   const useBrowserRecommended = viewer?.useBrowserRecommendedResolution ?? true;
   const pixelRatio = useBrowserRecommended ? 1.0 : getPixelRatio();
   const effectiveMaxDim = maxDim * (pixelRatio > 0 ? pixelRatio : 1.0);
-  const maxAllowedScale = maxTextureSize / effectiveMaxDim;
+  const maxAllowedScale = maxSize / effectiveMaxDim;
 
-  if (viewer._requestedResolutionScale === undefined) {
-    viewer._requestedResolutionScale = viewer.resolutionScale ?? 1.0;
+  let state = resolutionScaleStates.get(viewer);
+  if (!state) {
+    state = { requestedScale: viewer.resolutionScale ?? 1.0 };
+    resolutionScaleStates.set(viewer, state);
   } else if (
-    viewer.resolutionScale !== viewer._appliedResolutionScale &&
-    viewer.resolutionScale !== undefined
+    viewer.resolutionScale !== state.appliedScale &&
+    Number.isFinite(viewer.resolutionScale) &&
+    viewer.resolutionScale > 0
   ) {
-    viewer._requestedResolutionScale = viewer.resolutionScale;
+    state.requestedScale = viewer.resolutionScale;
   }
 
-  const requested = viewer._requestedResolutionScale;
-  const clamped = Math.min(requested, maxAllowedScale);
-  viewer._appliedResolutionScale = clamped;
+  const clamped = Math.min(state.requestedScale, maxAllowedScale);
+  state.appliedScale = clamped;
   viewer.resolutionScale = clamped;
 }
 
 /**
- * Explicitly set the requested resolution scale for a viewer.
- * Records the requested value in `_requestedResolutionScale` and clamps against
- * texture limits, ensuring custom presets or battery saver scales are preserved
- * across window resizes (#905, #1017).
- * @param {object} viewer - Cesium viewer instance
- * @param {number} scale - Requested resolution scale
- * @param {object} [options]
- */
-export function setRequestedResolutionScale(viewer, scale, options) {
-  if (!viewer) return;
-  const num = Number(scale);
-  if (Number.isFinite(num) && num > 0) {
-    viewer._requestedResolutionScale = num;
-  }
-  clampResolutionToTextureLimits(viewer, options);
-}
-
-/**
- * Return the requested resolution scale for a viewer before GPU texture clamping,
- * allowing save/set/restore patterns to read the unconstrained user/preset value (#905, #1017).
- * @param {object} viewer - Cesium viewer instance
- * @returns {number} Requested resolution scale
- */
-export function getRequestedResolutionScale(viewer) {
-  return viewer?._requestedResolutionScale ?? viewer?.resolutionScale ?? 1.0;
-}
-
-/**
  * Install a resize and fullscreen listener that continuously guarantees the
- * drawing buffer fits within the GPU's texture size limit. Returns a disposer.
+ * drawing buffer fits within the GPU's texture and renderbuffer limits. Returns
+ * a disposer.
  */
 export function installTextureLimitGuard(
   viewer,
   {
     getLimit = () => Cesium?.ContextLimits?.maximumTextureSize ?? 0,
+    getRenderbufferLimit = () =>
+      Cesium?.ContextLimits?.maximumRenderbufferSize ?? 0,
     getPixelRatio = () =>
       (typeof window !== 'undefined' && window.devicePixelRatio) || 1.0,
     windowTarget = globalThis.window,
+    createResizeObserver = (callback) =>
+      typeof globalThis.ResizeObserver === 'function'
+        ? new globalThis.ResizeObserver(callback)
+        : null,
   } = {},
 ) {
-  const enforce = () =>
-    clampResolutionToTextureLimits(viewer, { getLimit, getPixelRatio });
-  enforce();
-
-  if (viewer && typeof viewer.setResolutionScale !== 'function') {
-    viewer.setResolutionScale = (scale) =>
-      setRequestedResolutionScale(viewer, scale, { getLimit, getPixelRatio });
-  }
-
-  if (viewer && typeof viewer.getRequestedResolutionScale !== 'function') {
-    viewer.getRequestedResolutionScale = () =>
-      getRequestedResolutionScale(viewer);
-  }
-
-  const hadRequestedProp = viewer && 'requestedResolutionScale' in viewer;
-  if (viewer && !hadRequestedProp) {
-    Object.defineProperty(viewer, 'requestedResolutionScale', {
-      get: () => getRequestedResolutionScale(viewer),
-      set: (scale) =>
-        setRequestedResolutionScale(viewer, scale, { getLimit, getPixelRatio }),
-      configurable: true,
-      enumerable: true,
+  const enforce = () => {
+    clampResolutionToTextureLimits(viewer, {
+      getLimit,
+      getRenderbufferLimit,
+      getPixelRatio,
     });
-  }
+  };
+  enforce();
 
   let unlistenResize = null;
   if (windowTarget?.addEventListener) {
@@ -225,18 +198,10 @@ export function installTextureLimitGuard(
     unlistenResize = () => windowTarget.removeEventListener('resize', enforce);
   }
 
-  let unlistenPreRender = null;
-  if (viewer?.scene?.preRender?.addEventListener) {
-    // Backstop: catches canvas size changes from layout shifts that do not fire window resize
-    const preRenderListener = () => enforce();
-    viewer.scene.preRender.addEventListener(preRenderListener);
-    unlistenPreRender = () => {
-      try {
-        viewer.scene.preRender.removeEventListener(preRenderListener);
-      } catch {
-        /* ignore */
-      }
-    };
+  let resizeObserver = null;
+  if (viewer?.canvas && createResizeObserver) {
+    resizeObserver = createResizeObserver(enforce);
+    resizeObserver?.observe(viewer.canvas);
   }
 
   let active = true;
@@ -244,18 +209,11 @@ export function installTextureLimitGuard(
     if (!active) return;
     active = false;
     unlistenResize?.();
-    unlistenPreRender?.();
-    if (!hadRequestedProp && viewer) {
-      delete viewer.requestedResolutionScale;
-    }
+    resizeObserver?.disconnect();
+    if (viewer) resolutionScaleStates.delete(viewer);
   };
 }
 
-/** Create the standard globe viewer in caller-owned, visible containers. */
-export function createApplicationViewer({ container, creditContainer }) {
-  if (!container || !creditContainer)
-    throw new TypeError('Viewer and credit containers are required');
-  const viewer = new Cesium.Viewer(container, {
 /** Cesium.Viewer options of the standard globe viewer. */
 export function applicationViewerOptions(creditContainer) {
   return {
@@ -299,13 +257,6 @@ export function createApplicationViewer({ container, creditContainer }) {
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
     viewer.scene.skyAtmosphere.brightnessShift = -0.08;
-
-    const uninstallGuard = installTextureLimitGuard(viewer);
-    const originalDestroy = viewer.destroy.bind(viewer);
-    viewer.destroy = () => {
-      uninstallGuard();
-      return originalDestroy();
-    };
 
     return viewer;
   } catch (error) {

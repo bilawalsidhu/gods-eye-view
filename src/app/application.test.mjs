@@ -6,8 +6,6 @@ import {
   installTrackpadPinchZoom,
   clampResolutionToTextureLimits,
   installTextureLimitGuard,
-  setRequestedResolutionScale,
-  getRequestedResolutionScale,
 } from './viewer.js';
 
 const phases = ['Scene', 'Controls', 'Data', 'Tools'];
@@ -410,8 +408,10 @@ test('clampResolutionToTextureLimits constrains resolutionScale on high-res disp
   );
 });
 
-test('installTextureLimitGuard registers and cleans up window resize listeners', () => {
+test('installTextureLimitGuard clamps before resize and cleans up its listeners', () => {
   let resizeHandler = null;
+  let resizeObserverCallback = null;
+  let observerDisconnected = false;
   const mockWindow = {
     addEventListener(type, handler) {
       if (type === 'resize') resizeHandler = handler;
@@ -420,106 +420,55 @@ test('installTextureLimitGuard registers and cleans up window resize listeners',
       if (type === 'resize' && resizeHandler === handler) resizeHandler = null;
     },
   };
-  let preRenderHandler = null;
   const viewer = {
     resolutionScale: 1.0,
-    canvas: { clientWidth: 2560, clientHeight: 1440 },
-    scene: {
-      preRender: {
-        addEventListener(handler) {
-          preRenderHandler = handler;
-        },
-        removeEventListener(handler) {
-          if (preRenderHandler === handler) preRenderHandler = null;
-        },
-      },
+    canvas: { clientWidth: 1920, clientHeight: 1080 },
+    resize() {
+      this.drawingBufferWidth = Math.round(
+        this.canvas.clientWidth * this.resolutionScale,
+      );
+    },
+    render() {
+      assert.ok(this.drawingBufferWidth <= 2048);
+      return this.drawingBufferWidth;
     },
   };
   const uninstall = installTextureLimitGuard(viewer, {
-    getLimit: () => 2048,
+    getLimit: () => 4096,
+    getRenderbufferLimit: () => 2048,
     windowTarget: mockWindow,
+    createResizeObserver(callback) {
+      resizeObserverCallback = callback;
+      return {
+        observe(canvas) {
+          assert.equal(canvas, viewer.canvas);
+        },
+        disconnect() {
+          observerDisconnected = true;
+        },
+      };
+    },
   });
-  assert.equal(viewer.resolutionScale, 2048 / 2560);
+  assert.equal(viewer.resolutionScale, 1.0);
   assert.equal(typeof resizeHandler, 'function');
-  assert.equal(typeof preRenderHandler, 'function');
+  assert.equal(typeof resizeObserverCallback, 'function');
+  assert.equal(Object.hasOwn(viewer, 'requestedResolutionScale'), false);
+  assert.equal(Object.hasOwn(viewer, 'setResolutionScale'), false);
+  assert.equal(Object.hasOwn(viewer, 'getRequestedResolutionScale'), false);
 
-  // Changing canvas size triggers recalculation on resize event
-  viewer.canvas.clientWidth = 3840;
-  resizeHandler();
-  assert.equal(viewer.resolutionScale, 2048 / 3840);
-
-  // Pre-render also recalculates
+  // ResizeObserver runs after layout changes but before Cesium's resize/render frame.
   viewer.canvas.clientWidth = 2560;
-  preRenderHandler();
-  assert.equal(viewer.resolutionScale, 2048 / 2560);
+  resizeObserverCallback([{ target: viewer.canvas }]);
+  viewer.resize();
+  assert.equal(viewer.render(), 2048);
+
+  viewer.canvas.clientWidth = 1920;
+  resizeHandler();
+  viewer.resize();
+  assert.equal(viewer.render(), 1920);
 
   // Disposing uninstalls listeners
   uninstall();
   assert.equal(resizeHandler, null);
-  assert.equal(preRenderHandler, null);
-});
-
-test('setRequestedResolutionScale records requested scale and preserves it across resizes (#905, #1017)', () => {
-  const viewer = {
-    resolutionScale: 1.0,
-    canvas: { clientWidth: 2560, clientHeight: 1440 },
-  };
-  const getLimit = () => 2048;
-
-  // At 2560, initial 1.0 clamps to 0.8 (2048 / 2560)
-  clampResolutionToTextureLimits(viewer, { getLimit });
-  assert.equal(viewer.resolutionScale, 2048 / 2560);
-
-  // Explicitly set scale to 0.8 via setRequestedResolutionScale
-  setRequestedResolutionScale(viewer, 0.8, { getLimit });
-  assert.equal(viewer.resolutionScale, 0.8);
-
-  // Shrink the window to 1080p: requested 0.8 stays 0.8 rather than reverting to 1.0
-  viewer.canvas.clientWidth = 1920;
-  viewer.canvas.clientHeight = 1080;
-  clampResolutionToTextureLimits(viewer, { getLimit });
-  assert.equal(viewer.resolutionScale, 0.8);
-
-  // Set scale to 1.0 again
-  setRequestedResolutionScale(viewer, 1.0, { getLimit });
-  assert.equal(viewer.resolutionScale, 1.0);
-});
-
-test('getRequestedResolutionScale and requestedResolutionScale getter preserve unconstrained value across save/restore (#1017)', () => {
-  const viewer = {
-    resolutionScale: 1.0,
-    canvas: { clientWidth: 2560, clientHeight: 1440 },
-  };
-  const getLimit = () => 2048;
-
-  const uninstall = installTextureLimitGuard(viewer, { getLimit });
-  // At 2560 wide, resolutionScale clamps to 0.8
-  assert.equal(viewer.resolutionScale, 2048 / 2560);
-  // Requested scale getter returns the unconstrained 1.0
-  assert.equal(getRequestedResolutionScale(viewer), 1.0);
-  assert.equal(viewer.getRequestedResolutionScale(), 1.0);
-  assert.equal(viewer.requestedResolutionScale, 1.0);
-
-  // Save / set / restore pattern:
-  const saved = viewer.requestedResolutionScale;
-  assert.equal(saved, 1.0);
-
-  // Temporarily set a lower scale (e.g. 0.5 for capture/perf)
-  viewer.requestedResolutionScale = 0.5;
-  assert.equal(viewer.resolutionScale, 0.5);
-  assert.equal(viewer.requestedResolutionScale, 0.5);
-
-  // Restore saved scale:
-  viewer.requestedResolutionScale = saved;
-  assert.equal(viewer.resolutionScale, 0.8); // Still clamped at 2560 wide
-  assert.equal(viewer.requestedResolutionScale, 1.0);
-
-  // Window shrinks to 1080p: scale cleanly restores to 1.0 rather than being stuck at 0.8
-  viewer.canvas.clientWidth = 1920;
-  viewer.canvas.clientHeight = 1080;
-  clampResolutionToTextureLimits(viewer, { getLimit });
-  assert.equal(viewer.resolutionScale, 1.0);
-
-  uninstall();
-  assert.equal(viewer.requestedResolutionScale, undefined);
+  assert.equal(observerDisconnected, true);
 });
