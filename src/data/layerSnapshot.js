@@ -17,6 +17,7 @@ export const LAYER_FEED_STATES = Object.freeze([
   'loading',
   'degraded',
   'stale',
+  'partial',
   'fallback',
   'unavailable',
 ]);
@@ -27,6 +28,7 @@ export const LAYER_FEED_STATE_LABELS = Object.freeze({
   loading: 'LOADING',
   degraded: 'DEGRADED',
   stale: 'STALE',
+  partial: 'PARTIAL',
   fallback: 'FALLBACK',
   unavailable: 'UNAVAILABLE',
 });
@@ -48,8 +50,9 @@ export const FEED_STATE_SEVERITY = Object.freeze({
   degraded: 2,
   stale: 3,
   fallback: 4,
-  nominal: 5,
-  off: 6,
+  partial: 5,
+  nominal: 6,
+  off: 7,
 });
 
 export { layerFeedState } from './feedState.js';
@@ -90,7 +93,7 @@ export function snapshotAgeLabel(lastUpdate, now = Date.now()) {
 /**
  * Pick the most severe feed-state from a list.
  * @param {Iterable<string|null|undefined>} states Feed-state strings.
- * @returns {'nominal'|'loading'|'degraded'|'stale'|'fallback'|'unavailable'|'off'|null}
+ * @returns {'nominal'|'loading'|'degraded'|'stale'|'partial'|'fallback'|'unavailable'|'off'|null}
  */
 export function worstFeedState(states) {
   let worst = null;
@@ -205,6 +208,8 @@ export function feedProvenanceNote(layers = [], overall = null) {
     return `${s.name || s.id} is ${String(s.feedState).toUpperCase()}${extras ? ` (${extras})` : ''}`;
   });
   const body = bits.join('; ') || `${String(overall).toUpperCase()} feed`;
+  if (overall === 'partial')
+    return `${body}. Narrate that coverage is incomplete with any count; do not claim full coverage.`;
   return `${body}. Narrate that provenance with any count; do not describe this as live.`;
 }
 
@@ -250,4 +255,36 @@ export function viewStateLayerRow(layer, options) {
     source: snap.source,
     lastUpdate: snap.lastUpdate,
   };
+}
+
+/**
+ * The feed state and up to two layer names of a provenance envelope that is
+ * not nominal, or null. Values stay English (`state` is a feed-state id,
+ * `names` are `layer.name`); the HUD translates them for display.
+ * @param {{ overall?: string|null, layers?: Array<object> }|null} envelope
+ * @returns {{ state: string, names: string[] }|null}
+ */
+export function provenanceTag(envelope) {
+  const overall = envelope?.overall;
+  if (!overall || overall === 'nominal' || overall === 'off') return null;
+  const names = (envelope.layers || [])
+    .filter(
+      (s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off',
+    )
+    .map((s) => String(s.name || s.id || 'LAYER'))
+    .slice(0, 2);
+  return { state: overall, names };
+}
+
+/**
+ * Require a matching feedState for warning states: a view that is not
+ * nominal falls back on a missing or different state.
+ * @param {{ feedState?: string|null }|null} response The proxy's reply.
+ * @param {{ overall?: string|null }|null} provenance The context's envelope.
+ * @returns {boolean}
+ */
+export function hudSummaryMatchesProvenance(response, provenance) {
+  const state = provenance?.overall;
+  if (!state || state === 'nominal' || state === 'off') return true;
+  return response?.feedState === state;
 }

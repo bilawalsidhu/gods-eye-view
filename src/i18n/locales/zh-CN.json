@@ -326,7 +326,6 @@
   "STALE": "过期",
   "PARTIAL": "部分",
   "FALLBACK": "备用",
-  "{state} {layers}": "{state} {layers}",
   "view band|STREET": "街道",
   "view band|CITY": "城市",
   "view band|METRO": "都市圈",

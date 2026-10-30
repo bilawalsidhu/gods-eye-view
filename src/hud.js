@@ -27,17 +27,19 @@ import {
 } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
 import {
+  hudSummaryHasEnglish,
   hudSummaryMatchesProvenance,
   hudSummaryLayerContext,
   hudTelemetryProvenance,
   isHudSummaryUnconfigured,
+  provenanceTag,
 } from './hudSummaryResponse.js';
 import {
   applyHudUiTheme,
   DEFAULT_HUD_LAYOUT,
   normalizeHudLayout,
 } from './hudLayouts.js';
-import { formatNumber, msg, t } from './i18n/index.js';
+import { formatNumber, getLocale, msg, t } from './i18n/index.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
 
@@ -103,22 +105,44 @@ const FEED_STATE_LABELS = Object.freeze({
 });
 
 /**
- * The summary's feed-state suffix in the active language, e.g.
- * `UNAVAILABLE: LIVE AIS VESSELS`. State ids and layer names stay English in
- * layer data; only this line translates them.
+ * A summary line with its feed-state warning in the active language, e.g.
+ * `UNAVAILABLE | <text> | LIVE AIS VESSELS`. The state word leads so the
+ * one-line readout never clips it; the layer names trail so they never push
+ * the text out. State ids and layer names stay English in layer data; only
+ * this line translates them.
  */
-function localizedProvenanceTag(provenance) {
-  if (!provenance) return null;
+function withProvenance(text, provenance) {
+  if (!provenance) return text;
   const state = FEED_STATE_LABELS[provenance.state]
     ? t(FEED_STATE_LABELS[provenance.state])
     : provenance.state.toUpperCase();
-  if (!provenance.names.length) return state;
-  return t('{state} {layers}', {
-    state,
-    layers: provenance.names
-      .map((name) => localizeLayerName(name).toUpperCase())
-      .join('/'),
-  });
+  const layers = provenance.names
+    .map((name) => localizeLayerName(name).toUpperCase())
+    .join('/');
+  return [state, text, layers].filter(Boolean).join(' | ');
+}
+
+/**
+ * The English a summary outside English must not carry: feed-state ids and
+ * translated layers' English names. A state word the locale keeps in English
+ * (de FALLBACK) and a layer name inside a place label (Radio City) are fine.
+ */
+function summaryEnglishWords(context) {
+  const places = [
+    ...(context.placeLabels || []),
+    ...(context.streetLabels || []),
+    ...(context.nearbyPlaceLabels || []),
+  ]
+    .join(' ')
+    .toLowerCase();
+  return [
+    ...Object.keys(FEED_STATE_LABELS).filter(
+      (state) => t(FEED_STATE_LABELS[state]).toLowerCase() !== state,
+    ),
+    ...(context.translatedLayerNames || []).filter(
+      (name) => !places.includes(name.toLowerCase()),
+    ),
+  ];
 }
 
 /** The name shown for a _viewBand() id. */
@@ -237,12 +261,17 @@ export class IntelHUD {
     // the camera has moved to.
     this._onCameraMoveStart = () => {
       this._markSummaryDirty();
-      if (this._summaryRequest || this._summaryTypingInterval) {
+      const typing = Boolean(this._summaryTypingInterval);
+      if (this._summaryRequest || typing) {
         // Cancelled requests and partially typed replies are not reusable answers.
         this._lastSummarySignature = null;
       }
       this._summaryRequest?.abort();
       this._stopSummaryTyping();
+      // A half-typed reply would stay until moveEnd, which a camera that
+      // keeps moving may not send for a long time: show the plain line.
+      if (typing && this._latestMetrics)
+        this._setSummaryText(this._composeSummary(), false);
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
@@ -763,8 +792,8 @@ export class IntelHUD {
       LOCALIZED_LOCALITY,
     );
 
-    const provenance = localizedProvenanceTag(
-      hudTelemetryProvenance(this._dataManager?.getAll?.() || []),
+    const provenance = hudTelemetryProvenance(
+      this._dataManager?.getAll?.() || [],
     );
     // ALT, SUN and ONA are sensor codes, as in the corner readouts.
     const line = t(
@@ -781,7 +810,7 @@ export class IntelHUD {
         zone: localTag,
       },
     );
-    return provenance ? `${line} | ${provenance}` : line;
+    return withProvenance(line, provenance);
   }
 
   /** Stop a summary still typing out, leaving what it has typed so far. */
@@ -856,6 +885,18 @@ export class IntelHUD {
       return;
     }
     if (revision !== this._summaryRevision) return;
+    // No place to name: with layers alone the model invents one, so the plain
+    // line (state and layers) is shown instead.
+    const described = [
+      context.placeLabels,
+      context.streetLabels,
+      context.nearbyPlaceLabels,
+    ].some((list) => list?.length);
+    if (!described) {
+      this._summaryDirty = false;
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
       this._summaryDirty = false;
@@ -892,8 +933,17 @@ export class IntelHUD {
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      if (hudSummaryMatchesProvenance(data.summary, context.feedProvenance))
-        this._lastSummaryText = data.summary;
+      if (
+        hudSummaryMatchesProvenance(data, context.feedProvenance) &&
+        !hudSummaryHasEnglish(
+          data.summary,
+          context.locale,
+          summaryEnglishWords(context),
+        )
+      ) {
+        // The warning is the HUD's own translated state, not the model's words.
+        this._lastSummaryText = withProvenance(data.summary, context.warning);
+      }
       this._setSummaryText(this._lastSummaryText || fallbackText, animate);
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
@@ -953,18 +1003,47 @@ export class IntelHUD {
     // A slower build for a view the camera has left must not replace the
     // newer view's lookup.
     if (revision === this._summaryRevision) this._placeLabels = labels;
-    const enabledLayers =
-      this._dataManager
-        ?.getAll?.()
-        ?.filter((layer) => layer.enabled)
-        .map((layer) => layer.name) || [];
-    return {
+    const locale = getLocale();
+    const layerContext = hudSummaryLayerContext(
+      this._dataManager?.getAll?.() || [],
+    );
+    // Outside English a layer's state id is left out: the model echoes it,
+    // and `overall` already carries the state.
+    const named = ({ feedState, ...layer }) => ({
+      ...layer,
+      name: localizeLayerName(layer.name),
+      ...(locale === 'en' && { feedState }),
+    });
+    const { feedProvenance } = layerContext;
+    const context = {
+      locale,
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
-      enabledLayerLabels: enabledLayers,
-      ...hudSummaryLayerContext(this._dataManager?.getAll?.() || []),
+      ...layerContext,
+      // The model sees only the layer names the user sees. The English note
+      // goes too: a small model copies its words. `overall` stays the id.
+      enabledLayerLabels:
+        layerContext.enabledLayerLabels.map(localizeLayerName),
+      enabledLayers: layerContext.enabledLayers.map(named),
+      feedProvenance: {
+        ...feedProvenance,
+        layers: feedProvenance.layers.map(named),
+        note: locale === 'en' ? feedProvenance.note : undefined,
+      },
     };
+    // Not sent and not part of the signature: the line's own warning, taken
+    // before the layer states are left out, and the English names a reply in
+    // another language must not echo.
+    Object.defineProperties(context, {
+      warning: { value: provenanceTag(feedProvenance) },
+      translatedLayerNames: {
+        value: layerContext.enabledLayerLabels.filter(
+          (name) => localizeLayerName(name) !== name,
+        ),
+      },
+    });
+    return context;
   }
 
   _markSummaryDirty() {

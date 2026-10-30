@@ -336,6 +336,7 @@
     "exports": ["./server/providers/openai"],
     "modules": [
       "src/i18n/marker.js",
+      "src/i18n/locale.js",
       "src/hudLayoutPolicy.js",
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",
