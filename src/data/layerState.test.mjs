@@ -202,8 +202,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 32);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 32);
+  assert.equal(REGISTERED_LAYER_IDS.length, 35);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 35);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.ok(REGISTERED_LAYER_IDS.includes('local-usgs-water'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
@@ -243,19 +243,18 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '6');
+  assert.equal(nextLayerStateToken(), '9');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '6',
-      bravo: '7',
+      alpha: '9',
     }),
-    '8',
+    '00',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
     ...Object.fromEntries(
-      [...'6789'].map((digit) => [`prior-${digit}`, digit]),
+      [...'9'].map((digit) => [`prior-${digit}`, digit]),
     ),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
@@ -308,8 +307,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '6',
-      next: '7',
+      future: '9',
+      next: '00',
     }),
     true,
   );
@@ -319,7 +318,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
         ...LAYER_STATE_TOKEN_RESERVATIONS,
         future: '00',
       }),
-    /next free token 6/,
+    /next free token 9/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
@@ -342,10 +341,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '6' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '6', competing: '6' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9', competing: '9' },
       ),
-    /next free token 7/,
+    /next free token 00/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -532,9 +531,9 @@ test('Nepal event and locator have distinct enabled-only share tokens', () => {
 
 test('USGS water layers have stable enabled-only share tokens', () => {
   for (const [token, id] of [
-    ['5', 'local-usgs-water'],
-    ['6', 'local-usgs-lakes'],
-    ['7', 'local-usgs-springs'],
+    ['6', 'local-usgs-water'],
+    ['7', 'local-usgs-lakes'],
+    ['8', 'local-usgs-springs'],
   ]) {
     const decoded = decodeLayerStateParams(
       new URLSearchParams(`v=2&l=${token}`),

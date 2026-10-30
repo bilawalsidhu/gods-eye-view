@@ -42,7 +42,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
-    // S2 GhostMaps extends the generated layer enums.
+    // S2 GhostMaps and USGS water levels (rivers, lakes, springs) extend the generated layer enums.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
