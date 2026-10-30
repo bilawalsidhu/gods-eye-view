@@ -21,7 +21,8 @@ if (
   )
 )
   throw new Error('Explicit unreserved base URL and output required');
-const report = { checks: [], browserErrors: [] };
+const emptyRenders = process.argv.includes('--empty-renders');
+const report = { emptyRenders, checks: [], browserErrors: [] };
 const check = (name, pass, detail) => {
   report.checks.push({ name, pass: !!pass, detail });
   console.log(pass ? 'PASS' : 'FAIL', name);
@@ -131,6 +132,21 @@ try {
     return { changed, max };
   };
   async function mode(original) {
+    if (emptyRenders) {
+      await page.evaluate((original) => {
+        const { mrt, opaque } = window.__batchContext.scenes;
+        window.__emptyRenderCallbacks ??= [
+          mrt.onBeforeRender,
+          opaque.onBeforeRender,
+        ];
+        [mrt, opaque].forEach((scene, i) => {
+          scene.onBeforeRender = original
+            ? () => {}
+            : window.__emptyRenderCallbacks[i];
+        });
+      }, original);
+      return;
+    }
     await page.evaluate((original) => {
       for (const mesh of window.__batchOwner.meshes) {
         mesh.userData.qaOptimizedProcess ??= mesh.process;
@@ -171,7 +187,7 @@ try {
       }
     });
   }
-  async function compare(name) {
+  async function compare(name, preserveClears = false) {
     await mode(false);
     const optimized = await shot(name + '-optimized'),
       fast = await submissions();
@@ -191,8 +207,14 @@ try {
       difference,
     );
     check(
-      name + ': same draws with fewer render submissions',
-      fast.draws === slow.draws && fast.renders < slow.renders,
+      name +
+        (preserveClears
+          ? ': preserves required clear resolves'
+          : ': same draws with fewer render submissions'),
+      fast.draws === slow.draws &&
+        (preserveClears
+          ? fast.renders === slow.renders
+          : fast.renders < slow.renders),
       { fast, slow },
     );
     return baseline;
@@ -325,6 +347,18 @@ try {
       mesh.material.dispose();
     }
   });
+  if (emptyRenders) {
+    await page.evaluate(async () => {
+      const manager = window.__godsEyeView.dataManager;
+      await manager.setEnabled('military-installations', false);
+      await manager.setEnabled('cctv', false);
+    });
+    await compare('empty');
+    await page.evaluate(() => {
+      window.__stencilNative.view.globe.hideUnderground = false;
+    });
+    await compare('empty-depth-clear', true);
+  }
   check(
     'no unexpected browser errors',
     report.browserErrors.length === 0,

@@ -22,9 +22,17 @@ const diagnostic = process.argv.includes('--diagnostic');
 const baselineSampling = process.argv.includes('--baseline-sampling');
 const baselineStencil = process.argv.includes('--baseline-stencil');
 const stencilPairs = process.argv.includes('--stencil-pairs');
+const baselineEmptyRenders = process.argv.includes('--baseline-empty-renders');
+const emptyRenderPairs = process.argv.includes('--empty-render-pairs');
+const paired = stencilPairs || emptyRenderPairs;
 if (
-  (baselineSampling && baselineStencil) ||
-  (stencilPairs && (baselineSampling || baselineStencil))
+  [
+    baselineSampling,
+    baselineStencil,
+    stencilPairs,
+    baselineEmptyRenders,
+    emptyRenderPairs,
+  ].filter(Boolean).length > 1
 )
   throw new Error('Choose one baseline override');
 const denseQuakes = process.argv.includes('--dense-quakes');
@@ -87,6 +95,8 @@ const report = {
   baselineSampling,
   baselineStencil,
   stencilPairs,
+  baselineEmptyRenders,
+  emptyRenderPairs,
   denseQuakes,
   workload: denseQuakes
     ? '500 co-located earthquake discs: pathological overlap stress'
@@ -152,17 +162,22 @@ const browser = await puppeteer.launch({
 try {
   report.browser = await browser.version();
   for (let run = diagnostic ? 0 : -1; run < (diagnostic ? 1 : 3); run++)
-    for (const { kind, stencilOriginal } of engines.flatMap((kind) =>
-      stencilPairs && kind === 'navara'
-        ? (run % 2 === 1 ? [false, true] : [true, false]).map(
-            (stencilOriginal) => ({ kind, stencilOriginal }),
-          )
-        : [{ kind, stencilOriginal: baselineStencil }],
+    for (const { kind, original } of engines.flatMap((kind) =>
+      paired && kind === 'navara'
+        ? (run % 2 === 1 ? [false, true] : [true, false]).map((original) => ({
+            kind,
+            original,
+          }))
+        : [{ kind, original: baselineStencil || baselineEmptyRenders }],
     )) {
+      const stencilOriginal = original && (baselineStencil || stencilPairs);
+      const emptyOriginal =
+        original && (baselineEmptyRenders || emptyRenderPairs);
       const context = await browser.createBrowserContext(),
         entry = {
-          engine: stencilPairs && stencilOriginal ? 'navara-original' : kind,
+          engine: paired && original ? 'navara-original' : kind,
           baselineStencil: kind === 'navara' && stencilOriginal,
+          baselineEmptyRenders: kind === 'navara' && emptyOriginal,
           run,
           discarded: run < 0,
           scenes: {},
@@ -211,6 +226,24 @@ try {
                         constructor(...args) {
                           super(...args);
                           window.__qaStencilOwner = this.owner;
+                        }
+                      }
+                    : Class,
+                );
+            };
+          });
+        if (emptyOriginal)
+          await page.evaluateOnNewDocument(() => {
+            window.__gevW2NativeProbe = ({ view }) => {
+              const register = view.registerEffect.bind(view);
+              view.registerEffect = (key, Class) =>
+                register(
+                  key,
+                  key === 'gevPostSampling'
+                    ? class extends Class {
+                        constructor(...args) {
+                          super(...args);
+                          window.__qaEmptyContext = args[1];
                         }
                       }
                     : Class,
@@ -393,6 +426,16 @@ try {
                 mesh.process = original;
               }
               return meshes.length;
+            });
+          if (emptyOriginal && kind === 'navara')
+            entry.baselineEmptyScenes = await page.evaluate(() => {
+              const scenes = window.__qaEmptyContext?.scenes;
+              if (!scenes?.mrt || !scenes.opaque)
+                throw new Error('Missing empty-scene control');
+              // A no-op callback invokes the conservative original-render path.
+              for (const scene of [scenes.mrt, scenes.opaque])
+                scene.onBeforeRender = () => {};
+              return 2;
             });
           const cdp = await page.createCDPSession();
           await cdp.send('HeapProfiler.collectGarbage');
@@ -578,7 +621,7 @@ try {
           ratio <= 1.1 &&
           (mode === 'uncapped' || n.longFrames33 <= c.longFrames33 + 2),
       };
-      if (stencilPairs && engines.includes('navara'))
+      if (paired && engines.includes('navara'))
         report.comparison[name].originalNavara = summary('navara-original');
     }
 } catch (error) {

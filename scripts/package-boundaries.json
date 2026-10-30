@@ -2671,6 +2671,7 @@
       "src/globe/navara/overlayPass.js",
       "src/globe/navara/postSampling.js",
       "src/globe/navara/postSamplingPass.js",
+      "src/globe/navara/emptySceneRender.js",
       "src/globe/navara/movers/modelMover.js",
       "src/globe/navara/movers/modelTint.js",
       "src/globe/navara/movers/index.js",
