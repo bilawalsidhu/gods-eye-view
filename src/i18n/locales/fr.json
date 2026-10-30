@@ -2996,5 +2996,13 @@
   "ESC to dismiss": "ESC pour fermer",
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Astuce : le bouton GEV MIC du dock permet de parler à la carte.",
   "Malformed cyclone snapshot": "Instantané cyclonique mal formé",
-  "Cyclone request timed out": "Délai dépassé pour la requête cyclonique"
+  "Cyclone request timed out": "Délai dépassé pour la requête cyclonique",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · LECTEUR PUBLIC · POSITION APPROXIMATIVE · COUVERTURE NON CALIBRÉE",
+  "{camera} — public player": "{camera} — lecteur public",
+  "Open official camera page ↗": "Ouvrir la page officielle de la caméra ↗",
+  "PUBLIC PLAYER · EXTERNAL": "LECTEUR PUBLIC · EXTERNE",
+  "NO PUBLIC FEED": "AUCUN FLUX PUBLIC",
+  "PLAYER IN PANEL": "LECTEUR DANS LE PANNEAU",
+  "LOCATION · APPROXIMATE": "POSITION · APPROXIMATIVE",
+  "Approximate location; coverage not calibrated.": "Position approximative ; couverture non calibrée."
 }

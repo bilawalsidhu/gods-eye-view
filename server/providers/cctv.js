@@ -15,6 +15,7 @@ import {
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
+import { admitSameSite } from './common/same-site.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
@@ -74,7 +75,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       mediaUrl: isVideoFeedType(feedType)
         ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
         : null,
-      frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+      frameUrl:
+        feedType === 'embed'
+          ? null
+          : `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+      embedUrl: feedType === 'embed' ? source?.embedUrl || null : null,
+      sourcePageUrl: source?.sourcePageUrl || null,
       provider: source?.provider || '',
       sourceKind:
         source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
@@ -143,6 +149,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     server.middlewares.use('/api/cctv', async (req, res) => {
       try {
         const url = new URL(req.url || '/', 'http://localhost');
+        // Refuse before catalog I/O, session creation, renewal or release.
+        if (url.pathname.startsWith('/media/') && admitSameSite(req, res))
+          return;
+        const clientId = String(req.socket?.remoteAddress || 'unknown').replace(
+          /^::ffff:/,
+          '',
+        );
         // Refuse cross-site requests before any catalog or upstream work. The
         // keyless gate keeps the routes reachable behind a reverse proxy; the
         // key-bearing Street View fallback below has its own check.
@@ -172,6 +185,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
               feedType: normalizeFeedType(source.feedType),
+              embedUrl: source.embedUrl || '',
+              sourcePageUrl: source.sourcePageUrl || '',
+              locationNote: source.locationNote || '',
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               poseSource: source.poseSource,
@@ -200,6 +216,29 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
 
+        // A provider-hosted player has no frame or media proxy. Refuse before
+        // any upstream request or Street View/synthetic fallback can run.
+        const playerRoute = /^\/(?:frame|media)\/([^/]+)(?:\/|$)/.exec(
+          url.pathname,
+        );
+        if (
+          playerRoute &&
+          sourceById.get(decodeURIComponent(playerRoute[1]))?.feedType ===
+            'embed'
+        ) {
+          res.writeHead(409, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(
+            JSON.stringify({
+              error:
+                'This camera uses its public embedded player; frames are not available.',
+            }),
+          );
+          return;
+        }
+
         if (url.pathname.startsWith('/stream/')) {
           const cameraId =
             decodeURIComponent(url.pathname.replace('/stream/', '').trim()) ||
@@ -215,9 +254,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         }
 
         if (url.pathname.startsWith('/media/')) {
-          const match = /^\/media\/([^/]+)(?:\/(seg_(\d+)\.ts))?$/.exec(
-            url.pathname,
-          );
+          const match =
+            /^\/media\/([^/]+)(?:\/((?:seg_\d+\.(?:ts|mp4)|init_\d+\.mp4)))?$/.exec(
+              url.pathname,
+            );
           if (!match) {
             res.writeHead(404);
             res.end();
@@ -249,7 +289,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             return;
           }
           if (req.method === 'DELETE') {
-            if (leaseId) puller.release(cameraId, leaseId);
+            if (leaseId) puller.release(cameraId, leaseId, clientId);
             res.writeHead(204);
             res.end();
             return;
@@ -274,26 +314,33 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               return;
             }
             if (match[2]) {
-              const body = puller.getSegment(
+              const asset = puller.getAsset(
                 cameraId,
                 url.searchParams.get('session'),
-                Number(match[3]),
+                match[2],
                 leaseId,
+                clientId,
               );
-              res.writeHead(body ? 200 : 404, {
-                'Content-Type': 'video/mp2t',
+              res.writeHead(asset ? 200 : 404, {
+                'Content-Type':
+                  asset?.contentType || 'application/octet-stream',
                 'Cache-Control': 'no-store',
               });
-              res.end(body || undefined);
+              res.end(asset?.body);
               return;
             }
             const downstream = watchDownstreamClose(res);
             let entry;
             const cancelPending = () => {
-              if (entry) puller.release(cameraId, leaseId);
+              if (entry) puller.release(cameraId, leaseId, clientId);
             };
             try {
-              entry = await puller.ensure(cameraId, mediaUrl, leaseId);
+              entry = await puller.ensure(
+                cameraId,
+                mediaUrl,
+                leaseId,
+                clientId,
+              );
               if (downstream.closed) {
                 cancelPending();
                 return;
@@ -307,6 +354,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 entry,
                 cameraId,
                 leaseId,
+                clientId,
               );
               if (downstream.closed) return;
               if (!playlist) throw new Error('Stream unavailable');

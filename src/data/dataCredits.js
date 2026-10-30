@@ -206,6 +206,14 @@ export const DATA_CREDITS = [
       '(location-matched article links; publisher terms apply)',
   },
   {
+    key: 'youtube-cctv',
+    html:
+      'YouTube CCTV examples (when configured): ' +
+      '<a href="https://www.youtube.com/@ArgentinaNewsTV" target="_blank" rel="noopener">Argentina News</a>, ' +
+      '<a href="https://www.uade.edu.ar/" target="_blank" rel="noopener">UADE</a>. ' +
+      'Original YouTube players; no open video license asserted.',
+  },
+  {
     key: 'austin-cctv',
     html:
       'CCTV cameras &amp; frames: City of Austin, TX — ' +
@@ -480,6 +488,14 @@ export const DATA_CREDITS = [
     html:
       'CCTV cameras &amp; frames (Tallinn): City of Tallinn — ' +
       '<a href="https://ristmikud.tallinn.ee/" target="_blank" rel="noopener">ristmikud.tallinn.ee</a> (courtesy)',
+  },
+  {
+    key: 'argentina-cctv',
+    html:
+      'Argentina public webcams: each camera identifies and links its operator; media rights remain with that operator. ' +
+      'Municipal terrace: <a href="https://camarasmunicapital.ciudaddemendoza.gov.ar/playersite_5a03c0ce-4e27-43c2-8066-981d9ed228e6.html" target="_blank" rel="noopener">Ciudad de Mendoza</a>, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
+      'Approximate map anchors use OpenStreetMap data; camera positions and viewing angles are unverified.',
   },
   {
     key: 'tarktee-cctv',
