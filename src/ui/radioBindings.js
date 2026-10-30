@@ -338,9 +338,8 @@ export function bindRadioControls() {
     const pool = this._radioTunerPool.length
       ? this._radioTunerPool
       : this._radioTunerStations;
-    // Stepping only selects until the user has pressed Play; once a stream is
-    // active it follows the selection so the old broadcaster does not keep
-    // playing under a new station label.
+    // Keep the step silent unless a stream is active. An active stream follows
+    // the selection, so the station label matches the broadcaster.
     const { audioState } = this.radio.getUIState();
     const cycled = this.radio.cycleStation(direction, {
       rotate,

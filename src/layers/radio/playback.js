@@ -344,7 +344,12 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     }
     if (!parts.interaction.radioPresentationAllowed())
       return Promise.resolve(false);
-    if (!layerState._selectedId) {
+    if (layerState._selectedId) {
+      // An explicit Play owns its attempt; a fallback left by an earlier step
+      // (a cancelled voice handoff) belongs to a playback that never started.
+      layerState._playFallbackId = null;
+      layerState._playFallbackFocus = null;
+    } else {
       const ranked = parts.queries.rankedVisibleStations();
       if (!ranked.length) return Promise.resolve(false);
       layerState._playFallbackId = ranked[1]?.id || null;

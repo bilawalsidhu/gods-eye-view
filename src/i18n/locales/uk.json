@@ -2906,7 +2906,7 @@
   "Radio volume": "Гучність радіо",
   "STATION SITE": "САЙТ СТАНЦІЇ",
   "DIRECTORY: RADIO BROWSER": "КАТАЛОГ: RADIO BROWSER",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "Після натискання «Відтворити» звук надходить безпосередньо від мовника. Мовник бачить вашу IP-адресу.",
+  "Audio connects directly to the broadcaster when you press play, finish tuning or choose a station on the globe. Your IP is visible to that broadcaster.": "Звук надходить безпосередньо від мовника після натискання «Відтворити», завершення налаштування або вибору станції на глобусі. Мовник бачить вашу IP-адресу.",
   "Local RTL-SDR receiver": "Локальний приймач RTL-SDR",
   "LOCAL RTL-SDR": "ЛОКАЛЬНИЙ RTL-SDR",
   "Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.": "Chrome/Edge · WebUSB · один локальний тюнер для FM і шару «Локальний ADS-B».",

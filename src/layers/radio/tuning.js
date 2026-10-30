@@ -179,7 +179,10 @@ export function createTuning({ state: layerState, services, parts, source }) {
       layerState._selectionGeneration += 1;
       parts.tuningNoise.clearRadioTuningNoise({ emit: false });
       layerState._tuningUnavailableStationId = stationId;
-      parts.presentation.emitState();
+      // The drag paused the previous stream; with no selection left, Resume
+      // could only start the nearest station, so release it. Stop publishes
+      // the state, and as the user's gesture it cancels a voice handoff.
+      parts.playback.stopRadioPlayback({ origin });
       return Object.freeze({
         ok: false,
         reason: 'station-unavailable',

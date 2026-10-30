@@ -2579,7 +2579,7 @@
   "Radio volume": "電臺音量",
   "STATION SITE": "電臺網站",
   "DIRECTORY: RADIO BROWSER": "目錄：RADIO BROWSER",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "點擊播放後，音頻將直接連接到廣播方。廣播方可以看到你的 IP。",
+  "Audio connects directly to the broadcaster when you press play, finish tuning or choose a station on the globe. Your IP is visible to that broadcaster.": "點擊播放、完成調諧或在地球上選擇電臺後，音頻將直接連接到廣播方。廣播方可以看到你的 IP。",
   "Local RTL-SDR receiver": "本地 RTL-SDR 接收機",
   "LOCAL RTL-SDR": "本地 RTL-SDR",
   "Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.": "Chrome/Edge · WebUSB · 一個本地調諧器由 FM 與本地 ADS-B 圖層共享。",

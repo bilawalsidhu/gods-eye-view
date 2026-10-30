@@ -735,7 +735,7 @@
   "STATION TAG": "ТЕГ СТАНЦИИ",
   "DRAG TO TUNE": "ТЯНИТЕ ДЛЯ НАСТРОЙКИ",
   "TAB PREVIEWS · ENTER / SPACE SELECTS": "TAB — ПРОСМОТР · ENTER / SPACE — ВЫБОР",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "После нажатия «Пуск» звук идёт напрямую от вещателя, и ему виден ваш IP-адрес.",
+  "Audio connects directly to the broadcaster when you press play, finish tuning or choose a station on the globe. Your IP is visible to that broadcaster.": "Звук идёт напрямую от вещателя после нажатия «Пуск», завершения настройки или выбора станции на глобусе. Вещателю виден ваш IP-адрес.",
   "Internet radio and local SDR": "Интернет-радио и локальный SDR",
   "Filter stations by station tag": "Фильтровать станции по тегу",
   "CONTEXT": "КОНТЕКСТ",

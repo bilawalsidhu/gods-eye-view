@@ -964,7 +964,8 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
     assert.equal(radioLayer.cycleStation(1, {
       stationIds: stationRows.map(({ id }) => id),
       autoplay: false,
-    }), true, 'non-playing cycle creates the stale-fallback precondition');
+      fallback: true,
+    }), true, 'a voice-style prepared cycle creates the stale-fallback precondition');
     assert.equal(radioLayer.beginTuning(), true);
     assert.equal(radioLayer.previewTuningStation(stationRows[0].id, { rotate: false }), true);
     assert.equal(radioLayer.commitTuningStation(stationRows[0].id, { origin: 'user' }).ok, true);

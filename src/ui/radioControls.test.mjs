@@ -182,7 +182,7 @@ test('destruction releases an active tuner pointer after revoking listeners', ()
   }
 });
 
-test('Next and Previous select without playing until playback has started', () => {
+test('Next and Previous play only while a stream is active', () => {
   const f = fixture();
   try {
     f.controls.connect();
