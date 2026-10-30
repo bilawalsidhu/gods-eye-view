@@ -378,14 +378,6 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   width: 100%;
 }
 
-#data-panel.collapsed .panel-title,
-#cctv-panel.collapsed .panel-title,
-#radio-panel.collapsed .panel-title,
-#scene-panel.collapsed .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.8px;
-}
-
 #control-panel.collapsed .panel-inner,
 #data-panel.collapsed .data-panel-inner,
 #cctv-panel.collapsed .cctv-panel-inner,
