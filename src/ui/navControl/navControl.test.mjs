@@ -524,3 +524,18 @@ test('destroy stops animation, hold timers and listeners', () => {
     Cesium.Cartesian3.distance(position, viewer.camera.positionWC) < 1e-6,
   );
 });
+
+test('on wide screens the control sits above the bottom-right corner row', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(
+    new URL('./navControl.css', import.meta.url),
+    'utf8',
+  );
+  // #corner-actions (POWER UP chip + language picker) sits at z-index 150 in
+  // the very corner; the control must clear it rather than hide under it.
+  const rule = css.match(
+    /@media \(min-width: 901px\)\s*\{\s*\.gev-nav\s*\{([^}]*)\}/,
+  );
+  assert.ok(rule, 'a wide-screen rule lifts the control');
+  assert.match(rule[1], /bottom:\s*max\(58px/);
+});
