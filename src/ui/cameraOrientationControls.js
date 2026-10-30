@@ -107,7 +107,7 @@ export function readCameraTargetFrame(viewer) {
 }
 
 /** Apply an orbit frame, then return the camera to Cesium's fixed-world frame. */
-function setCameraTargetFrame(viewer, frame) {
+export function setCameraTargetFrame(viewer, frame) {
   const camera = viewer?.camera;
   if (!camera || !frame?.target || !Number.isFinite(frame.range)) return false;
   try {

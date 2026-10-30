@@ -3083,5 +3083,20 @@
   "Play from this scene through the rest of the project": "Воспроизвести с этой сцены и далее по всему проекту",
   "Play the shot after the selected one, moving on to the next scene when needed": "Воспроизвести кадр после выбранного, при необходимости перейдя к следующей сцене",
   "Edit anchors, data packs and shot details": "Изменить якоря, пакеты данных и параметры кадров",
-  "Download this scene as JSON or an asset bundle": "Скачать эту сцену в формате JSON или архивом ресурсов"
+  "Download this scene as JSON or an asset bundle": "Скачать эту сцену в формате JSON или архивом ресурсов",
+  "Tilt up toward the horizon": "Наклонить к горизонту",
+  "Tilt down toward top-down view": "Наклонить к виду сверху",
+  "Top-down view": "Вид сверху",
+  "Look left": "Посмотреть влево",
+  "Look right": "Посмотреть вправо",
+  "Look up": "Посмотреть вверх",
+  "Look down": "Посмотреть вниз",
+  "Map navigation": "Навигация по карте",
+  "Tilt": "Наклон",
+  "Tilt: top-down (bottom) to near horizon (top)": "Наклон: вид сверху (внизу) — почти горизонт (вверху)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "Курс карты. Перетащите, чтобы повернуть; стрелки поворачивают, Home — на север",
+  "North, 0 degrees": "Север, 0°",
+  "Look around": "Осмотреться",
+  "{heading} degrees from north": "{heading}° от севера",
+  "{tilt} degrees from top-down": "{tilt}° от вида сверху"
 }
