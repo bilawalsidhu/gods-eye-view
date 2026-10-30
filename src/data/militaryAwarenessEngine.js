@@ -47,8 +47,10 @@ export function findByDoublingRadius(
 /** @param {number} meters @returns {string} */
 export function formatAwarenessDistance(meters) {
   if (!Number.isFinite(meters) || meters < 0) return '—';
-  return meters < 1000
-    ? `${Math.round(meters)} m`
+  // Round before the kilometre cut. 999.6 m was printed as "1000 m".
+  const wholeMeters = Math.round(meters);
+  return wholeMeters < 1000
+    ? `${wholeMeters} m`
     : `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
 }
 

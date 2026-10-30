@@ -25,6 +25,12 @@ test('awareness formatters preserve valid zeroes and replace missing or invalid 
   assert.equal(formatAwarenessLabel(undefined), '—');
 });
 
+test('a contact marker moves a distance that rounds to 1,000 m into kilometres', () => {
+  assert.equal(formatAwarenessDistance(999.4), '999 m');
+  assert.equal(formatAwarenessDistance(999.6), '1.0 km');
+  assert.equal(formatAwarenessDistance(4600), '4.6 km');
+});
+
 test('awareness cohorts sort nearest-first and do not turn empty data into out of range', () => {
   const result = summarizeAwarenessCohort([{ id: 'far', distance: 9000 }, { id: 'near', distanceM: 1000 }]);
   assert.equal(result.relationship, 'NEARBY');
