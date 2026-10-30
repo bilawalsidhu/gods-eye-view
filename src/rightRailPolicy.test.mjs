@@ -4,16 +4,21 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { shouldExpandGlobalContextPanel } from './rightRailPolicy.js';
 
-test('desktop side rails hide collapsed panels in every HUD layout, never on phones', () => {
+test('desktop side rails hide collapsed panels in every HUD layout, never on phones or beside Cockpit', () => {
   const right = readFileSync(new URL('./ui/rightPanelRail.js', import.meta.url), 'utf8');
   const left = readFileSync(new URL('./ui/leftPanelRail.js', import.meta.url), 'utf8');
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   for (const ui of [right, left]) {
     assert.match(ui, /const isMobile = windowRef\.matchMedia\('\(max-width: 720px\)'\)\.matches/);
-    assert.match(ui, /const exclusive = !isMobile;/);
     assert.match(ui, /if \(exclusive && panel\.classList\.contains\('collapsed'\)\)\s*panel\.setAttribute\('aria-hidden', 'true'\)/);
     assert.doesNotMatch(ui, /hud\.variant === 'cyber'/);
   }
+  assert.match(right, /const exclusive = !isMobile;/);
+  // Cockpit keeps its collapsed Data Layers strip, which its layout aligns to.
+  assert.match(
+    left,
+    /const exclusive =\s*!isMobile && !documentRef\?\.body\?\.classList\?\.contains\('cockpit-mode'\);/,
+  );
   assert.match(css, /#right-context-rail\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);
   assert.match(css, /#left-panel-stack\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);
 });

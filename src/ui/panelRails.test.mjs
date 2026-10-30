@@ -777,3 +777,17 @@ test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', (
     ) <= alone,
   );
 });
+
+test('left rail keeps collapsed panels shown beside Cockpit, still one open', () => {
+  const f = fixture('left');
+  f.options.documentRef.body = {
+    classList: { contains: (name) => name === 'cockpit-mode' },
+  };
+  f.expand(f.first, 250);
+  f.expand(f.second, 250);
+  f.options.preferredPanelId = f.second.id;
+  f.run();
+  assert.equal(f.first.classList.contains('accordion-collapsed'), true);
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
+});

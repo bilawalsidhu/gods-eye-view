@@ -5,6 +5,7 @@ import {
 import { resolveHudRailLayout } from './panelRailGeometry.js';
 
 import { displayPanelScroller } from './displayPanelScroll.js';
+import { settleSideAccordion } from './panelAccordion.js';
 
 const pendingCollapseRetries = new WeakSet();
 
@@ -86,31 +87,16 @@ export function layoutRightPanelRail({
       onCollapse(panel);
     }
   }
-  // One panel is open per desktop side. Normalize restored state without
-  // overwriting saved panel preferences; this marker is distinct from
-  // Tactical's space-based collapse. Phones present the rail as tab sheets
-  // that show several panels at once.
+  // One panel is open per desktop side; this marker is distinct from
+  // Tactical's space-based collapse.
   const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
-  if (!isMobile) {
-    const expanded = panels.filter(
-      (panel) => !panel.classList.contains('collapsed'),
-    );
-    const owner =
-      expanded.find((panel) => panel.id === preferredPanelId) ||
-      expanded.find((panel) => panel.contains(documentRef?.activeElement)) ||
-      expanded[0];
-    for (const panel of expanded) {
-      if (panel === owner) continue;
-      panel.classList.add('collapsed', 'accordion-collapsed');
-      onCollapse(panel);
-    }
-  } else {
-    for (const panel of panels) {
-      if (!panel.classList.contains('accordion-collapsed')) continue;
-      panel.classList.remove('collapsed', 'accordion-collapsed');
-      onCollapse(panel);
-    }
-  }
+  settleSideAccordion({
+    panels,
+    enabled: !isMobile,
+    preferredPanelId,
+    documentRef,
+    onCollapse,
+  });
   // The desktop panel rail lists every panel, so collapsed ones are hidden.
   // Phones present the rail as tab sheets (mobileShell.js), which choose what
   // shows; hiding collapsed siblings would empty a sheet and its a11y tree.

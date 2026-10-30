@@ -421,14 +421,14 @@ export class PanelChrome {
     const wasAutoCollapsed =
       panelEl.classList.contains('layout-auto-collapsed') ||
       panelEl.classList.contains('accordion-collapsed');
-    // One panel is open per desktop side: a user opening a side panel owns
-    // the whole accordion, including peers that were only
-    // presentation-collapsed during a saved-state restore.
+    // One panel is open per desktop side: opening a side panel, whether the
+    // user asked or a feature revealed it (Street Level's viewer, a selected
+    // radio station), owns the whole accordion, including peers that were
+    // only presentation-collapsed during a saved-state restore.
     const sideStack = [this._leftPanelStack, this._rightPanelStack].find(
       (stack) => stack && panelEl.parentElement === stack,
     );
     if (
-      explicit &&
       !restore &&
       !nextCollapsed &&
       sideStack &&
@@ -460,7 +460,7 @@ export class PanelChrome {
           : null;
     const priorLeftOwner = this._panelLayout._leftStackPreferredPanelId;
     const priorRightOwner = this._panelLayout._rightStackPreferredPanelId;
-    if (explicit && !restore && !nextCollapsed && leftOwnerPanel) {
+    if (!restore && !nextCollapsed && leftOwnerPanel) {
       this._panelLayout._leftStackPreferredPanelId = leftOwnerPanel.id;
     } else if (
       explicit &&
@@ -470,7 +470,7 @@ export class PanelChrome {
     ) {
       this._panelLayout._leftStackPreferredPanelId = null;
     }
-    if (explicit && !restore && !nextCollapsed && rightOwnerPanel) {
+    if (!restore && !nextCollapsed && rightOwnerPanel) {
       this._panelLayout._rightStackPreferredPanelId = rightOwnerPanel.id;
     } else if (
       explicit &&

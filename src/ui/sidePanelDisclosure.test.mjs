@@ -97,3 +97,20 @@ test('restored preferences keep every saved panel open for the layout to normali
     } finally { globalThis.document = prior; }
   }
 });
+
+test('a feature revealing a side panel makes it the side owner', () => {
+  const f = fixture('tactical'), prior = globalThis.document;
+  globalThis.document = f.doc;
+  try {
+    f.owner.setPanelCollapsed('pp-toggles', false, { explicit: true });
+    f.claimed.length = 0;
+    // Street Level's viewer or a selected radio station opens its panel
+    // without an explicit user disclosure.
+    f.owner.setPanelCollapsed('radio-panel', false);
+    assert.equal(f.context.classList.contains('collapsed'), false);
+    assert.equal(f.display.classList.contains('collapsed'), true);
+    assert.equal(f.owner._panelLayout._rightStackPreferredPanelId, 'global-context-panel');
+    // Only a user's choice claims restoration lanes.
+    assert.deepEqual(f.claimed, []);
+  } finally { globalThis.document = prior; }
+});

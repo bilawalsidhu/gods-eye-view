@@ -5,6 +5,7 @@ import {
   resolvePanelStackCorridor,
 } from '../panelStackLayout.js';
 import { measurePanelNaturalHeight } from './panelMeasurement.js';
+import { settleSideAccordion } from './panelAccordion.js';
 
 /**
  * Measure and place the left panel rail for one synchronous layout pass.
@@ -60,35 +61,26 @@ export function layoutLeftPanelRail({
     stack.style.removeProperty('--left-stack-centered-height');
     stack.classList.remove('layout-exclusive');
     stack.dataset.layoutMode = 'mobile';
+    settleSideAccordion({ panels, enabled: false, onCollapse });
     for (const panel of panels) {
-      if (panel.classList.contains('accordion-collapsed')) {
-        panel.classList.remove('collapsed', 'accordion-collapsed');
-        onCollapse(panel);
-      }
       panel.removeAttribute('aria-hidden');
       panel.style.removeProperty('--left-panel-allocated-height');
     }
     return;
   }
 
-  // One panel is open per desktop side and the panel rail lists the others,
-  // so collapsed panels are hidden. Normalize restored state without
-  // overwriting saved panel preferences.
-  const expandedBeforeAccordion = panels.filter(
-    (panel) => !panel.classList.contains('collapsed'),
-  );
-  const accordionOwner =
-    expandedBeforeAccordion.find((panel) => panel.id === preferredPanelId) ||
-    expandedBeforeAccordion.find((panel) =>
-      panel.contains(documentRef?.activeElement),
-    ) ||
-    expandedBeforeAccordion[0];
-  for (const panel of expandedBeforeAccordion) {
-    if (panel === accordionOwner) continue;
-    panel.classList.add('collapsed', 'accordion-collapsed');
-    onCollapse(panel);
-  }
-  const exclusive = !isMobile;
+  // One panel is open per desktop side, and the panel rail lists the others,
+  // so collapsed panels are hidden. Cockpit keeps its collapsed Data Layers
+  // strip, which its layout aligns to, and shows no rail.
+  settleSideAccordion({
+    panels,
+    enabled: true,
+    preferredPanelId,
+    documentRef,
+    onCollapse,
+  });
+  const exclusive =
+    !isMobile && !documentRef?.body?.classList?.contains('cockpit-mode');
   stack.classList.toggle('layout-exclusive', exclusive);
   const laidOutPanels = panels.filter(
     (panel) => !exclusive || !panel.classList.contains('collapsed'),

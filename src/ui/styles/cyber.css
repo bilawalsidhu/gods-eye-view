@@ -1674,6 +1674,13 @@
     flex: 0 0 auto;
   }
 
+  /* The panel rail lists the collapsed panels. */
+  :root[data-ui-theme='cyber']
+    #left-panel-stack.layout-focus.layout-exclusive
+    > [data-panel-id].collapsed {
+    display: none;
+  }
+
   :root[data-ui-theme='cyber']
     #left-panel-stack
     > :is(#data-panel, #scene-panel) {
