@@ -33,7 +33,7 @@ test('the console is torn down with the application that mounted it', () => {
 });
 
 test('the server owns the tool inventory, and the browser never declares one', () => {
-  assert.match(routes, /GEV_REALTIME_TOOLS/);
+  assert.match(routes, /GEV_AGENT_TOOLS/);
   for (const source of [consoleSource, loopSource]) {
     assert.doesNotMatch(source, /GEV_REALTIME_TOOLS/);
     assert.doesNotMatch(source, /actionSchemas/);

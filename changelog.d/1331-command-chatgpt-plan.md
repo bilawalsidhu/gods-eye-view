@@ -42,3 +42,7 @@
   tool data, and provide 32 Arabic account/console translations. Add desktop,
   phone, authentication-fixture and payload-preservation regressions (radianx,
   #1331; compatibility with #1479).
+- Preserve canonical feed provenance in large COMMAND tool results and offer
+  validated HUD caption queries with the current UI language. Retain partial
+  section coverage and share localized caption state tags with voice (radianx,
+  #1331; compatibility with #1488).

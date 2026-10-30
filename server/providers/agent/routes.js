@@ -13,7 +13,7 @@ import {
 import { estimateCommandCostUsd } from '../../../src/agent/cost.js';
 import { readRequestBody } from '../common/request.js';
 import { enforceRateLimit } from '../openai/rate-limit.js';
-import { GEV_REALTIME_TOOLS } from '../openai/tools.js';
+import { GEV_AGENT_TOOLS } from './tools.js';
 import { diagnoseToolTurn } from './diagnostics.js';
 import { buildAgentInstructions } from './instructions.js';
 import { agentPromptPrefixTokens } from './prefix.js';
@@ -68,12 +68,12 @@ let _chatTools;
 let _toolIndex;
 
 function chatTools() {
-  if (!_chatTools) _chatTools = toChatCompletionTools(GEV_REALTIME_TOOLS);
+  if (!_chatTools) _chatTools = toChatCompletionTools(GEV_AGENT_TOOLS);
   return _chatTools;
 }
 
 function toolIndex() {
-  if (!_toolIndex) _toolIndex = indexToolsByName(GEV_REALTIME_TOOLS);
+  if (!_toolIndex) _toolIndex = indexToolsByName(GEV_AGENT_TOOLS);
   return _toolIndex;
 }
 
@@ -172,7 +172,7 @@ function createAgentConfigHandler({
         ),
       defaultProvider: configured.id,
       defaultModel: resolveConfiguredModel(configured, env),
-      toolCount: GEV_REALTIME_TOOLS.length,
+      toolCount: GEV_AGENT_TOOLS.length,
       promptPrefixTokens: agentPromptPrefixTokens(),
       minContextTokens: toolContextFloor(agentPromptPrefixTokens()),
     });

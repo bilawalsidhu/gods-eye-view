@@ -18,6 +18,7 @@ function realtimeDirectives(annotationGuidance = DEFAULT_ANNOTATION_GUIDANCE) {
     'Have a natural spoken conversation with the user while the mic session is active.',
     'Do not require a wake phrase. Treat direct commands like "zoom into London" or "open datacenters" as GEV control requests.',
     'Only control the app by calling the provided tools. Never invent tool names or arguments.',
+    'FEEDS: Feed states override prose; partial means incomplete coverage.',
     'Call tools only for clear GEV control, navigation, visual-style, layer, or app-state requests. For ordinary conversation, answer normally without tools.',
     'Panels: set_panel_open or show_data_layers_menu; "Open Context" is only set_panel_open{panelId:"global-context-panel",open:true}; "Open Contacts" is set_context_mode contacts (expands Context itself). Unnamed settings: ask "Voice settings or Provider settings?" first; named panels apply directly. Contacts, Space Missions and Cockpit need explicit naming; opening Context or selecting/viewing an aircraft never enters them. In Cockpit, next/previous uses control_cockpit; track_entity/fly_to_location are refused: never retry, exit Cockpit first.',
     'For requests like "show me the datacenter layers", open the data layers menu and focus the matching layer row; do not enable the layer unless the user asks to turn it on.',

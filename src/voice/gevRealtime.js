@@ -1,4 +1,5 @@
 import { toFunctionOutput } from '../tools/functions.js';
+import { localizeHudCaption } from './hudResult.js';
 import { GEV_ACTION_SCHEMAS } from './actionSchemas.js';
 import { createGevActionRunner } from './gevActions.js';
 import { createVoiceCommands } from './commands.js';
@@ -22,7 +23,10 @@ export function withToolCatalog(runner, loadCatalog) {
     const result = await catalog.call(name, args ?? {}, {
       signal: options.signal,
     });
-    return toFunctionOutput(name, result);
+    return toFunctionOutput(
+      name,
+      name === 'get_hud_caption' ? localizeHudCaption(result) : result,
+    );
   };
   runGevTool.resetConversation = (...args) =>
     runner.resetConversation?.(...args);

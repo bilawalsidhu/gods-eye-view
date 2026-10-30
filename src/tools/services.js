@@ -42,7 +42,12 @@ import {
 } from './places.js';
 
 /** Construct every service Core's tools read. */
-export function createToolServices({ fetchImpl, appUrl, panelKey }) {
+export function createToolServices({
+  fetchImpl,
+  appUrl,
+  panelKey,
+  summaryPresentation = {},
+}) {
   if (typeof fetchImpl !== 'function')
     throw new TypeError('A fetch implementation is required');
   const requests = createApplicationRequestServices({ fetchImpl });
@@ -78,7 +83,7 @@ export function createToolServices({ fetchImpl, appUrl, panelKey }) {
     events: createEventPackSource({ fetchImpl }),
     regional: requests.regional,
     terrain: requests.terrain,
-    summary: requests.summary,
+    summary: { ...requests.summary, ...summaryPresentation },
     features: requests.features,
     cyclones: createCycloneSource({ fetchImpl }),
     perimeters: createWfigsPerimeterSource({ fetchImpl }),

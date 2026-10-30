@@ -48,7 +48,25 @@ const ESSENTIAL_RESULT_KEYS = Object.freeze([
   'partial',
   'scopeLabel',
   'count',
+  'feedState',
+  'feedProvenance',
 ]);
+
+// Keep machine evidence when display text and large rosters must be shed.
+// The aggregate still describes the entire roster; omitted rows are explicit.
+function compactProvenance(value) {
+  if (!value || typeof value !== 'object') return value;
+  const layers = Array.isArray(value.layers) ? value.layers : [];
+  return {
+    overall: value.overall,
+    layers: layers.slice(0, 5).map(({ id, enabled, feedState }) => ({
+      id,
+      enabled,
+      feedState,
+    })),
+    ...(layers.length > 5 ? { layersOmitted: layers.length - 5 } : {}),
+  };
+}
 
 /** Clamp a string, marking the truncation so the model knows it is partial. */
 function clampContent(text, maxChars) {
@@ -115,6 +133,32 @@ function boundedResultJson(
   }
 
   const bounded = { ...value };
+  if (bounded.feedProvenance)
+    bounded.feedProvenance = compactProvenance(bounded.feedProvenance);
+  // Catalog tools put canonical state under data; app actions put it at
+  // the top level. Both cross the same typed transport.
+  const hasDataEvidence =
+    bounded.data &&
+    typeof bounded.data === 'object' &&
+    (Object.hasOwn(bounded.data, 'feedState') || bounded.data.feedProvenance);
+  if (hasDataEvidence) {
+    const data = { ...bounded.data };
+    if (data.feedProvenance)
+      data.feedProvenance = compactProvenance(data.feedProvenance);
+    for (const key of Object.keys(data)
+      .filter((key) => !['feedState', 'feedProvenance'].includes(key))
+      .sort(
+        (a, b) =>
+          (JSON.stringify(data[b]) ?? '').length -
+          (JSON.stringify(data[a]) ?? '').length,
+      )) {
+      if (JSON.stringify({ ...bounded, data }).length <= maxChars) break;
+      data[key] = describeShedValue(data[key]);
+    }
+    bounded.data = data;
+  }
+  json = JSON.stringify(bounded);
+  if (json.length <= maxChars) return json;
   // An analyst_query creates the numbered referents held by the action runner.
   // Removing the entire 'items' array leaves the typed model unable to name
   // or navigate those referents, although the browser still remembers them.
@@ -134,6 +178,7 @@ function boundedResultJson(
     .filter(
       (key) =>
         !essentialKeys.includes(key) &&
+        !(hasDataEvidence && key === 'data') &&
         !(analystItems && (key === 'items' || key === 'itemsOmitted')),
     )
     .map((key) => ({ key, size: (JSON.stringify(bounded[key]) ?? '').length }))
@@ -164,6 +209,19 @@ function boundedResultJson(
   // Every sheddable field is a marker and it still does not fit, which means
   // an essential field is itself enormous. Keep `ok` legible and say why.
   const essentials = { ok: bounded.ok === true };
+  if (Object.hasOwn(bounded, 'feedState'))
+    essentials.feedState = bounded.feedState;
+  if (bounded.feedProvenance?.overall !== undefined)
+    essentials.feedProvenance = { overall: bounded.feedProvenance.overall };
+  if (hasDataEvidence) {
+    essentials.data = {};
+    if (Object.hasOwn(bounded.data, 'feedState'))
+      essentials.data.feedState = bounded.data.feedState;
+    if (bounded.data.feedProvenance?.overall !== undefined)
+      essentials.data.feedProvenance = {
+        overall: bounded.data.feedProvenance.overall,
+      };
+  }
   json = JSON.stringify({
     ...essentials,
     error: 'Result too large to return',

@@ -1,5 +1,5 @@
 import { CHARS_PER_TOKEN } from '../../../src/agent/conversation.js';
-import { GEV_REALTIME_TOOLS } from '../openai/tools.js';
+import { GEV_AGENT_TOOLS } from './tools.js';
 import { buildAgentInstructions } from './instructions.js';
 import { toChatCompletionTools } from './toolSchema.js';
 
@@ -22,7 +22,7 @@ import { toChatCompletionTools } from './toolSchema.js';
 /** Serialized size of the fixed request prefix, in characters. */
 function prefixCharacters({
   instructions = buildAgentInstructions(),
-  tools = toChatCompletionTools(GEV_REALTIME_TOOLS),
+  tools = toChatCompletionTools(GEV_AGENT_TOOLS),
 } = {}) {
   return String(instructions).length + JSON.stringify(tools).length;
 }

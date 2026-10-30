@@ -1,4 +1,30 @@
 import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+import { msg, t } from '../i18n/index.js';
+
+const CAPTION_STATES = {
+  loading: msg('LOADING'),
+  degraded: msg('DEGRADED'),
+  stale: msg('STALE'),
+  partial: msg('PARTIAL'),
+  fallback: msg('FALLBACK'),
+  unavailable: msg('UNAVAILABLE'),
+};
+
+// #1488's catalog caption has a canonical English tag. Translate only that
+// exact prefix at the shared voice/COMMAND boundary, never model prose.
+export function localizeHudCaption(result) {
+  const state = result?.data?.feedState;
+  const caption = result?.data?.caption;
+  if (!CAPTION_STATES[state] || typeof caption !== 'string') return result;
+  const prefix = `${state.toUpperCase()} | `;
+  if (!caption.startsWith(prefix)) return result;
+  const localized = `${t(CAPTION_STATES[state])} | ${caption.slice(prefix.length)}`;
+  return {
+    ...result,
+    summary: localized,
+    data: { ...result.data, caption: localized },
+  };
+}
 
 // Only observed control state may become a confirmation. Never echo a request
 // or tool-supplied prose, especially when an old layout was normalized.

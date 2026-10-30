@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+import { GEV_AGENT_TOOLS } from '../../server/providers/agent/tools.js';
 import { agentPromptPrefixTokens } from '../../server/providers/agent/prefix.js';
 import {
   MIN_TOOL_CONTEXT_TOKENS,
@@ -134,7 +134,7 @@ test('config reports the providers, the tool count and the derived prefix size',
   );
   assert.equal(res.json.defaultProvider, 'openai');
   assert.equal(res.json.defaultModel, 'gpt-5-mini');
-  assert.equal(res.json.toolCount, GEV_REALTIME_TOOLS.length);
+  assert.equal(res.json.toolCount, GEV_AGENT_TOOLS.length);
   assert.equal(res.json.promptPrefixTokens, agentPromptPrefixTokens());
   assert.ok(res.json.minContextTokens > 4096);
   assert.doesNotMatch(res.body, /sk-test/);
@@ -302,7 +302,7 @@ test('the app manual is sent, and a client system turn cannot replace it', async
   assert.equal(sent.filter((message) => message.role === 'system').length, 1);
   assert.match(sent[0].content, /^You are GEV Command,/);
   assert.equal(sent[1].content, 'hello');
-  assert.equal(fetchImpl.calls[0].body.tools.length, GEV_REALTIME_TOOLS.length);
+  assert.equal(fetchImpl.calls[0].body.tools.length, GEV_AGENT_TOOLS.length);
 });
 
 test('a malformed model id runs the configured default and says it fell back', async () => {
@@ -801,4 +801,33 @@ test('the config endpoint shares the throttle the other two use', async () => {
   );
   assert.equal(res.statusCode, 429);
   assert.equal(res.headers['retry-after'], '5');
+});
+
+test('a typed HUD caption is offered, schema-validated and returned for the shared browser catalog', async () => {
+  const args = { area: { lat: 30.26, lon: -97.74, radius_km: 10 } };
+  const res = response();
+  const fetchImpl = stubFetch([toolCallReply('get_hud_caption', args)]);
+  await createAgentCommandHandler({ env: KEYED, fetchImpl, limiter: admitAll })(
+    request({
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'openai',
+        model: 'gpt-5-mini',
+        messages: [
+          { role: 'user', content: 'Dame el resumen del HUD de esta zona' },
+        ],
+      }),
+    }),
+    res,
+  );
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json.toolCalls, [
+    { id: 'call_1', name: 'get_hud_caption', args },
+  ]);
+  assert.equal(res.json.corrections, 0);
+  const tool = fetchImpl.calls[0].body.tools.find(
+    (tool) => tool.function.name === 'get_hud_caption',
+  );
+  assert.ok(tool);
+  assert.deepEqual(tool.function.parameters.required, ['area']);
 });
