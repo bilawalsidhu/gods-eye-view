@@ -1,0 +1,76 @@
+# Vue migration
+
+The application UI moves from static templates plus imperative DOM wiring to
+Vue 3 components with Pinia stores. The migration keeps the experience the
+same: element ids, classes, the global stylesheet, translations, keyboard
+shortcuts, voice actions, share links and the phone layout all behave as
+before. The one intended change is the panel rail described below.
+
+## Goals
+
+- Views are Vue single-file components; state that several views read lives in
+  Pinia stores rather than in DOM classes.
+- The owners listed in [UI-OWNERSHIP.md](UI-OWNERSHIP.md) keep their
+  responsibilities. A component replaces DOM construction; it does not add a
+  second owner of the same state.
+- Public methods used by layers, scene playback, voice and host applications
+  (`setPanelCollapsed`, `setContextMode`, `setStyle`, share and location
+  subscriptions) keep their signatures.
+- Ids and classes used by browser QA and host applications stay stable until a
+  host can use an explicit extension point instead.
+
+## The panel rail
+
+Each desktop sidebar gets a floating icon rail that lists every panel available
+on that side. Selecting an icon opens that panel; selecting it again closes it.
+One panel is open per side at a time, so the rail replaces the accordion
+stacking. Panels that are not available in the current mode (for example
+Weather before a weather layer is active) are shown disabled or omitted as the
+panel's own availability rule dictates. The rail hides with the rest of the
+chrome in Cockpit, scene playback, recording and the clean view.
+
+Phones keep the existing bottom tab bar and sheets; the rail is desktop only.
+
+Voice and keyboard openings go through the same panel store, so they follow the
+one-panel rule too. Share links continue to record which panels are open.
+
+## Component kit
+
+`src/ui/kit/` holds the generic components (`UiRail`, `UiPanel`, `UiButton`,
+`UiChip`, `UiTooltip` and so on). Names, props and events follow Halfpixel's
+`ui-vue` kit so the two can converge later, but the components are written for
+this repository and styled by its existing stylesheet and custom properties.
+They contain no application state.
+
+## Phases
+
+1. **Foundation.** Vue, Pinia and the Vite Vue plugin join the browser build
+   (`build/vite.js`, so host applications receive them too). One Vue app is
+   mounted beside the existing markup with a shared Pinia instance. Stores
+   mirror the state that owners already publish: panel disclosure, the UI
+   theme, exclusive surfaces (Cockpit, scene playback, recording, clean view),
+   share state and location. The existing `gev:*` window events feed them.
+   Nothing visible changes.
+2. **Rail.** The panel store becomes the authority for which panel is open on
+   each side, enforcing one panel per side, and the rail renders from it.
+3. **Panels.** Each template and its wiring become a component, keeping ids,
+   classes, `data-i18n` text and CSS. Order: Scenes, Weather, Recent imagery,
+   Street level, CCTV, Layers, Display, Context and Radio, the command dock,
+   the phone shell, then Cockpit. Layers that write into the right rail
+   directly gain a slot instead.
+4. **Cleanup.** The build-time template expansion and the attribute
+   translation pass are retired once nothing uses them. Hosts register panels
+   and rail items through an explicit API instead of editing markup.
+   Markup-string tests are replaced by component tests.
+
+## Verification
+
+- Unit tests: stores and components run under `npm test`. Single-file
+  components are compiled by a test loader; component tests render with
+  `@vue/test-utils` and `happy-dom`.
+- Visual parity: before/after screenshots of every panel at desktop and phone
+  widths, in the default and Cyber themes, with the rail as the only expected
+  difference.
+- Browser QA: the selector-based `scripts/qa-*.mjs` suites keep passing.
+- `npm run format:check`, `npm run check:boundaries`, `npm run i18n` and
+  `npm run build`.
