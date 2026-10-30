@@ -45,14 +45,13 @@ They contain no application state.
 ## Phases
 
 1. **Foundation.** Vue, Pinia and the Vite Vue plugin join the browser build
-   (`build/vite.js`, so host applications receive them too). One Vue app is
-   mounted beside the existing markup with a shared Pinia instance. Stores
-   mirror the state that owners already publish: panel disclosure, the UI
-   theme, exclusive surfaces (Cockpit, scene playback, recording, clean view),
-   share state and location. The existing `gev:*` window events feed them.
-   Nothing visible changes.
-2. **Rail.** The panel store becomes the authority for which panel is open on
-   each side, enforcing one panel per side, and the rail renders from it.
+   (`build/vite.js`, so host applications receive them too). One Vue runtime is
+   created by the shell (`src/ui/vueRuntime.js`) with one Pinia instance that
+   every view shares; disposing the shell unmounts them. Stores are added
+   when a view needs one, mirroring state an owner already publishes, so
+   there is never a second owner of the same state.
+2. **Rail.** `PanelChrome` enforces one panel per side; the panel store
+   mirrors each side's panels and the rail renders from it. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
    classes, `data-i18n` text and CSS. Order: Scenes, Weather, Recent imagery,
    Street level, CCTV, Layers, Display, Context and Radio, the command dock,
@@ -67,7 +66,9 @@ They contain no application state.
 
 - Unit tests: stores and components run under `npm test`. Single-file
   components are compiled by a test loader; component tests render with
-  `@vue/test-utils` and `happy-dom`.
+  `@vue/test-utils` and `happy-dom`. `npm test` registers the loader; to run
+  one file that reaches a component (including anything importing the
+  shell), use `node --import=./src/testSupport/registerVue.mjs --test <file>`.
 - Visual parity: before/after screenshots of every panel at desktop and phone
   widths, in the default and Cyber themes, with the rail as the only expected
   difference.

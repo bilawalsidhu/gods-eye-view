@@ -1,6 +1,7 @@
 /** Own rail measurement, layout scheduling and dock tray observation. */
 import { layoutLeftPanelRail, layoutRightPanelRail } from './panelRails.js';
 import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
+import { isPanelRailMutation } from './panelRailCatalog.js';
 const COCKPIT_LAYOUT_SETTLE_MS = 240;
 /**
  * Fixed UI regions that can occupy the left accordion's vertical lane.
@@ -233,7 +234,8 @@ export class PanelLayoutController {
     }
 
     if (typeof MutationObserver !== 'undefined') {
-      this._rightStackMutationObserver = new MutationObserver(() => {
+      this._rightStackMutationObserver = new MutationObserver((records) => {
+        if (records.every(isPanelRailMutation)) return;
         this._scheduleRightPanelLayout();
       });
       this._rightStackMutationObserver.observe(stack, {
@@ -334,7 +336,8 @@ export class PanelLayoutController {
     }
 
     if (typeof MutationObserver !== 'undefined') {
-      this._leftStackMutationObserver = new MutationObserver(() => {
+      this._leftStackMutationObserver = new MutationObserver((records) => {
+        if (records.every(isPanelRailMutation)) return;
         this._scheduleLeftPanelLayout();
       });
       this._leftStackMutationObserver.observe(stack, {

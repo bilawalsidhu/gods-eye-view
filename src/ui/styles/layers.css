@@ -263,6 +263,33 @@
 #left-panel-stack.layout-exclusive > [data-panel-id].collapsed {
   display: none;
 }
+
+/* Panel rails (src/ui/panelNavigation.js). Each rail lives inside its stack,
+   so it shows and hides with the stack, and floats in the screen-edge gutter. */
+.gev-panel-rail {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  pointer-events: auto;
+}
+.gev-panel-rail--left {
+  right: calc(100% + 6px);
+}
+.gev-panel-rail--right {
+  left: calc(100% + 6px);
+}
+body.mobile-shell #left-panel-stack > .gev-panel-rail,
+body.mobile-shell #right-context-rail > .gev-panel-rail,
+body.cockpit-mode .gev-panel-rail {
+  display: none;
+}
+/* Clean view and recording hide the panels one by one, not their stacks. */
+body.ui-clean-view .gev-panel-rail,
+body.recording-mode .gev-panel-rail {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 #right-context-rail.layout-focus > [data-panel-id].collapsed {
   display: block;
   flex: 0 0 auto;

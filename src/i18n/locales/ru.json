@@ -3083,5 +3083,7 @@
   "Play from this scene through the rest of the project": "Воспроизвести с этой сцены и далее по всему проекту",
   "Play the shot after the selected one, moving on to the next scene when needed": "Воспроизвести кадр после выбранного, при необходимости перейдя к следующей сцене",
   "Edit anchors, data packs and shot details": "Изменить якоря, пакеты данных и параметры кадров",
-  "Download this scene as JSON or an asset bundle": "Скачать эту сцену в формате JSON или архивом ресурсов"
+  "Download this scene as JSON or an asset bundle": "Скачать эту сцену в формате JSON или архивом ресурсов",
+  "Left panels": "Левые панели",
+  "Right panels": "Правые панели"
 }

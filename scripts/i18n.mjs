@@ -433,6 +433,7 @@ function sourceFiles() {
     'src/*.mjs',
     'src/**/*.js',
     'src/**/*.mjs',
+    'src/**/*.vue',
   ).filter(
     (file) =>
       !file.startsWith('src/i18n/') &&

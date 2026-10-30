@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Each desktop sidebar has an icon rail that lists every panel on that side
+  and opens one with a click. One panel is open per side in every HUD layout,
+  so the collapsed panel headers no longer take up the sidebars. Phones keep
+  the bottom tab bar. The rail is the first view built with Vue and Pinia,
+  which now ship with the app; see docs/VUE-MIGRATION.md (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

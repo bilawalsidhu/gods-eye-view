@@ -51,6 +51,8 @@ import {
   t,
 } from '../i18n/index.js';
 import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
+import { PanelNavigation } from './panelNavigation.js';
+import { createUiRuntime } from './vueRuntime.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -133,6 +135,8 @@ export class StyleManager extends ShellFacade {
       readSharedCollapsed: (panelId) =>
         this._mobileShell?.sharedCollapsed(panelId),
     });
+    // Vue views share this runtime and its stores; dispose unmounts them.
+    this._ui = createUiRuntime();
     this._feedback = new ShellFeedback({
       readLayers: () => this._dataManager?.getAll?.() || [],
     });
@@ -594,6 +598,13 @@ export class StyleManager extends ShellFacade {
     // Headers first: panel chrome builds its toggle labels from them.
     this._applyRuntimeStaticHeaderText();
     this._initPanelChrome();
+    this._panelNavigation = new PanelNavigation({
+      ui: this._ui,
+      stacks: { left: this._leftPanelStack, right: this._rightPanelStack },
+      setPanelCollapsed: (...args) =>
+        this._panelChrome.setPanelCollapsed(...args),
+    });
+    this._panelNavigation.init();
     this._initLocaleSelector();
     this._sizeDisplayLabelColumn();
     this._initLeftPanelAdaptiveLayout();
@@ -1776,6 +1787,8 @@ export class StyleManager extends ShellFacade {
     this._localePicker = null;
     this._recording.destroy();
     this._mobileShell?.destroy();
+    this._panelNavigation?.destroy();
+    this._ui.destroy();
     this._panelChrome.destroy();
     this._feedback.destroy();
 

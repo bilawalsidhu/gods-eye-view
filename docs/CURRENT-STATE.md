@@ -1545,6 +1545,28 @@ The right rail skips panels hidden by other CSS (computed `display: none`), but
 keeps the collapsed panels its own exclusive presentation hides, so automatic
 collapse can still be undone.
 
+## Panel rails
+
+On desktop each side stack has a floating icon rail (`src/ui/panelNavigation.js`,
+rendered by the Vue `PanelRailView` and the kit's `UiRail`) in the screen-edge
+gutter beside it. The rail lists every panel the side currently offers, in stack
+order: Data Layers and Authoring on the left; Display, CCTV, Weather and Recent
+Imagery (while shown), Street Level and Context on the right. Selecting an item
+opens its panel through `setPanelCollapsed(id, false, {explicit: true})`;
+selecting the open panel's item closes it. The item of the open panel is
+pressed (`aria-pressed`), and its tooltip is suppressed while the panel is open.
+
+One panel is open per desktop side, in every HUD layout. Opening a side panel
+by any route (rail, header, keyboard, voice) collapses its peers; restored or
+shared state that opens several is normalized by the layout pass, which keeps
+the most recently opened panel, then the one holding keyboard focus, then the
+first, and marks the others `accordion-collapsed` (presentation only, so share
+links still report the saved preference). Collapsed panels are hidden
+(`layout-exclusive`) because the rail lists them. The rail lives inside its
+stack, so it hides with it in Cockpit (where Authoring's item is also hidden),
+recording and clean view. The panel store (`src/ui/stores/panels.js`) mirrors
+each side's panels from the DOM; `PanelChrome` remains the disclosure owner.
+
 ## Phone layout
 
 At 720px and narrower, `src/ui/mobileShell.js` keeps the globe full screen and
@@ -1580,8 +1602,9 @@ sheet before a panel's own Escape handling, and the dock's hover auto-close does
 not apply inside a sheet.
 Cockpit, recording and clean view close the sheet and hide the tab bar; scene
 playback keeps both so its STOP control in the Authoring panel stays reachable. The
-right rail neither hides collapsed siblings nor applies Cyber's one-panel
-accordion at these widths, since the sheet chooses what shows. The Cesium and Google attribution stays visible above the
+side rails neither hide collapsed siblings nor apply the desktop one-panel
+accordion at these widths, and the panel rails are hidden, since the sheet
+chooses what shows. The Cesium and Google attribution stays visible above the
 voice control, and above an open sheet. The page draws under the notch and
 system bars (`viewport-fit=cover`) and the shell's chrome uses safe-area insets.
 Wider viewports are unchanged, and crossing to them closes any open sheet.
@@ -5622,7 +5645,7 @@ apply to `public/` assets or built-preview serving.
 - GEV MIC control is a glass capsule (var(--glass-bg), blur(24px) saturate(1.4), 999px radius; panel radius in error state).
 - The desktop right rail (`#right-context-rail`) owns `DISPLAY`, `CCTV`, its active parameter controls, and `GLOBAL CONTEXT` as one fixed responsive stack in that order. Its compact buttons use the same 176 px width as the left accordion and one consistent 50 px height, share the left stack's 52 px edge inset and measured top baseline across HUD variants, then constrain themselves against visible HUD/chrome rectangles and the remaining vertical corridor. `DISPLAY` is no longer draggable and legacy saved coordinates are ignored.
 - The right rail is labeled **DISPLAY** (formerly "MOVE") and groups, in order, HUD, DETECT, Bloom, Sharpen, 3D, Clean-UI (HUD + DETECT promoted to the top). Its expanded controls retain the same compact 176 px width as the right-side tabs instead of growing to the wider Context detail-card width. It starts expanded on first run and respects the user's later `v6` collapse choice. Collapses/expands with directional chevrons (`◀` collapsed, `▶` expanded).
-- Display and Context use matching 330 px expanded widths and matching compact tab dimensions. The parameter panel is part of Display's expanded content. DISPLAY may remain open beside one contextual panel; CCTV and Context are mutually exclusive. In Tactical HUD, expanding CCTV or Context hides the other contextual launcher while DISPLAY remains independently available. The most recently opened right-rail panel owns the constrained lane even when it appears later in DOM order; passive restoration and automatic disclosure do not replace that explicit owner. Minimal and other HUD layouts retain the collapsed launchers; when their active panel exceeds the measured corridor, the rail reserves sibling heights and gaps and scrolls the active panel internally.
+- Display and Context use matching 330 px expanded widths and matching compact tab dimensions. The parameter panel is part of Display's expanded content. One right-rail panel is open at a time in every HUD layout and collapsed launchers are hidden; the panel rail beside the stack switches between them (see Panel rails). The most recently opened right-rail panel owns the lane even when it appears later in DOM order; passive restoration and automatic disclosure do not replace that explicit owner. When the open panel exceeds the measured corridor, it scrolls internally.
 - At 720px and below both panel stacks (`#left-panel-stack`, `#right-context-rail`) go edge-to-edge and scroll vertically. Every hosted panel's decorative `.panel-glow` is pinned to its panel box there (`inset: 0` in `src/ui/styles/responsive.css`): on desktop the glow overhangs the panel by 18–20 px as harmless paint, but inside a scroll container that overhang is scrollable overflow on both axes and drew a horizontal scrollbar band plus a vertical scrollbar that scrolled nothing but glow whenever CCTV, Context, Data Layers or Authoring was expanded. The glow's blur is ink overflow and never scrolls, so the look is unchanged. Do not fix this by clipping the stacks: `overflow-x: clip` would not remove the vertical scrollbar. Context draws no glow at all (`display: none`), so it is not part of that pin. Pinned by `src/ui/panelRails.test.mjs` against every `(max-width: 720px)` block in the flattened stylesheet.
 - `STYLE PRESETS` and `LOCATIONS` start collapsed, expand on intentional hover/click, and auto-collapse after hover leave delay.
 - Collapsed mini-status indicators show active style and active location/landmark.
@@ -6055,7 +6078,7 @@ After the initial broadside launch profile, the ascent chase camera stays in a r
 During orbit replay, the camera continues following the selected vehicle but eases its look-at target down toward the vehicle's sub-satellite globe anchor. The range expands when necessary for high-altitude missions, keeping both Earth and the tracked label visible through the full revolution. The active replay clock clamps at the final orbital sample rather than wrapping to ascent progress zero; replay completion therefore leaves the final globe/orbit framing in place and does not return to the launch site.
 
 Reconstructed mission orbits use a small downrange launch-to-insertion arc, so their estimated ground track is not artificially drawn directly over the launch pad in top-down views. The ascent remains connected to the ring at its selected insertion point.
-Collapsed right-rail controls use the same 176 px width as collapsed left-rail controls, while expanded right-side detail panels retain their independent widths. DISPLAY starts expanded only on first run and then respects persistence; DISPLAY may remain open beside CCTV or Context, while CCTV and Context remain mutually exclusive without persisting forced collapses. Selecting a dedicated Context mode opens its right-side surface and clears unrelated layers after first snapshotting their exact state. Final exit restores the original enabled set and changed parameters. Cockpit View hides the right-side CCTV control because CCTV is not part of the cockpit rail. Airborne cockpit altitude uses the tracked aircraft's reported aviation MSL altitude, never the potentially negative Cesium terrain/ellipsoid render height; confirmed grounded contacts display `0 ft` without rewriting that source field. A cold photoreal floor shows `ACQUIRING SURFACE` for at most five seconds, then uses the source target-height fallback instead of freezing the camera indefinitely.
+Collapsed right-rail controls use the same 176 px width as collapsed left-rail controls, while expanded right-side detail panels retain their independent widths. DISPLAY starts expanded only on first run and then respects persistence; one right-side panel is open at a time, without persisting the collapses that rule forces. Selecting a dedicated Context mode opens its right-side surface and clears unrelated layers after first snapshotting their exact state. Final exit restores the original enabled set and changed parameters. Cockpit View hides the right-side CCTV control because CCTV is not part of the cockpit rail. Airborne cockpit altitude uses the tracked aircraft's reported aviation MSL altitude, never the potentially negative Cesium terrain/ellipsoid render height; confirmed grounded contacts display `0 ft` without rewriting that source field. A cold photoreal floor shows `ACQUIRING SURFACE` for at most five seconds, then uses the source target-height fallback instead of freezing the camera indefinitely.
 Replay transport uses one Play/Pause toggle plus Cancel. During ascent only the active thrust ring is visible; stage-recovery handoff uses a pulsing dot.
 
 ## Tooling Snapshot

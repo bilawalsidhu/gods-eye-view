@@ -876,9 +876,18 @@
       "src/ui/statusBadge.js",
       "src/scopeMaskPolicy.js",
       "src/visualStylePolicy.js",
+      "src/ui/stores/panels.js",
+      "src/ui/panelRailCatalog.js",
+      "src/ui/vueRuntime.js",
+      "src/ui/kit/UiIcon.vue",
+      "src/ui/kit/rail.js",
+      "src/ui/kit/UiTooltip.vue",
+      "src/ui/kit/UiRail.vue",
+      "src/ui/PanelRailView.vue",
+      "src/ui/panelNavigation.js",
       "src/ui/panelAccordion.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "vue", "pinia"]
   },
   "ui-styles": {
     "exports": ["./ui/styles"],
@@ -2813,6 +2822,15 @@
       "src/sceneCommandRelease.js",
       "src/scopeMaskPolicy.js",
       "src/visualStylePolicy.js",
+      "src/ui/stores/panels.js",
+      "src/ui/panelRailCatalog.js",
+      "src/ui/vueRuntime.js",
+      "src/ui/kit/UiIcon.vue",
+      "src/ui/kit/UiTooltip.vue",
+      "src/ui/kit/rail.js",
+      "src/ui/kit/UiRail.vue",
+      "src/ui/PanelRailView.vue",
+      "src/ui/panelNavigation.js",
       "src/ui/panelAccordion.js"
     ],
     "external": [
@@ -2824,7 +2842,9 @@
       "pbf",
       "satellite.js",
       "mapillary-js",
-      "@jtarrio/webrtlsdr"
+      "@jtarrio/webrtlsdr",
+      "vue",
+      "pinia"
     ]
   },
   "application-catalog": {
@@ -3607,6 +3627,7 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
+      "src/ui/panelRailCatalog.js",
       "src/ui/panelAccordion.js"
     ],
     "external": []
