@@ -42,7 +42,7 @@
       "build/embed-framing.js",
       "build/panel.js"
     ],
-    "external": ["vite-plugin-cesium"]
+    "external": ["vite-plugin-cesium", "@vitejs/plugin-vue"]
   },
   "live-providers": {
     "runtime": "node",
