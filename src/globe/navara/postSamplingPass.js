@@ -1,14 +1,6 @@
 import { Pass } from 'postprocessing';
 import { AlwaysDepth, Mesh, PlaneGeometry, ShaderMaterial } from 'three';
-
-function hasGeometry(scene) {
-  let found = false;
-  scene.traverseVisible((object) => {
-    if (object.isMesh || object.isLine || object.isPoints || object.isSprite)
-      found = true;
-  });
-  return found;
-}
+import { hasGeometry, skipEmptySceneRenders } from './emptySceneRender.js';
 
 // Navara 0.2.1 multisamples every composer target, including full-screen
 // effects. Resolve geometry once; post effects need one sample per pixel.
@@ -50,13 +42,17 @@ export class GeometrySamplingPass extends Pass {
       const pass = this.ctx.getPass(key);
       if (!pass || this.wrapped.has(pass)) continue;
       const original = pass.render;
+      const draw =
+        key === 'mrt'
+          ? skipEmptySceneRenders(original, this.ctx.scenes)
+          : original;
       const owner = this;
       pass.render = function (renderer, input, output, ...rest) {
         if (key === 'gevOverlay' && !this.overlay.hasDrawables()) return;
         if (key === 'transparent' && !hasGeometry(owner.ctx.scenes.transparent))
           return;
         if (key === 'mrt' && !hasGeometry(owner.ctx.scenes.opaque))
-          return original.call(this, renderer, input, output, ...rest);
+          return draw.call(this, renderer, input, output, ...rest);
         const target = (owner.target ??= input.clone());
         owner.setSamples(target, owner.samples);
         target.setSize(input.width, input.height);
@@ -70,7 +66,7 @@ export class GeometrySamplingPass extends Pass {
             // resolve. The opaque background sorts before transparent glyphs.
             this.scene.add(owner.background);
           }
-          original.call(this, renderer, target, output, ...rest);
+          draw.call(this, renderer, target, output, ...rest);
           renderer.initRenderTarget(input);
           renderer.copyTextureToTexture(target.texture, input.texture);
           if (key === 'mrt')
