@@ -1,0 +1,100 @@
+/* Generic components in src/ui/kit. Names follow Halfpixel's ui-vue kit; the
+   surfaces use this application's glass, accent and type tokens. */
+
+.ui-icon {
+  display: inline-block;
+  line-height: 1;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
+  user-select: none;
+}
+
+.ui-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+.ui-tooltip__tip {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--menu-bg);
+  color: var(--dock-label-color);
+  font: var(--dock-label-font-weight) var(--dock-label-font-size) / 1.4
+    var(--font-sans);
+  letter-spacing: var(--dock-label-letter-spacing);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.ui-tooltip__tip--right {
+  left: calc(100% + 10px);
+}
+.ui-tooltip__tip--left {
+  right: calc(100% + 10px);
+}
+
+.ui-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--btn-radius) + 4px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+.ui-rail__sep {
+  height: 1px;
+  margin: 3px 6px;
+  background: var(--glass-border);
+}
+.ui-rail__item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+.ui-rail__item:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+.ui-rail__item--on,
+.ui-rail__item--on:hover:not(:disabled) {
+  border-color: var(--accent-dim);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.ui-rail__item:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ui-rail__badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--bg-dark);
+  font: 600 9px/14px var(--font-mono);
+  text-align: center;
+}

@@ -14,6 +14,8 @@ const SPAN_TEXT =
 /** A whole `textContent =` statement, across lines, so a multi-line ternary is read once. */
 const TEXT_ASSIGNMENT = /(?:textContent|innerText)\s*=\s*([^;]{0,400})/gs;
 const STRING_LITERAL = /['"`]([a-z0-9_]{2,})['"`]/g;
+/** A rail or menu item's glyph: `{ icon: 'layers' }`, rendered by `UiIcon`. */
+const ICON_PROPERTY = /\bicon:\s*['"]([a-z0-9_]+)['"]/g;
 
 /**
  * Files that SHIP markup. Tests assert on markup, they do not render it.
@@ -29,7 +31,7 @@ function sourceFiles(directory = SRC_ROOT) {
     if (entry.isDirectory()) files.push(...sourceFiles(absolute));
     else if (
       entry.isFile() &&
-      /\.(js|mjs|html)$/.test(entry.name) &&
+      /\.(js|mjs|html|vue)$/.test(entry.name) &&
       !entry.name.endsWith('.test.mjs')
     ) {
       files.push(absolute);
@@ -62,6 +64,7 @@ function referencedGlyphs() {
       if (!found.has(glyph)) found.set(glyph, relative);
     };
     for (const match of source.matchAll(SPAN_TEXT)) add(match[1]);
+    for (const match of source.matchAll(ICON_PROPERTY)) add(match[1]);
     for (const match of source.matchAll(TEXT_ASSIGNMENT)) {
       const statement = match[1].replaceAll('?.', '.');
       const assigned = statement.includes('?')
