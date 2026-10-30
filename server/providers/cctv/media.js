@@ -92,7 +92,7 @@ export function buildSyntheticCctvSvg({ cameraId, label, city, status }) {
  * @param {ReadableStream|NodeJS.ReadableStream|null} body
  * @returns {import('stream').Readable|null}
  */
-export function toReadable(body) {
+function toReadable(body) {
   if (!body) return null;
   if (typeof body.pipe === 'function') return body;
   if (typeof body.getReader === 'function') {
@@ -108,7 +108,7 @@ export function toReadable(body) {
  * @returns {{essence:string,params:Map<string,string>}|null} Null when the
  *   value is missing or is not a `type/subtype` media type.
  */
-export function parseMediaType(value) {
+function parseMediaType(value) {
   const [head, ...rest] = String(value ?? '').split(';');
   const essence = head.trim().toLowerCase();
   if (!/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(essence)) return null;

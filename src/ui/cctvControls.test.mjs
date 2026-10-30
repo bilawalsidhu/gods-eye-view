@@ -107,8 +107,14 @@ test('the camera panel owns the embedded player across visibility, selection and
     enabled: true,
     activeCameraId: camera.id,
     activeCamera: camera,
-    cameras: [camera],
+    cameraIndex: [{ id: camera.id, name: camera.name, city: 'Buenos Aires' }],
+    count: 4000,
   };
+  Object.defineProperty(state, 'cameras', {
+    get() {
+      assert.fail('player refresh must not materialize the full catalog');
+    },
+  });
   const render = () => controls._renderCctvState(state);
   render();
   assert.equal(children.size, 2);

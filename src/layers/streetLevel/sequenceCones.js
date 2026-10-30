@@ -5,8 +5,8 @@ import { createHorizonCull, metresBetween } from './view.js';
 import { msg } from '../../i18n/index.js';
 
 /** Cones closer than this to the previous kept one are dropped. */
-export const IMAGE_CONE_MIN_SPACING_M = 3;
-export const IMAGE_CONE_SIZE_PX = 26;
+const IMAGE_CONE_MIN_SPACING_M = 3;
+const IMAGE_CONE_SIZE_PX = 26;
 
 /**
  * @typedef {object} ConeImage   One image of a sequence, as the cones draw it.

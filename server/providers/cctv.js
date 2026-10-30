@@ -1,9 +1,5 @@
 import { createCctvCatalog } from './cctv/catalog.js';
-import {
-  normalizeFeedType,
-  isVideoFeedType,
-  toFiniteNumber,
-} from './cctv/normalize.js';
+import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
 import {
   buildSyntheticCctvSvg,
   cctvLiveMediaType,

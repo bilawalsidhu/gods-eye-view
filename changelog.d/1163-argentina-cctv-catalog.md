@@ -17,3 +17,7 @@
   preserving external/approximate semantics without redundant live-region
   updates; retain shared native controls and feature-owned calibration width.
   (radianx, #1163).
+
+Reconcile upstream CCTV view thinning: retain the lightweight visible-camera
+index and lazy full state alongside external players, off-screen selection,
+active-camera persistence and no-public-feed handling.

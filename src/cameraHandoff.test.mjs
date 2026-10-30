@@ -1,7 +1,6 @@
 import { LayerBindings } from './ui/layerBindings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
-import { StyleManager } from './ui/applicationShell.js';
 import { enter as cockpitEnter, navigateContext } from './ui/cockpitTrackingController.js';
 import { CockpitViewController } from './ui/cockpitController.js';
 import assert from 'node:assert/strict';
@@ -224,7 +223,7 @@ test('validated voice camera destinations share the UI navigation authority faca
     'move camera',
   );
   ordered(move, [
-    "if (!['orbit', 'pan', 'tilt', 'rotate'].includes(motion))",
+    "if (!['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe'].includes(motion))",
     'const start = () => {',
     /const preserveCameraFlight =\s*motion === 'orbit'/,
     'runNavigation(start, { preserveCameraFlight })',
@@ -262,7 +261,7 @@ test('deferred search releases only after its final authority check', () => {
   assert.match(ui, /begin: \(\) => this\._beginDeferredNavigation\('location'\)/);
   assert.match(ui, /beforeFly: \(generation\) => this\._reassertNavigationHandoff\(generation\)/);
   assert.match(ui, /isCurrent: \(generation\) =>\s*!this\._disposed && generation === this\._navigationGeneration/);
-  assert.match(ui, /change\.type === 'settled'\)\s*this\._settleLocationSearchUi\(change\.generation\)/);
+  assert.match(ui, /change\.type === 'settled'\)\s*this\._settleLocationSearchUi\(change\.generation, \{\s*keepQuery: state\.status === 'missing' \|\| state\.status === 'failed',?\s*\}\)/);
   assert.doesNotMatch(search.slice(0, search.indexOf('await this.search')), /_releaseFollowCamera/);
 });
 
@@ -384,7 +383,7 @@ test('world-focus listener lifecycle is symmetric and idempotent', () => {
 });
 
 test('vessel and fire layers announce valid clicks and never fly cameras', () => {
-  for (const [label, source] of [['vessels', vessels], ['fires', firms]]) {
+  for (const source of [vessels, firms]) {
     assert.match(source, /requestWorldFocus\(\{/);
     assert.doesNotMatch(source, /camera\.flyTo/);
   }

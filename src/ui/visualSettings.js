@@ -1,4 +1,7 @@
+import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
+import { syncScopeControls } from './displayControls.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import { syncSegmentedControl } from './segmentedControl.js';
 import { t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
@@ -10,7 +13,6 @@ import {
   MILITARY_DETECTION_PRESET,
 } from './effects.js';
 import { createStyleParameters } from './visualInput.js';
-import * as Cesium from 'cesium';
 import {
   BLOOM_SCALE_VERSION,
   clampBloomIntensity,
@@ -74,13 +76,24 @@ export class VisualSettings {
       panelState,
       styleParams,
     } = state || {};
-    // Ignore the retired 'ai-edit' style from older share links.
-    if (style && style !== 'normal' && style !== 'ai-edit') {
+    // Ignore the retired 'ai-edit' style from older share links. Normal is
+    // the start-up style, but a share opened later in the tab must still leave
+    // a filtered style for it.
+    if (
+      style &&
+      style !== 'ai-edit' &&
+      (style !== 'normal' || this.activeStyle !== 'normal')
+    ) {
+      const alreadyActive = style === this.activeStyle;
       this.setStyle(style, {
         applyPreset: true,
         revealParameters: false,
         restore: true,
       });
+      // setStyle leaves an already-active style untouched; the incoming share
+      // still starts from that preset before its own parameters apply.
+      if (alreadyActive && style !== 'normal')
+        this._applyStylePresetDefaults(style);
     }
     if (styleParams && style && this.stages[style] && STYLES[style]?.uniforms) {
       for (const [uniformName, uniformValue] of Object.entries(styleParams)) {
@@ -137,11 +150,10 @@ export class VisualSettings {
     }
     if (typeof scopeEnabled === 'boolean') {
       setScopeMaskEnabled(scopeEnabled);
-      this._scopeBtn?.classList.toggle('active', scopeEnabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeEnabled));
+      syncScopeControls(this._scopeBtn, this._scopeFeatherSlider, scopeEnabled);
     }
     if (typeof scopeFeatherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(scopeFeatherPct)));
+      const pct = clampScopeFeatherPct(scopeFeatherPct);
       this._scopeFeatherSlider.value = String(pct);
       if (this._scopeFeatherValue)
         this._scopeFeatherValue.textContent = `${pct}%`;
@@ -1261,8 +1273,9 @@ export class VisualSettings {
     const superseded = () => typeof isCurrent === 'function' && !isCurrent();
     if (superseded()) return false;
 
-    if (state.style && state.style !== this.activeStyle) {
-      this.setStyle(state.style, { applyPreset: false });
+    const style = RETIRED_STYLES.includes(state.style) ? 'normal' : state.style;
+    if (style && style !== this.activeStyle) {
+      this.setStyle(style, { applyPreset: false });
     }
 
     const bloomState = state.bloom || {};
@@ -1303,11 +1316,14 @@ export class VisualSettings {
     const scopeState = state.scope || {};
     if (typeof scopeState.enabled === 'boolean') {
       setScopeMaskEnabled(scopeState.enabled);
-      this._scopeBtn?.classList.toggle('active', scopeState.enabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeState.enabled));
+      syncScopeControls(
+        this._scopeBtn,
+        this._scopeFeatherSlider,
+        scopeState.enabled,
+      );
     }
     if (typeof scopeState.featherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(scopeState.featherPct)));
+      const pct = clampScopeFeatherPct(scopeState.featherPct);
       this._scopeFeatherSlider.value = String(pct);
       if (this._scopeFeatherValue)
         this._scopeFeatherValue.textContent = `${pct}%`;
@@ -1538,6 +1554,11 @@ export class VisualSettings {
       preserveCyberRestore = false,
     } = {},
   ) {
+    if (
+      typeof styleName !== 'string' ||
+      (styleName !== 'normal' && !Object.hasOwn(STYLES, styleName))
+    )
+      return;
     const { setDetectionStyle } = this.services;
     if (!restore) this.shareLinkManager?.claimRestoreLane?.('visual');
     if (this.hud.getVariant() === 'cyber') {

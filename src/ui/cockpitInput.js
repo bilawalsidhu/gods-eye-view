@@ -9,12 +9,6 @@ export function onKeyDown(event) {
     // focus; Cockpit must stay active behind it.
     if (event.target?.closest?.('.cesium-credit-lightbox')) return;
     if (
-      document
-        .getElementById('context-radio-dock')
-        ?.classList.contains('disclosure-open')
-    )
-      return;
-    if (
       document.querySelector('#cockpit-utility-controls [aria-expanded="true"]')
     )
       return;
@@ -64,7 +58,8 @@ export function onKeyDown(event) {
     event.preventDefault();
     event.stopImmediatePropagation();
     if (!this.active && !this.isEntryAllowed()) return;
-    const changed = this.active ? this.exit() : this.enter();
+    if (this.active) this.exit();
+    else this.enter();
     return;
   }
 }

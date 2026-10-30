@@ -1,7 +1,6 @@
 import * as Cesium from 'cesium';
 import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
 import {
-  PROJECTION_VERT_ASPECT,
   FRUSTUM_GROUND_CLEARANCE_M,
   PROBE_MIN_RANGE_M,
   PROBE_CLEARANCE_M,
@@ -585,6 +584,13 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function coverageNeighborCount(targetRecord) {
     if (!targetRecord || targetRecord.camera?.feedType === 'embed') return 0;
+    // The summary asks on every notification; scan the catalog only when the
+    // camera, its pose or the catalog changed.
+    const { id, lat, lon, rangeM } = targetRecord.camera;
+    const key = `${id}|${lat}|${lon}|${rangeM}|${layerState._records.length}`;
+    const cached = layerState._neighborCountCache;
+    if (cached?.key === key && cached.records === layerState._records)
+      return cached.count;
     let count = 0;
     for (const record of layerState._records) {
       if (record === targetRecord || record.camera?.feedType === 'embed')
@@ -599,6 +605,11 @@ export function createGeometry({ state: layerState, services, parts, source }) {
         ((targetRecord.camera.rangeM + record.camera.rangeM) / 1000) * 0.92;
       if (dKm <= overlapKm) count++;
     }
+    layerState._neighborCountCache = {
+      key,
+      records: layerState._records,
+      count,
+    };
     return count;
   }
 

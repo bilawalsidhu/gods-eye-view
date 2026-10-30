@@ -61,7 +61,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🎯 Click-to-track anything:** Camera locks on, draws a fading trail, surfaces full metadata — and a tracked fire or vessel hands you off to the nearest live camera in one click.
 - **🖊️ Voice whiteboard:** Speak annotations onto the world — real boundary polygons, marks, and routes.
 - **🛫 3D hangar:** Real per-class aircraft models — 787, ATR-72, Citation, Bell 206, MQ-9 — and a tracked contact swaps from glyph to 3D model as you close in.
-- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir, Snow.
+- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir.
 - **🟩 Detection overlay:** Screen-space bounding boxes and IDs on everything in view.
 - **🎖️ Military HUD:** Tactical heads-up display with intelligence-style telemetry.
 - **🌐 Global Context:** Stage the full situational picture with one switch — and get your exact view back when you leave.
@@ -111,13 +111,15 @@ app's **POWER UP** panel; [Keys & Costs](#-api-keys) explains the options.
 
 Available on **Windows, macOS, and Linux**. The Pinokio maintainer reports
 cross-platform testing of the fixed installer. The launcher installs the
-locked dependencies, finds a free local port, and opens the app.
+locked dependencies, finds a free local port, and opens the app in your system
+browser. The Server menu item keeps the launcher console available.
 
 **Tried before and installation failed?** Update Pinokio and try again.
 Version 8.2 fixes the launcher installation issue;
 [details from the Pinokio maintainer](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g).
 
-**Pinokio opens but the globe is very choppy?** Before treating that as a GPU
+**Using an older launcher or opening the embedded view manually?** If the globe
+is very choppy, before treating that as a GPU
 compatibility or minimum-hardware problem, copy the local server URL shown by
 Pinokio and open the same URL in your normal hardware-accelerated browser. One
 Pinokio 8.2.0 user reported severe stutter in Pinokio's embedded view that went
@@ -177,6 +179,16 @@ Publishing it wider is the [Sharing an instance](#-sharing-an-instance) opt-in, 
 
 When you widen the publish, also set `GEV_KEY_SETUP_TRUSTED_PEERS=none` so the launcher trusts no gateway address.
 
+```bash
+GEV_KEY_SETUP_TRUSTED_PEERS=none docker compose up
+```
+
+Compose forwards `GEV_KEY_SETUP_TRUSTED_PEERS` and `GEV_ALLOWED_HOSTS` from your
+shell or the project's `.env`; an exported shell value takes precedence. You can
+also put `GEV_KEY_SETUP_TRUSTED_PEERS=none` in `.env` for a persistent setting.
+Unset or blank trusted peers retain automatic gateway discovery; `none` explicitly
+disables it. The startup log confirms that no additional peers are trusted.
+
 <details>
 <summary>Running on Linux, a NAS, or behind a reverse proxy</summary>
 
@@ -196,6 +208,8 @@ env UID=1026 GID=100 docker compose up -d
 ```
 
 Keep the `env`: bash treats `UID` as read-only, so a plain `UID=1026` in front of a command is silently ignored. If the container can't write the checkout, it says so at start. Docker Desktop on macOS and Windows maps ownership for you.
+
+On SELinux hosts (Fedora, RHEL), compose mounts the checkout with `:z` so the container may read it; Docker may relabel the checkout for container access, which can take a moment on a large checkout. Without that, the start fails with `Cannot find module '/app/scripts/docker-start.mjs'`.
 
 Behind a reverse proxy, put your keys in `.env` or pass them as environment variables - Provider Settings refuses proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)).
 
@@ -280,14 +294,14 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Tracking the ISS along its orbital path as it crosses over Ukraine](docs/media/14-iss-over-ukraine.gif)
 
-6. **Switch the optics.** Tap `1`–`7` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
+6. **Switch the optics.** Tap `1`–`6` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
 7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
 
-**Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
+**Keyboard:** `1`–`6` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
 
 ---
 
@@ -332,6 +346,10 @@ Click **GEV MIC**, grant the microphone, and just talk. This is more than a voic
 Thirty tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
 
 **🎥 Direct it** — drone-operator camera verbs:
+
+“Rotate the globe” spins Earth to the right continuously; ask for left, a speed,
+or stop. If it refuses, follow its reset-and-rotate or further-zoom guidance;
+camera input stops rotation.
 
 > 🗣️ _"Take me to Tokyo."_ · _"Orbit around this area slowly."_ · _"Draw the walking route from the Capitol to Zilker Park."_ → _"Fly the route we just drew."_ · _"Zoom out to a globe view."_
 
@@ -478,7 +496,7 @@ How the globe handles live data:
 ```
 src/
 ├── main.js                 # Bootstrap: Google 3D tiles, layer registration
-├── ui.js                   # Runtime UI — panels, HUD, styles, control facade
+├── ui/                     # Runtime UI — panels, HUD, styles, controls
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks

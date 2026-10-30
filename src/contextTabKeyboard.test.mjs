@@ -1,4 +1,3 @@
-import { readShellSource } from './testSupport/readShellSource.mjs';
 import { expandApplicationHtml } from '../build/application-html.js';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
@@ -8,13 +7,11 @@ import { clearSelectedLayers } from './ui/contextActions.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
 const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
-const radioControlsSource = readRadioSource(new URL('./ui/radioControls.js', import.meta.url), 'utf8');
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
-const ui = readShellSource();
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 test('Contacts and Space Missions both participate in the ordinary Tab sequence', () => {
@@ -32,8 +29,6 @@ test('Contacts and Space Missions both participate in the ordinary Tab sequence'
 });
 
 test('Context transition state preserves focus and Tab availability until settle', () => {
-  const syncSource = _syncContextModeButtons.toString();
-
   const attributes = () => new Map();
   const makeButton = () => {
     const attrs = attributes();
@@ -134,7 +129,7 @@ test('Context tabs draw a visible keyboard-focus outline including active tabs',
 
 test('Context async action buttons remain focused while busy', () => {
   const init = _initGlobalContextPanel.toString();
-  const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this.listen(this._contextRadioToggleBtn,'));
+  const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this.listen(this._cockpitRadioToggleBtn,'));
   const radioSync = radioPresentation.slice(0, radioPresentation.indexOf('if (this._radioFilter)'));
   const clear = clearSelectedLayers.toString();
 
@@ -142,7 +137,7 @@ test('Context async action buttons remain focused while busy', () => {
   assert.doesNotMatch(init, /button\.disabled\s*=\s*true/);
   assert.match(radio, /trigger\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(radio, /trigger\.disabled\s*=\s*true/);
-  for (const name of ['_radioEnableBtn', '_contextRadioMiniEnableBtn', '_cockpitRadioEnableBtn']) {
+  for (const name of ['_radioEnableBtn', '_cockpitRadioEnableBtn']) {
     assert.match(radioSync, new RegExp(`${name}\\.disabled = false`));
   }
   assert.doesNotMatch(clear, /_clearSelectedLayersBtn\.disabled\s*=\s*true/);
@@ -150,4 +145,37 @@ test('Context async action buttons remain focused while busy', () => {
   const control = readFileSync(new URL('./ui/clearLayersControl.js', import.meta.url), 'utf8');
   assert.match(control, /button\.setAttribute\('aria-busy', String\(busy\)\)/);
   assert.doesNotMatch(control, /button\.disabled\s*=/);
+});
+
+test('Context header holds only its title and collapse control', () => {
+  const panel = html.match(/<div id="global-context-panel"[\s\S]*?<div class="cyber-panel-body"/);
+  assert.ok(panel, 'Global Context panel is missing');
+  const header = panel[0].match(/<div class="panel-header">([\s\S]*?)<\/div>\s*<div class="cyber-panel-body"/);
+  assert.ok(header, 'Global Context header is missing');
+  const tags = [...header[1].matchAll(/<(\w+)\s+class="([^"]+)"/g)].map(([, tag, cls]) => `${tag}.${cls}`);
+  assert.deepEqual(tags, ['span.panel-title', 'span.panel-divider', 'button.panel-collapse-btn']);
+});
+
+test('Context reads as one segmented control with legible type and no halo', () => {
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const clean = (selector) => selector.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim();
+  const rule = (selector) => rules.find(([, s]) => clean(s) === selector)?.[2] || '';
+  const px = (body, prop) => Number(body.match(new RegExp(`${prop}:[^;]*?(\\d+(?:\\.\\d+)?)px`))?.[1] || 0);
+
+  assert.match(rule('#global-context-panel .panel-glow'), /display:\s*none/);
+  const modes = rule('.global-context-modes');
+  assert.match(modes, /border:\s*1px solid/);
+  assert.match(modes, /padding:\s*2px/);
+  assert.ok(px(rule('.context-mode-button'), 'font') >= 10, 'mode labels must stay at least 10px');
+  assert.doesNotMatch(rule('.context-mode-button.active'), /box-shadow/);
+  const standby = rule('.context-mode-standby');
+  assert.ok(px(standby, 'font') >= 10, 'standby guidance must stay at least 10px');
+  assert.doesNotMatch(standby, /dashed/);
+  assert.ok(px(rule('.global-context-actions .panel-layer-toggle'), 'font-size') >= 10);
+  // Default theme only, expanded only: Cyber keeps its red titles and the
+  // collapsed launcher matches its sibling launchers.
+  assert.match(
+    rule(":root:not([data-ui-theme='cyber']) #global-context-panel:not(.collapsed) .panel-title"),
+    /color:\s*var\(--text-secondary\)/,
+  );
 });

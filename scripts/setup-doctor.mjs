@@ -124,6 +124,19 @@ export function resolveOpenSkyAuthMode({
   return OPENSKY_AUTH_MODES.has(mode) ? mode : OPENSKY_AUTH_MODE_DEFAULT;
 }
 
+/** Whether OPENSKY_CREDENTIALS_FILE is set, with the same precedence as the auth mode. The server reads that file when the client id and secret are empty. */
+export function resolveOpenSkyCredentialsFile({
+  authoritativeEnvironment = false,
+  environment = process.env,
+  rootDir = ROOT,
+} = {}) {
+  const environmentDefines = Object.prototype.hasOwnProperty.call(environment, 'OPENSKY_CREDENTIALS_FILE');
+  const value = authoritativeEnvironment && environmentDefines
+    ? String(environment.OPENSKY_CREDENTIALS_FILE || '')
+    : String(environment.OPENSKY_CREDENTIALS_FILE || '') || readDoctorDotenvValue('OPENSKY_CREDENTIALS_FILE', rootDir);
+  return isConfiguredValue(value.trim());
+}
+
 function hasKeychainItem(service, account) {
   if (process.platform !== 'darwin') return false;
   const result = spawnSync('security', [
@@ -153,10 +166,11 @@ export function resolveCredential(spec, {
 
 export function buildCapabilitySummary(
   credentials,
-  { openSkyAuthMode = OPENSKY_AUTH_MODE_DEFAULT } = {},
+  { openSkyAuthMode = OPENSKY_AUTH_MODE_DEFAULT, openSkyCredentialsFile = false } = {},
 ) {
   const configured = (name) => credentials[name]?.configured === true;
-  const hasOAuthCredentials = configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET');
+  const hasClientPair = configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET');
+  const hasOAuthCredentials = hasClientPair || openSkyCredentialsFile === true;
   const requestedOpenSkyMode = String(openSkyAuthMode || '').trim().toLowerCase();
   const openSkyMode = OPENSKY_AUTH_MODES.has(requestedOpenSkyMode)
     ? requestedOpenSkyMode
@@ -164,11 +178,13 @@ export function buildCapabilitySummary(
   const flights = openSkyMode === 'anon'
     ? 'OpenSky keyless anonymous access (rate-limited)'
     : openSkyMode === 'basic'
-      ? 'OpenSky Basic mode selected (credential presence and validity not verified)'
+      ? 'OpenSky Basic mode selected: OpenSky retired username/password sign-in, so flights load anonymously (rate-limited)'
       : openSkyMode === 'auto'
         ? 'OpenSky auto mode selected (runtime credential choice and validity not verified)'
-        : hasOAuthCredentials
+        : hasClientPair
           ? 'OpenSky OAuth credentials present (runtime mode and validity not verified)'
+          : hasOAuthCredentials
+            ? 'OpenSky OAuth credentials file set (OPENSKY_CREDENTIALS_FILE; file contents and validity not verified)'
           : 'OpenSky keyless anonymous access (rate-limited)';
   const route = selectMapStartupRoute({
     googleApiKey: configured('GOOGLE_MAPS_API_KEY') ? 'configured' : '',
@@ -215,6 +231,7 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
     credentials,
     capabilities: buildCapabilitySummary(credentials, {
       openSkyAuthMode: resolveOpenSkyAuthMode({ authoritativeEnvironment, rootDir }),
+      openSkyCredentialsFile: resolveOpenSkyCredentialsFile({ authoritativeEnvironment, rootDir }),
     }),
   };
 }
