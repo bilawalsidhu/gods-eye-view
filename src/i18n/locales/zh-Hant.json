@@ -2889,6 +2889,6 @@
   "Map heading. Drag to rotate, arrow keys turn, Home for north": "地圖朝向。拖曳以旋轉，方向鍵轉向，Home 鍵朝北",
   "North, 0 degrees": "北，0 度",
   "Look around": "環顧四周",
-  "{heading} degrees from north": "偏北 {heading} 度",
+  "{heading} degrees from north": "從北方起算 {heading} 度",
   "{tilt} degrees from top-down": "偏離俯視 {tilt} 度"
 }
