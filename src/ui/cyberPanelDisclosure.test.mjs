@@ -87,7 +87,7 @@ test('opening already-expanded Radio reveals Context and closes Display', () => 
 });
 
 test('every theme collapses rail peers on an explicit open and keeps restored preferences', () => {
-  for (const theme of ['tactical', 'operator', 'minimal', 'cyber']) {
+  for (const theme of ['tactical', 'minimal', 'cyber']) {
     const prior = globalThis.document;
     const explicit = fixture(theme);
     globalThis.document = explicit.doc;

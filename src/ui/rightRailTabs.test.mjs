@@ -55,7 +55,6 @@ function fixture() {
   });
   const strip = tabs.element;
   const column = doc.getElementById('right-rail-column');
-  const tools = doc.getElementById('right-rail-tools');
   const join = rail.querySelector('.right-rail-join');
   const tabFor = (id) =>
     strip.children.find((tab) => tab.dataset.railTab === id);
@@ -73,7 +72,6 @@ function fixture() {
     tabs,
     strip,
     column,
-    tools,
     join,
     calls,
     tabFor,
@@ -88,12 +86,7 @@ test('builds one icon tab per visible rail panel, in rail order, named from the 
     f.column,
     'the column precedes its panels in the tab order',
   );
-  assert.deepEqual(
-    f.column.children,
-    [f.strip, f.tools],
-    'the tablist, then the tool slot',
-  );
-  assert.deepEqual(f.tools.children, [], 'the slot starts empty');
+  assert.deepEqual(f.column.children, [f.strip]);
   assert.equal(f.strip.getAttribute('role'), 'tablist');
   assert.equal(f.strip.getAttribute('aria-orientation'), 'vertical');
   assert.equal(f.rail.getAttribute('data-rail-tabs'), 'vertical');
@@ -461,17 +454,15 @@ test('the stylesheet keeps phones on border-box, folds the strip into narrow des
     /\.right-rail-tab[^{]*\{[^}]*(writing-mode|mask-image)/,
   );
   // The column keeps its natural height: every tab stays whole, nothing
-  // scrolls or clips; only the strip and the slot take the pointer.
+  // scrolls or clips; only the strip takes the pointer.
   assert.doesNotMatch(
     css,
     /#right-rail-(column|tabs) \{[^}]*(max-height|overflow|scrollbar-width)/,
   );
   assert.match(css, /#right-rail-column \{[^}]*pointer-events: none;/);
   assert.match(css, /#right-rail-tabs \{[^}]*pointer-events: auto;/);
-  assert.match(css, /#right-rail-tools \{[^}]*pointer-events: auto;/);
   assert.match(css, /--right-rail-panel-cover: min\(/);
-  // The column hides on phones, where the Radio launcher is back in Context's
-  // header; in the slot the launcher's popover opens upward and to the left.
+  // The column hides on phones.
   assert.match(
     css,
     /body\.mobile-shell #right-context-rail > #right-rail-column \{\s*display: none;/,
@@ -480,11 +471,6 @@ test('the stylesheet keeps phones on border-box, folds the strip into narrow des
     css,
     /body\.mobile-shell #right-context-rail > #right-rail-tabs/,
   );
-  assert.match(
-    css,
-    /#right-rail-tools \.context-radio-mini \{\s*top: auto;\s*right: calc\(100% \+ var\(--right-rail-tabs-gap\) \+ 6px\);\s*bottom: 0;/,
-  );
-  assert.match(css, /#right-rail-tools:empty \{\s*display: none;/);
   assert.match(
     css,
     /body:not\(\.mobile-shell\)\s*#right-context-rail\[data-rail-tabs\]\s*:is\(\s*\[data-collapse-target='pp-toggles'\],\s*\[data-collapse-target='cctv-panel'\],\s*\[data-collapse-target='street-level-panel'\],\s*\[data-collapse-target='global-context-panel'\],\s*\[data-collapse-target='weather-panel'\],\s*\[data-collapse-target='recent-imagery-panel'\]\s*\) \{\s*display: none;/,

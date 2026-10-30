@@ -8,8 +8,7 @@
  *
  * The open tab and its panel are drawn as one surface by a join element the
  * strip shapes from both (railJoinPath); styles/right-rail-tabs.css has the
- * layers. A tool slot under the tabs holds the compact Radio launcher on
- * desktop (radioPanelPlacement.js).
+ * layers.
  */
 import { msg, t } from '../i18n/index.js';
 
@@ -220,9 +219,7 @@ export function createRightRailTabs({
   strip.setAttribute('role', 'tablist');
   strip.setAttribute('aria-orientation', 'vertical');
   strip.setAttribute('aria-label', t('Panels'));
-  const tools = documentRef.createElement('div');
-  tools.id = 'right-rail-tools';
-  column.append(strip, tools);
+  column.append(strip);
   rail.setAttribute(RAIL_TABS_ATTRIBUTE, 'vertical');
 
   // The join: shadow under, glass, outline over; all shaped by one path.
@@ -359,8 +356,8 @@ export function createRightRailTabs({
   function sync() {
     if (destroyed) return;
     // The column precedes its panels in the tab order, so Tab from the open
-    // tab reaches the tool slot and then the open panel. The rail owner moves
-    // panels in at start-up; keep the column first afterwards too.
+    // tab reaches the open panel. The rail owner moves panels in at start-up;
+    // keep the column first afterwards too.
     if (rail.firstElementChild !== column) rail.prepend(column);
     if (join.parentElement !== rail) rail.append(join);
     // Hidden panels too: Weather and Recent Imagery arrive hidden and their

@@ -99,7 +99,8 @@ export function createCards({ state: layerState, services, parts, source }) {
 
     const candidates = [];
     const screenById = new Map();
-    for (const record of layerState._records) {
+    // Cards go only on the icons the view pass shows (refreshHorizonCulling).
+    for (const record of layerState._viewRecords) {
       const id = record.camera.id;
       if (id === activeId || !record.position) continue;
       let inView = false;
@@ -187,7 +188,14 @@ export function createCards({ state: layerState, services, parts, source }) {
       nowMs: Date.now(),
       cardLimit: budgets.cardLimit,
     });
-    layerState._cardIds = new Set(retention.keepIds);
+    // Grace keeps a card briefly after it loses selection, but never on a
+    // camera whose icon the view pass has hidden.
+    const shownIds = new Set(
+      layerState._viewRecords.map((record) => record.camera.id),
+    );
+    layerState._cardIds = new Set(
+      retention.keepIds.filter((id) => shownIds.has(id)),
+    );
     layerState._cardGraceState = retention.graceState;
 
     // Bounded thumbnail LRU: live cards (grace included) never lose their
@@ -371,7 +379,6 @@ export function createCards({ state: layerState, services, parts, source }) {
     layerState._cctvOverlayHost.clearSource(CCTV_OVERLAY_SOURCE_ID);
     layerState._cctvOverlayHost.setVisible(CCTV_OVERLAY_SOURCE_ID, false);
     parts.hover.clearHoverCard();
-    layerState._cameraMoving = false;
     layerState._cardIds = new Set();
     layerState._cardGraceState = new Map();
     layerState._cardFrameSlots = new Map();

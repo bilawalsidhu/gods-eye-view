@@ -8,7 +8,10 @@ import { formatNumber, getLocale, t } from './i18n/index.js';
 import { unitLabel } from './ui/unitLabels.js';
 import { localizePlaceName } from './ui/placeNames.js';
 
-/** An upper-case HUD quantity such as `13KM` / `13КМ`, in the active language. */
+/**
+ * An upper-case HUD quantity such as `13KM` / `13КМ`, in the active language.
+ * Chinese and Japanese have no case and keep the catalog's `13 km`.
+ */
 export function hudQuantity(value, unit, digits = 0) {
   const number = formatNumber(value, {
     useGrouping: false,
@@ -16,7 +19,7 @@ export function hudQuantity(value, unit, digits = 0) {
     maximumFractionDigits: digits,
   });
   const label = unitLabel(unit);
-  if (getLocale().startsWith('zh-'))
+  if (/^(zh|ja)(-|$)/.test(getLocale()))
     return label ? `${number} ${label}` : number;
   return `${number}${label.toUpperCase()}`;
 }

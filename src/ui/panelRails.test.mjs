@@ -22,7 +22,7 @@ test('Display uses an inner scroll body only in Cyber', () => {
 });
 
 test('every HUD layout keeps one expanded owner, hides its peers and never reopens them', () => {
-  for (const variant of ['tactical', 'operator', 'minimal', 'cyber']) {
+  for (const variant of ['tactical', 'minimal', 'cyber']) {
     const f = fixture('right', { hud: { visible: true, variant } });
     f.expand(f.first, 250);
     f.expand(f.second, 250);
@@ -673,12 +673,7 @@ function flatRules(block) {
 
 test('narrow-screen rails pin every hosted panel glow inside its panel box', () => {
   const css = readStylesheet(new URL('../../style.css', import.meta.url));
-  for (const panel of [
-    'data-panel',
-    'scene-panel',
-    'cctv-panel',
-    'global-context-panel',
-  ]) {
+  for (const panel of ['data-panel', 'scene-panel', 'cctv-panel']) {
     assert.match(
       css,
       new RegExp(`#${panel} \\.panel-glow \\{[^}]*\\binset: -\\d+px;`),

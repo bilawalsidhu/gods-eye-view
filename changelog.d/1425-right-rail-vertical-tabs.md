@@ -6,8 +6,6 @@
   rather than scroll. A first-time visitor on a desktop finds Display open; a
   stored choice still wins. The panels' own collapse arrows are gone on desktop:
   the tab opens and closes a panel, Escape inside one closes it and returns
-  focus to its tab, and the strip is a keyboard-navigable tablist. The compact
-  Radio launcher moves from Context's header to the bottom of the strip on
-  desktop and always opens the compact player, also while Context is open; the
-  player's Details button leads to the Radio section. Saved preferences, share
-  links and the phone sheet shell are unchanged (gekh, #1425).
+  focus to its tab, and the strip is a keyboard-navigable tablist. Saved
+  preferences, share links and the phone sheet shell are unchanged (gekh,
+  #1425).

@@ -1,4 +1,3 @@
-import { t, msg } from '../i18n/index.js';
 import { bindRadioControls } from './radioBindings.js';
 import { renderRadioState } from './radioPresentation.js';
 
@@ -59,49 +58,37 @@ export class RadioControls {
    * @returns {Promise<boolean>} Whether the internal scroller moved.
    */
   async _revealRadioControlsAfterExplicitEnable(trigger) {
-    const directory = this._radioPanel?.querySelector('.radio-directory-row');
-    const transport = this._radioPanel?.querySelector('.radio-transport');
-    if (!directory || !transport || !this._radioState?.enabled) return false;
-    return this._revealInsideContext(
-      directory,
-      transport,
-      () => this._radioState?.enabled && trigger?.isConnected,
-    );
-  }
-
-  /**
-   * Scroll Context so `top` through `bottom` show, preferring `bottom` when
-   * both do not fit, once the rail has laid out the opened panels.
-   * @param {HTMLElement} top
-   * @param {HTMLElement} bottom
-   * @param {() => boolean} stillWanted Rechecked after the layout frames.
-   * @returns {Promise<boolean>} Whether the internal scroller moved.
-   */
-  async _revealInsideContext(top, bottom, stillWanted) {
     const contextPanel = document.getElementById('global-context-panel');
     const scroller =
       (document.documentElement?.dataset.uiTheme === 'cyber' &&
         contextPanel?.querySelector('.cyber-panel-body')) ||
       contextPanel?.querySelector('.global-context-panel-inner');
+    const directory = this._radioPanel?.querySelector('.radio-directory-row');
+    const transport = this._radioPanel?.querySelector('.radio-transport');
     if (
       !contextPanel ||
       contextPanel.classList.contains('collapsed') ||
-      !scroller
+      !scroller ||
+      !directory ||
+      !transport ||
+      !this._radioState?.enabled
     )
       return false;
 
     await new Promise((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
     );
-    if (this.destroyed || !stillWanted()) return false;
+    if (this.destroyed || !this._radioState?.enabled || !trigger?.isConnected)
+      return false;
 
     const viewport = scroller.getBoundingClientRect();
-    const topRect = top.getBoundingClientRect();
-    const bottomRect = bottom.getBoundingClientRect();
+    const directoryRect = directory.getBoundingClientRect();
+    const transportRect = transport.getBoundingClientRect();
     const margin = 10;
     const minimum =
-      scroller.scrollTop + bottomRect.bottom - (viewport.bottom - margin);
-    const maximum = scroller.scrollTop + topRect.top - (viewport.top + margin);
+      scroller.scrollTop + transportRect.bottom - (viewport.bottom - margin);
+    const maximum =
+      scroller.scrollTop + directoryRect.top - (viewport.top + margin);
     const desired =
       minimum <= maximum
         ? Math.min(Math.max(scroller.scrollTop, minimum), maximum)
@@ -142,25 +129,6 @@ export class RadioControls {
       );
     }
     return true;
-  }
-
-  /** Keep the launcher's ARIA state matched to the compact player. */
-  _syncContextRadioLauncherState() {
-    if (this.destroyed || !this._contextRadioToggleBtn) return;
-    const compactOpen = Boolean(
-      this._contextRadioDock?.classList.contains('disclosure-open'),
-    );
-    this._contextRadioToggleBtn.setAttribute(
-      'aria-expanded',
-      String(compactOpen),
-    );
-    const launcherLabel = t(
-      compactOpen
-        ? msg('Close compact Radio controls')
-        : msg('Open compact Radio controls'),
-    );
-    this._contextRadioToggleBtn.setAttribute('aria-label', launcherLabel);
-    this._contextRadioToggleBtn.title = launcherLabel;
   }
 
   destroy() {

@@ -102,7 +102,6 @@ test('Radio listeners and subscriptions are revoked once before tuning teardown'
     f.controls.destroy();
     f.controls.destroy();
     const snapshot = structuredClone(f.calls);
-    f.controls._setRadioDisclosure(true);
     f.controls._setCockpitDisclosure('display', true);
     f.next.dispatchEvent(new Event('click'));
     f.document.dispatchEvent(new Event('gev:radio-selected'));

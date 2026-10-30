@@ -362,12 +362,6 @@ export class PanelChrome {
       dockToggle.setAttribute('aria-label', t(titleKey, { name: panelName }));
       dockToggle.title = t(titleKey, { name: panelName });
     }
-    if (panelEl.id === 'radio-panel' && this._contextRadioDetailsBtn) {
-      this._contextRadioDetailsBtn.setAttribute(
-        'aria-expanded',
-        String(!collapsed),
-      );
-    }
   }
 
   _buildSharePanelState() {

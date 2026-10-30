@@ -221,7 +221,7 @@ from 0–200%. OFF disables the slider while retaining its value. HUD layout
 changes preserve both settings; share links and scenes restore them. The
 historical missing-`scf` fallback remains 35%; explicit 0% keeps the hard edge.
 
-With Scope OFF, Tactical, Operator and Minimal add text-sized black backplates
+With Scope OFF, Tactical and Minimal add text-sized black backplates
 at 70% opacity behind telemetry, vertical metadata and scene chrome. Original
 HUD text color, glow and opacity are preserved. Scope OFF brightens the tagline
 and Active Style label with the shared secondary text color. The title plate
@@ -230,6 +230,15 @@ the original HUD presentation; Cyber retains its existing skin.
 
 `node scripts/qa-scope-hud.mjs` checks native input, range, layout persistence,
 restoration and both Scope presentations. `QA_SCREENSHOT_DIR` saves screenshots.
+
+## HUD layouts — October 29, 2026
+
+Display > HUD > Layout offers Tactical, Minimal and Cyber; the `set_hud` voice
+action accepts the same three. The Operator layout is retired. Share links
+keep its enum code so older links still parse, and a link, scene or saved state
+that names Operator restores the default Tactical layout. Operator was the
+only layout that showed the HUD's top banner bar, so its markup and styles are
+removed too.
 
 ## Cyber HUD — September 30, 2026
 
@@ -248,8 +257,7 @@ treatment; the one-panel rule applies in every desktop layout (see "Right rail
 tabs" below). Display, CCTV and Context scroll their contents
 inside fixed headers and decorative frames. The narrow-screen rail remains
 scrollable to reach each panel. Radio retains the shared nested Context player
-and compact header disclosure, without relocating playback controls on theme
-changes.
+without relocating playback controls on theme changes.
 
 Voice help/error popups and Location/Visual Presets pins extend beyond their
 Cyber frames without being clipped: the shapes decorate non-interactive
@@ -971,6 +979,15 @@ directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
 request skips the key-bearing Street View fallback and gets the placeholder.
 
+The CCTV layer draws only the cameras on or near the screen. Zoomed out, it
+keeps one camera per ground cell sized to the view, preferring a healthy feed,
+and the cells are anchored to the ground so a pan keeps the same cameras. The
+active camera always shows. Ground placement and coverage geometry load only
+for the cameras in view, with at most two attempts per camera and view regime.
+The view pass reruns while the camera moves, paced by its own cost. The camera
+picker lists the cameras in view, active camera first, and closes with the
+count of cameras outside the view.
+
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames.
 
 Traffic and bikeshare expose factories through `./layers/traffic` and
@@ -1394,8 +1411,10 @@ and sharpen. Display supplies actions and renders settings; effect execution has
 no DOM dependency. Existing presets and the 500 ms transition remain unchanged.
 Stopping the controller revokes animation before asynchronous UI teardown; final
 destruction removes its stages and restores the borrowed bloom configuration.
-Snow's sideways sway stays within a fixed range at any session age; Wind scales
-its amplitude.
+Snow is no longer a visual preset. A share link that names it, in either the
+long or compact form, opens on Normal and drops the Snow shader parameters. A
+view passed to embed mode or `show_in_gods_eye_view`, and a saved scene shot,
+that names Snow also open on Normal.
 Sharpen runs only when enabled with intensity above 0.001. At slider zero its
 stage is disabled; raising the slider resumes it when sharpen is enabled.
 
@@ -1517,11 +1536,8 @@ flag (a camera click, Street Level switching on, a radio pick), makes that
 panel the owner. Mobile layout still releases desktop allocation styles and
 gives every owner-collapsed panel back. Stable Display allocation avoids
 unnecessary style writes.
-The compact Radio player is independent of Context: its launcher toggles it
-whether Context is collapsed or open, and only an outside pointer, Escape, its
-close button or its Details button closes it, never a layout pass. The
-reveal after the expanded Enable lands its smooth scroll even when a rail
-layout pass cuts it short.
+The reveal after the expanded Radio Enable lands its smooth scroll even when a
+rail layout pass cuts it short.
 The right rail skips panels hidden by other CSS (computed `display: none`), but
 keeps the collapsed panels its own exclusive presentation hides, so the owner
 rule can still give them back.
@@ -1540,17 +1556,13 @@ buttons are hidden: the tab is the one control, Escape its keyboard twin.
 The strip is a vertical `role="tablist"`: Up/Down
 wrap, Home/End jump, the open tab (else the first) is the tab stop, Escape
 inside a panel returns focus to its tab, and the strip precedes the panels in
-the DOM so Tab from the open tab reaches the tool slot and then the panel.
+the DOM so Tab from the open tab reaches the panel.
 Glyphs come from `RAIL_TAB_ICONS` (Material Symbols, in the `index.html`
 subset); a tab's accessible name and tooltip are the panel's translated header
 title. The tabs keep their size. The lane's top follows the left rail's; a
 strip taller than the lane lifts the rail toward the HUD corner above
 (`src/ui/rightPanelRail.js`), and on a lane still shorter the strip runs past
-its end; the strip never scrolls or clips. Under the tabs the strip's
-column keeps a tool slot (`#right-rail-tools`) that holds the compact Radio
-launcher on desktop: `src/ui/radioPanelPlacement.js` moves it there from
-Context's header, and back for the phone sheet, so the compact player stays one
-click away; the player's Details button opens the Radio section inside Context.
+its end; the strip never scrolls or clips.
 The strip marks the rail with `data-rail-tabs`, which
 the stylesheet keys the strip's column on; a rail without the strip keeps its
 plain geometry. Phones hide the strip and keep the sheet shell; Cockpit hides
@@ -2056,7 +2068,7 @@ they do not reduce the materialized entity count or establish an FPS gain.
   rotation and mission-marker highlight as pointer hover. Focus alone does not
   select the mission; Enter or Space performs selection. Keyboard and pointer
   preview ownership remain independent when the pointer is parked over the list.
-- Radio power controls in the full, compact, and Cockpit surfaces, Search Nearby
+- Radio power controls in the full and Cockpit surfaces, Search Nearby
   Sites, and Clear Selected Layers remain focusable while lifecycle work is in
   progress. They announce busy/disabled semantics and ignore repeat activation
   until the operation settles, so async work cannot drop the keyboard ring.
@@ -2153,6 +2165,19 @@ The FIRMS proxy records source success after appending its rows. If aggregation
 throws, that source reports failure without a contradictory success entry.
 The existing per-record append continues to support large feeds; sequential
 fetching, trailing-24-hour filtering and partial-success caching are unchanged.
+
+FIRMS requests retry once over IPv4 when every resolved address fails to
+connect. Node's network-family auto-selection gives each address a short
+attempt timeout, so on hosts where IPv6 is unreachable a slow IPv4 handshake
+was abandoned and the request reported only `fetch failed` (#68). The retry
+makes a single IPv4 connection within the same deadline and the same body
+cap, and does not follow redirects. HTTP errors, an expired request deadline
+and DNS failures are not retried; a per-address connect timeout, which Node 26
+reports as `ConnectTimeoutError`, is. A retry answered with a null-body status
+(204, 205, 304) or a status above 599 fails that source instead of crashing
+the server, and a non-OK response releases its connection at once. FIRMS
+warnings include the per-address connection errors and never the request URL,
+which embeds the MAP_KEY.
 
 ## Installations and map-source guidance
 
@@ -2304,8 +2329,9 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > to yield to: whoever handles ESC first calls `preventDefault()` **and**
 > `stopImmediatePropagation()`, and the launcher skips `defaultPrevented` events.
 > `stopPropagation()` alone does **not** stop later listeners on the same
-> `document` — that is exactly how the compact Radio disclosure made one key
-> close the disclosure _and_ dismiss the launcher.
+> `document` — that is exactly how a disclosure that called it alone made one
+> key close the disclosure _and_ dismiss the launcher. Cockpit's utility
+> disclosures (Display, Radio) claim the key the immediate way.
 >
 > **Accepted:** a surface class that never clears means no launcher for that page
 > load, with no timeout. None of the four classes is restored at startup, so an
@@ -2889,7 +2915,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   failed searches leave the current camera owner untouched, and Context Focus
 >   can return to the preserved Contact. Focus also restores the selected
 >   aircraft's canonical follow frame after a manual zoom-away.
->   Visual presets retain the order Normal, CRT, NVG, FLIR, Anime, Noir, Snow.
+>   Visual presets retain the order Normal, CRT, NVG, FLIR, Anime, Noir.
 >   Configurable preset selection—including same-style reselection—opens the
 >   shared Parameters surface directly below Detection and scrolls it into
 >   view; share-link restoration
@@ -2941,7 +2967,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   Inside Cockpit, the focused summary card is titled Contact in both visible
 >   copy and its accessible control labels.
 >   The top-center Cockpit vision cycle is the fixed, duplicate-free sequence
->   Normal, CRT, NVG, FLIR, Anime, Noir, and Snow. Entry selects the map preset
+>   Normal, CRT, NVG, FLIR, Anime, and Noir. Entry selects the map preset
 >   already in use, so a FLIR map opens on the existing FLIR item while
 >   Normal remains available exactly once. NONE is not offered. Cockpit choices
 >   temporarily override the map preset, while Exit Cockpit and Reset both restore
@@ -2985,7 +3011,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   corridor). Its minimal Display popover exposes Intel HUD,
 >   Detection, Parameters, and 3D aircraft. During Cockpit, those existing
 >   standard Display controls move into the Cockpit popover and retain their normal
->   nested interaction: HUD plus Tactical/Operator/Minimal layout, Detection plus
+>   nested interaction: HUD plus Tactical/Minimal/Cyber layout, Detection plus
 >   Density/Allocation/Fade/Outside tuning, and 3D plus Proximity/All mode. The
 >   same nodes and state return to the map Display on exit, so Cockpit does not
 >   maintain a second control state. **Detection is owned by the CONTACTS
@@ -3047,15 +3073,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   stacking. Narrow mobile Cockpit
 >   viewports suppress the legacy layer stack, peripheral HUD, and secondary
 >   Context/briefing panes so the flight instruments and primary controls remain
->   unobstructed. Outside Cockpit, Radio starts collapsed while off. When Context
->   is collapsed, its Radio header icon opens compact controls whose explicit
->   Enable/Disable action owns power; stable close and full-panel buttons own
->   compact dismissal and one-way detailed expansion independently. When Context
->   is already expanded, that same icon skips the floating compact card, expands
->   the embedded Radio section, scrolls it into view, and moves keyboard focus to
->   its disclosure control. The detailed panel's normal accordion control owns
->   its collapse. Compact/detailed state and playback continuity remain shared.
->   Radio volume in the full, compact, and Cockpit surfaces, plus Space Mission
+>   unobstructed. Outside Cockpit, Radio starts collapsed while off and lives
+>   only in its section inside Context; the detailed panel's normal accordion
+>   control owns its disclosure and its Enable/Disable action owns power.
+>   Radio volume in the full and Cockpit surfaces, plus Space Mission
 >   replay speed, use Display / Sharpen's muted 3px rail, circular cyan thumb,
 >   glow, and mono value treatment. Their larger transparent hit areas, keyboard
 >   focus indication, ranges, disabled states, and mission speed scale remain
@@ -3840,7 +3861,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 
 ### Interface localization (October 2026)
 
-Shipped locales: **en** (source and fallback), **es**, **ru**, **zh-CN** and **zh-Hant**. The code lives in
+Shipped locales: **en** (source and fallback), **de**, **es**, **fr**, **it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **uk**, **zh-CN** and **zh-Hant**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
 
@@ -3851,7 +3872,7 @@ Shipped locales: **en** (source and fallback), **es**, **ru**, **zh-CN** and **z
   value). English has no catalog; every other locale is
   `src/i18n/locales/<code>.json`, and a missing entry falls back to English.
 - **Locale choice.** `?lang=` → stored choice (`gev:locale:v1`) →
-  `navigator.languages` → English. Chinese tags default to `zh-CN`; Traditional Chinese tags
+  `navigator.languages` → English. Any `pt` tag (`pt-BR`, `pt-PT`) selects `pt`. Chinese tags default to `zh-CN`; Traditional Chinese tags
   select `zh-Hant`. Explicit `Hans` selects `zh-CN` regardless of region. `?lang=` is not stored, and share links drop
   it, so a recipient keeps their own language. The globe picker in the
   bottom-right corner (`src/ui/localePicker.js`) stores the choice, drops
@@ -3918,7 +3939,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
@@ -4831,13 +4852,6 @@ synchronous playback-control observers run, so reentrant voice cleanup cannot
 overwrite a released stream with a stale paused state. Layer
 destruction likewise retains an enabled manager entry when module disable or
 destroy fails semantically, preventing an active orphan and allowing retry.
-When Context is collapsed, explicitly activating its Radio header icon reveals
-the compact transport; hover and focus alone do not open it. When Context is
-expanded, the icon instead expands and scrolls to the embedded Radio section.
-Its accessible label, controlled region, and expanded state keep describing the
-current route throughout enabling, enabled, disabling, and uncertain lifecycle
-renders. Both routes preserve Radio power, playback, station, filter, and volume
-state.
 
 Bundled datasets live in `src/data/local_data/` with per-folder provenance READMEs; they are lazily loaded via `src/data/localGeojsonCore.js` (Vite `?url` assets) when toggled on.
 
@@ -4858,6 +4872,8 @@ silently demoting every later lookup for the session.
 - The expanded `CONTEXT` view offers mutually exclusive `CONTACTS` and `SPACE MISSIONS` modes. Selecting `CONTACTS` enables the context-owned Flights, Military Flights, AIS Vessels, and Mapped Installations dependencies only when they are not already user-enabled; selecting `SPACE MISSIONS` enables the recent-launch layer and its Satellite dependency. `CONTACTS` cycles the nearest supported contact of whatever type is selected. Satellites are deliberately excluded from those Awareness cohorts and keep their own tracking UX. Selecting the active mode again returns to the neutral chooser and releases only mode-owned dependencies.
 - If a civilian or military aircraft is already tracked when `CONTACTS` becomes operational, that source-owned track is adopted as the Context subject before nearest-contact autofocus. Context rechecks the tracker after its dependencies settle, so a newer selection wins, while an explicit clear during activation prevents fallback from silently selecting a replacement. Cockpit entry remains unavailable until that Context transaction has settled, so its camera takeover cannot clear Cesium tracking before adoption. Adoption does not recreate tracking or transfer camera ownership; it initializes the normal 250 km ring, history, proximity results, and Cockpit Previous/Next state for the original aircraft.
 - `SEARCH NEARBY SITES` retains the bounded OSM results and makes one user-initiated, view-biased Google Maps Places text search for “military installation.” Google results are source-stamped, deduplicated against OSM by rounded location/name, and remain mapped context rather than operational claims. If Places is unavailable or the API is not enabled for the supplied key, OSM context remains available. A view across the antimeridian is searched around its own centre, with a radius from its real width.
+- The Context header holds only its title and collapse control. It no longer carries a Radio shortcut or a compact Radio player: Radio is the `RADIO` section inside the panel, with its own disclosure and the single `ENABLE` power control. Cockpit keeps its own compact Radio utility.
+- Context is set for reading in every theme: mode, standby and action labels are 10 px, and the panel draws no glow halo. Outside Cyber, the two modes form one segmented control, the standby guidance is plain left-aligned text rather than a dashed placeholder, and the panel's section titles share the side panels' dock-label colour. Cyber keeps its separately framed mode buttons, its red panel titles, and in layout-focus a framed, centred standby card over its radar art.
 - The expanded desktop header omits the redundant `ON` label; the active mode button carries state. Expanded Contact results also omit the duplicate `GLOBAL CONTEXT` / `CONTEXT ONLY` status row and begin with the selected subject and its 250 km scope. Global Context does not fabricate a selected-entity model preview: the provisional hand-authored aircraft wireframe was removed because it was not geometry extracted from the selected entity's actual asset.
 - Dependency ownership is reversible: disabling Global Context releases only dependencies it enabled, while user-enabled layers remain on. This also removes the Military-layer suppression handoff when Global Context owned Military, allowing an already-enabled civilian Flights layer to resume its normal mixed rendering. If OpenSky is unavailable and has no last-good cache, Flights requests a capped 250 nm adsb.lol point snapshot around the current view anchor and labels that provenance explicitly; it never relabels military-feed rows as civilian data. If both inputs fail, Flights remains `UNKNOWN`.
 - Space Missions is replay-isolated: Rocket Launches and Satellites are the only Data Layers permitted while the mode is active. Direct UI and voice entry capture the same pre-entry snapshot; internal dependency and restoration enables do not create a user-owned Context session. Entry waits for incompatible layers to shut down, direct incompatible enables are blocked before lifecycle work, and the entry gate remains active through the complete Rocket Launches enable. A newer same-target ON request takes ownership of the pending entry without releasing its isolation snapshot, including when it arrives while the prior request is awaiting the adoption guard. A caller abort, resource cancellation, newer OFF, or layer teardown waits for exact manager settlement and restores that snapshot without resurrecting Rocket Launches. If an abort lands after only part of a restore settles, Context completes the same exact target without the stale caller signal and then replays newer explicit layer intent. Dedicated Voice Context cancellation reports a stable cancelled result plus the current Context state; generic layer visibility additionally exposes manager phase, reason, successor, and lifecycle details. Once an exact voice visibility intent commits, a newer voice turn cannot relabel it as cancelled while Context settlement completes; pre-commit aborts remain cancellable and final lifecycle mismatches remain failures. Clear Selected Layers reserves its complete captured OFF set before sequential teardown; a newer absolute request of any origin supersedes only its layer reservation and remains authoritative. A rejected layer teardown retains the truthful enabled state, rolls already-stopped siblings back to the captured pre-entry set, and aborts replay; rapid exit/re-entry serializes the full Satellite enabled-state and parameter restore before a new snapshot is taken. Contacts remains additive and restores user-enabled layers normally.
@@ -5230,8 +5246,8 @@ and unreachable upstream (502/504) separately from road geometry.
   first, activates the Contacts sub-view, and returns the settled 250 km window.
   Its `aircraft` count is the exact civilian-plus-military total when both feeds
   can answer, or `unknown` when either component is unavailable.
-- Cockpit's top vision switch cycles all seven map looks: Normal, CRT, NVG,
-  FLIR, Anime, Noir, and Snow. Entry selects the matching map style without adding
+- Cockpit's top vision switch cycles all six map looks: Normal, CRT, NVG,
+  FLIR, Anime, and Noir. Entry selects the matching map style without adding
   a duplicate carousel item. There is no empty `NONE` entry.
 
 ### Live AIS Vessels (June 2026)
@@ -5648,7 +5664,7 @@ apply to `public/` assets or built-preview serving.
 - The desktop right rail (`#right-context-rail`) owns `DISPLAY`, `CCTV`, its active parameter controls, and `GLOBAL CONTEXT` as one fixed responsive stack in that order. Its compact buttons use the same 176 px width as the left accordion and one consistent 50 px height, share the left stack's 52 px edge inset and measured top baseline across HUD variants, then constrain themselves against visible HUD/chrome rectangles and the remaining vertical corridor. `DISPLAY` is no longer draggable and legacy saved coordinates are ignored.
 - The right rail is labeled **DISPLAY** (formerly "MOVE") and groups, in order, HUD, DETECT, Bloom, Sharpen, 3D, Clean-UI (HUD + DETECT promoted to the top). Its expanded controls retain the same compact 176 px width as the right-side tabs instead of growing to the wider Context detail-card width. It starts expanded on first run and respects the user's later `v6` collapse choice. Collapses/expands with directional chevrons (`◀` collapsed, `▶` expanded).
 - Display and Context use matching 330 px expanded widths and matching compact tab dimensions. The parameter panel is part of Display's expanded content. DISPLAY may remain open beside one contextual panel; CCTV and Context are mutually exclusive. In Tactical HUD, expanding CCTV or Context hides the other contextual launcher while DISPLAY remains independently available. The most recently opened right-rail panel owns the constrained lane even when it appears later in DOM order; passive restoration and automatic disclosure do not replace that explicit owner. Minimal and other HUD layouts retain the collapsed launchers; when their active panel exceeds the measured corridor, the rail reserves sibling heights and gaps and scrolls the active panel internally.
-- At 720px and below both panel stacks (`#left-panel-stack`, `#right-context-rail`) go edge-to-edge and scroll vertically. Every hosted panel's decorative `.panel-glow` is pinned to its panel box there (`inset: 0` in `src/ui/styles/responsive.css`): on desktop the glow overhangs the panel by 18–20 px as harmless paint, but inside a scroll container that overhang is scrollable overflow on both axes and drew a horizontal scrollbar band plus a vertical scrollbar that scrolled nothing but glow whenever CCTV, Context, Data Layers or Scenes was expanded. The glow's blur is ink overflow and never scrolls, so the look is unchanged. Do not fix this by clipping the stacks: `overflow-x: clip` would also clip the Context radio popover and would not remove the vertical scrollbar. Pinned by `src/ui/panelRails.test.mjs` against every `(max-width: 720px)` block in the flattened stylesheet.
+- At 720px and below both panel stacks (`#left-panel-stack`, `#right-context-rail`) go edge-to-edge and scroll vertically. Every hosted panel's decorative `.panel-glow` is pinned to its panel box there (`inset: 0` in `src/ui/styles/responsive.css`): on desktop the glow overhangs the panel by 18–20 px as harmless paint, but inside a scroll container that overhang is scrollable overflow on both axes and drew a horizontal scrollbar band plus a vertical scrollbar that scrolled nothing but glow whenever CCTV, Context, Data Layers or Scenes was expanded. The glow's blur is ink overflow and never scrolls, so the look is unchanged. Do not fix this by clipping the stacks: `overflow-x: clip` would not remove the vertical scrollbar. Context draws no glow at all (`display: none`), so it is not part of that pin. Pinned by `src/ui/panelRails.test.mjs` against every `(max-width: 720px)` block in the flattened stylesheet.
 - `STYLE PRESETS` and `LOCATIONS` start collapsed, expand on intentional hover/click, and auto-collapse after hover leave delay.
 - Collapsed mini-status indicators show active style and active location/landmark.
 - Detection mode is user-controlled and should persist when switching styles. Since 2026-08-22 it also STARTS on — Dense @ 75% for every style on a first run, Normal included — as a `GLOBAL_POST_DEFAULTS` baseline that does NOT set `_detectionUserOverridden`. Exception (unchanged): selecting a military style (CRT/NVG/FLIR) auto-enables the same Dense preset, but only until the user manually changes detection this session (`_detectionUserOverridden` gate), after which style switches never touch it.
@@ -5717,7 +5733,7 @@ apply to `public/` assets or built-preview serving.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Scenes keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.
 - **Cockpit camera anchor:** first-person mode does not write feed-boundary corrections directly into the camera. A cockpit-only inertial anchor advances from the selected aircraft's displayed course and speed, then converges toward the authoritative delayed track with correction capped below forward motion. The displayed kinematics are derived from the same consecutive fix segment as the rendered position, with raw feed speed/course used only as fallback; a transient zero/missing feed speed therefore cannot freeze a visibly moving aircraft after layer enable or a map/cockpit handoff. Rendered altitude continues to come from that interpolated track position. Late ADS-B fixes and short render stalls can remove drift without accelerating or reversing the view. Camera placement runs before scene update/culling at a bounded 20 Hz so a moving cockpit does not force Photoreal 3D Tiles to retraverse on every display frame; textual instruments update at 10 Hz and context/layout work at 4 Hz. Every far Cockpit contact pip shares one stable Cesium texture-atlas entry and skips unused screen-projected course calculations, while only in-range 2D aircraft silhouettes pay the screen-projected rotation cost; ambient glTF collections are hidden/retained rather than synchronously destroyed at cockpit entry, and context rails lay out only on explicit content/state changes and viewport resize. The deliberate 15/30-second layer interpolation delays and per-Cesium-frame position caches remain unchanged.
-- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; its destination label rounds to whole degrees in 000–359, wrapping rounded north to 000° while the chevron continues to use the relative bearing independently of label rounding; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, `NOIR`, and `SNOW`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
+- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; its destination label rounds to whole degrees in 000–359, wrapping rounded north to 000° while the chevron continues to use the relative bearing independently of label rounding; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, and `NOIR`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
 - Cockpit wind-direction labels wrap after rounding to whole degrees, so a direction of 359.5° displays as `N · 0°` rather than `N · 360°`.
 - **Cockpit missing observations:** missing local weather observations remain unknown rather than being converted to zero or clear skies, in the briefing and in the cloud effects; a missing temperature drops the whole local weather record, including its wind and condition.
 - **Cockpit weather status:** the earlier multi-canvas atmospheric compositor remains fail-closed and is not attached to the live viewer. Cockpit clouds are a separate transparent WebGL pass with a capped 520×320 framebuffer, 24 ray steps, three FBM octaves, and a 12 FPS ceiling. It defaults off and starts only when local storage explicitly contains the persisted `WX ON` opt-in (`'1'`). When opted in, observations refresh after five minutes or 25 km of aircraft movement, fail transparent when unavailable or clear, and stop on exit or disable. `WX OFF` governs atmospheric rendering only: the briefing still fetches source-backed Natural Earth region, headline, and Open-Meteo local-information data, aborting and replacing any in-flight request when the selected aircraft changes. No weather effect runs in map mode and no synthetic fallback is shown.

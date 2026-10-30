@@ -1,6 +1,7 @@
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { syncScopeControls } from './displayControls.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import { syncSegmentedControl } from './segmentedControl.js';
 import { t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
@@ -1272,8 +1273,9 @@ export class VisualSettings {
     const superseded = () => typeof isCurrent === 'function' && !isCurrent();
     if (superseded()) return false;
 
-    if (state.style && state.style !== this.activeStyle) {
-      this.setStyle(state.style, { applyPreset: false });
+    const style = RETIRED_STYLES.includes(state.style) ? 'normal' : state.style;
+    if (style && style !== this.activeStyle) {
+      this.setStyle(style, { applyPreset: false });
     }
 
     const bloomState = state.bloom || {};

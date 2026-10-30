@@ -2,9 +2,7 @@
    A strip of icon tabs (rightRailTabs.js) hugs the rail's right edge and the
    open panel sits beside it. Panels keep their `collapsed` state; the rail's
    exclusive layout (rightPanelRail.js) hides the collapsed ones, so the strip
-   is the only launcher. The compact Radio launcher, which rides in Context's
-   header, moves to a slot under the tabs so it survives a collapsed Context.
-   Phones keep the sheet shell (mobile-shell.css).
+   is the only launcher. Phones keep the sheet shell (mobile-shell.css).
 
    The open tab and its panel are one surface. The strip builds a join element
    (.right-rail-join) under the panels: one path traces the panel with the tab
@@ -57,10 +55,8 @@
   }
 }
 
-/* The strip's column: the tablist, then a tool slot for the compact Radio
-   launcher (radioPanelPlacement.js). It keeps its natural height, so every
-   tab stays whole even past a short lane; only the strip and the slot take
-   the pointer. */
+/* The strip's column keeps its natural height, so every tab stays whole even
+   past a short lane; only the strip takes the pointer. */
 #right-rail-column {
   position: absolute;
   top: 0;
@@ -82,59 +78,6 @@
   /* Room for the open tab's bridge on the left. */
   padding-left: var(--right-rail-tabs-gap);
   pointer-events: auto;
-}
-
-#right-rail-tools {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  gap: 6px;
-  box-sizing: border-box;
-  margin-top: 6px;
-  padding-left: var(--right-rail-tabs-gap);
-  pointer-events: auto;
-}
-
-#right-rail-tools:empty {
-  display: none;
-}
-
-/* In the slot the launcher is one more icon in the column: no card, the
-   tab's corner, the accent while the radio plays. Its popover opens to the
-   left over the panel, bottom-aligned so it stays inside the lane. */
-#right-rail-tools .context-radio-dock {
-  width: var(--right-rail-tabs-width);
-}
-
-#right-rail-tools .context-radio-toggle {
-  width: var(--right-rail-tabs-width);
-  height: var(--right-rail-tabs-width);
-  border: 0;
-  border-radius: var(--right-rail-tab-radius);
-  color: var(--text-dim);
-  background: transparent;
-  box-shadow: none;
-}
-
-#right-rail-tools .context-radio-toggle .material-symbols-outlined {
-  color: inherit;
-  font-size: 19px;
-}
-
-#right-rail-tools .context-radio-toggle:hover,
-#right-rail-tools .context-radio-toggle[aria-expanded='true'] {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-#right-rail-tools .context-radio-toggle.active {
-  color: var(--accent);
-}
-
-#right-rail-tools .context-radio-mini {
-  top: auto;
-  right: calc(100% + var(--right-rail-tabs-gap) + 6px);
-  bottom: 0;
 }
 
 /* The tabs open and close the rail's panels; the headers' own collapse
@@ -312,17 +255,6 @@ body:not(.mobile-shell)
 :root[data-ui-theme='cyber'] .right-rail-tab[aria-selected='true']:hover {
   background-color: transparent;
   box-shadow: -3px 0 0 var(--cyber-red) inset;
-  color: var(--cyber-red-bright);
-}
-
-:root[data-ui-theme='cyber'] #right-rail-tools .context-radio-toggle:hover,
-:root[data-ui-theme='cyber']
-  #right-rail-tools
-  .context-radio-toggle[aria-expanded='true'] {
-  background-color: rgba(226, 235, 236, 0.08);
-}
-
-:root[data-ui-theme='cyber'] #right-rail-tools .context-radio-toggle.active {
   color: var(--cyber-red-bright);
 }
 
