@@ -963,7 +963,10 @@ export function progressStepLabel(step, label) {
     : step
       ? spokenLabel(step, 24)
       : t('Working');
-  return label ? `${base}: ${spokenLabel(label, 32)}` : base;
+  // The join is a catalog string so each language spaces its colon.
+  return label
+    ? t('{name}: {state}', { name: base, state: spokenLabel(label, 32) })
+    : base;
 }
 
 /**

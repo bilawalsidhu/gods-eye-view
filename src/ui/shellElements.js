@@ -61,36 +61,6 @@ export function readShellElements(document = globalThis.document) {
     _cctvPanel: document.getElementById('cctv-panel'),
     _streetLevelPanel: document.getElementById('street-level-panel'),
     _radioPanel: document.getElementById('radio-panel'),
-    _contextRadioDock: document.getElementById('context-radio-dock'),
-    _contextRadioToggleBtn: document.getElementById('context-radio-toggle-btn'),
-    _contextRadioMini: document.getElementById('context-radio-mini'),
-    _contextRadioMiniEnableBtn: document.getElementById(
-      'context-radio-mini-enable-btn',
-    ),
-    _contextRadioDetailsBtn: document.getElementById(
-      'context-radio-details-btn',
-    ),
-    _contextRadioMiniCloseBtn: document.getElementById(
-      'context-radio-mini-close-btn',
-    ),
-    _contextRadioMiniStation: document.getElementById(
-      'context-radio-mini-station',
-    ),
-    _contextRadioMiniPrevBtn: document.getElementById(
-      'context-radio-mini-prev-btn',
-    ),
-    _contextRadioMiniPlayBtn: document.getElementById(
-      'context-radio-mini-play-btn',
-    ),
-    _contextRadioMiniNextBtn: document.getElementById(
-      'context-radio-mini-next-btn',
-    ),
-    _contextRadioMiniVolume: document.getElementById(
-      'context-radio-mini-volume',
-    ),
-    _contextRadioMiniVolumeValue: document.getElementById(
-      'context-radio-mini-volume-value',
-    ),
     _cockpitUtilityControls: document.getElementById(
       'cockpit-utility-controls',
     ),
