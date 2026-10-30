@@ -237,6 +237,12 @@ export function createUsgsWaterStore({
   log = console,
 } = {}) {
   const requestTimes = [];
+  /** Log a failure with the API key (if any) masked out of its message. */
+  function warn(label, error) {
+    const key = usgsWaterApiKey(env);
+    const message = String(error?.message || error);
+    log.warn?.(label, key ? message.split(key).join('[redacted]') : message);
+  }
   const names = new Map();
   let namesLoaded = false;
   let namesDirty = false;
@@ -348,7 +354,7 @@ export function createUsgsWaterStore({
       );
       await fsp.rename(tmp, cacheFile);
     } catch (error) {
-      log.warn?.('[USGS water] name cache not saved:', error?.message || error);
+      warn('[USGS water] name cache not saved:', error);
     }
   }
 
@@ -380,10 +386,7 @@ export function createUsgsWaterStore({
           signal,
         );
       } catch (error) {
-        log.warn?.(
-          '[USGS water] site name lookup failed:',
-          error?.message || error,
-        );
+        warn('[USGS water] site name lookup failed:', error);
         return;
       }
       for (const f of body?.features || []) {
@@ -408,10 +411,7 @@ export function createUsgsWaterStore({
         fresh[cls] = { spec, items: await fetchClassItems(spec, signal) };
       } catch (error) {
         failed.push(cls);
-        log.warn?.(
-          `[USGS water] ${cls} refresh failed:`,
-          error?.message || error,
-        );
+        warn(`[USGS water] ${cls} refresh failed:`, error);
       }
     }
     if (failed.length === Object.keys(USGS_WATER_CLASSES).length && !built)
@@ -453,7 +453,7 @@ export function createUsgsWaterStore({
       inflight = refresh()
         .catch((error) => {
           lastFailureAt = now();
-          log.warn?.('[USGS water] refresh failed:', error?.message || error);
+          warn('[USGS water] refresh failed:', error);
           return built;
         })
         .finally(() => {
@@ -488,9 +488,16 @@ export function usgsWaterProxy(options = {}) {
         'application/json',
         JSON.stringify({ error: 'method_not_allowed' }),
       );
-    const name = decodeURIComponent(
-      String(req.url || '').split('?')[0],
-    ).replace(/^\/+/, '');
+    let name;
+    try {
+      name = decodeURIComponent(String(req.url || '').split('?')[0]).replace(
+        /^\/+/,
+        '',
+      );
+    } catch {
+      // A malformed percent-escape is just an unknown file.
+      name = '';
+    }
     if (
       !/^(manifest\.json|(stream|lake|spring)\.geojsonl|stream\/\d{1,3}_\d{1,3}\.geojsonl)$/.test(
         name,
