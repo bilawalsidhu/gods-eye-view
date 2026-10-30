@@ -43,6 +43,10 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'air-quality': msg('Air quality'),
   directions: msg('Directions'),
   'alpr-cameras': msg('ALPR Cameras'),
+  // USGS water layers (src/layers/usgsWater/).
+  'local-usgs-water': msg('USGS Rivers & Streams'),
+  'local-usgs-lakes': msg('USGS Lakes & Reservoirs'),
+  'local-usgs-springs': msg('USGS Springs'),
 });
 
 /** The layer panel's own English names, where they differ from the module's. */

@@ -148,7 +148,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'usgs',
-    html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
+    html: 'Earthquakes and water levels: Data courtesy of the U.S. Geological Survey',
   },
   {
     key: 'nasa-gibs',

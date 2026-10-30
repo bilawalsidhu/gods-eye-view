@@ -1804,6 +1804,41 @@ does not claim the image is current. The `current_view` field distinguishes came
 provenance from historical fallback imagery; it does not measure capture time or
 image freshness.
 
+## USGS water levels
+
+Three layers in the Layers panel's **Water** group show the newest USGS gauge
+readings nationwide: **USGS Rivers & Streams** (`local-usgs-water`, share token
+`6`), **USGS Lakes & Reservoirs** (`local-usgs-lakes`, `7`) and **USGS Springs**
+(`local-usgs-springs`, `8`).
+
+- **Server** (`server/providers/usgsWater.js`, `/api/usgs-water/`): once an
+  hour, on demand and single flight, it asks the USGS Water Data OGC API
+  `latest-continuous` collection for each parameter of each site type, one
+  site type per request (multi-value `site_type_code` queries return
+  incomplete subsets): streams 00065/00060, lakes 00065/00062/62614/62615,
+  springs 00065/00060, readings from the last 7 days. Readings merge into one
+  feature per gauge, most useful reading first. When the data is an hour old a
+  refresh starts in the background and the old files keep being served; a
+  failed refresh is not retried for 5 minutes, and a failed site type keeps its
+  previous features.
+- **Names** come from `monitoring-locations` in batches of 150 ids, only with
+  what the hour's request budget leaves, and are kept for 7 days in
+  `.gev-cache/usgs-water-names.json`. Until a name arrives the gauge is
+  labelled with its id.
+- **Budget**: keyless USGS allows 50 requests per IP per hour, so the server
+  stays under 40; the optional `USGS_WATER_API_KEY` (free, api.data.gov) raises
+  USGS's limit to 1000 and the server's to 800. The key is sent only as the
+  `X-Api-Key` header and never reaches the browser.
+- **Files**: `manifest.json`, `stream.geojsonl`, `lake.geojsonl`,
+  `spring.geojsonl` and 4-degree stream tiles `stream/<x>_<y>.geojsonl`
+  (about 10,100 stream gauges in 102 tiles, 720 lakes and 45 springs on
+  2026-10-21).
+- **Browser** (`src/layers/usgsWater/`): streams load only the tiles that
+  intersect the view and reload when the camera settles; wider than 24 degrees
+  (or more than 40 tiles) the layer loads nothing and asks to zoom in. Lakes and
+  springs load whole and re-fetch on every enable. Cards show up to two
+  readings and the newest observation time.
+
 ## CCTV missing numeric fields
 
 CCTV numbers are read as missing when they are absent, null, blank or boolean,

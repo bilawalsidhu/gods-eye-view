@@ -406,6 +406,32 @@ const layers = [
     context: false,
     noQuery: 'cable records are not loaded for queries',
   },
+  // --- USGS water layers (src/layers/usgsWater/) ---
+  {
+    id: 'local-usgs-water',
+    aliases: [
+      'water levels',
+      'usgs water',
+      'usgs water levels',
+      'rivers',
+      'streams',
+      'river gauges',
+    ],
+    context: false,
+    noQuery: 'USGS gauge readings are shown on cards, not loaded for queries',
+  },
+  {
+    id: 'local-usgs-lakes',
+    aliases: ['lakes', 'reservoirs', 'lakes and reservoirs'],
+    context: false,
+    noQuery: 'USGS gauge readings are shown on cards, not loaded for queries',
+  },
+  {
+    id: 'local-usgs-springs',
+    aliases: ['springs'],
+    context: false,
+    noQuery: 'USGS gauge readings are shown on cards, not loaded for queries',
+  },
   {
     // Global Context owns this layer; voice reaches it through
     // set_context_mode, never a bare toggle.
