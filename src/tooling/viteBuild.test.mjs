@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -5,7 +6,11 @@ import { rm, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import path from 'node:path';
 import { build, createServer, preview } from 'vite';
-import { BROWSER_CSP, createBrowserViteConfig } from '../../build/vite.js';
+import {
+  BROWSER_CSP,
+  createBrowserViteConfig,
+  escapeFsDenyPath,
+} from '../../build/vite.js';
 import standaloneConfig, * as compatibility from '../../vite.config.js';
 import * as providers from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
@@ -30,6 +35,20 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   assert.deepEqual(config.server.allowedHosts, ['localhost', '127.0.0.1']);
   assert.ok(config.server.fs.deny.includes('**/ENVIRONMENT'));
   assert.ok(config.server.fs.deny.includes('.env.*'));
+  assert.ok(config.server.fs.deny.includes('**/.gev-logs/**'));
+  assert.ok(config.server.fs.deny.includes('**/.gev-cache/**'));
+  const root = fileURLToPath(new URL('../../', import.meta.url))
+    .replace(/\\/g, '/')
+    .replace(/\/$/, '');
+  assert.deepEqual(
+    config.server.fs.deny.filter((pattern) => pattern.endsWith('/dist/**')),
+    [`${escapeFsDenyPath(root)}/dist/**`],
+    'only project build output is denied, not dependency dist directories',
+  );
+  assert.equal(
+    escapeFsDenyPath('C:/Users/a/project (1) [test]{copy}'),
+    'C:/Users/a/project \\(1\\) \\[test\\]\\{copy\\}',
+  );
   assert.equal(config.server.headers['X-Frame-Options'], 'DENY');
   assert.equal(config.server.headers['X-Content-Type-Options'], 'nosniff');
   const csp = config.server.headers['Content-Security-Policy'];
@@ -98,7 +117,7 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
   const standaloneProviders = config.plugins
-    .slice(4, -5)
+    .slice(4, -6)
     .map((plugin) => plugin.name);
   assert.equal(
     standaloneProviders.filter((name) => name === 'gemini-live-proxy').length,
@@ -112,9 +131,10 @@ test('root config retains existing named exports and standalone provider order',
     standaloneProviders.filter((name) => name !== 'gemini-live-proxy'),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
-  assert.equal(config.plugins.at(-6).name, 'gev-key-setup');
-  // The local MCP route follows every provider and precedes the API fallback.
-  assert.equal(config.plugins.at(-5).name, 'local-mcp');
+  assert.equal(config.plugins.at(-7).name, 'gev-key-setup');
+  // Token fallback follows real providers and local MCP before the API 404.
+  assert.equal(config.plugins.at(-6).name, 'local-mcp');
+  assert.equal(config.plugins.at(-5).name, 'google-token-unavailable');
   assert.equal(config.plugins.at(-4).name, 'api-not-found');
   // Config-only, so it sits after the provider slice rather than in it.
   assert.equal(config.plugins.at(-3).name, 'gev-unwatched-runtime-dirs');
