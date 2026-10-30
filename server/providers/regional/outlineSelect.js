@@ -547,8 +547,6 @@ export function selectOutlineResult(rows, { kind, query }) {
       skipped.push(`${label}: too large`);
       continue;
     }
-    const lat = Number(row.lat);
-    const lon = Number(row.lon);
     return {
       outline: {
         name: String(row.name || '').slice(0, 160) || null,
@@ -559,7 +557,6 @@ export function selectOutlineResult(rows, { kind, query }) {
           row.osm_type && row.osm_id != null
             ? `${row.osm_type}/${row.osm_id}`
             : null,
-        center: finiteLat(lat) && finiteLon(lon) ? { lat, lon } : null,
         polygons,
       },
       skipped,

@@ -262,7 +262,6 @@ export function createOutlineRungs({
     if (!containsAnchor(outline.polygons, ctx.lat, ctx.lon)) return null;
     const polygons = anchorPartFirst(outline.polygons, [
       { lat: ctx.lat, lon: ctx.lon },
-      outline.center || {},
     ]);
     const ring = polygons[0][0];
     // A grounds ask answered by a building-sized polygon found the named
