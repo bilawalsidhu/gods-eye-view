@@ -1235,10 +1235,15 @@ test('the outline route reports disabled and capped as permanent, busy as retrya
   assert.equal(off.status, 503);
   assert.equal(off.body.code, 'NOMINATIM_DISABLED');
   assert.equal(off.body.retryable, false);
+  // The capability probe answers 200, so a client can skip the refused lookup.
+  const probe = await disabled('/status');
+  assert.equal(probe.status, 200);
+  assert.deepEqual(probe.body, { configured: false });
 
   const capped = mount({
     gate: publicGate(t, { settings: { ...PUBLIC, dailyCap: 0 } }),
   });
+  assert.deepEqual((await capped('/status')).body, { configured: true });
   const cap = await capped('/outline?q=Paris&kind=city');
   assert.equal(cap.status, 429);
   assert.equal(cap.body.retryable, false);

@@ -1,4 +1,5 @@
 import { readResponseJsonCapped } from './httpBody.js';
+import { createNominatimStatus } from './nominatimStatus.js';
 
 /**
  * Browser client for the server's guarded outline route. The server owns the
@@ -61,6 +62,11 @@ export function createNominatimOutlineClient({
   fetchImpl = (...args) => globalThis.fetch(...args),
   endpoint = DEFAULT_ENDPOINT,
   maxRemembered = 64,
+  // The app's own route can say up front that Nominatim is not configured;
+  // another endpoint is simply asked.
+  configured = endpoint === DEFAULT_ENDPOINT
+    ? createNominatimStatus({ fetchImpl })
+    : null,
 } = {}) {
   let unavailable = null;
   const remembered = new Map();
@@ -90,6 +96,15 @@ export function createNominatimOutlineClient({
     if (remembered.has(key)) return remembered.get(key);
     // A cancelled ask spends nothing.
     signal?.throwIfAborted();
+    if (configured && (await configured()) === false) {
+      signal?.throwIfAborted();
+      unavailable = {
+        unavailable: true,
+        retryable: false,
+        code: 'NOMINATIM_DISABLED',
+      };
+      return unavailable;
+    }
 
     const controller = new AbortController();
     const abort = () => controller.abort();

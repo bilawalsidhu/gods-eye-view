@@ -30,3 +30,26 @@ test('place search follows the Photon setting', async () => {
   const off = await hosts({ photon: null });
   assert.ok(!off.some((host) => host.includes('photon')), off.join(','));
 });
+
+test('the last-resort route is skipped when the server reports Nominatim unconfigured', async () => {
+  const run = async (configured) => {
+    const asked = [];
+    const search = createDefaultPlaceSearch({
+      endpoints: { photon: null },
+      fetchImpl: async (url) => {
+        const path = new URL(String(url), 'http://local.test').pathname;
+        asked.push(path);
+        if (path === '/api/geocode/status')
+          return Response.json({ configured });
+        return Response.json({ status: 'ZERO_RESULTS', results: [] });
+      },
+    });
+    await search.geocode(`nowhere-nominatim-${configured}`);
+    return asked;
+  };
+  const off = await run(false);
+  assert.ok(off.includes('/api/geocode/status'));
+  assert.ok(!off.includes('/api/geocode'), off.join(','));
+  const on = await run(true);
+  assert.ok(on.includes('/api/geocode'), on.join(','));
+});

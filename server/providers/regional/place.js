@@ -474,6 +474,12 @@ export function geocodeProxy({
   function install(middlewares) {
     middlewares.use('/api/geocode', async (req, res, next) => {
       const url = new URL(req.url || '', 'http://localhost');
+      // Capability probe, like /api/overpass/status: clients skip lookups a
+      // server without a Nominatim endpoint could only refuse.
+      if (url.pathname === '/status' && req.method === 'GET')
+        return sendJson(res, 200, {
+          configured: Boolean(currentGate().settings()?.endpoint),
+        });
       if (url.pathname === '/outline') return handleOutline(req, res, url);
       if (url.pathname === '/' || url.pathname === '')
         return handleSearch(req, res, url);

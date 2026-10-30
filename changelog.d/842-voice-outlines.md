@@ -27,3 +27,6 @@
   First sources whose licence is only listed as CC BY or CC0 "equivalent",
   including the Ottawa, Saskatoon, Gatineau and Madrid records
   (Manjunath, #842).
+- Skip Nominatim place and outline lookups when the server reports that no
+  Nominatim endpoint is configured, so a default install sends no request it
+  would refuse (Manjunath, #842).

@@ -11,19 +11,29 @@ const ring = [
   [2.3, 48.8],
 ];
 
-function client(respond) {
+const reply = (status, body, headers = {}) =>
+  new Response(JSON.stringify(body), { status, headers });
+
+// `calls` counts outline requests only; the capability probe is answered by
+// `status` and defaults to an older server without it (capability unknown).
+function client(
+  respond,
+  { status = () => reply(404, { error: 'Not Found' }) } = {},
+) {
   const calls = [];
+  const probes = [];
   const lookup = createNominatimOutlineClient({
     fetchImpl: async (url) => {
+      if (String(url) === '/api/geocode/status') {
+        probes.push(String(url));
+        return status(probes.length);
+      }
       calls.push(String(url));
       return respond(calls.length);
     },
   }).lookup;
-  return { calls, lookup };
+  return { calls, probes, lookup };
 }
-
-const reply = (status, body, headers = {}) =>
-  new Response(JSON.stringify(body), { status, headers });
 
 test('an accepted outline comes back with its polygons and is remembered', async () => {
   const hole = ring.map(([lon, lat]) => [
@@ -138,4 +148,34 @@ test('a cancelled ask sends nothing', async () => {
     { name: 'AbortError' },
   );
   assert.equal(calls.length, 0);
+});
+
+test('a server that reports Nominatim unconfigured is never asked for outlines', async () => {
+  const { calls, probes, lookup } = client(
+    () => {
+      throw new Error('the outline route must not be asked');
+    },
+    { status: () => reply(200, { configured: false }) },
+  );
+  const first = await lookup({ query: 'Austin High School', kind: 'landmark' });
+  assert.deepEqual(first, {
+    unavailable: true,
+    retryable: false,
+    code: 'NOMINATIM_DISABLED',
+  });
+  const second = await lookup({ query: 'Paris', kind: 'city' });
+  assert.equal(second.unavailable, true);
+  assert.equal(calls.length, 0, 'no outline request at all');
+  assert.equal(probes.length, 1, 'one capability probe per session');
+});
+
+test('a configured server is asked as usual after one probe', async () => {
+  const { calls, probes, lookup } = client(
+    () => reply(200, { status: 'ZERO_RESULTS', outline: null }),
+    { status: () => reply(200, { configured: true }) },
+  );
+  assert.equal(await lookup({ query: 'Nowhere', kind: 'landmark' }), null);
+  assert.equal(await lookup({ query: 'Elsewhere', kind: 'landmark' }), null);
+  assert.equal(calls.length, 2);
+  assert.equal(probes.length, 1);
 });

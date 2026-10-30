@@ -5298,6 +5298,11 @@ Google first when configured, Photon/OpenStreetMap as fallback (including Google
 transport failures or declined requests), and the local `/api/geocode` route
 over Nominatim as a last resort when neither answers and an operator explicitly
 configures `NOMINATIM_URL`. Unset, empty and invalid values disable Nominatim.
+`GET /api/geocode/status` answers `{configured}`; the browser asks once per
+page, and when Nominatim is not configured neither the last-resort search nor
+the voice outline client asks `/api/geocode`, so a default install sends no
+lookup it would refuse. A missing or failed probe leaves the capability unknown
+and lookups proceed as before.
 Explicit public-service configuration retains an identifying `User-Agent` and `Referer`, at
 least 1.1 seconds between public search and outline starts, a shared durable
 per-install daily allowance and pause state that fail closed when unusable.
