@@ -762,7 +762,7 @@
   "Working…": "Trabajando…",
   "Could not open that mission{detail}. Retry or explore manually.": "No se pudo abrir esa misión{detail}. Reintenta o explora manualmente.",
   "This browser is blocking storage, so that could not be saved.": "Este navegador bloquea el almacenamiento, así que no se pudo guardar.",
-  "Live earthquakes and active fires, from USGS and NASA": "Terremotos en vivo e incendios activos, de USGS y NASA",
+  "Live earthquakes, active fires, and wildfire perimeters": "Terremotos en tiempo real, incendios activos y perímetros de incendios forestales",
   "ENVIRONMENTAL": "MEDIO AMBIENTE",
   "EARTH WATCH": "VIGILANCIA TERRESTRE",
   "ACTIVE EVENTS": "EVENTOS ACTIVOS",

@@ -244,19 +244,19 @@ const MUTATIONS = [
   {
     defect: 'ENVIRONMENTAL drops the keyless earthquakes that carry it without a key',
     file: 'module',
-    from: "layerIds: Object.freeze(['earthquakes', 'local-firms']),",
+    from: "layerIds: Object.freeze(['earthquakes', 'local-firms', 'fire-perimeters']),",
     to: "layerIds: Object.freeze(['local-firms']),",
   },
   {
     defect: 'FIRMS is dropped again from the tile whose subcopy promises it',
     file: 'module',
-    from: "layerIds: Object.freeze(['earthquakes', 'local-firms']),",
+    from: "layerIds: Object.freeze(['earthquakes', 'local-firms', 'fire-perimeters']),",
     to: "layerIds: Object.freeze(['earthquakes']),",
   },
   {
     defect: 'the tile stops promising the fires it actually turns on',
     file: 'html',
-    from: '<small>Live earthquakes and active fires, from USGS and NASA</small>',
+    from: '<small>Live earthquakes, active fires, and wildfire perimeters</small>',
     to: '<small>Live earthquakes worldwide, straight from USGS</small>',
   },
   {
