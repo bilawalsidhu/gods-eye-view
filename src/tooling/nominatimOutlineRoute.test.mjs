@@ -884,6 +884,18 @@ test('a result whose name does not answer the ask is passed over', () => {
     selectOutlineResult([city('City of York', { short_name: 'York' })], york)
       .outline,
   );
+  // A name tag holding several names answers for each of them, not the joint text.
+  assert.ok(
+    selectOutlineResult([city('Eboracum', { alt_name: 'Jorvik;York' })], york)
+      .outline,
+  );
+  assert.equal(
+    selectOutlineResult(
+      [city('Eboracum', { alt_name: 'Jorvik;New York' })],
+      york,
+    ).outline,
+    null,
+  );
   assert.equal(
     selectOutlineResult([city('新東京')], { kind: 'city', query: '東京' })
       .outline,

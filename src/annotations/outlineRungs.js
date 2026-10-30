@@ -5,6 +5,7 @@ import {
 } from '../sources/featureGeometry.js';
 import { isUnavailableCapability } from '../sources/capability.js';
 import { polygonsContain } from '../data/adminBoundaries.js';
+import { lonLatToTile } from '../data/tomtomTiles.js';
 import {
   BUILDING_MAX_DISTANCE_M,
   OUTLINE_TILE_ZOOM,
@@ -173,13 +174,27 @@ export function createOutlineRungs({
   tiles = sharedOutlineTiles(),
   nominatim = createNominatimOutlineClient(),
 } = {}) {
-  /** Decoded tiles around a point, or null when the tiles cannot be read. */
-  async function tilesAround(lat, lon, radiusM, signal) {
+  /**
+   * Decoded tiles around a point, or null when the tiles cannot be read. With
+   * `needAnchor`, a partial load that lost the point's own tile is null too: a
+   * neighbouring tile alone cannot show what is at the point, so a nearby
+   * building or area would stand in for it.
+   */
+  async function tilesAround(lat, lon, radiusM, signal, needAnchor = false) {
     try {
-      const { tiles: decoded } = await tiles.fetchBounds(
-        boxAround(lat, lon, radiusM),
-        { zoom: OUTLINE_TILE_ZOOM, signal },
-      );
+      const {
+        tiles: decoded,
+        partial,
+        loadedTiles,
+      } = await tiles.fetchBounds(boxAround(lat, lon, radiusM), {
+        zoom: OUTLINE_TILE_ZOOM,
+        signal,
+      });
+      if (needAnchor && partial && Array.isArray(loadedTiles)) {
+        const anchor = lonLatToTile(lon, lat, OUTLINE_TILE_ZOOM);
+        if (!loadedTiles.some((t) => t.x === anchor.x && t.y === anchor.y))
+          return null;
+      }
       return decoded;
     } catch (error) {
       signal?.throwIfAborted();
@@ -212,6 +227,7 @@ export function createOutlineRungs({
       ctx.lon,
       BUILDING_MAX_DISTANCE_M * 2,
       ctx.signal,
+      true,
     );
     const building = decoded && buildingFromTiles(decoded, ctx);
     if (!building || (requireContainment && building.contains !== true))
@@ -228,7 +244,7 @@ export function createOutlineRungs({
   /** The open area enclosing `seed` (the named feature) or the anchor. */
   async function groundsRung(ctx, seed = null) {
     const at = seed || { lat: ctx.lat, lon: ctx.lon };
-    const decoded = await tilesAround(at.lat, at.lon, 600, ctx.signal);
+    const decoded = await tilesAround(at.lat, at.lon, 600, ctx.signal, true);
     const area =
       decoded &&
       enclosingAreaFromTiles(decoded, {

@@ -340,6 +340,60 @@ test('named building tile fallbacks require the anchor in filled geometry', asyn
   assert.equal(pointed.outlineCredit, 'tiles');
 });
 
+test('a partial tile load that lost the point tile lets nothing stand in', async () => {
+  // The point (z14 tile 8192/8192) is ~28 m from a building in the tile that
+  // did load; without the point's own tile, that neighbour must not answer.
+  const anchor = { lat: 0, lon: 0.00035 };
+  const school = square(CAPITOL.lat, CAPITOL.lon, 0.002);
+  const load = (loadedTiles) => ({
+    fetchBounds: async () => ({
+      tiles: [
+        {
+          buildings: [{ rings: [square(0, 0, 0.0001)], heightM: null }],
+          areas: [
+            { name: null, rings: [school], class: 'school', clipped: false },
+          ],
+        },
+      ],
+      loadedTiles,
+      partial: true,
+    }),
+  });
+  const pointAt = (tiles) =>
+    createOutlineRungs({ tiles, nominatim: fakeNominatim(null) }).resolve(
+      ctx({
+        ...anchor,
+        view: anchor,
+        scope: 'building',
+        target: 'this building',
+        fromName: false,
+      }),
+      ladder(UNAVAILABLE),
+    );
+  assert.equal(await pointAt(load([{ z: 14, x: 8191, y: 8192 }])), UNAVAILABLE);
+  const kept = await pointAt(load([{ z: 14, x: 8192, y: 8192 }]));
+  assert.equal(kept.footprintKind, 'building', 'the point tile loaded');
+
+  const grounds = (loaded) =>
+    createOutlineRungs({
+      tiles: load(loaded),
+      nominatim: fakeNominatim(null),
+    }).resolve(
+      ctx({
+        scope: 'building',
+        target: 'Lincoln High School grounds',
+        groundsLike: true,
+      }),
+      ladder(UNAVAILABLE),
+    );
+  // The Capitol fixture point lies in tile 3743/6745.
+  assert.equal(await grounds([{ z: 14, x: 3744, y: 6745 }]), UNAVAILABLE);
+  assert.equal(
+    (await grounds([{ z: 14, x: 3743, y: 6745 }])).footprintKind,
+    'area',
+  );
+});
+
 test('a city with no configured Overpass is outlined by Nominatim', async () => {
   const ring = square(43.6, 1.44, 0.05);
   const nominatim = fakeNominatim({ polygons: [[ring]], class: 'boundary' });

@@ -500,8 +500,8 @@ test('the phone shell keeps the required attribution visible', () => {
     /display:\s*none|visibility:\s*hidden|opacity:\s*0/,
   );
   // A long credit line (map plus outline credits) wraps inside the screen:
-  // the box needs a real width for Cesium's absolutely positioned credit
-  // block, set before the 0.8 scale, so it is divided by it.
+  // it wraps, and the box gets a real width, set before the 0.8 scale, so it
+  // is divided by it.
   assert.match(idleCredit, /white-space: normal;/);
   assert.match(
     idleCredit,

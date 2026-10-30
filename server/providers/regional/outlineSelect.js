@@ -276,8 +276,10 @@ function outlineNameMatches(row, query, kind) {
   };
   add(row?.name);
   add(String(row?.display_name || '').split(',')[0]);
+  // OSM name tags may hold several names separated by ";" ("York;Eboracum").
   if (row?.namedetails && typeof row.namedetails === 'object')
-    for (const value of Object.values(row.namedetails)) add(value);
+    for (const value of Object.values(row.namedetails))
+      for (const part of String(value ?? '').split(';')) add(part);
   if (kind === 'city' || kind === 'admin' || kind === 'neighborhood') {
     const head = normalizePlaceName(String(query ?? '').split(',')[0]);
     return Boolean(head) && names.has(head);

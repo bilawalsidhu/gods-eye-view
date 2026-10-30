@@ -723,6 +723,10 @@ test('a building queued behind others gets its full budget on a slow device', as
   installBrowserGlobals(t);
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => t.mock.timers.reset());
+  // The renderers' per-frame budget checks read performance.now(); it follows
+  // the same mocked clock as the timers.
+  let now = 0;
+  t.mock.method(globalThis.performance, 'now', () => now);
   const { viewer, frames } = fakeViewer(-99, 31);
   const renderer = createHybridAnnotationRenderer(viewer);
   viewer.scene.clampToHeight = (position) => position;
@@ -732,17 +736,22 @@ test('a building queued behind others gets its full budget on a slow device', as
       pendingVisible: false,
       workTrace: traces[index],
     }));
-  // Eight probes per building at one probe per frame; 1.5 s passes while
-  // each of the first two buildings samples, so the third waits 3 s in line.
+  // Eight probes per building at one probe per frame, at about 5 fps: each
+  // building samples for 1.5 s, so the third waits 3 s in line. Pending
+  // promise work runs between frames, as it does in a browser.
   for (let building = 0; building < 3; building += 1) {
-    for (let frame = 0; frame < 8; frame += 1) frames.emit();
-    if (building < 2) t.mock.timers.tick(1500);
+    for (let frame = 0; frame < 8; frame += 1) {
+      now += 187.5;
+      t.mock.timers.tick(187.5);
+      frames.emit();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
   }
   const results = await Promise.all(completions);
   assert.deepEqual(results.map((result) => result.status), ['installed', 'installed', 'installed']);
   assert.deepEqual(traces.map((trace) => trace.samplerStatus), ['installed', 'installed', 'installed']);
+  assert.ok(traces[2].samplerHeadAt - traces[2].samplerStart >= 2000, 'the third waited longer than one budget');
   assert.ok(traces[2].samplerHeadAt >= traces[1].samplerHeadAt);
-  assert.ok(traces[2].samplerHeadAt >= traces[2].samplerStart);
 });
 
 test('building cancellation, queued deadline and destroy prevent saved callbacks from committing', async (t) => {
