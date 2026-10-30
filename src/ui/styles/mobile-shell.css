@@ -378,7 +378,15 @@ body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   right: auto;
   bottom: calc(var(--mobile-tab-space) + 106px) !important;
   left: 10px;
-  max-width: calc(100vw - 20px);
+  /* With the base rule's nowrap the credits run off the right edge, and a
+     max-width alone wrapped them into a narrow column: the line needs wrapping
+     and a real width. The width applies before the 0.8 scale, keeping the
+     scaled line 10px from the right edge, so every credit and "Data
+     attribution" stay on screen. Like the offset above, it must beat the
+     dock's width: auto !important. */
+  width: calc((100vw - 20px) / 0.8) !important;
+  max-width: none !important;
+  white-space: normal;
   transform-origin: left bottom;
   scale: 0.8;
 }

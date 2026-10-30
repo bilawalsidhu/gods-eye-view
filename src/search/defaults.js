@@ -2,6 +2,7 @@ import { createNominatimProvider } from './nominatim.js';
 import { createGeospatialServices } from './geospatial.js';
 import { createHttpGeospatialProvider } from './http.js';
 import { createPlaceSearch } from './placeSearch.js';
+import { createNominatimStatus } from '../sources/nominatimStatus.js';
 import { createGoogleGeocoder } from './google.js';
 import { createPhotonGeocoder } from '../keylessGeocoder.js';
 import { createCoordinateGeocoder } from './coordinateGeocoder.js';
@@ -28,6 +29,9 @@ export function createDefaultPlaceSearch({
 } = {}) {
   if (geocoding && geocoding.provider !== 'nominatim')
     throw new TypeError('Unsupported geocoding provider');
+  const nominatimConfigured = endpoints.nominatim
+    ? null
+    : createNominatimStatus({ fetchImpl });
   const selected = geocoding
     ? createNominatimProvider({ ...geocoding, fetchImpl })
     : null;
@@ -61,12 +65,27 @@ export function createDefaultPlaceSearch({
                 );
               },
             }),
-            createPhotonGeocoder({ fetchImpl, endpoint: endpoints.photon }),
+            // `endpoints.photon === null` is the operator's "no Photon".
+            ...(endpoints.photon === null
+              ? []
+              : [
+                  createPhotonGeocoder({
+                    fetchImpl,
+                    endpoint: endpoints.photon ?? undefined,
+                  }),
+                ]),
             // Last resort: the local Nominatim route, which answers with no key when
             // neither of the two above did. It speaks the same result shape, so it
             // rides the existing Google adapter rather than needing its own.
             createGoogleGeocoder({
-              request(query, { bias, signal }) {
+              async request(query, { bias, signal }) {
+                // The app's own route says up front when Nominatim is off.
+                const capability = nominatimConfigured
+                  ? await nominatimConfigured()
+                  : null;
+                // A search cancelled during the probe starts no request.
+                signal?.throwIfAborted();
+                if (capability === false) return null;
                 const params = new URLSearchParams({ q: query });
                 if (bias) params.set('bounds', bias);
                 return fetchImpl(

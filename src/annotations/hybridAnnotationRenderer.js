@@ -1,3 +1,4 @@
+import { recordWorkSlice } from '../sources/phaseTiming.js';
 import { createWorldAnnotationRenderer } from './worldAnnotationRenderer.js';
 import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
 
@@ -24,7 +25,7 @@ export function createHybridAnnotationRenderer(viewer) {
   // anno.id -> { worldProxy?, screenProxy? } — proxies own the sub-renderer state.
   const routed = new Map();
 
-  function add(anno) {
+  function add(anno, options = {}) {
     const entry = {};
     // Route the entry FIRST, then fill it in. A sub-renderer throw (WebGL loss
     // mid-add) otherwise stranded whatever the earlier sub-renderer had already
@@ -36,7 +37,20 @@ export function createHybridAnnotationRenderer(viewer) {
     if (anno.type === 'area' && anno.ring && anno.ring.length >= 3) {
       // Drape the footprint in world space, but without its own label...
       entry.worldProxy = liveProxy(anno, { label: null });
-      world.add(entry.worldProxy);
+      const completion = world.add(
+        entry.worldProxy,
+        worldOptions(anno, entry, options),
+      );
+      if (completion?.then) {
+        if (options.pendingVisible !== false) {
+          entry.screenProxy = liveProxy(anno, {
+            ring: null,
+            pendingOutline: true,
+          });
+          screen.add(entry.screenProxy);
+        }
+        return finishBuilding(anno, entry, completion, options);
+      }
       // ...and place the caption as a screen-space callout at the centroid.
       if (anno.label) {
         entry.screenProxy = liveProxy(anno, { type: 'label', ring: null });
@@ -71,27 +85,45 @@ export function createHybridAnnotationRenderer(viewer) {
    * World geometry is new, but the reticle's SVG group is converted in place to
    * the centroid callout so there is no overlapping fade-out/fade-in pair.
    */
-  function update(anno) {
+  function update(anno, options = {}) {
     const entry = routed.get(anno.id);
     if (!entry) {
-      add(anno);
-      return;
+      return add(anno, options);
     }
     if (anno.type !== 'area' || !anno.ring || anno.ring.length < 3) {
-      if (anno.outlineUnavailable && entry.screenProxy)
+      if (anno.outlineUnavailable && entry.screenProxy) {
+        entry.screenProxy = liveProxy(anno, { ring: null });
         screen.update(entry.screenProxy);
+      }
       return;
     }
 
     if (!entry.worldProxy) {
       entry.worldProxy = liveProxy(anno, { label: null });
-      world.add(entry.worldProxy);
+      const completion = world.add(
+        entry.worldProxy,
+        worldOptions(anno, entry, options),
+      );
+      if (completion?.then) {
+        if (entry.screenProxy) {
+          const pending = liveProxy(anno, { ring: null, pendingOutline: true });
+          screen.update(pending);
+          entry.screenProxy = pending;
+        }
+        return finishBuilding(anno, entry, completion, options);
+      }
     }
 
+    updateCaption(anno, entry);
+  }
+
+  function updateCaption(anno, entry) {
     const screenProxy = liveProxy(anno, { type: 'label', ring: null });
     if (entry.screenProxy) {
       screen.update(screenProxy, { empty: !anno.label });
     } else if (anno.label) {
+      // Publish before add: a partially created caption must remain removable.
+      entry.screenProxy = screenProxy;
       screen.add(screenProxy);
     }
     entry.screenProxy = entry.screenProxy
@@ -99,6 +131,104 @@ export function createHybridAnnotationRenderer(viewer) {
       : anno.label
         ? screenProxy
         : null;
+  }
+
+  function finishBuilding(anno, entry, completion, options) {
+    const workTrace = options.workTrace;
+    const proxy = entry.worldProxy;
+    return completion
+      .then((result) => {
+        const workStart = workTrace ? performance.now() : 0;
+        try {
+          if (
+            routed.get(anno.id) !== entry ||
+            entry.worldProxy !== proxy ||
+            options.signal?.aborted ||
+            !(options.isCurrent?.() ?? true)
+          ) {
+            world.remove(proxy);
+            if (routed.get(anno.id) === entry) remove(anno);
+            if (workTrace) workTrace.rendererStatus = 'cancelled';
+            return { ...result, status: 'cancelled' };
+          }
+          if (result.status !== 'installed') {
+            world.remove(proxy);
+            entry.worldProxy = null;
+            if (workTrace) workTrace.rendererStatus = result.status;
+            return result;
+          }
+          if (performance.now() >= result.timing.deadlineMs) {
+            world.remove(proxy);
+            entry.worldProxy = null;
+            if (workTrace) workTrace.rendererStatus = 'timeout';
+            return { ...result, status: 'timeout' };
+          }
+          const at = performance.now();
+          try {
+            updateCaption(anno, entry);
+          } finally {
+            const ms = performance.now() - at;
+            result.timing.workMs += ms;
+            result.timing.lastSliceMs += ms;
+            result.timing.maxSliceMs = Math.max(
+              result.timing.maxSliceMs,
+              result.timing.lastSliceMs,
+            );
+          }
+          if (performance.now() >= result.timing.deadlineMs) {
+            world.remove(proxy);
+            entry.worldProxy = null;
+            if (options.pendingVisible === false) {
+              if (entry.screenProxy) screen.remove(entry.screenProxy);
+              entry.screenProxy = null;
+            } else {
+              const pending = liveProxy(anno, {
+                ring: null,
+                pendingOutline: true,
+              });
+              screen.update(pending);
+              entry.screenProxy = pending;
+            }
+            if (workTrace) workTrace.rendererStatus = 'timeout';
+            return { ...result, status: 'timeout' };
+          }
+          if (workTrace) workTrace.rendererStatus = result.status;
+          return result;
+        } finally {
+          if (workTrace)
+            recordWorkSlice(workTrace, 'hybrid-complete', workStart);
+        }
+      })
+      .catch((error) => {
+        const workStart = workTrace ? performance.now() : 0;
+        try {
+          // A later caption throw must roll back the already installed world parts too.
+          if (routed.get(anno.id) === entry) {
+            try {
+              remove(anno);
+            } catch {
+              /* original error wins; failed routes stay addressable */
+            }
+          } else world.remove(proxy);
+          throw error;
+        } finally {
+          if (workTrace) {
+            workTrace.rendererStatus = 'failed';
+            recordWorkSlice(workTrace, 'hybrid-rollback', workStart);
+          }
+        }
+      });
+  }
+
+  function worldOptions(anno, entry, options) {
+    const proxy = entry.worldProxy;
+    return {
+      ...options,
+      isCurrent: () =>
+        routed.get(anno.id) === entry &&
+        entry.worldProxy === proxy &&
+        (options.isCurrent?.() ?? true),
+    };
   }
 
   /**

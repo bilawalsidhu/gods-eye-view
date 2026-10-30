@@ -5,7 +5,10 @@ import { getEventListeners } from 'node:events';
 import { createFlowTileSource } from './flowSource.js';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 import { decodeFlowTile } from './flowDecode.js';
-import { decodeOpenFreeMapTile } from '../../sources/openFreeMap.js';
+import {
+  clearSharedOpenFreeMapTiles,
+  decodeOpenFreeMapTile,
+} from '../../sources/openFreeMap.js';
 import {
   RoadRequestError,
   roadRequestError,
@@ -831,6 +834,8 @@ test('failed detail cores retain real coarse roads while successful cores replac
 });
 
 test('traffic separates API and public tile transports, including the default tile fetch', async (t) => {
+  clearSharedOpenFreeMapTiles();
+  t.after(clearSharedOpenFreeMapTiles);
   const publicUrls = [],
     apiUrls = [];
   const publicFetch = async (url) => {
@@ -866,7 +871,12 @@ test('traffic separates API and public tile transports, including the default ti
       (await (await source.requestOsmRoads(bounds)).json()).roads.length,
     );
   }
-  assert.ok(publicUrls.length >= 4);
+  assert.equal(
+    publicUrls.filter((url) => url.endsWith('.pbf')).length,
+    1,
+    'compatible sources reuse the shared decoded public tile',
+  );
+  assert.equal(publicUrls.filter((url) => url.endsWith('/planet')).length, 2);
   assert.ok(apiUrls.length >= 4);
 });
 

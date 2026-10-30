@@ -376,6 +376,10 @@ export class RealtimeConnection {
       this.stream = null;
     }
     if (this.audioEl) {
+      // This session owns the element's remote media; peer closure is not track release.
+      const remoteStream = this.audioEl.srcObject;
+      this.audioEl.srcObject = null;
+      remoteStream?.getTracks?.().forEach((track) => track.stop());
       this.audioEl.remove();
       this.audioEl = null;
     }

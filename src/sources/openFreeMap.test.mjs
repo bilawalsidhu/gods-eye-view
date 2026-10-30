@@ -7,10 +7,40 @@ import {
   polygonCentroid,
   clipTileLine,
   createOpenFreeMapSource,
+  estimateOpenFreeMapProjectionBytes,
 } from './openFreeMap.js';
-import { createVectorTileSource } from './vectorTiles.js';
+import {
+  createSharedDecodedTileCache,
+  createVectorTileSource,
+} from './vectorTiles.js';
 const fixture = (name) =>
   readFileSync(new URL(`../data/fixtures/${name}`, import.meta.url));
+
+test('projected tile geometry has deterministic accounting and a coordinate cap', () => {
+  const small = {
+    streets: [
+      {
+        name: 'A',
+        coordinates: [
+          [0, 1],
+          [2, 3],
+        ],
+      },
+    ],
+  };
+  assert.equal(
+    estimateOpenFreeMapProjectionBytes(small),
+    estimateOpenFreeMapProjectionBytes(structuredClone(small)),
+  );
+  assert.ok(estimateOpenFreeMapProjectionBytes(small) > 4 * 8);
+  assert.throws(
+    () =>
+      estimateOpenFreeMapProjectionBytes({
+        coordinates: Array.from({ length: 250_001 }, () => [0, 0]),
+      }),
+    /coordinate limit/,
+  );
+});
 
 test('real z14 and z12 Austin tiles decode only drivable roads', () => {
   for (const [z, x, y, name] of [
@@ -116,6 +146,36 @@ test('Camp Mabry tile emits an unnamed polygon and its centroid marker', () => {
     ]),
     [4 / 3, 4 / 3],
   );
+});
+
+test('a shared consumer is charged only its own slice of each tile', async () => {
+  const bytes = fixture('ofm-austin-14-3743-6745.pbf');
+  const sharedDecodedCache = createSharedDecodedTileCache({
+    maxEntries: 4,
+    maxCacheBytes: 64 * 1024 * 1024,
+  });
+  const source = createOpenFreeMapSource({
+    template: 'https://tiles.openfreemap.org/planet/v/test/{z}/{x}/{y}.pbf',
+    sharedDecodedCache,
+    selectDecoded: ({ military }) => ({ military }),
+    fetchImpl: async () => new Response(bytes),
+  });
+  try {
+    const box = { south: 30.267, north: 30.268, west: -97.744, east: -97.743 };
+    const { tiles } = await source.fetchBounds(box, { zoom: 14 });
+    const stats = source.getStats();
+    assert.equal(stats.cacheEntries, 1);
+    assert.equal(
+      stats.cacheBytes,
+      estimateOpenFreeMapProjectionBytes(tiles[0]),
+      'the slice estimate, not the whole decoded tile',
+    );
+    assert.ok(stats.cacheBytes < bytes.byteLength * 4);
+    assert.ok(sharedDecodedCache.stats().bytes >= bytes.byteLength * 4);
+  } finally {
+    source.clear();
+    sharedDecodedCache.clear();
+  }
 });
 
 test('TileJSON is resolved once and decoded tile LRU prevents per-pan refetch', async () => {

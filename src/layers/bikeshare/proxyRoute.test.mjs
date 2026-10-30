@@ -10,11 +10,16 @@
 // Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { rm } from 'node:fs/promises';
 import { gbfsProxy } from '../../../server/providers/gbfs.js';
 import { localProviderPlugins } from '../../../server/providers/local.js';
 import { createBikeshareSource } from './source.js';
 import { createModel } from './model.js';
 import { CITY_BY_ID } from './registry.js';
+import { makeFixtureRoot } from '../../tooling/fixtureRoot.mjs';
+
+const nominatimStorageDir = await makeFixtureRoot('gev-gbfs-composition-');
+test.after(() => rm(nominatimStorageDir, { recursive: true, force: true }));
 
 const AUSTIN = CITY_BY_ID.get('austin-capmetro');
 const OSLO = CITY_BY_ID.get('oslo-bysykkel');
@@ -339,7 +344,7 @@ test('the mounted route still refuses a host outside the allowlist', async () =>
  * or from the preview half of it — fails here rather than in a browser.
  */
 function composedGbfsPlugin() {
-  const plugin = localProviderPlugins().find(
+  const plugin = localProviderPlugins({ nominatimStorageDir }).find(
     (entry) => entry.name === 'gbfs-proxy',
   );
   assert.ok(plugin, 'the application must compose a GBFS provider');

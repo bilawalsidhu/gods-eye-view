@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { createGoogleTokenSource } from './maps/googleTokens.js';
 import {
   loadPhotorealisticTileset,
   selectMapStartupRoute,
@@ -48,6 +51,87 @@ function fakeCesium(outcomes = []) {
   };
 }
 
+async function standaloneStartup(Cesium, credentials, fetchImpl) {
+  // Exercise the actual assembly; replace browser-only imports at its scene seam.
+  const source = readFileSync(
+    new URL('./standalone/application.js', import.meta.url),
+    'utf8',
+  )
+    .replace(/^import .*;\n/gm, '')
+    .replace(/^export /gm, '');
+  const context = vm.createContext({
+    document: {
+      getElementById: () => ({ querySelector: () => ({}) }),
+    },
+    resolveLocale: () => 'en',
+    setLocale() {},
+    applyDocumentLanguage() {},
+    applyDocumentTranslations() {},
+    CITY_POIS: [],
+    createApplication: (options) => options,
+    createStandalonePlaceSearch: () => ({}),
+    createStandaloneCatalog: () => ({}),
+    createGoogleTokenSource: () => createGoogleTokenSource({ fetchImpl }),
+    selectMapStartupRoute,
+    // The real scene forwards these credentials to this same loader.
+    createStandaloneScene: async (options) => ({
+      ...(await loadPhotorealisticTileset(Cesium, options)),
+      operations: {},
+    }),
+  });
+  vm.runInContext(source, context);
+  const app = context.createStandaloneApplication(credentials);
+  return app.createScene({ signal: new AbortController().signal });
+}
+
+test('standalone falls back to ion when the server token route is unavailable', async () => {
+  const tileset = { id: 'ion' };
+  const Cesium = fakeCesium([tileset]);
+  const requests = [];
+  const result = await standaloneStartup(
+    Cesium,
+    { cesiumToken: 'ion-fixture' },
+    async (url) => {
+      requests.push(url);
+      return { ok: false };
+    },
+  );
+  assert.equal(result.route, 'google-ion');
+  assert.equal(result.tileset, tileset);
+  assert.deepEqual(requests, ['/api/google/tiles-token']);
+  assert.equal(result.errors.length, 1);
+  assert.equal(Cesium.calls[0].assetId, 2275207);
+});
+
+test('standalone uses server tokens without a browser key and preserves keyless fallback', async () => {
+  const tileset = { id: 'server-token' };
+  const Cesium = fakeCesium([tileset]);
+  const requests = [];
+  const result = await standaloneStartup(Cesium, {}, async (url) => {
+    requests.push(url);
+    return {
+      ok: true,
+      json: async () => ({
+        accessToken: 'server-fixture',
+        expiresAt: Date.now() + 120_000,
+      }),
+    };
+  });
+  assert.equal(result.route, 'google-token');
+  assert.equal(result.tileset, tileset);
+  assert.deepEqual(requests, ['/api/google/tiles-token']);
+  assert.equal(
+    Cesium.calls[0].resource.headers.Authorization,
+    'Bearer server-fixture',
+  );
+  assert.deepEqual(result.errors, []);
+  const fallback = await standaloneStartup(fakeCesium(), {}, async () => ({
+    status: 204,
+  }));
+  assert.equal(fallback.route, 'osm');
+  assert.equal(fallback.tileset, null);
+});
+
 test('map startup route reflects the best configured provider', () => {
   assert.equal(
     selectMapStartupRoute({ googleApiKey: 'google', cesiumToken: 'ion' }),
@@ -68,13 +152,22 @@ test('no credentials skip photoreal loading and preserve keyless startup', async
 test('a direct Google key is preferred', async () => {
   const tileset = { id: 'direct' };
   const Cesium = fakeCesium([tileset]);
-  const result = await loadPhotorealisticTileset(Cesium, {
-    googleApiKey: 'google-secret',
-    cesiumToken: 'ion-secret',
-  });
+  let tokenRequests = 0;
+  const result = await standaloneStartup(
+    Cesium,
+    {
+      googleApiKey: 'google-secret',
+      cesiumToken: 'ion-secret',
+    },
+    async () => {
+      tokenRequests++;
+      return { status: 204 };
+    },
+  );
   assert.equal(result.tileset, tileset);
   assert.equal(result.route, 'google-direct');
   assert.equal(Cesium.calls[0].googleKey, 'google-secret');
+  assert.equal(tokenRequests, 0);
 });
 
 test('an ion-only setup loads the hosted Google 3D asset', async () => {

@@ -1,3 +1,4 @@
+import { recordWorkSlice } from '../sources/phaseTiming.js';
 import * as Cesium from 'cesium';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 
@@ -51,6 +52,230 @@ export function createWorldAnnotationRenderer(viewer) {
   const dataSource = new Cesium.CustomDataSource('gev-annotations');
   viewer.dataSources.add(dataSource);
   const osmAnnotations = new Set();
+  const pendingGround = new Map();
+  const groundQueue = [];
+  let observingGround = false;
+  let destroyed = false;
+
+  function sampleBuilding(anno, options) {
+    pendingGround.get(anno)?.finish('cancelled');
+    return new Promise((resolve, reject) => {
+      const queuedAt = performance.now();
+      // The 2 s budget starts when this task reaches the head of the queue, so
+      // waiting behind other buildings on a slow device never spends it.
+      let started = null;
+      const workTrace = options.workTrace;
+      if (workTrace) workTrace.samplerStart = queuedAt;
+      let groundDetailSlots = 0;
+      let groundDetailReady = true;
+      if (workTrace) {
+        try {
+          workTrace.groundDetailDropped = 0;
+        } catch {
+          groundDetailReady = false;
+        }
+      }
+      const task = {
+        anno,
+        points: groundProbePositions(anno.ring),
+        samples: [],
+        index: 0,
+      };
+      const timing = {
+        workMs: 0,
+        maxSliceMs: 0,
+        lastSliceMs: 0,
+        probes: 0,
+        queuedMs: 0,
+        deadlineMs: null,
+      };
+      task.current = () =>
+        !destroyed &&
+        !options.signal?.aborted &&
+        pendingGround.get(anno) === task &&
+        (options.isCurrent?.() ?? true);
+      task.begin = () => {
+        if (started !== null) return;
+        started = performance.now();
+        timing.queuedMs = started - queuedAt;
+        timing.deadlineMs = started + 2000;
+        if (workTrace) workTrace.samplerHeadAt = started;
+        task.timer = setTimeout(() => task.finish('timeout'), 2000);
+        // A task promoted outside a frame (its predecessor timed out or was
+        // cancelled) still needs frames in request-render mode.
+        try {
+          viewer.scene.requestRender?.();
+        } catch {
+          /* the enqueue path reports render failures */
+        }
+      };
+      task.finish = (status, error) => {
+        if (pendingGround.get(anno) !== task) return;
+        pendingGround.delete(anno);
+        const position = groundQueue.indexOf(task);
+        groundQueue.splice(position, 1);
+        clearTimeout(task.timer);
+        if (position === 0) groundQueue[0]?.begin();
+        options.signal?.removeEventListener('abort', task.abort);
+        if (!groundQueue.length && observingGround) {
+          viewer.scene.postRender.removeEventListener(onGroundFrame);
+          observingGround = false;
+        }
+        timing.elapsedMs = performance.now() - (started ?? queuedAt);
+        if (workTrace) {
+          workTrace.probes = timing.probes;
+          workTrace.samplerStatus = status;
+        }
+        if (error) reject(error);
+        else resolve({ status, timing });
+      };
+      task.abort = () => task.finish('cancelled');
+      task.step = () => {
+        const workStart = workTrace ? performance.now() : 0;
+        // Nested call/commit wall-time only; the original parent remains the gate.
+        const detail =
+          workTrace && groundDetailSlots++ < 8
+            ? {
+                index: task.index,
+                status: groundDetailReady ? 'recorded' : 'missing',
+                clampStart: null,
+                clampEnd: null,
+                clampResult: 'not-run',
+                commitStart: null,
+                commitEnd: null,
+                commitStatus: 'not-run',
+              }
+            : undefined;
+        const note = detail
+          ? (key) => {
+              try {
+                const at = performance.now();
+                if (Number.isFinite(at)) detail[key] = at;
+                else detail.status = 'missing';
+              } catch {
+                detail.status = 'missing';
+              }
+            }
+          : null;
+        if (workTrace && !detail) {
+          try {
+            workTrace.groundDetailDropped += 1;
+          } catch {
+            // Missing attribution must not change the sampler outcome.
+          }
+        }
+        try {
+          if (!task.current()) return task.finish('cancelled');
+          if (performance.now() - started >= 2000)
+            return task.finish('timeout');
+          const sliceStart = performance.now();
+          let error;
+          try {
+            if (
+              viewer.scene.clampToHeightSupported &&
+              typeof viewer.scene.clampToHeight === 'function'
+            ) {
+              const [lon, lat] = task.points[task.index++];
+              timing.probes += 1;
+              try {
+                const position = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+                let c;
+                note?.('clampStart');
+                if (detail) detail.clampResult = 'threw';
+                try {
+                  c = viewer.scene.clampToHeight(position);
+                  if (detail) detail.clampResult = 'returned';
+                } finally {
+                  note?.('clampEnd');
+                }
+                if (c) {
+                  const h = Cesium.Cartographic.fromCartesian(c).height;
+                  if (Number.isFinite(h) && h > -430 && h < 9000)
+                    task.samples.push(h);
+                }
+              } catch {
+                /* surface not ready: preserve the existing sample filter */
+              }
+            } else task.index = task.points.length;
+            if (performance.now() - started >= 2000) {
+              task.finish('timeout');
+              return;
+            }
+            if (!task.current()) return task.finish('cancelled');
+            if (task.index === task.points.length) {
+              if (detail) detail.commitStatus = 'attempted';
+              note?.('commitStart');
+              task.samples.sort((a, b) => a - b);
+              const ground = task.samples.length
+                ? task.samples[Math.floor(task.samples.length * 0.3)]
+                : null;
+              add(anno, {
+                sampledGroundHeight: ground,
+                isCurrent: task.current,
+              });
+              if (performance.now() >= timing.deadlineMs) {
+                task.finish('timeout');
+                remove(anno);
+                return;
+              }
+            }
+          } catch (caught) {
+            error = caught;
+          } finally {
+            timing.lastSliceMs = performance.now() - sliceStart;
+            timing.workMs += timing.lastSliceMs;
+            timing.maxSliceMs = Math.max(timing.maxSliceMs, timing.lastSliceMs);
+          }
+          if (error) {
+            task.finish('failed', error);
+            try {
+              remove(anno);
+            } catch {
+              /* retain the original commit error */
+            }
+          } else if (task.index === task.points.length)
+            task.finish('installed');
+        } finally {
+          // Commit includes sort/selection/add/deadline/finish or rollback,
+          // including intervening bookkeeping; it is not exclusive entity cost.
+          if (detail?.commitStatus === 'attempted') note('commitEnd');
+          if (workTrace)
+            recordWorkSlice(
+              workTrace,
+              'ground-step',
+              workStart,
+              undefined,
+              detail,
+            );
+        }
+      };
+      pendingGround.set(anno, task);
+      groundQueue.push(task);
+      if (groundQueue[0] === task) task.begin();
+      options.signal?.addEventListener('abort', task.abort, { once: true });
+      if (!task.current()) return task.finish('cancelled');
+      if (!observingGround) {
+        viewer.scene.postRender.addEventListener(onGroundFrame);
+        observingGround = true;
+      }
+      try {
+        viewer.scene.requestRender?.();
+      } catch (error) {
+        task.finish('failed', error);
+      }
+    });
+  }
+
+  function onGroundFrame() {
+    // One building probe TOTAL, not one per mark. Other renderers have their own work.
+    const task = groundQueue[0];
+    try {
+      task?.step();
+      if (groundQueue.length) viewer.scene.requestRender?.();
+    } catch (error) {
+      for (const pending of [...groundQueue]) pending.finish('failed', error);
+    }
+  }
 
   // Register the GevRouteFlow fabric once so Cesium's Material.fromType() can build the
   // material the route pipeline renders. The animated `time` uniform is read straight
@@ -81,7 +306,7 @@ export function createWorldAnnotationRenderer(viewer) {
     }, false);
   }
 
-  function add(anno) {
+  function add(anno, options = {}) {
     const base = colorFor(anno);
     // Published to the mark BEFORE anything is added, and mutated in place as
     // each entity lands: a mid-add failure (bad geometry, lost context) must
@@ -91,19 +316,39 @@ export function createWorldAnnotationRenderer(viewer) {
     anno._entities = entities;
 
     if (
+      anno.ring?.length >= 3 &&
+      anno.footprintKind === 'building' &&
+      !Object.hasOwn(options, 'sampledGroundHeight')
+    ) {
+      return sampleBuilding(anno, options);
+    }
+
+    if (
       anno.ring &&
       anno.ring.length >= 3 &&
       anno.footprintKind === 'building'
     ) {
+      const addBuildingEntity = (definition) => {
+        if (!(options.isCurrent?.() ?? true))
+          throw new Error('Building install cancelled');
+        const entity = dataSource.entities.add(definition);
+        if (!(options.isCurrent?.() ?? true)) {
+          dataSource.entities.remove(entity);
+          throw new Error('Building install cancelled');
+        }
+        return entity;
+      };
       // Single building → the PRIMARY highlight is an extruded CLASSIFICATION
       // volume that tints the real photogrammetry mesh (dome, walls, roof —
       // everything inside the column) amber and pulses. A flat footprint
       // extrusion is only 2.5D and misses domes; classification colors the
       // actual tiles. A faint wireframe cage rides on top as a secondary cue.
-      const buffered = bufferRing(anno.ring, 3);
-      const positions = Cesium.Cartesian3.fromDegreesArray(buffered.flat());
+      const parts =
+        Array.isArray(anno.polygons) && anno.polygons.length
+          ? anno.polygons
+          : [[anno.ring]];
       const groundH =
-        sampleGroundOutside(viewer.scene, anno.ring) ??
+        options.sampledGroundHeight ??
         (Number.isFinite(anno.anchor.height)
           ? anno.anchor.height - (anno.buildingHeight || 25)
           : 0);
@@ -112,55 +357,73 @@ export function createWorldAnnotationRenderer(viewer) {
       // empty air above the roof isn't tinted — this just guarantees we cover
       // under-tagged building heights.
       const topH = groundH + Math.max(18, anno.buildingHeight || 25) + 24;
-      // 1) Classification volume — tints the mesh amber, pulsing.
-      entities.push(
-        dataSource.entities.add({
-          polygon: {
-            hierarchy: new Cesium.PolygonHierarchy(positions),
-            height: baseH,
-            extrudedHeight: topH,
-            perPositionHeight: false,
-            classificationType: CLASSIFY,
-            material: new Cesium.ColorMaterialProperty(
-              liveColor(anno, base, { alpha: 0.45, pulse: true }),
-            ),
-          },
-        }),
+      const fillMaterial = new Cesium.ColorMaterialProperty(
+        liveColor(anno, base, { alpha: 0.45, pulse: true }),
       );
-      // 2) Faint, SIMPLIFIED wireframe cage — secondary, lower opacity. Decimate
-      // the footprint so the extruded outline draws ~14 clean verticals, not one
-      // per (often 100+) ring vertex.
-      const cagePositions = Cesium.Cartesian3.fromDegreesArray(
-        decimateRing(buffered, 14).flat(),
-      );
-      entities.push(
-        dataSource.entities.add({
-          polygon: {
-            hierarchy: new Cesium.PolygonHierarchy(cagePositions),
-            height: baseH,
-            extrudedHeight: topH,
-            perPositionHeight: false,
-            fill: false,
-            outline: true,
-            outlineColor: liveColor(anno, base, { alpha: 0.32, pulse: true }),
-          },
-        }),
-      );
-      // 3) Crisp draped base outline so the footprint reads on the ground.
-      entities.push(
-        dataSource.entities.add({
-          polyline: {
-            positions,
-            width: 3,
-            material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: 0.25,
-              color: liveColor(anno, base, { alpha: 0.7 }),
+      const lineMaterial = new Cesium.PolylineGlowMaterialProperty({
+        glowPower: 0.25,
+        color: liveColor(anno, base, { alpha: 0.7 }),
+      });
+      for (const [outer, ...holes] of parts) {
+        const buffered = bufferRing(outer, 3);
+        const positions = Cesium.Cartesian3.fromDegreesArray(buffered.flat());
+        // 1) Classification volume — tints the mesh amber, pulsing.
+        entities.push(
+          addBuildingEntity({
+            polygon: {
+              hierarchy: new Cesium.PolygonHierarchy(
+                positions,
+                holes.map(
+                  (hole) =>
+                    new Cesium.PolygonHierarchy(
+                      Cesium.Cartesian3.fromDegreesArray(hole.flat()),
+                    ),
+                ),
+              ),
+              height: baseH,
+              extrudedHeight: topH,
+              perPositionHeight: false,
+              classificationType: CLASSIFY,
+              material: fillMaterial,
+            },
+          }),
+        );
+        // 2) Faint, SIMPLIFIED wireframe cage — secondary, lower opacity. Decimate
+        // the footprint so the extruded outline draws ~14 clean verticals, not one
+        // per (often 100+) ring vertex.
+        const cagePositions = Cesium.Cartesian3.fromDegreesArray(
+          decimateRing(buffered, 14).flat(),
+        );
+        entities.push(
+          addBuildingEntity({
+            polygon: {
+              hierarchy: new Cesium.PolygonHierarchy(cagePositions),
+              height: baseH,
+              extrudedHeight: topH,
+              perPositionHeight: false,
+              fill: false,
+              outline: true,
+              outlineColor: liveColor(anno, base, { alpha: 0.32, pulse: true }),
+            },
+          }),
+        );
+        // 3) Crisp draped base outline so the footprint reads on the ground.
+        for (const ring of [outer, ...holes]) {
+          entities.push(
+            addBuildingEntity({
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArray(
+                  closedRing(ring).flat(),
+                ),
+                width: 3,
+                material: lineMaterial,
+                clampToGround: true,
+                classificationType: CLASSIFY,
+              },
             }),
-            clampToGround: true,
-            classificationType: CLASSIFY,
-          },
-        }),
-      );
+          );
+        }
+      }
     } else if (anno.ring && anno.ring.length >= 3) {
       // Larger area (district / compound / park / state) → flat fill draped on
       // the tiles + a glowing outline. Draping is right here: you can't extrude
@@ -300,6 +563,19 @@ export function createWorldAnnotationRenderer(viewer) {
       }
       entities.push(pointMarker(anno, base));
     }
+    if (
+      entities.length &&
+      anno.ring?.length >= 3 &&
+      !anno.synthesized &&
+      (anno.outlineCredit === 'tiles' || anno.outlineCredit === 'osm') &&
+      (options.isCurrent?.() ?? true)
+    ) {
+      // The actual world proxy owns both geometry and credit, including rollback.
+      osmAnnotations.add(anno);
+      showOsmCredit(viewer, anno, {
+        openMapTiles: anno.outlineCredit === 'tiles',
+      });
+    }
   }
 
   // Captions belong to the hybrid renderer's screen-space callouts.
@@ -318,6 +594,7 @@ export function createWorldAnnotationRenderer(viewer) {
   }
 
   function remove(anno) {
+    pendingGround.get(anno)?.finish('cancelled');
     hideOsmCredit(viewer, anno);
     osmAnnotations.delete(anno);
     if (!anno?._entities) return;
@@ -336,6 +613,8 @@ export function createWorldAnnotationRenderer(viewer) {
   }
 
   function destroy() {
+    destroyed = true;
+    for (const task of [...pendingGround.values()]) task.finish('cancelled');
     for (const anno of osmAnnotations) hideOsmCredit(viewer, anno);
     osmAnnotations.clear();
     try {
@@ -458,17 +737,10 @@ function decimateRing(ring, n) {
 }
 
 /**
- * Sample the ground height (m) just OUTSIDE a building footprint. Sampling at
- * the centroid would clamp onto the roof, so we probe several points beyond the
- * footprint radius and take a low percentile (≈ ground). Returns null if the
- * tiles under those points aren't loaded yet.
+ * The original eight outside-footprint probes. Keep their coordinates and order
+ * while scheduling the expensive scene picks across rendered frames.
  */
-function sampleGroundOutside(scene, ring) {
-  if (
-    !scene?.clampToHeightSupported ||
-    typeof scene.clampToHeight !== 'function'
-  )
-    return null;
+function groundProbePositions(ring) {
   let clon = 0;
   let clat = 0;
   for (const [lon, lat] of ring) {
@@ -494,23 +766,11 @@ function sampleGroundOutside(scene, ring) {
     [0.7, -0.7],
     [-0.7, 0.7],
   ];
-  const samples = [];
-  for (const [dx, dy] of dirs) {
+  return dirs.map(([dx, dy]) => {
     const lon = clon + (dx * out) / lonS;
     const lat = clat + (dy * out) / latS;
-    try {
-      const c = scene.clampToHeight(Cesium.Cartesian3.fromDegrees(lon, lat, 0));
-      if (c) {
-        const h = Cesium.Cartographic.fromCartesian(c).height;
-        if (Number.isFinite(h) && h > -430 && h < 9000) samples.push(h);
-      }
-    } catch {
-      /* tile not ready */
-    }
-  }
-  if (!samples.length) return null;
-  samples.sort((a, b) => a - b);
-  return samples[Math.floor(samples.length * 0.3)];
+    return [lon, lat];
+  });
 }
 
 /**

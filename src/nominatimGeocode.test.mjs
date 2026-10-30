@@ -75,6 +75,20 @@ test('a hit without real coordinates produces no result at all', () => {
     );
 });
 
+test('a documented JSONv2 highway hit carries route type and canonical identity', () => {
+  const result = nominatimToGeocodeResult({
+    lat: '30.2672',
+    lon: '-97.7425',
+    display_name: 'Congress Avenue, Austin, Texas, United States',
+    name: 'Congress Avenue',
+    category: 'highway',
+    type: 'primary',
+  });
+  assert.deepEqual(result.types, ['route']);
+  assert.deepEqual(result.geometry.location, { lat: 30.2672, lng: -97.7425 });
+  assert.equal(result.address_components[0].long_name, 'Congress Avenue');
+});
+
 test('a real hit carries its point, label, types and box', () => {
   const result = nominatimToGeocodeResult({
     lat: '43.1731',

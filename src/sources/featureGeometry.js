@@ -14,28 +14,48 @@ export function ringAreaM2(ring) {
   return Math.abs(area) / 2;
 }
 
-export function stitchLine(segments) {
-  const same = (a, b) => approximateDistanceM(a[1], a[0], b[1], b[0]) < 2;
+/**
+ * Join line pieces whose ends meet (closer than `toleranceM`, or at most it
+ * when `inclusive`) into as few chains as possible. Each chain grows greedily
+ * from the first unused piece.
+ */
+export function stitchLines(
+  segments,
+  { toleranceM = 2, inclusive = false, maxChains = Infinity } = {},
+) {
+  const same = (a, b) => {
+    const d = approximateDistanceM(a[1], a[0], b[1], b[0]);
+    return inclusive ? d <= toleranceM : d < toleranceM;
+  };
   const remaining = segments.map((s) => s.slice());
-  let line = remaining.shift();
-  let advanced = true;
-  while (advanced && remaining.length) {
-    advanced = false;
-    for (let i = 0; i < remaining.length; i++) {
-      const s = remaining[i];
-      if (same(line[line.length - 1], s[0])) line = line.concat(s.slice(1));
-      else if (same(line[line.length - 1], s[s.length - 1]))
-        line = line.concat(s.slice(0, -1).reverse());
-      else if (same(line[0], s[s.length - 1]))
-        line = s.slice(0, -1).concat(line);
-      else if (same(line[0], s[0])) line = s.slice(1).reverse().concat(line);
-      else continue;
-      remaining.splice(i, 1);
-      advanced = true;
-      break;
+  const chains = [];
+  while (remaining.length && chains.length < maxChains) {
+    let line = remaining.shift();
+    let advanced = true;
+    while (advanced && remaining.length) {
+      advanced = false;
+      for (let i = 0; i < remaining.length; i++) {
+        const s = remaining[i];
+        if (same(line[line.length - 1], s[0])) line = line.concat(s.slice(1));
+        else if (same(line[line.length - 1], s[s.length - 1]))
+          line = line.concat(s.slice(0, -1).reverse());
+        else if (same(line[0], s[s.length - 1]))
+          line = s.slice(0, -1).concat(line);
+        else if (same(line[0], s[0])) line = s.slice(1).reverse().concat(line);
+        else continue;
+        remaining.splice(i, 1);
+        advanced = true;
+        break;
+      }
     }
+    chains.push(line);
   }
-  return line;
+  return chains;
+}
+
+/** The chain grown from the first segment. */
+export function stitchLine(segments) {
+  return stitchLines(segments, { maxChains: 1 })[0];
 }
 
 export function bufferCorridor(line, halfWidthM) {

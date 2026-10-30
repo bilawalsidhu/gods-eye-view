@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVectorTileSource } from './vectorTiles.js';
+import {
+  createSharedDecodedTileCache,
+  createVectorTileSource,
+} from './vectorTiles.js';
 const meta = { tiles: ['https://tiles.example/{z}/{x}/{y}.pbf'] };
 const box = { south: 30.267, north: 30.268, west: -97.744, east: -97.743 };
 const options = {
@@ -244,4 +247,294 @@ test('an explicit allowedOrigin still wins over the one derived from tileJsonUrl
     (await source.getMetadata()).template,
     'https://tiles.example/planet/{z}/{x}/{y}.pbf',
   );
+});
+
+test('shared decoded tiles are isolated from consumer mutation', async () => {
+  const sharedDecodedCache = createSharedDecodedTileCache();
+  let decodes = 0;
+  let requests = 0;
+  const decode = () => {
+    decodes++;
+    return { roads: [{ name: 'Congress Avenue', coordinates: [[-97, 30]] }] };
+  };
+  const common = {
+    ...options,
+    template: meta.tiles[0],
+    sharedDecodedCache,
+    decode,
+    selectDecoded: (value) => value.roads,
+    fetchImpl: async () => {
+      requests++;
+      return new Response(new Uint8Array([1, 2, 3]));
+    },
+  };
+  const first = createVectorTileSource(common);
+  const second = createVectorTileSource(common);
+  const tiles = [{ z: 14, x: 3743, y: 6745 }];
+  const firstResult = await first.fetchBounds(box, { zoom: 14, tiles });
+  firstResult.tiles[0][0].name = 'mutated';
+  firstResult.tiles[0][0].coordinates[0][0] = 0;
+
+  const secondResult = await second.fetchBounds(box, { zoom: 14, tiles });
+  assert.equal(secondResult.tiles[0][0].name, 'Congress Avenue');
+  assert.equal(secondResult.tiles[0][0].coordinates[0][0], -97);
+  assert.equal(requests, 1);
+  assert.equal(decodes, 1);
+});
+
+test('compatible consumers share one in-flight fetch and survive one consumer clearing', async () => {
+  const sharedDecodedCache = createSharedDecodedTileCache();
+  let requests = 0;
+  let decodes = 0;
+  let releaseResponse;
+  let requestStarted;
+  const responseReady = new Promise((resolve) => {
+    releaseResponse = resolve;
+  });
+  const started = new Promise((resolve) => {
+    requestStarted = resolve;
+  });
+  const decode = () => {
+    decodes++;
+    return { roads: ['road'], outlines: ['outline'] };
+  };
+  const common = {
+    ...options,
+    template: meta.tiles[0],
+    sharedDecodedCache,
+    decode,
+    fetchImpl: async () => {
+      requests++;
+      requestStarted();
+      await responseReady;
+      return new Response(new Uint8Array([1, 2, 3]));
+    },
+  };
+  const roads = createVectorTileSource({
+    ...common,
+    selectDecoded: (value) => value.roads,
+  });
+  const outlines = createVectorTileSource({
+    ...common,
+    selectDecoded: (value) => value.outlines,
+  });
+  const tiles = [{ z: 14, x: 3743, y: 6745 }];
+  const roadResult = roads.fetchBounds(box, { zoom: 14, tiles });
+  const roadRejected = assert.rejects(roadResult, { name: 'AbortError' });
+  await started;
+  const outlineResult = outlines.fetchBounds(box, { zoom: 14, tiles });
+  await new Promise((resolve) => setImmediate(resolve));
+  roads.clear();
+  releaseResponse();
+  await roadRejected;
+  assert.deepEqual((await outlineResult).tiles, [['outline']]);
+  assert.equal(requests, 1);
+  assert.equal(decodes, 1);
+});
+
+test('queued shared hits preserve sibling ownership and cannot refill after clear', async (t) => {
+  const sharedDecodedCache = createSharedDecodedTileCache();
+  let requests = 0,
+    decodes = 0,
+    selections = 0;
+  const geometry = [
+    {
+      name: 'Congress Avenue',
+      coordinates: [
+        [-97, 30],
+        [-97, 31],
+      ],
+    },
+  ];
+  const common = {
+    ...options,
+    template: meta.tiles[0],
+    sharedDecodedCache,
+    decode: () => {
+      decodes++;
+      return { roads: geometry };
+    },
+    selectDecoded: (value) => {
+      selections++;
+      return value.roads;
+    },
+    fetchImpl: async () => {
+      requests++;
+      return new Response(new Uint8Array([1, 2, 3]));
+    },
+  };
+  const tiles = [{ z: 14, x: 3743, y: 6745 }];
+  await createVectorTileSource(common).fetchBounds(box, { zoom: 14, tiles });
+  selections = 0;
+  const scheduler = Object.getOwnPropertyDescriptor(globalThis, 'scheduler');
+  let queued = Promise.withResolvers();
+  let resume;
+  Object.defineProperty(globalThis, 'scheduler', {
+    configurable: true,
+    value: {
+      yield: () =>
+        new Promise((resolve) => {
+          resume = resolve;
+          queued.resolve();
+        }),
+    },
+  });
+  t.after(() => {
+    resume?.();
+    if (scheduler) Object.defineProperty(globalThis, 'scheduler', scheduler);
+    else delete globalThis.scheduler;
+  });
+  const source = createVectorTileSource(common);
+  const controller = new AbortController();
+  const cancelled = source.fetchBounds(box, {
+    zoom: 14,
+    tiles,
+    signal: controller.signal,
+  });
+  const rejected = assert.rejects(cancelled, { name: 'AbortError' });
+  const sibling = source.fetchBounds(box, { zoom: 14, tiles });
+  await queued.promise;
+  controller.abort();
+  await rejected;
+  resume();
+  assert.deepEqual((await sibling).tiles, [geometry]);
+  assert.equal(selections, 1);
+  assert.deepEqual(source.getStats(), {
+    tilesFetched: 0,
+    cacheEntries: 1,
+    cacheBytes: 12,
+  });
+
+  selections = 0;
+  queued = Promise.withResolvers();
+  const cleared = createVectorTileSource(common);
+  let published = 0;
+  const pending = cleared.fetchBounds(box, {
+    zoom: 14,
+    tiles,
+    onTile: () => published++,
+  });
+  const clearRejected = assert.rejects(pending, { name: 'AbortError' });
+  await queued.promise;
+  cleared.clear();
+  resume();
+  await clearRejected;
+  assert.equal(selections, 0);
+  assert.equal(published, 0);
+  assert.deepEqual(cleared.getStats(), {
+    tilesFetched: 0,
+    cacheEntries: 0,
+    cacheBytes: 0,
+  });
+
+  queued = Promise.withResolvers();
+  const fresh = cleared.fetchBounds(box, { zoom: 14, tiles });
+  await queued.promise;
+  resume();
+  assert.deepEqual((await fresh).tiles, [geometry]);
+  assert.equal(requests, 1);
+  assert.equal(decodes, 1);
+});
+
+test('shared ownership recharges materialized projections and evicts over budget', () => {
+  const shared = createSharedDecodedTileCache({ maxCacheBytes: 100 });
+  let resize;
+  let releases = 0;
+  const decoded = {
+    bindSharedCacheEntry(update) {
+      resize = update;
+    },
+    releaseSharedCacheEntry() {
+      releases++;
+    },
+  };
+  const entry = shared.set('tile', decoded, 12);
+  assert.deepEqual(shared.stats(), { entries: 1, bytes: 12 });
+  resize(80);
+  assert.deepEqual(shared.stats(), { entries: 1, bytes: 80 });
+  resize(101);
+  assert.deepEqual(shared.stats(), { entries: 0, bytes: 0 });
+  assert.equal(entry.size, 101);
+  assert.equal(releases, 1);
+  shared.clear();
+  assert.equal(releases, 1);
+});
+
+test('shared clear releases entries and prevents a pending loader from refilling', async () => {
+  const shared = createSharedDecodedTileCache();
+  let releases = 0;
+  shared.set(
+    'resident',
+    {
+      releaseSharedCacheEntry() {
+        releases++;
+      },
+    },
+    12,
+  );
+  shared.clear();
+  assert.deepEqual(shared.stats(), { entries: 0, bytes: 0 });
+  assert.equal(releases, 1);
+
+  let loaderStarted;
+  let resolveLoader;
+  const started = new Promise((resolve) => {
+    loaderStarted = resolve;
+  });
+  const loaderResult = new Promise((resolve) => {
+    resolveLoader = resolve;
+  });
+  const pending = shared.load('late', null, async () => {
+    loaderStarted();
+    return loaderResult;
+  });
+  await started;
+  resolveLoader({ value: {}, size: 16 });
+  shared.clear();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.deepEqual(shared.stats(), { entries: 0, bytes: 0 });
+});
+
+test('shared decoded ownership is isolated by decoder identity', async () => {
+  const sharedDecodedCache = createSharedDecodedTileCache();
+  let requests = 0;
+  const common = {
+    ...options,
+    template: meta.tiles[0],
+    sharedDecodedCache,
+    fetchImpl: async () => {
+      requests++;
+      return new Response(new Uint8Array([1]));
+    },
+  };
+  const a = createVectorTileSource({ ...common, decode: () => ['a'] });
+  const b = createVectorTileSource({ ...common, decode: () => ['b'] });
+  const tiles = [{ z: 14, x: 3743, y: 6745 }];
+  assert.deepEqual((await a.fetchBounds(box, { zoom: 14, tiles })).tiles, [
+    ['a'],
+  ]);
+  assert.deepEqual((await b.fetchBounds(box, { zoom: 14, tiles })).tiles, [
+    ['b'],
+  ]);
+  assert.equal(requests, 2);
+});
+
+test('clear prevents an old generation from starting tile I/O', async () => {
+  let requests = 0;
+  const source = createVectorTileSource({
+    ...options,
+    template: meta.tiles[0],
+    fetchImpl: async () => {
+      requests++;
+      return new Response(new Uint8Array([1]));
+    },
+  });
+  await source.getMetadata();
+  const pending = source.fetchBounds(box, {
+    zoom: 14,
+    tiles: [{ z: 14, x: 3743, y: 6745 }],
+  });
+  source.clear();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(requests, 0);
 });

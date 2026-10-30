@@ -6,6 +6,10 @@ import path from 'node:path';
 import { cctvProxy } from '../../server/providers/cctv.js';
 import { radioBrowserProxy } from '../../server/providers/radio.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
+import { makeFixtureRoot } from './fixtureRoot.mjs';
+
+const nominatimStorageDir = await makeFixtureRoot('gev-media-composition-');
+test.after(() => rmSync(nominatimStorageDir, { recursive: true, force: true }));
 
 function install(plugin, hook = 'configureServer') {
   let handler;
@@ -97,7 +101,7 @@ test('CCTV instances resolve their own application source root and isolate catal
 
 test('composition creates exactly one CCTV and radio provider without acquisition', (t) => {
   isolate(t);
-  const plugins = localProviderPlugins();
+  const plugins = localProviderPlugins({ nominatimStorageDir });
   for (const factory of [cctvProxy, radioBrowserProxy]) {
     assert.equal(plugins.filter((p) => p.name === factory().name).length, 1);
   }

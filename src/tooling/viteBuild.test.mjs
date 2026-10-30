@@ -16,6 +16,9 @@ import * as providers from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
 import { makeFixtureRoot } from './fixtureRoot.mjs';
 
+const nominatimStorageDir = await makeFixtureRoot('gev-build-composition-');
+test.after(() => rm(nominatimStorageDir, { recursive: true, force: true }));
+
 test('explicit build inputs preserve browser-only defines, plugin order and loopback protections', () => {
   const plugin = { name: 'fixture-provider' };
   const config = createBrowserViteConfig({
@@ -69,6 +72,19 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
     'import.meta.env.MAPILLARY_CLIENT_TOKEN': '""',
   });
   assert.equal(
+    createBrowserViteConfig({ photonUrl: '' }).define[
+      'import.meta.env.PHOTON_URL'
+    ],
+    'null',
+    'an empty PHOTON_URL reaches the browser only as the disabled sentinel',
+  );
+  assert.equal(
+    createBrowserViteConfig({ photonUrl: 'https://u:p@example.test/api/' })
+      .define['import.meta.env.PHOTON_URL'],
+    'null',
+    'credentials are never serialized into browser assets',
+  );
+  assert.equal(
     createBrowserViteConfig({ mapillaryToken: 'MLY|1|abc' }).define[
       'import.meta.env.MAPILLARY_CLIENT_TOKEN'
     ],
@@ -115,7 +131,7 @@ test('build helper does not discover environment values or construct local provi
 test('root config retains existing named exports and standalone provider order', () => {
   for (const [name, value] of Object.entries(providers))
     assert.equal(compatibility[name], value, name);
-  const config = standaloneConfig({ mode: 'test' });
+  const config = standaloneConfig({ mode: 'test' }, { nominatimStorageDir });
   const standaloneProviders = config.plugins
     .slice(4, -6)
     .map((plugin) => plugin.name);
@@ -129,7 +145,9 @@ test('root config retains existing named exports and standalone provider order',
   );
   assert.deepEqual(
     standaloneProviders.filter((name) => name !== 'gemini-live-proxy'),
-    providers.localProviderPlugins().map((plugin) => plugin.name),
+    providers
+      .localProviderPlugins({ nominatimStorageDir })
+      .map((plugin) => plugin.name),
   );
   assert.equal(config.plugins.at(-7).name, 'gev-key-setup');
   // Token fallback follows real providers and local MCP before the API 404.
@@ -142,10 +160,26 @@ test('root config retains existing named exports and standalone provider order',
   assert.equal(config.plugins.at(-1).name, 'panel-build');
 });
 
+test('standalone config passes a validated Photon setting into the browser define', () => {
+  const previous = process.env.PHOTON_URL;
+  process.env.PHOTON_URL = 'https://photon.example.test/api/';
+  try {
+    assert.equal(
+      standaloneConfig({ mode: 'test' }, { nominatimStorageDir }).define[
+        'import.meta.env.PHOTON_URL'
+      ],
+      '"https://photon.example.test/api/"',
+    );
+  } finally {
+    if (previous === undefined) delete process.env.PHOTON_URL;
+    else process.env.PHOTON_URL = previous;
+  }
+});
+
 test('directories the server writes while it runs are kept out of the dev watcher', () => {
   // Providers write cache files and logs here while the app runs; none of it is
   // source, so the dev watcher has no reason to stat it.
-  const config = standaloneConfig({ mode: 'test' });
+  const config = standaloneConfig({ mode: 'test' }, { nominatimStorageDir });
   const plugin = config.plugins.find(
     ({ name }) => name === 'gev-unwatched-runtime-dirs',
   );
