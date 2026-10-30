@@ -304,7 +304,7 @@ test('a summary asked for one view is dropped once the camera moves', async () =
   try {
     hud = new IntelHUD(env.viewer, { summaryService });
     let place = 'Yellowstone';
-    hud._summaryContext = async () => ({ place });
+    hud._summaryContext = async () => ({ placeLabels: [place] });
     const summary = () => env.elements.get('hud-summary').textContent;
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     hud._updateCameraData();
@@ -330,7 +330,7 @@ test('a summary asked for one view is dropped once the camera moves', async () =
     const moving = hud._updateSummary(false);
     await settle();
     assert.equal(pending.length, 2, 'the move marked the summary dirty');
-    assert.deepEqual(pending[1].context, { place: 'Atlantic' });
+    assert.deepEqual(pending[1].context, { placeLabels: ['Atlantic'] });
     pending[1].reply('North Atlantic Ocean');
     await moving;
     assert.equal(summary(), 'North Atlantic Ocean');
@@ -363,7 +363,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
   let hud;
   try {
     hud = new IntelHUD(env.viewer, { summaryService });
-    hud._summaryContext = async () => ({ place: 'Yellowstone' });
+    hud._summaryContext = async () => ({ placeLabels: ['Yellowstone'] });
     const element = env.elements.get('hud-summary');
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     hud._updateCameraData();
@@ -425,7 +425,7 @@ test('a cancelled summary retries the same context but completed answers stay re
   let hud;
   try {
     hud = new IntelHUD(env.viewer, { summaryService });
-    hud._summaryContext = async () => ({ place: 'San Francisco' });
+    hud._summaryContext = async () => ({ placeLabels: ['San Francisco'] });
     hud._updateCameraData();
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     const first = hud._updateSummary(false);
@@ -483,7 +483,7 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
   try {
     hud = new IntelHUD(env.viewer, { summaryService });
     // The same place before and after: a slow follow camera, a small pan.
-    hud._summaryContext = async () => ({ place: 'Lisboa' });
+    hud._summaryContext = async () => ({ placeLabels: ['Lisboa'] });
     const element = env.elements.get('hud-summary');
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     hud._updateCameraData();
@@ -510,15 +510,17 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
     });
     await update;
 
-    // A reply still typing stops when the camera starts moving.
+    // A reply still typing stops when the camera starts moving, and the
+    // plain line replaces the fragment.
     hud._typeSummary('Canyon Junction Wyoming Yellowstone National Park');
     t.mock.timers.tick(48);
-    const typed = element.textContent;
     env.cameraListeners.moveStart();
+    const plain = element.textContent;
+    assert.equal(plain, hud._composeSummary());
     t.mock.timers.tick(2_000);
     assert.equal(
       element.textContent,
-      typed,
+      plain,
       'no more characters after the move',
     );
   } finally {
@@ -545,7 +547,7 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
   let hud;
   try {
     hud = new IntelHUD(env.viewer, { summaryService });
-    hud._summaryContext = async () => ({ place: 'San Francisco' });
+    hud._summaryContext = async () => ({ placeLabels: ['San Francisco'] });
     hud._updateCameraData();
     await hud._updateSummary(true);
     t.mock.timers.tick(48);

@@ -45,18 +45,24 @@ function toFiveWordHudSummary(value, unspaced) {
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .trim()
     .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 5)
-    .join(' ');
-  // Japanese and Chinese have no spaces to count words by: cap characters.
+    .filter(Boolean);
   // Other languages keep five words, even around a Han place name.
-  if (!unspaced) return words;
-  const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-  return [...graphemes.segment(words)]
-    .slice(0, HUD_SUMMARY_MAX_UNSPACED_CHARS)
-    .map(({ segment }) => segment)
-    .join('')
-    .trim();
+  if (!unspaced) return words.slice(0, 5).join(' ');
+  // Japanese and Chinese have no spaces to count words by: cap characters,
+  // stepping back to a space rather than cutting a Latin word in two.
+  const text = words.join(' ');
+  const graphemes = [
+    ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text),
+  ].map(({ segment }) => segment);
+  if (graphemes.length <= HUD_SUMMARY_MAX_UNSPACED_CHARS) return text;
+  const head = graphemes.slice(0, HUD_SUMMARY_MAX_UNSPACED_CHARS);
+  const next = graphemes[HUD_SUMMARY_MAX_UNSPACED_CHARS];
+  const inWord = (g) => /^[\p{Script=Latin}\p{N}]/u.test(g ?? '');
+  if (inWord(head.at(-1)) && inWord(next)) {
+    const space = head.lastIndexOf(' ');
+    if (space > 0) return head.slice(0, space).join('').trim();
+  }
+  return head.join('').trim();
 }
 
 async function handleHudSummary(req, res) {

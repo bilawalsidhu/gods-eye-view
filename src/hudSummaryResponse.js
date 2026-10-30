@@ -59,7 +59,7 @@ export const HUD_SUMMARY_INSTRUCTIONS = [
   "Write one concise intelligence-HUD summary for God's Eye View.",
   'Use only the supplied place, street, nearby-place, enabled-layer labels, and feedProvenance.',
   'Prefer the clearest named place and include a relevant enabled layer only when useful.',
-  'Name layers only as in enabledLayerLabels; never copy layer names or state words from feedProvenance or its note.',
+  'In the summary, name layers only as in enabledLayerLabels; never copy layer names or state words from feedProvenance into it.',
   'Set feedState to feedProvenance.overall exactly as given, or none when it is null.',
   'If feedProvenance.overall is partial, do not present the coverage as complete; if it is any other state but nominal, do not present the view as live or healthy.',
   'Do not infer from coordinates or invent a place or feed state.',
@@ -106,6 +106,32 @@ const SUMMARY_LANGUAGES = Object.freeze({
 
 /** Scripts written without spaces, where five words do not apply. */
 const UNSPACED_LOCALES = /^(?:ja|zh)(?:-|$)/;
+
+/**
+ * Whether a summary for a non-English locale still carries English the HUD
+ * sent only as data: a feed-state id (`stale`) or an English layer name that
+ * has a translation (`Live Flights` in Russian).
+ * @param {string} summary The model's words.
+ * @param {unknown} locale The request locale.
+ * @param {string[]} [englishNames] English layer names that the UI translates.
+ * @returns {boolean}
+ */
+export function hudSummaryHasEnglish(summary, locale, englishNames = []) {
+  if (hudSummaryLocale(locale) === DEFAULT_LOCALE) return false;
+  const text = String(summary || '').toLowerCase();
+  return [...HUD_SUMMARY_FEED_STATES, ...englishNames].some((word) => {
+    const needle = String(word).toLowerCase();
+    let at = text.indexOf(needle);
+    while (at >= 0) {
+      const before = text[at - 1];
+      const after = text[at + needle.length];
+      if (!/\p{L}/u.test(before ?? '') && !/\p{L}/u.test(after ?? ''))
+        return true;
+      at = text.indexOf(needle, at + 1);
+    }
+    return false;
+  });
+}
 
 /** Whether the summary for this locale is capped in characters, not words. */
 export function hudSummaryIsUnspaced(locale) {

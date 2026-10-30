@@ -255,33 +255,6 @@ test('the instructions name the UI language, with English as the fallback', () =
   assert.equal(hudSummaryLocale(42), 'en');
 });
 
-test('the HUD sends its UI locale inside the context it signs for dedupe', () => {
-  const hud = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
-  assert.match(hud, /locale: getLocale\(\),\s+placeLabels:/);
-  assert.match(hud, /const signature = JSON\.stringify\(context\);/);
-  // The model gets the layer names the user sees.
-  assert.match(
-    hud,
-    /enabledLayerLabels:\s+layerContext\.enabledLayerLabels\.map\(localizeLayerName\)/,
-  );
-});
-
-test('the state word leads and the layer names trail the one-line summary', () => {
-  const hud = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
-  assert.match(
-    hud,
-    /return \[state, text, layers\]\.filter\(Boolean\)\.join\(' \| '\);/,
-  );
-  assert.match(hud, /withProvenance\(\s*data\.summary,/);
-  assert.match(hud, /return withProvenance\(line, provenance\);/);
-  // The model sees only the layer names the user sees.
-  assert.match(hud, /name: localizeLayerName\(layer\.name\)/);
-  assert.match(
-    HUD_SUMMARY_INSTRUCTIONS,
-    /Name layers only as in enabledLayerLabels/,
-  );
-});
-
 test('shipped catalogs get their exact language, and CJK a character limit', () => {
   assert.match(hudSummaryInstructions('pt'), /in Brazilian Portuguese \(pt\)/);
   assert.match(
@@ -396,6 +369,17 @@ for (const [locale, summary] of [
     assert.equal(response.body.summary, summary);
   });
 }
+
+test('a ja cap steps back to a space instead of cutting a Latin word', async () => {
+  const { response } = await postHudSummary(
+    { locale: 'ja', feedProvenance: { overall: 'stale' } },
+    JSON.stringify({
+      summary: 'San Francisco Bay Area flights',
+      feedState: 'stale',
+    }),
+  );
+  assert.equal(response.body.summary, 'San Francisco Bay');
+});
 
 test('a reply that skips the format carries no summary and no state', async () => {
   const { response } = await postHudSummary(

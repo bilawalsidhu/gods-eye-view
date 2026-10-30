@@ -27,6 +27,7 @@ import {
 } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
 import {
+  hudSummaryHasEnglish,
   hudSummaryMatchesProvenance,
   hudSummaryLayerContext,
   hudTelemetryProvenance,
@@ -237,12 +238,17 @@ export class IntelHUD {
     // the camera has moved to.
     this._onCameraMoveStart = () => {
       this._markSummaryDirty();
-      if (this._summaryRequest || this._summaryTypingInterval) {
+      const typing = Boolean(this._summaryTypingInterval);
+      if (this._summaryRequest || typing) {
         // Cancelled requests and partially typed replies are not reusable answers.
         this._lastSummarySignature = null;
       }
       this._summaryRequest?.abort();
       this._stopSummaryTyping();
+      // A half-typed reply would stay until moveEnd, which a camera that
+      // keeps moving may not send for a long time: show the plain line.
+      if (typing && this._latestMetrics)
+        this._setSummaryText(this._composeSummary(), false);
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
@@ -856,6 +862,19 @@ export class IntelHUD {
       return;
     }
     if (revision !== this._summaryRevision) return;
+    // Nothing to describe (no place labels, no enabled layer): the model only
+    // answers about the empty input, so the plain line is shown instead.
+    const described = [
+      context.placeLabels,
+      context.streetLabels,
+      context.nearbyPlaceLabels,
+      context.enabledLayerLabels,
+    ].some((list) => list?.length);
+    if (!described) {
+      this._summaryDirty = false;
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
       this._summaryDirty = false;
@@ -892,7 +911,14 @@ export class IntelHUD {
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      if (hudSummaryMatchesProvenance(data, context.feedProvenance)) {
+      if (
+        hudSummaryMatchesProvenance(data, context.feedProvenance) &&
+        !hudSummaryHasEnglish(
+          data.summary,
+          context.locale,
+          context.translatedLayerNames,
+        )
+      ) {
         // The warning is the HUD's own translated state, not the model's words.
         this._lastSummaryText = withProvenance(
           data.summary,
@@ -958,23 +984,40 @@ export class IntelHUD {
     // A slower build for a view the camera has left must not replace the
     // newer view's lookup.
     if (revision === this._summaryRevision) this._placeLabels = labels;
+    const locale = getLocale();
     const layerContext = hudSummaryLayerContext(
       this._dataManager?.getAll?.() || [],
     );
-    return {
-      locale: getLocale(),
+    const named = (layer) => ({
+      ...layer,
+      name: localizeLayerName(layer.name),
+    });
+    const { feedProvenance } = layerContext;
+    const context = {
+      locale,
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
       ...layerContext,
-      // The names the user sees; feedProvenance keeps the English ids.
+      // The model sees only the layer names the user sees. The English note
+      // goes too: a small model copies its words. `overall` stays the id.
       enabledLayerLabels:
         layerContext.enabledLayerLabels.map(localizeLayerName),
-      enabledLayers: layerContext.enabledLayers.map((layer) => ({
-        ...layer,
-        name: localizeLayerName(layer.name),
-      })),
+      enabledLayers: layerContext.enabledLayers.map(named),
+      feedProvenance: {
+        ...feedProvenance,
+        layers: feedProvenance.layers.map(named),
+        note: locale === 'en' ? feedProvenance.note : undefined,
+      },
     };
+    // Not sent and not part of the signature: the English names a reply in
+    // another language must not echo.
+    Object.defineProperty(context, 'translatedLayerNames', {
+      value: layerContext.enabledLayerLabels.filter(
+        (name) => localizeLayerName(name) !== name,
+      ),
+    });
+    return context;
   }
 
   _markSummaryDirty() {
