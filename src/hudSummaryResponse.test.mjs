@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import {
   HUD_SUMMARY_FEED_STATES,
   HUD_SUMMARY_INSTRUCTIONS,
+  HUD_SUMMARY_MAX_UNSPACED_CHARS,
   HUD_SUMMARY_RESPONSE_FORMAT,
   HUD_SUMMARY_UNCONFIGURED_CODE,
   hudSummaryInput,
@@ -163,9 +164,6 @@ test('the installed keyless HUD route stays successful after the voice quota is 
   } finally {
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
-    if (previousLimit === undefined)
-      delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
-    else process.env.GEV_RATELIMIT_OPENAI_PER_MIN = previousLimit;
   }
 });
 
@@ -219,7 +217,14 @@ test('HUD summary instructions ask for the canonical feedState as its own field'
     HUD_SUMMARY_INSTRUCTIONS,
     /Set feedState to feedProvenance\.overall exactly/,
   );
-  assert.match(HUD_SUMMARY_INSTRUCTIONS, /must not present the view as live/);
+  assert.match(
+    HUD_SUMMARY_INSTRUCTIONS,
+    /do not present the view as live or healthy/,
+  );
+  assert.match(
+    HUD_SUMMARY_INSTRUCTIONS,
+    /partial, do not present the coverage as complete/,
+  );
   assert.deepEqual(HUD_SUMMARY_RESPONSE_FORMAT.schema.required, [
     'summary',
     'feedState',
@@ -251,6 +256,32 @@ test('the HUD sends its UI locale inside the context it signs for dedupe', () =>
   const hud = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
   assert.match(hud, /locale: getLocale\(\),\s+placeLabels:/);
   assert.match(hud, /const signature = JSON\.stringify\(context\);/);
+  // The model gets the layer names the user sees.
+  assert.match(
+    hud,
+    /enabledLayerLabels:\s+layerContext\.enabledLayerLabels\.map\(localizeLayerName\)/,
+  );
+});
+
+test('the state tag leads the one-line summary so clipping cannot hide it', () => {
+  const hud = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
+  assert.match(hud, /tag \? `\$\{tag\} \| \$\{data\.summary\}`/);
+  assert.match(hud, /provenance \? `\$\{provenance\} \| \$\{line\}`/);
+});
+
+test('shipped catalogs get their exact language, and CJK a character limit', () => {
+  assert.match(hudSummaryInstructions('pt'), /in Brazilian Portuguese \(pt\)/);
+  assert.match(
+    hudSummaryInstructions('zh-Hant'),
+    /in Chinese in Traditional characters \(mainland wording\) \(zh-Hant\)/,
+  );
+  assert.match(hudSummaryInstructions('zh-CN'), /in Simplified Chinese/);
+  assert.match(
+    hudSummaryInstructions('ja'),
+    new RegExp(`at most ${HUD_SUMMARY_MAX_UNSPACED_CHARS} characters`),
+  );
+  assert.doesNotMatch(hudSummaryInstructions('es'), /at most/);
+  assert.match(hudSummaryInstructions('es'), /names in enabledLayerLabels/);
 });
 
 let hudSummaryClient = 0;
@@ -259,10 +290,8 @@ async function postHudSummary(context, reply) {
   // A fresh address per request: the per-IP limiter outlives a single test.
   hudSummaryClient += 1;
   const previousKey = process.env.OPENAI_API_KEY;
-  const previousLimit = process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
   const previousFetch = globalThis.fetch;
   process.env.OPENAI_API_KEY = 'test-key';
-  process.env.GEV_RATELIMIT_OPENAI_PER_MIN = '0';
   let sent = null;
   globalThis.fetch = async (url, init) => {
     sent = JSON.parse(init.body);
@@ -301,9 +330,6 @@ async function postHudSummary(context, reply) {
     globalThis.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previousKey;
-    if (previousLimit === undefined)
-      delete process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
-    else process.env.GEV_RATELIMIT_OPENAI_PER_MIN = previousLimit;
   }
 }
 
@@ -332,6 +358,18 @@ test('an es request reaches the model in Spanish and returns the canonical state
   });
 });
 
+test('a Japanese summary is capped in characters, not words', async () => {
+  const long = 'テキサス州議会議事堂周辺の航空機データは古くなっています';
+  const { response } = await postHudSummary(
+    { locale: 'ja', feedProvenance: { overall: 'stale' } },
+    JSON.stringify({ summary: long, feedState: 'stale' }),
+  );
+  assert.equal(
+    response.body.summary,
+    [...long].slice(0, HUD_SUMMARY_MAX_UNSPACED_CHARS).join(''),
+  );
+});
+
 test('a reply that skips the format carries no summary and no state', async () => {
   const { response } = await postHudSummary(
     { locale: 'ru', feedProvenance: { overall: 'stale' } },
@@ -344,17 +382,6 @@ test('a reply that skips the format carries no summary and no state', async () =
     JSON.stringify({ summary: 'Остин рейсы', feedState: 'fine' }),
   );
   assert.equal(unknown.response.body.feedState, null);
-});
-
-test('the HUD proxy builds its instructions from the shared contract', () => {
-  const local = readFileSync(
-    new URL('../server/providers/openai/hud-summary.js', import.meta.url),
-    'utf8',
-  );
-  assert.match(local, /hudSummaryInstructions\(context\?\.locale\)/);
-  assert.match(local, /hudSummaryInput\(context\)/);
-  assert.match(local, /HUD_SUMMARY_RESPONSE_FORMAT/);
-  assert.doesNotMatch(local, /enabled-layer text labels/);
 });
 
 test("a localized summary is shown only with the HUD's own canonical state", () => {

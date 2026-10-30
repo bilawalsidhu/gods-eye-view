@@ -782,7 +782,8 @@ export class IntelHUD {
         zone: localTag,
       },
     );
-    return provenance ? `${line} | ${provenance}` : line;
+    // The feed state leads: the one-line readout clips its end.
+    return provenance ? `${provenance} | ${line}` : line;
   }
 
   /** Stop a summary still typing out, leaving what it has typed so far. */
@@ -894,11 +895,12 @@ export class IntelHUD {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
       if (hudSummaryMatchesProvenance(data, context.feedProvenance)) {
-        // The warning is the HUD's own translated tag, not the model's words.
+        // The warning is the HUD's own translated tag, not the model's
+        // words, and it leads so the one-line readout never clips it.
         const tag = localizedProvenanceTag(
           provenanceTag(context.feedProvenance),
         );
-        this._lastSummaryText = tag ? `${data.summary} | ${tag}` : data.summary;
+        this._lastSummaryText = tag ? `${tag} | ${data.summary}` : data.summary;
       }
       this._setSummaryText(this._lastSummaryText || fallbackText, animate);
     } catch (error) {
@@ -959,18 +961,18 @@ export class IntelHUD {
     // A slower build for a view the camera has left must not replace the
     // newer view's lookup.
     if (revision === this._summaryRevision) this._placeLabels = labels;
-    const enabledLayers =
-      this._dataManager
-        ?.getAll?.()
-        ?.filter((layer) => layer.enabled)
-        .map((layer) => layer.name) || [];
+    const layerContext = hudSummaryLayerContext(
+      this._dataManager?.getAll?.() || [],
+    );
     return {
       locale: getLocale(),
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
-      enabledLayerLabels: enabledLayers,
-      ...hudSummaryLayerContext(this._dataManager?.getAll?.() || []),
+      ...layerContext,
+      // The names the user sees; feedProvenance keeps the English ids.
+      enabledLayerLabels:
+        layerContext.enabledLayerLabels.map(localizeLayerName),
     };
   }
 

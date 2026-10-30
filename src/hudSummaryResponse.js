@@ -2,8 +2,14 @@ import {
   SNAPSHOT_FEED_STATES,
   feedProvenanceEnvelope,
   layerSnapshots,
+  provenanceTag,
 } from './data/layerSnapshot.js';
 import { DEFAULT_LOCALE, normalizeLocale } from './i18n/locale.js';
+
+export {
+  hudSummaryMatchesProvenance,
+  provenanceTag,
+} from './data/layerSnapshot.js';
 
 export const HUD_SUMMARY_UNCONFIGURED_CODE = 'OPENAI_NOT_CONFIGURED';
 
@@ -54,10 +60,13 @@ export const HUD_SUMMARY_INSTRUCTIONS = [
   'Use only the supplied place, street, nearby-place, enabled-layer labels, and feedProvenance.',
   'Prefer the clearest named place and include a relevant enabled layer only when useful.',
   'Set feedState to feedProvenance.overall exactly as given, or none when it is null.',
-  'If feedProvenance.overall is not nominal, the summary must not present the view as live or healthy.',
+  'If feedProvenance.overall is partial, do not present the coverage as complete; if it is any other state but nominal, do not present the view as live or healthy.',
   'Do not infer from coordinates or invent a place or feed state.',
   'The summary is exactly five words with no title, punctuation, markdown, or introductory phrase.',
 ].join(' ');
+
+/** Longest summary, in characters, for a script written without spaces. */
+export const HUD_SUMMARY_MAX_UNSPACED_CHARS = 20;
 
 /** feedState values the model may return; none stands for a null overall. */
 export const HUD_SUMMARY_FEED_STATES = Object.freeze([
@@ -87,7 +96,19 @@ export function hudSummaryLocale(value) {
 }
 
 /** The language a request's summary is written in, named in English. */
+// Names Intl.DisplayNames gets wrong for the shipped catalogs: pt is the
+// Brazilian variant, and zh-Hant is the zh-CN wording in Traditional script.
+const SUMMARY_LANGUAGES = Object.freeze({
+  pt: 'Brazilian Portuguese',
+  'zh-CN': 'Simplified Chinese',
+  'zh-Hant': 'Chinese in Traditional characters (mainland wording)',
+});
+
+/** Scripts written without spaces, where five words do not apply. */
+const UNSPACED_LOCALES = /^(?:ja|zh)(?:-|$)/;
+
 function summaryLanguage(tag) {
+  if (SUMMARY_LANGUAGES[tag]) return SUMMARY_LANGUAGES[tag];
   try {
     return new Intl.DisplayNames(['en'], { type: 'language' }).of(tag) || tag;
   } catch {
@@ -96,8 +117,7 @@ function summaryLanguage(tag) {
 }
 
 /**
- * The instructions for one request: English as before, otherwise one more
- * sentence naming the language the five words are written in.
+ * Build the summary instructions for the requested locale.
  * @param {unknown} locale The `locale` the HUD sent.
  * @returns {string}
  */
@@ -105,7 +125,10 @@ export function hudSummaryInstructions(locale) {
   const tag = hudSummaryLocale(locale);
   if (tag === DEFAULT_LOCALE) return HUD_SUMMARY_INSTRUCTIONS;
   const language = summaryLanguage(tag);
-  return `${HUD_SUMMARY_INSTRUCTIONS} Write the summary in ${language} (${tag}), not English, giving places and layers their usual ${language} names; feedState stays the English value.`;
+  const length = UNSPACED_LOCALES.test(tag)
+    ? ` Instead of five words, write one phrase of at most ${HUD_SUMMARY_MAX_UNSPACED_CHARS} characters.`
+    : '';
+  return `${HUD_SUMMARY_INSTRUCTIONS} Write the summary in ${language} (${tag}), not English, giving places their usual ${language} names and layers the names in enabledLayerLabels; feedState stays the English value.${length}`;
 }
 
 /**
@@ -149,25 +172,6 @@ export function hudSummaryLayerContext(layers = [], options) {
 }
 
 /**
- * The feed state and up to two layer names of a provenance envelope that is
- * not nominal, or null. Values stay English (`state` is a feed-state id,
- * `names` are `layer.name`); the HUD translates them for display.
- * @param {{ overall?: string|null, layers?: Array<object> }|null} envelope
- * @returns {{ state: string, names: string[] }|null}
- */
-export function provenanceTag(envelope) {
-  const overall = envelope?.overall;
-  if (!overall || overall === 'nominal' || overall === 'off') return null;
-  const names = (envelope.layers || [])
-    .filter(
-      (s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off',
-    )
-    .map((s) => String(s.name || s.id || 'LAYER'))
-    .slice(0, 2);
-  return { state: overall, names };
-}
-
-/**
  * The feed-state tag for the HUD telemetry suffix when an enabled feed is not
  * nominal.
  * @param {Array<object>} [layers]
@@ -177,17 +181,4 @@ export function provenanceTag(envelope) {
 export function hudTelemetryProvenance(layers = [], options) {
   const snapshots = layerSnapshots(layers, options).filter((s) => s.enabled);
   return provenanceTag(feedProvenanceEnvelope(snapshots, options));
-}
-
-/**
- * Show an AI summary only when its canonical feedState is the HUD's own: a
- * view that is not nominal falls back on a missing or different state.
- * @param {{ feedState?: string|null }|null} response The proxy's reply.
- * @param {{ overall?: string|null }|null} provenance The context's envelope.
- * @returns {boolean}
- */
-export function hudSummaryMatchesProvenance(response, provenance) {
-  const state = provenance?.overall;
-  if (!state || state === 'nominal' || state === 'off') return true;
-  return response?.feedState === state;
 }

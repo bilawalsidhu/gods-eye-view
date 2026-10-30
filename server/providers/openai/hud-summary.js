@@ -1,5 +1,6 @@
 import {
   HUD_SUMMARY_FEED_STATES,
+  HUD_SUMMARY_MAX_UNSPACED_CHARS,
   HUD_SUMMARY_RESPONSE_FORMAT,
   hudSummaryInput,
   hudSummaryInstructions,
@@ -21,7 +22,7 @@ function extractOpenAiResponseText(data) {
     .trim();
 }
 
-/** The structured reply, or nulls when the model did not follow the format. */
+/** Parse the summary and normalize the canonical feed state. */
 function parseHudSummaryReply(text) {
   let reply = null;
   try {
@@ -39,13 +40,22 @@ function parseHudSummaryReply(text) {
 }
 
 function toFiveWordHudSummary(value) {
-  return String(value || '')
+  const words = String(value || '')
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .trim()
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 5)
     .join(' ');
+  // Japanese and Chinese have no spaces to count words by: cap characters.
+  if (!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(words))
+    return words;
+  const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  return [...graphemes.segment(words)]
+    .slice(0, HUD_SUMMARY_MAX_UNSPACED_CHARS)
+    .map(({ segment }) => segment)
+    .join('')
+    .trim();
 }
 
 async function handleHudSummary(req, res) {

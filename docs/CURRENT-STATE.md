@@ -5255,8 +5255,11 @@ and unreachable upstream (502/504) separately from road geometry.
 ### AI HUD Summary (June 2026)
 
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
-- Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
-- Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
+- Input is the live basemap label context (place/street/nearby-place labels + enabled layers, the layer names as the user sees them) and `feedProvenance`; the model is instructed not to infer from coordinates.
+- Language (October 2026): the HUD sends `locale`, which is part of the dedupe signature. The proxy keeps a shipped locale (English otherwise) and names the language in the instructions and at the start of the input; Japanese and Chinese get a 20-character phrase instead of five words.
+- The reply is structured (`text.format` JSON schema): `{summary, feedState}`, `feedState` being the snapshot state or `none`. For a view that is not nominal, a missing or different `feedState` falls back to the deterministic line. An accepted summary is shown after the HUD's own translated state tag (`STALE LIVE FLIGHTS | …`), which leads so the one-line readout never clips it.
+- Output is sanitized to five words (20 characters for Japanese and Chinese); falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
+- `partial` is a feed state of its own, ranked between `fallback` and `nominal`, so one partial layer no longer reads as off and partial plus nominal reads partial (HUD, voice view state, `analyst_query`, `brief`, the agent world packet). Its narration note says coverage is incomplete rather than not live.
 - A summary asked for before the camera starts moving never paints over the next view: `moveStart` marks the summary dirty and bumps its revision, as `moveEnd` does, aborts the request in flight and stops a reply still typing; neither a reply nor a fallback line (on an error, the 5 s timeout, the abort, or a failed context build) paints once the revision has moved. A dropped request forgets its signature and a timeout counts as a failure, so the next 15 s tick asks again even over the same place. An interrupted typewriter reply also forgets its signature; fully displayed answers remain reusable.
 
 ### Place-search providers

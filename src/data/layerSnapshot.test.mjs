@@ -132,6 +132,9 @@ test('partial is a feed-state of its own: above nominal, below every fault', () 
   assert.equal(overall([partial, stale]), 'stale');
   assert.equal(overall([stale, partial]), 'stale');
   assert.equal(LAYER_FEED_STATE_LABELS.partial, 'PARTIAL');
+  const note = feedProvenanceEnvelope([partial], { now: NOW }).note;
+  assert.match(note, /coverage is incomplete/);
+  assert.doesNotMatch(note, /do not describe this as live/);
   assert.equal(
     FEED_STATE_SEVERITY.fallback < FEED_STATE_SEVERITY.partial &&
       FEED_STATE_SEVERITY.partial < FEED_STATE_SEVERITY.nominal,
