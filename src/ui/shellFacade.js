@@ -949,14 +949,6 @@ export class ShellFacade {
     return this._radioControls?._setCockpitDisclosure?.(...args);
   }
 
-  _setRadioDisclosure(...args) {
-    return this._radioControls?._setRadioDisclosure?.(...args);
-  }
-
-  _syncContextRadioLauncherState(...args) {
-    return this._radioControls?._syncContextRadioLauncherState?.(...args);
-  }
-
   _renderRadioState(...args) {
     return this._radioControls?._renderRadioState?.(...args);
   }

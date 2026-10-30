@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
@@ -11,7 +10,20 @@ import {
   ACTIVE_COVERAGE_EDGE,
   IDLE_COVERAGE_EDGE_MUTED,
   ACTIVE_COVERAGE_EDGE_DEPTHFAIL,
+  VIEW_CELL_PX,
+  VIEW_ICON_MARGIN,
+  VIEW_MIN_CELL_M,
 } from './policy.js';
+
+/** FNV-1a over a camera id: a stable, well-spread order for crowded cells. */
+function idHash(id) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
 
 export function createRendering({
   state: layerState,
@@ -138,24 +150,186 @@ export function createRendering({
    * (Google-3D regime) nothing writes far-side depth, and the billboards are now
    * always-on-top (`disableDepthTestDistance: INFINITY` — the far-zoom submerge
    * fix), so without this pass London's cluster would shine through the planet
-   * from a US viewpoint. Pure math over ≤ catalog-size points; runs on
-   * camera.moveEnd + init only (event-driven — no steady-state work).
+   * from a US viewpoint.
+   *
+   * The same pass thins the view so a large catalog stays readable and cheap:
+   * icons well off screen hide, and each camera competes for a world-anchored
+   * cell sized to VIEW_CELL_PX at its distance (healthiest first, then a stable
+   * id order). The active camera shows whenever it is above the horizon
+   * and near the screen, even in a crowded cell. The shown records become
+   * `_viewRecords`, the working set for geometry, cards and the camera picker;
+   * the array keeps its identity while the shown set is unchanged.
+   *
+   * Runs on camera settle, throttled during motion, on resize, enable and
+   * activation changes — never per frame.
+   * @returns {boolean} Whether the shown set changed.
    */
 
   function refreshHorizonCulling() {
     if (
+      !layerState._enabled ||
       !layerState._viewer ||
       layerState._viewer.isDestroyed() ||
       !layerState._records.length
     )
-      return;
-    const occluder = horizonOccluder(layerState._viewer.camera);
+      return false;
+    const { camera, scene } = layerState._viewer;
+    const width = scene.canvas.clientWidth || scene.canvas.width || 0;
+    const height = scene.canvas.clientHeight || scene.canvas.height || 0;
+    const minX = -width * VIEW_ICON_MARGIN;
+    const maxX = width * (1 + VIEW_ICON_MARGIN);
+    const minY = -height * VIEW_ICON_MARGIN;
+    const maxY = height * (1 + VIEW_ICON_MARGIN);
+    // Ground metres one pixel covers per metre of distance from the viewer.
+    const fovy = Number.isFinite(camera.frustum?.fovy)
+      ? camera.frustum.fovy
+      : Math.PI / 3;
+    const metresPerPixelPerMetre =
+      (2 * Math.tan(fovy / 2)) / Math.max(1, height);
+    const viewer = camera.positionWC;
+    // The horizon test of Cesium's EllipsoidalOccluder, inlined: this loop
+    // visits every camera in the catalog.
+    const inverseRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
+    const cx = viewer.x * inverseRadii.x;
+    const cy = viewer.y * inverseRadii.y;
+    const cz = viewer.z * inverseRadii.z;
+    const limbSquared = cx * cx + cy * cy + cz * cz - 1;
+    const activeId = layerState._activeCameraId;
+    const project = screenProjector(scene, camera, width, height);
+    const pass = (layerState._viewPassId = (layerState._viewPassId || 0) + 1);
+    const shown = [];
+    const cells = new Map();
+    for (const record of layerState._records) {
+      const position = record.billboard?.position;
+      if (!position) continue;
+      const vx = position.x * inverseRadii.x - cx;
+      const vy = position.y * inverseRadii.y - cy;
+      const vz = position.z * inverseRadii.z - cz;
+      const vtDotVc = -(vx * cx + vy * cy + vz * cz);
+      if (
+        limbSquared < 0
+          ? vtDotVc > 0
+          : vtDotVc > limbSquared &&
+            (vtDotVc * vtDotVc) / (vx * vx + vy * vy + vz * vz) > limbSquared
+      )
+        continue;
+      const screen = project(position);
+      if (
+        !screen ||
+        !(screen.x >= minX && screen.x <= maxX) ||
+        !(screen.y >= minY && screen.y <= maxY)
+      )
+        continue;
+      const dx = position.x - viewer.x;
+      const dy = position.y - viewer.y;
+      const dz = position.z - viewer.z;
+      const cellM =
+        VIEW_CELL_PX *
+        metresPerPixelPerMetre *
+        Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (record.camera.id === activeId || !(cellM >= VIEW_MIN_CELL_M)) {
+        record.viewPass = pass;
+        shown.push(record);
+        continue;
+      }
+      const key = worldCellKey(record, cellM);
+      const rank = viewRank(record);
+      const holder = cells.get(key);
+      if (!holder || rank < holder.rank) cells.set(key, { record, rank });
+    }
+    for (const { record } of cells.values()) {
+      record.viewPass = pass;
+      shown.push(record);
+    }
     for (const record of layerState._records) {
       const bb = record.billboard;
       if (!bb) continue;
-      const visible = occluder.isPointVisible(bb.position);
+      const visible = record.viewPass === pass;
       if (bb.show !== visible) bb.show = visible;
     }
+    const previous = layerState._viewRecords;
+    const changed =
+      previous.length !== shown.length ||
+      previous.some((record) => record.viewPass !== pass);
+    if (changed) layerState._viewRecords = shown;
+    return changed;
+  }
+
+  /**
+   * Canvas coordinates for world positions. In 3D the pass multiplies by one
+   * view-projection matrix per call instead of Cesium's per-point
+   * cartesianToCanvasCoordinates, which dominated the pass on a large
+   * catalog; other scene modes keep Cesium's projection.
+   * @returns {(position: Cesium.Cartesian3) => ({x: number, y: number}|null)}
+   */
+  function screenProjector(scene, camera, width, height) {
+    const out = layerState._scratchViewScreen;
+    const projection = camera.frustum?.projectionMatrix;
+    if (
+      scene.mode !== Cesium.SceneMode.SCENE3D ||
+      !projection ||
+      !camera.viewMatrix
+    )
+      return (position) => scene.cartesianToCanvasCoordinates(position, out);
+    const m = Cesium.Matrix4.multiply(
+      projection,
+      camera.viewMatrix,
+      layerState._scratchViewProjection,
+    );
+    return (p) => {
+      const w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
+      const z = m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14];
+      // Behind the eye or before the near plane: Cesium does not draw it.
+      if (!(w > 0) || z < 0) return null;
+      out.x =
+        ((m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12]) / w + 1) * 0.5 * width;
+      out.y =
+        (1 - (m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13]) / w) * 0.5 * height;
+      return out;
+    };
+  }
+
+  /**
+   * A grid cell fixed to the ground: `cellM` rounded up to a power of two
+   * metres, so the cell (and its winner) only changes when the camera's
+   * distance crosses a doubling: a level pan keeps it, a tilted pan or a zoom
+   * can move cameras near the edge of a step to the next one.
+   */
+  function worldCellKey(record, cellM) {
+    const level = Math.ceil(Math.log2(cellM));
+    const { lat, lon } = record.camera;
+    // A camera's key changes only with the level (or an edited position), so
+    // it is kept per level.
+    if (
+      record.viewCellLevel === level &&
+      record.viewCellLat === lat &&
+      record.viewCellLon === lon
+    )
+      return record.viewCellKey;
+    const latStep = 2 ** level / 111_320;
+    const row = Math.floor(lat / latStep);
+    const rowLat = Cesium.Math.toRadians((row + 0.5) * latStep);
+    const lonStep = latStep / Math.max(0.05, Math.cos(rowLat));
+    record.viewCellLevel = level;
+    record.viewCellLat = lat;
+    record.viewCellLon = lon;
+    record.viewCellKey = `${level}:${row}:${Math.floor(lon / lonStep)}`;
+    return record.viewCellKey;
+  }
+
+  /** Lower ranks win a crowded cell: healthy feeds first, then a stable id order. */
+  function viewRank(record) {
+    const status = layerState._healthById.get(record.camera.id)?.status;
+    const tier =
+      status === 'ok'
+        ? 0
+        : status === 'degraded'
+          ? 1
+          : status === 'offline'
+            ? 3
+            : 2;
+    record.viewHash ??= idHash(record.camera.id);
+    return tier * 2 ** 32 + record.viewHash;
   }
 
   /**
@@ -204,6 +378,8 @@ export function createRendering({
     const activeId = activeRecord?.camera.id || null;
     const coverageVisible =
       parts.geometry.buildCoverageVisibleSet(activeRecord);
+    // Drawn coverage needs geometry too (geometryQueue's working set).
+    layerState._coverageVisibleIds = coverageVisible;
     const coverageOn = layerState._coverageMode !== 'off';
     const viewshedOn = layerState._coverageMode === 'viewshed';
     if (coverageOn) {
@@ -215,8 +391,13 @@ export function createRendering({
     for (const record of layerState._records) {
       const isActive = record.camera.id === activeId;
       if (record.billboard) {
-        record.billboard.color = cameraColorFor(record);
-        record.billboard.scale = isActive ? 1.25 : 1.0;
+        // Unchanged writes still dirty the collection, which then rewrites
+        // every icon's vertices: across a large catalog, write only changes.
+        const color = cameraColorFor(record);
+        if (!Cesium.Color.equals(record.billboard.color, color))
+          record.billboard.color = color;
+        const scale = isActive ? 1.25 : 1.0;
+        if (record.billboard.scale !== scale) record.billboard.scale = scale;
         // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
         // (set at creation) — see the field-test far-zoom submerge fix there.
       }

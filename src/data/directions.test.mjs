@@ -875,6 +875,13 @@ test('route numbers follow the page language and never break from their unit', (
   );
   const list = directionsStepList({ route });
   assert.equal(list.items[1].lead, '240\u00a0м');
+
+  // Japanese unit words follow the number: 1時間5分, but 1.5 km.
+  setLocale('ja');
+  assert.equal(routeDistanceText(1500), '1.5\u00a0km');
+  assert.equal(routeDurationText(39), '39秒');
+  assert.equal(routeDurationText(3900), '1時間5分');
+  assert.equal(routeDurationText(7200), '2時間');
 });
 
 test('ramp and lane wording stays localized after choosing the maneuver form', (t) => {
@@ -891,6 +898,12 @@ test('ramp and lane wording stays localized after choosing the maneuver form', (
       'Toma la rampa ligeramente a la izquierda hacia I-95',
       'Toma la salida bruscamente a la derecha',
       'Toma el carril izquierdo',
+    ],
+    [
+      'ja',
+      'ランプを斜め左に進んでI-95に入る',
+      '出口を急角度で右に出る',
+      '左車線を通行',
     ],
     [
       'zh-CN',
@@ -918,4 +931,20 @@ test('ramp and lane wording stays localized after choosing the maneuver form', (
       lane,
     );
   }
+});
+
+test('the reroute tooltip keeps German mode nouns capitalized', (t) => {
+  t.after(() => setLocale('en'));
+  const title = (id) =>
+    directionsRowControls(idle).chips.find((chip) => chip.id === id).title;
+  assert.equal(title('mode-foot'), 'Walk — reroute for walk');
+  setLocale('de');
+  assert.equal(
+    title('mode-foot'),
+    'Zu Fuß – Route im Modus „Zu Fuß“ neu berechnen',
+  );
+  assert.equal(
+    title('mode-bike'),
+    'Fahrrad – Route im Modus „Fahrrad“ neu berechnen',
+  );
 });
