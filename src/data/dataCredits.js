@@ -250,6 +250,17 @@ export const DATA_CREDITS = [
       'license CC BY 4.0',
   },
   {
+    key: 'met-cctv',
+    html:
+      'Weather-station webcams (Norway, Svalbard, Jan Mayen): data from ' +
+      '<a href="https://www.met.no/" target="_blank" rel="noopener">MET Norway</a>, licensed under ' +
+      '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">NLOD 2.0</a> and ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>' +
+      ' · camera ground heights © ' +
+      '<a href="https://kartverket.no/en/api-and-data/terrengdata" target="_blank" rel="noopener">Kartverket</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
+  },
+  {
     key: 'lithuania-cctv',
     html:
       // Opt-in: the camera endpoints are the eismoinfo.lt website backend, not
