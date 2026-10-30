@@ -226,6 +226,36 @@ test('the keyless hourly budget stays under the USGS 50/hour limit', async (t) =
   assert.ok(store.budgetLeft() > 30, 'the window rolls');
 });
 
+test('an error that quotes the API key never reaches the log', async (t) => {
+  const key = 'synthetic-key-Zq81xT7';
+  const lines = [];
+  const store = createUsgsWaterStore({
+    fetchImpl: async (url, init) => {
+      // Both shapes: an HTTP error that quotes the key, and a thrown error.
+      if (String(url).includes('site_type_code=LK'))
+        throw new Error(`connect failed, key ${key}`);
+      return new Response(
+        JSON.stringify({ description: `bad key ${key} rejected` }),
+        { status: 403 },
+      );
+    },
+    cacheFile: tmpCache(t),
+    env: { USGS_WATER_API_KEY: key },
+    now: () => 1_000_000,
+    log: { warn: (...args) => lines.push(args.join(' ')) },
+  });
+  assert.equal(await store.current(), null);
+  assert.ok(lines.length > 0, 'the failure is logged');
+  assert.ok(
+    lines.some((line) => line.includes('[redacted]')),
+    'the key is replaced, not just dropped with the message',
+  );
+  assert.ok(
+    lines.every((line) => !line.includes(key)),
+    'the key is masked in the log',
+  );
+});
+
 test('the route serves the files, refreshes hourly and keeps serving through a failure', async (t) => {
   let now = 1_000_000;
   let fail = false;
@@ -243,7 +273,7 @@ test('the route serves the files, refreshes hourly and keeps serving through a f
   let handler;
   plugin.configureServer({ middlewares: { use: (p, h) => (handler = h) } });
   const get = (url) =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
       const res = {
         writeHead(status, headers) {
           this.status = status;
@@ -253,7 +283,7 @@ test('the route serves the files, refreshes hourly and keeps serving through a f
           resolve({ status: this.status, headers: this.headers, body });
         },
       };
-      handler({ method: 'GET', url }, res);
+      Promise.resolve(handler({ method: 'GET', url }, res)).catch(reject);
     });
 
   const manifest = await get('/manifest.json');
@@ -267,6 +297,11 @@ test('the route serves the files, refreshes hourly and keeps serving through a f
   );
   assert.equal((await get('/../package.json')).status, 404);
   assert.equal((await get('/well.geojsonl')).status, 404);
+  assert.equal(
+    (await get('/%E0%A4%A')).status,
+    404,
+    'a malformed percent-escape answers 404 and cannot throw out of the route',
+  );
 
   const before = calls.length;
   await get('/manifest.json');
