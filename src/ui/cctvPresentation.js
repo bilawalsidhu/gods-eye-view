@@ -237,7 +237,7 @@ export function _renderCctvState(state) {
         '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
         {
           city: activeCamera.city,
-          heading: `${Math.round(activeCamera.headingDeg)}°`,
+          heading: `${Math.round(activeCamera.headingDeg) % 360}°`,
           fov: `${Math.round(activeCamera.fovDeg)}°`,
           range: Math.round(activeCamera.rangeM),
           projection: projLabel,

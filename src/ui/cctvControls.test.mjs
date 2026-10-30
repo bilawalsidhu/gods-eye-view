@@ -47,6 +47,30 @@ function fixture(t) {
   return { controls, requests };
 }
 
+test('the panel meta line reads a bearing that rounds to north as HDG 0°', (t) => {
+  const { controls } = fixture(t);
+  controls.actions.setPanelCollapsed = () => {};
+  controls._cctvMeta = element();
+  const meta = (headingDeg) => {
+    const camera = {
+      id: 'a',
+      city: 'Austin',
+      headingDeg,
+      fovDeg: 74,
+      rangeM: 700,
+    };
+    controls._renderCctvState({
+      enabled: true,
+      activeCameraId: camera.id,
+      activeCamera: camera,
+      cameras: [camera],
+    });
+    return controls._cctvMeta.textContent;
+  };
+  assert.match(meta(359.4), /· HDG 359° ·/);
+  assert.match(meta(359.6), /· HDG 0° ·/);
+});
+
 test('a late image completion cannot replace a newer camera preview', (t) => {
   const { controls, requests } = fixture(t);
   controls._queueCctvFrame('first.jpg', 'a', true);
