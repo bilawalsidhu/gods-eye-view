@@ -25,6 +25,14 @@
   publish the panel's state to a store that the CCTV and Radio views render,
   instead of writing the panel's markup themselves (samehkhamis).
 
+- `./layers/awareness` no longer writes the Contacts panel into
+  `#military-awareness-panel`: the layer publishes a plain panel view through
+  `subscribePanel(listener)` and Core's Contacts view renders it, calling the
+  layer's `navigatePrevious`, `focusCurrent`, `navigateNext` and `focusTarget`.
+  The `awarenessPanelControlKey`, `captureAwarenessPanelFocus` and
+  `restoreAwarenessPanelFocus` helpers are gone; the view keeps focus itself
+  (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

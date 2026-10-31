@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useContextStore } from '../stores/context.js';
+import AwarenessPanel from './panels/AwarenessPanel.vue';
 import RadioPanel from './panels/RadioPanel.vue';
 
 // ContextControls presents the mode switch and the nearby sites search and
@@ -68,12 +69,7 @@ const { view: ctx } = storeToRefs(useContextStore());
             <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)" data-i18n>SEARCH NEARBY SITES</button>
             <button id="tr3b-toggle" class="tr3b-toggle" type="button" aria-pressed="false" hidden aria-label="Reclassify tracked contact as TR-3B" title="Reclassify as TR-3B" data-i18n-aria-label data-i18n-title>🛸</button>
           </div>
-          <aside id="military-awareness-panel">
-            <div class="military-awareness-standby">
-              <strong data-i18n>CONTACTS CONTEXT OFF</strong>
-              <span data-i18n>SELECT CONTACTS TO LOAD OBSERVED / MAPPED PROXIMITY</span>
-            </div>
-          </aside>
+          <AwarenessPanel />
         </section>
         <section id="context-missions-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-missions-btn" :hidden="!ctx?.missionsActive">
           <div id="space-mission-panel-host">

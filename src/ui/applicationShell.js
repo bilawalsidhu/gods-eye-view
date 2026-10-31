@@ -973,7 +973,8 @@ export class StyleManager extends ShellFacade {
   }
 
   _initGlobalContextPanel() {
-    const { radioLayer, militaryInstallationsLayer } = this.services;
+    const { radioLayer, militaryInstallationsLayer, militaryAwarenessLayer } =
+      this.services;
     const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
       elements: {
@@ -999,6 +1000,14 @@ export class StyleManager extends ShellFacade {
         },
       },
     });
+    // The Contacts layer publishes its panel; the view calls its navigation.
+    contextStore.connectAwareness(militaryAwarenessLayer);
+    // A panel left by an earlier shell must not outlive its layer.
+    this._awarenessPanelUnsubscribe?.();
+    contextStore.publishAwareness(null);
+    this._awarenessPanelUnsubscribe = militaryAwarenessLayer?.subscribePanel?.(
+      (view) => contextStore.publishAwareness(view),
+    );
   }
 
   /** Wire the independent Radio companion controls. */
@@ -1757,6 +1766,9 @@ export class StyleManager extends ShellFacade {
     this._streetLevelControls?.destroy();
     this._radioControls?.destroy();
     this._localSdrControls?.destroy();
+    this._awarenessPanelUnsubscribe?.();
+    this._awarenessPanelUnsubscribe = null;
+    useContextStore(applicationPinia()).connectAwareness(null);
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

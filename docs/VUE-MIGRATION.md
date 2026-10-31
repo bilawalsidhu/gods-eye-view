@@ -110,8 +110,10 @@ They contain no application state.
    the tuner and the Cockpit radio controls keep their owners' element
    bindings; `ContextView` renders the mode switch and the nearby sites
    search from the `gev-context` store, which ContextControls reaches only
-   through its `publish` option, so `./ui/context` needs no Vue), the
-   command dock,
+   through its `publish` option, so `./ui/context` needs no Vue;
+   `AwarenessPanel` renders the Contacts panel that the awareness layer
+   publishes through `subscribePanel()`, the first layer to hand its rail
+   content to a view), the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 
