@@ -17,6 +17,9 @@ test('Chinese HUD and cockpit units keep their case without spacing coordinates'
     assert.equal(formatCockpitDistance(14000), '14\u00a0km');
     assert.equal(LOCALIZED_LOCALITY.sector({ latDeg: 21.33, lonDeg: -77.5 }),
       '扇区 21.33N 77.50W');
+    setLocale('ja');
+    assert.equal(hudQuantity(13, 'km'), '13 km');
+    assert.equal(hudQuantity(1.5, 'km', 1), '1.5 km');
     setLocale('en');
     assert.equal(hudQuantity(0, 'km'), '0KM');
     assert.equal(hudQuantity(2069, 'km', 1), '2069.0KM');
@@ -88,7 +91,6 @@ test('radio option text and accessible name use the same localized parentheses',
       setLocale(locale);
       const host = {
         _radioPanel: element(), _radioFilter: element(),
-        _syncContextRadioLauncherState() {},
         actions: { getLifecycle: () => null, scheduleLayout() {} },
       };
       renderRadioState.call(host, {

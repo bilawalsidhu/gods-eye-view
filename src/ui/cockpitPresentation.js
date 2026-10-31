@@ -149,7 +149,15 @@ export function formatCockpitDistance(distanceM) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-  return getLocale().startsWith('zh-') ? distance : distance.toUpperCase();
+  return cockpitUnitCase(distance);
+}
+
+/**
+ * Upper-case a cockpit unit the HUD way (`9.5 KM`), except in Chinese and
+ * Japanese, which have no case and keep units as the catalog writes them.
+ */
+export function cockpitUnitCase(text) {
+  return /^(zh|ja)(-|$)/.test(getLocale()) ? text : text.toUpperCase();
 }
 
 export function formatCockpitWindDirection(value) {
