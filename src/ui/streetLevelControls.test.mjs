@@ -50,6 +50,8 @@ class FakeNode {
     const names = new Set(classes);
     this.classList = {
       contains: (name) => names.has(name),
+      add: (...more) => more.forEach((name) => names.add(name)),
+      remove: (...more) => more.forEach((name) => names.delete(name)),
       toggle: (name, force) => {
         const on = force ?? !names.has(name);
         if (on) names.add(name);
@@ -91,9 +93,23 @@ class FakeNode {
     this.attributes.delete(key);
   }
   appendChild(child) {
+    // As in the DOM, appending moves a node that already has a parent.
+    child.parent?.children.splice(child.parent.children.indexOf(child), 1);
     child.parent = this;
     this.children.push(child);
     return child;
+  }
+  get parentNode() {
+    return this.parent;
+  }
+  get nextSibling() {
+    const siblings = this.parent?.children;
+    return siblings ? (siblings[siblings.indexOf(this) + 1] ?? null) : null;
+  }
+  get isConnected() {
+    let node = this;
+    while (node.parent) node = node.parent;
+    return node.tagName === '#DOCUMENT';
   }
   append(...nodes) {
     for (const node of nodes) this.appendChild(node);
@@ -1024,4 +1040,90 @@ test('Street View lit hides the imagery filters; Mapillary lit shows them', () =
       since: true,
       controls: true,
     });
+  }));
+
+/** In embed mode, the viewer moved out of the hidden rail onto the globe. */
+const overGlobe = (dom) =>
+  dom.wrap.parentNode === dom.document.body &&
+  dom.wrap.classList.contains('sl-viewer-wrap-embed');
+
+test('in embed mode an open photo leaves the hidden rail for an overlay on the globe, and goes back when it closes', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const home = dom.wrap.parentNode;
+    const after = dom.wrap.nextSibling;
+    const { layer, controls } = stubPanel(dom, uiState({ open: false }));
+    assert.equal(overGlobe(dom), false, 'nothing to show yet');
+    layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), true, 'shown over the globe');
+    layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), true, 'an update keeps it there');
+    layer.publish(uiState({ open: false }));
+    assert.equal(overGlobe(dom), false);
+    assert.equal(dom.wrap.parentNode, home, 'back in the panel');
+    assert.equal(dom.wrap.nextSibling, after, 'in its own place');
+    controls.destroy();
+  }));
+
+test('outside embed mode a photo stays in the panel', () =>
+  withDom(async (dom) => {
+    const home = dom.wrap.parentNode;
+    const { layer, controls } = stubPanel(dom, uiState({ open: false }));
+    layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), false);
+    assert.equal(dom.wrap.parentNode, home);
+    controls.destroy();
+  }));
+
+test('in embed mode Esc closes the photo, and the next photo is shown over the globe again', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const { layer, controls } = stubPanel(dom, uiState({ open: false }));
+    let closed = 0;
+    layer.closeViewer = () => {
+      closed++;
+      layer.publish(uiState({ open: false }));
+    };
+    layer.publish(uiState({ open: true }));
+    dom.document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    assert.equal(closed, 1, 'Esc closed the photo');
+    assert.equal(overGlobe(dom), false);
+    layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), true, 'the next photo is shown');
+    controls.destroy();
+  }));
+
+test('in embed mode Esc in full screen leaves full screen and keeps the photo', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const { layer, controls } = stubPanel(dom, uiState({ open: false }));
+    let closed = 0;
+    layer.closeViewer = () => closed++;
+    layer.publish(uiState({ open: true }));
+    await dom.wrap.requestFullscreen();
+    assert.equal(controls.isViewerExpanded(), true);
+    dom.document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    assert.equal(closed, 0, 'the photo stays open');
+    controls.destroy();
+  }));
+
+test('outside embed mode Esc does not close a photo in the panel', () =>
+  withDom(async (dom) => {
+    const { layer, controls } = stubPanel(dom, uiState({ open: true }));
+    let closed = 0;
+    layer.closeViewer = () => closed++;
+    dom.document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    assert.equal(closed, 0);
+    controls.destroy();
+  }));
+
+test('destroying the panel in embed mode puts an open photo back in the panel', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const home = dom.wrap.parentNode;
+    const { layer, controls } = stubPanel(dom, uiState({ open: false }));
+    layer.publish(uiState({ open: true }));
+    controls.destroy();
+    assert.equal(overGlobe(dom), false);
+    assert.equal(dom.wrap.parentNode, home);
   }));

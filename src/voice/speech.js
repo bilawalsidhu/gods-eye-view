@@ -24,6 +24,7 @@
 
 import { analystHeadline } from './resultDisplay.js';
 import {
+  formatDate,
   formatNumber,
   getLocale,
   msg,
@@ -564,6 +565,87 @@ function selectNearestAircraft(result) {
   };
 }
 
+/** Month and year an image was captured, or ''. */
+function capturedMonth(capturedAt) {
+  const ms = Number(capturedAt);
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  try {
+    // Dates are UTC months (Google: the first of the month).
+    return formatDate(new Date(ms), {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  } catch {
+    return '';
+  }
+}
+
+function showStreetLevel(result) {
+  // `location` is the flight's own result on a failed flight; its label is
+  // the place, never the object.
+  const place = spokenLabel(
+    result?.label ||
+      (typeof result?.location === 'string'
+        ? result.location
+        : result?.location?.label) ||
+      'there',
+  );
+  const source = spokenLabel(result?.providerName || 'Street Level');
+  // The card in the interface language; the spoken line stays English.
+  const shownSource = result?.providerName
+    ? spokenLabel(result.providerName)
+    : t('Street Level');
+  const shown = spokenLabel(localizePlaceName(result?.label || '')) || place;
+  if (result?.cancelled) return null;
+  if (!result?.ok) {
+    let say;
+    if (result?.stage === 'location') say = `Couldn't find ${place}.`;
+    else if (result?.stage === 'map')
+      say = `${source} needs the Google 3D map, which isn't available.`;
+    else if (result?.stage === 'key')
+      say = result?.keyRejected
+        ? `${source} refused its key.`
+        : `${source} needs its key.`;
+    else if (result?.stage === 'layer') say = "Couldn't turn on Street Level.";
+    else if (result?.stage === 'imagery')
+      say = result?.filter?.label
+        ? `No ${source} imagery near ${place} with the ${result.filter.label} on.`
+        : `No ${source} imagery near ${place}.`;
+    else say = `Couldn't open ${source}.`;
+    return {
+      say,
+      display: {
+        title: shownSource,
+        lines: errorLines(result),
+        sources: [],
+      },
+    };
+  }
+  if (result.armed === true)
+    return {
+      say: sentence(`${source} is ready at ${place}: press OPEN to load it`),
+      display: {
+        title: shownSource,
+        lines: [shown, t('Press OPEN to load the photo')],
+        sources: [{ label: shownSource }],
+      },
+    };
+  const title = spokenLabel(result.title || '', 60);
+  const month = capturedMonth(result.capturedAt);
+  return {
+    say: sentence(`${source} at ${title || place}`),
+    display: {
+      title: shownSource,
+      lines: [
+        title || shown,
+        month ? t('Captured {month}', { month }) : null,
+      ].filter(Boolean),
+      sources: [{ label: shownSource }],
+    },
+  };
+}
+
 const SPOKEN_ROUTE = Object.freeze({
   between: (origin, destination) => `${origin} to ${destination}`,
   from: (origin) => `from ${origin}`,
@@ -771,6 +853,7 @@ export const SPEECH_BUILDERS = Object.freeze({
   fly_to_location: flyToLocation,
   frame_overhead: frameOverhead,
   select_nearest_aircraft: selectNearestAircraft,
+  show_street_level: showStreetLevel,
   get_entity_context: getEntityContext,
   get_current_view_state: getCurrentViewState,
   annotate_map: annotateMap,
@@ -825,6 +908,14 @@ function annotationTargets(args) {
     )
     .filter(Boolean);
 }
+
+/** Street-level sources as a plan step names them. */
+const STREET_LEVEL_SOURCE_NAMES = Object.freeze({
+  google: 'Street View',
+  mapillary: 'Mapillary',
+  kartaview: 'KartaView',
+  panoramax: 'Panoramax',
+});
 
 // frame_overhead targets as the schema names them.
 function frameStepLabel(target) {
@@ -897,6 +988,17 @@ export function planStepLabel(name, args = {}) {
         ? t('Nearest aircraft to {place}', { place: shownPlace(place, 32) })
         : t('Nearest aircraft to Here');
     }
+    case 'show_street_level': {
+      const source = STREET_LEVEL_SOURCE_NAMES[args.provider];
+      const place = args.query
+        ? shownPlace(args.query, 32)
+        : args.latitude != null
+          ? t('this spot')
+          : t('the view centre');
+      return source
+        ? t('{source} at {place}', { source, place })
+        : t('Street level at {place}', { place });
+    }
     case 'set_layer_visibility': {
       const on = args.enabled !== false;
       const label =
@@ -940,6 +1042,8 @@ export function narrationLabel(name, args = {}) {
         presetPlaceName(args.locationQuery || args.locationId || ''),
         32,
       );
+    case 'show_street_level':
+      return shownPlace(args.query || '', 32);
     default:
       return '';
   }
@@ -954,6 +1058,8 @@ const STEP_LABELS = Object.freeze({
   layer: msg('Turning on layer'),
   refresh: msg('Loading aircraft'),
   nearest: msg('Picking nearest'),
+  map: msg('Switching map'),
+  imagery: msg('Opening imagery'),
 });
 
 /** On-screen label for a progress step. */
@@ -988,6 +1094,12 @@ export function progressLine(step, label) {
       return 'Loading aircraft there.';
     case 'nearest':
       return 'Picking the nearest aircraft.';
+    case 'map':
+      return place === 'photoreal'
+        ? 'Switching to Google 3D.'
+        : 'Switching the map.';
+    case 'imagery':
+      return place ? `Looking for imagery at ${place}.` : null;
     case 'still':
       return place ? `Still working on ${place}.` : 'Still working on it.';
     default:

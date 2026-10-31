@@ -33,6 +33,10 @@ import {
 } from '../data/contextStore.js';
 import { CCTV_FOCUS_RESULT } from '../layers/cctv/index.js';
 import {
+  NEAREST_RADIUS_MAX_M as STREET_LEVEL_WIDE_RADIUS_M,
+  STREET_LEVEL_LAYER_ID,
+} from '../layers/streetLevel/policy.js';
+import {
   createAnalystEngine,
   normalizeAnalystSpec,
   selectAnalystRows,
@@ -720,6 +724,18 @@ export function createGevActionRunner({
           onGround: false,
         },
       };
+    }
+
+    if (name === 'show_street_level') {
+      return showStreetLevel(args, {
+        dataManager,
+        styleManager,
+        placeSearch,
+        runGevAction,
+        runOptions,
+        current,
+        reportProgress,
+      });
     }
 
     if (name === 'set_visual_style') {
@@ -2561,12 +2577,36 @@ function stopAllTracking(viewer, dataManager) {
 }
 
 /**
+ * The imagery filter the lit source honours when it is narrower than the
+ * default (360° or flat only, or SINCE), or null.
+ * @returns {{ pano?: string, sinceDays?: number, label: string } | null}
+ */
+export function activeImageryFilter(ui) {
+  const filter = ui?.filter || {};
+  const controls = ui?.filterControls || {};
+  const out = {};
+  const names = [];
+  if (controls.pano && (filter.pano === 'pano' || filter.pano === 'flat')) {
+    out.pano = filter.pano;
+    names.push(filter.pano === 'pano' ? '360°' : 'flat-photo');
+  }
+  if (controls.since && Number(filter.sinceDays) > 0) {
+    out.sinceDays = Number(filter.sinceDays);
+    names.push('SINCE');
+  }
+  if (!names.length) return null;
+  out.label = `${names.join(' and ')} filter${names.length > 1 ? 's' : ''}`;
+  return out;
+}
+
+/**
  * Frames entities near the current view target with a cinematic pull-back:
  * oblique high pitch for aircraft/ships, shallow wide pitch for satellites.
  * When entries are found and detection is OFF, auto-enables panoptic
  * detection so the framed entities are labeled, and reports
  * detectionEnabled so the voice agent can mention labels are on.
  */
+
 async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
   const targetRaw = String(args.target || 'flights').toLowerCase();
   const layerId =
@@ -3219,6 +3259,311 @@ function normalizeStyle(value) {
   return null;
 }
 
+/**
+ * "Show me <place> on Street View / on Mapillary": fly to the place, make sure
+ * the imagery source's map is up, light that source in Street Level, turn the
+ * layer on and open the nearest image. One source at a time, as the panel
+ * does; the choice persists like a chip click. The key is checked before
+ * anything changes, and each stage reports its own failure so speech can say
+ * which part did not happen. With no place at all, the view centre is used.
+ * `autoOpen: false` (links, not the model) stops short of loading a photo
+ * from a source that bills every load: the panel is armed and the OPEN
+ * button is one click away.
+ */
+export async function showStreetLevel(
+  args,
+  {
+    dataManager,
+    styleManager,
+    placeSearch,
+    runGevAction,
+    runOptions = {},
+    current = () => true,
+    reportProgress = () => {},
+  },
+) {
+  const action = 'show_street_level';
+  let provider = null;
+  let providerName = null;
+  let label = null;
+  const fail = (stage, error, extra = {}) => ({
+    ok: false,
+    action,
+    stage,
+    cancelled: !current(),
+    error,
+    ...(provider ? { provider } : {}),
+    ...(providerName ? { providerName } : {}),
+    ...(label ? { label } : {}),
+    ...extra,
+  });
+  const query = String(args.query || '').trim();
+  const latitude = Number(args.latitude);
+  const longitude = Number(args.longitude);
+  const hasCoordinates =
+    args.latitude != null &&
+    args.longitude != null &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude);
+  // A referent that is a layer entity (deixis): located when the flight starts.
+  const entity =
+    args.entity && typeof args.entity === 'object' && args.entity.id
+      ? args.entity
+      : null;
+  const layerModule =
+    dataManager?.layers?.get?.(STREET_LEVEL_LAYER_ID)?.module || null;
+  if (!layerModule || typeof layerModule.openNearest !== 'function')
+    return fail('provider', 'Street Level is unavailable');
+  const providerIds = Array.isArray(layerModule.providerIds)
+    ? layerModule.providerIds
+    : [];
+
+  // The source: asked for, else the one lit now, else the first registered.
+  const requested = String(args.provider || '')
+    .trim()
+    .toLowerCase();
+  if (requested) {
+    if (!providerIds.includes(requested))
+      return fail(
+        'provider',
+        `${requested} is not a street-level imagery source here`,
+      );
+    provider = requested;
+  } else {
+    const params = dataManager.getLayerParams?.(STREET_LEVEL_LAYER_ID) || {};
+    provider =
+      providerIds.find((id) => params[id] === true) || providerIds[0] || null;
+  }
+  if (!provider)
+    return fail('provider', 'No street-level imagery source is configured');
+  const status = layerModule.providerStatus?.(provider) || null;
+  providerName = status?.name || provider;
+
+  // The key first, on any map: a chip without a key explains it and switches
+  // nothing, and so does this.
+  if (status && (status.keyRequired === true || status.configured === false))
+    return fail('key', status.error || `${providerName} needs its key`, {
+      keyRejected: status.keyRejected === true,
+      keyAlternatives: layerModule.getUIState?.()?.keyAlternatives || [],
+    });
+
+  // Then the place: a name that geocodes to nothing changes nothing else.
+  label =
+    query ||
+    (entity ? String(entity.label || entity.id) : '') ||
+    (hasCoordinates ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '') ||
+    'the view centre';
+  const atViewCentre = !query && !hasCoordinates && !entity;
+  let point = null;
+  let location = null;
+  if (args.fly === false || atViewCentre) {
+    if (hasCoordinates) point = { lat: latitude, lon: longitude };
+    else if (entity) {
+      // Where it is now, as the flying path does: the coordinates a list
+      // saved go stale as soon as the item moves or unloads.
+      const located = locateLayerEntity(dataManager, entity);
+      if (!located) return fail('location', `${label} is no longer loaded`);
+      point = { lat: located.lat, lon: located.lon };
+    } else if (query) {
+      reportProgress('search', query);
+      const outcome = await placeSearch.geocode(query, {
+        signal: runOptions.signal,
+      });
+      const place = outcome?.place;
+      if (!current())
+        return fail('location', 'Street-level request was cancelled');
+      if (!Number.isFinite(place?.lat) || !Number.isFinite(place?.lng))
+        return fail('location', `Could not find ${query}`);
+      point = { lat: place.lat, lon: place.lng };
+      label = place.label || query;
+    }
+    // No place at all: the layer looks under the view centre.
+  } else {
+    location = await runGevAction(
+      'fly_to_location',
+      {
+        ...(entity
+          ? { entity }
+          : hasCoordinates
+            ? { latitude, longitude }
+            : { query }),
+        viewMode: 'close',
+        waitForArrival: true,
+      },
+      runOptions,
+    );
+    if (location?.ok !== true || !current())
+      return fail(
+        'location',
+        location?.error || `Could not arrive at ${location?.label || label}`,
+        { cancelled: !current() || Boolean(location?.cancelled), location },
+      );
+    // An item keeps its name: the flight to it reports only coordinates.
+    label = entity ? label : location.label || label;
+    if (
+      !Number.isFinite(location.latitude) ||
+      !Number.isFinite(location.longitude)
+    )
+      return fail(
+        'location',
+        `${label} has no position to look for imagery at`,
+        { location },
+      );
+    point = { lat: location.latitude, lon: location.longitude };
+  }
+
+  // The source's map, when it needs one (Street View: Google 3D only).
+  const requiredStack = layerModule.requiredMapStack?.(provider) || null;
+  const activeStack = styleManager?.mapStackController?.getActiveId?.() ?? null;
+  if (requiredStack && activeStack !== requiredStack) {
+    reportProgress('map', requiredStack);
+    const map = await runGevAction(
+      'set_map_stack',
+      { stack: requiredStack },
+      runOptions,
+    );
+    if (map?.ok !== true || !current())
+      return fail(
+        'map',
+        map?.error ||
+          `${providerName} needs the ${requiredStack} map, which is not available`,
+        { map, location },
+      );
+  }
+
+  // Light the source the way a chip click does, so the choice is kept.
+  const switches = Object.fromEntries(
+    providerIds.map((id) => [id, id === provider]),
+  );
+  let accepted = true;
+  if (typeof dataManager.setLayerParams === 'function')
+    accepted =
+      dataManager.setLayerParams(STREET_LEVEL_LAYER_ID, switches, {
+        origin: 'voice',
+      }) !== false;
+  else layerModule.setProviderEnabled?.(provider, true);
+  if (!accepted)
+    return fail('provider', `${providerName} could not be switched on`, {
+      location,
+    });
+  let layer = null;
+  if (!dataManager.isEnabled?.(STREET_LEVEL_LAYER_ID)) {
+    layer = await runGevAction(
+      'set_layer_visibility',
+      { layerId: STREET_LEVEL_LAYER_ID, enabled: true },
+      runOptions,
+    );
+    if (layer?.ok !== true || !current())
+      return fail(
+        'layer',
+        layer?.error || 'Street Level could not be enabled',
+        { cancelled: !current() || Boolean(layer?.cancelled), layer, location },
+      );
+  }
+
+  // Listed now that its map is up, and lit.
+  const ui = layerModule.getUIState?.() || {};
+  const snapshot =
+    (ui.providers || []).find((entry) => entry.id === provider) || null;
+  if (!snapshot)
+    return fail(
+      'provider',
+      ui.coverage?.hint || `${providerName} is not available on this map`,
+      { location },
+    );
+  if (snapshot.on !== true)
+    return fail('provider', `${providerName} could not be switched on`, {
+      location,
+    });
+
+  // A billed source never loads from a link without a click: everything is
+  // ready and OPEN is one press away at the view centre.
+  if (args.autoOpen === false && status?.billed === true) {
+    // The next OPEN press loads exactly what the link asked for.
+    layerModule.armNearest?.(point, {
+      providerIds: [provider],
+      ...(snapshot.groundClick === true
+        ? { radiusM: STREET_LEVEL_WIDE_RADIUS_M }
+        : {}),
+    });
+    return {
+      ok: true,
+      action,
+      provider,
+      providerName,
+      label,
+      armed: true,
+      flew: location !== null,
+      ...(location ? { location: location.label } : {}),
+    };
+  }
+
+  // A source with no coverage to click (Street View) is searched wider: a
+  // geocoded landmark is rarely within 50 m of a street. A newer turn
+  // retires the lookup: nothing opens after the user moved on.
+  reportProgress('imagery', label);
+  const opened = await layerModule.openNearest(point, {
+    providerIds: [provider],
+    frame: false,
+    ...(runOptions.signal ? { signal: runOptions.signal } : {}),
+    ...(snapshot.groundClick === true
+      ? { radiusM: STREET_LEVEL_WIDE_RADIUS_M }
+      : {}),
+  });
+  const street = layerModule.getUIState?.()?.street || {};
+  // A cancelled request opens nothing (the lookup and the viewer both honour
+  // the turn's signal); a photo that did open is reported as open.
+  if (opened !== true && !current())
+    return fail('imagery', 'Street-level request was cancelled', {
+      cancelled: true,
+      location,
+    });
+  if (opened !== true) {
+    // Why nothing opened: the key, a change under the lookup, or no imagery.
+    const after = layerModule.providerStatus?.(provider) || status || {};
+    if (after.keyRequired === true || after.keyRejected === true)
+      return fail(
+        'key',
+        street.error || after.error || `${providerName} needs its key`,
+        { keyRejected: after.keyRejected === true, location },
+      );
+    if (
+      !dataManager.isEnabled?.(STREET_LEVEL_LAYER_ID) ||
+      after.on === false ||
+      after.available === false
+    )
+      return fail(
+        'imagery',
+        street.error || 'Street Level changed while it looked for imagery',
+        { cancelled: true, location },
+      );
+    // An imagery filter the source honours can hide every photo here; say
+    // so, or the answer reads as "no coverage" when one switch would do.
+    const filter = activeImageryFilter(layerModule.getUIState?.());
+    const reason = street.error || `No ${providerName} imagery near ${label}`;
+    return fail(
+      'imagery',
+      filter ? `${reason} with the ${filter.label} on` : reason,
+      { location, ...(filter ? { filter } : {}) },
+    );
+  }
+  return {
+    ok: true,
+    action,
+    provider,
+    providerName,
+    label,
+    imageId: street.imageId ?? null,
+    title: street.title ?? null,
+    capturedAt: street.capturedAt ?? null,
+    capturedAtPrecision: street.capturedAtPrecision ?? null,
+    position: street.position ?? null,
+    externalUrl: street.externalUrl ?? null,
+    flew: location !== null,
+    ...(location ? { location: location.label } : {}),
+  };
+}
+
 async function flyToRequestedLocation(
   viewer,
   args,
@@ -3283,11 +3628,25 @@ async function flyToRequestedLocation(
     );
     if (result === false)
       return cancelled(CITY_POIS[locationId]?.name || locationId);
+    // Where the camera went: the first POI for a close view, else the middle
+    // of the city's overview bounds.
+    const city = CITY_POIS[locationId];
+    const overview =
+      !(rangeM || args.viewMode === 'close') && Boolean(city?.viewBounds);
+    const centre = overview
+      ? {
+          lat:
+            (city.viewBounds.southwest.lat + city.viewBounds.northeast.lat) / 2,
+          lon:
+            (city.viewBounds.southwest.lng + city.viewBounds.northeast.lng) / 2,
+        }
+      : city?.pois?.[0] || null;
     const response = {
       ok: Boolean(result),
       action: 'fly_to_location',
       locationId,
       label: CITY_POIS[locationId]?.name || locationId,
+      ...(centre ? { latitude: centre.lat, longitude: centre.lon } : {}),
       rangeM: result?.range ? Math.round(result.range) : rangeM || null,
       navigationMode: rangeM
         ? 'explicit-range'
@@ -3348,6 +3707,7 @@ async function flyToRequestedLocation(
         action: 'fly_to_location',
         query,
         label: poi?.name || query,
+        ...(poi ? { latitude: poi.lat, longitude: poi.lon } : {}),
         navigationMode: rangeM ? 'preset-poi-range' : 'preset-poi',
         rangeM: result?.range ? Math.round(result.range) : rangeM || null,
       };
@@ -3378,6 +3738,10 @@ async function flyToRequestedLocation(
       action: 'fly_to_location',
       query,
       label: destination?.label || query,
+      ...(Number.isFinite(destination?.latitude) &&
+      Number.isFinite(destination?.longitude)
+        ? { latitude: destination.latitude, longitude: destination.longitude }
+        : {}),
       navigationMode: destination?.navigationMode || null,
       rangeM: destination?.rangeM || rangeM || null,
     };

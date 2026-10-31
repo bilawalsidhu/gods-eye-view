@@ -531,6 +531,25 @@ export function createLineCoverage({
     };
   }
 
+  /**
+   * The sequence lines drawn now, as `[lon, lat]` parts per sequence: for
+   * diagnostics and the browser gate, which aims its clicks at them instead
+   * of scanning pixels: what each tile drew (`attachPrimitive` keeps it in
+   * `entry.sequences`). Read-only copies.
+   */
+  function drawnLines() {
+    const lines = [];
+    for (const entry of state.coverage.tiles.values())
+      for (const sequence of entry.sequences.values())
+        lines.push({
+          id: sequence.id,
+          parts: (sequence.parts || []).map((part) =>
+            part.map(([lon, lat]) => [lon, lat]),
+          ),
+        });
+    return lines;
+  }
+
   return {
     attach,
     detach,
@@ -543,5 +562,6 @@ export function createLineCoverage({
     highlight,
     sequenceCount,
     stats,
+    drawnLines,
   };
 }

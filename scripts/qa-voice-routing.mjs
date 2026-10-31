@@ -885,6 +885,7 @@ const SLOW_TOOLS = new Set([
   'annotate_map',
   'fly_to_location',
   'select_nearest_aircraft',
+  'show_street_level',
   'analyst_query',
   'fly_route',
   'frame_overhead',

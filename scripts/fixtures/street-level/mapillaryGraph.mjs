@@ -181,6 +181,18 @@ export function answerMapillaryRequest({ method, url, images }) {
         : [];
       return { ...json(200, { data }), known: true };
     }
+    if (q.has('lat') && q.has('lng')) {
+      const at = { lat: Number(q.get('lat')), lon: Number(q.get('lng')) };
+      const radius = Math.min(50, Number(q.get('radius')) || 50);
+      const limit = Number(q.get('limit')) || 10;
+      // In no particular order, as the real API answers.
+      const data = photos
+        .filter((image) => metresApart(at, image) <= radius)
+        .reverse()
+        .slice(0, limit)
+        .map((image) => withFields(imageRecord(image), fields));
+      return { ...json(200, { data }), known: true };
+    }
     if (q.has('s2')) return { ...json(200, { data: [] }), known: true };
     return {
       ...json(400, { error: 'unsupported images query' }),

@@ -778,3 +778,35 @@ test('a precise search without an outline frames against the resolved ground, no
   const eye = target.height + flight.offset.range * Math.sin(-flight.offset.pitch);
   assert.ok(eye > 171 + 100, `eye ${eye} must clear the 171 m surface`);
 });
+
+test('searchAndFlyTo reports the place it flew to, whichever framing it chose', async () => {
+  // A city frames its viewport.
+  const city = await runSearch(stubViewer(), {});
+  assert.equal(city.latitude, 30.2672);
+  assert.equal(city.longitude, -97.7431);
+  // A precise place flies to a landmark.
+  const place = await runSearch(stubViewer(), {}, {
+    query: 'Texas State Capitol',
+    result: {
+      formatted_address: '1100 Congress Ave, Austin, TX',
+      types: ['establishment', 'point_of_interest'],
+      geometry: { location: { lat: 30.2747, lng: -97.7403 } },
+    },
+  });
+  assert.equal(place.latitude, 30.2747);
+  assert.equal(place.longitude, -97.7403);
+  // A natural region frames a swath.
+  const region = await runSearch(stubViewer(), {}, {
+    query: 'Rocky Mountains',
+    result: {
+      formatted_address: 'Rocky Mountains',
+      types: ['natural_feature', 'establishment'],
+      geometry: {
+        location: { lat: 43.7, lng: -110.7 },
+        viewport: { southwest: { lat: 35, lng: -118 }, northeast: { lat: 52, lng: -104 } },
+      },
+    },
+  });
+  assert.equal(region.latitude, 43.7);
+  assert.equal(region.longitude, -110.7);
+});

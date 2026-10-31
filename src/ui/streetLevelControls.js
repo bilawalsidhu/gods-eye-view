@@ -23,6 +23,11 @@ const setAttr = (node, key, value) => {
   if (node && node.getAttribute(key) !== value) node.setAttribute(key, value);
 };
 
+/** True on an embedded page (`?embed=1` or the inline panel). */
+function isEmbedPage() {
+  return globalThis.document?.body?.classList?.contains('ui-embed') === true;
+}
+
 /**
  * Fills the Street Level panel body: provider chips, filters and viewer. The
  * panel chrome itself belongs to the application shell.
@@ -158,6 +163,15 @@ export class StreetLevelControls {
         this._exitExpanded();
       });
     } else setProp(el.viewerExpand, 'hidden', true);
+    // Embed mode: Esc closes an open photo, since the rail it would go back to
+    // is hidden. Full screen keeps its own Esc (above), which leaves it first.
+    this.listen(document, 'keydown', (event) => {
+      if (event.key !== 'Escape' || !this._embedHome || this.isViewerExpanded())
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.layer.closeViewer?.();
+    });
     createSegmentedControl({
       buttons: el.renderButtons,
       valueOf: (button) => button.dataset.slRender,
@@ -342,6 +356,30 @@ export class StreetLevelControls {
     this._requestResize();
   }
 
+  /**
+   * Embed mode hides the right rail, panel and viewer with it: an open photo
+   * moves to <body> as an overlay on the globe (`sl-viewer-wrap-embed`, see
+   * embed.css) and returns to its place in the panel when it closes.
+   */
+  _syncEmbedOverlay(open) {
+    const wrap = this._elements.viewerWrap;
+    if (!wrap || !document.body) return;
+    const lift = open === true && isEmbedPage();
+    if (lift && !this._embedHome) {
+      this._embedHome = { parent: wrap.parentNode, next: wrap.nextSibling };
+      document.body.appendChild(wrap);
+      wrap.classList.add('sl-viewer-wrap-embed');
+      this._requestResize();
+    } else if (!lift && this._embedHome) {
+      wrap.classList.remove('sl-viewer-wrap-embed');
+      const { parent, next } = this._embedHome;
+      this._embedHome = null;
+      if (parent?.isConnected)
+        parent.insertBefore(wrap, next?.parentNode === parent ? next : null);
+      this._requestResize();
+    }
+  }
+
   connect() {
     this._unsubscribe?.();
     this._unsubscribe = null;
@@ -489,6 +527,9 @@ export class StreetLevelControls {
     const open = view.viewer.open;
     if (open && !this._wasOpen) this.setCollapsed(false, { persist: false });
     this._wasOpen = open;
+    // Embed mode hides the rail the panel sits in: an open photo is shown over
+    // the globe instead, and goes back into the panel when it closes.
+    this._syncEmbedOverlay(open);
   }
 
   destroy() {
@@ -500,6 +541,7 @@ export class StreetLevelControls {
     if (this._expandMode === 'popover')
       this._elements.viewerWrap?.removeAttribute('popover');
     this._watchPanelHidingModes(false);
+    this._syncEmbedOverlay(false);
     this.listeners.abort();
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;

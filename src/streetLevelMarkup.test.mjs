@@ -114,3 +114,17 @@ test('OPEN STREET VIEW keeps its width beside a long coverage line', () => {
   );
   assert.match(panelCss, /\.sl-meta-row \.sl-meta \{[^}]*min-width: 0;/);
 });
+
+test('embed mode shows an open photo over the globe, filling the overlay', () => {
+  const overlay = css.match(
+    /body\.ui-embed \.sl-viewer-wrap-embed \{([^}]*)\}/,
+  );
+  assert.ok(overlay, 'embed styles the viewer it moves over the globe');
+  for (const rule of ['position: fixed', 'inset: 12px', 'z-index: 1000'])
+    assert.ok(overlay[1].includes(rule), rule);
+  // The photo takes the overlay's height, as it does full screen.
+  assert.match(
+    css,
+    /body\.ui-embed \.sl-viewer-wrap-embed \.sl-viewer \{[^}]*flex: 1 1 auto/,
+  );
+});

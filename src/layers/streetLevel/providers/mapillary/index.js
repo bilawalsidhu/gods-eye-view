@@ -5,6 +5,9 @@ import {
 } from '../../lineCoverage.js';
 import { createSequenceCones, thinImages } from '../../sequenceCones.js';
 import { coverageZoomForHeight } from '../../tileMath.js';
+import { passesImageryFilter } from '../../filter.js';
+import { NEAREST_RADIUS_M } from '../../policy.js';
+import { metresBetween } from '../../view.js';
 import { decodeCoverageTile } from './decode.js';
 import { createMapillaryViewer } from './viewer.js';
 import {
@@ -17,6 +20,7 @@ import {
   MAPILLARY_NAME,
   MAPILLARY_PROVIDER_ID,
   MAPILLARY_SOURCE_METHODS,
+  NEAREST_LIMIT,
   PICK_PREFIX,
   RATE_LIMITED_MESSAGE,
 } from './policy.js';
@@ -191,6 +195,39 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
           loading: state.sequence.loading,
           error: state.sequence.error,
         }),
+        coverageLines: () => parts.coverage.drawnLines(),
+
+        /**
+         * The nearest image that passes the imagery filter, or null: what
+         * show_street_level and sl= links open (clicks open a line, then a
+         * cone). The core aborts `signal` once a newer request overtakes it.
+         */
+        async nearestImage({ lat, lon }, { signal } = {}) {
+          const images = await source.nearestImages(
+            { lat, lon, radius: NEAREST_RADIUS_M, limit: NEAREST_LIMIT },
+            { signal },
+          );
+          // The API returns the images in the radius in no particular order.
+          const metres = (record) => {
+            const [lon2, lat2] = (record.computed_geometry || record.geometry)
+              ?.coordinates || [NaN, NaN];
+            const d = metresBetween({ lon, lat }, { lon: lon2, lat: lat2 });
+            return Number.isFinite(d) ? d : Infinity;
+          };
+          const filter = context.getFilter();
+          const hit = [...images]
+            .sort((a, b) => metres(a) - metres(b))
+            .find((record) =>
+              passesImageryFilter(
+                {
+                  isPano: record.is_pano === true,
+                  capturedAt: Number(record.captured_at) || 0,
+                },
+                filter,
+              ),
+            );
+          return hit ? String(hit.id) : null;
+        },
 
         viewer:
           photoViewer ||

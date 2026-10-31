@@ -3013,5 +3013,13 @@
   "Load scenes from an exported JSON file": "Carregar cenas de um arquivo JSON exportado",
   "Download the timing log of the last play": "Baixar o registro de tempos da última reprodução",
   "Edit anchors, data packs and shot details": "Editar âncoras, pacotes de dados e detalhes dos planos",
-  "Download this scene as JSON or an asset bundle": "Baixar esta cena como JSON ou pacote de recursos"
+  "Download this scene as JSON or an asset bundle": "Baixar esta cena como JSON ou pacote de recursos",
+  "Press OPEN to load the photo": "Clique em ABRIR para carregar a foto",
+  "Captured {month}": "Capturada em {month}",
+  "this spot": "este ponto",
+  "the view centre": "o centro da vista",
+  "{source} at {place}": "{source} em {place}",
+  "Street level at {place}": "Nível da rua em {place}",
+  "Switching map": "Mudando de mapa",
+  "Opening imagery": "Abrindo imagens"
 }
