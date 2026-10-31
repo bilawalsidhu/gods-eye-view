@@ -58,6 +58,7 @@
       "src/ui/stores/cctv.js",
       "src/ui/stores/radio.js",
       "src/ui/stores/context.js",
+      "src/ui/stores/location.js",
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue",
       "src/ui/views/panels/DisplayPanel.vue",
@@ -973,6 +974,7 @@
       "src/ui/stores/cctv.js",
       "src/ui/stores/radio.js",
       "src/ui/stores/context.js",
+      "src/ui/stores/location.js",
       "src/ui/stores/display.js"
     ],
     "external": ["cesium", "vue", "pinia"]
@@ -2943,6 +2945,7 @@
       "src/ui/stores/cctv.js",
       "src/ui/stores/radio.js",
       "src/ui/stores/context.js",
+      "src/ui/stores/location.js",
       "src/ui/stores/display.js"
     ],
     "external": [

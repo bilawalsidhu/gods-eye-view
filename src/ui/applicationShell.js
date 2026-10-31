@@ -55,6 +55,7 @@ import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
 import { useDisplayStore } from './stores/display.js';
+import { useLocationStore } from './stores/location.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -311,18 +312,16 @@ export class StyleManager extends ShellFacade {
         rocketLaunchesLayer: services.rocketLaunchesLayer,
       },
       elements: {
-        _locationPills: this._locationPills,
-        _poiRow: this._poiRow,
-        _locationBarDivider: this._locationBarDivider,
         _locationSearch: this._locationSearch,
-        _locationSearchError: this._locationSearchError,
         _searchToggle: this._searchToggle,
         _resetGlobeBtn: this._resetGlobeBtn,
         _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
-        _locationMiniCity: this._locationMiniCity,
-        _locationMiniPoi: this._locationMiniPoi,
       },
       operations: {
+        _publishLocation: (view) =>
+          useLocationStore(applicationPinia()).publish(view),
+        _connectLocation: (controls) =>
+          useLocationStore(applicationPinia()).connect(controls),
         _beginDeferredNavigation: (...args) =>
           this._beginDeferredNavigation(...args),
         _reassertNavigationHandoff: (...args) =>

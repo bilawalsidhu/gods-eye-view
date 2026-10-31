@@ -120,7 +120,9 @@ They contain no application state.
    VisualSettings publishes to the `gev-display` store; the buttons keep
    their owner's listeners; the map source chips and status badge render
    what `createMapSourceControls()` publishes beside it, so `./ui/maps`
-   needs no Vue),
+   needs no Vue; the location tray's city and landmark pills, mini status
+   and search error render what `LocationControls` publishes to the
+   `gev-location` store, and the search field keeps its listeners),
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 

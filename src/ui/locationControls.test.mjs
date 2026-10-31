@@ -59,14 +59,9 @@ function node() {
 }
 function fixture() {
   const elements = {
-    pills: node(),
-    poiRow: node(),
-    divider: node(),
     search: node(),
     searchToggle: node(),
     resetButtons: [node(), node()],
-    statusCity: node(),
-    statusPoi: node(),
   };
   const doc = node();
   doc.createElement = node;
@@ -79,6 +74,7 @@ function fixture() {
   const frames = new Map();
   const cancelled = [];
   let next = 0;
+  const views = [];
   const controls = new LocationControls({
     elements,
     cities,
@@ -88,6 +84,7 @@ function fixture() {
     onSearch: (query) => calls.push(['search', query]),
     onSearchEdit: () => calls.push(['edit']),
     onReset: () => calls.push(['reset']),
+    publish: (view) => views.push(view),
     doc,
     requestFrame: (fn) => {
       const id = next++;
@@ -96,8 +93,32 @@ function fixture() {
     },
     cancelFrame: (id) => cancelled.push(id),
   });
-  return { elements, doc, controls, calls, frames, cancelled };
+  const view = () => views.at(-1);
+  return { elements, doc, controls, calls, frames, cancelled, views, view };
 }
+test('the tray presents its cities, empty status and no landmarks at first', () => {
+  const f = fixture();
+  assert.deepEqual(f.view(), {
+    cities: [
+      { id: 'a', label: 'City A', active: false },
+      { id: 'b', label: 'City B', active: false },
+    ],
+    poiCity: null,
+    pois: [],
+    poisExpanded: false,
+    status: { city: '📍 Location: --', poi: 'Landmark: --' },
+    searchError: null,
+  });
+  f.controls.highlightCity('b');
+  assert.deepEqual(
+    f.view().cities.map((city) => city.active),
+    [false, true],
+  );
+  f.controls.setSearchError('Not found');
+  assert.equal(f.view().searchError, 'Not found');
+  f.controls.setSearchError(null);
+  assert.equal(f.view().searchError, null);
+});
 test('hiding a POI row cancels frame zero and rejects an already queued expansion', () => {
   const f = fixture();
   f.controls.showPois('a');
@@ -105,41 +126,61 @@ test('hiding a POI row cancels frame zero and rejects an already queued expansio
   f.controls.hidePois();
   callback();
   assert.deepEqual(f.cancelled, [0]);
-  assert.equal(f.elements.poiRow.classList.contains('expanded'), false);
-  assert.equal(f.elements.divider.classList.contains('visible'), false);
+  assert.equal(f.view().poisExpanded, false);
 });
-test('replacing POIs removes old click actions and presents the final row', () => {
+test('replacing POIs routes clicks to the final row and expands it a frame later', () => {
   const f = fixture();
   f.controls.showPois('a');
-  const old = f.elements.poiRow.children[0];
+  f.controls.highlightPoi(1);
+  assert.deepEqual(
+    f.view().pois.map((poi) => [poi.key, poi.name, poi.active]),
+    [
+      ['Q', 'First', false],
+      ['W', 'Second', true],
+    ],
+  );
   f.controls.showPois('b');
-  old.fire('click');
-  assert.deepEqual(f.calls, []);
-  f.elements.poiRow.children[0].fire('click');
+  assert.equal(f.view().poiCity, 'b');
+  assert.deepEqual(
+    f.view().pois.map((poi) => [poi.name, poi.active]),
+    [['Elsewhere', false]],
+  );
+  f.controls.choosePoi(0);
   assert.deepEqual(f.calls, [['poi', 'b', 0]]);
   f.frames.get(0)();
-  assert.equal(f.elements.poiRow.classList.contains('expanded'), false);
+  assert.equal(f.view().poisExpanded, false);
   f.frames.get(1)();
-  assert.equal(f.elements.poiRow.classList.contains('expanded'), true);
+  assert.equal(f.view().poisExpanded, true);
 });
 test('destruction revokes document, search, reset, city and POI actions and removes orbit UI', () => {
   const f = fixture();
   f.controls.showPois('a');
   f.controls.createOrbitIndicator();
   assert.equal(f.doc.body.children.length, 1);
-  const city = f.elements.pills.children[0];
-  const poi = f.elements.poiRow.children[0];
   f.controls.destroy();
   f.controls.destroy();
-  city.fire('click');
-  poi.fire('click');
+  const published = f.views.length;
+  f.controls.chooseCity('a');
+  f.controls.choosePoi(0);
+  f.controls.highlightCity('a');
   f.elements.search.value = 'Place';
   f.elements.search.fire('keydown', { key: 'Enter' });
   f.doc.fire('keydown', { key: 'Q' });
   f.elements.resetButtons[0].fire('click');
   f.frames.get(0)();
   assert.deepEqual(f.calls, []);
+  assert.equal(f.views.length, published);
   assert.equal(f.doc.body.children.length, 0);
+});
+test('the mini status shows the city, a landmark or a searched place', () => {
+  const f = fixture();
+  f.controls.renderStatus({ searchedLabel: 'Somewhere' });
+  assert.equal(f.view().status.poi, 'Searched location');
+  f.controls.renderStatus({});
+  assert.deepEqual(f.view().status, {
+    city: '📍 Location: --',
+    poi: 'Landmark: --',
+  });
 });
 test('location and POI keys route once while form controls retain typing', () => {
   const f = fixture();

@@ -62,13 +62,15 @@ test('a search that arrived still clears and closes the field', () => {
 
 function navigation() {
   const field = input();
-  const error = { id: 'location-search-error', textContent: '' };
+  // The tray renders the error and the field's aria-invalid from the
+  // controls' published view (src/ui/commandDock.test.mjs).
+  const errors = [];
   const settled = [];
   const toasts = [];
   const owner = {
     _disposed: false,
     _locationSearch: field,
-    _locationSearchError: error,
+    _locationControls: { setSearchError: (message) => errors.push(message) },
     _activeLocationSearchGeneration: null,
     _settleLocationSearchUi: (generation, options) =>
       settled.push([generation, options]),
@@ -82,7 +84,7 @@ function navigation() {
       { status, query: field.value },
       { type, generation: 7 },
     );
-  return { owner, field, error, settled, toasts, handle };
+  return { owner, field, errors, settled, toasts, handle };
 }
 
 for (const [status, text] of [
@@ -94,17 +96,10 @@ for (const [status, text] of [
     n.handle('searching', 'started');
     n.handle(status, status);
     n.handle(status, 'settled');
-    assert.match(n.error.textContent, new RegExp(`^${text}\\. `));
-    assert.equal(n.field.getAttribute('aria-invalid'), 'true');
-    assert.equal(
-      n.field.getAttribute('aria-describedby'),
-      'location-search-error',
-    );
+    assert.match(n.errors.at(-1), new RegExp(`^${text}\\. `));
     assert.deepEqual(n.settled, [[7, { keepQuery: true }]]);
     assert.deepEqual(n.toasts, []);
     n.handle('searching', 'started');
-    assert.equal(n.error.textContent, '');
-    assert.equal(n.field.getAttribute('aria-invalid'), null);
-    assert.equal(n.field.getAttribute('aria-describedby'), null);
+    assert.equal(n.errors.at(-1), null);
   });
 }

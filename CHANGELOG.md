@@ -50,6 +50,13 @@
   dock renders them and calls `select()`. `renderMapStackChips` and
   `syncMapStackChips` are deprecated (samehkhamis).
 
+- `LocationControls` (`./ui/location`) no longer builds the city and
+  landmark pills or writes the mini status: it presents the tray, including
+  the search error (`setSearchError()`), and hands it to its `publish`
+  option, and Core's dock renders it and calls `chooseCity()` and
+  `choosePoi()`. Its `elements` are now only `search`, `searchToggle` and
+  `resetButtons` (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

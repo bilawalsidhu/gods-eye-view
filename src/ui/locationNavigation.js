@@ -111,17 +111,7 @@ export class LocationNavigation {
 
   /** Show, or with null clear, the announced error under the search field. */
   _setLocationSearchError(message) {
-    const input = this._locationSearch;
-    const error = this._locationSearchError;
-    if (error) error.textContent = message || '';
-    if (!input) return;
-    if (message) {
-      input.setAttribute('aria-invalid', 'true');
-      if (error?.id) input.setAttribute('aria-describedby', error.id);
-    } else {
-      input.removeAttribute('aria-invalid');
-      input.removeAttribute('aria-describedby');
-    }
+    this._locationControls?.setSearchError(message);
   }
 
   _initLocationBar() {
@@ -153,15 +143,11 @@ export class LocationNavigation {
     );
     this._locationControls = new LocationControls({
       elements: {
-        pills: this._locationPills,
-        poiRow: this._poiRow,
-        divider: this._locationBarDivider,
         search: this._locationSearch,
         searchToggle: this._searchToggle,
         resetButtons: [this._resetGlobeBtn, this._cockpitResetGlobeBtn],
-        statusCity: this._locationMiniCity,
-        statusPoi: this._locationMiniPoi,
       },
+      publish: (view) => this._publishLocation?.(view),
       cities: CITY_POIS,
       getExpandedCity: () => this._expandedCityId,
       onCity: (id) => this._onCityPillClick(id),
@@ -170,6 +156,7 @@ export class LocationNavigation {
       onSearchEdit: () => this._setLocationSearchError(null),
       onReset: () => this.resetToGlobeView(),
     });
+    this._connectLocation?.(this._locationControls);
   }
 
   _beginWorldJumpTransition() {
@@ -449,6 +436,8 @@ export class LocationNavigation {
     this._locationLookupUnsubscribe = null;
     this._locationLookup?.destroy();
     this._locationControls?.destroy();
+    this._connectLocation?.(null);
+    this._publishLocation?.(null);
     this._cancelGlobeReset?.();
     this._cancelGlobeReset = null;
     if (this._worldJumpActive) this._endWorldJumpTransition();

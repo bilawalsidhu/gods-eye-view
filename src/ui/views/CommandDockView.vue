@@ -3,11 +3,15 @@ import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
+import { useLocationStore } from '../stores/location.js';
 
 // VisualSettings publishes the active style and the map source controls
 // their chip row; until they do, the dock shows its initial markup. The
 // style buttons keep their owner's listeners; a chip calls the controls.
 const { style, mapSource, mapSourceControls } = storeToRefs(useDisplayStore());
+// LocationControls publishes the location tray; pills call the controls,
+// and the search field keeps their listeners.
+const { view: loc, controls: locationControls } = storeToRefs(useLocationStore());
 
 function selectMapSource(chip) {
   if (!chip.available) return;
@@ -88,23 +92,23 @@ function selectMapSource(chip) {
         <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel" data-i18n-title>+</button>
       </div>
       <div id="location-mini-status" class="location-mini-status" aria-live="polite">
-        <div id="location-mini-city" class="location-mini-city" data-i18n>📍 Location: --</div>
-        <div id="location-mini-poi" class="location-mini-poi" data-i18n>Landmark: --</div>
+        <div id="location-mini-city" class="location-mini-city">{{ loc ? loc.status.city : t('📍 Location: --') }}</div>
+        <div id="location-mini-poi" class="location-mini-poi">{{ loc ? loc.status.poi : t('Landmark: --') }}</div>
       </div>
       <div id="location-bar-popover" class="dock-popover-content">
         <button class="dock-pin-btn" data-pin-target="location-bar" type="button" aria-label="Pin location tray" aria-pressed="false" title="Keep location tray open" data-i18n-aria-label data-i18n-title><img src="/pin.svg" alt="" /></button>
-        <div id="poi-row" class="poi-row-container"></div>
-        <div class="location-bar-divider" id="location-bar-divider"></div>
+        <div id="poi-row" class="poi-row-container" v-class-toggle="{ expanded: !!loc?.poisExpanded }"><button v-for="poi in loc?.pois" :key="`${loc.poiCity}:${poi.index}`" type="button" class="poi-pill" v-class-toggle="{ active: poi.active }" :data-poi-index="poi.index" @click="locationControls?.choosePoi(poi.index)"><span class="poi-pill-key">{{ poi.key }}</span><span class="poi-pill-name">{{ poi.name }}</span></button></div>
+        <div class="location-bar-divider" id="location-bar-divider" v-class-toggle="{ visible: !!loc?.poisExpanded }"></div>
         <div class="location-city-row">
-          <div id="location-pills" class="location-pills"></div>
+          <div id="location-pills" class="location-pills"><button v-for="city in loc?.cities" :key="city.id" type="button" class="location-pill" v-class-toggle="{ active: city.active }" :data-location-id="city.id" @click="locationControls?.chooseCity(city.id)">{{ city.label }}</button></div>
           <div class="location-search-wrap">
             <button id="search-toggle" class="search-toggle-btn" title="Search any location" data-i18n-title>
               <span>&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" data-i18n-aria-label data-i18n-placeholder />
+            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" :aria-invalid="loc?.searchError ? 'true' : null" :aria-describedby="loc?.searchError ? 'location-search-error' : null" data-i18n-aria-label data-i18n-placeholder />
           </div>
         </div>
-        <p id="location-search-error" class="location-search-error" role="alert"></p>
+        <p id="location-search-error" class="location-search-error" role="alert">{{ loc?.searchError }}</p>
       </div>
     </div>
   </div>
