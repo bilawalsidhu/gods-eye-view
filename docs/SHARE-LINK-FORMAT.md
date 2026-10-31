@@ -90,35 +90,35 @@ probability of about 255 in 256 (many of them already fail as base64url).
 
 ## Field registry (top level)
 
-| #   | State key                    | Type  | Default     | Encoding                                                |
-| --- | ---------------------------- | ----- | ----------- | ------------------------------------------------------- |
-| 1   | `view.kind`                  | enum  | see below   | 0 place, 1 thing                                        |
-| 2   | `lat`                        | coord | 0           | zigzag of degrees × 10⁴                                 |
-| 3   | `lon`                        | coord | 0           | zigzag of degrees × 10⁴                                 |
-| 4   | `alt`                        | sint  | 800         | whole metres                                            |
-| 5   | `heading`                    | angle | 0           | whole degrees, see angles                               |
-| 6   | `pitch`                      | sint  | −35         | whole degrees                                           |
-| 7   | `roll`                       | angle | 0           | whole degrees                                           |
-| 8   | `sharedAtMs`                 | epoch | none        | zigzag seconds since 2026-01-01T00:00:00Z               |
-| 9   | booleans                     | flags | 0           | bit set when the value differs from default             |
-| 10  | `layerState.enabledLayerIds` | LEN   | none        | layer bitset, see layers                                |
-| 11  | `layerState.options`         | LEN   | none        | packed option triples, see layers                       |
-| 12  | `panelState`                 | LEN   | none        | packed panel entries, see panels                        |
-| 13  | thing                        | LEN   | none        | sub-message, see thing views                            |
-| 14  | `style`                      | enum  | `normal`    | normal, retro, surveillance, thermal, anime, noir, snow |
-| 15  | `mapStack`                   | enum  | `photoreal` | photoreal, bing-aerial, bing-labels, esri-imagery, osm  |
-| 16  | `hudVariant`                 | enum  | style       | tactical, operator, minimal, cyber                      |
-| 17  | `bloomIntensity`             | uint  | style       |                                                         |
-| 18  | `bloomVersion`               | uint  | 2           |                                                         |
-| 19  | `sharpenIntensity`           | uint  | style       |                                                         |
-| 20  | `detectionMode`              | enum  | style       | OFF, SPARSE, BALANCED, DENSE                            |
-| 21  | `detectionDensity`           | uint  | style       | one of 0, 25, 50, 75, 100                               |
-| 22  | `detectionAllocation`        | enum  | style       | ELASTIC, WEIGHTED                                       |
-| 23  | `detectionFadePct`           | uint  | style       | 0–40                                                    |
-| 24  | `detectionOutsideOpacityPct` | uint  | style       | 0–100                                                   |
-| 25  | `scopeFeatherPct`            | uint  | 100         | 0–200                                                   |
-| 26  | `scopeTerminusPct`           | uint  | none        | 94–100; absent is the adaptive terminus                 |
-| 27  | `styleParams`                | LEN   | style       | packed `(token, value × 100)` pairs                     |
+| #   | State key                    | Type  | Default     | Encoding                                                          |
+| --- | ---------------------------- | ----- | ----------- | ----------------------------------------------------------------- |
+| 1   | `view.kind`                  | enum  | see below   | 0 place, 1 thing                                                  |
+| 2   | `lat`                        | coord | 0           | zigzag of degrees × 10⁴                                           |
+| 3   | `lon`                        | coord | 0           | zigzag of degrees × 10⁴                                           |
+| 4   | `alt`                        | sint  | 800         | whole metres                                                      |
+| 5   | `heading`                    | angle | 0           | whole degrees, see angles                                         |
+| 6   | `pitch`                      | sint  | −35         | whole degrees                                                     |
+| 7   | `roll`                       | angle | 0           | whole degrees                                                     |
+| 8   | `sharedAtMs`                 | epoch | none        | zigzag seconds since 2026-01-01T00:00:00Z                         |
+| 9   | booleans                     | flags | 0           | bit set when the value differs from default                       |
+| 10  | `layerState.enabledLayerIds` | LEN   | none        | layer bitset, see layers                                          |
+| 11  | `layerState.options`         | LEN   | none        | packed option triples, see layers                                 |
+| 12  | `panelState`                 | LEN   | none        | packed panel entries, see panels                                  |
+| 13  | thing                        | LEN   | none        | sub-message, see thing views                                      |
+| 14  | `style`                      | enum  | `normal`    | normal, retro, surveillance, thermal, anime, noir, snow (retired) |
+| 15  | `mapStack`                   | enum  | `photoreal` | photoreal, bing-aerial, bing-labels, esri-imagery, osm            |
+| 16  | `hudVariant`                 | enum  | style       | tactical, operator (retired), minimal, cyber                      |
+| 17  | `bloomIntensity`             | uint  | style       |                                                                   |
+| 18  | `bloomVersion`               | uint  | 2           |                                                                   |
+| 19  | `sharpenIntensity`           | uint  | style       |                                                                   |
+| 20  | `detectionMode`              | enum  | style       | OFF, SPARSE, BALANCED, DENSE                                      |
+| 21  | `detectionDensity`           | uint  | style       | one of 0, 25, 50, 75, 100                                         |
+| 22  | `detectionAllocation`        | enum  | style       | ELASTIC, WEIGHTED                                                 |
+| 23  | `detectionFadePct`           | uint  | style       | 0–40                                                              |
+| 24  | `detectionOutsideOpacityPct` | uint  | style       | 0–100                                                             |
+| 25  | `scopeFeatherPct`            | uint  | 100         | 0–200                                                             |
+| 26  | `scopeTerminusPct`           | uint  | none        | 94–100; absent is the adaptive terminus                           |
+| 27  | `styleParams`                | LEN   | style       | packed `(token, value × 100)` pairs                               |
 
 Field 1 absent means `thing` when field 13 is present and `place` otherwise,
 so v1 never writes it; a later view kind writes its code.
@@ -128,6 +128,9 @@ as LEN text in the same field, so the app can add a style or map before this
 table learns its code. A new style's settings are encoded against its own
 defaults, while a decoder that does not know the style uses Normal's; adding a
 style also extends the pinned style-defaults table.
+
+`hudVariant` code 1 (`operator`) is retired: the app no longer offers that
+layout and restores it as `tactical`. The code stays reserved.
 
 Flag bits (field 9): 0 `bloom`, 1 `sharpen`, 2 `hudVisible`, 3
 `celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on).
@@ -163,7 +166,7 @@ for it.) In v1:
 | thermal      | sensitivity 0.85, bloom 0.2, mode 0.33, pixelation 1, palette 0 |
 | anime        | saturation 1, edgeThick 0.5                                     |
 | noir         | contrastAmt 1.2, grainAmt 0.5, vignetteAmt 0.5                  |
-| snow         | density 0.6, wind 0.5                                           |
+| snow         | retired: decodes as normal; its parameters are dropped          |
 
 These are frozen like every other default: the codec reads them from the
 app's tables today, and a test pins them, so if a table moves the old values
@@ -342,7 +345,9 @@ the app that can open it.
    values in the codec (see Style defaults). The same applies
    to `SHARE_VIEW_LAYER_OPTION_ABSENT` and the panel defaults.
 4. **Codes are append-only.** Enum lists, entity kinds, flag bits, panel
-   numbers and style parameter tokens only grow.
+   numbers and style parameter tokens only grow. A style the app no longer
+   offers keeps its code: `snow` (6) is retired, so a link that names it
+   opens as Normal and the parameters written for it are dropped.
 5. **Add, don't change.** A new setting takes the next free field number
    (28 onwards; fields 1–15 have one-byte tags and are all taken). A new
    boolean takes the next flag bit instead, which costs nothing when it is at
