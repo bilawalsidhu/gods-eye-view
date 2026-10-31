@@ -20,13 +20,14 @@ export async function renderApplicationHtml(html) {
     const view = APPLICATION_VIEWS[name];
     if (!view) throw new Error(`Unknown application view: ${name}`);
     const markup = (await renderToString(createSSRApp(view).use(createPinia())))
-      // Hydration markers and empty-attribute values are SSR detail; the
-      // DOM is the same as the template's.
+      // Hydration markers, empty-attribute values and escaped apostrophes
+      // are SSR detail; the DOM is the same as the template's.
       .replace(/<!--\[-->|<!--\]-->|<!---->/g, '')
-      .replace(/ ([\w:.-]+)=""/g, ' $1');
+      .replace(/ ([\w:.-]+)=""/g, ' $1')
+      .replaceAll('&#39;', "'");
     output = output.replace(
       host,
-      `<div class="gev-view" data-gev-view="${name}">${markup}</div>`,
+      () => `<div class="gev-view" data-gev-view="${name}">${markup}</div>`,
     );
   }
   return output;

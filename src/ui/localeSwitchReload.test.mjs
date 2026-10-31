@@ -136,3 +136,21 @@ test('the language already active neither asks nor reloads', () => {
     view.restore();
   }
 });
+
+test('a host without Core locales removes the picker instead of mounting it', () => {
+  const previous = globalThis.document;
+  let removed = 0;
+  const root = { remove: () => removed++ };
+  globalThis.document = {
+    getElementById: (id) => (id === 'locale-picker' ? root : null),
+  };
+  const shell = { services: {}, _localePickerEnabled: false };
+  try {
+    StyleManager.prototype._initLocaleSelector.call(shell);
+    assert.equal(removed, 1);
+    assert.equal(shell._localePicker, undefined);
+  } finally {
+    for (const unregister of shell._unsavedWorkChecks) unregister();
+    globalThis.document = previous;
+  }
+});

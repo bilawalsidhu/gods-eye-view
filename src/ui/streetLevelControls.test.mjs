@@ -988,7 +988,7 @@ test('a note under SINCE says what date it compares, only while one is given', (
     assert.equal(note().hidden, true);
     // The panel's own markup has it, read out with the slider.
     const template = fs.readFileSync(
-      new URL('./templates/layer-panels.html', import.meta.url),
+      new URL('./views/LayerPanelsView.vue', import.meta.url),
       'utf8',
     );
     assert.match(template, /<small id="sl-since-note"[^>]* hidden>/);

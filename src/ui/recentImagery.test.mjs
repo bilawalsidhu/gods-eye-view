@@ -190,7 +190,7 @@ class FakeElement {
   }
 }
 
-/** The static rail panel skeleton from templates/context.html. */
+/** The static rail panel skeleton from views/ContextView.vue. */
 function fakeDocument() {
   const document = {
     documentElement: { clientWidth: 1200 },

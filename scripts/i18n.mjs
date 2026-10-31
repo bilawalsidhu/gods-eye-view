@@ -8,7 +8,8 @@
 // lists it.
 //
 // Messages are the English literals passed to t(), tn() and msg() in src/,
-// plus the markup opted in with data-i18n* in src/ui/templates and index.html.
+// plus the markup opted in with data-i18n* in index.html, src/ui/templates and
+// the Vue views.
 // It also lists UI text that is not marked at all (see findUnmarked).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';

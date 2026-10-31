@@ -62,9 +62,9 @@ test('the engine resolves manual geometry before any name resolution', () => {
 });
 
 test('the Draw control markup carries the ids the tool binds to', () => {
-  // The DISPLAY rail is a component template now, assembled into index.html at
-  // build time — the markup is not in index.html any more.
-  const html = read('src/ui/templates/display-controls.html');
+  // The DISPLAY rail is a Vue view now, rendered into index.html's view host —
+  // the markup is not in index.html any more.
+  const html = read('src/ui/views/DisplayControlsView.vue');
   const ids = [
     'draw-toggle',
     'draw-mode-row',

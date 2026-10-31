@@ -208,7 +208,7 @@ test('DETECT uses the real OFF/restore button and density input to reach DENSE',
   assert.equal(await detectOn(page, pause), 'DENSE');
   assert.deepEqual(modes, ['BALANCED', 'OFF', 'DENSE']);
   const template = readFileSync(
-    new URL('../ui/templates/display-controls.html', import.meta.url),
+    new URL('../ui/views/DisplayControlsView.vue', import.meta.url),
     'utf8',
   );
   assert.match(template, /id="detection-density-slider"/);

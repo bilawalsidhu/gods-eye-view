@@ -1,3 +1,4 @@
+<template>
   <div id="cesiumContainer"></div>
   <div id="world-overlay-root" aria-hidden="true">
     <canvas id="world-overlay-canvas"></canvas>
@@ -59,3 +60,4 @@
   <div id="safe-frame-overlay">
     <div id="safe-frame-box"></div>
   </div>
+</template>

@@ -74,7 +74,7 @@ export function allocationTestArgs(file) {
 /** Node flags every unit-test process receives. */
 export const UNIT_TEST_NODE_FLAGS = Object.freeze([
   // Single-file components compile on import.
-  '--import=./src/testSupport/registerVue.mjs',
+  '--import=./build/registerVue.js',
 ]);
 
 function runTests(args) {

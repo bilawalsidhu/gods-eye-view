@@ -17,9 +17,9 @@ import { VisualSettings } from './visualSettings.js';
 import { STYLES } from './visualPresets.js';
 
 test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () => {
-  for (const file of ['layer-panels.html', 'context.html']) {
+  for (const file of ['LayerPanelsView.vue', 'ContextView.vue']) {
     const markup = readFileSync(
-      new URL(`./templates/${file}`, import.meta.url),
+      new URL(`./views/${file}`, import.meta.url),
       'utf8',
     );
     assert.match(markup, /class="cyber-panel-body" data-rail-scroller/);
@@ -647,7 +647,7 @@ test('Cyber visual defaults update the style, thermal palette and render state',
 });
 
 test('the Display selector, voice schema and final stylesheet expose Cyber', () => {
-  const display = read('./templates/display-controls.html');
+  const display = read('./views/DisplayControlsView.vue');
   const stylesheet = read('../../style.css');
   const rightRail = read('./rightPanelRail.js');
   const hud = read('../hud.js');
@@ -877,7 +877,7 @@ test('Cyber panels retain clean edges without the added footer band', () => {
 
 test('Cyber keeps Sonar on/off without the removed CSS effect switch or dimmer', () => {
   const template = readFileSync(
-    new URL('./templates/display-controls.html', import.meta.url),
+    new URL('./views/DisplayControlsView.vue', import.meta.url),
     'utf8',
   );
   assert.match(template, /id="cyber-sonar-toggle"/);

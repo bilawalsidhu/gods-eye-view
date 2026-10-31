@@ -1,3 +1,4 @@
+<template>
   <!-- POWER UP — in-app key setup. Dev-server only: src/keySetup.js removes
        both the chip and this dialog outright when /api/setup/status is not
        there to answer (prod builds, LAN visitors). Rows are rendered from
@@ -28,3 +29,4 @@
     </div>
     <p class="key-setup-note" data-key-setup-status role="status" aria-live="polite" data-i18n>The Google Maps key buys the photorealistic planet — everything else stacks on top.</p>
   </aside>
+</template>

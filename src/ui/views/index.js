@@ -1,11 +1,28 @@
 import { createApp } from 'vue';
 import { applicationPinia } from '../vueRuntime.js';
+import WelcomeView from './WelcomeView.vue';
+import ContextView from './ContextView.vue';
+import LayerPanelsView from './LayerPanelsView.vue';
+import CommandDockView from './CommandDockView.vue';
+import DisplayControlsView from './DisplayControlsView.vue';
+import CockpitView from './CockpitView.vue';
+import SceneChromeView from './SceneChromeView.vue';
+import ProviderSettingsView from './ProviderSettingsView.vue';
 
 /**
  * Application views by template name (build/applicationViews.js lists the
  * same names). Each renders the markup its static template held.
  */
-export const APPLICATION_VIEWS = Object.freeze({});
+export const APPLICATION_VIEWS = Object.freeze({
+  'provider-settings': ProviderSettingsView,
+  'scene-chrome': SceneChromeView,
+  cockpit: CockpitView,
+  'display-controls': DisplayControlsView,
+  'command-dock': CommandDockView,
+  'layer-panels': LayerPanelsView,
+  context: ContextView,
+  welcome: WelcomeView,
+});
 
 const mounted = new WeakSet();
 

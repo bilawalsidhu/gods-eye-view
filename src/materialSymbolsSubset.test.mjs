@@ -20,9 +20,8 @@ const ICON_PROPERTY = /\bicon:\s*['"]([a-z0-9_]+)['"]/g;
 /**
  * Files that SHIP markup. Tests assert on markup, they do not render it.
  *
- * The panel markup lives in `src/ui/templates/*.html`, so HTML under `src` is
- * read as well: a glyph named only in a template is still a glyph the font has
- * to carry.
+ * The panel markup lives in Vue views under `src`, so markup there is read as
+ * well: a glyph named only in a view is still a glyph the font has to carry.
  */
 function sourceFiles(directory = SRC_ROOT) {
   const files = [];

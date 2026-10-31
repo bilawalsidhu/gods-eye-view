@@ -4,4 +4,13 @@
  * `mountApplicationViews()` renders them before the page is wired. The
  * loading screen stays static so it paints before any script runs.
  */
-export const APPLICATION_VIEW_NAMES = Object.freeze([]);
+export const APPLICATION_VIEW_NAMES = Object.freeze([
+  'provider-settings',
+  'scene-chrome',
+  'cockpit',
+  'display-controls',
+  'command-dock',
+  'layer-panels',
+  'context',
+  'welcome',
+]);

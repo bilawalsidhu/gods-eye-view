@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { compileScript, compileTemplate, parse } from 'vue/compiler-sfc';
-import { VUE_COMPILER_OPTIONS } from '../../build/vueOptions.js';
+import { VUE_TEMPLATE_OPTIONS } from './vueOptions.js';
 
 /**
- * Compile a single-file component to an ES module for Node's test runner.
+ * Compile a single-file component to an ES module for Node, so unit tests (the
+ * application's and a host's) can import components without a bundler.
  * Styles are dropped: tests read the global stylesheet separately.
  */
 export function compileVueModule(source, filename) {
@@ -15,7 +16,7 @@ export function compileVueModule(source, filename) {
     return compileScript(descriptor, {
       id,
       inlineTemplate: true,
-      templateOptions: { compilerOptions: VUE_COMPILER_OPTIONS },
+      templateOptions: VUE_TEMPLATE_OPTIONS,
     }).content;
   }
   const script = descriptor.script
@@ -27,7 +28,7 @@ export function compileVueModule(source, filename) {
       source: descriptor.template.content,
       filename,
       id,
-      compilerOptions: VUE_COMPILER_OPTIONS,
+      ...VUE_TEMPLATE_OPTIONS,
     });
     if (compiled.errors.length) throw compiled.errors[0];
     template = compiled.code;

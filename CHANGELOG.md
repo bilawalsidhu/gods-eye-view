@@ -8,6 +8,12 @@
   the bottom tab bar. The rail is the first view built with Vue and Pinia,
   which now ship with the app; see docs/VUE-MIGRATION.md (samehkhamis).
 
+- The page's panels, dock, cockpit and dialogs are Vue views with the same
+  markup as before. Hosts that do not initialize Core's locale pass
+  `localePicker: false` to `createApplicationControls` to drop the language
+  picker, and Node tests that import application modules register the
+  component loader with `--import=<core>/build/register-vue` (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

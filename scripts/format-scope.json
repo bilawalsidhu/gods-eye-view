@@ -1121,8 +1121,8 @@
   "src/share/shareLinkPath.test.mjs",
   "src/ui/kit/UiRail.test.mjs",
   "src/testSupport/vueDom.mjs",
-  "src/testSupport/vueLoader.mjs",
-  "src/testSupport/registerVue.mjs",
+  "build/vueLoader.js",
+  "build/registerVue.js",
   "src/ui/panelNavigation.test.mjs",
   "src/ui/stores/panels.test.mjs"
 ]

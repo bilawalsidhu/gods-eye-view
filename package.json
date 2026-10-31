@@ -222,6 +222,9 @@
     "./build/html": {
       "node": "./build/application-html.js"
     },
+    "./build/register-vue": {
+      "node": "./build/registerVue.js"
+    },
     "./application/catalog": "./src/app/catalog.js",
     "./standalone/catalog": "./src/standalone/catalog.js",
     "./application/layers": "./src/app/constructCatalog.js",

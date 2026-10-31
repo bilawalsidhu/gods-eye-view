@@ -1,3 +1,4 @@
+<template>
   <!-- Post-processing toggles (top-right) -->
   <div id="pp-toggles" class="panel-collapsible collapsed" data-panel-id="pp-toggles">
     <div class="compact pp-header-row">
@@ -184,3 +185,4 @@
   </div>
   </div>
   <button id="clean-view-exit" title="Return UI controls" data-i18n-title data-i18n>EXIT CLEAN VIEW</button>
+</template>

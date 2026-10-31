@@ -61,9 +61,11 @@ They contain no application state.
    need no change. Views belong to the page and are never unmounted. The
    loading screen stays static so it paints before any script runs. Markup
    tests read `renderApplicationHtml()` from `src/testSupport`, which renders
-   the views on the server. Vue preserves template whitespace so a view's DOM
-   matches its template exactly. First the markup moves, unchanged;
-   then each view takes over its wiring. Order: Scenes, Weather, Recent imagery,
+   the views on the server. Vue keeps the whitespace between elements as a
+   single space, so a view renders as its template did; no view markup sits
+   under a `white-space: pre` rule. The markup has moved, unchanged: every
+   template except the loading screen is a view. Next each view takes over
+   its wiring. Order: Scenes, Weather, Recent imagery,
    Street level, CCTV, Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
@@ -78,7 +80,7 @@ They contain no application state.
   components are compiled by a test loader; component tests render with
   `@vue/test-utils` and `happy-dom`. `npm test` registers the loader; to run
   one file that reaches a component (including anything importing the
-  shell), use `node --import=./src/testSupport/registerVue.mjs --test <file>`.
+  shell), use `node --import=./build/registerVue.js --test <file>`.
 - Visual parity: before/after screenshots of every panel at desktop and phone
   widths, in the default and Cyber themes, with the rail as the only expected
   difference.

@@ -77,6 +77,8 @@ export class StyleManager extends ShellFacade {
   /**
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options]
+   * @param {boolean} [options.localePicker=true] - false removes the language
+   *   picker, for a host that does not initialize Core's locale.
    */
   constructor(
     viewer,
@@ -86,9 +88,11 @@ export class StyleManager extends ShellFacade {
       services,
       requestServices,
       initialShareCode = null,
+      localePicker = true,
     } = {},
   ) {
     super();
+    this._localePickerEnabled = localePicker;
     const {
       IntelHUD,
       ShareLinkManager,
@@ -763,6 +767,10 @@ export class StyleManager extends ShellFacade {
     ];
     const root = globalThis.document?.getElementById?.('locale-picker');
     if (!root) return;
+    if (this._localePickerEnabled === false) {
+      root.remove();
+      return;
+    }
     this._localePicker = mountLocalePicker({
       root,
       current: getLocale(),

@@ -20,7 +20,15 @@
     "modules": [
       "src/app/application.js",
       "src/ui/vueRuntime.js",
-      "src/ui/views/index.js"
+      "src/ui/views/index.js",
+      "src/ui/views/CockpitView.vue",
+      "src/ui/views/CommandDockView.vue",
+      "src/ui/views/ContextView.vue",
+      "src/ui/views/DisplayControlsView.vue",
+      "src/ui/views/LayerPanelsView.vue",
+      "src/ui/views/ProviderSettingsView.vue",
+      "src/ui/views/SceneChromeView.vue",
+      "src/ui/views/WelcomeView.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -38,7 +46,7 @@
   },
   "vite-build": {
     "runtime": "node",
-    "exports": ["./build/vite", "./build/html"],
+    "exports": ["./build/vite", "./build/html", "./build/register-vue"],
     "modules": [
       "build/vite.js",
       "build/application-html.js",
@@ -46,9 +54,11 @@
       "build/embed-framing.js",
       "build/panel.js",
       "build/applicationViews.js",
-      "build/vueOptions.js"
+      "build/vueOptions.js",
+      "build/registerVue.js",
+      "build/vueLoader.js"
     ],
-    "external": ["vite-plugin-cesium", "@vitejs/plugin-vue"]
+    "external": ["vite-plugin-cesium", "@vitejs/plugin-vue", "vue"]
   },
   "live-providers": {
     "runtime": "node",

@@ -1,3 +1,4 @@
+<template>
   <!-- Aircraft first-person view. It can be entered from the visible view switcher. -->
   <section id="cockpit-hud" aria-label="Aircraft cockpit view" hidden data-i18n-aria-label>
     <!-- One optical coordinate system: every targeting mark shares this center.
@@ -326,3 +327,4 @@
       <span data-i18n>EXIT COCKPIT</span>
     </button>
   </nav>
+</template>

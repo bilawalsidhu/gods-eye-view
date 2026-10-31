@@ -1,3 +1,4 @@
+<template>
   <!-- Global Context is deliberately independent from the left layer accordion. -->
   <aside id="right-context-rail">
     <div id="weather-panel" class="panel-collapsible" data-panel-id="weather-panel" hidden>
@@ -214,3 +215,4 @@
   </aside>
 
   <div id="scene-runtime"></div>
+</template>

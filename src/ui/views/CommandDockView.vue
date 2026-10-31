@@ -1,3 +1,4 @@
+<template>
   <!-- Unified bottom command dock: locations, voice (injected at runtime), visual presets -->
   <div id="command-dock" aria-label="Navigation, voice, and visual preset controls" data-i18n-aria-label>
   <!-- Control panel -->
@@ -91,3 +92,4 @@
     </div>
   </div>
   </div>
+</template>

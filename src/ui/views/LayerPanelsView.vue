@@ -1,3 +1,4 @@
+<template>
   <div id="left-panel-stack">
   <!-- Data Layer Toggle Panel -->
   <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
@@ -185,3 +186,4 @@
   </div>
 
   </div>
+</template>

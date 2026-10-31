@@ -816,7 +816,7 @@ test('markup, startup ordering and accessibility remain pinned', async () => {
     html,
     /data-first-run-status[^>]*role="status"[^>]*aria-live="polite"/,
   );
-  assert.match(html, /<input type="checkbox" data-first-run-suppress \/>/);
+  assert.match(html, /<input type="checkbox" data-first-run-suppress\s*\/?>/);
   assert.match(html, /<strong data-first-run-environmental-title>/);
   // Subcopy must name BOTH feeds the tile turns on — a tile that promised only
   // half of what it does is the defect this replaced. Only the VISIBLE <small>

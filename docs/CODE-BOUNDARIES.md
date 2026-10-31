@@ -276,7 +276,7 @@ compatible through re-exports.
 
 ### Adding a right-rail readout panel
 
-Add the shell in `src/ui/templates/context.html` inside `#right-context-rail`:
+Add the shell in `src/ui/views/ContextView.vue` inside `#right-context-rail`:
 a `.panel-collapsible` with a stable `id` and matching `data-panel-id`, the
 existing `.panel-header`, collapse button and a dedicated body. Register it
 with the existing panel chrome/layout owners; do not allocate rail space in

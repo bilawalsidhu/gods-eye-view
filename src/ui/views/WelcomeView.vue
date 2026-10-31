@@ -1,3 +1,4 @@
+<template>
   <!-- Explicit mission choice on a fresh session. Live feeds are not auto-enabled
        until the visitor asks; shared links skip this surface entirely. It returns
        every session until "Don't show this again" is ticked — see
@@ -56,3 +57,4 @@
          a live region that also holds layout makes the row jump as it speaks. -->
     <p class="first-run-note" data-first-run-status role="status" aria-live="polite" data-i18n>Tip: the GEV MIC button in the dock lets you talk to the map.</p>
   </aside>
+</template>

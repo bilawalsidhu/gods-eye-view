@@ -286,7 +286,12 @@ test('Radio volume and mission speed share the Sharpen slider visual language', 
 test('Radio is nested inside Context with its own disclosure and power controls', () => {
   const contextStart = html.indexOf('id="global-context-panel"');
   const radioStart = html.indexOf('id="radio-panel"');
-  const contextEnd = html.indexOf('\n  </aside>', contextStart);
+  // The Context panel ends with the right rail's own closing tag, after the
+  // military awareness aside nested inside it.
+  const contextEnd = html.indexOf(
+    '</aside>',
+    html.indexOf('</aside>', html.indexOf('id="military-awareness-panel"')) + 1,
+  );
   assert.ok(contextStart >= 0 && radioStart > contextStart && radioStart < contextEnd);
   assert.match(html, /id="radio-panel"[^>]*data-panel-id="radio-panel"/);
   assert.match(html, /aria-label="Radio playback"/);

@@ -92,7 +92,7 @@ test('first run opens with Scope ON and 100% feather at every default surface', 
   assert.match(indexHtml, /id="scope-feather-value"[^>]*>100%</,
     'index.html: and its readout agrees with the handle');
 
-  assert.match(indexHtml, /<input type="checkbox" id="scope-toggle"[^>]*\schecked\s*\/>/,
+  assert.match(indexHtml, /<input type="checkbox" id="scope-toggle"[^>]*\schecked\s*\/?>/,
     'the native Scope checkbox starts checked');
 
   // The link this session generates must describe the mask this session draws,
