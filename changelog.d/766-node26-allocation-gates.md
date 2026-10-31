@@ -1,0 +1,1 @@
+- Run the existing GC-bracketed allocation regression gates on Node 26 as well as Node 24. Keep the current byte budgets so CI catches allocation regressions on both supported runtimes (#39).
