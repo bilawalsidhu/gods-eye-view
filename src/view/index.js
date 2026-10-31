@@ -82,18 +82,20 @@ const ANNOTATION_COLORS = Object.freeze([
   'red',
 ]);
 const ANNOTATION_ROUTE_MODES = Object.freeze(['walk', 'car', 'bike']);
-const ANNOTATION_ROUTE_MODE_MAP = Object.freeze({
-  walk: 'walk',
-  walking: 'walk',
-  foot: 'walk',
-  car: 'car',
-  drive: 'car',
-  driving: 'car',
-  bike: 'bike',
-  cycle: 'bike',
-  cycling: 'bike',
-  bicycle: 'bike',
-});
+const ANNOTATION_ROUTE_MODE_MAP = Object.freeze(
+  Object.assign(Object.create(null), {
+    walk: 'walk',
+    walking: 'walk',
+    foot: 'walk',
+    car: 'car',
+    drive: 'car',
+    driving: 'car',
+    bike: 'bike',
+    cycle: 'bike',
+    cycling: 'bike',
+    bicycle: 'bike',
+  }),
+);
 const MAX_ANNOTATIONS = 24;
 const MAX_ANNOTATION_PARAM_CHARS = 6000;
 const ANNOTATION_PARAM = 'an';

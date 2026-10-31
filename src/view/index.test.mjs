@@ -316,3 +316,29 @@ for (const [mode, routedMode, word] of [
     engine.clear();
   });
 }
+
+// Regression: ANNOTATION_ROUTE_MODE_MAP must not expose Object.prototype
+// inherited keys. mode:'constructor' and mode:'__proto__' must be treated as
+// unknown modes and discarded, not surfaced as a function or object.
+for (const mode of ['constructor', '__proto__']) {
+  test(`route mode '${mode}' is not an inherited map key and is discarded`, () => {
+    const points = [
+      { latitude: 33.513, longitude: 36.292 },
+      { latitude: 36.202, longitude: 37.134 },
+    ];
+    const view = createView({
+      camera: { lat: 35, lon: 37 },
+      annotations: [{ type: 'route', points, mode }],
+    });
+    const annotation = view.annotations[0];
+    assert.equal(
+      typeof annotation.mode,
+      'undefined',
+      `mode should be dropped, got ${typeof annotation.mode}`,
+    );
+    const expected = { type: 'route', points };
+    assert.deepEqual(viewFromParams(viewToParams(view)).annotations, [
+      expected,
+    ]);
+  });
+}
