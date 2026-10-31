@@ -245,17 +245,8 @@ export function updateRoute(info) {
 }
 
 export function syncWeatherToggle(enabled) {
-  if (!this.weatherToggle) return;
-  const active = !!enabled;
-  this.weatherToggle.setAttribute('aria-pressed', String(active));
-  const weatherLabel = active
-    ? t('Disable cockpit weather effects')
-    : t('Enable cockpit weather effects');
-  this.weatherToggle.setAttribute('aria-label', weatherLabel);
-  this.weatherToggle.title = weatherLabel;
-  if (this.weatherState) {
-    this.weatherState.textContent = active ? t('ON') : t('OFF');
-  }
+  this.contextView.weather = !!enabled;
+  this.publishContextView();
 }
 
 export function setVisionMode(mode, { revealParameters = false } = {}) {

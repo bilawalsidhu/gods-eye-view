@@ -375,8 +375,12 @@ export class StyleManager extends ShellFacade {
         _models3dBtn: this._models3dBtn,
       },
       operations: {
-        publishCockpitBrief: (view) =>
-          useCockpitStore(applicationPinia()).publishBrief(view),
+        publishCockpit: {
+          brief: (view) =>
+            useCockpitStore(applicationPinia()).publishBrief(view),
+          context: (view) =>
+            useCockpitStore(applicationPinia()).publishContext(view),
+        },
         _layoutRightPanels: (...args) => this._layoutRightPanels(...args),
         _setCockpitVision: (...args) => this._setCockpitVision(...args),
         _stampNavigation: (...args) => this._stampNavigation(...args),

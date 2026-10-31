@@ -1,5 +1,6 @@
 <script setup>
 import CockpitBriefing from './panels/CockpitBriefing.vue';
+import CockpitContext from './panels/CockpitContext.vue';
 </script>
 
 <template>
@@ -158,56 +159,7 @@ import CockpitBriefing from './panels/CockpitBriefing.vue';
       <span id="cockpit-clock">--:--:--Z</span>
       <span id="cockpit-position">--° · --°</span>
     </div>
-    <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" hidden data-i18n-aria-label>
-      <header class="cockpit-context-header">
-        <div>
-          <span data-i18n class="cockpit-context-kicker">CONTACT</span>
-          <strong id="cockpit-context-subject" data-i18n>CONTACTS · 250 KM</strong>
-        </div>
-        <nav class="cockpit-context-actions" aria-label="Contact navigation" data-i18n-aria-label>
-          <button id="cockpit-context-previous" type="button" aria-label="Previous — prior visited contact in the 250 km window" title="Previous — prior visited contact in the 250 km window" data-i18n-aria-label data-i18n-title>
-            <span class="material-symbols-outlined" aria-hidden="true">skip_previous</span>
-          </button>
-          <button id="cockpit-context-next" type="button" aria-label="Next — nearest unvisited contact in the 250 km window" title="Next — nearest unvisited contact in the 250 km window" data-i18n-aria-label data-i18n-title>
-            <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
-          </button>
-          <button id="cockpit-context-toggle" type="button" aria-label="Collapse Contact panel" aria-expanded="true" title="Collapse contact panel" data-i18n-aria-label data-i18n-title>
-            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-          </button>
-        </nav>
-        <span class="cockpit-context-qualifier" data-i18n>CONTEXT ONLY</span>
-      </header>
-      <div class="cockpit-context-cohorts" role="list" aria-label="Nearby cohort counts" data-i18n-aria-label>
-        <div role="listitem" data-context-cohort="flights"><span data-i18n>FLT</span><strong>—</strong><small translate="no">OpenSky</small></div>
-        <div role="listitem" data-context-cohort="military"><span data-i18n>MIL</span><strong>—</strong><small translate="no">adsb.lol</small></div>
-        <div role="listitem" data-context-cohort="ais-live-vessels"><span translate="no">AIS</span><strong>—</strong><small translate="no">AISStream</small></div>
-        <div role="listitem" data-context-cohort="military-installations"><span data-i18n>SITE</span><strong>—</strong><small translate="no">OpenStreetMap</small></div>
-      </div>
-      <div class="cockpit-context-nearest">
-        <span id="cockpit-context-direction" class="material-symbols-outlined" aria-hidden="true">navigation</span>
-        <div>
-          <small data-i18n>NEAREST OBSERVED / MAPPED</small>
-          <strong id="cockpit-context-nearest-label" data-i18n>NO AVAILABLE EXAMPLE</strong>
-        </div>
-        <span id="cockpit-context-bearing">—</span>
-        <span id="cockpit-context-distance">—</span>
-      </div>
-      <footer class="cockpit-context-footer">
-        <span id="cockpit-context-uncertainty" data-i18n>AVAILABLE INPUTS ONLY · NOT AN ALL-CLEAR</span>
-        <button
-          id="cockpit-weather-toggle"
-          class="cockpit-context-weather"
-          type="button"
-          aria-label="Enable cockpit weather effects"
-          aria-pressed="false"
-          title="Enable cockpit weather effects" data-i18n-aria-label data-i18n-title
-        >
-          <span data-i18n>WX</span>
-          <strong data-i18n id="cockpit-weather-state">OFF</strong>
-        </button>
-        <time id="cockpit-context-updated">--:--:--Z</time>
-      </footer>
-    </aside>
+    <CockpitContext />
     <CockpitBriefing />
     <aside id="cockpit-utility-controls" class="cockpit-utility-controls" aria-label="Cockpit display and Radio controls" data-i18n-aria-label>
       <div class="cockpit-utility-control">

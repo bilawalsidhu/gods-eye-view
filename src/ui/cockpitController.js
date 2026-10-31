@@ -19,7 +19,8 @@ import {
   cycleVisionMode,
   clearPredictiveRoute,
 } from './cockpitInstruments.js';
-import { updateContext } from './cockpitContext.js';
+import { publishContextView, updateContext } from './cockpitContext.js';
+import { createContextState } from './cockpitContextState.js';
 import { createBriefState } from './cockpitBriefPages.js';
 import {
   publishBriefView,
@@ -60,7 +61,7 @@ export class CockpitViewController {
       onEntered = null,
       onExited = null,
       restoreTrackingFrame = null,
-      publishBrief = () => {},
+      publish = {},
     } = {},
   ) {
     this.viewer = viewer;
@@ -138,29 +139,10 @@ export class CockpitViewController {
     this.isEntryAllowed =
       typeof isEntryAllowed === 'function' ? isEntryAllowed : () => true;
     this.context = document.getElementById('cockpit-context');
-    this.contextSubject = document.getElementById('cockpit-context-subject');
-    this.contextNearestLabel = document.getElementById(
-      'cockpit-context-nearest-label',
-    );
-    this.contextBearing = document.getElementById('cockpit-context-bearing');
-    this.contextDistance = document.getElementById('cockpit-context-distance');
-    this.contextDirection = document.getElementById(
-      'cockpit-context-direction',
-    );
-    this.contextUncertainty = document.getElementById(
-      'cockpit-context-uncertainty',
-    );
-    this.contextUpdated = document.getElementById('cockpit-context-updated');
-    this.contextCohorts = new Map(
-      Array.from(document.querySelectorAll('[data-context-cohort]')).map(
-        (element) => [element.dataset.contextCohort, element],
-      ),
-    );
     this.contextPrevious = document.getElementById('cockpit-context-previous');
     this.contextNext = document.getElementById('cockpit-context-next');
     this.contextToggle = document.getElementById('cockpit-context-toggle');
     this.weatherToggle = document.getElementById('cockpit-weather-toggle');
-    this.weatherState = document.getElementById('cockpit-weather-state');
     this.contextCollapsed = false;
     this.signalStream = document.getElementById('cockpit-signal-stream');
     this.signalList = document.getElementById('cockpit-signal-list');
@@ -177,8 +159,10 @@ export class CockpitViewController {
     this.signalSignatures = new Map();
     this.briefPageIndex = 0;
     this.briefAutoRotateEnabled = false;
-    // CockpitBriefing renders what publishBrief receives.
-    this.publishBrief = publishBrief;
+    // Cockpit's views render what these receive.
+    this.publishBrief = publish.brief ?? (() => {});
+    this.publishContext = publish.context ?? (() => {});
+    this.contextView = createContextState();
     this.brief = createBriefState();
     this.briefTimer = null;
     this.lastAircraftInfo = null;
@@ -232,8 +216,7 @@ export class CockpitViewController {
       this.setContextCollapsed(!this.contextCollapsed),
     );
     this._listen(this.weatherToggle, 'click', () => {
-      const enabled =
-        this.weatherToggle.getAttribute('aria-pressed') !== 'true';
+      const enabled = !this.contextView.weather;
       this.syncWeatherToggle(enabled);
       window.dispatchEvent(
         new CustomEvent('gev:cockpit-weather-toggle', {
@@ -329,6 +312,9 @@ export class CockpitViewController {
   }
   clearPredictiveRoute() {
     return clearPredictiveRoute.call(this);
+  }
+  publishContextView() {
+    return publishContextView.call(this);
   }
   updateContext(info, heading) {
     return updateContext.call(this, info, heading);

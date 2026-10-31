@@ -82,7 +82,7 @@ export class CockpitCoordinator {
           flightsEnabled: !!this._dataManager?.isEnabled('flights'),
           militaryEnabled: !!this._dataManager?.isEnabled('military'),
         }),
-      publishBrief: (view) => this.publishCockpitBrief?.(view),
+      publish: this.publishCockpit,
       onEntered: () => this.enterPanels(),
       onExited: () => this.exitPanels(),
       restoreTrackingFrame: (entity) => {

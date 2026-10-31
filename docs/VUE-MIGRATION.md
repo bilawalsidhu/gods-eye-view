@@ -128,12 +128,17 @@ They contain no application state.
    backdrop to the end of the page from the first publish until the shell
    is destroyed; the shell takes their clicks from the document), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
-   pages, cycle toggle, regional news and local conditions from the
-   `gev-cockpit` store that the Cockpit controller publishes to, starting
-   from `cockpitBriefPages.js`, which both read; the controls keep the
-   controller's listeners, and the route card and signal list keep their
-   owners' bindings for now). Layers that write into the right rail
-   directly gain a slot instead.
+   pages, cycle toggle, regional news and local conditions, and
+   `CockpitContext` the Contact card's scope, navigation, counts, nearest
+   contact and weather toggle, from the `gev-cockpit` store that the Cockpit
+   controller publishes to, starting from `cockpitBriefPages.js` and
+   `cockpitContextState.js`, which both read; the controls keep the
+   controller's listeners, and the cards' visibility, collapse and layout
+   stay with the controller. The signal rows, the route card, the
+   instruments and the radio controls follow; the signal rows become a
+   component that keeps their focus-safe reorder, since a keyed Vue list
+   would move the focused row and drop focus several times a second).
+   Layers that write into the right rail directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion and the attribute
    translation pass are retired once nothing uses them. Hosts register panels

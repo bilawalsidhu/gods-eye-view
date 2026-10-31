@@ -1,0 +1,72 @@
+<script setup>
+import { storeToRefs } from 'pinia';
+import { computed } from 'vue';
+import { t } from '../../../i18n/index.js';
+import { createContextState } from '../../cockpitContextState.js';
+import { vClassToggle } from '../../rail/classToggle.js';
+import { useCockpitStore } from '../../stores/cockpit.js';
+
+// The Cockpit Contact card. The Cockpit controller presents its scope,
+// navigation, cohort counts, nearest contact and weather toggle; until it
+// does, the card shows the state it starts in. Its visibility, collapse and
+// layout stay with the controller, and the controls keep its listeners.
+const { context } = storeToRefs(useCockpitStore());
+const initial = createContextState();
+const c = computed(() => context.value ?? initial);
+const directionStyle = computed(() =>
+  c.value.direction.angle === null
+    ? undefined
+    : { transform: `rotate(${c.value.direction.angle}deg)` },
+);
+const weatherLabel = computed(() =>
+  c.value.weather
+    ? t('Disable cockpit weather effects')
+    : t('Enable cockpit weather effects'),
+);
+</script>
+
+<template>
+  <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" hidden data-i18n-aria-label :data-state="c.state ?? undefined">
+    <header class="cockpit-context-header">
+      <div>
+        <span data-i18n class="cockpit-context-kicker">CONTACT</span>
+        <strong id="cockpit-context-subject">{{ c.subject }}</strong>
+      </div>
+      <nav class="cockpit-context-actions" aria-label="Contact navigation" data-i18n-aria-label>
+        <button id="cockpit-context-previous" type="button" :disabled="!c.canPrevious" aria-label="Previous — prior visited contact in the 250 km window" title="Previous — prior visited contact in the 250 km window" data-i18n-aria-label data-i18n-title>
+          <span class="material-symbols-outlined" aria-hidden="true">skip_previous</span>
+        </button>
+        <button id="cockpit-context-next" type="button" :disabled="!c.canNext" aria-label="Next — nearest unvisited contact in the 250 km window" title="Next — nearest unvisited contact in the 250 km window" data-i18n-aria-label data-i18n-title>
+          <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
+        </button>
+        <button id="cockpit-context-toggle" type="button" aria-label="Collapse Contact panel" aria-expanded="true" title="Collapse contact panel" data-i18n-aria-label data-i18n-title>
+          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+        </button>
+      </nav>
+      <span class="cockpit-context-qualifier" data-i18n>CONTEXT ONLY</span>
+    </header>
+    <div class="cockpit-context-cohorts" role="list" aria-label="Nearby cohort counts" data-i18n-aria-label>
+      <div v-class-toggle="{ unknown: c.cohorts.flights.unknown }" role="listitem" data-context-cohort="flights"><span data-i18n>FLT</span><strong>{{ c.cohorts.flights.count }}</strong><small translate="no">OpenSky</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts.military.unknown }" role="listitem" data-context-cohort="military"><span data-i18n>MIL</span><strong>{{ c.cohorts.military.count }}</strong><small translate="no">adsb.lol</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts['ais-live-vessels'].unknown }" role="listitem" data-context-cohort="ais-live-vessels"><span translate="no">AIS</span><strong>{{ c.cohorts['ais-live-vessels'].count }}</strong><small translate="no">AISStream</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts['military-installations'].unknown }" role="listitem" data-context-cohort="military-installations"><span data-i18n>SITE</span><strong>{{ c.cohorts['military-installations'].count }}</strong><small translate="no">OpenStreetMap</small></div>
+    </div>
+    <div class="cockpit-context-nearest">
+      <span id="cockpit-context-direction" v-class-toggle="{ unknown: c.direction.unknown }" class="material-symbols-outlined" :style="directionStyle" aria-hidden="true">navigation</span>
+      <div>
+        <small data-i18n>NEAREST OBSERVED / MAPPED</small>
+        <strong id="cockpit-context-nearest-label" :aria-label="c.nearest.ariaLabel ?? undefined">{{ c.nearest.label }}</strong>
+      </div>
+      <span id="cockpit-context-bearing">{{ c.bearing }}</span>
+      <span id="cockpit-context-distance" :aria-label="c.distance.ariaLabel ?? undefined">{{ c.distance.text }}</span>
+    </div>
+    <footer class="cockpit-context-footer">
+      <span id="cockpit-context-uncertainty">{{ c.uncertainty }}</span>
+      <button id="cockpit-weather-toggle" class="cockpit-context-weather" type="button" :aria-label="weatherLabel" :aria-pressed="String(c.weather)" :title="weatherLabel">
+        <span data-i18n>WX</span>
+        <strong id="cockpit-weather-state">{{ c.weather ? t('ON') : t('OFF') }}</strong>
+      </button>
+      <time id="cockpit-context-updated">{{ c.updated }}</time>
+    </footer>
+  </aside>
+</template>

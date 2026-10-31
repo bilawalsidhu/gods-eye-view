@@ -268,7 +268,7 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
   // A culled subject holds last-known content behind the CONTACT LOST cue.
   assert.match(body, /readout\.contactLost/);
   assert.match(body, /CONTACT LOST/);
-  assert.match(body, /this\.context\.dataset\.state = 'lost'/);
+  assert.match(body, /view\.state = 'lost'/);
   assert.match(
     body,
     /if \(readout\.contactLost\) \{/,
@@ -276,14 +276,14 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
   );
   // PREVIOUS/NEXT must be written before any early return, so the operator can
   // always step off the current contact — including a lost one.
-  const navIndex = body.indexOf('this.contextNext.disabled');
+  const navIndex = body.indexOf('view.canNext =');
   const lostIndex = body.indexOf('if (readout.contactLost)');
   assert.ok(
     navIndex >= 0 && lostIndex > navIndex,
     'nav state must be written before the CONTACT LOST return',
   );
   assert.equal(
-    (body.match(/this\.contextNext\.disabled/g) || []).length,
+    (body.match(/view\.canNext =/g) || []).length,
     1,
     'one owner for the NEXT enabled state, reached by every visible path',
   );
