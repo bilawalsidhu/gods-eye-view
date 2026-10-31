@@ -23,7 +23,7 @@ test('the application composition wires the draw tool and owns its teardown', ()
   const tools = read('src/app/tools.js');
   const engineAt = tools.indexOf('const annotations = initAnnotations({');
   const drawAt = tools.indexOf(
-    'const drawTool = initDrawTool({ viewer, annotations });',
+    'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    publish: (view) => displayStore.publishDraw(view),',
   );
   assert.ok(engineAt >= 0, 'initAnnotations call missing');
   assert.ok(
@@ -88,7 +88,9 @@ test('the Draw control markup carries the ids the tool binds to', () => {
       `shape button ${shape} missing`,
     );
   }
-  for (const id of ids) {
+  // The rows and the hint render what the tool publishes; it binds the rest.
+  const bound = ids.filter((id) => id !== 'draw-label-row' && id !== 'draw-hint');
+  for (const id of bound) {
     assert.match(
       tool(),
       new RegExp(`getElementById\\('${id}'\\)`),

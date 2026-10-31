@@ -2,6 +2,8 @@ import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
+import { useDisplayStore } from '../ui/stores/display.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
@@ -56,7 +58,12 @@ export function createApplicationTools({
   // DISPLAY ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
   // while a session is open, so its teardown belongs to the application
   // lifetime rather than to whoever last pressed the button.
-  const drawTool = initDrawTool({ viewer, annotations });
+  const displayStore = useDisplayStore(applicationPinia());
+  const drawTool = initDrawTool({
+    viewer,
+    annotations,
+    publish: (view) => displayStore.publishDraw(view),
+  });
   defer(() => drawTool?.destroy());
   // DISPLAY ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
   // own data source. They live for the page session, so the application

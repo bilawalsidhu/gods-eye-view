@@ -6,10 +6,11 @@ import { vRangeValue } from '../../rail/rangeValue.js';
 import { useDisplayStore } from '../../stores/display.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
-// Celestial, detection, bloom and sharpen and AircraftDisplay the 3D group,
-// and each publishes them; until they do, the panel shows its initial
-// markup. The other groups keep their owners' element bindings.
-const { view, models3d } = storeToRefs(useDisplayStore());
+// Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group and
+// the draw tool its controls, and each publishes them; until they do, the
+// panel shows its initial markup. The other groups keep their owners'
+// element bindings.
+const { view, models3d, draw } = storeToRefs(useDisplayStore());
 const pct = (value) => `${value}%`;
 const hud = computed(() => view.value?.hud ?? null);
 const sonar = computed(() => view.value?.sonar ?? null);
@@ -33,6 +34,8 @@ const segment = (current) => (value) => ({
   'aria-checked': String(current.value === value),
 });
 const modelsSegment = segment(modelsMode);
+const drawShape = computed(() => draw.value?.shape ?? 'area');
+const drawSegment = segment(drawShape);
 const allocationSegment = segment(allocation);
 </script>
 
@@ -156,19 +159,19 @@ const allocationSegment = segment(allocation);
     </div>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" id="draw-toggle" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" aria-pressed="false" data-i18n-title>
+    <button class="pp-toggle-btn" :class="{ active: draw?.active }" id="draw-toggle" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" :aria-pressed="String(draw?.active ?? false)" data-i18n-title>
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">draw</span>
       <span class="pp-label" data-i18n>Draw</span>
     </button>
-    <div class="pp-slider-row" id="draw-mode-row">
+    <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-mode-row">
       <span class="pp-slider-mini-label" data-i18n>Shape</span>
       <div class="gev-segmented pp-mode-seg" role="radiogroup" aria-label="Shape to draw" data-i18n-aria-label>
-        <button class="gev-segment pp-mode-btn active" data-shape="area" role="radio" aria-checked="true" data-i18n>Area</button>
-        <button class="gev-segment pp-mode-btn" data-shape="line" role="radio" aria-checked="false" data-i18n>Line</button>
-        <button class="gev-segment pp-mode-btn" data-shape="pin" role="radio" aria-checked="false" data-i18n>Pin</button>
+        <button class="gev-segment pp-mode-btn" data-shape="area" role="radio" v-bind="drawSegment('area')" data-i18n>Area</button>
+        <button class="gev-segment pp-mode-btn" data-shape="line" role="radio" v-bind="drawSegment('line')" data-i18n>Line</button>
+        <button class="gev-segment pp-mode-btn" data-shape="pin" role="radio" v-bind="drawSegment('pin')" data-i18n>Pin</button>
       </div>
     </div>
-    <div class="pp-slider-row" id="draw-label-row">
+    <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-label-row">
       <input type="text" class="pp-text-input" id="draw-label-input" maxlength="120" placeholder="Label (optional)" aria-label="Label for the drawn shape" data-i18n-placeholder data-i18n-aria-label autocomplete="off" spellcheck="false">
       <select class="pp-select draw-color-select gev-field gev-field--compact" id="draw-color-select" aria-label="Colour of the drawn shape" data-i18n-aria-label>
         <option value="primary" data-i18n>Primary</option>
@@ -178,7 +181,7 @@ const allocationSegment = segment(allocation);
         <option value="red" data-i18n>Red</option>
       </select>
       <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" title="Remove every mark from the board" data-i18n-title data-i18n>Clear</button>
-      <span class="draw-hint" id="draw-hint" aria-live="polite"></span>
+      <span class="draw-hint" id="draw-hint" aria-live="polite">{{ draw?.hint ?? '' }}</span>
     </div>
   </div>
   <div class="pp-toggle-group" id="geo-import-group">

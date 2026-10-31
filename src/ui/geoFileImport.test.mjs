@@ -427,9 +427,7 @@ test('the application composition wires the import and owns its teardown', () =>
     new URL('../app/tools.js', import.meta.url),
     'utf8',
   );
-  const drawAt = tools.indexOf(
-    'const drawTool = initDrawTool({ viewer, annotations });',
-  );
+  const drawAt = tools.indexOf('const drawTool = initDrawTool({');
   const importAt = tools.indexOf('const geoFileImport = initGeoFileImport({');
   assert.ok(importAt > drawAt && drawAt >= 0);
   // Fly-to goes through the application shell's navigation policy.

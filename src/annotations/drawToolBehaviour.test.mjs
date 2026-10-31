@@ -218,9 +218,15 @@ function harness() {
   const previousWindow = globalThis.window;
   globalThis.document = documentDouble;
   globalThis.window = globalThis.window || {};
-  const tool = initDrawTool({ viewer, annotations });
+  const shown = { view: null };
+  const tool = initDrawTool({
+    viewer,
+    annotations,
+    publish: (view) => (shown.view = view),
+  });
   return {
     tool,
+    shown,
     viewer,
     annotations,
     byId,
@@ -289,7 +295,7 @@ test('Draw refuses to start when something else holds the pointer', async () => 
     assert.equal(pointerOwner(), 'directions', 'and must not steal the claim');
     // Named by its tool, not by the internal owner id.
     assert.equal(
-      h.element('draw-hint').textContent,
+      h.shown.view.hint,
       'Directions is using the pointer — close it first.',
     );
     assert.equal(h.tool.diagnostics().sceneHandler, false, 'no handler was bound');

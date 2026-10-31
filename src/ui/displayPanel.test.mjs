@@ -343,3 +343,30 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   assert.equal(row.classList.contains('visible'), true);
   assert.equal(all.getAttribute('aria-checked'), 'false');
 });
+
+test('the Draw controls render what the draw tool publishes', async (t) => {
+  const { store, $ } = fixture(t);
+  const toggle = $('draw-toggle');
+  const segment = (shape) =>
+    document.querySelector(`#draw-mode-row [data-shape="${shape}"]`);
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  assert.equal(segment('area').getAttribute('aria-checked'), 'true');
+  assert.equal($('draw-hint').textContent, '');
+
+  store.publishDraw({ active: true, shape: 'line', hint: 'Click to add points.' });
+  await nextTick();
+  assert.equal(toggle.className, 'pp-toggle-btn active');
+  assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+  assert.equal($('draw-mode-row').classList.contains('visible'), true);
+  assert.equal($('draw-label-row').classList.contains('visible'), true);
+  assert.equal(segment('line').getAttribute('aria-checked'), 'true');
+  assert.equal(segment('line').classList.contains('active'), true);
+  assert.equal(segment('area').classList.contains('active'), false);
+  assert.equal($('draw-hint').textContent, 'Click to add points.');
+
+  store.publishDraw({ active: false, shape: 'line', hint: '' });
+  await nextTick();
+  assert.equal(toggle.className, 'pp-toggle-btn');
+  assert.equal($('draw-mode-row').classList.contains('visible'), false);
+  assert.equal($('draw-label-row').classList.contains('visible'), false);
+});

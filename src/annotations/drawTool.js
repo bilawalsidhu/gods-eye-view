@@ -67,17 +67,17 @@ const PREVIEW = {
 /**
  * Wire the Draw control. Returns a handle with a `destroy()` the application
  * lifetime owns, plus the console/test seam (`window.__gevDrawTool`).
- * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}}} deps
+ * The tool keeps its listeners on the controls and hands what they show
+ * (`{ active, shape, hint }`) to `publish`, which the view renders.
+ * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, publish?: Function}} deps
  * @returns {{destroy: Function}|null}
  */
-export function initDrawTool({ viewer, annotations }) {
+export function initDrawTool({ viewer, annotations, publish = () => {} }) {
   const toggle = document.getElementById('draw-toggle');
   const modeRow = document.getElementById('draw-mode-row');
-  const labelRow = document.getElementById('draw-label-row');
   const labelInput = document.getElementById('draw-label-input');
   const colorSelect = document.getElementById('draw-color-select');
   const clearButton = document.getElementById('draw-clear');
-  const hint = document.getElementById('draw-hint');
   if (!viewer || !annotations || !toggle) return null;
 
   let active = false;
@@ -85,6 +85,7 @@ export function initDrawTool({ viewer, annotations }) {
   let session = null;
   let shape = 'area';
   let color = 'primary';
+  let hint = '';
   let handler = null;
   let lease = null;
   let savedDoubleClick = null;
@@ -124,8 +125,10 @@ export function initDrawTool({ viewer, annotations }) {
     () => null,
   );
 
+  const present = () => publish({ active, shape, hint });
   const setHint = (text) => {
-    if (hint) hint.textContent = text;
+    hint = text;
+    present();
   };
 
   // ---- preview ---------------------------------------------------------
@@ -354,10 +357,7 @@ export function initDrawTool({ viewer, annotations }) {
       }
     }
     active = next;
-    toggle.classList.toggle('active', active);
-    toggle.setAttribute('aria-pressed', String(active));
-    modeRow?.classList.toggle('visible', active);
-    labelRow?.classList.toggle('visible', active);
+    present();
     document.body.classList.toggle('gev-drawing', active);
     if (active) {
       session = createDrawSession(shape);
@@ -433,13 +433,13 @@ export function initDrawTool({ viewer, annotations }) {
   const shapeButtons = [
     ...(modeRow?.querySelectorAll('.pp-mode-btn[data-shape]') || []),
   ];
-  const shapeControl = createSegmentedControl({
+  createSegmentedControl({
     buttons: shapeButtons,
     valueOf: (button) => button.dataset.shape,
     listen,
     onChange: (value) => {
       shape = normalizeShape(value);
-      shapeControl.update(shape);
+      present();
       if (active) {
         generation += 1;
         session = createDrawSession(shape);
@@ -546,11 +546,8 @@ export function initDrawTool({ viewer, annotations }) {
         }
       });
       document.body.classList.remove('gev-drawing');
-      toggle.classList.remove('active');
-      toggle.setAttribute('aria-pressed', 'false');
-      modeRow?.classList.remove('visible');
-      labelRow?.classList.remove('visible');
-      if (hint) hint.textContent = '';
+      hint = '';
+      present();
       if (window.__gevDrawTool === api) delete window.__gevDrawTool;
       return attaching;
     },

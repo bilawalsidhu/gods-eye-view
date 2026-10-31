@@ -3,8 +3,9 @@ import { markRaw, shallowRef } from 'vue';
 
 /**
  * The Display panel as its view renders it. VisualSettings presents its
- * groups (`_presentDisplay()`) and AircraftDisplay the 3D aircraft group,
- * and each publishes here; both keep their listeners on the controls.
+ * groups (`_presentDisplay()`), AircraftDisplay the 3D aircraft group and
+ * the draw tool its controls, and each publishes here; each keeps its
+ * listeners on the controls.
  */
 export const useDisplayStore = defineStore('gev-display', () => {
   /** The presented panel; null until VisualSettings first renders. */
@@ -23,5 +24,13 @@ export const useDisplayStore = defineStore('gev-display', () => {
     models3d.value = markRaw(next);
   }
 
-  return { view, publish, models3d, publishModels3d };
+  /** The Draw controls; null until the draw tool first renders. */
+  const draw = shallowRef(null);
+
+  /** @param {object} next A fresh presentation of the Draw controls. */
+  function publishDraw(next) {
+    draw.value = markRaw(next);
+  }
+
+  return { view, publish, models3d, publishModels3d, draw, publishDraw };
 });
