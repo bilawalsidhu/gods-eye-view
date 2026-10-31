@@ -2154,16 +2154,20 @@ async function main() {
         .every((control) => control.closest('.pp-toggle-group')?.parentElement
           ?.closest('#cockpit-display-panel'));
       display.click();
+      await waitForLayout();
 
       manager.cockpitView.syncSignalLayout();
       radio.click();
+      await waitForLayout();
       const radioOpened = radio.getAttribute('aria-expanded') === 'true'
         && !document.getElementById('cockpit-radio-panel').hidden;
       const mutuallyExclusive = display.getAttribute('aria-expanded') === 'false';
       radio.click();
+      await waitForLayout();
 
       manager.cockpitView.syncSignalLayout();
       radio.click();
+      await waitForLayout();
 
       const radioNavigationAvailable = [
         document.getElementById('cockpit-radio-prev-btn'),

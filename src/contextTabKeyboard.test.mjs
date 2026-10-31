@@ -5,7 +5,6 @@ import { _initGlobalContextPanel } from './ui/contextBindings.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
-const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
 const contextView = readRadioSource(new URL('./ui/views/ContextView.vue', import.meta.url), 'utf8');
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -67,7 +66,6 @@ test('Context tabs draw a visible keyboard-focus outline including active tabs',
 test('Context async action buttons remain focused while busy', () => {
   const init = _initGlobalContextPanel.toString();
   const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this.listen(this._cockpitRadioToggleBtn,'));
-  const radioSync = radioPresentation.slice(0, radioPresentation.indexOf('this._radioView = {'));
   const radioPanel = readFileSync(new URL('./ui/views/panels/RadioPanel.vue', import.meta.url), 'utf8');
   const clear = clearSelectedLayers.toString();
 
@@ -79,7 +77,11 @@ test('Context async action buttons remain focused while busy', () => {
   assert.match(search, /:aria-busy=/);
   assert.match(radio, /trigger\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(radio, /trigger\.disabled\s*=\s*true/);
-  assert.match(radioSync, /_cockpitRadioEnableBtn\.disabled = false/);
+  const cockpitRadio = readFileSync(new URL('./ui/views/panels/CockpitUtilityControls.vue', import.meta.url), 'utf8');
+  const cockpitEnable = cockpitRadio.match(/<button id="cockpit-radio-enable-btn"[^>]*>/)?.[0];
+  assert.ok(cockpitEnable, 'Cockpit Radio Enable button is missing');
+  assert.doesNotMatch(cockpitEnable, /disabled(?!=")|:disabled/);
+  assert.match(cockpitEnable, /:aria-busy=/);
   // The Radio view never disables its Enable button; it marks it busy.
   const enable = radioPanel.match(/<button id="radio-enable-btn"[^>]*>/)?.[0];
   assert.ok(enable, 'Radio Enable button is missing');

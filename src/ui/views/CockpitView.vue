@@ -12,6 +12,7 @@ import { useCockpitStore } from '../stores/cockpit.js';
 import CockpitBriefing from './panels/CockpitBriefing.vue';
 import CockpitContext from './panels/CockpitContext.vue';
 import CockpitRollingValue from './panels/CockpitRollingValue.vue';
+import CockpitUtilityControls from './panels/CockpitUtilityControls.vue';
 
 // The Cockpit HUD. The Cockpit controller presents the instruments, the
 // destination arrow and the vision selector on every HUD update; until it
@@ -180,42 +181,7 @@ const tickStyle = (tick) =>
     </div>
     <CockpitContext />
     <CockpitBriefing />
-    <aside id="cockpit-utility-controls" class="cockpit-utility-controls" aria-label="Cockpit display and Radio controls" data-i18n-aria-label>
-      <div class="cockpit-utility-control">
-        <div class="cockpit-utility-launcher" data-cockpit-launcher="display">
-          <span data-i18n>DISPLAY</span>
-          <span class="cockpit-utility-divider" aria-hidden="true"></span>
-          <button id="cockpit-display-toggle-btn" class="cockpit-utility-glyph" type="button" aria-expanded="false" aria-controls="cockpit-display-panel" aria-label="Expand Cockpit display options" title="Expand Cockpit display options" data-i18n-aria-label data-i18n-title>◀</button>
-        </div>
-        <div id="cockpit-display-panel" class="cockpit-utility-popover" role="group" aria-label="Cockpit display options" hidden data-i18n-aria-label>
-          <div class="cockpit-display-slot" data-cockpit-display-slot="hud"></div>
-          <div class="cockpit-display-slot" data-cockpit-display-slot="detection"></div>
-          <div class="cockpit-display-slot" data-cockpit-display-slot="parameters"></div>
-          <div class="cockpit-display-slot" data-cockpit-display-slot="models3d"></div>
-        </div>
-      </div>
-      <div class="cockpit-utility-control">
-        <div class="cockpit-utility-launcher" data-cockpit-launcher="radio">
-          <span data-i18n>RADIO</span>
-          <span class="cockpit-utility-divider" aria-hidden="true"></span>
-          <button id="cockpit-radio-toggle-btn" class="cockpit-utility-glyph" type="button" aria-expanded="false" aria-controls="cockpit-radio-panel" aria-label="Expand Cockpit Radio controls" title="Expand Cockpit Radio controls" data-i18n-aria-label data-i18n-title>◀</button>
-        </div>
-        <div id="cockpit-radio-panel" class="cockpit-utility-popover cockpit-radio-compact" role="group" aria-label="Cockpit compact Radio controls" hidden data-i18n-aria-label>
-          <strong id="cockpit-radio-station" class="cockpit-radio-station" data-i18n>READY</strong>
-          <button id="cockpit-radio-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false" data-i18n>ENABLE</button>
-          <div class="cockpit-radio-transport">
-            <button id="cockpit-radio-prev-btn" type="button" aria-label="Previous filtered radio station" disabled data-i18n-aria-label>◀◀</button>
-            <button id="cockpit-radio-play-btn" type="button" aria-label="Play selected radio station" disabled data-i18n-aria-label>▶</button>
-            <button id="cockpit-radio-next-btn" type="button" aria-label="Next filtered radio station" disabled data-i18n-aria-label>▶▶</button>
-          </div>
-          <label class="cockpit-radio-volume" for="cockpit-radio-volume">
-            <span data-i18n>VOLUME</span>
-            <input id="cockpit-radio-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Cockpit Radio volume" disabled data-i18n-aria-label />
-            <output id="cockpit-radio-volume-value" class="gev-slider-value" for="cockpit-radio-volume">80%</output>
-          </label>
-        </div>
-      </div>
-    </aside>
+    <CockpitUtilityControls />
     <div class="cockpit-help"><bdi data-i18n>ESC EXIT</bdi> <span>·</span> <bdi data-i18n>C TOGGLE</bdi></div>
   </section>
 

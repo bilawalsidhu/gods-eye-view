@@ -14,6 +14,7 @@ export class CockpitCoordinator {
     readDataManager,
     readContext,
     readActiveStyle,
+    readUtilityDisclosureOpen,
     enterPanels,
     exitPanels,
   }) {
@@ -25,6 +26,7 @@ export class CockpitCoordinator {
         readDataManager,
         readContext,
         readActiveStyle,
+        readUtilityDisclosureOpen,
         enterPanels,
         exitPanels,
       },
@@ -83,6 +85,7 @@ export class CockpitCoordinator {
           militaryEnabled: !!this._dataManager?.isEnabled('military'),
         }),
       publish: this.publishCockpit,
+      isUtilityDisclosureOpen: () => !!this.readUtilityDisclosureOpen?.(),
       onEntered: () => this.enterPanels(),
       onExited: () => this.exitPanels(),
       restoreTrackingFrame: (entity) => {

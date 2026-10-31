@@ -213,7 +213,6 @@ export class StyleManager extends ShellFacade {
         setScopeMaskFeather: services.setScopeMaskFeather,
       },
       elements: {
-        _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
         _ppToggles: this._ppToggles,
         _sliderContainer: this._sliderContainer,
         _sliderPanel: this._sliderPanel,
@@ -226,6 +225,7 @@ export class StyleManager extends ShellFacade {
         _scheduleRightPanelLayout: (...args) =>
           this._scheduleRightPanelLayout(...args),
         _setCockpitDisclosure: (...args) => this._setCockpitDisclosure(...args),
+        _cockpitDisclosureOpen: (kind) => this._cockpitDisclosureOpen(kind),
         _setMapStack: (...args) => this._setMapStack(...args),
         _syncPanelCollapseButton: (...args) =>
           this._syncPanelCollapseButton(...args),
@@ -400,6 +400,9 @@ export class StyleManager extends ShellFacade {
       readDataManager: () => this._dataManager,
       readContext: () => this.getContextModeState(),
       readActiveStyle: () => this.activeStyle,
+      readUtilityDisclosureOpen: () =>
+        this._cockpitDisclosureOpen('display') ||
+        this._cockpitDisclosureOpen('radio'),
       enterPanels: () => this._panelChrome.enterCockpit(),
       exitPanels: () => this._panelChrome.exitCockpit(),
     });
@@ -1043,17 +1046,13 @@ export class StyleManager extends ShellFacade {
     this._radioControls?.destroy();
     this._radioControls = new RadioControls({
       elements: {
-        _cockpitDisplayPanel: this._cockpitDisplayPanel,
         _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
         _cockpitRadioEnableBtn: this._cockpitRadioEnableBtn,
         _cockpitRadioNextBtn: this._cockpitRadioNextBtn,
-        _cockpitRadioPanel: this._cockpitRadioPanel,
         _cockpitRadioPlayBtn: this._cockpitRadioPlayBtn,
         _cockpitRadioPrevBtn: this._cockpitRadioPrevBtn,
-        _cockpitRadioStation: this._cockpitRadioStation,
         _cockpitRadioToggleBtn: this._cockpitRadioToggleBtn,
         _cockpitRadioVolume: this._cockpitRadioVolume,
-        _cockpitRadioVolumeValue: this._cockpitRadioVolumeValue,
         _cockpitUtilityControls: this._cockpitUtilityControls,
         _radioEnableBtn: this._radioEnableBtn,
         _radioFilter: this._radioFilter,
@@ -1713,9 +1712,10 @@ export class StyleManager extends ShellFacade {
     this._updateHudButtonState();
 
     this._lifetime.listen(this._cockpitDisplayToggleBtn, 'click', () => {
-      const open =
-        this._cockpitDisplayToggleBtn.getAttribute('aria-expanded') === 'true';
-      this._setCockpitDisclosure?.('display', !open);
+      this._setCockpitDisclosure?.(
+        'display',
+        !this._cockpitDisclosureOpen('display'),
+      );
     });
     this._initCockpitDisplayPortal();
   }

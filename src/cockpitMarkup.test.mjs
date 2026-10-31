@@ -235,7 +235,7 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
 test('Cockpit shortcut failures do not leak and open utilities own the first Escape', () => {
   const keydown = cockpitKeyDown.toString();
   assert.ok(keydown, 'Cockpit keyboard handler is missing');
-  assert.match(keydown, /#cockpit-utility-controls \[aria-expanded="true"\]/);
+  assert.match(keydown, /if \(this\.isUtilityDisclosureOpen\?\.\(\)\) return;/);
   assert.match(
     keydown,
     /const cockpitAttempt = !!\(\s*this\.readAircraftInfo\(\) && this\.viewer\.trackedEntity\?\.position\s*\);[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?!this\.isEntryAllowed\(\)/,
@@ -475,14 +475,6 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.match(
     css,
     /\.cockpit-utility-control\.is-expanded \.cockpit-utility-divider\s*\{[\s\S]*?linear-gradient\(\s*90deg,\s*rgb\(0 212 255 \/ 28%\),\s*rgba\(0, 212, 255, 0\.18\) 58%,\s*transparent\s*\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(0, 212, 255, 0\.22\);/,
-  );
-  assert.match(
-    radioBindings,
-    /this\._cockpitDisplayToggleBtn\.textContent = displayOpen \? '▶' : '◀';/,
-  );
-  assert.match(
-    radioBindings,
-    /this\._cockpitRadioToggleBtn\.textContent = radioOpen \? '▶' : '◀';/,
   );
   assert.match(
     css,
@@ -1096,7 +1088,7 @@ test('Cockpit Display portals shared HUD, Detection, Parameters, and 3D controls
   );
   assert.match(
     ui,
-    /_revealCockpitStyleParameters\(\{ openDisplay = false \} = \{\}\) \{[\s\S]*?openDisplay[\s\S]*?_setCockpitDisclosure\?\.\('display', true\)[\s\S]*?aria-expanded'\) !== 'true'[\s\S]*?classList\.remove\('collapsed'\)/,
+    /_revealCockpitStyleParameters\(\{ openDisplay = false \} = \{\}\) \{[\s\S]*?openDisplay[\s\S]*?_setCockpitDisclosure\?\.\('display', true\)[\s\S]*?!this\._cockpitDisclosureOpen\?\.\('display'\)[\s\S]*?classList\.remove\('collapsed'\)/,
   );
   assert.match(
     radioBindings,

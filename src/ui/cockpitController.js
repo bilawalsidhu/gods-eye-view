@@ -64,6 +64,7 @@ export class CockpitViewController {
       getInitialVisionMode = null,
       onCameraTakeover = null,
       isEntryAllowed = null,
+      isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
       restoreTrackingFrame = null,
@@ -112,6 +113,10 @@ export class CockpitViewController {
         : () => false;
     this.isEntryAllowed =
       typeof isEntryAllowed === 'function' ? isEntryAllowed : () => true;
+    this.isUtilityDisclosureOpen =
+      typeof isUtilityDisclosureOpen === 'function'
+        ? isUtilityDisclosureOpen
+        : () => false;
     this.context = document.getElementById('cockpit-context');
     this.contextPrevious = document.getElementById('cockpit-context-previous');
     this.contextNext = document.getElementById('cockpit-context-next');

@@ -32,6 +32,7 @@
       "src/ui/views/panels/CockpitRoute.vue",
       "src/ui/views/panels/CockpitRollingValue.vue",
       "src/ui/views/panels/CockpitSignalList.vue",
+      "src/ui/views/panels/CockpitUtilityControls.vue",
       "src/ui/cockpitBriefPages.js",
       "src/ui/cockpitContextState.js",
       "src/ui/cockpitInstrumentState.js",

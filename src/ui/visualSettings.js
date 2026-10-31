@@ -440,15 +440,11 @@ export class VisualSettings {
       !this._sliderPanel?.classList.contains('active')
     )
       return;
-    if (
-      openDisplay &&
-      this._cockpitDisplayToggleBtn?.getAttribute('aria-expanded') !== 'true'
-    ) {
+    if (openDisplay && !this._cockpitDisclosureOpen?.('display')) {
       this._setCockpitDisclosure?.('display', true);
       return;
     }
-    if (this._cockpitDisplayToggleBtn?.getAttribute('aria-expanded') !== 'true')
-      return;
+    if (!this._cockpitDisclosureOpen?.('display')) return;
     this._sliderPanel.classList.remove('collapsed');
     this._syncPanelCollapseButton(this._sliderPanel);
     this._lifetime.frame(() =>

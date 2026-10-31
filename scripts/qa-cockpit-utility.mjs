@@ -1720,6 +1720,9 @@ try {
     const priorSignalMaxHeight = signal.style.maxHeight;
     signal.style.maxHeight = '150px';
     manager._setCockpitDisclosure(kind, true);
+    // Let Vue render the disclosure, but not the scheduled layout frame: the
+    // first syncSignalLayout below must be the first pass.
+    await Promise.resolve();
     // One pass must be enough. Record the result of the FIRST layout call, then
     // confirm a second changes nothing, so a convergence regression cannot hide
     // behind a repeated call.
@@ -1851,7 +1854,7 @@ try {
     JSON.stringify(portalScroll),
   );
 
-  const boundary = await page.evaluate(() => {
+  const boundary = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const hud = document.getElementById('cockpit-hud');
     const signal = document.getElementById('cockpit-signal-stream');
@@ -1866,6 +1869,7 @@ try {
     signal.hidden = false;
     manager._setCockpitDisclosure('radio', false);
     manager._setCockpitDisclosure('display', true);
+    await new Promise(requestAnimationFrame);
     const priorSignalMaxHeight = signal.style.maxHeight;
     const priorSignalHeight = signal.style.height;
     // The strip is pinned to the viewport ceiling once the briefing card grows
@@ -2261,12 +2265,14 @@ try {
     signal.hidden = false;
     manager._setCockpitDisclosure('display', false);
     manager._setCockpitDisclosure('radio', false);
+    await new Promise(requestAnimationFrame);
     manager.cockpitView.syncSignalLayout();
     const collapsed = {
       display: displayControl.getBoundingClientRect().toJSON(),
       radio: radioControl.getBoundingClientRect().toJSON(),
     };
     display.click();
+    await new Promise(requestAnimationFrame);
     manager.cockpitView.syncSignalLayout();
     return {
       collapsed,

@@ -144,7 +144,11 @@ They contain no application state.
    every HUD update (about 10 Hz); in a dev build their Vue patch costs
    about 0.5 ms, close to the DOM writes it replaced. The controls keep the
    controller's listeners, and the cards' visibility, collapse and layout
-   stay with the controller. The radio controls follow).
+   stay with the controller. `CockpitUtilityControls` renders the Display
+   and Radio launchers, which popover is open and the compact Radio
+   controls from the `gev-radio` store that RadioControls publishes to; the
+   Display popover's slots stay static for the Cockpit display portal. The
+   Radio tuner follows).
    Layers that write into the right rail directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion and the attribute

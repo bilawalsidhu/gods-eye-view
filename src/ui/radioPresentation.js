@@ -1,8 +1,8 @@
 /**
  * Present Radio state without making playback or Context decisions: the
  * panel view renders the directory row, station card, transport, volume and
- * playback line from what this publishes (`gev-radio` store); the tuner and
- * the Cockpit radio controls are still written here.
+ * playback line, and the Cockpit's compact radio controls, from what this
+ * publishes (`gev-radio` store); the tuner is still written here.
  */
 import { t } from '../i18n/index.js';
 
@@ -50,23 +50,6 @@ export function renderRadioState(state) {
     : enabled
       ? t('Disable Radio')
       : t('Enable Radio');
-  if (this._cockpitRadioEnableBtn) {
-    this._cockpitRadioEnableBtn.classList.toggle('active', enabled);
-    this._cockpitRadioEnableBtn.setAttribute('aria-pressed', String(enabled));
-    this._cockpitRadioEnableBtn.textContent = transitioning
-      ? lifecycleLabel
-      : enableLabel;
-    this._cockpitRadioEnableBtn.setAttribute('aria-label', enableAria);
-    this._cockpitRadioEnableBtn.disabled = false;
-    this._cockpitRadioEnableBtn.setAttribute(
-      'aria-disabled',
-      String(transitioning),
-    );
-    this._cockpitRadioEnableBtn.setAttribute(
-      'aria-busy',
-      String(transitioning),
-    );
-  }
 
   const filter = state.filter || 'all';
   const categories = state.categories || [];
@@ -136,10 +119,6 @@ export function renderRadioState(state) {
       : t('Choose a globe marker or use next.');
   const tags = Array.isArray(selected?.tags) ? selected.tags.slice(0, 8) : [];
 
-  if (this._cockpitRadioPrevBtn)
-    this._cockpitRadioPrevBtn.disabled = !interactive || !hasStations;
-  if (this._cockpitRadioNextBtn)
-    this._cockpitRadioNextBtn.disabled = !interactive || !hasStations;
   const playbackAction = activePlayback
     ? t('Pause')
     : state.audioState === 'paused'
@@ -156,34 +135,11 @@ export function renderRadioState(state) {
     action: playbackAction,
     target: playTargetWord,
   });
-  if (this._cockpitRadioPlayBtn) {
-    this._cockpitRadioPlayBtn.disabled = !interactive || !hasStations;
-    this._cockpitRadioPlayBtn.classList.toggle('active', activePlayback);
-    this._cockpitRadioPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
-    this._cockpitRadioPlayBtn.setAttribute('aria-label', playAria);
-    this._cockpitRadioPlayBtn.title = playbackAction;
-  }
   // A slider the person is dragging keeps the value they are setting.
   this._radioVolumeShown =
     this._radioVolume && document.activeElement === this._radioVolume
       ? Number(this._radioVolume.value)
       : Math.round(state.volume * 100);
-  if (
-    this._cockpitRadioVolume &&
-    document.activeElement !== this._cockpitRadioVolume
-  ) {
-    this._cockpitRadioVolume.value = String(Math.round(state.volume * 100));
-  }
-  if (this._cockpitRadioVolume)
-    this._cockpitRadioVolume.disabled = !interactive;
-  if (this._cockpitRadioVolumeValue) {
-    this._cockpitRadioVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
-  }
-  if (this._cockpitRadioStation) {
-    this._cockpitRadioStation.textContent = uncertain
-      ? t('UNCERTAIN')
-      : selected?.name || (state.loading ? t('SYNCING') : t('READY'));
-  }
   let playbackText = '';
   let playbackError = false;
   {
@@ -243,16 +199,17 @@ export function renderRadioState(state) {
       state.audioState === 'error',
     );
   }
+  const enable = {
+    active: enabled,
+    text: transitioning ? lifecycleLabel : enableLabel,
+    label: enableAria,
+    busy: transitioning,
+  };
   this._radioView = {
     enabled,
     uncertain,
     layerState: { active: enabled, text: layerStateText },
-    enable: {
-      active: enabled,
-      text: transitioning ? lifecycleLabel : enableLabel,
-      label: enableAria,
-      busy: transitioning,
-    },
+    enable,
     filter: {
       options: this._radioFilterOptions ?? null,
       value: filter,
@@ -277,6 +234,20 @@ export function renderRadioState(state) {
     },
     volume: { disabled: !interactive, value: this._radioVolumeShown },
     playback: { text: playbackText, error: playbackError },
+    // The Cockpit's compact controls: a glyph transport and the layer's own
+    // volume, which only a focused slider holds back.
+    cockpit: {
+      station: uncertain
+        ? t('UNCERTAIN')
+        : selected?.name || (state.loading ? t('SYNCING') : t('READY')),
+      enable: { ...enable },
+      // The rest of the transport is the panel's; the glyphs are the Cockpit's.
+      play: { glyph: activePlayback ? 'Ⅱ' : '▶', title: playbackAction },
+      volume: {
+        disabled: !interactive,
+        value: Math.round(state.volume * 100),
+      },
+    },
   };
   this.store?.publish(this._radioView);
   if (
@@ -291,31 +262,42 @@ export function renderRadioState(state) {
 }
 
 /**
- * Show the volume the person is setting before the layer reports it.
+ * Show the volume the person is setting, on either slider, before the layer
+ * reports it.
  * @param {number} value Percent, as the slider holds it.
  */
 export function showRadioVolume(value) {
   this._radioVolumeShown = value;
   if (!this._radioView) return;
+  const { volume, cockpit } = this._radioView;
   this._radioView = {
     ...this._radioView,
-    volume: { ...this._radioView.volume, value },
+    volume: { ...volume, value },
+    cockpit: { ...cockpit, volume: { ...cockpit.volume, value } },
   };
   this.store?.publish(this._radioView);
 }
 
 /**
- * Mark the panel's Enable button busy while its own toggle runs, as a render
- * would until the next one reports the lifecycle.
+ * Mark an Enable button busy while its own toggle runs, as a render would
+ * until the next one reports the lifecycle.
  * @param {boolean} busy
+ * @param {'panel'|'cockpit'} [where] The panel's button or the Cockpit's.
  * @returns {boolean} False before the first render, when nothing is shown yet.
  */
-export function showRadioEnableBusy(busy) {
+export function showRadioEnableBusy(busy, where = 'panel') {
   if (!this._radioView) return false;
-  this._radioView = {
-    ...this._radioView,
-    enable: { ...this._radioView.enable, busy },
-  };
+  const view = this._radioView;
+  this._radioView =
+    where === 'cockpit'
+      ? {
+          ...view,
+          cockpit: {
+            ...view.cockpit,
+            enable: { ...view.cockpit.enable, busy },
+          },
+        }
+      : { ...view, enable: { ...view.enable, busy } };
   this.store?.publish(this._radioView);
   return true;
 }

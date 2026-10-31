@@ -948,6 +948,10 @@ export class ShellFacade {
     return this._radioControls?._setCockpitDisclosure?.(...args);
   }
 
+  _cockpitDisclosureOpen(kind) {
+    return Boolean(this._radioControls?._cockpitDisclosureOpen?.(kind));
+  }
+
   _renderRadioState(...args) {
     return this._radioControls?._renderRadioState?.(...args);
   }

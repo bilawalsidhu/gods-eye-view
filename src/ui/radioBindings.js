@@ -20,56 +20,9 @@ export function bindRadioControls() {
     const displayOpen = kind === 'display' && Boolean(expanded);
     const radioOpen = kind === 'radio' && Boolean(expanded);
     if (displayOpen || radioOpen) this.actions.setSignalCollapsed(true);
-    if (this._cockpitDisplayPanel)
-      this._cockpitDisplayPanel.hidden = !displayOpen;
-    if (this._cockpitRadioPanel) this._cockpitRadioPanel.hidden = !radioOpen;
-    this._cockpitDisplayToggleBtn
-      ?.closest('.cockpit-utility-control')
-      ?.classList.toggle('is-expanded', displayOpen);
-    this._cockpitRadioToggleBtn
-      ?.closest('.cockpit-utility-control')
-      ?.classList.toggle('is-expanded', radioOpen);
-    this._cockpitDisplayToggleBtn?.setAttribute(
-      'aria-expanded',
-      String(displayOpen),
-    );
-    this._cockpitRadioToggleBtn?.setAttribute(
-      'aria-expanded',
-      String(radioOpen),
-    );
+    this._cockpitDisclosure = { display: displayOpen, radio: radioOpen };
+    this.store?.publishUtility({ ...this._cockpitDisclosure });
     if (displayOpen) this.actions.revealStyleParameters();
-    if (this._cockpitDisplayToggleBtn) {
-      this._cockpitDisplayToggleBtn.textContent = displayOpen ? '▶' : '◀';
-      this._cockpitDisplayToggleBtn.setAttribute(
-        'aria-label',
-        t(
-          displayOpen
-            ? msg('Collapse Cockpit display options')
-            : msg('Expand Cockpit display options'),
-        ),
-      );
-      this._cockpitDisplayToggleBtn.title = t(
-        displayOpen
-          ? msg('Collapse Cockpit display options')
-          : msg('Expand Cockpit display options'),
-      );
-    }
-    if (this._cockpitRadioToggleBtn) {
-      this._cockpitRadioToggleBtn.textContent = radioOpen ? '▶' : '◀';
-      this._cockpitRadioToggleBtn.setAttribute(
-        'aria-label',
-        t(
-          radioOpen
-            ? msg('Collapse Cockpit Radio controls')
-            : msg('Expand Cockpit Radio controls'),
-        ),
-      );
-      this._cockpitRadioToggleBtn.title = t(
-        radioOpen
-          ? msg('Collapse Cockpit Radio controls')
-          : msg('Expand Cockpit Radio controls'),
-      );
-    }
     if (!expanded && returnFocus) {
       (kind === 'display'
         ? this._cockpitDisplayToggleBtn
@@ -87,6 +40,9 @@ export function bindRadioControls() {
     this.actions.layoutCockpit();
   };
   this._setCockpitDisclosure = setCockpitDisclosure;
+  /** @param {'display'|'radio'} kind @returns {boolean} Whether it is open. */
+  this._cockpitDisclosureOpen = (kind) =>
+    Boolean(this._cockpitDisclosure?.[kind]);
   const syncTunerTape = (coordinate) => {
     const scale = this._radioTuner?.querySelector('.radio-tuner-scale');
     const dial = this._radioTuner?.querySelector('.radio-tuner-dial');
@@ -339,22 +295,29 @@ export function bindRadioControls() {
       return;
     }
   };
-  // The panel's Enable button renders from the Radio store; the Cockpit one
-  // is still written directly.
+  // Both Enable buttons render from the Radio store; before its first render
+  // there is nothing shown to mark, so the button is marked directly.
   const setTriggerBusy = (trigger, busy) => {
-    if (
-      trigger === this._radioEnableBtn &&
-      showRadioEnableBusy.call(this, busy)
-    )
-      return;
+    const where =
+      trigger === this._radioEnableBtn
+        ? 'panel'
+        : trigger === this._cockpitRadioEnableBtn
+          ? 'cockpit'
+          : null;
+    if (where && showRadioEnableBusy.call(this, busy, where)) return;
     trigger.setAttribute('aria-disabled', String(busy));
     trigger.setAttribute('aria-busy', String(busy));
   };
+  // The store patches aria-busy on the next render, so a second press before
+  // it lands is turned away by this set.
+  const busyTriggers = new Set();
   const toggleRadio = async (trigger) => {
     if (!this.actions.isRegistered()) return;
+    if (busyTriggers.has(trigger)) return;
     if (trigger.getAttribute('aria-busy') === 'true') return;
     const enabling = !this.actions.isEnabled();
     const revealAfterEnable = enabling && trigger === this._radioEnableBtn;
+    busyTriggers.add(trigger);
     setTriggerBusy(trigger, true);
     try {
       const toggled = await this.actions.runUserAction(
@@ -387,6 +350,7 @@ export function bindRadioControls() {
       if (revealAfterEnable)
         await this._revealRadioControlsAfterExplicitEnable(trigger);
     } finally {
+      busyTriggers.delete(trigger);
       if (!this.destroyed) {
         setTriggerBusy(trigger, false);
         if (revealAfterEnable && trigger.isConnected)
@@ -405,9 +369,7 @@ export function bindRadioControls() {
     () => void toggleRadio(this._cockpitRadioEnableBtn),
   );
   this.listen(this._cockpitRadioToggleBtn, 'click', () => {
-    const open =
-      this._cockpitRadioToggleBtn.getAttribute('aria-expanded') === 'true';
-    setCockpitDisclosure('radio', !open);
+    setCockpitDisclosure('radio', !this._cockpitDisclosureOpen('radio'));
   });
   this.listen(
     document,
@@ -431,10 +393,8 @@ export function bindRadioControls() {
     'keydown',
     (event) => {
       if (event.key !== 'Escape') return;
-      const displayOpen =
-        this._cockpitDisplayToggleBtn?.getAttribute('aria-expanded') === 'true';
-      const radioOpen =
-        this._cockpitRadioToggleBtn?.getAttribute('aria-expanded') === 'true';
+      const displayOpen = this._cockpitDisclosureOpen('display');
+      const radioOpen = this._cockpitDisclosureOpen('radio');
       if (!displayOpen && !radioOpen) return;
       const nestedPanel = event.target?.closest?.(
         '.panel-collapsible:not(.collapsed), #param-slider-panel:not(.collapsed)',
@@ -534,8 +494,7 @@ export function bindRadioControls() {
   );
   this.listen(this._cockpitRadioVolume, 'input', () => {
     const value = Number(this._cockpitRadioVolume.value);
-    if (this._cockpitRadioVolumeValue)
-      this._cockpitRadioVolumeValue.textContent = `${value}%`;
+    showRadioVolume.call(this, value);
     this.actions.setParams({ volume: value / 100 }, { origin: 'user' });
   });
   const updateTunerFromPointer = (event) => {

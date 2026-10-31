@@ -29,6 +29,7 @@ export class RadioControls {
     this._radioCategorySignature = '';
     this._radioFilterOptions = null;
     this._radioVolumeShown = null;
+    this._cockpitDisclosure = { display: false, radio: false };
     this._radioTunerStations = [];
     this._radioTunerPool = [];
     this._radioTunerDragging = false;

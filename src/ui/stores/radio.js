@@ -3,10 +3,11 @@ import { markRaw, shallowRef } from 'vue';
 
 /**
  * The Radio panel as its view renders it. RadioControls presents the
- * directory row, station card, transport, volume and playback line
- * (`renderRadioState()`) and publishes them here; it keeps its listeners,
- * the tuner and the Cockpit radio controls. LocalSdrControls publishes the
- * local RTL-SDR card beside it.
+ * directory row, station card, transport, volume and playback line and the
+ * Cockpit's compact radio controls (`renderRadioState()`), and which Cockpit
+ * utility popover is open, and publishes them here; it keeps its listeners
+ * and the tuner. LocalSdrControls publishes the local RTL-SDR card beside
+ * it.
  */
 export const useRadioStore = defineStore('gev-radio', () => {
   /** The presented panel; null until the controls first render. */
@@ -25,5 +26,13 @@ export const useRadioStore = defineStore('gev-radio', () => {
     sdr.value = markRaw(next);
   }
 
-  return { view, publish, sdr, publishSdr };
+  /** The open Cockpit utility popover; null until one first opens or closes. */
+  const utility = shallowRef(null);
+
+  /** @param {{display: boolean, radio: boolean}} next */
+  function publishUtility(next) {
+    utility.value = markRaw(next);
+  }
+
+  return { view, publish, sdr, publishSdr, utility, publishUtility };
 });
