@@ -79,6 +79,7 @@
       "server/providers/places/google-key.js",
       "server/providers/places/routes.js",
       "server/providers/common/rate-limit.js",
+      "server/providers/common/methods.js",
       "server/providers/common/geo.js",
       "server/providers/common/http.js",
       "scripts/google-server-key.mjs",
@@ -108,6 +109,7 @@
       "server/providers/space/cooldown.js",
       "server/providers/space/launch-library.js",
       "server/providers/common/http.js",
+      "server/providers/common/methods.js",
       "src/data/spaceProviderRequests.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
@@ -179,6 +181,7 @@
     "modules": [
       "server/providers/gbfs.js",
       "server/providers/common/http.js",
+      "server/providers/common/methods.js",
       "server/providers/common/rate-limit.js",
       "src/sources/rateLimit.js",
       "src/data/gbfsSource.js",
@@ -211,6 +214,7 @@
       "server/providers/cctv/sources.js",
       "server/providers/cctv/stream.js",
       "server/providers/common/http.js",
+      "server/providers/common/methods.js",
       "src/data/directionText.js",
       "server/providers/common/geo.js",
       "server/providers/places/google-key.js",
@@ -230,6 +234,7 @@
       "server/providers/mapillary/tiles.js",
       "server/providers/mapillary/trim.js",
       "server/providers/common/same-site.js",
+      "server/providers/common/methods.js",
       "src/localRequestGate.mjs",
       "server/providers/common/rate-limit.js",
       "src/sources/rateLimit.js",
@@ -250,6 +255,7 @@
       "server/providers/radio/transport.js",
       "src/data/radioCountry.js",
       "server/providers/common/http.js",
+      "server/providers/common/methods.js",
       "src/sources/radioBrowser.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js"
@@ -261,6 +267,7 @@
     "exports": ["./server/providers/overpass"],
     "modules": [
       "server/providers/common/geo.js",
+      "server/providers/common/methods.js",
       "server/providers/common/http.js",
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",
@@ -287,6 +294,7 @@
     "exports": ["./server/providers/military-installations"],
     "modules": [
       "server/providers/common/http.js",
+      "server/providers/common/methods.js",
       "server/providers/common/query.js",
       "server/providers/common/rate-limit.js",
       "server/providers/military-installations.js",
@@ -307,6 +315,7 @@
     "exports": ["./server/providers/regional"],
     "modules": [
       "server/providers/common/http.js",
+      "server/providers/common/methods.js",
       "server/providers/common/query.js",
       "server/providers/common/rate-limit.js",
       "server/providers/regional.js",
@@ -338,6 +347,7 @@
       "src/i18n/marker.js",
       "src/hudLayoutPolicy.js",
       "server/providers/common/rate-limit.js",
+      "server/providers/common/methods.js",
       "server/providers/common/request.js",
       "server/providers/common/source-root.js",
       "server/providers/openai.js",
@@ -371,6 +381,7 @@
       "src/i18n/marker.js",
       "scripts/pinokio-environment.mjs",
       "server/providers/common/source-root.js",
+      "server/providers/common/methods.js",
       "server/standalone/key-setup.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",

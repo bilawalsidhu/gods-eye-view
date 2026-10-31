@@ -2,6 +2,7 @@ import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { fetchRegionalWeather } from './weather.js';
 import { validRegionalPoint } from './query.js';
 import { coalesceProxyRequest } from '../common/http.js';
+import { allowedMethods } from '../common/methods.js';
 
 const WEATHER_EFFECTS_CACHE_MS = 5 * 60_000;
 
@@ -45,7 +46,10 @@ function weatherEffectsProxy() {
   function install(middlewares) {
     middlewares.use('/api/weather-effects', async (req, res) => {
       if (req.method !== 'GET') {
-        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.writeHead(405, {
+          Allow: allowedMethods('GET'),
+          'Content-Type': 'application/json',
+        });
         res.end(JSON.stringify({ error: 'Method Not Allowed' }));
         return;
       }
