@@ -44,7 +44,10 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/ui/views/panels/StreetLevelPanel.vue",
+      "src/ui/stores/streetLevel.js",
+      "src/ui/rail/RailChips.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -944,7 +947,8 @@
       "src/ui/rail/utcClock.js",
       "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js",
-      "src/ui/weather/WeatherReadout.vue"
+      "src/ui/weather/WeatherReadout.vue",
+      "src/ui/stores/streetLevel.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -2909,7 +2913,8 @@
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/recentImagery/RecentImageryCard.vue",
-      "src/ui/recentImagery/RecentImageryReadout.vue"
+      "src/ui/recentImagery/RecentImageryReadout.vue",
+      "src/ui/stores/streetLevel.js"
     ],
     "external": [
       "hls.js",

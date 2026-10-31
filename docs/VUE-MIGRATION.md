@@ -84,7 +84,9 @@ They contain no application state.
    `SceneShotList` over the `gev-scenes` store), Weather (done: the owner
    renders `WeatherReadout` from the view it computes), Recent imagery
    (done: `RecentImageryReadout` and its day cards, the same way),
-   Street level, CCTV, Layers, Display, Context and Radio, the command dock,
+   Street level (done: `StreetLevelPanel` renders the `gev-street-level`
+   store that `StreetLevelControls` publishes to; the controls keep their
+   listeners, EXPAND, focus and resizing), CCTV, Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 
@@ -100,6 +102,12 @@ They contain no application state.
   `@vue/test-utils` and `happy-dom`. `npm test` registers the loader; to run
   one file that reaches a component (including anything importing the
   shell), use `node --import=./build/registerVue.js --test <file>`.
+- Never pass happy-dom nodes to `assert.equal` or `deepEqual`: a failure
+  prints both operands, and a node reaches the whole page and window, which
+  runs the process out of memory. Compare nodes with `assertSameNode()`
+  (`src/testSupport/domAssert.mjs`).
+- Panels lifted out of a view keep its verbatim markup in
+  `src/ui/views/panels/`, which Prettier leaves alone like the views.
 - Visual parity: before/after screenshots of every panel at desktop and phone
   widths, in the default and Cyber themes, with the rail as the only expected
   difference.

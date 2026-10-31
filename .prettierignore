@@ -21,5 +21,7 @@ node_modules
 .vite-*
 *.min.js
 
-# Application views hold the page markup verbatim; reflowing it changes the DOM
+# Application views, and panels lifted from them, hold the page markup
+# verbatim; reflowing it changes the DOM
 src/ui/views/*View.vue
+src/ui/views/panels/
