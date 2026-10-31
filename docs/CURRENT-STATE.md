@@ -6444,8 +6444,8 @@ when their footprints touch or contain one another, never across a seam toleranc
 - Scene and CCTV selects share the default `gev-field` surface. HUD layout and
   draw colour retain compact density. Radio filter, tuner gain and FM frequency
   use the same base while retaining their feature-specific skins and layout.
-- The CCTV inline number editor uses `createNumberInput` with its existing
-  precision and inline density. Enter/blur commit, Escape cancellation, frozen
+- The CCTV inline number editor is rendered by its pose chip component with
+  its existing precision and inline density. Enter/blur commit, Escape cancellation, frozen
   camera base, camera-switch guards and disposal remain with CCTV controls.
 - Options, values, native keyboard/typeahead, disabled attributes and browser
   validity remain native. Frequency bounds, tuner commit timing and calibration

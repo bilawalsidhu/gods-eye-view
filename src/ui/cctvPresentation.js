@@ -2,6 +2,7 @@ import { t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
+import { presentCctvCalibration } from './cctvCalibration.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -78,6 +79,7 @@ export function presentCctvPanel(state, enabled) {
       calBadge: dirty ? 'edited' : badge || '',
     },
     meta: metaText(state, enabled, activeCamera, catalogCount),
+    calibration: presentCctvCalibration(state, enabled),
   };
 }
 
@@ -245,7 +247,6 @@ export function _renderCctvState(state) {
   }
 
   this.store.publish(presentCctvPanel(state, enabled));
-  this._syncCctvCalReadout(enabled, activeCamera);
 
   const liveIntent = enabled && !!activeCamera?.isVideo;
   if (this._cctvVideo) {

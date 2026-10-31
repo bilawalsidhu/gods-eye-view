@@ -1,5 +1,6 @@
 import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import test from 'node:test';
 import { createPinia } from 'pinia';
 import { createApp, nextTick } from 'vue';
@@ -36,6 +37,10 @@ function panel(t) {
       ...elements,
       _cctvPanel: document.getElementById('cctv-panel'),
       _cctvSourceBadge: document.getElementById('cctv-source-badge'),
+      _cctvCalReadout: document.getElementById('cctv-cal-readout'),
+      _cctvAdjustBtn: document.getElementById('cctv-adjust-btn'),
+      _cctvCalibSaveBtn: document.getElementById('cctv-calib-save-btn'),
+      _cctvCalibResetBtn: document.getElementById('cctv-calib-reset-btn'),
     },
     cctv: {},
     actions: {
@@ -212,4 +217,176 @@ test('losing the active camera resets the CAL chip', async (t) => {
     byId('cctv-meta').textContent,
     'Enable CCTV to load camera intersections',
   );
+});
+
+/** A panel with an active camera, calibration patches recorded. */
+async function calibrating(t) {
+  const page = panel(t);
+  const patches = [];
+  page.controls.actions.setParams = (params) => patches.push(params);
+  page.controls._renderCctvState({
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'a',
+    activeCamera: { ...camera, headingDeg: 30, basePose: { headingDeg: 20 } },
+  });
+  await nextTick();
+  const chip = document.querySelector('[data-cal-field="heading"]');
+  const begin = async () => {
+    chip.click();
+    await nextTick();
+    return chip.querySelector('input');
+  };
+  const key = (name) =>
+    new KeyboardEvent('keydown', { key: name, cancelable: true });
+  return { ...page, patches, chip, begin, key };
+}
+
+test('a pose chip types against the camera base captured when it opened', async (t) => {
+  const { controls, patches, chip, begin, key } = await calibrating(t);
+  assert.equal(chip.textContent, 'HDG 30.0°');
+  const input = await begin();
+  assert.ok(input, 'the chip holds an input');
+  assert.ok(document.activeElement === input, 'the input has focus');
+  assert.equal(chip.textContent, 'HDG ');
+  assert.equal(input.value, '30.0');
+  assert.equal(input.step, '0.1');
+  assert.equal(input.getAttribute('aria-label'), 'HDG');
+  input.value = '100';
+  // A refresh while typing keeps the draft and the base the edit opened with.
+  controls._renderCctvState({
+    ...controls._cctvState,
+    activeCamera: {
+      ...controls._cctvState.activeCamera,
+      basePose: { headingDeg: 60 },
+    },
+  });
+  await nextTick();
+  assertSameNode(chip.querySelector('input'), input, 'the input survives');
+  assert.equal(input.value, '100');
+  input.dispatchEvent(key('Enter'));
+  input.dispatchEvent(new Event('blur'));
+  assert.deepEqual(patches, [
+    {
+      selectedCameraId: 'a',
+      calibration: { cameraId: 'a', patch: { headingDeg: 80 } },
+    },
+  ]);
+  assert.equal(controls._calibrationEdit, null);
+  await nextTick();
+  assert.ok(!chip.querySelector('input'), 'the input is gone');
+  assert.equal(chip.textContent, 'HDG 30.0°');
+});
+
+test('a camera switch cancels calibration before old blur can change the new camera', async (t) => {
+  const { controls, patches, chip, begin } = await calibrating(t);
+  const input = await begin();
+  input.value = '100';
+  controls._renderCctvState({
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'b',
+    activeCamera: {
+      ...camera,
+      id: 'b',
+      headingDeg: 200,
+      basePose: { headingDeg: 190 },
+    },
+  });
+  input.dispatchEvent(new Event('blur'));
+  await nextTick();
+  assert.deepEqual(patches, []);
+  assert.ok(!chip.querySelector('input'), 'the input is gone');
+  assert.equal(chip.textContent, 'HDG 200.0°');
+});
+
+test('Escape claims calibration cancellation and disposal prevents late commits', async (t) => {
+  const { controls, patches, chip, begin, key } = await calibrating(t);
+  let input = await begin();
+  input.value = '100';
+  const escape = key('Escape');
+  input.dispatchEvent(escape);
+  input.dispatchEvent(new Event('blur'));
+  assert.equal(escape.defaultPrevented, true);
+  await nextTick();
+  assert.equal(chip.textContent, 'HDG 30.0°');
+  input = await begin();
+  input.value = '120';
+  controls.destroy();
+  input.dispatchEvent(new Event('blur'));
+  assert.deepEqual(patches, []);
+  await nextTick();
+  assert.ok(!chip.querySelector('input'), 'disposal closes the editor');
+});
+
+test('ADJUST, SAVE and RESET follow whether a camera can be calibrated', async (t) => {
+  const { controls, byId } = panel(t);
+  controls._renderCctvState({ enabled: true, count: 1, cameraIndex: [] });
+  await nextTick();
+  for (const id of [
+    'cctv-adjust-btn',
+    'cctv-calib-save-btn',
+    'cctv-calib-reset-btn',
+  ])
+    assert.equal(byId(id).disabled, true, id);
+  const chip = document.querySelector('[data-cal-field="north"]');
+  assert.equal(chip.textContent, 'ΔN --');
+  assert.equal(chip.disabled, true);
+  controls._renderCctvState({
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'a',
+    activeCamera: camera,
+    calibrationMode: true,
+  });
+  await nextTick();
+  assert.equal(byId('cctv-adjust-btn').textContent, 'ADJUST ON');
+  assert.equal(byId('cctv-adjust-btn').classList.contains('active'), true);
+  assert.equal(byId('cctv-calib-save-btn').disabled, false);
+  assert.equal(chip.textContent, 'ΔN 0.0m');
+  assert.equal(chip.disabled, false);
+});
+
+test('blur alone commits the draft; an empty draft changes nothing', async (t) => {
+  const { patches, chip, begin } = await calibrating(t);
+  let input = await begin();
+  input.value = '';
+  input.dispatchEvent(new Event('blur'));
+  assert.deepEqual(patches, []);
+  await nextTick();
+  assert.equal(chip.textContent, 'HDG 30.0°');
+  input = await begin();
+  input.value = '25';
+  input.dispatchEvent(new Event('blur'));
+  assert.deepEqual(patches, [
+    {
+      selectedCameraId: 'a',
+      calibration: { cameraId: 'a', patch: { headingDeg: 5 } },
+    },
+  ]);
+});
+
+test('keys typed into a pose chip stay in it', async (t) => {
+  const { begin } = await calibrating(t);
+  const input = await begin();
+  let reached = 0;
+  document.body.addEventListener('keydown', () => reached++);
+  for (const key of ['5', 'Escape'])
+    input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  assert.equal(reached, 0);
+});
+
+test('a second edit of the same chip gets a fresh input', async (t) => {
+  const { controls, chip, begin } = await calibrating(t);
+  const first = await begin();
+  first.value = '99';
+  controls._beginCctvCalValueEdit(chip);
+  controls._beginCctvCalValueEdit(chip);
+  await nextTick();
+  const second = chip.querySelector('input');
+  assert.ok(second && second !== first, 'a new input');
+  assert.equal(second.value, '30.0');
 });

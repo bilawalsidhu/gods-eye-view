@@ -87,9 +87,9 @@ They contain no application state.
    Street level (done: `StreetLevelPanel` renders the `gev-street-level`
    store that `StreetLevelControls` publishes to; the controls keep their
    listeners, EXPAND, focus and resizing), CCTV (in progress: `CctvPanel`
-   renders the buttons, CAL chip and meta line from the `gev-cctv` store;
-   the picker, frame, source badge, calibration readout and summary are
-   still written by `CctvControls`), Layers, Display, Context and Radio, the command dock,
+   renders the buttons, CAL chip, meta line and calibration readout, with
+   its inline pose editor, from the `gev-cctv` store; the picker, frame,
+   source badge and summary are still written by `CctvControls`), Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 

@@ -741,13 +741,13 @@ DOM and platform middleware.
 
 ### Native form fields
 
-`src/ui/formField.js` constructs native numeric inputs without listeners or
-application state. Static selects and number inputs use the same `gev-field`
-surface, with explicit compact and inline densities. Feature owners retain
+Native numeric inputs are rendered by the views that own them; the CCTV pose
+chip renders its inline input in `src/ui/cctv/CctvCalValue.vue`. Static
+selects and number inputs use the same `gev-field` surface, with explicit
+compact and inline densities. Feature owners retain
 option identity/order, bounds, parsing, draft values, input/change timing and
 teardown. CCTV effective-pose conversion and tuner/device operations remain
-feature responsibilities. A Vue replacement can reuse this contract and CSS;
-it replaces DOM construction, rather than adding a second state owner.
+feature responsibilities.
 
 The shared stylesheet owns field surfaces and disabled opacity; feature and theme
 palettes use `--gev-field-background`, `--gev-field-border-color`,

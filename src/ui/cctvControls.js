@@ -8,7 +8,6 @@ import {
   _activeCctvCameraId,
   _resetCctvCalibration,
   _beginCctvCalValueEdit,
-  _syncCctvCalReadout,
 } from './cctvCalibration.js';
 import {
   _calBadgeLabel,
@@ -102,9 +101,6 @@ export class CctvControls {
   }
   _beginCctvCalValueEdit(...args) {
     return _beginCctvCalValueEdit.call(this, ...args);
-  }
-  _syncCctvCalReadout(...args) {
-    return _syncCctvCalReadout.call(this, ...args);
   }
   _calBadgeLabel(...args) {
     return _calBadgeLabel.call(this, ...args);

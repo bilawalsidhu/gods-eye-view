@@ -1,12 +1,13 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
+import CctvCalValue from '../../cctv/CctvCalValue.vue';
 import { useCctvStore } from '../../stores/cctv.js';
 
 // The CCTV panel, its buttons, CAL chip and meta line rendered from what
 // CctvControls presents; until it renders, the panel shows its initial
-// markup. The picker, frame, source badge, calibration readout and summary
-// are written by the controls, so their elements carry no bindings.
+// markup. The picker, frame, source badge and summary are written by the
+// controls, so their elements carry no bindings.
 const { view } = storeToRefs(useCctvStore());
 </script>
 
@@ -48,20 +49,20 @@ const { view } = storeToRefs(useCctvStore());
     <div class="cctv-calibration-block">
       <div class="cctv-calibration-header">
         <div class="cctv-summary-label" data-i18n>CALIBRATION</div>
-        <button id="cctv-adjust-btn" class="scene-btn" title="Drag the camera in the world: rings rotate, arrows move, handles set range/FOV" data-i18n-title data-i18n>ADJUST</button>
+        <button id="cctv-adjust-btn" :class="['scene-btn', { active: view?.calibration.adjust.active }]" title="Drag the camera in the world: rings rotate, arrows move, handles set range/FOV" data-i18n-title :disabled="view?.calibration.disabled">{{ view?.calibration.adjust.text ?? t('ADJUST') }}</button>
       </div>
       <div id="cctv-cal-readout" class="cctv-cal-readout" aria-label="Camera pose — click a value to type" data-i18n-aria-label>
-        <button class="cctv-cal-value" data-cal-field="heading" title="Heading (compass °) — click to type" data-i18n-title data-i18n-runtime>HDG --</button>
-        <button class="cctv-cal-value" data-cal-field="pitch" title="Pitch (° up/down) — click to type" data-i18n-title data-i18n-runtime>PITCH --</button>
-        <button class="cctv-cal-value" data-cal-field="fov" title="Horizontal FOV (°) — click to type" data-i18n-title data-i18n-runtime>FOV --</button>
-        <button class="cctv-cal-value" data-cal-field="range" title="Range / monitor-plane distance (m) — click to type" data-i18n-title data-i18n-runtime>RANGE --</button>
-        <button class="cctv-cal-value" data-cal-field="height" title="Mount height above ground (m) — click to type" data-i18n-title data-i18n-runtime>HGT --</button>
-        <button class="cctv-cal-value" data-cal-field="north" title="North offset from catalog position (m) — click to type" data-i18n-title>ΔN --</button>
-        <button class="cctv-cal-value" data-cal-field="east" title="East offset from catalog position (m) — click to type" data-i18n-title>ΔE --</button>
+        <CctvCalValue field="heading" label="HDG" title="Heading (compass °) — click to type" data-i18n-title />
+        <CctvCalValue field="pitch" label="PITCH" title="Pitch (° up/down) — click to type" data-i18n-title />
+        <CctvCalValue field="fov" label="FOV" title="Horizontal FOV (°) — click to type" data-i18n-title />
+        <CctvCalValue field="range" label="RANGE" title="Range / monitor-plane distance (m) — click to type" data-i18n-title />
+        <CctvCalValue field="height" label="HGT" title="Mount height above ground (m) — click to type" data-i18n-title />
+        <CctvCalValue field="north" label="ΔN" title="North offset from catalog position (m) — click to type" data-i18n-title />
+        <CctvCalValue field="east" label="ΔE" title="East offset from catalog position (m) — click to type" data-i18n-title />
       </div>
       <div class="cctv-controls cctv-calibration-actions">
-        <button id="cctv-calib-save-btn" type="button" class="gev-action-button scene-btn" data-i18n>SAVE CAL</button>
-        <button id="cctv-calib-reset-btn" type="button" class="gev-action-button scene-btn" data-i18n>RESET CAL</button>
+        <button id="cctv-calib-save-btn" type="button" class="gev-action-button scene-btn" :disabled="view?.calibration.disabled" data-i18n>SAVE CAL</button>
+        <button id="cctv-calib-reset-btn" type="button" class="gev-action-button scene-btn" :disabled="view?.calibration.disabled" data-i18n>RESET CAL</button>
       </div>
     </div>
     <div class="cctv-summary-label" data-i18n>SCENE SUMMARY</div>
