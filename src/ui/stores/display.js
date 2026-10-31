@@ -3,9 +3,9 @@ import { markRaw, shallowRef } from 'vue';
 
 /**
  * The Display panel as its view renders it. VisualSettings presents its
- * groups (`_presentDisplay()`), AircraftDisplay the 3D aircraft group and
- * the draw tool its controls, and each publishes here; each keeps its
- * listeners on the controls.
+ * groups (`_presentDisplay()`), AircraftDisplay the 3D aircraft group, the
+ * draw tool its controls and the file import its list, and each publishes
+ * here; each keeps its listeners on the controls.
  */
 export const useDisplayStore = defineStore('gev-display', () => {
   /** The presented panel; null until VisualSettings first renders. */
@@ -32,5 +32,22 @@ export const useDisplayStore = defineStore('gev-display', () => {
     draw.value = markRaw(next);
   }
 
-  return { view, publish, models3d, publishModels3d, draw, publishDraw };
+  /** The imported files and hint; null until the file import renders. */
+  const geoImport = shallowRef(null);
+
+  /** @param {object} next A fresh presentation of the imported files. */
+  function publishGeoImport(next) {
+    geoImport.value = markRaw(next);
+  }
+
+  return {
+    view,
+    publish,
+    models3d,
+    publishModels3d,
+    draw,
+    publishDraw,
+    geoImport,
+    publishGeoImport,
+  };
 });

@@ -9,6 +9,7 @@ import { useDisplayStore } from './stores/display.js';
 import DisplayPanel from './views/panels/DisplayPanel.vue';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { VisualSettings } from './visualSettings.js';
+import { initGeoFileImport } from './geoFileImport.js';
 
 function fixture(t) {
   document.body.replaceChildren();
@@ -369,4 +370,89 @@ test('the Draw controls render what the draw tool publishes', async (t) => {
   assert.equal(toggle.className, 'pp-toggle-btn');
   assert.equal($('draw-mode-row').classList.contains('visible'), false);
   assert.equal($('draw-label-row').classList.contains('visible'), false);
+});
+
+test('the imported files render what the file import publishes and keep focus', async (t) => {
+  const { store, $ } = fixture(t);
+  const list = $('geo-import-list');
+  assert.equal(list.className, 'geo-import-list');
+  assert.equal(list.children.length, 0);
+  assert.equal($('geo-import-hint').textContent, '');
+
+  const viewer = {
+    container: document.createElement('div'),
+    scene: { requestRender() {} },
+    dataSources: { add: async (ds) => ds, remove: () => true },
+  };
+  const tool = initGeoFileImport({
+    viewer,
+    load: async (file) => ({
+      dataSource: { show: true },
+      name: file.name,
+      format: file.name.endsWith('.kml') ? 'kml' : 'geojson',
+      entityCount: 2,
+      removed: 0,
+      revoke() {},
+    }),
+    flyToSource() {},
+    publish: (view) => {
+      store.publishGeoImport(view);
+      return nextTick();
+    },
+  });
+  t.after(() => tool.destroy());
+  await tool.importFiles([{ name: '<b>a</b>.geojson' }, { name: 'b.kml' }]);
+  await nextTick();
+  assert.equal(list.className, 'geo-import-list visible');
+  assert.equal($('geo-import-hint').textContent, 'Added 2 files.');
+  const rowsNow = () => [...list.querySelectorAll('.geo-import-row')];
+  const [first, second] = rowsNow();
+  assert.equal(first.children.length, 5);
+  assert.equal(
+    [...first.childNodes].some((node) => node.nodeType === 3 && node.data),
+    false,
+    'no text between the parts',
+  );
+  const [swatch, name, toggle] = first.children;
+  assert.equal(swatch.className, 'geo-import-swatch');
+  assert.ok(swatch.style.background);
+  assert.equal(name.textContent, '<b>a</b>.geojson');
+  assert.equal(name.children.length, 0, 'the name is text');
+  assert.match(name.title, /GEOJSON, 2 map objects$/);
+  assert.equal(toggle.className, 'geo-import-action');
+  assert.equal(toggle.getAttribute('type'), 'button');
+  assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+  assert.equal(toggle.getAttribute('aria-label'), 'Hide <b>a</b>.geojson');
+  assert.equal(toggle.textContent, 'visibility');
+  assert.equal(first.children[3].hasAttribute('aria-pressed'), false);
+  assert.equal(second.children[0].className, 'geo-import-swatch own-styles');
+  assert.equal(second.children[0].getAttribute('style'), null);
+
+  const button = (row, action) =>
+    row.querySelector(`button[data-action="${action}"]`);
+  // The click lands on the icon inside the button, as in a browser.
+  const press = async (el) => {
+    el.focus();
+    el.firstElementChild.click();
+    await nextTick();
+    await nextTick();
+  };
+  await press(button(first, 'toggle'));
+  assert.equal(rowsNow()[0] === first, true, 'the row is kept');
+  assert.equal(document.activeElement === button(first, 'toggle'), true);
+  assert.equal(button(first, 'toggle').getAttribute('aria-pressed'), 'false');
+  assert.equal(button(first, 'toggle').textContent, 'visibility_off');
+  assert.equal(button(first, 'toggle').title, 'Show <b>a</b>.geojson');
+  await press(button(first, 'toggle'));
+  assert.equal(document.activeElement === button(first, 'toggle'), true);
+  assert.equal(button(first, 'toggle').getAttribute('aria-pressed'), 'true');
+  assert.equal(button(first, 'fly').title, 'Fly to <b>a</b>.geojson');
+  assert.equal(button(first, 'remove').getAttribute('aria-label'), 'Remove <b>a</b>.geojson');
+
+  await press(button(first, 'remove'));
+  assert.equal(rowsNow().length, 1);
+  assert.equal(document.activeElement === button(second, 'remove'), true);
+  await press(button(second, 'remove'));
+  assert.equal(list.className, 'geo-import-list');
+  assert.equal(document.activeElement === $('geo-import-button'), true);
 });

@@ -6,11 +6,10 @@ import { vRangeValue } from '../../rail/rangeValue.js';
 import { useDisplayStore } from '../../stores/display.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
-// Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group and
-// the draw tool its controls, and each publishes them; until they do, the
-// panel shows its initial markup. The other groups keep their owners'
-// element bindings.
-const { view, models3d, draw } = storeToRefs(useDisplayStore());
+// Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group, the
+// draw tool its controls and the file import its list, and each publishes
+// them; until they do, the panel shows its initial markup.
+const { view, models3d, draw, geoImport } = storeToRefs(useDisplayStore());
 const pct = (value) => `${value}%`;
 const hud = computed(() => view.value?.hud ?? null);
 const sonar = computed(() => view.value?.sonar ?? null);
@@ -37,6 +36,8 @@ const modelsSegment = segment(modelsMode);
 const drawShape = computed(() => draw.value?.shape ?? 'area');
 const drawSegment = segment(drawShape);
 const allocationSegment = segment(allocation);
+const geoRows = computed(() => geoImport.value?.rows ?? []);
+const geoListed = computed(() => geoRows.value.length > 0);
 </script>
 
 <template>
@@ -190,8 +191,8 @@ const allocationSegment = segment(allocation);
       <span class="pp-label" data-i18n>Import</span>
     </button>
     <input type="file" id="geo-import-input" accept=".geojson,.json,.kml,.kmz,.gpx" multiple hidden aria-label="Choose GeoJSON, KML, KMZ or GPX files" data-i18n-aria-label>
-    <ul class="geo-import-list" id="geo-import-list" aria-label="Imported files" data-i18n-aria-label></ul>
-    <span class="draw-hint geo-import-hint" id="geo-import-hint" aria-live="polite"></span>
+    <ul class="geo-import-list" :class="{ visible: geoListed }" id="geo-import-list" aria-label="Imported files" data-i18n-aria-label><li v-for="row in geoRows" :key="row.id" class="geo-import-row" :data-import-id="row.id"><span :class="['geo-import-swatch', { 'own-styles': row.ownStyles }]" :style="row.ownStyles ? null : { background: row.color }"></span><span class="geo-import-name" :title="row.title">{{ row.name }}</span><button v-for="item in row.actions" :key="item.action" type="button" class="geo-import-action" :data-action="item.action" :title="item.label" :aria-label="item.label" :aria-pressed="item.pressed"><span class="material-symbols-outlined" aria-hidden="true">{{ item.icon }}</span></button></li></ul>
+    <span class="draw-hint geo-import-hint" id="geo-import-hint" aria-live="polite">{{ geoImport?.hint ?? '' }}</span>
   </div>
   <div class="pp-toggle-group">
     <button class="pp-toggle-btn" :class="{ active: celestial?.active }" id="celestial-toggle" :title="celestialTitle" :aria-pressed="String(celestial?.active ?? false)" :disabled="celestial ? !celestial.supported : undefined" :aria-disabled="celestial ? String(!celestial.supported) : undefined">

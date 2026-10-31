@@ -1,8 +1,9 @@
 // Behavioral tests for DISPLAY ▸ Import: the controller is driven against
 // fake DOM and viewer doubles with an injected loader, and its observable
-// effects are asserted — data sources added and removed, list rows, the hint,
-// drop handling, the file limit, and what destroy() gives back. Real parsing
-// and rendering run in `scripts/qa-geo-import.mjs`.
+// effects are asserted — data sources added and removed, the rows and hint it
+// publishes, drop handling, the file limit, and what destroy() gives back.
+// The Display panel renders the published list (`displayPanel.test.mjs`);
+// real parsing and rendering run in `scripts/qa-geo-import.mjs`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -135,7 +136,13 @@ class FakeElement {
   }
 }
 
-function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
+function setup({
+  load,
+  navigation,
+  flyToSource,
+  subscribeMapSource,
+  rendered,
+} = {}) {
   focus.active = null;
   const els = {
     'geo-import-button': new FakeElement('button', 'geo-import-button'),
@@ -156,6 +163,7 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
   const removed = [];
   const flights = [];
   let renders = 0;
+  let shown = null;
   const viewer = {
     container: new FakeElement('div', 'cesiumContainer'),
     scene: { requestRender: () => (renders += 1) },
@@ -193,6 +201,10 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
     ...(navigation ? { navigation } : {}),
     ...(subscribeMapSource ? { subscribeMapSource } : {}),
     flyToSource: flyToSource || ((_viewer, ds) => flights.push(ds)),
+    publish: (view) => {
+      shown = view;
+      return rendered?.();
+    },
   });
   return {
     tool,
@@ -205,12 +217,25 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
     revoked,
     loads,
     renders: () => renders,
+    shown: () => shown,
   };
 }
 const file = (name, extra = {}) => ({ name, size: 10, ...extra });
-const rows = (els) => els['geo-import-list'].children;
-const action = (row, name) =>
-  row.children.find((c) => c.dataset.action === name);
+const rows = (t) => t.shown().rows;
+const action = (row, name) => row.actions.find((a) => a.action === name);
+// A click on a row button, as the list's delegated listener receives it.
+const press = (t, row, name) =>
+  t.els['geo-import-list'].emit('click', {
+    target: {
+      closest: (selector) =>
+        selector === 'button[data-action]'
+          ? {
+              dataset: { action: name },
+              closest: () => ({ dataset: { importId: row.id } }),
+            }
+          : null,
+    },
+  });
 
 // Runs first: tools left by later tests would answer the same registry.
 test('imported files make the language switch ask first', async () => {
@@ -256,24 +281,19 @@ test('the Import button opens the picker and a pick imports each file', async ()
     t.loads[1].opts.color,
     'each file gets its own color',
   );
-  assert.equal(rows(t.els).length, 2);
-  assert.ok(t.els['geo-import-list'].classList.contains('visible'));
+  assert.equal(rows(t).length, 2);
   assert.equal(t.flights.length, 1, 'the first file of a batch is flown to');
-  assert.equal(t.els['geo-import-hint'].textContent, 'Added 2 files.');
+  assert.equal(t.shown().hint, 'Added 2 files.');
   assert.deepEqual(
     t.tool.list().map((f) => f.name),
     ['a.geojson', 'b.kml'],
   );
 });
 
-test('file names are text, never markup', async () => {
+test('file names are published as given, for the view to show as text', async () => {
   const t = setup();
   await t.tool.importFiles([file('<img src=x onerror=alert(1)>.kml')]);
-  const name = rows(t.els)[0].children.find((c) =>
-    c.classList.contains('geo-import-name'),
-  );
-  assert.equal(name.textContent, '<img src=x onerror=alert(1)>.kml');
-  assert.equal(name.innerHTML, undefined);
+  assert.equal(rows(t)[0].name, '<img src=x onerror=alert(1)>.kml');
 });
 
 test('row buttons hide, show, fly to and remove a file', async () => {
@@ -281,19 +301,14 @@ test('row buttons hide, show, fly to and remove a file', async () => {
   await t.tool.importFiles([file('a.gpx')]);
   const [{ id }] = t.tool.list();
   const ds = t.added[0];
-  // the click lands on the glyph inside the button, as in a browser
-  const glyphClick = (name) =>
-    t.els['geo-import-list'].emit('click', {
-      target: action(rows(t.els)[0], name).children[0],
-    });
+  const glyphClick = (name) => press(t, rows(t)[0], name);
   assert.equal(ds.show, true);
   glyphClick('toggle');
   assert.equal(ds.show, false);
   assert.equal(t.tool.list()[0].visible, false);
-  assert.equal(
-    action(rows(t.els)[0], 'toggle').getAttribute('aria-pressed'),
-    'false',
-  );
+  assert.equal(action(rows(t)[0], 'toggle').pressed, 'false');
+  assert.equal(action(rows(t)[0], 'toggle').icon, 'visibility_off');
+  assert.equal(action(rows(t)[0], 'toggle').label, 'Show a.gpx');
   glyphClick('fly');
   assert.equal(ds.show, true, 'flying to a hidden file shows it');
   assert.equal(t.flights.at(-1), ds);
@@ -301,7 +316,7 @@ test('row buttons hide, show, fly to and remove a file', async () => {
   assert.deepEqual(t.removed, [{ ds, destroy: true }]);
   assert.deepEqual(t.revoked, ['a.gpx']);
   assert.equal(t.tool.list().length, 0);
-  assert.ok(!t.els['geo-import-list'].classList.contains('visible'));
+  assert.deepEqual(rows(t), []);
   assert.equal(t.tool.remove(id), false);
 });
 
@@ -319,7 +334,7 @@ test('a refused file says why and does not stop the rest of the batch', async ()
   assert.equal(out[0].error, 'That KML file is not valid XML.');
   assert.match(out[1].error, /could not be read\./);
   assert.match(
-    t.els['geo-import-hint'].textContent,
+    t.shown().hint,
     /^Added 1 file\. 2 files could not be added \(bad\.kml: That KML file is not valid XML\.\)/,
   );
   assert.equal(t.tool.list().length, 1);
@@ -387,7 +402,7 @@ test('destroy removes every file and listener and the window handle', async () =
       t.els['geo-import-list'],
     ])
       assert.equal(el.listeners.length, 0);
-    assert.equal(rows(t.els).length, 0);
+    assert.deepEqual(t.shown(), { rows: [], hint: '' });
     assert.equal(globalThis.window.__gevGeoImport, undefined);
     assert.equal(t.tool.diagnostics().destroyed, true);
   } finally {
@@ -436,6 +451,11 @@ test('the application composition wires the import and owns its teardown', () =>
     /navigation: styleManager/,
   );
   assert.ok(tools.indexOf('defer(() => geoFileImport?.destroy());') > importAt);
+  // The list renders from the store once Vue has flushed.
+  assert.match(
+    tools.slice(importAt, importAt + 400),
+    /displayStore\.publishGeoImport\(view\);\s*return nextTick\(\);/,
+  );
   const markup = fs.readFileSync(
     new URL('./views/panels/DisplayPanel.vue', import.meta.url),
     'utf8',
@@ -665,30 +685,81 @@ test('a refused deferred stamp (Cockpit) imports without flying', async () => {
   assert.equal(flown.length, 0);
 });
 
-test('keyboard focus stays on the control after hide, show and remove', async () => {
-  const t = setup();
-  await t.tool.importFiles([file('a.geojson'), file('b.geojson')]);
-  // Clicks reach the list's delegated listener, as they bubble in a page.
-  const press = (btn) =>
-    t.els['geo-import-list'].emit('click', { target: btn });
-  const [first] = rows(t.els);
-  action(first, 'toggle').focus();
-  press(action(first, 'toggle'));
-  // The list was rebuilt; focus is on the NEW toggle of the same row.
-  const again = rows(t.els)[0];
-  assert.notEqual(again, first);
-  assert.equal(t.document.activeElement, action(again, 'toggle'));
-  assert.equal(action(again, 'toggle').getAttribute('aria-pressed'), 'false');
-  press(action(again, 'toggle'));
-  assert.equal(t.document.activeElement, action(rows(t.els)[0], 'toggle'));
-  // Remove the first row: focus moves to the same control on the next row.
-  action(rows(t.els)[0], 'remove').focus();
-  press(action(rows(t.els)[0], 'remove'));
-  assert.equal(rows(t.els).length, 1);
-  assert.equal(t.document.activeElement, action(rows(t.els)[0], 'remove'));
-  // Remove the last row: focus goes back to the Import button.
-  press(action(rows(t.els)[0], 'remove'));
+// The rendered view as the owner reads it back: a row per published file,
+// each with its buttons. `settle()` finishes the held render.
+async function heldRender(names) {
+  let settle = () => {};
+  const t = setup({ rendered: () => new Promise((r) => (settle = r)) });
+  await t.tool.importFiles(names.map((name) => file(name)));
+  const list = t.els['geo-import-list'];
+  const renderRow = ({ id }) => {
+    const row = new FakeElement('li');
+    row.dataset.importId = id;
+    for (const name of ['toggle', 'fly', 'remove']) {
+      const btn = new FakeElement('button');
+      btn.dataset.action = name;
+      row.append(btn);
+    }
+    return row;
+  };
+  const render = async () => {
+    list.replaceChildren(...rows(t).map(renderRow));
+    settle();
+    await new Promise((r) => setImmediate(r));
+  };
+  await render();
+  const removeButton = (at) => list.children[at].children[2];
+  return { t, list, render, removeButton };
+}
+
+test('keyboard focus moves on only once the list without the removed row renders', async () => {
+  const { t, list, render, removeButton } = await heldRender([
+    'a.geojson',
+    'b.geojson',
+  ]);
+  const first = removeButton(0);
+  first.focus();
+  press(t, rows(t)[0], 'remove');
+  await new Promise((r) => setImmediate(r));
+  assert.equal(t.document.activeElement, first, 'not before the view renders');
+  await render();
+  assert.equal(list.children.length, 1);
+  assert.equal(
+    t.document.activeElement,
+    removeButton(0),
+    'the same control on the next row',
+  );
+  press(t, rows(t)[0], 'remove');
+  await render();
   assert.equal(t.document.activeElement, t.els['geo-import-button']);
+});
+
+test('focus moved elsewhere while the list renders stays where it went', async () => {
+  const { t, render, removeButton } = await heldRender([
+    'a.geojson',
+    'b.geojson',
+  ]);
+  removeButton(0).focus();
+  press(t, rows(t)[0], 'remove');
+  t.els['geo-import-input'].focus();
+  await render();
+  assert.equal(t.document.activeElement, t.els['geo-import-input']);
+});
+
+test('two removes before one render give focus to the first one’s next row', async () => {
+  const names = ['a', 'b', 'c', 'd', 'e'].map((n) => `${n}.geojson`);
+  const { t, list, render, removeButton } = await heldRender(names);
+  removeButton(1).focus();
+  press(t, rows(t)[1], 'remove');
+  // The view has not rendered: b's button still holds focus.
+  press(t, rows(t)[2], 'remove');
+  await render();
+  assert.deepEqual(
+    t.tool.list().map((f) => f.name),
+    ['a.geojson', 'c.geojson', 'e.geojson'],
+  );
+  assert.equal(t.document.activeElement, removeButton(1));
+  assert.equal(list.children[1].dataset.importId, rows(t)[1].id);
 });
 
 test('KML and KMZ rows say they keep their own styles instead of showing a color', async () => {
@@ -703,12 +774,11 @@ test('KML and KMZ rows say they keep their own styles instead of showing a color
     }),
   });
   await t.tool.importFiles([file('a.kml'), file('b.gpx')]);
-  const [kml, gpx] = rows(t.els);
-  assert.ok(kml.children[0].classList.contains('own-styles'));
-  assert.equal(kml.children[0].style.background, undefined);
-  assert.match(kml.children[1].title, /drawn with its own styles/);
-  assert.ok(!gpx.children[0].classList.contains('own-styles'));
-  assert.ok(gpx.children[0].style.background);
+  const [kml, gpx] = rows(t);
+  assert.equal(kml.ownStyles, true);
+  assert.match(kml.title, /drawn with its own styles/);
+  assert.equal(gpx.ownStyles, false);
+  assert.ok(gpx.color);
 });
 
 test('the map-object count in a row title keeps digit grouping', async () => {
@@ -723,7 +793,7 @@ test('the map-object count in a row title keeps digit grouping', async () => {
     }),
   });
   await t.tool.importFiles([file('big.geojson')]);
-  const [row] = rows(t.els);
-  assert.match(row.children[1].title, /12,345 map objects/);
+  const [row] = rows(t);
+  assert.match(row.title, /12,345 map objects/);
   t.tool.destroy();
 });

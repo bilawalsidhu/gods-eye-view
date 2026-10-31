@@ -96,11 +96,12 @@ They contain no application state.
    descriptor before acting), Display (in progress: `DisplayPanel` renders
    the HUD, Sonar, Scope, Celestial, detection, bloom and sharpen from the
    `gev-display` store, which VisualSettings publishes to, and the 3D
-   aircraft group and the Draw controls, which AircraftDisplay and the draw
-   tool publish beside it; the style parameter rows render through Vue
-   behind `createStyleParameters()`, as a render function so the portable
-   `./ui/input` entry needs no component compiler; the other groups follow
-   one owner at a time),
+   aircraft group, the Draw controls and the imported file list, which
+   AircraftDisplay, the draw tool and the file import publish beside it; the
+   file import restores keyboard focus once the list has rendered; the
+   style parameter rows render through Vue behind `createStyleParameters()`,
+   as a render function so the portable `./ui/input` entry needs no
+   component compiler; the other groups follow one owner at a time),
    Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.

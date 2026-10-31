@@ -1,3 +1,4 @@
+import { nextTick } from 'vue';
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
@@ -73,6 +74,10 @@ export function createApplicationTools({
     navigation: styleManager,
     ground: operations.surface?.groundFloor,
     subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
+    publish: (view) => {
+      displayStore.publishGeoImport(view);
+      return nextTick();
+    },
   });
   defer(() => geoFileImport?.destroy());
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
