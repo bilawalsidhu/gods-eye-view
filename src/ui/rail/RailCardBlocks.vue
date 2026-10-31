@@ -172,11 +172,24 @@ function legendView(legend) {
             >{{ action.label }}</a
           ><button
             v-else
-            class="data-toggle-chip"
+            :class="[
+              'data-toggle-chip',
+              { active: action.pressed, 'is-reserved': action.reserved },
+            ]"
             type="button"
             :data-action-id="action.id"
             :title="action.title || undefined"
             :disabled="Boolean(action.disabled)"
+            :aria-pressed="
+              action.pressed === undefined
+                ? undefined
+                : String(Boolean(action.pressed))
+            "
+            :aria-hidden="
+              action.reserved === undefined
+                ? undefined
+                : String(Boolean(action.reserved))
+            "
             @click="dispatch(action, block)"
             >{{ action.label }}</button
           ><span class="rail-card-action-hint" :hidden="!action.hint">{{

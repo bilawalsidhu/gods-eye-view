@@ -985,6 +985,15 @@ test('opacity drives both images; EXPORT downloads the pin or the preview and EX
     failing.byId('ri-notice-text').textContent,
     'Export failed · HTTP 503',
   );
+  // A retained export after teardown neither fetches nor mounts again.
+  const fetched = f.fetches.length;
+  const container = f
+    .byId('ri-strip')
+    .closest('.recent-imagery-readout').parentElement;
+  f.readout.destroy();
+  assert.equal(await f.readout.exportImage('a'), false);
+  assert.equal(f.fetches.length, fetched);
+  assert.equal(container.querySelector('.recent-imagery-readout'), null);
 });
 
 test('DETAILS is a collapsed rail card holding every note, and the empty-days toggle', async () => {

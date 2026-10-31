@@ -2907,7 +2907,9 @@
       "src/ui/rail/utcClock.js",
       "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js",
-      "src/ui/weather/WeatherReadout.vue"
+      "src/ui/weather/WeatherReadout.vue",
+      "src/ui/recentImagery/RecentImageryCard.vue",
+      "src/ui/recentImagery/RecentImageryReadout.vue"
     ],
     "external": [
       "hls.js",
