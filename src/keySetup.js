@@ -215,7 +215,7 @@ export function stripKeylessBasemapFromHash(hash) {
   }
 }
 
-const TIER_DOTS = Object.freeze({ metered: '🔴', free: '🟡' });
+const TIER_DOTS = Object.freeze({ metered: '🔴', paid: '🔴', free: '🟡' });
 
 function updateCloudVoiceAuthControl(auth, busy = false) {
   const mode = readStoredCloudVoiceAuthMode();
@@ -259,7 +259,9 @@ function buildRow(documentRef, key) {
   tier.title =
     key.tier === 'metered'
       ? t('Metered — a billing-enabled account')
-      : t('Free key — register, paste, done');
+      : key.tier === 'paid'
+        ? t('Optional paid token — public access works without one')
+        : t('Free key — register, paste, done');
   head.append(led, title, tier);
   if (key.clientExposed) {
     const exposed = documentRef.createElement('span');
@@ -393,6 +395,7 @@ export async function initKeySetup({
   const destroy = () => {
     if (disposed) return;
     disposed = true;
+    delete root.dataset.ready;
     unregisterUnsavedWork();
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
@@ -589,6 +592,7 @@ export async function initKeySetup({
   chip.addEventListener('click', openDialog);
   closeButton?.addEventListener('click', close);
   applyButton?.addEventListener('click', onApply);
+  root.dataset.ready = 'true';
   // Remove buttons are rendered per row; delegate so re-renders stay wired.
   rowsHost?.addEventListener('click', (event) => {
     const authButton = event.target?.closest?.(

@@ -72,146 +72,6 @@
   text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
 }
 
-.panel-drag-handle {
-  cursor: grab;
-  user-select: none;
-}
-
-.panel-drag-handle:active {
-  cursor: grabbing;
-}
-
-.panel-drag-handle.compact {
-  margin-left: auto;
-  margin-bottom: 2px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.4px;
-  color: var(--text-dim);
-}
-
-.panel-drag-handle.compact:hover {
-  color: var(--text-primary);
-  border-color: var(--glass-border-hover);
-}
-
-.panel-dragging {
-  opacity: 0.96;
-}
-
-/* ── Portable rail panels ────────────────────
-   Rail placement in layers.css is guarded with :not(.panel-floating), so
-   these rules only have to beat a panel's base placement (one id). */
-.panel-portable .panel-header {
-  cursor: grab;
-}
-.panel-portable.panel-dragging .panel-header {
-  cursor: grabbing;
-}
-#right-context-rail > .panel-floating {
-  position: fixed;
-  inset: auto;
-  /* Above every docked rail panel; keep in step with PANEL_Z_FLOATING_FLOOR. */
-  z-index: 111;
-  max-height: calc(100vh - 12px);
-  margin: 0;
-  flex: none;
-  pointer-events: auto;
-}
-/* A collapsed window shows only its header strip; its inline height stays. */
-#right-context-rail > .panel-floating.collapsed {
-  max-height: max-content;
-}
-.panel-floating[style*='height'] > .cctv-panel-inner {
-  box-sizing: border-box;
-  height: 100%;
-  max-height: none;
-}
-.panel-resize-edge,
-.panel-resize-grip {
-  position: absolute;
-  z-index: 3;
-  touch-action: none;
-}
-.panel-resize-edge[data-dir='n'],
-.panel-resize-edge[data-dir='s'] {
-  left: 10px;
-  right: 10px;
-  height: 7px;
-  cursor: ns-resize;
-}
-.panel-resize-edge[data-dir='n'] {
-  top: -3px;
-}
-.panel-resize-edge[data-dir='s'] {
-  bottom: -3px;
-}
-.panel-resize-edge[data-dir='e'],
-.panel-resize-edge[data-dir='w'] {
-  top: 10px;
-  bottom: 10px;
-  width: 7px;
-  cursor: ew-resize;
-}
-.panel-resize-edge[data-dir='e'] {
-  right: -3px;
-}
-.panel-resize-edge[data-dir='w'] {
-  left: -3px;
-}
-.panel-resize-edge[data-dir='ne'],
-.panel-resize-edge[data-dir='nw'],
-.panel-resize-edge[data-dir='sw'] {
-  width: 14px;
-  height: 14px;
-}
-.panel-resize-edge[data-dir='ne'] {
-  top: -3px;
-  right: -3px;
-  cursor: nesw-resize;
-}
-.panel-resize-edge[data-dir='nw'] {
-  top: -3px;
-  left: -3px;
-  cursor: nwse-resize;
-}
-.panel-resize-edge[data-dir='sw'] {
-  bottom: -3px;
-  left: -3px;
-  cursor: nesw-resize;
-}
-.panel-resize-grip {
-  right: 3px;
-  bottom: 3px;
-  width: 14px;
-  height: 14px;
-  cursor: nwse-resize;
-  opacity: 0.55;
-  clip-path: polygon(100% 0, 100% 100%, 0 100%);
-  background: repeating-linear-gradient(
-    135deg,
-    transparent 0 3px,
-    rgba(0, 212, 255, 0.6) 3px 4px
-  );
-  transition: opacity var(--transition-fast);
-}
-.panel-portable:hover .panel-resize-grip,
-.panel-resizing .panel-resize-grip {
-  opacity: 1;
-}
-.panel-collapsible.collapsed > .panel-resize-edge,
-.panel-collapsible.collapsed > .panel-resize-grip {
-  display: none;
-}
-.panel-resizing,
-.panel-resizing * {
-  user-select: none;
-}
-
 .panel-title {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -221,16 +81,104 @@
   white-space: nowrap;
 }
 
-/* A longer translated title in a collapsed rail launcher tightens its
-   tracking rather than pushing the disclosure button out of the card. */
-html:not([lang='en'])
-  #right-context-rail
-  .panel-collapsible.collapsed
-  .panel-title {
+/* Side panel titles read like the command dock's labels: one type for every
+   panel, collapsed or open, and bright enough to read over the globe. The
+   dock's type is in rem, but a collapsed launcher is a fixed 176px, so the
+   rail caps it at its 16px-root size: a larger browser font must not cut
+   Recent Imagery short. */
+:is(#left-panel-stack, #right-context-rail)
+  :is(.panel-header > .panel-title, .pp-header-label) {
+  font-family: var(--font-mono);
+  font-size: min(var(--dock-label-font-size), 9.28px);
+  font-weight: var(--dock-label-font-weight);
+  letter-spacing: min(var(--dock-label-letter-spacing), 2.08px);
+  text-transform: uppercase;
+}
+
+/* A hovered panel sets --rail-label-hover on itself (see below); its own
+   header picks it up. Radio sits inside Context and keeps its own colour. */
+:root:not([data-ui-theme='cyber'])
+  :is(#left-panel-stack, #right-context-rail)
+  :is(
+    .panel-header > .panel-title,
+    .pp-header-label,
+    :is(.panel-header, .pp-header-row) > .panel-collapse-btn
+  ) {
+  color: var(--rail-label-hover, var(--dock-label-color));
+}
+
+#radio-panel {
+  --rail-label-hover: initial;
+}
+
+/* A title never pushes its toggle out of the card: one that does not fit
+   ends in an ellipsis. Cyber draws a marker left of the title, which a clip
+   would cut, and keeps its own header layout. */
+:root:not([data-ui-theme='cyber'])
+  :is(#left-panel-stack, #right-context-rail)
+  :is(.panel-header > .panel-title, .pp-header-label) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: 1.5px;
+}
+
+/* A collapsed launcher is 176px wide and its divider has no room to draw,
+   so the header drops it and packs closer. English titles such as Recent
+   Imagery then fit whole. Only the rail's own launchers: Radio, nested in
+   Context, keeps its divider. */
+:root:not([data-ui-theme='cyber'])
+  :is(#left-panel-stack, #right-context-rail)
+  > .panel-collapsible.collapsed
+  > [class$='-panel-inner']
+  > .panel-header,
+:root:not([data-ui-theme='cyber'])
+  :is(#left-panel-stack, #right-context-rail)
+  > #pp-toggles.collapsed
+  > .pp-header-row {
+  gap: 8px;
+}
+
+:root:not([data-ui-theme='cyber'])
+  :is(#left-panel-stack, #right-context-rail)
+  > .panel-collapsible.collapsed
+  > [class$='-panel-inner']
+  > .panel-header
+  > .panel-divider,
+:root:not([data-ui-theme='cyber'])
+  :is(#left-panel-stack, #right-context-rail)
+  > #pp-toggles.collapsed
+  > .pp-header-row
+  > .panel-divider {
+  display: none;
+}
+
+:root:not([data-ui-theme='cyber'])
+  :is(#left-panel-stack, #right-context-rail)
+  > .panel-collapsible.collapsed
+  > [class$='-panel-inner']
+  > .panel-header
+  > .panel-collapse-btn,
+:root:not([data-ui-theme='cyber'])
+  :is(#left-panel-stack, #right-context-rail)
+  > #pp-toggles.collapsed
+  > .pp-header-row
+  > .panel-collapse-btn {
+  margin-left: auto;
+}
+
+/* Translated titles run longer (Aktuelle Bilddaten), so a collapsed rail
+   launcher sets them in compact type rather than pushing the disclosure
+   button out of the card or cutting the word short. Chinese and Japanese
+   titles fit at full size and stay at or above their 9px floor (cjk.css);
+   Radio, nested in Context, is not a launcher. */
+html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
+  :is(#left-panel-stack, #right-context-rail)
+  > .panel-collapsible.collapsed
+  > [class$='-panel-inner']
+  > .panel-header
+  > .panel-title {
+  font-size: 8px;
+  letter-spacing: 1px;
 }
 
 .panel-divider {
@@ -249,6 +197,8 @@ html:not([lang='en'])
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1;
+  /* A long title or a header action must not squeeze the toggle. */
+  flex-shrink: 0;
   cursor: pointer;
   transition:
     background-color var(--transition-fast),
@@ -256,15 +206,48 @@ html:not([lang='en'])
     color var(--transition-fast);
 }
 
-/* A long translated title must not squeeze the toggle into a sliver. */
-html:not([lang='en']) .panel-collapse-btn {
-  flex-shrink: 0;
-}
-
 .panel-collapse-btn:hover {
   border-color: var(--glass-border-hover);
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.07);
+}
+
+/* A side panel answers the pointer as the command dock's trays do: a
+   brighter edge and an accent title and toggle. Touch screens have no hover,
+   so a tap must not leave a panel lit. */
+@media (hover: hover) and (pointer: fine) {
+  :root:not([data-ui-theme='cyber'])
+    :is(#left-panel-stack, #right-context-rail)
+    :where(
+      .data-panel-inner,
+      .scene-panel-inner,
+      .cctv-panel-inner,
+      .weather-panel-inner,
+      .recent-imagery-panel-inner,
+      .street-level-panel-inner,
+      .global-context-panel-inner,
+      #pp-toggles:not(.collapsed),
+      #pp-toggles.collapsed > .pp-header-row
+    ) {
+    transition: border-color var(--transition-fast);
+  }
+
+  :root:not([data-ui-theme='cyber'])
+    :is(#left-panel-stack, #right-context-rail)
+    :where(
+      .data-panel-inner,
+      .scene-panel-inner,
+      .cctv-panel-inner,
+      .weather-panel-inner,
+      .recent-imagery-panel-inner,
+      .street-level-panel-inner,
+      .global-context-panel-inner,
+      #pp-toggles:not(.collapsed),
+      #pp-toggles.collapsed > .pp-header-row
+    ):hover {
+    --rail-label-hover: var(--accent);
+    border-color: var(--glass-border-hover);
+  }
 }
 
 /* ── Button Grid ──────────────────────────────── */
@@ -571,10 +554,19 @@ html:not([lang='en']) .panel-collapse-btn {
 }
 
 #pp-toggles .pp-header-label {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.4px;
   color: var(--text-dim);
+}
+
+/* Display's title and toggle sit where the other panels' do: 14px of panel
+   padding plus a 4px header inset. The cyber theme sets its own insets. */
+:root:not([data-ui-theme='cyber']) #pp-toggles.collapsed > .pp-header-row {
+  padding: 8px 18px;
+}
+
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles:not(.collapsed)
+  > .pp-header-row {
+  padding: 0 10px;
 }
 
 #pp-toggles > .pp-header-row .pp-collapse-btn {
@@ -583,6 +575,16 @@ html:not([lang='en']) .panel-collapse-btn {
   border-radius: 6px;
   font-size: 12px;
   padding: 0;
+}
+
+/* In the default theme Display's toggle matches the other panels' 22px. */
+:root:not([data-ui-theme='cyber'])
+  #pp-toggles
+  > .pp-header-row
+  .pp-collapse-btn {
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
 }
 
 #pp-toggles.collapsed {
@@ -641,6 +643,27 @@ html:not([lang='en']) .panel-collapse-btn {
   color: var(--accent);
 }
 
+.pp-scope-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0 0 0 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.pp-scope-toggle:has(input:checked) .pp-label {
+  color: var(--accent);
+}
+
+.pp-scope-toggle:has(input:focus-visible) {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#scope-slider-row:has(input:disabled) {
+  opacity: 0.45;
+}
+
 /* ── Bloom Slider (inline with toggle) ───────── */
 .pp-toggle-group {
   display: flex;
@@ -672,110 +695,7 @@ html:not([lang='en']) .panel-collapse-btn {
 
 .pp-slider {
   flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
-  min-width: 60px;
-}
-
-.pp-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-  cursor: pointer;
-}
-
-.pp-slider::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: none;
-  box-shadow: 0 0 6px var(--accent-glow);
-  cursor: pointer;
-}
-
-.pp-slider-value {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.5px;
-  color: var(--accent);
-  min-width: 28px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-/* Quantitative companion sliders share Display / Sharpen's visible rail,
- * circular thumb, glow, and value treatment while retaining a taller hit area. */
-.gev-quantitative-slider {
-  width: 100%;
   min-width: 0;
-  height: 18px;
-  margin: 0;
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  outline: none;
-  cursor: pointer;
-}
-.gev-quantitative-slider::-webkit-slider-runnable-track {
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.08);
-}
-.gev-quantitative-slider::-webkit-slider-thumb {
-  width: 10px;
-  height: 10px;
-  margin-top: -3.5px;
-  border: 0;
-  border-radius: 50%;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-  cursor: pointer;
-}
-.gev-quantitative-slider::-moz-range-track,
-.gev-quantitative-slider::-moz-range-progress {
-  height: 3px;
-  border: 0;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.08);
-}
-.gev-quantitative-slider::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-  cursor: pointer;
-}
-.gev-quantitative-slider:focus-visible {
-  border-radius: 4px;
-  outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
-  outline-offset: 2px;
-}
-.gev-quantitative-slider:disabled {
-  opacity: 0.42;
-  cursor: not-allowed;
-}
-.gev-slider-value {
-  min-width: 28px;
-  color: var(--accent);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.5px;
-  text-align: right;
-  flex-shrink: 0;
 }
 
 .pp-slider-mini-label {
@@ -817,11 +737,6 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   padding: 5px 8px 6px;
 }
 
-.detection-allocation-seg .pp-mode-btn {
-  font-size: 8px;
-  letter-spacing: 0.35px;
-}
-
 #hud-layout-row {
   min-width: 200px;
 }
@@ -839,7 +754,7 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   min-width: 200px;
 }
 
-.cyber-sonar-toggle-row .pp-mode-btn {
+.cyber-sonar-toggle-row .pp-mode-btn:not(.gev-segment) {
   margin-left: auto;
   min-width: 48px;
 }
@@ -975,26 +890,11 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 .pp-select {
   flex: 1;
   min-width: 0;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.6px;
-  padding: 2px 6px;
-  outline: none;
 }
 
 /* DISPLAY ▸ Draw: shape segment, label field, colour, and the one-line hint */
 #draw-mode-row {
   min-width: 184px;
-}
-/* Equal thirds with room around the label, so a long translated shape name
-   never runs edge to edge in its segment. */
-html:not([lang='en']) #draw-mode-row .pp-mode-btn {
-  padding: 0 4px;
 }
 #draw-label-row {
   flex-wrap: wrap;
@@ -1124,11 +1024,8 @@ body.gev-geo-import-drag #cesiumContainer {
 .pp-mode-seg {
   display: flex;
   flex: 1;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px;
-  overflow: hidden;
 }
-.pp-mode-btn {
+.pp-mode-btn:not(.gev-segment) {
   flex: 1;
   height: 22px;
   background: rgba(255, 255, 255, 0.04);
@@ -1143,14 +1040,11 @@ body.gev-geo-import-drag #cesiumContainer {
     background-color var(--transition-fast),
     color var(--transition-fast);
 }
-.pp-mode-btn + .pp-mode-btn {
-  border-left: 1px solid rgba(255, 255, 255, 0.14);
-}
-.pp-mode-btn:hover {
+.pp-mode-btn:not(.gev-segment):hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
-.pp-mode-btn.active {
+.pp-mode-btn:not(.gev-segment).active {
   background: var(--accent);
   color: #000;
 }
@@ -1166,12 +1060,6 @@ body.gev-geo-import-drag #cesiumContainer {
 
 .pp-mode-btn:focus-visible {
   box-shadow: inset 0 0 0 4px #061014;
-}
-
-.pp-slider:focus-visible,
-.param-slider:focus-visible {
-  outline: 2px solid var(--text-primary);
-  outline-offset: 4px;
 }
 
 #clean-view-toggle {
@@ -1214,9 +1102,7 @@ body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
-body.ui-clean-view #scene-panel,
-/* The expanded viewer lives on <body>, outside every panel. */
-body.ui-clean-view .sl-viewer-wrap-expanded {
+body.ui-clean-view #scene-panel {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -1382,47 +1268,4 @@ html:not([lang='en']) .param-slider-row {
 .param-slider {
   flex: 1;
   min-width: 0;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
-}
-
-.param-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-  cursor: pointer;
-  transition: box-shadow var(--transition-fast);
-}
-
-.param-slider::-webkit-slider-thumb:hover {
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-.param-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: none;
-  box-shadow: 0 0 6px var(--accent-glow);
-  cursor: pointer;
-}
-
-.param-value {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.5px;
-  color: var(--accent);
-  min-width: 32px;
-  text-align: right;
-  flex-shrink: 0;
 }

@@ -73,13 +73,13 @@ function shortcuts() {
   return { documentRef, searchInput, calls, controller, press };
 }
 
-test('number keys retain the seven style mappings', () => {
+test('number keys retain the six style mappings', () => {
   const f = shortcuts();
   for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', 'Space'])
     f.press(key);
   assert.deepEqual(
     f.calls,
-    ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow'].map(
+    ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir'].map(
       (style) => ['setStyle', style],
     ),
   );
@@ -176,7 +176,7 @@ test('parameter rows preserve labels, bounds, precision and initial values', () 
   assert.equal(label.textContent, '<Amount>');
   assert.equal(slider.attributes.get('aria-label'), '<Amount>');
   assert.equal(slider.type, 'range');
-  assert.equal(slider.className, 'param-slider');
+  assert.equal(slider.className, 'gev-quantitative-slider param-slider');
   assert.equal(slider.min, 0);
   assert.equal(slider.max, 1);
   assert.equal(slider.step, '0.01');

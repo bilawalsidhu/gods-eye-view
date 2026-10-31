@@ -14,6 +14,7 @@ import {
   formatAltitudeRulerTick,
   formatCompassDivision,
   formatCockpitEmergency,
+  formatHeadingReadout,
   formatSpeedRulerTick,
   normalizeHeading,
   relativeBearing,
@@ -238,7 +239,7 @@ export function updateRoute(info) {
   }
   if (this.routeDirectionLabel) {
     this.routeDirectionLabel.textContent = t('DEST {bearing}', {
-      bearing: `${String(Math.round(destinationBearing)).padStart(3, '0')}°`,
+      bearing: `${formatHeadingReadout(destinationBearing)}°`,
     });
   }
 }
@@ -267,7 +268,6 @@ export function setVisionMode(mode, { revealParameters = false } = {}) {
     thermal: t('FLIR'),
     anime: t('ANIME'),
     noir: t('NOIR'),
-    snow: t('SNOW'),
   };
   const names = {
     optical: t('Normal'),
@@ -276,7 +276,6 @@ export function setVisionMode(mode, { revealParameters = false } = {}) {
     thermal: t('Thermal'),
     anime: t('Anime'),
     noir: t('Noir'),
-    snow: t('Snow'),
   };
   if (this.visionCurrent) {
     this.visionCurrent.dataset.cockpitVision = next;

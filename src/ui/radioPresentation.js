@@ -26,11 +26,6 @@ export function renderRadioState(state) {
     ?.classList.toggle('radio-broadcasting', state.audioState === 'playing');
   this._radioPanel.classList.toggle('radio-enabled', enabled);
   this._radioPanel.classList.toggle('lifecycle-uncertain', uncertain);
-  this._contextRadioDock?.classList.toggle('active', enabled);
-  if (this._contextRadioToggleBtn) {
-    this._contextRadioToggleBtn.classList.toggle('active', enabled);
-  }
-  this._syncContextRadioLauncherState();
   this._radioLayerState?.classList.toggle('active', enabled);
   const lifecycleLabel =
     lifecycleState === 'enabling' ? t('ENABLING') : t('DISABLING');
@@ -66,26 +61,6 @@ export function renderRadioState(state) {
     this._radioEnableBtn.setAttribute('aria-disabled', String(transitioning));
     this._radioEnableBtn.setAttribute('aria-busy', String(transitioning));
   }
-  if (this._contextRadioMiniEnableBtn) {
-    this._contextRadioMiniEnableBtn.classList.toggle('active', enabled);
-    this._contextRadioMiniEnableBtn.setAttribute(
-      'aria-pressed',
-      String(enabled),
-    );
-    this._contextRadioMiniEnableBtn.textContent = transitioning
-      ? lifecycleLabel
-      : enableLabel;
-    this._contextRadioMiniEnableBtn.setAttribute('aria-label', enableAria);
-    this._contextRadioMiniEnableBtn.disabled = false;
-    this._contextRadioMiniEnableBtn.setAttribute(
-      'aria-disabled',
-      String(transitioning),
-    );
-    this._contextRadioMiniEnableBtn.setAttribute(
-      'aria-busy',
-      String(transitioning),
-    );
-  }
   if (this._cockpitRadioEnableBtn) {
     this._cockpitRadioEnableBtn.classList.toggle('active', enabled);
     this._cockpitRadioEnableBtn.setAttribute('aria-pressed', String(enabled));
@@ -114,13 +89,14 @@ export function renderRadioState(state) {
         ...state.categories.map((category) => {
           const option = document.createElement('option');
           option.value = category.id;
-          option.textContent = `● ${category.label} (${category.count})`;
+          const label = t('{category} ({count})', {
+            category: category.label,
+            count: category.count,
+          });
+          option.textContent = `● ${label}`;
           option.dataset.radioColor = category.color;
           option.style.color = category.color;
-          option.setAttribute(
-            'aria-label',
-            `${category.label} (${category.count})`,
-          );
+          option.setAttribute('aria-label', label);
           return option;
         }),
       );
@@ -201,10 +177,6 @@ export function renderRadioState(state) {
     this._radioPrevBtn.disabled = !interactive || !hasStations;
   if (this._radioNextBtn)
     this._radioNextBtn.disabled = !interactive || !hasStations;
-  if (this._contextRadioMiniPrevBtn)
-    this._contextRadioMiniPrevBtn.disabled = !interactive || !hasStations;
-  if (this._contextRadioMiniNextBtn)
-    this._contextRadioMiniNextBtn.disabled = !interactive || !hasStations;
   if (this._cockpitRadioPrevBtn)
     this._cockpitRadioPrevBtn.disabled = !interactive || !hasStations;
   if (this._cockpitRadioNextBtn)
@@ -231,13 +203,6 @@ export function renderRadioState(state) {
     this._radioPlayBtn.textContent = playbackButtonLabel;
     this._radioPlayBtn.setAttribute('aria-label', playAria);
   }
-  if (this._contextRadioMiniPlayBtn) {
-    this._contextRadioMiniPlayBtn.disabled = !interactive || !hasStations;
-    this._contextRadioMiniPlayBtn.classList.toggle('active', activePlayback);
-    this._contextRadioMiniPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
-    this._contextRadioMiniPlayBtn.setAttribute('aria-label', playAria);
-    this._contextRadioMiniPlayBtn.title = playbackAction;
-  }
   if (this._cockpitRadioPlayBtn) {
     this._cockpitRadioPlayBtn.disabled = !interactive || !hasStations;
     this._cockpitRadioPlayBtn.classList.toggle('active', activePlayback);
@@ -255,17 +220,6 @@ export function renderRadioState(state) {
       this._radioVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
   }
   if (
-    this._contextRadioMiniVolume &&
-    document.activeElement !== this._contextRadioMiniVolume
-  ) {
-    this._contextRadioMiniVolume.value = String(Math.round(state.volume * 100));
-  }
-  if (this._contextRadioMiniVolume)
-    this._contextRadioMiniVolume.disabled = !interactive;
-  if (this._contextRadioMiniVolumeValue) {
-    this._contextRadioMiniVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
-  }
-  if (
     this._cockpitRadioVolume &&
     document.activeElement !== this._cockpitRadioVolume
   ) {
@@ -275,12 +229,6 @@ export function renderRadioState(state) {
     this._cockpitRadioVolume.disabled = !interactive;
   if (this._cockpitRadioVolumeValue) {
     this._cockpitRadioVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
-  }
-  if (this._contextRadioMiniStation) {
-    this._contextRadioMiniStation.textContent = uncertain
-      ? t('RADIO STATE UNCERTAIN')
-      : selected?.name ||
-        (state.loading ? t('SYNCING DIRECTORY') : t('RADIO READY'));
   }
   if (this._cockpitRadioStation) {
     this._cockpitRadioStation.textContent = uncertain

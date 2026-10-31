@@ -22,7 +22,6 @@ function render(audioError) {
     destroyed: false,
     _radioPanel: el(),
     _radioPlaybackState: el(),
-    _syncContextRadioLauncherState() {},
     actions: {
       getLifecycle: () => null,
       preservePanelStateDuringClear: () => false,
