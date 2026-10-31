@@ -380,6 +380,12 @@ export class StyleManager extends ShellFacade {
             useCockpitStore(applicationPinia()).publishBrief(view),
           context: (view) =>
             useCockpitStore(applicationPinia()).publishContext(view),
+          instruments: (view) =>
+            useCockpitStore(applicationPinia()).publishInstruments(view),
+          route: (view) =>
+            useCockpitStore(applicationPinia()).publishRoute(view),
+          vision: (view) =>
+            useCockpitStore(applicationPinia()).publishVision(view),
         },
         _layoutRightPanels: (...args) => this._layoutRightPanels(...args),
         _setCockpitVision: (...args) => this._setCockpitVision(...args),

@@ -3,12 +3,13 @@ import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { createBriefState } from '../../cockpitBriefPages.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import CockpitRoute from './CockpitRoute.vue';
 
 // The Cockpit briefing card. The Cockpit controller presents its pages,
 // cycle toggle, regional news and local conditions; until it does, the card
 // shows the state it starts in. The controls keep the controller's
-// listeners. The route card and the signal list keep their owners'
-// bindings, so nothing here binds them.
+// listeners. The route card renders itself; the signal list keeps its
+// owner's bindings, so nothing here binds it.
 const { brief } = storeToRefs(useCockpitStore());
 const initial = createBriefState();
 const b = computed(() => brief.value ?? initial);
@@ -21,23 +22,7 @@ const streamState = computed(() => ({
 
 <template>
   <aside id="cockpit-signal-stream" class="cockpit-signal-window" aria-label="Cockpit briefing carousel" hidden data-i18n-aria-label v-bind="streamState">
-    <section id="cockpit-route" class="cockpit-route-card" aria-label="Estimated flight plan" hidden data-i18n-aria-label>
-      <div class="cockpit-route-heading">
-        <span class="cockpit-route-kicker" data-i18n>ESTIMATED FLIGHT PLAN</span>
-        <small id="cockpit-route-status" data-i18n>ROUTE DATA UNAVAILABLE</small>
-      </div>
-      <div class="cockpit-route-endpoints">
-        <div class="cockpit-route-airport">
-          <span data-i18n>FROM</span>
-          <strong id="cockpit-route-from" data-i18n>UNKNOWN</strong>
-        </div>
-        <span class="cockpit-route-arrow material-symbols-outlined" aria-hidden="true">east</span>
-        <div class="cockpit-route-airport">
-          <span data-i18n>TO</span>
-          <strong id="cockpit-route-to" data-i18n>UNKNOWN</strong>
-        </div>
-      </div>
-    </section>
+    <CockpitRoute />
     <header class="cockpit-signal-header">
       <div class="cockpit-brief-heading">
         <span id="cockpit-brief-kicker" class="cockpit-signal-kicker"><i aria-hidden="true"></i> {{ b.kicker }}</span>

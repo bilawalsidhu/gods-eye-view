@@ -130,12 +130,18 @@ They contain no application state.
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
-   contact and weather toggle, from the `gev-cockpit` store that the Cockpit
-   controller publishes to, starting from `cockpitBriefPages.js` and
-   `cockpitContextState.js`, which both read; the controls keep the
-   controller's listeners, and the cards' visibility, collapse and layout
-   stay with the controller. The signal rows, the route card, the
-   instruments and the radio controls follow; the signal rows become a
+   contact and weather toggle, `CockpitView` the instruments, destination
+   arrow and vision selector, and `CockpitRoute` the flight plan card, from
+   the `gev-cockpit` store that the Cockpit controller publishes to,
+   starting from `cockpitBriefPages.js`, `cockpitContextState.js` and
+   `cockpitInstrumentState.js`, which both read; the odometer readouts
+   (`CockpitRollingValue`) keep their throttle and roll in
+   `cockpitRollingValue.js`. The instruments publish on every HUD update
+   (about 10 Hz); in a dev build their Vue patch costs about 0.5 ms, close
+   to the DOM writes it replaced. The controls keep the controller's
+   listeners, and the cards' visibility, collapse and layout stay with the
+   controller. The signal rows and the radio controls follow; the signal
+   rows become a
    component that keeps their focus-safe reorder, since a keyed Vue list
    would move the focused row and drop focus several times a second).
    Layers that write into the right rail directly gain a slot instead.

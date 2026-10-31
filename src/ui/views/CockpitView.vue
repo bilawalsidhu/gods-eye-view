@@ -1,11 +1,46 @@
 <script setup>
+import { storeToRefs } from 'pinia';
+import { computed } from 'vue';
+import { t } from '../../i18n/index.js';
+import {
+  createInstrumentState,
+  createRouteState,
+  createVisionState,
+} from '../cockpitInstrumentState.js';
+import { vClassToggle } from '../rail/classToggle.js';
+import { useCockpitStore } from '../stores/cockpit.js';
 import CockpitBriefing from './panels/CockpitBriefing.vue';
 import CockpitContext from './panels/CockpitContext.vue';
+import CockpitRollingValue from './panels/CockpitRollingValue.vue';
+
+// The Cockpit HUD. The Cockpit controller presents the instruments, the
+// destination arrow and the vision selector on every HUD update; until it
+// does, they show the state they start in. The HUD's visibility, classes
+// and layout stay with the controller, and the controls keep its listeners.
+const { instruments, route, vision } = storeToRefs(useCockpitStore());
+const initialInstruments = createInstrumentState();
+const initialRoute = createRouteState();
+const initialVision = createVisionState();
+const hud = computed(() => instruments.value ?? initialInstruments);
+const direction = computed(() => (route.value ?? initialRoute).direction);
+const v = computed(() => vision.value ?? initialVision);
+const visionLabel = computed(() =>
+  t('Current cockpit vision style: {style}. Activate for next style.', {
+    style: v.value.name,
+  }),
+);
+const visionTitle = computed(() =>
+  t('Current style: {style} — click for next', { style: v.value.name }),
+);
+const tickStyle = (tick) =>
+  tick.slot === null
+    ? undefined
+    : { '--slot': tick.slot, '--depth': tick.depth, '--curve': tick.curve };
 </script>
 
 <template>
   <!-- Aircraft first-person view. It can be entered from the visible view switcher. -->
-  <section id="cockpit-hud" aria-label="Aircraft cockpit view" hidden data-i18n-aria-label>
+  <section id="cockpit-hud" aria-label="Aircraft cockpit view" hidden data-i18n-aria-label :data-layer="hud.layer ?? undefined">
     <!-- One optical coordinate system: every targeting mark shares this center.
          Decorative only; telemetry and interactive panels remain separate. -->
     <svg class="cockpit-frame-lines" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-hidden="true" focusable="false">
@@ -69,67 +104,51 @@ import CockpitContext from './panels/CockpitContext.vue';
       <div class="cockpit-horizon-guide">
         <span></span><small data-i18n>LEVEL</small><span></span>
       </div>
-      <div id="cockpit-route-direction" class="cockpit-route-direction" hidden aria-label="Estimated destination direction" data-i18n-aria-label>
+      <div id="cockpit-route-direction" class="cockpit-route-direction" :hidden="!direction.visible" aria-label="Estimated destination direction" data-i18n-aria-label :style="direction.angle === null ? undefined : { '--route-angle': direction.angle }">
         <svg class="cockpit-route-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M12 2 4.58 19.93c-.34.83.51 1.63 1.31 1.27L12 18.47l6.11 2.73c.8.36 1.65-.44 1.31-1.27L12 2Z" />
         </svg>
-        <small id="cockpit-route-direction-label" data-i18n>DEST ---°</small>
+        <small id="cockpit-route-direction-label">{{ direction.label }}</small>
       </div>
       <div class="cockpit-visor-status cockpit-visor-status-left" data-i18n>OPTICAL PLANE · 01</div>
       <div class="cockpit-visor-status cockpit-visor-status-right" data-i18n>VISOR LOCK · ACTIVE</div>
     </div>
-    <div id="cockpit-speed-rim" class="cockpit-altitude-rim cockpit-speed-rim">
+    <div id="cockpit-speed-rim" class="cockpit-altitude-rim cockpit-speed-rim" v-class-toggle="{ unavailable: hud.speedRim.unavailable }">
       <span class="cockpit-altitude-rim-label" data-i18n>GROUND SPEED · KTS</span>
       <div class="cockpit-altitude-rim-rail"></div>
       <div class="cockpit-altitude-rim-scale">
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
-        <span data-speed-rim-tick><b></b><i></i></span>
+        <span v-for="(tick, index) in hud.speedRim.ticks" :key="index" data-speed-rim-tick :hidden="tick.hidden" :class="{ major: tick.major }" :style="tickStyle(tick)"><b>{{ tick.label }}</b><i></i></span>
       </div>
       <div class="cockpit-altitude-rim-pointer">
         <span class="material-symbols-outlined">arrow_right</span>
-        <strong id="cockpit-speed-rim-value">---</strong>
+        <strong id="cockpit-speed-rim-value">{{ hud.speedRim.value }}</strong>
       </div>
     </div>
-    <div id="cockpit-altitude-rim" class="cockpit-altitude-rim">
+    <div id="cockpit-altitude-rim" class="cockpit-altitude-rim" v-class-toggle="{ unavailable: hud.altitudeRim.unavailable }">
       <span class="cockpit-altitude-rim-label" data-i18n>ALTITUDE · FT</span>
       <div class="cockpit-altitude-rim-rail"></div>
       <div class="cockpit-altitude-rim-scale">
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
-        <span data-altitude-rim-tick><b></b><i></i></span>
+        <span v-for="(tick, index) in hud.altitudeRim.ticks" :key="index" data-altitude-rim-tick :hidden="tick.hidden" :class="{ major: tick.major }" :style="tickStyle(tick)"><b>{{ tick.label }}</b><i></i></span>
       </div>
       <div class="cockpit-altitude-rim-pointer">
-        <strong id="cockpit-altitude-rim-value">-----</strong>
+        <strong id="cockpit-altitude-rim-value">{{ hud.altitudeRim.value }}</strong>
         <span class="material-symbols-outlined">arrow_left</span>
       </div>
     </div>
     <div class="cockpit-topline">
       <div>
         <span class="cockpit-kicker" data-i18n>FIRST PERSON</span>
-        <strong id="cockpit-callsign" data-i18n>AIRCRAFT</strong>
-        <span id="cockpit-aircraft-meta" class="cockpit-aircraft-meta" data-i18n>LIVE TRACK · COURSE ALIGNED</span>
+        <strong id="cockpit-callsign">{{ hud.callsign }}</strong>
+        <span id="cockpit-aircraft-meta" v-class-toggle="{ emergency: hud.meta.emergency }" class="cockpit-aircraft-meta">{{ hud.meta.text }}</span>
       </div>
       <div class="cockpit-vision-controls" role="group" aria-label="Cockpit vision style" data-i18n-aria-label>
         <button id="cockpit-vision-previous" class="cockpit-vision-nav" type="button" aria-label="Previous cockpit vision style" title="Previous vision style" data-i18n-aria-label data-i18n-title>
           <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
           <small data-i18n>PREV</small>
         </button>
-        <button id="cockpit-vision-current" class="cockpit-vision-current" type="button" data-cockpit-vision="optical" aria-label="Current cockpit vision style: NORMAL. Activate for next style." title="Current style: NORMAL — click for next" data-i18n-aria-label data-i18n-title>
+        <button id="cockpit-vision-current" class="cockpit-vision-current" type="button" :data-cockpit-vision="v.mode" :aria-label="visionLabel" :title="visionTitle">
           <small data-i18n>CURRENT</small>
-          <strong id="cockpit-vision-current-label" aria-live="polite" data-i18n>NORMAL</strong>
+          <strong id="cockpit-vision-current-label" aria-live="polite">{{ v.label }}</strong>
         </button>
         <button id="cockpit-vision-next" class="cockpit-vision-nav" type="button" aria-label="Next cockpit vision style" title="Next vision style" data-i18n-aria-label data-i18n-title>
           <small data-i18n>NEXT</small>
@@ -142,22 +161,22 @@ import CockpitContext from './panels/CockpitContext.vue';
       <div class="cockpit-instrument-row">
         <div class="cockpit-readout cockpit-speed">
           <span class="cockpit-readout-label" data-i18n>GROUND SPEED</span>
-          <strong id="cockpit-speed-value">---</strong>
+          <CockpitRollingValue id="cockpit-speed-value" tag="strong" :reading="hud.speed" placeholder="---" />
           <span class="cockpit-readout-unit" data-i18n>KTS</span>
         </div>
-        <div class="cockpit-heading-value"><span id="cockpit-heading-value">---</span><small>°</small></div>
+        <div class="cockpit-heading-value"><CockpitRollingValue id="cockpit-heading-value" :reading="hud.heading" placeholder="---" :circular-range="360" /><small>°</small></div>
         <div class="cockpit-readout cockpit-altitude">
           <span class="cockpit-readout-label" data-i18n>ALTITUDE</span>
-          <strong id="cockpit-altitude-value">-----</strong>
+          <CockpitRollingValue id="cockpit-altitude-value" tag="strong" :reading="hud.altitude" placeholder="-----" />
           <span class="cockpit-readout-unit" data-i18n>FT</span>
         </div>
       </div>
       <span class="cockpit-heading-caret material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
-      <div class="cockpit-compass-tape" id="cockpit-compass-tape" aria-hidden="true"></div>
+      <div class="cockpit-compass-tape" id="cockpit-compass-tape" aria-hidden="true"><span v-for="division in hud.compass" :key="division.slot" :class="division.slot === 0 ? 'active' : ''" :style="{ '--slot': division.slot, '--depth': Math.abs(division.slot) }">{{ division.label }}</span></div>
     </div>
     <div class="cockpit-position-readout">
-      <span id="cockpit-clock">--:--:--Z</span>
-      <span id="cockpit-position">--° · --°</span>
+      <span id="cockpit-clock">{{ hud.clock }}</span>
+      <span id="cockpit-position">{{ hud.position }}</span>
     </div>
     <CockpitContext />
     <CockpitBriefing />

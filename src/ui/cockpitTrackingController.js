@@ -154,7 +154,6 @@ export function enter() {
   this.surfaceWaitStartedMs = performance.now();
   this.surfaceAcquiring = false;
   this.surfaceFallback = false;
-  this.lastCompassSignature = '';
   this.cockpitAnchorValid = false;
   this.lastCameraUpdateMs = 0;
   this.active = true;
@@ -220,7 +219,6 @@ export function exit({ restoreTracking = true } = {}) {
   this.lastHudUpdateMs = 0;
   this.lastContextUpdateMs = 0;
   this.contextNavigationDeadlineMs = 0;
-  this.lastCompassSignature = '';
   this.stopBriefRotation();
   this.regionalBriefAbort?.abort();
   this.regionalBriefAbort = null;
@@ -231,7 +229,7 @@ export function exit({ restoreTracking = true } = {}) {
   this.hud?.style.removeProperty('--cockpit-utility-top');
   this.hud?.style.removeProperty('--cockpit-utility-max-height');
   if (this.hud) this.hud.hidden = true;
-  if (this.route) this.route.hidden = true;
+  this.routeView.visible = false;
   this.clearPredictiveRoute();
   this.setVisionMode('optical');
   if (this.signalStream) this.signalStream.hidden = true;

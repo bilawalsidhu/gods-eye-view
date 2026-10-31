@@ -48,7 +48,7 @@
  *    smooth width ease.
  *
  * The motion vocabulary deliberately matches the cockpit odometer roll
- * (`setCockpitRollingValue`, style.css `.cockpit-roll-token`): ~200 ms per
+ * (`cockpitRollingValue.js`, style.css `.cockpit-roll-token`): ~200 ms per
  * character on `cubic-bezier(0.2, 0.75, 0.25, 1)`, reduced-motion collapsing
  * the duration rather than removing the animation. What this adds over the
  * odometer is the CASCADE — the left-to-right sweep that makes a departure

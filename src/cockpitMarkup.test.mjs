@@ -16,7 +16,9 @@ import {
   readAircraftInfo,
   _adoptTrackedEntity,
 } from './ui/cockpitTrackingController.js';
-import { setVisionMode, cycleVisionMode } from './ui/cockpitInstruments.js';
+import { cycleVisionMode } from './ui/cockpitInstruments.js';
+import { createVisionState } from './ui/cockpitInstrumentState.js';
+import { COCKPIT_VISION_MODES } from './cockpitVisionPolicy.js';
 import { updateContext as cockpitContext } from './ui/cockpitContext.js';
 import {
   syncSignalLayout,
@@ -153,11 +155,10 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
     cycleVisionMode.toString(),
     /const modes = COCKPIT_VISION_MODES;/,
   );
-  assert.match(
-    setVisionMode.toString(),
-    /const labels = \{\s*optical: t\('NORMAL'\),\s*crt: t\('CRT'\),\s*nvg: t\('NVG'\),\s*thermal: t\('FLIR'\),\s*anime: t\('ANIME'\),\s*noir: t\('NOIR'\),?\s*\};/,
+  assert.deepEqual(
+    COCKPIT_VISION_MODES.map((mode) => createVisionState(mode).label),
+    ['NORMAL', 'CRT', 'NVG', 'FLIR', 'ANIME', 'NOIR'],
   );
-  assert.doesNotMatch(setVisionMode.toString(), /none: 'NONE'/);
   assert.doesNotMatch(ui, /getInheritedVisionLabel/);
   assert.match(html, /id="cockpit-vision-current-label"[^>]*>NORMAL<\/strong>/);
   assert.match(

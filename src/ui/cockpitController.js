@@ -12,6 +12,8 @@ import {
 } from './cockpitTrackingController.js';
 import { update } from './cockpitCamera.js';
 import {
+  publishInstrumentsView,
+  publishRouteView,
   updateHud,
   updateRoute,
   syncWeatherToggle,
@@ -22,6 +24,10 @@ import {
 import { publishContextView, updateContext } from './cockpitContext.js';
 import { createContextState } from './cockpitContextState.js';
 import { createBriefState } from './cockpitBriefPages.js';
+import {
+  createInstrumentState,
+  createRouteState,
+} from './cockpitInstrumentState.js';
 import {
   publishBriefView,
   showBriefPage,
@@ -81,7 +87,6 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
-    this.lastCompassSignature = '';
     this.entry = document.getElementById('cockpit-entry');
     this.tr3bToggle = document.getElementById('tr3b-toggle');
     this._tr3bSignature = null;
@@ -89,39 +94,8 @@ export class CockpitViewController {
     this.resetGlobeButton = document.getElementById('cockpit-reset-globe');
     this.hud = document.getElementById('cockpit-hud');
     this.entryFocusOrigin = null;
-    this.callsign = document.getElementById('cockpit-callsign');
-    this.speed = document.getElementById('cockpit-speed-value');
-    this.speedRim = document.getElementById('cockpit-speed-rim');
-    this.speedRimValue = document.getElementById('cockpit-speed-rim-value');
-    this.speedRimTicks = Array.from(
-      document.querySelectorAll('[data-speed-rim-tick]'),
-    );
-    this.altitude = document.getElementById('cockpit-altitude-value');
-    this.altitudeRim = document.getElementById('cockpit-altitude-rim');
-    this.altitudeRimValue = document.getElementById(
-      'cockpit-altitude-rim-value',
-    );
-    this.altitudeRimTicks = Array.from(
-      document.querySelectorAll('[data-altitude-rim-tick]'),
-    );
-    this.headingValue = document.getElementById('cockpit-heading-value');
-    this.compassTape = document.getElementById('cockpit-compass-tape');
-    this.clock = document.getElementById('cockpit-clock');
-    this.position = document.getElementById('cockpit-position');
-    this.aircraftMeta = document.getElementById('cockpit-aircraft-meta');
-    this.route = document.getElementById('cockpit-route');
-    this.routeFrom = document.getElementById('cockpit-route-from');
-    this.routeTo = document.getElementById('cockpit-route-to');
-    this.routeStatus = document.getElementById('cockpit-route-status');
-    this.routeDirection = document.getElementById('cockpit-route-direction');
-    this.routeDirectionLabel = document.getElementById(
-      'cockpit-route-direction-label',
-    );
     this.visionPrevious = document.getElementById('cockpit-vision-previous');
     this.visionCurrent = document.getElementById('cockpit-vision-current');
-    this.visionCurrentLabel = document.getElementById(
-      'cockpit-vision-current-label',
-    );
     this.visionNext = document.getElementById('cockpit-vision-next');
     this.visionMode = 'optical';
     this.onVisionChange = onVisionChange;
@@ -162,6 +136,12 @@ export class CockpitViewController {
     // Cockpit's views render what these receive.
     this.publishBrief = publish.brief ?? (() => {});
     this.publishContext = publish.context ?? (() => {});
+    this.publishInstruments = publish.instruments ?? (() => {});
+    this.publishRoute = publish.route ?? (() => {});
+    this.publishVision = publish.vision ?? (() => {});
+    this.instruments = createInstrumentState();
+    this.routeView = createRouteState();
+    this.routeSignature = null;
     this.contextView = createContextState();
     this.brief = createBriefState();
     this.briefTimer = null;
@@ -294,6 +274,12 @@ export class CockpitViewController {
   }
   update() {
     return update.call(this);
+  }
+  publishInstrumentsView() {
+    return publishInstrumentsView.call(this);
+  }
+  publishRouteView() {
+    return publishRouteView.call(this);
   }
   updateHud(info, nowMs, forceContext) {
     return updateHud.call(this, info, nowMs, forceContext);
