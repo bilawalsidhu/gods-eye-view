@@ -5,8 +5,9 @@ import { markRaw, shallowRef } from 'vue';
  * The Context panel's mode switch as its view renders it. ContextControls
  * presents the selected mode, the transition busy state and the nearby
  * sites search (`_presentContext()`) and publishes them here; it
- * keeps its listeners and transactions. The Contacts layer publishes its
- * panel beside it, and the app connects that layer's navigation.
+ * keeps its listeners and transactions. The Contacts and Space Missions
+ * layers publish their panels beside it, and the app connects each layer's
+ * commands.
  */
 export const useContextStore = defineStore('gev-context', () => {
   /** The presented mode switch; null until the controls first render. */
@@ -36,6 +37,29 @@ export const useContextStore = defineStore('gev-context', () => {
     awarenessLayer.value = layer && markRaw(layer);
   }
 
+  /** The Space Missions roster; null until the layer first presents it. */
+  const missionRoster = shallowRef(null);
+
+  /** The selected space mission; null while none is selected. */
+  const mission = shallowRef(null);
+
+  /**
+   * @param {?{roster: ?object, mission: ?object}} next The layer's view. The
+   *   layer keeps an unchanged roster's object, which re-renders nothing.
+   */
+  function publishMissions(next) {
+    missionRoster.value = next?.roster ? markRaw(next.roster) : null;
+    mission.value = next?.mission ? markRaw(next.mission) : null;
+  }
+
+  /** The Space Missions layer whose panel commands the components call. */
+  const missionsLayer = shallowRef(null);
+
+  /** @param {?object} layer The Space Missions layer, or null to disconnect. */
+  function connectMissions(layer) {
+    missionsLayer.value = layer && markRaw(layer);
+  }
+
   return {
     view,
     publish,
@@ -43,5 +67,10 @@ export const useContextStore = defineStore('gev-context', () => {
     publishAwareness,
     awarenessLayer,
     connectAwareness,
+    missionRoster,
+    mission,
+    publishMissions,
+    missionsLayer,
+    connectMissions,
   };
 });

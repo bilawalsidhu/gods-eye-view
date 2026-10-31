@@ -33,6 +33,17 @@
   `restoreAwarenessPanelFocus` helpers are gone; the view keeps focus itself
   (samehkhamis).
 
+- `./layers/launches` no longer writes the Space Missions roster or the
+  selected mission panel into `#space-mission-panel-host`: the layer
+  publishes both through `subscribePanel(listener)` and Core's Space Missions
+  views render them, calling the layer's panel commands (`selectMissionAt`,
+  `selectPreviousMission`, `selectNextMission`, `deselectMission`,
+  `focusSelectedLaunchSite`, `startSelectedReplay`, `toggleReplayPause`,
+  `cancelReplay`, `setReplaySpeed` and the `roster*` preview inputs). The
+  `bindMissionRosterItemKeyboardPreview`, `captureMissionRosterFocus` and
+  `restoreMissionRosterFocus` helpers are gone; the roster keeps focus itself
+  (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

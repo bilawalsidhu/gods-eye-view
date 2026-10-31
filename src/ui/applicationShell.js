@@ -973,8 +973,12 @@ export class StyleManager extends ShellFacade {
   }
 
   _initGlobalContextPanel() {
-    const { radioLayer, militaryInstallationsLayer, militaryAwarenessLayer } =
-      this.services;
+    const {
+      radioLayer,
+      militaryInstallationsLayer,
+      militaryAwarenessLayer,
+      rocketLaunchesLayer,
+    } = this.services;
     const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
       elements: {
@@ -1007,6 +1011,13 @@ export class StyleManager extends ShellFacade {
     contextStore.publishAwareness(null);
     this._awarenessPanelUnsubscribe = militaryAwarenessLayer?.subscribePanel?.(
       (view) => contextStore.publishAwareness(view),
+    );
+    // The Space Missions layer publishes its roster and selected mission.
+    contextStore.connectMissions(rocketLaunchesLayer);
+    this._missionsPanelUnsubscribe?.();
+    contextStore.publishMissions(null);
+    this._missionsPanelUnsubscribe = rocketLaunchesLayer?.subscribePanel?.(
+      (view) => contextStore.publishMissions(view),
     );
   }
 
@@ -1768,7 +1779,13 @@ export class StyleManager extends ShellFacade {
     this._localSdrControls?.destroy();
     this._awarenessPanelUnsubscribe?.();
     this._awarenessPanelUnsubscribe = null;
-    useContextStore(applicationPinia()).connectAwareness(null);
+    this._missionsPanelUnsubscribe?.();
+    this._missionsPanelUnsubscribe = null;
+    const contextStore = useContextStore(applicationPinia());
+    contextStore.connectAwareness(null);
+    contextStore.publishAwareness(null);
+    contextStore.connectMissions(null);
+    contextStore.publishMissions(null);
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

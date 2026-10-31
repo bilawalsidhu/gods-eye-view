@@ -77,7 +77,11 @@ test('before the layer publishes, the panel shows its initial markup', (t) => {
     standby.querySelector('strong').textContent,
     'CONTACTS CONTEXT OFF',
   );
-  assert.equal(standby.querySelector('strong').hasAttribute('data-i18n'), true);
+  // Rendered through t(), so a later null view is translated too.
+  assert.equal(
+    standby.querySelector('strong').hasAttribute('data-i18n'),
+    false,
+  );
 });
 
 test('a standby view replaces the initial copy', async (t) => {

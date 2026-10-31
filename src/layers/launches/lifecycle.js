@@ -262,13 +262,7 @@ export function createLifecycle({
       layerState._animationStarts.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
-      layerState._missionPanel?.remove();
-      layerState._missionPanel = null;
-      if (layerState._missionRoster) {
-        layerState._missionRoster.onclick = null;
-      }
-      layerState._missionRosterPreviewOwnership = null;
-      layerState._missionRoster = null;
+      parts.panel.clearMissionPanel();
       layerState._viewer = null;
       if (layerState._dataSource)
         viewer.dataSources.remove(layerState._dataSource, true);

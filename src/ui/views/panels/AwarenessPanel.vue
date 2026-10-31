@@ -1,6 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { onBeforeUpdate, onUpdated, ref } from 'vue';
+import { t } from '../../../i18n/index.js';
 import { useContextStore } from '../../stores/context.js';
 import AwarenessNames from './AwarenessNames.vue';
 
@@ -42,8 +43,8 @@ onUpdated(() => {
 <template>
   <aside id="military-awareness-panel" ref="root">
     <div v-if="!view" class="military-awareness-standby">
-      <strong data-i18n>CONTACTS CONTEXT OFF</strong>
-      <span data-i18n>SELECT CONTACTS TO LOAD OBSERVED / MAPPED PROXIMITY</span>
+      <strong>{{ t('CONTACTS CONTEXT OFF') }}</strong>
+      <span>{{ t('SELECT CONTACTS TO LOAD OBSERVED / MAPPED PROXIMITY') }}</span>
     </div>
     <div v-else-if="view.kind === 'standby'" class="military-awareness-standby">
       <strong>{{ view.title }}</strong>

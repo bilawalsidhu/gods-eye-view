@@ -26,6 +26,8 @@
       "src/ui/views/ContextView.vue",
       "src/ui/views/panels/RadioPanel.vue",
       "src/ui/views/panels/SdrCard.vue",
+      "src/ui/views/panels/MissionDetail.vue",
+      "src/ui/views/panels/MissionRoster.vue",
       "src/ui/views/panels/AwarenessPanel.vue",
       "src/ui/views/panels/AwarenessNames.vue",
       "src/ui/views/DisplayControlsView.vue",

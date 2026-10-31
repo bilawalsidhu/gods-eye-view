@@ -3,6 +3,8 @@ import { storeToRefs } from 'pinia';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useContextStore } from '../stores/context.js';
 import AwarenessPanel from './panels/AwarenessPanel.vue';
+import MissionDetail from './panels/MissionDetail.vue';
+import MissionRoster from './panels/MissionRoster.vue';
 import RadioPanel from './panels/RadioPanel.vue';
 
 // ContextControls presents the mode switch and the nearby sites search and
@@ -73,19 +75,8 @@ const { view: ctx } = storeToRefs(useContextStore());
         </section>
         <section id="context-missions-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-missions-btn" :hidden="!ctx?.missionsActive">
           <div id="space-mission-panel-host">
-            <div id="space-mission-roster" class="space-mission-roster" aria-label="Available Space Missions" data-i18n-aria-label>
-              <div class="space-mission-roster-header">
-                <div>
-                  <strong data-i18n>AVAILABLE MISSIONS</strong>
-                  <span data-i18n>SELECT A MISSION TO INSPECT</span>
-                </div>
-                <output data-mission-roster-count>—</output>
-              </div>
-              <div class="space-mission-roster-list" data-mission-roster-list>
-                <div class="space-mission-roster-empty" data-i18n>LOADING 30-DAY MISSION INDEX</div>
-              </div>
-              <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation data-i18n>TAB PREVIEWS · ENTER / SPACE SELECTS</p>
-            </div>
+            <MissionRoster />
+            <MissionDetail />
           </div>
         </section>
         <RadioPanel />
