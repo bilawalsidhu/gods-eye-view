@@ -53,6 +53,7 @@ import {
 import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
+import { useContextStore } from './stores/context.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -973,17 +974,15 @@ export class StyleManager extends ShellFacade {
 
   _initGlobalContextPanel() {
     const { radioLayer, militaryInstallationsLayer } = this.services;
+    const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
       elements: {
-        _globalContextPanel: document.getElementById('global-context-panel'),
         _globalContextFlightsBtn: this._globalContextFlightsBtn,
         _globalContextMissionsBtn: this._globalContextMissionsBtn,
-        _contextModeStandby: this._contextModeStandby,
-        _contextFlightsView: this._contextFlightsView,
-        _contextMissionsView: this._contextMissionsView,
         _installationsSearchBtn: this._installationsSearchBtn,
       },
       installations: militaryInstallationsLayer,
+      publish: (view) => contextStore.publish(view),
       actions: {
         getCockpit: () => this.cockpitView,
         refreshRadio: () => this._renderRadioState(radioLayer.getUIState()),

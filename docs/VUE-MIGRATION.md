@@ -108,7 +108,10 @@ They contain no application state.
    card that LocalSdrControls publishes beside it; fields a person edits take
    their value through `v-field-value`, which never writes a focused field;
    the tuner and the Cockpit radio controls keep their owners' element
-   bindings), the command dock,
+   bindings; `ContextView` renders the mode switch and the nearby sites
+   search from the `gev-context` store, which ContextControls reaches only
+   through its `publish` option, so `./ui/context` needs no Vue), the
+   command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 

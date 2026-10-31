@@ -85,9 +85,6 @@ export function readShellElements(document = globalThis.document) {
     _globalContextMissionsBtn: document.getElementById(
       'global-context-missions-btn',
     ),
-    _contextModeStandby: document.getElementById('context-mode-standby'),
-    _contextFlightsView: document.getElementById('context-flights-view'),
-    _contextMissionsView: document.getElementById('context-missions-view'),
     _installationsSearchBtn: document.getElementById(
       'installations-search-btn',
     ),

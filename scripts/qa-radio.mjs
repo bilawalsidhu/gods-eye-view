@@ -1100,7 +1100,7 @@ async function main() {
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationFalseMessage = document.getElementById('toast').textContent;
-        const installationFalseReleased = !document.getElementById('installations-search-btn').disabled;
+        const installationFalseReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
 
         dataManager.setEnabled = async (layerId, shouldEnable) => {
           if (layerId === 'military-installations' && shouldEnable) {
@@ -1111,7 +1111,7 @@ async function main() {
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationEnableRejectionMessage = document.getElementById('toast').textContent;
-        const installationEnableRejectionReleased = !document.getElementById('installations-search-btn').disabled;
+        const installationEnableRejectionReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
 
         dataManager.setEnabled = async (layerId, shouldEnable) => {
           if (layerId === 'military-installations' && shouldEnable) enabled.add(layerId);
@@ -1123,13 +1123,13 @@ async function main() {
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationRejectionMessage = document.getElementById('toast').textContent;
-        const installationRejectionReleased = !document.getElementById('installations-search-btn').disabled;
+        const installationRejectionReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
 
         if (installations) installations.searchNearby = async () => false;
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationSearchFalseMessage = document.getElementById('toast').textContent;
-        const installationSearchFalseReleased = !document.getElementById('installations-search-btn').disabled;
+        const installationSearchFalseReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
         await new Promise((resolve) => setTimeout(resolve, 0));
         return {
           semanticFalseMessage,

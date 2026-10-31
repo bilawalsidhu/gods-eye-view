@@ -1,12 +1,12 @@
 import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
-import { _syncContextModeButtons } from './ui/contextPresentation.js';
 import { _initGlobalContextPanel } from './ui/contextBindings.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
 const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
+const contextView = readRadioSource(new URL('./ui/views/ContextView.vue', import.meta.url), 'utf8');
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,75 +22,12 @@ test('Contacts and Space Missions both participate in the ordinary Tab sequence'
     assert.match(button[0], /tabindex="0"/);
   }
 
-  const syncSource = _syncContextModeButtons.toString();
-  assert.match(syncSource, /\[\s*this\._globalContextFlightsBtn,\s*this\._globalContextMissionsBtn,?\s*\]/);
-  assert.match(syncSource, /button\.tabIndex = 0/);
-  assert.doesNotMatch(syncSource, /tabIndex\s*=\s*[^;]*\?\s*-1/);
-});
-
-test('Context transition state preserves focus and Tab availability until settle', () => {
-  const attributes = () => new Map();
-  const makeButton = () => {
-    const attrs = attributes();
-    let disabled = false;
-    const button = {
-      attrs,
-      tabIndex: -1,
-      classList: { toggle() {} },
-      setAttribute(name, value) { attrs.set(name, String(value)); },
-      get disabled() { return disabled; },
-      set disabled(value) {
-        disabled = Boolean(value);
-        // Model the browser behavior that exposed this regression: native
-        // disabled drops focus immediately.
-        if (disabled && globalThis.document?.activeElement === button) {
-          globalThis.document.activeElement = null;
-        }
-      },
-    };
-    return button;
-  };
-  const contacts = makeButton();
-  const missions = makeButton();
-  const panel = { classList: { toggle() {} }, setAttribute() {} };
-  const priorDocument = globalThis.document;
-  globalThis.document = { activeElement: missions, getElementById: () => panel };
-  const owner = {
-    _globalContextPanel: panel,
-    actions: { syncDetection() {}, scheduleLayout() {} },
-    _contextMode: null,
-    _contextModeChanging: true,
-    _globalContextFlightsBtn: contacts,
-    _globalContextMissionsBtn: missions,
-    _contextModeStandby: {},
-    _contextFlightsView: {},
-    _contextMissionsView: {},
-    cockpitView: { syncEntry() {} },
-    _syncContactsDetection() {},
-    _scheduleRightPanelLayout() {},
-  };
-  try {
-    _syncContextModeButtons.call(owner);
-    assert.equal(globalThis.document.activeElement, missions, 'busy sync retains focused Space Missions');
-    for (const button of [contacts, missions]) {
-      assert.equal(button.disabled, false);
-      assert.equal(button.tabIndex, 0);
-      assert.equal(button.attrs.get('aria-disabled'), 'true');
-      assert.equal(button.attrs.get('aria-busy'), 'true');
-    }
-
-    owner._contextModeChanging = false;
-    owner._contextMode = 'space-missions';
-    _syncContextModeButtons.call(owner);
-    assert.equal(globalThis.document.activeElement, missions, 'settled sync retains focused Space Missions');
-    for (const button of [contacts, missions]) {
-      assert.equal(button.disabled, false);
-      assert.equal(button.tabIndex, 0);
-      assert.equal(button.attrs.get('aria-disabled'), 'false');
-      assert.equal(button.attrs.get('aria-busy'), 'false');
-    }
-  } finally {
-    globalThis.document = priorDocument;
+  // The view keeps both tabs' tabindex static and never disables them; the
+  // transition itself is covered over happy-dom in ui/contextPanel.test.mjs.
+  for (const id of ['global-context-flights-btn', 'global-context-missions-btn']) {
+    const tag = contextView.match(new RegExp(`<button id="${id}"[^>]*>`))?.[0];
+    assert.ok(tag, `${id} is missing from the view`);
+    assert.doesNotMatch(tag, /:tabindex|:disabled|\sdisabled/);
   }
 });
 
@@ -134,8 +71,12 @@ test('Context async action buttons remain focused while busy', () => {
   const radioPanel = readFileSync(new URL('./ui/views/panels/RadioPanel.vue', import.meta.url), 'utf8');
   const clear = clearSelectedLayers.toString();
 
-  assert.match(init, /button\.getAttribute\('aria-busy'\) === 'true'/);
-  assert.doesNotMatch(init, /button\.disabled\s*=\s*true/);
+  assert.match(init, /if \(this\._installationsSearchBusy\) return;/);
+  assert.doesNotMatch(init, /\.disabled\s*=\s*true/);
+  const search = contextView.match(/<button id="installations-search-btn"[^>]*>/)?.[0];
+  assert.ok(search, 'nearby sites search is missing');
+  assert.doesNotMatch(search, /:disabled|\sdisabled/);
+  assert.match(search, /:aria-busy=/);
   assert.match(radio, /trigger\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(radio, /trigger\.disabled\s*=\s*true/);
   assert.match(radioSync, /_cockpitRadioEnableBtn\.disabled = false/);
