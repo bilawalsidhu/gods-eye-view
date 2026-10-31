@@ -2943,5 +2943,18 @@
   "Load scenes from an exported JSON file": "Szenen aus einer exportierten JSON-Datei laden",
   "Download the timing log of the last play": "Zeitprotokoll der letzten Wiedergabe herunterladen",
   "Edit anchors, data packs and shot details": "Anker, Datenpakete und Aufnahmedetails bearbeiten",
-  "Download this scene as JSON or an asset bundle": "Diese Szene als JSON oder Asset-Bundle herunterladen"
+  "Download this scene as JSON or an asset bundle": "Diese Szene als JSON oder Asset-Bundle herunterladen",
+  "Highway message signs": "Autobahn-Anzeigetafeln",
+  "MnDOT · Minnesota only": "MnDOT · nur Minnesota",
+  "MnDOT network error": "MnDOT: Netzwerkfehler",
+  "{count} signs lit": {
+    "one": "{count} Tafel leuchtet",
+    "other": "{count} Tafeln leuchten"
+  },
+  "Message sign, {location}": "Anzeigetafel, {location}",
+  "SIGN · {location}": "TAFEL · {location}",
+  "MnDOT data {age}": "MnDOT-Daten {age}",
+  "STALE · MnDOT data {age}": "VERALTET · MnDOT-Daten {age}",
+  "Page {n} of {total}": "Seite {n} von {total}",
+  "Graphic only": "Nur Grafik"
 }

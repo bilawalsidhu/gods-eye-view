@@ -14,6 +14,7 @@
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],
+  ["message-signs", "6"],
   ["military", "m"],
   ["military-awareness", "g"],
   ["military-installations", "i"],

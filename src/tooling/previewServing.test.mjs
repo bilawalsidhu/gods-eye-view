@@ -12,6 +12,7 @@ test('data providers have both hooks; credential editing stays development-only'
   assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
   assert.ok(plugins.some(({ name }) => name === 'gnss-integrity'));
   assert.ok(plugins.some(({ name }) => name === 'ghostmaps'));
+  assert.ok(plugins.some(({ name }) => name === 'message-signs'));
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
@@ -107,6 +108,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
         ['/api/gnss-integrity?lat=invalid', 400],
         ['/api/ghostmaps/unknown', 404],
+        ['/api/message-signs/unknown', 404],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
         ['/api/overpass/status', 200],

@@ -72,6 +72,12 @@ const layers = [
     noQuery: 'published third-party intel placemarks; not analyst records',
   },
   {
+    id: 'message-signs',
+    aliases: ['message signs', 'highway signs', 'dms'],
+    context: false,
+    noQuery: 'published MnDOT sign messages; not analyst records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -532,7 +538,8 @@ const SELF_EVIDENT_IDS = new Set([
 /**
  * Compact model-facing alias hint: "alias/alias→id; …" for toggleable layers
  * whose id is not already the spoken word. At most two aliases per layer keep
- * the tool JSON small; the runner accepts the full alias list.
+ * the tool JSON small; an alias that only reads the id aloud is dropped, since
+ * the runner already maps it. The runner accepts the full alias list.
  * @returns {string} One line for the layerId description.
  */
 export function voiceLayerAliasHint() {
@@ -540,7 +547,14 @@ export function voiceLayerAliasHint() {
     (entry) =>
       entry.toggle && entry.aliases.length && !SELF_EVIDENT_IDS.has(entry.id),
   )
-    .map((entry) => `${entry.aliases.slice(0, 2).join('/')}→${entry.id}`)
+    .map((entry) => {
+      const spokenId = entry.id.replace(/-/g, ' ');
+      const names = entry.aliases
+        .slice(0, 2)
+        .filter((alias) => alias.toLowerCase() !== spokenId);
+      return names.length ? `${names.join('/')}→${entry.id}` : '';
+    })
+    .filter(Boolean)
     .join(';');
 }
 
