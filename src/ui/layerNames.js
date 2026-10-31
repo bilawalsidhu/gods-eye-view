@@ -13,6 +13,7 @@ import { msg, t, translateKnown } from '../i18n/index.js';
 
 /** English module names (`layer.name`) by layer id. */
 export const LAYER_NAME_KEYS = Object.freeze({
+  abyss: msg('Deep Sea (ABYSS)'),
   flights: msg('Live Flights'),
   military: msg('Military Flights'),
   earthquakes: msg('Earthquakes (24h)'),
@@ -47,6 +48,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
 
 /** The layer panel's own English names, where they differ from the module's. */
 export const PANEL_LABEL_KEYS = Object.freeze({
+  abyss: msg('Deep Sea (ABYSS)'),
   'ais-live-vessels': msg('Live Vessels'),
   bikeshare: msg('Bike Share'),
   cctv: msg('Cameras'),

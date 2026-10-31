@@ -76,6 +76,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🔍 Keyless search:** Type decimal coordinates, a two-dimensional WGS84 `geo:` URI (for example, `geo:39.7392,-104.9903`), or a bundled city or landmark to fly there with no geocoder request; other names use Google when configured, then Photon and Nominatim.
 - **📦 Shareable scenes:** Import, preview and share Director scenes as files or bundles, with camera anchors, authored moves and data packs.
 - **🌊 Nepal flood scene:** Replay the Bhote Koshi flood: flood path, witness sources and before-and-after imagery (bundled data is non-commercial; see [DATA_SOURCES.md](DATA_SOURCES.md)).
+- **🌊 Deep-Sea Exploration (ABYSS):** Drape global GEBCO bathymetry and seafloor relief over the oceans, explore 550+ active and relict hydrothermal vents with tectonic data, and follow NOAA Ocean Exploration ROV dive tracks into deep subsea trenches. No key needed.
 
 ---
 
@@ -385,7 +386,7 @@ _Ask for radio near anywhere and the globe starts broadcasting — every station
 
 ## 🛰️ What's on the Globe
 
-Twenty layers and map sources. **Eighteen have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
+Twenty-one layers and map sources. **Nineteen have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
 
 | Layer                       | What you get                                                                                                                                                                                                                                                                                                                                                                        | Source                                  | Auth                                                                                                |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -394,6 +395,7 @@ Twenty layers and map sources. **Eighteen have a keyless path.** Some offer addi
 | 🎖️ **Military Flights**     | ADS-B military traffic in amber, emergency broadcasts in red                                                                                                                                                                                                                                                                                                                                                     | adsb.lol                                | 🟢                                                                                                  |
 | 📡 **GNSS Integrity** | Regional navigation accuracy scores; anomalies do not confirm interference | adsb.lol, GPSJAM aggregation | 🟢 |
 | 🔥 **Fire Perimeters** | Incident boundaries and reported containment | WFIGS / NIFC | 🟢 |
+| 🌊 **Deep Sea (ABYSS)**     | Global GEBCO bathymetry (colour elevation, shaded relief, survey type TID grid), 550+ NOAA PMEL hydrothermal vent fields with tectonic settings, and NOAA Ocean Exploration ROV dive locations and bottom tracks | GEBCO · NOAA PMEL · NOAA Ocean Exploration | 🟢                                                                                                  |
 | 🚢 **Live Vessels**         | Thousands of ships worldwide                                                                                                                                                                                                                                                                                                                                                        | AISStream                               | 🟡                                                                                                  |
 | 🛰️ **Satellites**           | 838-object catalog, color-coded by class with a live legend — the **DENSE** chip drops in the whole Starlink shell                                                                                                                                                                                                                                                                  | CelesTrak                               | 🟢                                                                                                  |
 | 🌍 **Earthquakes**          | Global seismic activity, last 24h                                                                                                                                                                                                                                                                                                                                                   | USGS                                    | 🟢                                                                                                  |
@@ -464,6 +466,7 @@ Once the basics click, run these:
 | **🚀 Launch replay**                | Open **Space Missions**, pick a launch from the last 30 days, and ride the T-minus countdown through ascent to orbit — scrub it at 0.25×–4×. Labeled `RECONSTRUCTED ESTIMATE`, because it is one.         |
 | **🪦 Walk the boneyard**            | Fly from regional context down into dense, fully resolved rows of retired aircraft.                                                                                                                       |
 | **🏗️ Orbit Three Gorges**           | Sweep the dam and its terrain at a glance — then flip on the **Dams** layer and find 703 more.                                                                                                            |
+| **🌊 Trench dive**                  | Turn on **Deep Sea (ABYSS)** over the Mariana Trench or Pacific Ring of Fire. Click a hydrothermal vent for its spreading rate and tectonic setting, or inspect a NOAA *Okeanos Explorer* ROV dive track on the ocean floor. |
 
 _🎙️ = voice missions — they need an OpenAI key._
 
@@ -522,9 +525,9 @@ each provider enables; none is required to start. See the
 and configuration details.
 
 No key needed for Wind, Rain radar, Satellite clouds, Lightning density,
-Cyclone advisories, Mapped ALPR Cameras, Transit, Directions, Delaware live
-video, and coordinate or bundled-place search. A layer row waiting on a key
-names it.
+Cyclone advisories, Deep Sea (ABYSS), Mapped ALPR Cameras, Transit, Directions,
+Delaware live video, and coordinate or bundled-place search. A layer row waiting
+on a key names it.
 
 ### Choose the capabilities you want
 
