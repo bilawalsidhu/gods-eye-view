@@ -1,6 +1,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { readFileSync } from 'node:fs';
 import { createRecentImageryPanel } from './recentImagery.js';
 import { createRecentImageryLayer } from '../layers/recentImagery/index.js';
@@ -246,7 +247,7 @@ function part(f, id, name) {
 // ---- tests ---------------------------------------------------------------------
 test('the readout mounts in the rail body, hides while the layer is off and opens the panel once on first appearance', async () => {
   const f = fixture();
-  assert.equal(f.root.parentNode, f.body);
+  assertSameNode(f.root.parentNode, f.body);
   assert.equal(f.panel.hidden, true);
   assert.equal(f.count.textContent, '');
   await f.ready();
@@ -864,7 +865,7 @@ test('the divider exists only while a swipe is live, labelled A / B or IMAGE / B
   };
   assert.equal(swap.tagName, 'BUTTON');
   assert.equal(swap.textContent, 'SWAP');
-  assert.equal(swap.parentNode, f.byId('ri-controls'));
+  assertSameNode(swap.parentNode, f.byId('ri-controls'));
   await f.ready();
   await f.settleLease();
   assert.equal(f.splits.length, 0, 'one image, no divider');
@@ -993,7 +994,7 @@ test('opacity drives both images; EXPORT downloads the pin or the preview and EX
   f.readout.destroy();
   assert.equal(await f.readout.exportImage('a'), false);
   assert.equal(f.fetches.length, fetched);
-  assert.equal(container.querySelector('.recent-imagery-readout'), null);
+  assertSameNode(container.querySelector('.recent-imagery-readout'), null);
 });
 
 test('DETAILS is a collapsed rail card holding every note, and the empty-days toggle', async () => {
@@ -1077,7 +1078,7 @@ test('destroy returns every listener, the divider and the panel state', async ()
   assert.equal(split.destroyed, true);
   assert.equal(f.root.listenerCount(), 0);
   assert.equal(f.strip.listenerCount(), 0);
-  assert.equal(f.root.parentNode, null);
+  assertSameNode(f.root.parentNode, null);
   assert.equal(f.document.getElementById('recent-imagery-panel').hidden, true);
   f.layer.setMode('ab');
   assert.equal(f.splits.length, 1, 'no renders after destroy');

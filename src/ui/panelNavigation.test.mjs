@@ -1,5 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { installVueDom } from '../testSupport/vueDom.mjs';
 
 let PanelNavigation;
@@ -132,8 +133,8 @@ test('destroy removes the rails and stops following the stacks', async () => {
   const { left, right, calls, ui, navigation } = setup();
   navigation.destroy();
   navigation.destroy();
-  assert.equal(left.querySelector('.gev-panel-rail'), null);
-  assert.equal(right.querySelector('.gev-panel-rail'), null);
+  assertSameNode(left.querySelector('.gev-panel-rail'), null);
+  assertSameNode(right.querySelector('.gev-panel-rail'), null);
   navigation.select('data-panel');
   assert.deepEqual(calls, []);
   ui.destroy();

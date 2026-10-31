@@ -1,6 +1,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { createStatusBadge, updateStatusBadge } from './statusBadge.js';
 import { createRailCards } from './railCards.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
@@ -51,7 +52,7 @@ test('painting preserves feature state, live regions and focus with zero identic
   assert.equal(badge.getAttribute('role'), 'status');
   assert.equal(badge.getAttribute('aria-live'), 'polite');
   assert.equal(badge.dataset.frameState, 'ready');
-  assert.equal(document.activeElement, focusOwner);
+  assertSameNode(document.activeElement, focusOwner);
 });
 
 test('coverage badges keep keyed identity, hide empty coverage and never claim feed health', () => {
@@ -74,7 +75,7 @@ test('coverage badges keep keyed identity, hide empty coverage and never claim f
     badge,
   );
   assert.deepEqual({ ...badge.dataset }, {});
-  assert.equal(f.document.activeElement, header);
+  assertSameNode(f.document.activeElement, header);
   view.destroy();
   view.update([card]);
   assert.equal(f.container.children.length, 0);

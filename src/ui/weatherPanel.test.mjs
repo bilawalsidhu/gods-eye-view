@@ -1,6 +1,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { setLocale } from '../i18n/index.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
@@ -115,7 +116,7 @@ test('ordered articles omit Controls and retain history labels, forecast dates a
   view.update([radar, wind]);
   const windCard = card(f, 'wind');
   assert.equal(windCard.tagName, 'ARTICLE');
-  assert.equal(windCard.parentElement.children[0], windCard);
+  assertSameNode(windCard.parentElement.children[0], windCard);
   assert.equal(
     f.find((n) => n.dataset.weatherOpen),
     null,
@@ -403,13 +404,13 @@ test('cyclones lead, and observed history owns one bordered group with only acti
     ['weather-cyclones', 'wind'],
   );
   const group = f.find((n) => n.className === 'weather-observed-group');
-  assert.equal(root.children[1], group);
+  assertSameNode(root.children[1], group);
   assert.equal(group.children[0].textContent, 'Observed history');
   assert.equal(
     group.children[1].textContent,
     'Rain radar · Satellite clouds · Lightning density',
   );
-  assert.equal(group.children[2], timelineHost(f));
+  assertSameNode(group.children[2], timelineHost(f));
   assert.deepEqual(
     [...group.children[3].children].map((n) => n.dataset.cardId),
     ['weather-radar', 'weather-satellite', 'weather-lightning'],

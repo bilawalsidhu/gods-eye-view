@@ -1,5 +1,6 @@
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { createStateChannel } from '../app/stateChannel.js';
 import { sceneElements } from './scenePresentation.js';
 import { mountSceneSharing } from './sceneSharing.js';
@@ -192,7 +193,7 @@ test('Scene controls dispatch panel and shot-row actions, and rows outlive repub
     ]);
     f.owner.renderShotList();
     await nextTick();
-    assert.equal(f.elements.shots.children[0], row);
+    assertSameNode(f.elements.shots.children[0], row);
     // An owner destroyed after a newer one attached leaves the newer list.
     const newer = new SceneControls({
       read: () => f.state,
@@ -391,7 +392,7 @@ test('inline shot names save on Enter, cancel on Escape, and reject blank names'
       label.dispatchEvent(new Event('dblclick'));
       await nextTick();
       const input = label.children[0];
-      assert.equal(document.activeElement, input);
+      assertSameNode(document.activeElement, input);
       input.value = value;
       input.dispatchEvent(key(commitKey));
       input.dispatchEvent(new Event('blur'));
@@ -482,7 +483,7 @@ test('Scene controls consume current state, preserve rows on progress, and unsub
     f.state.progress = 0.5;
     channel.publish({ type: 'progress-changed' });
     await nextTick();
-    assert.equal(f.elements.shots.children[0], row);
+    assertSameNode(f.elements.shots.children[0], row);
     f.state.status = 'Project exported';
     channel.publish({ type: 'project-exported' });
     assert.equal(f.elements.status.textContent, 'Project exported');
@@ -619,7 +620,7 @@ test('The sharing row sits under SAVE & SHARE, after the file row', () => {
     const dispose = mountSceneSharing({ edit() {}, share() {} }, panel);
     const bar = inner.children[1];
     assert.equal(bar.className, 'scene-controls');
-    assert.equal(inner.children[2], status);
+    assertSameNode(inner.children[2], status);
     assert.ok(bar.children.every((button) => button.title));
     dispose();
     assert.deepEqual(inner.children, [fileRow, status]);

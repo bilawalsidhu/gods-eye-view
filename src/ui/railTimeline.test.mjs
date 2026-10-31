@@ -1,6 +1,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { nextTick } from 'vue';
 import { createRailTimeline } from './railTimeline.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
@@ -46,8 +47,8 @@ test('preview is immediate, commits are coalesced and the drag DOM and tick mapp
     index: 1,
     readout: 'Refresh',
   });
-  assert.equal(slider.parentElement, row);
-  assert.equal(row.children[1], slider);
+  assertSameNode(slider.parentElement, row);
+  assertSameNode(row.children[1], slider);
   assert.equal(slider.value, '0');
   assert.equal(slider.max, '2');
   assert.equal(

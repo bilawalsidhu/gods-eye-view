@@ -1,6 +1,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { nextTick } from 'vue';
 import { createRailCards } from './railCards.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
@@ -94,7 +95,7 @@ test('footer buttons retain focus and current callbacks; links use safe new tabs
       },
     ]),
   ]);
-  assert.equal(f.document.activeElement, button);
+  assertSameNode(f.document.activeElement, button);
   assert.equal(button.parentElement.tagName, 'FOOTER');
   assert.equal(
     f.find((n) => n.className === 'rail-card-action-hint').textContent,
@@ -200,7 +201,7 @@ test('setting ranges stay below presets and commit expensive filters on release'
   assert.equal(slider.value, '53', 'release keeps the handle until the owner');
   view.update([model(53)]);
   assert.equal(slider.value, '53');
-  assert.equal(f.document.activeElement, slider);
+  assertSameNode(f.document.activeElement, slider);
   slider.value = '41';
   slider.dispatchEvent(new Event('input'));
   await nextTick();
@@ -334,7 +335,7 @@ test('labelled rows, lists and results retain focus and dispatch current params'
   const chip = f.find((n) => n.dataset.chipId === 'motion');
   chip.focus();
   view.update([model(true)]);
-  assert.equal(f.document.activeElement, chip);
+  assertSameNode(f.document.activeElement, chip);
   chip.click();
   assert.deepEqual(calls.at(-1), ['a', { paused: false }]);
   const storm = f.find(
