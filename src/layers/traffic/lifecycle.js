@@ -12,7 +12,6 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { resetFlowTileCache } = source;
 
   const methods = {
@@ -43,6 +42,8 @@ export function createLifecycle({
       layerState._lastViewCenter = null;
       layerState._flowRoads = null;
       layerState._flowError = null;
+      layerState._flowStale = false;
+      layerState._flowOldestTileAt = null;
       if (TRAFFIC_TIMING_ENABLED) {
         layerState._trafficTimingCurrentAnchor = null;
         layerState._trafficTimingSequence = 0;
@@ -81,7 +82,7 @@ export function createLifecycle({
       layerState._enabled = true;
       layerState._surfaceFrameRemover = observeTrafficSurface(viewer.scene);
       if (layerState._roadMode !== 'tomtom') source.prefetch?.();
-      holdContinuousRender('traffic'); // per-frame animator (perf wave 2)
+      parts.animation.syncRenderDemand();
       layerState._lastAnimTime = 0;
       layerState._pointCollection.show = true;
 
@@ -142,7 +143,7 @@ export function createLifecycle({
     disable(viewer) {
       layerState._enabled = false;
       services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
-      releaseContinuousRender('traffic');
+      parts.animation.syncRenderDemand();
       clearTimeout(layerState._fetchTimeout);
       clearInterval(layerState._enableKickTimer);
       layerState._enableKickTimer = null;
@@ -160,6 +161,8 @@ export function createLifecycle({
       // A stale outage from the last session would misreport a fresh enable —
       // the next load re-derives feed health from real evidence.
       layerState._flowError = null;
+      layerState._flowStale = false;
+      layerState._flowOldestTileAt = null;
 
       layerState._surfaceFrameRemover?.();
       layerState._surfaceFrameRemover = null;

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAnalystEngine, applyScope, haversineKm } from './analystEngine.js';
+import { createAnnotationResolver } from '../annotations/resolver.js';
+import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 
 // Stub world: a square "Texland" region, flights + ships + fires around it.
 const TEXLAND = { name: 'Texland', ring: [[-100, 28], [-94, 28], [-94, 33], [-100, 33]] };
@@ -130,6 +132,175 @@ test('analyst: count flights over a region', async () => {
   assert.equal(r.count, 3, 'Oregon flight excluded');
   assert.ok(r.coverage.scope.includes('Texland'));
 });
+
+test('analyst: region coverage identifies the source of the boundary used for counting', async () => {
+  for (const source of ['natural-earth', 'bundled-admin', 'remote-boundary']) {
+    const engine = createAnalystEngine({
+      getRecords: () => FLIGHTS,
+      resolveRegionRing: async () => ({ ...TEXLAND, source }),
+    });
+    const result = await engine.query({
+      layers: ['flights'],
+      scope: { kind: 'region', name: 'Texland' },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.count, 3, 'the boundary excludes the Oregon flight');
+    assert.equal(result.coverage.scope, 'region:Texland');
+    assert.equal(result.coverage.scopeSource, source);
+  }
+});
+
+test('analyst: filter-only follow-ups retain the region source without resolving again', async () => {
+  const lookups = [];
+  const engine = createAnalystEngine({
+    getRecords: () => FLIGHTS,
+    resolveRegionRing: async (name) => {
+      lookups.push(name);
+      return { ...TEXLAND, source: 'natural-earth' };
+    },
+  });
+  const first = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Texland' },
+  });
+  const airborne = await engine.query({
+    followUp: true,
+    filters: [{ field: 'onGround', op: 'eq', value: false }],
+  });
+  const military = await engine.query({
+    followUp: true,
+    filters: [{ field: 'military', op: 'eq', value: true }],
+  });
+
+  assert.equal(first.count, 3);
+  assert.equal(airborne.count, 2);
+  assert.deepEqual(military.items.map((item) => item.id), ['RCH01']);
+  for (const result of [first, airborne, military]) {
+    assert.equal(result.coverage.scope, 'region:Texland');
+    assert.equal(result.scopeLabel, 'over Texland');
+    assert.equal(result.coverage.scopeSource, 'natural-earth');
+  }
+  assert.deepEqual(lookups, ['Texland']);
+});
+
+test('analyst: an explicit replacement region replaces retained provenance', async () => {
+  const engine = createAnalystEngine({
+    getRecords: () => FLIGHTS,
+    resolveRegionRing: async (name) => name === 'Texland'
+      ? { ...TEXLAND, source: 'natural-earth' }
+      : {
+        name,
+        ring: [[-98, 30.5], [-96, 30.5], [-96, 31.5], [-98, 31.5]],
+        source: 'remote-boundary',
+      },
+  });
+  await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Texland' },
+  });
+  const replacement = await engine.query({
+    followUp: true,
+    scope: { kind: 'region', name: 'Northern Texland' },
+  });
+  const followUp = await engine.query({ followUp: true });
+
+  for (const result of [replacement, followUp]) {
+    assert.deepEqual(result.items.map((item) => item.id), ['RCH01']);
+    assert.equal(result.coverage.scope, 'region:Northern Texland');
+    assert.equal(result.coverage.scopeSource, 'remote-boundary');
+  }
+});
+
+test('analyst: an explicit scope without provenance clears the retained region source', async () => {
+  for (const scope of [
+    { kind: 'anywhere' },
+    { kind: 'view' },
+    { kind: 'radius', km: 150 },
+    { kind: 'region', name: 'Uncredited Texland' },
+  ]) {
+    const engine = createAnalystEngine({
+      getRecords: () => FLIGHTS,
+      resolveRegionRing: async (name) => ({
+        ...TEXLAND,
+        name,
+        ...(name === 'Texland' ? { source: 'natural-earth' } : {}),
+      }),
+      getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+    });
+    const first = await engine.query({
+      layers: ['flights'],
+      scope: { kind: 'region', name: 'Texland' },
+    });
+    const replacement = await engine.query({ followUp: true, scope });
+    const followUp = await engine.query({ followUp: true });
+
+    assert.equal(first.coverage.scopeSource, 'natural-earth');
+    for (const result of [replacement, followUp]) {
+      assert.equal(result.ok, true, scope.kind);
+      assert.equal(result.count, 3, scope.kind);
+      assert.equal(Object.hasOwn(result.coverage, 'scopeSource'), false, scope.kind);
+      assert.notEqual(result.coverage.scope, first.coverage.scope, scope.kind);
+    }
+  }
+});
+
+for (const [label, committedScope, scopeSource] of [
+  ['replacement boundary source', 'region:Presented Texland', 'remote-boundary'],
+  ['window without a boundary source', 'window:presented', null],
+]) {
+  test(`analyst: pre-commit displayed cohort retains ${label} and its feed provenance`, async () => {
+    const committedSnapshot = {
+      id: 'flights', enabled: true, feedState: 'stale',
+      source: 'displayed-cohort-feed', lastUpdate: 1_800_000_000_000,
+    };
+    let reads = 0;
+    let lookups = 0;
+    const engine = createAnalystEngine({
+      getRecords: () => { reads++; return FLIGHTS; },
+      getLayerSnapshot: () => ({
+        id: 'flights', enabled: true, feedState: 'nominal', source: 'current-feed',
+      }),
+      resolveRegionRing: async () => {
+        lookups++;
+        return { ...TEXLAND, source: 'natural-earth' };
+      },
+    });
+    await engine.query(
+      { layers: ['flights'], scope: { kind: 'region', name: 'Texland' } },
+      {
+        beforeCommit: async (result) => {
+          assert.equal(result.count, 3);
+          assert.equal(result.coverage.scopeSource, 'natural-earth');
+          const { scopeSource: _originalSource, ...coverage } = result.coverage;
+          return {
+            matched: [{ key: 'flights', rows: [FLIGHTS[1]] }],
+            scopeLabel: 'the presented cohort',
+            scopeDetail: 'the presented cohort window',
+            coverage: {
+              ...coverage,
+              scope: committedScope,
+              ...(scopeSource ? { scopeSource } : {}),
+              feedProvenance: { layers: [committedSnapshot] },
+            },
+          };
+        },
+      },
+    );
+    const followUp = await engine.query({ followUp: true });
+    assert.equal(followUp.count, 1);
+    assert.deepEqual(followUp.items.map((item) => item.id), ['RCH01']);
+    assert.equal(followUp.scopeLabel, 'the presented cohort');
+    assert.equal(followUp.display.scope, 'the presented cohort window');
+    assert.equal(followUp.coverage.scope, committedScope);
+    if (scopeSource) assert.equal(followUp.coverage.scopeSource, scopeSource);
+    else assert.equal(Object.hasOwn(followUp.coverage, 'scopeSource'), false);
+    assert.equal(followUp.coverage.feedProvenance.overall, 'stale');
+    assert.deepEqual(followUp.coverage.feedProvenance.layers, [committedSnapshot]);
+    assert.equal(reads, 1, 'displayed cohort is not replaced by another feed read');
+    assert.equal(lookups, 1, 'follow-up retains the committed scope without resolving again');
+  });
+}
 
 test('analyst: attribute filter — above 40,000 ft (~12,192 m)', async () => {
   const r = await makeEngine().query({
@@ -316,6 +487,138 @@ test('analyst: region lookup receives and obeys the owning action signal', async
   assert.equal(result.code, 'CANCELLED');
   assert.equal(result.cancelled, true);
 });
+
+for (const [label, reason, trackAuthority] of [
+  ['default abort reason', undefined, false],
+  ['custom error reason', new Error('operator stopped'), false],
+  ['primitive reason and revoked authority', 'operator stopped', true],
+]) {
+  test(`analyst: real region resolver cancellation preserves memory (${label})`, async () => {
+    const started = Promise.withResolvers();
+    const geocode = Promise.withResolvers();
+    const controller = new AbortController();
+    const lookups = [];
+    const { resolveRegionRingForQuery } = createAnnotationResolver({
+      featureSource: Object.fromEntries(FEATURE_SOURCE_METHODS.map((method) => [
+        method,
+        async () => { throw new Error('offline region query reached feature source'); },
+      ])),
+    });
+    const placeSearch = {
+      geocode(name, { signal }) {
+        lookups.push(name);
+        assert.equal(signal, controller.signal);
+        started.resolve();
+        return geocode.promise;
+      },
+    };
+    const engine = createAnalystEngine({
+      getRecords: () => FLIGHTS,
+      resolveRegionRing: (name, signal) => resolveRegionRingForQuery(
+        name, signal, placeSearch, { budgetMs: Infinity },
+      ),
+    });
+    const first = await engine.query({
+      layers: ['flights'], scope: { kind: 'region', name: 'Texas' },
+    });
+    assert.equal(first.ok, true);
+    assert.equal(first.coverage.scopeSource, 'bundled-admin');
+    assert.deepEqual(first.items.map((item) => item.id), ['SWA1', 'RCH01', 'GND1']);
+    let commits = 0;
+    const pending = engine.query(
+      { layers: ['flights'], scope: { kind: 'region', name: 'Cordillera Oriental' } },
+      {
+        signal: controller.signal,
+        ...(trackAuthority ? { isCurrent: () => !controller.signal.aborted } : {}),
+        beforeCommit: async () => { commits++; },
+      },
+    );
+    await started.promise;
+    controller.abort(reason);
+    // Let an actual late geocode result cross the resolver's post-await check.
+    geocode.resolve({ place: {
+      lat: 5, lng: -73, label: 'Cordillera Oriental',
+      name: 'Cordillera Oriental', types: ['natural_feature'],
+    } });
+    const result = await pending;
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'CANCELLED');
+    assert.equal(result.cancelled, true);
+    assert.equal(commits, 0);
+    const followUp = await engine.query({ followUp: true });
+    assert.deepEqual(followUp.items.map((item) => item.id), first.items.map((item) => item.id));
+    assert.equal(followUp.coverage.scope, first.coverage.scope);
+    assert.equal(followUp.coverage.scopeSource, 'bundled-admin');
+    assert.equal(followUp.scopeLabel, first.scopeLabel);
+    assert.deepEqual(lookups, ['Cordillera Oriental'], 'follow-up does not resolve again');
+  });
+}
+
+test('analyst: a rejected superseded region lookup returns cancellation and retains its prior cohort', async () => {
+  const lookup = Promise.withResolvers();
+  let current = true;
+  const engine = createAnalystEngine({
+    getRecords: () => FLIGHTS,
+    resolveRegionRing: (name) => name === 'Texland'
+      ? { ...TEXLAND, source: 'natural-earth' }
+      : lookup.promise,
+  });
+  const first = await engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' } });
+  const pending = engine.query(
+    { layers: ['flights'], scope: { kind: 'region', name: 'Replacement' } },
+    { isCurrent: () => current },
+  );
+  current = false;
+  lookup.reject(new Error('late lookup failed'));
+  assert.equal((await pending).code, 'CANCELLED');
+  const followUp = await engine.query({ followUp: true });
+  assert.deepEqual(followUp.items.map((item) => item.id), first.items.map((item) => item.id));
+  assert.equal(followUp.coverage.scopeSource, 'natural-earth');
+  assert.equal(followUp.coverage.scope, first.coverage.scope);
+});
+
+test('analyst: an aborted owner cannot commit a region provider that returns a late success', async () => {
+  const controller = new AbortController();
+  const lookup = Promise.withResolvers();
+  const engine = createAnalystEngine({
+    getRecords: () => FLIGHTS,
+    resolveRegionRing: () => lookup.promise,
+  });
+  const pending = engine.query(
+    { layers: ['flights'], scope: { kind: 'region', name: 'Texland' } },
+    { signal: controller.signal },
+  );
+  controller.abort();
+  lookup.resolve({ ...TEXLAND, source: 'natural-earth' });
+  assert.equal((await pending).code, 'CANCELLED');
+  assert.equal(engine.hasMemory(), false);
+});
+
+for (const error of [new Error('live lookup failed'), new DOMException('resource stopped', 'AbortError')]) {
+  test(`analyst: live region ${error.name} propagates without changing memory`, async () => {
+    const controller = new AbortController();
+    const engine = createAnalystEngine({
+      getRecords: () => FLIGHTS,
+      resolveRegionRing: async (name) => {
+        if (name === 'Texland') return { ...TEXLAND, source: 'natural-earth' };
+        throw error;
+      },
+    });
+    const first = await engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' } });
+    await assert.rejects(
+      engine.query(
+        { layers: ['flights'], scope: { kind: 'region', name: 'Replacement' } },
+        { signal: controller.signal },
+      ),
+      (thrown) => thrown === error,
+    );
+    assert.equal(controller.signal.aborted, false);
+    const followUp = await engine.query({ followUp: true });
+    assert.deepEqual(followUp.items.map((item) => item.id), first.items.map((item) => item.id));
+    assert.equal(followUp.coverage.scope, first.coverage.scope);
+    assert.equal(followUp.coverage.scopeSource, 'natural-earth');
+  });
+}
 
 test('analyst: route fields queryable from cached enrichment only', async () => {
   const r = await makeEngine().query({

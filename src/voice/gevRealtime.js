@@ -50,21 +50,24 @@ export function initGevVoiceCommands(options) {
   const referents = createReferentRegistry();
   // The controller exists only after the runner, so its hooks bind late.
   const deixis = { pointer, referents, cameraKey };
-  const commands = createVoiceCommands({
+  let commands;
+  commands = createVoiceCommands({
     ...options,
     pointer,
     referents,
     runner: withToolCatalog(
-      createGevActionRunner({ ...options, deixis }),
+      createGevActionRunner({
+        ...options,
+        deixis,
+        readVoicePanelOperation: () => commands?.captureVoicePanelOperation?.(),
+      }),
       options.toolCatalog,
     ),
   });
   deixis.imageFrame = () => commands.retainedImageFrame?.() || null;
   deixis.onPointerUsed = () => commands.announcePointer?.();
-  commands.session?.signal?.addEventListener(
-    'abort',
-    () => pointer?.destroy(),
-    { once: true },
-  );
+  const lifetime = commands.signal ?? commands.session?.signal;
+  lifetime?.addEventListener('abort', () => pointer?.destroy(), { once: true });
+  if (lifetime?.aborted) pointer?.destroy();
   return commands;
 }

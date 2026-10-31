@@ -42,6 +42,9 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   // every 20s showed no change inside 64s but a new frame by ~90-150s later —
   // matches the other highway packs' 3-minute cadence.
   'servei català de trànsit': 3 * 60 * 1000,
+  // Autobrennero (A22) refreshes its stills about once a minute (Last-Modified
+  // tracks the minute); 3 min matches the other highway packs.
+  'autostrada del brennero': 3 * 60 * 1000,
 });
 
 /**
@@ -94,7 +97,7 @@ export function incumbentRankKm(
 export const CCTV_CARD_CENTER_WEIGHT = 0.5;
 
 /** Robust pool-distance percentile used to scale the screen-space term. */
-export const CCTV_CARD_SPREAD_PERCENTILE = 0.9;
+const CCTV_CARD_SPREAD_PERCENTILE = 0.9;
 
 /** True only when both viewport dimensions are finite positive pixels. */
 export function hasFiniteCctvViewport(viewW, viewH) {
@@ -172,8 +175,8 @@ export function blendCenterRankKm(
 // viewport is bucketed into this grid and every occupied cell gets its best
 // candidate before global rank fills the rest. Owner-tunable together with
 // the budgets above.
-export const CCTV_CARD_GRID_COLS = 5;
-export const CCTV_CARD_GRID_ROWS = 4;
+const CCTV_CARD_GRID_COLS = 5;
+const CCTV_CARD_GRID_ROWS = 4;
 
 /**
  * Screen-space distribution pass (owner round 2, item C). Buckets the

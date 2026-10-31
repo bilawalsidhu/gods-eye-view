@@ -304,3 +304,61 @@ test('GBFS rejects redirects and caps bodies through both server hooks', async (
     globalThis.fetch = originalFetch;
   }
 });
+
+test('GBFS relays only JSON, re-serialized under a fixed type, through both server hooks', async () => {
+  const { gbfsProxy } = await import('../../server/providers/gbfs.js');
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const hook of ['configureServer', 'configurePreviewServer']) {
+      let handler;
+      gbfsProxy()[hook]({
+        middlewares: {
+          use(_path, callback) {
+            handler = callback;
+          },
+        },
+      });
+      const request = async (response) => {
+        globalThis.fetch = async () => response;
+        const res = {};
+        await handler(
+          { method: 'GET', url: '/' + encodeURIComponent(STATION_URL) },
+          {
+            writeHead(code, headers) {
+              Object.assign(res, { status: code, headers });
+            },
+            end(value) {
+              res.body = value;
+            },
+          },
+        );
+        return res;
+      };
+      for (const [contentType, body] of [
+        ['text/html', '<!doctype html><p>x</p>'],
+        ['application/json', '<!doctype html><p>x</p>'],
+        ['image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"/>'],
+        ['application/json', ''],
+      ]) {
+        const res = await request(
+          new Response(body, { headers: { 'Content-Type': contentType } }),
+        );
+        assert.equal(res.status, 502, `${hook}: ${contentType} ${body}`);
+        assert.equal(res.headers['Content-Type'], 'application/json');
+        assert.equal(typeof JSON.parse(res.body).error, 'string');
+        assert.doesNotMatch(res.body, /doctype|svg/);
+      }
+      const res = await request(
+        new Response(' { "data" : { "stations" : [] } } ', {
+          headers: { 'Content-Type': 'text/html; charset=iso-8859-1' },
+        }),
+      );
+      assert.equal(res.status, 200);
+      assert.equal(res.headers['Content-Type'], 'application/json; charset=utf-8');
+      assert.equal(res.headers['Cache-Control'], 'no-store');
+      assert.equal(res.body, STATION_BODY);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

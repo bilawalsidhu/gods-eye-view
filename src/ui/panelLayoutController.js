@@ -20,7 +20,6 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-top-right',
   '#intel-hud .hud-bottom-left',
   '#intel-hud .hud-bottom-right',
-  '#intel-hud .hud-top-bar',
   '#intel-hud .hud-bottom-bar',
   '#intel-hud .hud-left-edge',
   '#intel-hud .hud-right-edge',
@@ -50,7 +49,6 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-top-right',
   '#intel-hud .hud-bottom-left',
   '#intel-hud .hud-bottom-right',
-  '#intel-hud .hud-top-bar',
   '#intel-hud .hud-bottom-bar',
   '#intel-hud .hud-left-edge',
   '#intel-hud .hud-right-edge',
@@ -189,13 +187,6 @@ export class PanelLayoutController {
     const stack = this._rightPanelStack;
     if (!stack || !this._ppToggles) return;
 
-    this._ppToggles.style.removeProperty('top');
-    this._ppToggles.style.removeProperty('right');
-    this._ppToggles.style.removeProperty('bottom');
-    this._ppToggles.style.removeProperty('left');
-    this._ppToggles.style.removeProperty('z-index');
-    this._ppToggles.classList.remove('panel-draggable', 'panel-dragging');
-    this._ppToggles.querySelector('.pp-header-row')?.removeAttribute('title');
     stack.prepend(this._ppToggles);
     const globalContextPanel = document.getElementById('global-context-panel');
     for (const panel of [
@@ -205,12 +196,6 @@ export class PanelLayoutController {
       this._streetLevelPanel,
     ]) {
       if (!panel) continue;
-      // A floating window keeps its restored place and size.
-      if (!panel.classList.contains('panel-floating')) {
-        for (const property of ['top', 'right', 'bottom', 'left', 'z-index'])
-          panel.style.removeProperty(property);
-        panel.classList.remove('panel-draggable', 'panel-dragging');
-      }
       stack.insertBefore(panel, globalContextPanel);
       this._syncPanelCollapseButton(panel);
     }

@@ -93,6 +93,27 @@ test('partial feed controls distinguish incomplete records from stale data and o
   assert.equal(button.textContent, 'OFF');
 });
 
+test('a stale row dates cached data by its oldest tile, not the last load', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const panel = LayerPanel.prototype;
+  const layer = {
+    id: 'traffic',
+    name: 'Street Traffic',
+    source: 'TomTom',
+    enabled: true,
+    stats: {
+      mode: 'live',
+      stale: true,
+      count: 4,
+      lastUpdate: Date.now(),
+      oldestTileAt: Date.now() - 3 * 3600_000,
+    },
+  };
+  assert.match(panel._buildMetaText(layer), /^STALE · TomTom · 3h ago$/);
+  delete layer.stats.oldestTileAt;
+  assert.match(panel._buildMetaText(layer), /^STALE · TomTom · just now$/);
+});
+
 test('readout rows contain only toggles and metadata; ordinary rows retain controls', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
   const { railFixture } = await import('./railTestFixture.mjs');
@@ -302,6 +323,15 @@ test('row text keeps a hyphenated code whole and never starts a line with the se
     setRowText(plain, 'Satellites');
     assert.equal(plain.textContent, 'Satellites');
     assert.equal(plain.children.length, 0);
+
+    const compound = element();
+    setRowText(compound, 'Kartierte ALPR-Kameras · ADS-B-Flüge');
+    assert.equal(text(compound), 'Kartierte ALPR-Kameras · ADS-B-Flüge');
+    assert.deepEqual(
+      kept(compound),
+      [' ·', 'ADS-B'],
+      'a compound may break at its hyphen; the code inside it stays whole',
+    );
 
     const long = element();
     setRowText(long, 'see https-proxy-endpoint-config-x');

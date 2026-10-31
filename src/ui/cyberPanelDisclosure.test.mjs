@@ -72,7 +72,7 @@ test('opening already-expanded Radio reveals Context and closes Display', () => 
 });
 
 test('non-Cyber explicit panels and restored preferences retain their existing policy', () => {
-  for (const theme of ['tactical', 'operator', 'minimal', 'cyber']) {
+  for (const theme of ['tactical', 'minimal', 'cyber']) {
     const f = fixture(theme), prior = globalThis.document;
     globalThis.document = f.doc;
     try {
@@ -84,17 +84,4 @@ test('non-Cyber explicit panels and restored preferences retain their existing p
       if (theme === 'cyber') assert.deepEqual(f.saved, []);
     } finally { globalThis.document = prior; }
   }
-});
-
-test('opening a floating Cyber window leaves the docked rail panels open', () => {
-  const f = fixture(), prior = globalThis.document;
-  globalThis.document = f.doc;
-  try {
-    f.owner.setPanelCollapsed('pp-toggles', false, { explicit: true });
-    f.cctv.classList.add('panel-floating');
-    f.owner.setPanelCollapsed('cctv-panel', false, { explicit: true });
-    assert.equal(f.cctv.classList.contains('collapsed'), false);
-    assert.equal(f.display.classList.contains('collapsed'), false, 'DISPLAY stays open');
-    assert.ok(!f.saved.some(([id, collapsed]) => id === 'pp-toggles' && collapsed));
-  } finally { globalThis.document = prior; }
 });

@@ -1,6 +1,6 @@
 /** Pure proximity helpers for Global Context. No capability modeling. */
 
-import { t } from '../i18n/index.js';
+import { msg, t } from '../i18n/index.js';
 import { UNNAMED_PLACE_NAMES } from './installationNames.js';
 
 const UNNAMED_NAMES = new Set(UNNAMED_PLACE_NAMES);
@@ -84,7 +84,8 @@ export function formatAwarenessLabel(value) {
 /**
  * Summarize sorted nearby results without promoting missing/stale feeds to a
  * negative finding. `UNKNOWN` is an input-data state, never an out-of-range
- * claim in this MVP.
+ * claim in this MVP. `reason` is English data; the awareness panel shows it
+ * in the UI language.
  */
 export function summarizeAwarenessCohort(
   items,
@@ -95,14 +96,14 @@ export function summarizeAwarenessCohort(
       relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
       count: null,
       nearest: [],
-      reason: t('feed unavailable'),
+      reason: msg('feed unavailable'),
     };
   if (stale)
     return {
       relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
       count: null,
       nearest: [],
-      reason: t('feed stale'),
+      reason: msg('feed stale'),
     };
   const normalized = (Array.isArray(items) ? items : [])
     .filter(
@@ -119,8 +120,8 @@ export function summarizeAwarenessCohort(
     count: normalized.length,
     nearest: normalized.slice(0, limit),
     reason: normalized.length
-      ? t('observed or mapped nearby context')
-      : t('no observed or mapped objects in current feeds'),
+      ? msg('observed or mapped nearby context')
+      : msg('no observed or mapped objects in current feeds'),
   };
 }
 
