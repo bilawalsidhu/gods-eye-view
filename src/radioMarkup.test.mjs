@@ -2,7 +2,7 @@ import { readRealtimeSource } from './testSupport/readRealtimeSource.mjs';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import { realtimeInstructions } from '../server/providers/openai/instructions.js';
 import { readShellSource } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { readFileSync as readRadioSource } from 'node:fs';
@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const ui = readShellSource();
 const radio = ['playback', 'interaction'].map(name =>
   readFileSync(new URL(`./layers/radio/${name}.js`, import.meta.url), 'utf8')

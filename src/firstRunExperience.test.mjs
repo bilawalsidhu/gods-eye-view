@@ -1,4 +1,4 @@
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import test from 'node:test';
@@ -797,8 +797,8 @@ test('the decision table is written down where the next editor will read it', ()
 
 // ── Markup, startup ordering, accessibility ─────────────────────────────────
 
-test('markup, startup ordering and accessibility remain pinned', () => {
-  const html = expandApplicationHtml(
+test('markup, startup ordering and accessibility remain pinned', async () => {
+  const html = await renderApplicationHtml(
     fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
   );
   const startup = fs.readFileSync(
@@ -915,8 +915,8 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   assert.match(choicesBlock, /overflow-y: auto;/);
 });
 
-test('the card closes without a keyboard: the ESC hint is a button, kept on phones', () => {
-  const html = expandApplicationHtml(
+test('the card closes without a keyboard: the ESC hint is a button, kept on phones', async () => {
+  const html = await renderApplicationHtml(
     fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
   );
   const module = fs.readFileSync(

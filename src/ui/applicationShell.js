@@ -52,7 +52,7 @@ import {
 } from '../i18n/index.js';
 import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
-import { createUiRuntime } from './vueRuntime.js';
+import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -136,7 +136,7 @@ export class StyleManager extends ShellFacade {
         this._mobileShell?.sharedCollapsed(panelId),
     });
     // Vue views share this runtime and its stores; dispose unmounts them.
-    this._ui = createUiRuntime();
+    this._ui = createUiRuntime({ pinia: applicationPinia() });
     this._feedback = new ShellFeedback({
       readLayers: () => this._dataManager?.getAll?.() || [],
     });

@@ -1,6 +1,6 @@
 import { ShareRestoration } from './ui/shareRestoration.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -202,9 +202,9 @@ test('replacement, repetition, and hidden-tab elapsed time use the newest fixed 
     'elapsed wall time while hidden expires the notice instead of replaying it');
 });
 
-test('universal notice lifecycle clears on dispose and uses the one top-center live region', () => {
+test('universal notice lifecycle clears on dispose and uses the one top-center live region', async () => {
   const ui = readShellSource();
-  const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+  const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
   const disposeStart = ui.indexOf('  async dispose() {');
   const disposeEnd = ui.indexOf('\n  }\n', disposeStart);
   const dispose = ui.slice(disposeStart, disposeEnd);

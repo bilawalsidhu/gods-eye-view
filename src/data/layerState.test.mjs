@@ -1,6 +1,6 @@
 import { encodeParams, decodeParams } from '../layers/streetLevel/params.js';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../../build/application-html.js';
+import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -734,7 +734,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     /this\.(?:flightState\.)?_models3dMode = 'proximity';/,
     'ui.js: and believes the mode is proximity',
   );
-  const html = expandApplicationHtml(
+  const html = await renderApplicationHtml(
     await readFile(new URL('../../index.html', import.meta.url), 'utf8'),
   );
   assert.match(

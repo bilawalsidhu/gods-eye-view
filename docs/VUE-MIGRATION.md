@@ -53,7 +53,17 @@ They contain no application state.
 2. **Rail.** `PanelChrome` enforces one panel per side; the panel store
    mirrors each side's panels and the rail renders from it. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
-   classes, `data-i18n` text and CSS. Order: Scenes, Weather, Recent imagery,
+   classes, `data-i18n` text and CSS. A converted template is listed in
+   `build/applicationViews.js`; its `gev:template` marker then expands to a
+   `.gev-view` host (`display: contents`), and `mountApplicationViews()`
+   (`src/ui/views/index.js`) renders the view into it before the page is
+   translated and wired. `createApplication()` calls it too, so host pages
+   need no change. Views belong to the page and are never unmounted. The
+   loading screen stays static so it paints before any script runs. Markup
+   tests read `renderApplicationHtml()` from `src/testSupport`, which renders
+   the views on the server. Vue preserves template whitespace so a view's DOM
+   matches its template exactly. First the markup moves, unchanged;
+   then each view takes over its wiring. Order: Scenes, Weather, Recent imagery,
    Street level, CCTV, Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.

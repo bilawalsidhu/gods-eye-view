@@ -2,7 +2,7 @@ import {
   readShellSource,
   shellMethod,
 } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { PanelLayoutController } from './ui/panelLayoutController.js';
 import { readShellElements } from './ui/shellElements.js';
@@ -46,7 +46,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const html = expandApplicationHtml(
+const html = await renderApplicationHtml(
   fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'),
 );
 const ui = readShellSource();

@@ -1,4 +1,4 @@
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
 import { _syncContextModeButtons } from './ui/contextPresentation.js';
@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 test('Contacts and Space Missions both participate in the ordinary Tab sequence', () => {

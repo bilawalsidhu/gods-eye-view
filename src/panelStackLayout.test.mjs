@@ -1,5 +1,5 @@
 import { readShellSource } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -264,8 +264,8 @@ test('expanded left panels integrate their headers with the container shell', ()
   );
 });
 
-test('Map Source uses five compact tiles in the bottom Visual Presets tray', () => {
-  const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+test('Map Source uses five compact tiles in the bottom Visual Presets tray', async () => {
+  const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.doesNotMatch(html, /id="stack-panel"/);
@@ -277,8 +277,8 @@ test('Map Source uses five compact tiles in the bottom Visual Presets tray', () 
   );
 });
 
-test('expanded right panels highlight the title divider without changing collapsed launchers', () => {
-  const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+test('expanded right panels highlight the title divider without changing collapsed launchers', async () => {
+  const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.match(

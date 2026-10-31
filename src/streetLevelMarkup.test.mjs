@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
-const html = expandApplicationHtml(read('index.html'));
+const html = await renderApplicationHtml(read('index.html'));
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 const panelCss = read('src/ui/styles/street-level.css');
 const panelChrome = read('src/ui/panelChrome.js');

@@ -2,6 +2,7 @@ import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vue from '@vitejs/plugin-vue';
+import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 import { build, normalizePath } from 'vite';
 
 /** Build each browser or Node export group and reject imports outside its declared ownership. */
@@ -100,7 +101,7 @@ export async function checkPackageBoundaries(root) {
       ssr: node ? { noExternal: true } : undefined,
       logLevel: 'silent',
       plugins: [
-        vue(),
+        vue(VUE_PLUGIN_OPTIONS),
         {
           name: 'check-package-ownership',
           moduleParsed(info) {

@@ -1,3 +1,4 @@
+import { mountApplicationViews } from '../ui/views/index.js';
 const START_ORDER = ['scene', 'controls', 'data', 'tools'];
 // Controls cancel restoration while the data manager and viewer still exist.
 const STOP_ORDER = ['tools', 'controls', 'data', 'scene'];
@@ -15,6 +16,8 @@ export function createApplication({
   createData,
   createTools,
 }) {
+  // A host's page needs its views before any phase reads the markup.
+  mountApplicationViews();
   const factories = {
     scene: createScene,
     controls: createControls,

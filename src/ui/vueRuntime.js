@@ -1,13 +1,25 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 
+let pagePinia = null;
+
 /**
- * Create the application's Vue runtime: one Pinia instance shared by every
- * view the shell mounts, and the mounts themselves for teardown.
+ * The page's Pinia instance, shared by the application views and the shell,
+ * so a view and a shell control read the same stores.
+ * @returns {import('pinia').Pinia}
+ */
+export function applicationPinia() {
+  pagePinia ??= createPinia();
+  return pagePinia;
+}
+
+/**
+ * Create a Vue runtime: one Pinia instance shared by every view it mounts,
+ * and the mounts themselves for teardown.
+ * @param {{pinia?: import('pinia').Pinia}} [options]
  * @returns {{pinia: import('pinia').Pinia, mount: Function, destroy: Function}}
  */
-export function createUiRuntime() {
-  const pinia = createPinia();
+export function createUiRuntime({ pinia = createPinia() } = {}) {
   const apps = new Set();
   return {
     pinia,

@@ -98,3 +98,9 @@
   font: 600 9px/14px var(--font-mono);
   text-align: center;
 }
+
+/* Application view hosts (src/ui/views): the view's own elements lay out as
+   children of the page, as the static markup they replace did. */
+.gev-view {
+  display: contents;
+}

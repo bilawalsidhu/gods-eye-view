@@ -1,5 +1,5 @@
 import { readShellSource } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 // MAP STACK chip row — the dropdown's replacement control surface.
 //
@@ -482,8 +482,8 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
   );
 });
 
-test('the Visual Presets tray owns Map Source and the retired left panel is absent', () => {
-  const html = expandApplicationHtml(
+test('the Visual Presets tray owns Map Source and the retired left panel is absent', async () => {
+  const html = await renderApplicationHtml(
     readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
   );
   const ui = readShellSource();

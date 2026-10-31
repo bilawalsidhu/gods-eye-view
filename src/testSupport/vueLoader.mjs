@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { compileScript, compileTemplate, parse } from 'vue/compiler-sfc';
+import { VUE_COMPILER_OPTIONS } from '../../build/vueOptions.js';
 
 /**
  * Compile a single-file component to an ES module for Node's test runner.
@@ -11,7 +12,11 @@ export function compileVueModule(source, filename) {
   if (errors.length) throw errors[0];
   const id = filename;
   if (descriptor.scriptSetup) {
-    return compileScript(descriptor, { id, inlineTemplate: true }).content;
+    return compileScript(descriptor, {
+      id,
+      inlineTemplate: true,
+      templateOptions: { compilerOptions: VUE_COMPILER_OPTIONS },
+    }).content;
   }
   const script = descriptor.script
     ? compileScript(descriptor, { id, genDefaultAs: '__sfc__' }).content
@@ -22,6 +27,7 @@ export function compileVueModule(source, filename) {
       source: descriptor.template.content,
       filename,
       id,
+      compilerOptions: VUE_COMPILER_OPTIONS,
     });
     if (compiled.errors.length) throw compiled.errors[0];
     template = compiled.code;

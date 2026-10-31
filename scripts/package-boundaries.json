@@ -17,8 +17,12 @@
   },
   "application": {
     "exports": ["./application"],
-    "modules": ["src/app/application.js"],
-    "external": []
+    "modules": [
+      "src/app/application.js",
+      "src/ui/vueRuntime.js",
+      "src/ui/views/index.js"
+    ],
+    "external": ["vue", "pinia"]
   },
   "viewer": {
     "exports": ["./application/viewer"],
@@ -40,7 +44,9 @@
       "build/application-html.js",
       "build/allowedHosts.js",
       "build/embed-framing.js",
-      "build/panel.js"
+      "build/panel.js",
+      "build/applicationViews.js",
+      "build/vueOptions.js"
     ],
     "external": ["vite-plugin-cesium", "@vitejs/plugin-vue"]
   },

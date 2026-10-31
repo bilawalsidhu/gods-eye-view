@@ -119,10 +119,10 @@ export function extractMessages() {
     }
   }
 
-  const markup = trackedFiles('index.html', 'src/ui/templates/*.html');
+  const markup = markupFiles();
   const TAG = /<([a-zA-Z][\w-]*)(\s[^>]*?)\/?>([^<]*)/gs;
   for (const file of markup) {
-    const html = readFileSync(path.join(ROOT, file), 'utf8');
+    const html = readMarkup(file);
     for (const [, tag, attrs, text] of html.matchAll(TAG)) {
       const where = `${file} <${tag}>`;
       if (/\sdata-i18n(\s|=|$)/.test(attrs)) {
@@ -404,10 +404,8 @@ export function unmarkedScript(file, original) {
  */
 export function findUnmarked() {
   const found = [];
-  for (const file of trackedFiles('index.html', 'src/ui/templates/*.html'))
-    found.push(
-      ...unmarkedMarkup(file, readFileSync(path.join(ROOT, file), 'utf8')),
-    );
+  for (const file of markupFiles())
+    found.push(...unmarkedMarkup(file, readMarkup(file)));
   for (const file of sourceFiles().filter(
     (name) => !NOT_UI.some((pattern) => pattern.test(name)),
   ))
@@ -421,6 +419,24 @@ export function findUnmarked() {
     seen.add(key);
     return true;
   });
+}
+
+/** Static markup opted in with data-i18n*: the page, its templates and views. */
+function markupFiles() {
+  return trackedFiles(
+    'index.html',
+    'src/ui/templates/*.html',
+    'src/ui/views/*.vue',
+  );
+}
+
+/** A file's markup; for a single-file component, its template block. */
+function readMarkup(file) {
+  const source = readFileSync(path.join(ROOT, file), 'utf8');
+  if (!file.endsWith('.vue')) return source;
+  const start = source.indexOf('<template>');
+  const end = source.lastIndexOf('</template>');
+  return start === -1 ? '' : source.slice(start + '<template>'.length, end);
 }
 
 // Text that never reaches the page as UI: tool results and descriptions for
