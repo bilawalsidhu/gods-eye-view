@@ -1,8 +1,9 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStatusBadge, updateStatusBadge } from './statusBadge.js';
 import { createRailCards } from './railCards.js';
-import { railFixture } from './railTestFixture.mjs';
+import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 
 test('badges paint literal translated text without installing announcement or interaction semantics', () => {
   const { document } = railFixture();
@@ -32,19 +33,21 @@ test('badges paint literal translated text without installing announcement or in
 });
 
 test('painting preserves feature state, live regions and focus with zero identical writes', () => {
-  let writes = 0;
-  const { document } = railFixture(() => writes++);
+  const f = railFixture();
+  const { document } = f;
   const badge = createStatusBadge({ documentRef: document, hidden: true });
+  f.container.appendChild(badge);
   badge.setAttribute('role', 'status');
   badge.setAttribute('aria-live', 'polite');
   badge.dataset.frameState = 'ready';
   const focusOwner = document.createElement('button');
+  document.body.appendChild(focusOwner);
   focusOwner.focus();
   updateStatusBadge(badge, { label: 'SNAPSHOT · DEGRADED' });
   assert.equal(badge.hidden, false);
-  writes = 0;
+  f.writes();
   updateStatusBadge(badge, { label: 'SNAPSHOT · DEGRADED' });
-  assert.equal(writes, 0);
+  assert.equal(f.writes(), 0);
   assert.equal(badge.getAttribute('role'), 'status');
   assert.equal(badge.getAttribute('aria-live'), 'polite');
   assert.equal(badge.dataset.frameState, 'ready');

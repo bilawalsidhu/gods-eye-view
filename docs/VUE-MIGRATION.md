@@ -76,11 +76,16 @@ They contain no application state.
    the store, so the owner keeps every decision. Static markup that the
    translation pass rewrites (`data-i18n*`) stays outside `v-if` and
    `v-for`, because re-rendering it would bring back the English; component
-   text uses `t()` instead. Order: Scenes (done: `SceneOptions` and
+   text uses `t()` instead. Shared builders become components first and
+   keep their imperative entry points until their owners are components:
+   the rail cards and card blocks (`src/ui/rail/`) render through Vue's
+   synchronous `render()` behind `createRailCards()` and
+   `createRailCardBlocks()`. Order: Scenes (done: `SceneOptions` and
    `SceneShotList` over the `gev-scenes` store), Weather, Recent imagery,
    Street level, CCTV, Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
+
 4. **Cleanup.** The build-time template expansion and the attribute
    translation pass are retired once nothing uses them. Hosts register panels
    and rail items through an explicit API instead of editing markup.

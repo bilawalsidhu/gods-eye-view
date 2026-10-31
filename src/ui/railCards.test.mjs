@@ -1,7 +1,9 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { nextTick } from 'vue';
 import { createRailCards } from './railCards.js';
-import { railFixture } from './railTestFixture.mjs';
+import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 
 const legend = {
   colors: ['#112233', '#ffffff', '#abcdef'],
@@ -25,8 +27,7 @@ const card = {
   ],
 };
 test('keyed cards and optional blocks reorder without redundant writes', () => {
-  let writes = 0;
-  const f = railFixture(() => writes++);
+  const f = railFixture();
   const view = createRailCards(f);
   view.update([card]);
   const article = f.container.children[0];
@@ -50,13 +51,15 @@ test('keyed cards and optional blocks reorder without redundant writes', () => {
     [],
   ]) {
     view.update(cards);
-    writes = 0;
+    f.writes();
     view.update(cards);
-    assert.equal(writes, 0);
+    assert.equal(f.writes(), 0);
   }
   view.update([{ ...card, blocks: [...card.blocks].reverse() }]);
   assert.deepEqual(
-    f.container.children[0].children[1].children.map((n) => n.dataset.blockId),
+    [...f.container.children[0].children[1].children].map(
+      (n) => n.dataset.blockId,
+    ),
     ['actions', 'legend', 'details'],
   );
   view.destroy();
@@ -92,7 +95,7 @@ test('footer buttons retain focus and current callbacks; links use safe new tabs
     ]),
   ]);
   assert.equal(f.document.activeElement, button);
-  assert.equal(button.parent.tagName, 'FOOTER');
+  assert.equal(button.parentElement.tagName, 'FOOTER');
   assert.equal(
     f.find((n) => n.className === 'rail-card-action-hint').textContent,
     'at map center',
@@ -119,7 +122,7 @@ test('footer buttons retain focus and current callbacks; links use safe new tabs
   button.click();
   assert.deepEqual(calls, [2]);
 });
-test('setting ranges stay below presets and commit expensive filters on release', () => {
+test('setting ranges stay below presets and commit expensive filters on release', async () => {
   const f = railFixture();
   const calls = [];
   const view = createRailCards({
@@ -177,6 +180,7 @@ test('setting ranges stay below presets and commit expensive filters on release'
   slider.focus();
   slider.value = '53';
   slider.dispatchEvent(new Event('input'));
+  await nextTick();
   assert.equal(calls.length, 0, 'expensive image work waits until release');
   assert.equal(
     f.find((node) => node.className === 'rail-card-setting-range-value')
@@ -192,11 +196,14 @@ test('setting ranges stay below presets and commit expensive filters on release'
   );
   slider.dispatchEvent(new Event('change'));
   assert.deepEqual(calls.at(-1), ['a', { infrared: 53 }]);
+  await nextTick();
+  assert.equal(slider.value, '53', 'release keeps the handle until the owner');
   view.update([model(53)]);
   assert.equal(slider.value, '53');
   assert.equal(f.document.activeElement, slider);
   slider.value = '41';
   slider.dispatchEvent(new Event('input'));
+  await nextTick();
   view.update([model(70)]);
   assert.equal(
     slider.value,
@@ -208,10 +215,31 @@ test('setting ranges stay below presets and commit expensive filters on release'
   slider.dispatchEvent(new Event('change'));
   assert.equal(calls.length, 1, 'destroy removes the range listener');
 });
+test('controls of a removed block dispatch nothing', () => {
+  const f = railFixture();
+  const calls = [];
+  const view = createRailCards({
+    ...f,
+    onParams: (...args) => calls.push(args),
+  });
+  const actions = {
+    id: 'actions',
+    type: 'actions',
+    actions: [{ id: 'go', label: 'Go', params: { go: 1 } }],
+  };
+  view.update([{ ...card, blocks: [actions] }]);
+  const button = f.find((node) => node.dataset.actionId === 'go');
+  view.update([{ ...card, blocks: [] }]);
+  button.click();
+  assert.deepEqual(calls, []);
+  view.update([{ ...card, blocks: [{ ...actions }] }]);
+  f.find((node) => node.dataset.actionId === 'go').click();
+  assert.deepEqual(calls, [['a', { go: 1 }]]);
+  view.destroy();
+});
 
 test('legend validates colors, preserves the freezing anchor and ignores CSSOM normalization', () => {
-  let writes = 0;
-  const f = railFixture(() => writes++);
+  const f = railFixture();
   const view = createRailCards(f);
   const show = (legend) =>
     view.update([
@@ -222,26 +250,11 @@ test('legend validates colors, preserves the freezing anchor and ignores CSSOM n
   const ramp = f.find((n) => n.className === 'rail-card-ramp');
   assert.equal(zero.hidden, false);
   assert.equal(zero.style.left, '50%');
-  Object.defineProperty(ramp.style, 'background', {
-    get: () =>
-      'linear-gradient(to right, rgb(17, 34, 51), rgb(255, 255, 255), rgb(171, 205, 239))',
-    set() {
-      writes++;
-    },
-    configurable: true,
-  });
-  Object.defineProperty(zero.style, 'left', {
-    get: () => '50.0%',
-    set() {
-      writes++;
-    },
-    configurable: true,
-  });
-  writes = 0;
+  // An unchanged legend writes nothing, whatever the browser normalizes the
+  // colors it reads back to.
+  f.writes();
   show(legend);
-  assert.equal(writes, 0);
-  delete ramp.style.background;
-  delete zero.style.left;
+  assert.equal(f.writes(), 0);
   show({
     ...legend,
     colors: Array(10).fill('#abcdef'),
@@ -257,8 +270,7 @@ test('legend validates colors, preserves the freezing anchor and ignores CSSOM n
   view.destroy();
 });
 test('labelled rows, lists and results retain focus and dispatch current params', () => {
-  let writes = 0;
-  const f = railFixture(() => writes++);
+  const f = railFixture();
   const calls = [];
   const view = createRailCards({
     ...f,
@@ -337,9 +349,9 @@ test('labelled rows, lists and results retain focus and dispatch current params'
   clear.click();
   assert.deepEqual(calls.at(-1), ['a', { inspect: false }]);
   assert.equal(f.find((n) => n.dataset.lineId === 'wind').children.length, 0);
-  writes = 0;
+  f.writes();
   view.update([model(true)]);
-  assert.equal(writes, 0);
+  assert.equal(f.writes(), 0);
   view.destroy();
   const before = calls.length;
   chip.click();

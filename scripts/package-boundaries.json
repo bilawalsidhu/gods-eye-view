@@ -566,9 +566,16 @@
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
       "src/ui/statusText.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/ui/rail/RailChips.vue",
+      "src/ui/rail/RailRowList.vue",
+      "src/ui/rail/RailCardSetting.vue",
+      "src/ui/rail/RailCardBlocks.vue",
+      "src/ui/rail/RailCard.vue",
+      "src/ui/rail/RailCards.vue",
+      "src/ui/rail/rangeValue.js"
     ],
-    "external": []
+    "external": ["vue"]
   },
   "location-controls": {
     "exports": ["./ui/location"],
@@ -924,7 +931,14 @@
       "src/ui/kit/UiRail.vue",
       "src/ui/PanelRailView.vue",
       "src/ui/panelNavigation.js",
-      "src/ui/panelAccordion.js"
+      "src/ui/panelAccordion.js",
+      "src/ui/rail/RailRowList.vue",
+      "src/ui/rail/RailChips.vue",
+      "src/ui/rail/RailCardSetting.vue",
+      "src/ui/rail/RailCardBlocks.vue",
+      "src/ui/rail/RailCard.vue",
+      "src/ui/rail/RailCards.vue",
+      "src/ui/rail/rangeValue.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -2877,7 +2891,14 @@
       "src/ui/kit/UiRail.vue",
       "src/ui/PanelRailView.vue",
       "src/ui/panelNavigation.js",
-      "src/ui/panelAccordion.js"
+      "src/ui/panelAccordion.js",
+      "src/ui/rail/RailChips.vue",
+      "src/ui/rail/RailCardSetting.vue",
+      "src/ui/rail/RailRowList.vue",
+      "src/ui/rail/RailCard.vue",
+      "src/ui/rail/RailCards.vue",
+      "src/ui/rail/RailCardBlocks.vue",
+      "src/ui/rail/rangeValue.js"
     ],
     "external": [
       "hls.js",

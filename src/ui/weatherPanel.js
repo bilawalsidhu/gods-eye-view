@@ -3,8 +3,9 @@ import { createRailCards } from './railCards.js';
 import { createRailTimeline, utcClock } from './railTimeline.js';
 
 // Remounting controls must not reopen a panel the user already collapsed.
-const appearedDocuments = new WeakSet();
-const openDocuments = new WeakMap();
+// Keyed by the page's Weather panel, which outlives remounted controls.
+const appearedPanels = new WeakSet();
+const openPanels = new WeakMap();
 const ORDER = [
   'weather-cyclones',
   'wind',
@@ -97,7 +98,8 @@ export function createWeatherPanel({
   let destroyed = false;
   let previousIds = null;
   let hasAppeared = false;
-  let openId = openDocuments.get(document) || null;
+  const page = panel || document;
+  let openId = openPanels.get(page) || null;
   // Open card as last shown; null until cards are on screen.
   let shownOpenId = null;
   const timeline = createRailTimeline({
@@ -118,7 +120,7 @@ export function createWeatherPanel({
     onParams: (id, params) => setLayerParams(id, params, { origin: 'user' }),
     onOpen: (id) => {
       openId = id;
-      openDocuments.set(document, id);
+      openPanels.set(page, id);
       render();
     },
   };
@@ -260,8 +262,8 @@ export function createWeatherPanel({
     set(root, 'hidden', hidden);
     if (count) set(count, 'textContent', String(active.length));
     if (panel) set(panel, 'hidden', hidden);
-    if (!hidden && panel && !appearedDocuments.has(document)) {
-      appearedDocuments.add(document);
+    if (!hidden && panel && !appearedPanels.has(panel)) {
+      appearedPanels.add(panel);
       // First appearance opens the panel unless a stored or shared collapse
       // choice exists (marked by the panel chrome when it restored the state).
       const preference = panel.dataset?.collapsedPreference;
@@ -284,7 +286,7 @@ export function createWeatherPanel({
         previousIds && entries.filter(({ id }) => !previousIds.has(id));
       if (hasAppeared && added?.length) {
         openId = added.at(-1).id;
-        openDocuments.set(document, openId);
+        openPanels.set(page, openId);
       } else if (ids.size && !ids.has(openId)) {
         openId =
           (!hasAppeared &&

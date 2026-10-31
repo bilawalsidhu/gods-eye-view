@@ -18,6 +18,9 @@ globalThis.document ??= {
   getElementById: (id) => elements[id] ?? null,
   addEventListener() {},
   removeEventListener() {},
+  // The layer panel reaches Vue, whose DOM runtime creates one element as it
+  // loads.
+  createElement: () => ({}),
   hidden: false,
 };
 const { ShellFeedback, localizeLoadingPresentation } =
