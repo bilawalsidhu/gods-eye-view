@@ -248,15 +248,7 @@ const schemas = [
       properties: {
         style: {
           type: 'string',
-          enum: [
-            'normal',
-            'retro',
-            'surveillance',
-            'thermal',
-            'anime',
-            'noir',
-            'snow',
-          ],
+          enum: ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir'],
         },
       },
       required: ['style'],

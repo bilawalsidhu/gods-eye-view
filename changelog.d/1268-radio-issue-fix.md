@@ -1,2 +1,0 @@
-- Normalize station tags and retain valid mixed rows; skipped malformed rows still report degraded coverage (asturksever, #1268).
-- Correct Radio QA push-to-talk setup to target the mounted voice controller (asturksever, #1268).

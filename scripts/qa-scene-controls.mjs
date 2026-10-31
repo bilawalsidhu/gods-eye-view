@@ -106,6 +106,39 @@ try {
         ),
     ),
   );
+  // A long rename keeps its editor visible inside the shot row.
+  await page.click('.scene-shot-label', { count: 2 });
+  await page.waitForSelector('.scene-shot-rename', { visible: true });
+  await page.type(
+    '.scene-shot-rename',
+    ' with a much longer title that runs well past the shot row',
+  );
+  await page.keyboard.press('End');
+  check(
+    'A long rename keeps the editor visible inside its shot row',
+    await page.evaluate(() => {
+      // The label clips with an ellipsis, which hides an editor that
+      // overflows it, so its content must fit its width.
+      const input = document.querySelector('.scene-shot-rename');
+      const label = input?.closest('.scene-shot-label');
+      const box = input?.getBoundingClientRect();
+      const style = input && getComputedStyle(input);
+      return (
+        !!box &&
+        box.width > 120 &&
+        box.height > 10 &&
+        label.scrollWidth <= label.clientWidth + 1 &&
+        style.visibility === 'visible' &&
+        style.borderTopWidth !== '0px' &&
+        document.activeElement === input
+      );
+    }),
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(
+    () => !document.querySelector('.scene-shot-rename'),
+  );
+
   await page.click('#scene-capture-btn');
   await page.waitForFunction(
     () => document.querySelectorAll('.scene-shot-row').length === 2,

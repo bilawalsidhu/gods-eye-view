@@ -60,6 +60,45 @@ export const GEO_PROGRESS_NOTIFY_INTERVAL_MS = 300;
 
 export const GEO_PROGRESS_NOTIFY_BATCH_LIMIT = 10;
 
+// View thinning: camera icons show only on or near the screen, and each
+// camera competes for a world-anchored grid cell sized to about VIEW_CELL_PX
+// at its distance from the viewer (in power-of-two metre steps, so a pan
+// keeps the same winners until a camera's distance crosses a step). Cells
+// smaller than VIEW_MIN_CELL_M do not thin:
+// close up every camera shows, co-located ones included.
+
+export const VIEW_CELL_PX = 40;
+
+export const VIEW_MIN_CELL_M = 60;
+
+// Icons this far past the screen edge (fraction of its size) still show, so
+// a pan does not reveal empty ground before the next view pass.
+
+export const VIEW_ICON_MARGIN = 0.5;
+
+// While the camera moves, the view pass reruns at most this often.
+
+export const VIEW_MOTION_REFRESH_MS = 250;
+// A motion tick is skipped unless the camera moved this fraction of its
+// ellipsoid height, or turned this many degrees, since the last pass.
+
+export const VIEW_MOTION_MIN_MOVE_FRACTION = 0.01;
+
+export const VIEW_MOTION_MIN_TURN_DEG = 0.5;
+
+// Motion passes are spaced at least this many times the last pass's cost, so
+// a large catalog spends at most about a tenth of a long move on them.
+
+export const VIEW_MOTION_COST_FACTOR = 10;
+
+// A view camera's geometry is attempted at most this many times per surface
+// regime (a cold elevation cell can leave the first attempt unresolved); the
+// retry runs this long after the drain that left it unresolved.
+
+export const VIEW_GEOMETRY_ATTEMPTS = 2;
+
+export const VIEW_GEOMETRY_RETRY_MS = 1500;
+
 // Throttle for placeholder repaints — the projection RAF loop must not
 // re-fill a 1080p canvas on every frame while a feed image is still loading.
 

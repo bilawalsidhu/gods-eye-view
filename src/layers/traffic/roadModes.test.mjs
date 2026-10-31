@@ -283,6 +283,64 @@ test('flow application preserves direct values and leaves Hybrid fill simulated'
   assert.equal(state._flowPending, 0);
 });
 
+test('stale proxy flow tiles reach the layer stats and never read LIVE', async () => {
+  const { createFlow } = await import('./flow.js');
+  const { createModel } = await import('./model.js');
+  const { createControls } = await import('./controls.js');
+  const { createState } = await import('./state.js');
+  const { layerFeedState } = await import('../../data/feedState.js');
+  let detail = {
+    segments: [flow],
+    partial: false,
+    stale: true,
+    oldestTileAt: 1000,
+  };
+  const source = {
+    fetchFlowDetail: async () => detail,
+    fetchFlowForBounds: async () => detail.segments,
+    getFlowSessionStats: () => ({ tilesFetched: 1 }),
+  };
+  const state = createState({ services: {} });
+  Object.assign(state, {
+    _enabled: true,
+    _liveMode: true,
+    _loadGeneration: 1,
+    _flowStatusPromise: Promise.resolve(),
+    _bucketCounts: { free: 3, slow: 0, jam: 0, sim: 1 },
+  });
+  const parts = {};
+  const context = { state, services: { credits: {} }, parts, source };
+  parts.model = createModel(context);
+  parts.flow = createFlow(context);
+  const controls = createControls(context);
+
+  await parts.flow.applyFlowToRoads([{ coords: coordinates }], box, 1);
+  const stale = controls.methods.getStats();
+  assert.equal(stale.mode, 'live');
+  assert.equal(stale.stale, true);
+  assert.equal(stale.oldestTileAt, 1000);
+  assert.doesNotMatch(stale.loadingLabel, /LIVE/);
+  assert.equal(layerFeedState(stale), 'stale');
+
+  // A road failure outranks cached flow: the row reads the failure.
+  state._roadError = 'Road geometry unavailable';
+  assert.equal(controls.methods.getStats().stale, false);
+  state._roadError = null;
+
+  detail = {
+    segments: [flow],
+    partial: false,
+    stale: false,
+    oldestTileAt: 2000,
+  };
+  state._loadGeneration = 2;
+  await parts.flow.applyFlowToRoads([{ coords: coordinates }], box, 2);
+  const live = controls.methods.getStats();
+  assert.equal(live.stale, false);
+  assert.match(live.loadingLabel, /^LIVE · Roads: OpenStreetMap/);
+  assert.equal(layerFeedState(live), 'nominal');
+});
+
 test('status names the drawn road source for each mode', async () => {
   const { createModel } = await import('./model.js');
   const { trafficFeedPresentation: present } = createModel({

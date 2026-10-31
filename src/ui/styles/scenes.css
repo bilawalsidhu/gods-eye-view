@@ -1,6 +1,8 @@
 /* ── Scene Director Panel ───────────────────── */
 #scene-panel {
   --panel-expanded-width: 360px;
+  /* Secondary text in Authoring: dimmer than labels, but legible on the globe. */
+  --scene-quiet: rgba(232, 234, 237, 0.62);
   position: fixed;
   top: calc(var(--left-stack-top) + (var(--left-stack-gap) * 2));
   left: var(--left-stack-x);
@@ -150,15 +152,15 @@
   flex-wrap: wrap;
 }
 
+/* The scene's name takes its own row; NEW SCENE / DELETE share the next. */
 #scene-select {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
+  min-height: 32px;
+  font-size: 12px;
 }
 
-/* A translated scene name needs the width: the select takes its own row,
-   NEW / DEL share the next one. */
 html:not([lang='en']) #scene-select {
-  flex: 1 1 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -168,8 +170,7 @@ html:not([lang='en']) #scene-select {
 }
 
 /* A translated action longer than its button wraps inside the button instead
-   of running past it. English keeps its one-line buttons ("EXPORT PRESETS"
-   included). */
+   of running past it. English keeps its one-line buttons. */
 html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   white-space: normal;
   overflow-wrap: break-word;
@@ -178,6 +179,70 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 .scene-btn {
   flex: 1;
   min-width: 72px;
+}
+
+#scene-panel .scene-btn {
+  font-size: 10px;
+  padding: 8px 10px;
+}
+
+/* Authoring's steps: SCENE, SHOTS, PREVIEW, SAVE & SHARE. */
+.scene-step-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  color: var(--scene-quiet);
+}
+
+.scene-step-heading::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.panel-header + .scene-step-heading {
+  margin-top: 2px;
+}
+
+/* One primary action per step: CAPTURE SHOT and PLAY. The panel id keeps
+   this above Cyber's shared button surface. */
+#scene-panel .scene-btn-primary:not(:disabled) {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* The file row is housekeeping; it stays quieter than the steps above. */
+#scene-panel .scene-file-controls .scene-btn {
+  font-size: 9px;
+  /* Room for one long translated word (IMPORTIEREN, ІМПОРТУВАТИ) per line. */
+  padding: 8px 4px;
+  letter-spacing: 0.6px;
+  background: transparent;
+}
+
+/* Keep the shared hover on the restyled actions. */
+#scene-panel .scene-btn-primary:hover:not(:disabled),
+#scene-panel .scene-file-controls .scene-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.scene-shot-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--scene-quiet);
+}
+
+#scene-panel:not(.has-shots) .scene-shot-hint {
+  display: none;
 }
 
 #scene-start-btn,
@@ -190,12 +255,14 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 160px;
-  min-height: 96px;
+  max-height: 260px;
+  /* Two shot rows stay visible; the panel scrolls when space is short. */
+  min-height: 128px;
   flex: 1;
   overflow-y: auto;
   padding: 4px 2px 6px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  counter-reset: scene-shot;
 }
 
 .scene-shot-list::-webkit-scrollbar {
@@ -210,19 +277,21 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 .scene-shot-empty {
   border: 1px dashed rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  padding: 10px 8px;
+  padding: 16px 12px;
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1px;
-  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  line-height: 1.5;
+  color: var(--scene-quiet);
 }
 
 .scene-shot-row {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9px;
-  padding: 7px 8px;
+  padding: 8px 10px;
   background: rgba(255, 255, 255, 0.03);
+  counter-increment: scene-shot;
   transition:
     border-color var(--transition-fast),
     background var(--transition-fast);
@@ -243,10 +312,36 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 .scene-shot-label {
   min-width: 0;
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-size: 12px;
+  letter-spacing: 0.4px;
   color: var(--text-primary);
+}
+
+/* While renaming, the label holds only the editor at full width. */
+.scene-shot-label:has(.scene-shot-rename) {
+  overflow: visible;
+  white-space: normal;
+}
+
+.scene-shot-label:has(.scene-shot-rename)::before {
+  content: none;
+}
+
+/* Shots are numbered 01, 02… in playback order. */
+.scene-shot-label::before {
+  content: counter(scene-shot, decimal-leading-zero);
+  margin-right: 8px;
+  font-size: 10px;
+  color: var(--scene-quiet);
+}
+
+.scene-shot-row.active .scene-shot-label::before {
+  color: var(--accent);
 }
 
 .scene-shot-rename {
@@ -260,11 +355,11 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 }
 
 .scene-shot-meta {
-  margin-top: 4px;
+  margin-top: 5px;
   font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.8px;
-  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: var(--scene-quiet);
 }
 
 .scene-shot-actions {
@@ -275,7 +370,7 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 .scene-progress {
   margin-top: 8px;
   width: 100%;
-  height: 18px;
+  height: 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -305,9 +400,10 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 #scene-status {
   margin-top: 8px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  line-height: 1.4;
+  color: var(--scene-quiet);
 }
 
 #scene-runtime {
@@ -357,6 +453,8 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 #cctv-panel.collapsed .cctv-summary-label,
 #cctv-panel.collapsed #cctv-summary,
 #scene-panel.collapsed .scene-controls,
+#scene-panel.collapsed .scene-step-heading,
+#scene-panel.collapsed .scene-shot-hint,
 #scene-panel.collapsed .scene-shot-list,
 #scene-panel.collapsed .scene-progress,
 #scene-panel.collapsed #scene-status,
@@ -376,14 +474,6 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 
 #global-context-panel #radio-panel.collapsed {
   width: 100%;
-}
-
-#data-panel.collapsed .panel-title,
-#cctv-panel.collapsed .panel-title,
-#radio-panel.collapsed .panel-title,
-#scene-panel.collapsed .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.8px;
 }
 
 #control-panel.collapsed .panel-inner,

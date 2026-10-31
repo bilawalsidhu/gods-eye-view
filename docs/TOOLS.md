@@ -92,7 +92,8 @@ pitch), data layers, visual style, map imagery, and an aircraft, military
 aircraft or satellite to follow. `createView` builds and bounds one,
 `viewToParams` and `viewFromParams` write and read it in the share-link
 format the app restores, and `viewUrl` gives the address that opens it. The
-style names are the ones share links use. Ships cannot be followed from a
+style names are the ones share links use; a retired style (`snow`) is read
+as `normal`. Ships cannot be followed from a
 link yet. An aircraft's `follow` may ask for its cockpit view
 (`cockpit: true`); links cannot carry that and open the app following it.
 

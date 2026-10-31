@@ -135,6 +135,15 @@ test('document byte, nesting, collection, finite-number and string bounds are en
   );
 });
 
+test('a shot saved with the retired Snow style migrates to Normal', () => {
+  const project = fixture();
+  project.scenes[0].shots[0].visual = { style: 'snow' };
+  const migrated = normalizeProject(
+    parseSceneDocument(JSON.stringify(project)),
+  );
+  assert.equal(migrated.scenes[0].shots[0].visual.style, 'normal');
+});
+
 test('captured scope and extended detection edits survive migration', () => {
   const project = fixture();
   project.scenes[0].shots[0].visual = {
