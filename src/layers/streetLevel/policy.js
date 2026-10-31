@@ -20,6 +20,7 @@ export const PROVIDER_COLORS = Object.freeze({
   google: '#4285f4',
   kartaview: '#635bff',
   panoramax: '#ff6f00',
+  vegbilder: '#ec4899',
 });
 
 /** Colours every provider shares: the selection highlight and the marker. */
