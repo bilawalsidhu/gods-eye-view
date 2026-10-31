@@ -145,11 +145,11 @@ test('optional controls are absent safely and subscriptions stay instance-owned'
   const a = element();
   const b = element();
   const one = bindDisplayControls({
-    elements: { fadeSliders: [null, a] },
-    actions: { setFade: () => calls.push('a') },
+    elements: { fadeSlider: null, outsideOpacitySlider: a },
+    actions: { setOutsideOpacity: () => calls.push('a') },
   });
   const two = bindDisplayControls({
-    elements: { fadeSliders: [b] },
+    elements: { fadeSlider: b },
     actions: { setFade: () => calls.push('b') },
   });
   one.destroy();

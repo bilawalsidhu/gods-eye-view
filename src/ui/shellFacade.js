@@ -429,14 +429,6 @@ export class ShellFacade {
     this._visualSettings._contactsDetectionRestore = value;
   }
 
-  get _detectionAllocationBtns() {
-    return this._visualSettings._detectionAllocationBtns;
-  }
-
-  set _detectionAllocationBtns(value) {
-    this._visualSettings._detectionAllocationBtns = value;
-  }
-
   get _detectionAllocationPreference() {
     return this._visualSettings._detectionAllocationPreference;
   }
@@ -716,17 +708,24 @@ export class ShellFacade {
   }
 
   /**
-   * Reads and canonicalizes the five-stop density control. The engine derives
-   * Sparse/Balanced/Dense from the same stop.
+   * Sets the five-stop density control, canonicalized; the engine derives
+   * Sparse/Balanced/Dense from the same stop. Without a value it reapplies
+   * the current stop.
+   * @param {number} [pct]
    * @returns {void}
    */
-  _applyDetectionDensityFromUi() {
-    return this._visualSettings._applyDetectionDensityFromUi(...arguments);
+  _setDetectionDensity(pct) {
+    return this._visualSettings._setDetectionDensity(...arguments);
   }
 
-  /** Apply responsive keyhole fade controls from normalized UI percentages. */
-  _applyDetectionFadeFromUi() {
-    return this._visualSettings._applyDetectionFadeFromUi(...arguments);
+  /**
+   * Sets the keyhole fade distance and outside opacity, in percent; either
+   * one left out keeps its current value.
+   * @param {{fadePct?: number, outsideOpacityPct?: number}} [tuning]
+   * @returns {void}
+   */
+  _setDetectionFade(tuning) {
+    return this._visualSettings._setDetectionFade(...arguments);
   }
 
   _syncDetectionUiFromEngine() {

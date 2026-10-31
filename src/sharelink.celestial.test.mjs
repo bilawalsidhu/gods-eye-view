@@ -524,9 +524,9 @@ test('every explicit visual UI gesture claims restore authority before it mutate
     ['setScopeFeather:', 'setSharpenIntensity:', 'setScopeMaskFeather(', 'setScopeFeather control'],
     ['setSharpenIntensity:', 'setHudLayout:', 'this._setSharpenIntensity(', 'setSharpenIntensity control'],
     ['setHudLayout:', 'toggleCleanView:', 'this._setHudVariant(', 'setHudLayout control'],
-    ['setDensity:', 'setAllocation:', 'this._applyDetectionDensityFromUi()', 'setDensity control'],
+    ['setDensity:', 'setAllocation:', 'this._setDetectionDensity(', 'setDensity control'],
     ['setAllocation:', 'setFade:', 'this._setDetectionAllocation(', 'setAllocation control'],
-    ['setFade:', 'toggleCelestial:', 'this._applyDetectionFadeFromUi()', 'setFade control'],
+    ['setFade:', 'toggleCelestial:', 'this._setDetectionFade(', 'setFade control'],
   ];
   for (const [start, end, mutation, label] of gestureRoutes) {
     const startIndex = initUi.indexOf(start);

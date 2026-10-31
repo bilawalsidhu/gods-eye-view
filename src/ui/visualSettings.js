@@ -2,7 +2,6 @@ import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { syncScopeControls } from './displayControls.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
 import { RETIRED_STYLES } from '../visualStylePolicy.js';
-import { syncSegmentedControl } from './segmentedControl.js';
 import { useDisplayStore } from './stores/display.js';
 import { applicationPinia } from './vueRuntime.js';
 import { t } from '../i18n/index.js';
@@ -117,28 +116,22 @@ export class VisualSettings {
       this.hud.setMode(hudVisible ? 'on' : 'off');
       this._updateHudButtonState();
     }
-    if (typeof detectionDensity === 'number' && this._detectionDensitySlider) {
-      const pct = canonicalizeDensity(detectionDensity);
-      this._detectionDensitySlider.value = String(pct);
-      this._detectionDensityValue.textContent = `${pct}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof detectionDensity === 'number')
+      this._setDetectionDensity(detectionDensity);
     if (detectionAllocation) {
       this._setDetectionAllocation(detectionAllocation, {
         syncShare: false,
         persist: false,
       });
     }
-    if (typeof detectionFadePct === 'number' && this._detectionFadeSlider) {
-      this._detectionFadeSlider.value = String(detectionFadePct);
-    }
-    if (
-      typeof detectionOutsideOpacityPct === 'number' &&
-      this._detectionOpacitySlider
-    ) {
-      this._detectionOpacitySlider.value = String(detectionOutsideOpacityPct);
-    }
-    this._applyDetectionFadeFromUi();
+    this._setDetectionFade({
+      fadePct:
+        typeof detectionFadePct === 'number' ? detectionFadePct : undefined,
+      outsideOpacityPct:
+        typeof detectionOutsideOpacityPct === 'number'
+          ? detectionOutsideOpacityPct
+          : undefined,
+    });
     if (detectionMode) this._setDetectionMode(detectionMode);
     if (typeof celestialRing === 'boolean') {
       this.setCelestialRingEnabled(celestialRing, {
@@ -212,6 +205,14 @@ export class VisualSettings {
     // The sharpen amount as a whole percentage. VisualEffects keeps the
     // fraction it applies, and drops writes once it is stopped.
     this._sharpenPct = 49;
+    // Detection's density stop, keyhole fade and outside opacity, in whole
+    // percentages; the mode label the button shows (null until first
+    // synced) and the allocation its segments show (null until set).
+    this._detectionDensityPct = 50;
+    this._detectionFadePct = 7;
+    this._detectionOutsidePct = 1;
+    this._detectionModeLabel = null;
+    this._detectionAllocationShown = null;
     this.activeStyle = 'normal';
     this._preCyberStyle = null;
     this._cyberStyleUserSelected = false;
@@ -220,10 +221,6 @@ export class VisualSettings {
     this._cockpitVisionMode = 'optical';
     this._cockpitVisionRestore = null;
     this._contactsDetectionRestore = null;
-    this._detectionAllocationBtns = [
-      document.getElementById('detection-allocation-elastic'),
-      document.getElementById('detection-allocation-weighted'),
-    ].filter(Boolean);
     let storedDetectionAllocation = 'ELASTIC';
     try {
       storedDetectionAllocation =
@@ -475,14 +472,43 @@ export class VisualSettings {
 
   /** Present the Display panel's post-processing groups. */
   _presentDisplay() {
-    const bloom = this.bloomIntensityPct;
     return {
-      bloom: { active: this.bloomEnabled, intensity: bloom, text: `${bloom}%` },
-      sharpen: {
-        active: this.sharpenEnabled,
-        intensity: this._sharpenPct,
-        text: `${this._sharpenPct}%`,
-      },
+      bloom: { active: this.bloomEnabled, intensity: this.bloomIntensityPct },
+      sharpen: { active: this.sharpenEnabled, intensity: this._sharpenPct },
+      detection: this._presentDetection(),
+    };
+  }
+
+  /** Detection's button, rows, sliders and allocation segments. */
+  _presentDetection() {
+    const mode = this._detectionModeLabel;
+    const enabled = mode != null && mode !== 'OFF';
+    const labels = {
+      SPARSE: t('SPARSE'),
+      BALANCED: t('BALANCED'),
+      DENSE: t('DENSE'),
+    };
+    return {
+      // Null until the first sync, so the initial markup stands.
+      button:
+        mode == null
+          ? null
+          : {
+              pressed: enabled,
+              ariaLabel: enabled
+                ? t('Detection overlay: {mode}', {
+                    mode: String(mode).toLowerCase(),
+                  })
+                : t('Detection overlay: off'),
+              label: labels[mode] ?? t('DETECT'),
+              active: Object.hasOwn(labels, mode),
+              panoptic: mode === 'DENSE',
+            },
+      rowsVisible: enabled,
+      densityPct: this._detectionDensityPct,
+      fadePct: this._detectionFadePct,
+      outsideOpacityPct: this._detectionOutsidePct,
+      allocation: this._detectionAllocationShown,
     };
   }
 
@@ -547,44 +573,31 @@ export class VisualSettings {
     this._layoutRightPanels();
   }
 
-  _applyDetectionDensityFromUi() {
+  /** Set detection's density to its nearest stop and apply it. */
+  _setDetectionDensity(pct = this._detectionDensityPct) {
     const { getDetectionMode, setDetectionTuning } = this.services;
-    if (!this._detectionDensitySlider) return;
-    const pct = canonicalizeDensity(this._detectionDensitySlider.value);
-    this._detectionDensitySlider.value = String(pct);
-    if (this._detectionDensityValue)
-      this._detectionDensityValue.textContent = `${pct}%`;
-    setDetectionTuning({ densityPct: pct });
+    this._detectionDensityPct = canonicalizeDensity(pct);
+    setDetectionTuning({ densityPct: this._detectionDensityPct });
     this._updateDetectionButton(getDetectionMode());
   }
 
-  _applyDetectionFadeFromUi() {
+  /**
+   * Set the keyhole fade distance (0-40%) and the opacity outside it
+   * (0-100%), keeping either one that is not given, and apply them.
+   */
+  _setDetectionFade({
+    fadePct = this._detectionFadePct,
+    outsideOpacityPct = this._detectionOutsidePct,
+  } = {}) {
     const { setKeyholeFadeTuning } = this.services;
-    const fadePct = Math.max(
-      0,
-      Math.min(40, Math.round(Number(this._detectionFadeSlider?.value) || 0)),
-    );
-    const outsideOpacityValue = this._detectionOpacitySlider?.value;
-    const outsideOpacityPct = Math.max(
-      0,
-      Math.min(
-        100,
-        Math.round(
-          outsideOpacityValue == null ? 3 : Number(outsideOpacityValue) || 0,
-        ),
-      ),
-    );
-    if (this._detectionFadeSlider)
-      this._detectionFadeSlider.value = String(fadePct);
-    if (this._detectionFadeValue)
-      this._detectionFadeValue.textContent = `${fadePct}%`;
-    if (this._detectionOpacitySlider)
-      this._detectionOpacitySlider.value = String(outsideOpacityPct);
-    if (this._detectionOpacityValue)
-      this._detectionOpacityValue.textContent = `${outsideOpacityPct}%`;
+    const whole = (value, max) =>
+      Math.max(0, Math.min(max, Math.round(Number(value) || 0)));
+    this._detectionFadePct = whole(fadePct, 40);
+    this._detectionOutsidePct = whole(outsideOpacityPct, 100);
+    this._publishDisplay();
     setKeyholeFadeTuning({
-      fadeRatio: fadePct / 100,
-      outsideOpacity: outsideOpacityPct / 100,
+      fadeRatio: this._detectionFadePct / 100,
+      outsideOpacity: this._detectionOutsidePct / 100,
     });
     this.viewer.scene.requestRender?.();
   }
@@ -598,9 +611,8 @@ export class VisualSettings {
     const normalized = normalizeAllocationStrategy(raw);
     this._detectionAllocationPreference = normalized;
     setDetectionTuning({ allocationStrategy: normalized });
-    syncSegmentedControl(this._detectionAllocationBtns, normalized, {
-      valueOf: (button) => button.dataset.allocation,
-    });
+    this._detectionAllocationShown = normalized;
+    this._publishDisplay();
     if (persist) {
       try {
         localStorage.setItem(DETECTION_ALLOCATION_STORAGE_KEY, normalized);
@@ -616,25 +628,16 @@ export class VisualSettings {
     const { getKeyholeFadeTuning, getDetectionTuning, getDetectionMode } =
       this.services;
     const tuning = getDetectionTuning();
-    if (this._detectionDensitySlider)
-      this._detectionDensitySlider.value = String(tuning.densityPct);
-    if (this._detectionDensityValue)
-      this._detectionDensityValue.textContent = `${tuning.densityPct}%`;
+    this._detectionDensityPct = canonicalizeDensity(tuning.densityPct);
     this._setDetectionAllocation(tuning.allocationStrategy, {
       syncShare: false,
       persist: false,
     });
     const fadeTuning = getKeyholeFadeTuning();
-    if (this._detectionFadeSlider)
-      this._detectionFadeSlider.value = String(
-        Math.round(fadeTuning.fadeRatio * 100),
-      );
-    if (this._detectionOpacitySlider) {
-      this._detectionOpacitySlider.value = String(
-        Math.round(fadeTuning.outsideOpacity * 100),
-      );
-    }
-    this._applyDetectionFadeFromUi();
+    this._setDetectionFade({
+      fadePct: fadeTuning.fadeRatio * 100,
+      outsideOpacityPct: fadeTuning.outsideOpacity * 100,
+    });
     this._updateDetectionButton(getDetectionMode());
   }
 
@@ -810,13 +813,8 @@ export class VisualSettings {
 
   _applyDetectionPreset(det) {
     if (!det) return;
-    if (typeof det.densityPct === 'number' && this._detectionDensitySlider) {
-      const pct = canonicalizeDensity(det.densityPct);
-      this._detectionDensitySlider.value = String(pct);
-      if (this._detectionDensityValue)
-        this._detectionDensityValue.textContent = `${pct}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof det.densityPct === 'number')
+      this._setDetectionDensity(det.densityPct);
     if (det.mode) this._setDetectionMode(String(det.mode).toUpperCase());
   }
 
@@ -850,30 +848,18 @@ export class VisualSettings {
     if (defaults.detectionMode) {
       this._setDetectionMode(defaults.detectionMode);
     }
-    if (
-      typeof defaults.detectionDensity === 'number' &&
-      this._detectionDensitySlider
-    ) {
-      const density = canonicalizeDensity(defaults.detectionDensity);
-      this._detectionDensitySlider.value = String(density);
-      this._detectionDensityValue.textContent = `${density}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof defaults.detectionDensity === 'number')
+      this._setDetectionDensity(defaults.detectionDensity);
     this._setDetectionAllocation(
       this._detectionAllocationPreference ||
         defaults.detectionAllocation ||
         'ELASTIC',
       { syncShare: false, persist: false },
     );
-    if (this._detectionFadeSlider) {
-      this._detectionFadeSlider.value = String(defaults.detectionFadePct ?? 7);
-    }
-    if (this._detectionOpacitySlider) {
-      this._detectionOpacitySlider.value = String(
-        defaults.detectionOutsideOpacityPct ?? 1,
-      );
-    }
-    this._applyDetectionFadeFromUi();
+    this._setDetectionFade({
+      fadePct: defaults.detectionFadePct ?? 7,
+      outsideOpacityPct: defaults.detectionOutsideOpacityPct ?? 1,
+    });
     if (typeof defaults.celestialRing === 'boolean') {
       this.setCelestialRingEnabled(defaults.celestialRing, {
         syncShare: false,
@@ -887,7 +873,7 @@ export class VisualSettings {
     return shareableDetectionState({
       owned: this._contactsDetectionRestore,
       liveMode: getDetectionMode(),
-      liveDensityPct: parseInt(this._detectionDensitySlider?.value || '50', 10),
+      liveDensityPct: this._detectionDensityPct,
     });
   }
 
@@ -911,11 +897,8 @@ export class VisualSettings {
         detectionMode: detection.mode,
         detectionDensity: detection.densityPct,
         detectionAllocation: getDetectionTuning().allocationStrategy,
-        detectionFadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-        detectionOutsideOpacityPct: parseInt(
-          this._detectionOpacitySlider?.value || '1',
-          10,
-        ),
+        detectionFadePct: this._detectionFadePct,
+        detectionOutsideOpacityPct: this._detectionOutsidePct,
         celestialRingEnabled: this.celestialRingEnabled,
         scopeEnabled: isScopeMaskEnabled(),
         scopeFeatherPct: Math.round(getScopeMaskFeather() * 100),
@@ -931,18 +914,12 @@ export class VisualSettings {
 
   getDetectionState() {
     const { getDetectionTuning, getDetectionMode } = this.services;
-    const pct = this._detectionDensitySlider
-      ? parseInt(this._detectionDensitySlider.value, 10)
-      : null;
     return {
       detectionMode: getDetectionMode(),
-      densityPct: pct,
+      densityPct: this._detectionDensityPct,
       allocationStrategy: getDetectionTuning().allocationStrategy,
-      fadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-      outsideOpacityPct: parseInt(
-        this._detectionOpacitySlider?.value || '0',
-        10,
-      ),
+      fadePct: this._detectionFadePct,
+      outsideOpacityPct: this._detectionOutsidePct,
     };
   }
 
@@ -1047,18 +1024,11 @@ export class VisualSettings {
     if (requestedAllocation) {
       this._setDetectionAllocation(requestedAllocation, { syncShare: false });
     }
-    if (fadePct != null && this._detectionFadeSlider) {
-      this._detectionFadeSlider.value = String(
-        Math.max(0, Math.min(40, Math.round(Number(fadePct)))),
-      );
-    }
-    if (outsideOpacityPct != null && this._detectionOpacitySlider) {
-      this._detectionOpacitySlider.value = String(
-        Math.max(0, Math.min(100, Math.round(Number(outsideOpacityPct)))),
-      );
-    }
     if (fadePct != null || outsideOpacityPct != null)
-      this._applyDetectionFadeFromUi();
+      this._setDetectionFade({
+        fadePct: fadePct ?? undefined,
+        outsideOpacityPct: outsideOpacityPct ?? undefined,
+      });
 
     if (
       requestedProfile &&
@@ -1067,10 +1037,7 @@ export class VisualSettings {
     ) {
       requestedDensity = defaultDensityForProfile(requestedProfile);
     }
-    if (requestedDensity != null && this._detectionDensitySlider) {
-      this._detectionDensitySlider.value = String(requestedDensity);
-      this._applyDetectionDensityFromUi();
-    }
+    if (requestedDensity != null) this._setDetectionDensity(requestedDensity);
 
     if (enabled === false || requestedProfile === 'OFF') {
       setDetectionModeByLabel('OFF');
@@ -1078,9 +1045,7 @@ export class VisualSettings {
       setDetectionModeByLabel(requestedProfile);
     } else if (enabled === true && getDetectionMode() === 'OFF') {
       setDetectionModeByLabel(
-        profileForDensity(
-          requestedDensity ?? this._detectionDensitySlider?.value ?? 50,
-        ),
+        profileForDensity(requestedDensity ?? this._detectionDensityPct),
       );
     }
     this._syncDetectionUiFromEngine();
@@ -1255,13 +1220,10 @@ export class VisualSettings {
       },
       detection: {
         mode: getDetectionMode(),
-        density: parseInt(this._detectionDensitySlider?.value || '50', 10),
+        density: this._detectionDensityPct,
         allocation: getDetectionTuning().allocationStrategy,
-        fadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-        outsideOpacityPct: parseInt(
-          this._detectionOpacitySlider?.value || '0',
-          10,
-        ),
+        fadePct: this._detectionFadePct,
+        outsideOpacityPct: this._detectionOutsidePct,
       },
       scope: {
         enabled: isScopeMaskEnabled(),
@@ -1328,36 +1290,23 @@ export class VisualSettings {
     }
 
     const detectionState = state.detection || {};
-    if (
-      typeof detectionState.density === 'number' &&
-      this._detectionDensitySlider
-    ) {
-      const pct = canonicalizeDensity(detectionState.density);
-      this._detectionDensitySlider.value = String(pct);
-      if (this._detectionDensityValue)
-        this._detectionDensityValue.textContent = `${pct}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof detectionState.density === 'number')
+      this._setDetectionDensity(detectionState.density);
     if (detectionState.allocation) {
       this._setDetectionAllocation(detectionState.allocation, {
         syncShare: false,
       });
     }
-    if (
-      typeof detectionState.fadePct === 'number' &&
-      this._detectionFadeSlider
-    ) {
-      this._detectionFadeSlider.value = String(detectionState.fadePct);
-    }
-    if (
-      typeof detectionState.outsideOpacityPct === 'number' &&
-      this._detectionOpacitySlider
-    ) {
-      this._detectionOpacitySlider.value = String(
-        detectionState.outsideOpacityPct,
-      );
-    }
-    this._applyDetectionFadeFromUi();
+    this._setDetectionFade({
+      fadePct:
+        typeof detectionState.fadePct === 'number'
+          ? detectionState.fadePct
+          : undefined,
+      outsideOpacityPct:
+        typeof detectionState.outsideOpacityPct === 'number'
+          ? detectionState.outsideOpacityPct
+          : undefined,
+    });
     if (detectionState.mode) {
       this._setDetectionMode(detectionState.mode);
     }
@@ -1452,15 +1401,8 @@ export class VisualSettings {
     if (preset.detectionMode) {
       this._setDetectionMode(preset.detectionMode);
     }
-    if (
-      typeof preset.detectionDensity === 'number' &&
-      this._detectionDensitySlider
-    ) {
-      const density = canonicalizeDensity(preset.detectionDensity);
-      this._detectionDensitySlider.value = String(density);
-      this._detectionDensityValue.textContent = `${density}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof preset.detectionDensity === 'number')
+      this._setDetectionDensity(preset.detectionDensity);
     if (preset.detectionAllocation) {
       this._setDetectionAllocation(preset.detectionAllocation, {
         syncShare: false,
@@ -1653,49 +1595,8 @@ export class VisualSettings {
   }
 
   _updateDetectionButton(modeLabel) {
-    const btn = this._detectionBtn;
-    const enabled = modeLabel !== 'OFF';
-    btn.setAttribute('aria-pressed', String(enabled));
-    btn.setAttribute(
-      'aria-label',
-      enabled
-        ? t('Detection overlay: {mode}', {
-            mode: String(modeLabel).toLowerCase(),
-          })
-        : t('Detection overlay: off'),
-    );
-    btn.classList.remove('active', 'god', 'panoptic');
-    if (modeLabel === 'SPARSE') {
-      btn.querySelector('.pp-label').textContent = t('SPARSE');
-      btn.classList.add('active');
-    } else if (modeLabel === 'BALANCED') {
-      btn.querySelector('.pp-label').textContent = t('BALANCED');
-      btn.classList.add('active');
-    } else if (modeLabel === 'DENSE') {
-      btn.querySelector('.pp-label').textContent = t('DENSE');
-      btn.classList.add('active', 'panoptic');
-    } else {
-      btn.querySelector('.pp-label').textContent = t('DETECT');
-    }
-
-    if (this._detectionSliderRow) {
-      this._detectionSliderRow.classList.toggle('visible', modeLabel !== 'OFF');
-    }
-    if (this._detectionAllocationRow) {
-      this._detectionAllocationRow.classList.toggle(
-        'visible',
-        modeLabel !== 'OFF',
-      );
-    }
-    if (this._detectionFadeRow) {
-      this._detectionFadeRow.classList.toggle('visible', modeLabel !== 'OFF');
-    }
-    if (this._detectionOpacityRow) {
-      this._detectionOpacityRow.classList.toggle(
-        'visible',
-        modeLabel !== 'OFF',
-      );
-    }
+    this._detectionModeLabel = modeLabel;
+    this._publishDisplay();
     this._layoutRightPanels();
   }
   stop() {

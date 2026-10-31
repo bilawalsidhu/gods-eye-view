@@ -93,7 +93,7 @@ function styleOwner(t, initialVariant = 'cyber') {
     '_syncCockpitInheritedStyle',
     '_syncCyberSonarControl',
     '_scheduleAdaptivePanelLayout',
-    '_applyDetectionFadeFromUi',
+    '_setDetectionFade',
     // Intensities: the fixture has no post-process stages to drive.
     '_setBloomIntensity',
     '_setSharpenIntensity',

@@ -2,7 +2,6 @@ import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { createFrameRateMonitor } from './frameRateMonitor.js';
 import { bindApplicationShortcuts } from './visualInput.js';
 import { bindDisplayControls, syncScopeControls } from './displayControls.js';
-import { canonicalizeDensity } from '../data/detectionPolicy.js';
 
 /** Own keyboard/display event subscriptions; settings remain with their state owners. */
 export class DisplayBindings {
@@ -44,9 +43,6 @@ export class DisplayBindings {
   }
   get _models3dModeBtns() {
     return this.readState()._models3dModeBtns;
-  }
-  get _detectionAllocationBtns() {
-    return this.readState()._detectionAllocationBtns;
   }
   _initUI() {
     const {
@@ -121,7 +117,8 @@ export class DisplayBindings {
         densitySlider: this._detectionDensitySlider,
         detectionButton: this._detectionBtn,
         allocationButtons: this._detectionAllocationBtns,
-        fadeSliders: [this._detectionFadeSlider, this._detectionOpacitySlider],
+        fadeSlider: this._detectionFadeSlider,
+        outsideOpacitySlider: this._detectionOpacitySlider,
         celestialButton: this._celestialBtn,
         modelsButton: this._models3dBtn,
         modelModeButtons: this._models3dBtn ? this._models3dModeBtns : [],
@@ -167,11 +164,7 @@ export class DisplayBindings {
         setDensity: (value) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this.claimDetection();
-          const pct = canonicalizeDensity(value);
-          this._detectionDensitySlider.value = String(pct);
-          if (this._detectionDensityValue)
-            this._detectionDensityValue.textContent = `${pct}%`;
-          this._applyDetectionDensityFromUi();
+          this._setDetectionDensity(value);
           this._syncShareState();
         },
         setAllocation: (value) => {
@@ -179,9 +172,14 @@ export class DisplayBindings {
           this.claimDetection();
           this._setDetectionAllocation(value);
         },
-        setFade: () => {
+        setFade: (fadePct) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
-          this._applyDetectionFadeFromUi();
+          this._setDetectionFade({ fadePct });
+          this._syncShareState();
+        },
+        setOutsideOpacity: (outsideOpacityPct) => {
+          this.shareLinkManager?.claimRestoreLane?.('visual');
+          this._setDetectionFade({ outsideOpacityPct });
           this._syncShareState();
         },
         toggleCelestial: () => {

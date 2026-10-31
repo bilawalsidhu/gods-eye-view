@@ -121,3 +121,87 @@ test('a publish never rewrites a slider the user is dragging', async (t) => {
   assert.equal(writes, 0);
   assert.equal(slider.value, '30');
 });
+
+/** VisualSettings with a stand-in detection engine. */
+function detectionSettings(store) {
+  const { owner } = settings(store);
+  const engine = {
+    mode: 'OFF',
+    tuning: { densityPct: 50, allocationStrategy: 'ELASTIC' },
+    fade: { fadeRatio: 0.07, outsideOpacity: 0.01 },
+  };
+  Object.assign(owner, {
+    _detectionDensityPct: 50,
+    _detectionFadePct: 7,
+    _detectionOutsidePct: 1,
+    _detectionModeLabel: null,
+    _detectionAllocationShown: null,
+    viewer: { scene: { requestRender() {} } },
+  });
+  owner.services = {
+    ...owner.services,
+    getDetectionMode: () => engine.mode,
+    setDetectionModeByLabel: (label) => {
+      engine.mode = label;
+    },
+    getDetectionTuning: () => ({ ...engine.tuning }),
+    setDetectionTuning: (next) => Object.assign(engine.tuning, next),
+    getKeyholeFadeTuning: () => ({ ...engine.fade }),
+    setKeyholeFadeTuning: (next) => Object.assign(engine.fade, next),
+  };
+  return { owner, engine };
+}
+
+test('detection renders its mode, rows, sliders and allocation', async (t) => {
+  const { store, $ } = fixture(t);
+  const { owner, engine } = detectionSettings(store);
+  const button = $('detection-toggle');
+  assert.equal(button.querySelector('.pp-label').textContent, 'DETECT');
+  assert.equal(button.getAttribute('aria-label'), 'Detection overlay');
+
+  owner._setDetectionMode('DENSE');
+  owner._setDetectionDensity(80);
+  await nextTick();
+  assert.equal(button.querySelector('.pp-label').textContent, 'DENSE');
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+  assert.equal(button.getAttribute('aria-label'), 'Detection overlay: dense');
+  assert.equal(button.className, 'pp-toggle-btn active panoptic');
+  for (const id of [
+    'detection-slider-row',
+    'detection-allocation-row',
+    'detection-fade-row',
+    'detection-opacity-row',
+  ])
+    assert.equal($(id).classList.contains('visible'), true, id);
+  assert.equal($('detection-density-slider').value, '75', 'nearest stop');
+  assert.equal($('detection-density-value').textContent, '75%');
+  assert.equal(engine.tuning.densityPct, 75);
+
+  owner._setDetectionFade({ fadePct: 55 });
+  owner._setDetectionAllocation('weighted', { persist: false });
+  await nextTick();
+  assert.equal($('detection-fade-slider').value, '40', 'clamped to 40');
+  assert.equal($('detection-fade-value').textContent, '40%');
+  assert.equal($('detection-opacity-value').textContent, '1%', 'kept');
+  assert.equal(engine.fade.fadeRatio, 0.4);
+  const weighted = $('detection-allocation-weighted');
+  const elastic = $('detection-allocation-elastic');
+  assert.equal(weighted.classList.contains('active'), true);
+  assert.equal(weighted.getAttribute('aria-checked'), 'true');
+  assert.equal(elastic.classList.contains('active'), false);
+  assert.equal(elastic.getAttribute('aria-checked'), 'false');
+  assert.deepEqual(owner.getDetectionState(), {
+    detectionMode: 'DENSE',
+    densityPct: 75,
+    allocationStrategy: 'WEIGHTED',
+    fadePct: 40,
+    outsideOpacityPct: 1,
+  });
+
+  owner._setDetectionMode('OFF');
+  await nextTick();
+  assert.equal(button.querySelector('.pp-label').textContent, 'DETECT');
+  assert.equal(button.getAttribute('aria-label'), 'Detection overlay: off');
+  assert.equal(button.className, 'pp-toggle-btn');
+  assert.equal($('detection-slider-row').classList.contains('visible'), false);
+});

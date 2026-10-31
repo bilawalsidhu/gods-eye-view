@@ -28,22 +28,17 @@ export function readShellElements(document = globalThis.document) {
     ),
     _cyberSonarSector: document.getElementById('cyber-sonar-sector'),
     _cyberSonarSectorValue: document.getElementById('cyber-sonar-sector-value'),
-    _detectionSliderRow: document.getElementById('detection-slider-row'),
     _detectionDensitySlider: document.getElementById(
       'detection-density-slider',
     ),
-    _detectionDensityValue: document.getElementById('detection-density-value'),
-    _detectionAllocationRow: document.getElementById(
-      'detection-allocation-row',
-    ),
-    _detectionFadeRow: document.getElementById('detection-fade-row'),
+    _detectionAllocationBtns: [
+      document.getElementById('detection-allocation-elastic'),
+      document.getElementById('detection-allocation-weighted'),
+    ].filter(Boolean),
     _detectionFadeSlider: document.getElementById('detection-fade-slider'),
-    _detectionFadeValue: document.getElementById('detection-fade-value'),
-    _detectionOpacityRow: document.getElementById('detection-opacity-row'),
     _detectionOpacitySlider: document.getElementById(
       'detection-opacity-slider',
     ),
-    _detectionOpacityValue: document.getElementById('detection-opacity-value'),
     _celestialBtn: document.getElementById('celestial-toggle'),
     _scopeBtn: document.getElementById('scope-toggle'),
     _scopeFeatherSlider: document.getElementById('scope-feather-slider'),

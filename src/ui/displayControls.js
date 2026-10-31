@@ -65,7 +65,8 @@ export function bindDisplayControls({ elements, actions }) {
     });
     removers.push(() => control.destroy());
   }
-  for (const el of elements.fadeSliders || []) listen(el, 'input', 'setFade');
+  listen(elements.fadeSlider, 'input', 'setFade', integer);
+  listen(elements.outsideOpacitySlider, 'input', 'setOutsideOpacity', integer);
   return {
     destroy() {
       for (const remove of removers.splice(0)) remove();

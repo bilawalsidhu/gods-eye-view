@@ -209,17 +209,6 @@ export class StyleManager extends ShellFacade {
       elements: {
         _celestialBtn: this._celestialBtn,
         _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
-        _detectionAllocationRow: this._detectionAllocationRow,
-        _detectionBtn: this._detectionBtn,
-        _detectionDensitySlider: this._detectionDensitySlider,
-        _detectionDensityValue: this._detectionDensityValue,
-        _detectionFadeRow: this._detectionFadeRow,
-        _detectionFadeSlider: this._detectionFadeSlider,
-        _detectionFadeValue: this._detectionFadeValue,
-        _detectionOpacityRow: this._detectionOpacityRow,
-        _detectionOpacitySlider: this._detectionOpacitySlider,
-        _detectionOpacityValue: this._detectionOpacityValue,
-        _detectionSliderRow: this._detectionSliderRow,
         _hudBtn: this._hudBtn,
         _cyberSonarBtn: this._cyberSonarBtn,
         _cyberSonarRings: this._cyberSonarRings,
@@ -507,7 +496,7 @@ export class StyleManager extends ShellFacade {
     );
     initTrackedReadout(viewer);
     setDetectionStyle(this.activeStyle);
-    this._applyDetectionDensityFromUi();
+    this._setDetectionDensity();
 
     this._initStages();
     this._initBloomSharpen();
@@ -541,10 +530,10 @@ export class StyleManager extends ShellFacade {
         _detectionBtn: this._detectionBtn,
         _detectionFadeSlider: this._detectionFadeSlider,
         _detectionOpacitySlider: this._detectionOpacitySlider,
+        _detectionAllocationBtns: this._detectionAllocationBtns,
         _celestialBtn: this._celestialBtn,
         _models3dBtn: this._models3dBtn,
         _scopeFeatherValue: this._scopeFeatherValue,
-        _detectionDensityValue: this._detectionDensityValue,
       },
       operations: {
         setStyle: (...args) => this.setStyle(...args),
@@ -560,12 +549,10 @@ export class StyleManager extends ShellFacade {
         _setHudVariant: (...args) => this._setHudVariant(...args),
         _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
         _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
-        _applyDetectionDensityFromUi: (...args) =>
-          this._applyDetectionDensityFromUi(...args),
+        _setDetectionDensity: (...args) => this._setDetectionDensity(...args),
         _setDetectionAllocation: (...args) =>
           this._setDetectionAllocation(...args),
-        _applyDetectionFadeFromUi: (...args) =>
-          this._applyDetectionFadeFromUi(...args),
+        _setDetectionFade: (...args) => this._setDetectionFade(...args),
         setCelestialRingEnabled: (...args) =>
           this.setCelestialRingEnabled(...args),
         _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
@@ -581,7 +568,6 @@ export class StyleManager extends ShellFacade {
         celestialRingEnabled: this.celestialRingEnabled,
         _models3dEnabled: this._models3dEnabled,
         _models3dModeBtns: this._models3dModeBtns,
-        _detectionAllocationBtns: this._detectionAllocationBtns,
       }),
       claimDetection: () => {
         this._visualSettings._detectionUserOverridden = true;

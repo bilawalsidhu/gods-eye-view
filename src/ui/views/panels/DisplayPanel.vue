@@ -1,12 +1,22 @@
 <script setup>
 import { storeToRefs } from 'pinia';
+import { computed } from 'vue';
+import { t } from '../../../i18n/index.js';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import { useDisplayStore } from '../../stores/display.js';
 
-// The Display panel. VisualSettings presents bloom and sharpen and
-// publishes them; until it does, the panel shows its initial markup. The
-// other groups keep their owners' element bindings.
+// The Display panel. VisualSettings presents bloom, sharpen and detection
+// and publishes them; until it does, the panel shows its initial markup.
+// The other groups keep their owners' element bindings.
 const { view } = storeToRefs(useDisplayStore());
+const pct = (value) => `${value}%`;
+const detection = computed(() => view.value?.detection ?? null);
+const detectButton = computed(() => detection.value?.button ?? null);
+const allocation = computed(() => detection.value?.allocation ?? 'ELASTIC');
+const allocationSegment = (value) => ({
+  class: { active: allocation.value === value },
+  'aria-checked': String(allocation.value === value),
+});
 </script>
 
 <template>
@@ -63,31 +73,31 @@ const { view } = storeToRefs(useDisplayStore());
     </div>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" id="detection-toggle" title="Detection Overlay (D)" aria-label="Detection overlay" aria-pressed="false" data-i18n-title data-i18n-aria-label>
+    <button class="pp-toggle-btn" :class="{ active: detectButton?.active, panoptic: detectButton?.panoptic }" id="detection-toggle" title="Detection Overlay (D)" :aria-label="detectButton?.ariaLabel ?? t('Detection overlay')" :aria-pressed="String(detectButton?.pressed ?? false)" data-i18n-title>
       <span class="pp-icon">&#x25A3;</span>
-      <span class="pp-label" data-i18n>DETECT</span>
+      <span class="pp-label">{{ detectButton?.label ?? t('DETECT') }}</span>
     </button>
-    <div class="pp-slider-row detection-slider-row" id="detection-slider-row">
+    <div class="pp-slider-row detection-slider-row" :class="{ visible: detection?.rowsVisible }" id="detection-slider-row">
       <label class="pp-slider-mini-label" for="detection-density-slider" data-i18n>Density</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-density-slider" min="0" max="100" step="25" value="50" aria-label="Detection label density" data-i18n-aria-label />
-      <span class="pp-slider-value" id="detection-density-value">50%</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-density-slider" min="0" max="100" step="25" value="50" v-range-value="detection?.densityPct ?? 50" aria-label="Detection label density" data-i18n-aria-label />
+      <span class="pp-slider-value" id="detection-density-value">{{ pct(detection?.densityPct ?? 50) }}</span>
     </div>
-    <div class="pp-slider-row detection-allocation-row" id="detection-allocation-row">
+    <div class="pp-slider-row detection-allocation-row" :class="{ visible: detection?.rowsVisible }" id="detection-allocation-row">
       <span class="pp-slider-mini-label" data-i18n>Allocation</span>
       <div class="gev-segmented pp-mode-seg detection-allocation-seg" role="radiogroup" aria-label="Detection label allocation" data-i18n-aria-label>
-        <button class="gev-segment pp-mode-btn active" id="detection-allocation-elastic" data-allocation="ELASTIC" role="radio" aria-checked="true" data-i18n>Elastic</button>
-        <button class="gev-segment pp-mode-btn" id="detection-allocation-weighted" data-allocation="WEIGHTED" role="radio" aria-checked="false" data-i18n>Weighted</button>
+        <button class="gev-segment pp-mode-btn" v-bind="allocationSegment('ELASTIC')" id="detection-allocation-elastic" data-allocation="ELASTIC" role="radio" data-i18n>Elastic</button>
+        <button class="gev-segment pp-mode-btn" v-bind="allocationSegment('WEIGHTED')" id="detection-allocation-weighted" data-allocation="WEIGHTED" role="radio" data-i18n>Weighted</button>
       </div>
     </div>
-    <div class="pp-slider-row detection-fade-row" id="detection-fade-row">
+    <div class="pp-slider-row detection-fade-row" :class="{ visible: detection?.rowsVisible }" id="detection-fade-row">
       <label class="pp-slider-mini-label" for="detection-fade-slider" data-i18n>Fade</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-fade-slider" min="0" max="40" step="1" value="7" aria-label="Detection fade distance" title="World-overlay fade distance outside the keyhole as a percentage of its radius" data-i18n-aria-label data-i18n-title />
-      <span class="pp-slider-value" id="detection-fade-value">7%</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-fade-slider" min="0" max="40" step="1" value="7" v-range-value="detection?.fadePct ?? 7" aria-label="Detection fade distance" title="World-overlay fade distance outside the keyhole as a percentage of its radius" data-i18n-aria-label data-i18n-title />
+      <span class="pp-slider-value" id="detection-fade-value">{{ pct(detection?.fadePct ?? 7) }}</span>
     </div>
-    <div class="pp-slider-row detection-opacity-row" id="detection-opacity-row">
+    <div class="pp-slider-row detection-opacity-row" :class="{ visible: detection?.rowsVisible }" id="detection-opacity-row">
       <label class="pp-slider-mini-label" for="detection-opacity-slider" data-i18n>Outside</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-opacity-slider" min="0" max="100" step="1" value="1" aria-label="Detection opacity outside the keyhole" title="World-overlay label and card opacity beyond the fade distance" data-i18n-aria-label data-i18n-title />
-      <span class="pp-slider-value" id="detection-opacity-value">1%</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-opacity-slider" min="0" max="100" step="1" value="1" v-range-value="detection?.outsideOpacityPct ?? 1" aria-label="Detection opacity outside the keyhole" title="World-overlay label and card opacity beyond the fade distance" data-i18n-aria-label data-i18n-title />
+      <span class="pp-slider-value" id="detection-opacity-value">{{ pct(detection?.outsideOpacityPct ?? 1) }}</span>
     </div>
   </div>
   <!-- The one shared preset-parameter surface is inserted here at runtime. -->
@@ -180,7 +190,7 @@ const { view } = storeToRefs(useDisplayStore());
     </button>
     <div class="pp-slider-row" :class="{ visible: view?.bloom.active }" id="bloom-slider-row">
       <input type="range" class="gev-quantitative-slider pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" v-range-value="view?.bloom.intensity ?? 0" aria-label="Bloom intensity" data-i18n-aria-label />
-      <span class="pp-slider-value" id="bloom-intensity-value">{{ view?.bloom.text ?? '0%' }}</span>
+      <span class="pp-slider-value" id="bloom-intensity-value">{{ pct(view?.bloom.intensity ?? 0) }}</span>
     </div>
   </div>
   <div class="pp-toggle-group">
@@ -190,7 +200,7 @@ const { view } = storeToRefs(useDisplayStore());
     </button>
     <div class="pp-slider-row" :class="{ visible: view?.sharpen.active }" id="sharpen-slider-row">
       <input type="range" class="gev-quantitative-slider pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" v-range-value="view?.sharpen.intensity ?? 49" aria-label="Sharpen intensity" data-i18n-aria-label />
-      <span class="pp-slider-value" id="sharpen-intensity-value">{{ view?.sharpen.text ?? '49%' }}</span>
+      <span class="pp-slider-value" id="sharpen-intensity-value">{{ pct(view?.sharpen.intensity ?? 49) }}</span>
     </div>
   </div>
 </div>
