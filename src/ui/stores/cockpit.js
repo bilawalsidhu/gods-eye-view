@@ -5,7 +5,8 @@ import { markRaw, shallowRef } from 'vue';
  * Cockpit content as its views render it. The Cockpit controller presents
  * the briefing card's pages, cycle toggle, regional news and local
  * conditions, the Contact card's readouts and weather toggle, the
- * instruments, the flight plan and the vision selector, and publishes them
+ * instruments, the flight plan, the vision selector and the signal rows,
+ * and publishes them
  * here; it keeps the controls' listeners.
  */
 export const useCockpitStore = defineStore('gev-cockpit', () => {
@@ -49,6 +50,14 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
     vision.value = next && markRaw(next);
   }
 
+  /** The presented signal rows; null until the controller first presents them. */
+  const signals = shallowRef(null);
+
+  /** @param {?object[]} next A fresh presentation of the signal rows. */
+  function publishSignals(next) {
+    signals.value = next && markRaw(next);
+  }
+
   return {
     brief,
     publishBrief,
@@ -60,5 +69,7 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
     publishRoute,
     vision,
     publishVision,
+    signals,
+    publishSignals,
   };
 });

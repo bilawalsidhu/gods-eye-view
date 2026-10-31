@@ -1,15 +1,15 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import { createBriefState } from '../../cockpitBriefPages.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import CockpitRoute from './CockpitRoute.vue';
+import CockpitSignalList from './CockpitSignalList.vue';
 
 // The Cockpit briefing card. The Cockpit controller presents its pages,
 // cycle toggle, regional news and local conditions; until it does, the card
 // shows the state it starts in. The controls keep the controller's
-// listeners. The route card renders itself; the signal list keeps its
-// owner's bindings, so nothing here binds it.
+// listeners. The route card and the signal rows render themselves.
 const { brief } = storeToRefs(useCockpitStore());
 const initial = createBriefState();
 const b = computed(() => brief.value ?? initial);
@@ -18,10 +18,21 @@ const streamState = computed(() => ({
   'data-brief-page': brief.value?.pageId,
   'data-regional-status': brief.value?.regionalStatus || undefined,
 }));
+// A departed contact cannot stay selectable. Its row hands focus to the
+// shown page's tab, which stays, so keyboard traversal carries on from the
+// card's footer instead of the top of the page.
+const stream = useTemplateRef('stream');
+function leaveSignals() {
+  const card = stream.value;
+  (
+    card?.querySelector(`[data-cockpit-brief-index="${b.value.pageIndex}"]`) ??
+    card?.querySelector('#cockpit-signal-toggle')
+  )?.focus({ preventScroll: true });
+}
 </script>
 
 <template>
-  <aside id="cockpit-signal-stream" class="cockpit-signal-window" aria-label="Cockpit briefing carousel" hidden data-i18n-aria-label v-bind="streamState">
+  <aside id="cockpit-signal-stream" class="cockpit-signal-window" aria-label="Cockpit briefing carousel" hidden data-i18n-aria-label v-bind="streamState" ref="stream">
     <CockpitRoute />
     <header class="cockpit-signal-header">
       <div class="cockpit-brief-heading">
@@ -44,7 +55,7 @@ const streamState = computed(() => ({
     </header>
     <div class="cockpit-brief-stage">
       <section data-cockpit-brief-page="signals" aria-label="Live signals" data-i18n-aria-label :hidden="b.pageId !== 'signals'">
-        <ol id="cockpit-signal-list" class="cockpit-signal-list" aria-live="polite"></ol>
+        <CockpitSignalList :leave="leaveSignals" />
       </section>
       <section data-cockpit-brief-page="news" aria-label="Latest regional news" data-i18n-aria-label :hidden="b.pageId !== 'news'">
         <div id="cockpit-news-status" class="cockpit-brief-status" :hidden="b.news.statusHidden" :data-state="b.news.state ?? undefined">{{ b.news.status }}</div>

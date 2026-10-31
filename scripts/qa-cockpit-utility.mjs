@@ -2168,33 +2168,34 @@ try {
     JSON.stringify(contextTransition),
   );
   // Use the real connected DOM to catch focus loss caused by moving live rows.
-  const signalFocus = await page.evaluate(() => {
+  const signalFocus = await page.evaluate(async () => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    // The rows render on Vue's next update; a frame is past it.
+    const show = async (items) => {
+      cockpit.signalItems = items;
+      cockpit.publishCockpitSignals();
+      await new Promise(requestAnimationFrame);
+    };
     const originalItems = cockpit.signalItems;
     const wasCollapsed = cockpit.signalCollapsed;
     cockpit.setSignalCollapsed(false);
     const item = (id) => ({ key: `qa-${id}`, tone: 'info', timestamp: Date.now(),
       title: `QA ${id}`, detail: 'Keyboard refresh fixture', target: { layerId: 'flights', id } });
     try {
-      cockpit.signalItems = [item('focus-a'), item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-a'), item('focus-b')]);
       const button = cockpit.signalList.querySelector('[data-signal-id="focus-a"]');
       button.focus();
       const acquired = document.activeElement === button;
-      cockpit.signalItems = [item('focus-c'), item('focus-b'), item('focus-a')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-c'), item('focus-b'), item('focus-a')]);
       const retained = document.activeElement === button && button.isConnected;
       const order = [...cockpit.signalList.querySelectorAll('[data-signal-id]')].map((node) => node.dataset.signalId);
-      cockpit.signalItems = [item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-b')]);
       const continuation = cockpit.briefTabs[cockpit.briefPageIndex] || cockpit.signalToggle;
       const continued = document.activeElement === continuation;
-      cockpit.signalItems = [item('focus-a'), item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-a'), item('focus-b')]);
       return { acquired, retained, order, continued, notReclaimed: document.activeElement === continuation };
     } finally {
-      cockpit.signalItems = originalItems;
-      cockpit.renderCockpitSignals();
+      await show(originalItems);
       cockpit.setSignalCollapsed(wasCollapsed);
     }
   });

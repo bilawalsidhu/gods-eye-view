@@ -240,22 +240,6 @@ test('an unchanged position publishes nothing new', (t) => {
   assert.equal(views.length, 1);
 });
 
-test('re-renders leave the signal rows the controller owns', async (t) => {
-  const { $, text, owner } = fixture(t);
-  const list = $('#cockpit-signal-list');
-  const row = document.createElement('li');
-  row.textContent = 'N123AB';
-  list.append(row);
-  $('#cockpit-signal-stream').hidden = false;
-  showBriefPage.call(owner, 2);
-  renderRegionalBriefStatus.call(owner, 'loading', INFO);
-  await nextTick();
-  assert.equal($('#cockpit-signal-list') === list, true);
-  assert.equal(list.firstElementChild === row, true);
-  assert.equal(text('#cockpit-signal-list'), 'N123AB');
-  assert.equal($('#cockpit-signal-stream').hidden, false);
-});
-
 test('the route card sits in the briefing card, hidden until a route', (t) => {
   const { $ } = fixture(t);
   const route = $('#cockpit-signal-stream > #cockpit-route');

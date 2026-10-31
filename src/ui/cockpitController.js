@@ -41,7 +41,7 @@ import {
 } from './cockpitBriefing.js';
 import {
   handleSignalClick,
-  renderCockpitSignals,
+  publishCockpitSignals,
   pushCockpitSignal,
   updateCockpitSignals,
 } from './cockpitSignals.js';
@@ -139,6 +139,7 @@ export class CockpitViewController {
     this.publishInstruments = publish.instruments ?? (() => {});
     this.publishRoute = publish.route ?? (() => {});
     this.publishVision = publish.vision ?? (() => {});
+    this.publishSignals = publish.signals ?? (() => {});
     this.instruments = createInstrumentState();
     this.routeView = createRouteState();
     this.routeSignature = null;
@@ -332,8 +333,8 @@ export class CockpitViewController {
   renderRegionalBrief(payload, info) {
     return renderRegionalBrief.call(this, payload, info);
   }
-  renderCockpitSignals() {
-    return renderCockpitSignals.call(this);
+  publishCockpitSignals() {
+    return publishCockpitSignals.call(this);
   }
   pushCockpitSignal(key, tone, title, detail, target) {
     return pushCockpitSignal.call(this, key, tone, title, detail, target);

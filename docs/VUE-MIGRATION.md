@@ -136,14 +136,15 @@ They contain no application state.
    starting from `cockpitBriefPages.js`, `cockpitContextState.js` and
    `cockpitInstrumentState.js`, which both read; the odometer readouts
    (`CockpitRollingValue`) keep their throttle and roll in
-   `cockpitRollingValue.js`. The instruments publish on every HUD update
-   (about 10 Hz); in a dev build their Vue patch costs about 0.5 ms, close
-   to the DOM writes it replaced. The controls keep the controller's
-   listeners, and the cards' visibility, collapse and layout stay with the
-   controller. The signal rows and the radio controls follow; the signal
-   rows become a
-   component that keeps their focus-safe reorder, since a keyed Vue list
-   would move the focused row and drop focus several times a second).
+   `cockpitRollingValue.js`. `CockpitSignalList` renders the live signal
+   rows; `v-focus-safe-children` turns Vue's move of the focused row into
+   moves of the rows around it, and hands focus to the shown briefing tab
+   before the focused row is removed, so a keyed list reorders several times
+   a second without dropping keyboard focus. The instruments publish on
+   every HUD update (about 10 Hz); in a dev build their Vue patch costs
+   about 0.5 ms, close to the DOM writes it replaced. The controls keep the
+   controller's listeners, and the cards' visibility, collapse and layout
+   stay with the controller. The radio controls follow).
    Layers that write into the right rail directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion and the attribute
