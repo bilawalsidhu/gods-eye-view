@@ -203,6 +203,7 @@
       "server/providers/cctv/groundHeights.js",
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/lithuania.js",
+      "server/providers/cctv/mndot.js",
       "server/providers/cctv/taiwan.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",

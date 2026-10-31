@@ -1324,6 +1324,33 @@ the low-confidence heading prior. `CCTV_TAIWAN_ENABLED=0` disables the pack;
 `CCTV_TAIWAN_URL` overrides the table URL.
 Gate: `src/data/cctvTaiwan.test.mjs`.
 
+## MnDOT CCTV source pack
+
+The CCTV catalog includes Minnesota DOT cameras statewide. One keyless request
+reads MnDOT's IRIS public camera list (`data.dot.state.mn.us/iris/camera_pub`,
+~1,800 cameras). The request refuses redirects and has a 15-second deadline and
+a 2 MiB response cap. A camera is kept only when the list marks both `publish`
+and `streamable` as literal `true` and its coordinates fall inside Minnesota.
+Cameras are deduplicated by name, ignoring case. The list has no URL field, so each still is
+rebuilt from the validated camera name on the fixed origin
+`https://video.dot.state.mn.us/video/image/metro/<camera>?size=l`. That path
+also serves outstate cameras. The servlet requires `size` and returns its
+native 720×480 frame whatever size is asked for. Names come from MnDOT's
+location text (for example "T.H.36 WB @ Cleveland Ave"), cleaned and capped at
+160 characters. Headings use the carriageway direction (NB/SB/EB/WB) as a
+low-confidence prior, because MnDOT's cameras pan. Other values use the shared
+id-hash prior.
+
+Cameras are ordered nearest downtown Minneapolis and St Paul first.
+`CCTV_MNDOT_MAX_SOURCES` sets the pack cap (default 1,000, bounded to 1–2000).
+The pack shares the 4,000 catalog-wide ceiling round-robin with the other
+packs, so in a default install that share, not the pack cap, decides how many
+load, nearest the two downtowns first. Loading every camera also needs a higher
+`CCTV_MAX_SOURCES` and other packs lowered or switched off. A failed list contributes an empty pack until the next catalog
+refresh. `CCTV_MNDOT_ENABLED=0` disables the pack, and `CCTV_MNDOT_URL`
+overrides the list URL.
+Gate: `src/data/cctvMndot.test.mjs`.
+
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the
@@ -3898,7 +3925,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + MnDOT (MN) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |

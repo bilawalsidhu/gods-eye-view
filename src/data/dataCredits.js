@@ -267,6 +267,13 @@ export const DATA_CREDITS = [
       '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, Taiwan (Version 1.0)</a>',
   },
   {
+    key: 'mndot-cctv',
+    html:
+      'Traffic camera stills (Minnesota): ' +
+      '<a href="https://www.dot.state.mn.us/" target="_blank" rel="noopener">Minnesota Department of Transportation (MnDOT)</a>, ' +
+      'public camera data from the MnDOT IRIS system',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
