@@ -39,10 +39,14 @@ export function bindPanelDisclosure({
   return { destroy: () => scope.destroy() };
 }
 
-/** Close the nearest expanded panel and return focus to its disclosure. */
+/**
+ * Close the nearest expanded panel and return focus to its disclosure, or to
+ * `returnFocusTo()` when that names a control (a rail item standing in for a
+ * panel that collapsing hid).
+ */
 export function collapsePanelOnEscape(
   event,
-  { panel, onChange, beforeCollapse },
+  { panel, onChange, beforeCollapse, returnFocusTo },
 ) {
   if (event.key !== 'Escape' || event.defaultPrevented) return false;
   if (
@@ -59,6 +63,11 @@ export function collapsePanelOnEscape(
   event.stopPropagation();
   beforeCollapse?.();
   onChange(true, { explicit: true });
+  const stand = returnFocusTo?.();
+  if (stand) {
+    stand.focus?.({ preventScroll: true });
+    return true;
+  }
   const disclosure =
     panel.querySelector(`[data-dock-toggle-target="${panel.id}"]`) ||
     panel.querySelector(`[data-collapse-target="${panel.id}"]`);

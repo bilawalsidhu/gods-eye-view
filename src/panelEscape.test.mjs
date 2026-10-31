@@ -42,7 +42,7 @@ function panelFixture({ id = 'data-panel', nested = false, nestedCollapsed = fal
     disclosure.closest = () => panel;
   }
   const document = { getElementById: (candidate) => candidate === id ? panel : null };
-  const manager = new Function('document', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_initCommandDockPins')}};`)(document, collapsePanelOnEscape);
+  const manager = new Function('document', 'getComputedStyle', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_initCommandDockPins')}};`)(document, (el) => ({ visibility: el.visibility ?? 'visible' }), collapsePanelOnEscape);
   manager.setPanelCollapsed = (candidate, value, options) => {
     assert.equal(candidate, id);
     assert.equal(value, true);
@@ -55,7 +55,7 @@ function panelFixture({ id = 'data-panel', nested = false, nestedCollapsed = fal
     stopPropagation() { this.propagationStopped = true; },
   };
   return {
-    manager, panel, inner, target, event,
+    manager, panel, inner, target, event, document,
     collapsed: () => collapsed,
     focused: () => focused,
     blurred: () => blurred,
@@ -69,6 +69,41 @@ test('Escape collapses an expanded panel and returns focus to its disclosure', (
   assert.equal(fixture.focused(), true);
   assert.equal(fixture.event.defaultPrevented, true);
   assert.equal(fixture.event.propagationStopped, true);
+});
+
+test('Escape hands focus to the rail item when collapsing hides the panel', () => {
+  const fixture = panelFixture();
+  let railFocused = false;
+  const railItem = {
+    disabled: false,
+    getClientRects: () => [{}],
+    focus: () => { railFocused = true; },
+  };
+  fixture.panel.getClientRects = () => (fixture.collapsed() ? [] : [{}]);
+  fixture.document.querySelector = (selector) => {
+    assert.equal(selector, '.ui-rail [data-rail-item="data-panel"]');
+    return railItem;
+  };
+  assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'data-panel'), true);
+  assert.equal(fixture.collapsed(), true);
+  assert.equal(railFocused, true);
+  assert.equal(fixture.focused(), false, 'not the hidden disclosure');
+});
+
+test('Escape keeps the disclosure path when the rail is hidden', () => {
+  const fixture = panelFixture();
+  let railFocused = false;
+  const railItem = {
+    disabled: false,
+    visibility: 'hidden',
+    getClientRects: () => [{}],
+    focus: () => { railFocused = true; },
+  };
+  fixture.panel.getClientRects = () => (fixture.collapsed() ? [] : [{}]);
+  fixture.document.querySelector = () => railItem;
+  assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'data-panel'), true);
+  assert.equal(railFocused, false);
+  assert.equal(fixture.focused(), true);
 });
 
 test('Escape on an expanded panel disclosure closes it without retaining focus', () => {

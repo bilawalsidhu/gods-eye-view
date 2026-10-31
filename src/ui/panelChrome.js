@@ -163,6 +163,22 @@ export class PanelChrome {
         this._locationSearch.value = '';
         this._locationSearch.blur();
       },
+      // A desktop side panel hides entirely once collapsed; its rail item
+      // takes the focus its own disclosure can no longer hold.
+      returnFocusTo: () => {
+        const panel = document.getElementById(panelId);
+        if (!panel?.getClientRects || panel.getClientRects().length > 0)
+          return null;
+        const item = document.querySelector?.(
+          `.ui-rail [data-rail-item="${panelId}"]`,
+        );
+        return item &&
+          !item.disabled &&
+          item.getClientRects().length > 0 &&
+          getComputedStyle(item).visibility === 'visible'
+          ? item
+          : null;
+      },
     });
   }
 

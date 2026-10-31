@@ -95,7 +95,11 @@ export class PanelNavigation {
    */
   select(panelId) {
     if (this._destroyed) return;
-    this._setPanelCollapsed(panelId, this._store.isOpen(panelId), {
+    // The panel itself, not the store: the store follows its class a
+    // microtask later, after a same-task setPanelCollapsed.
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    this._setPanelCollapsed(panelId, !panel.classList.contains('collapsed'), {
       explicit: true,
     });
   }

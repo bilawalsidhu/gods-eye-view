@@ -103,6 +103,18 @@ test('selecting an item toggles its panel explicitly', async () => {
   ui.destroy();
 });
 
+test('selecting right after a same-task collapse reads the panel, not the store', async () => {
+  const { left, calls, ui, navigation } = setup();
+  await nextTick();
+  // A host collapses Data Layers and selects its item in one task, before
+  // the store follows the class change.
+  left.querySelector('#data-panel').classList.add('collapsed');
+  navigation.select('data-panel');
+  assert.deepEqual(calls, [['data-panel', false, { explicit: true }]]);
+  navigation.destroy();
+  ui.destroy();
+});
+
 test('the rails follow disclosure and availability changes', async () => {
   const { left, right, ui, navigation } = setup();
   document.getElementById('data-panel').classList.add('collapsed');
