@@ -569,6 +569,7 @@
   "src/data/cctvCataloniaSource.test.mjs",
   "src/data/cctvHk.test.mjs",
   "src/data/cctvVegvesen.test.mjs",
+  "src/data/cctvA22.test.mjs",
   "src/data/cctvNyc.test.mjs",
   "src/data/cctvNswSource.test.mjs",
   "src/data/cctvTxdotSource.test.mjs",

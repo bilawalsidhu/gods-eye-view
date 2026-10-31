@@ -50,10 +50,6 @@
 .weather-readout[hidden] {
   display: none !important;
 }
-#weather-panel.collapsed .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.8px;
-}
 #weather-panel.collapsed .panel-header {
   margin-bottom: 2px;
 }
