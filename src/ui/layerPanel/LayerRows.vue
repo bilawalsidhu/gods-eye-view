@@ -2,6 +2,7 @@
 import RailChips from '../rail/RailChips.vue';
 import RailRowList from '../rail/RailRowList.vue';
 import RowText from './RowText.vue';
+import { vClassToggle } from '../rail/classToggle.js';
 
 // The data layer rows under their group headings. LayerPanel presents every
 // value; clicks reach it with the layer id, and it re-reads the live
@@ -21,10 +22,10 @@ defineProps({
     }}</h3
     ><div
       v-else
-      :class="[
-        'data-toggle-row',
-        { 'data-toggle-row--count-line': item.count?.countLine },
-      ]"
+      class="data-toggle-row"
+      v-class-toggle="{
+        'data-toggle-row--count-line': item.count?.countLine,
+      }"
       :data-layer-id="item.id"
       :data-layer-name="item.englishName"
       ><div class="data-toggle-top"
