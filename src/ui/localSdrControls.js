@@ -6,6 +6,8 @@ import {
   localSdrFmAudioActive,
   localSdrGainOptionLabel,
 } from './localSdrPresentation.js';
+import { useRadioStore } from './stores/radio.js';
+import { applicationPinia } from './vueRuntime.js';
 
 const ELEMENT_IDS = Object.freeze({
   card: 'sdr-radio-card',
@@ -31,15 +33,12 @@ const ELEMENT_IDS = Object.freeze({
   feedStatus: 'sdr-feed-status',
 });
 
-function setText(element, text) {
-  if (element && element.textContent !== text) element.textContent = text;
-}
-
 /**
  * Local RTL-SDR card in the Radio panel.
  *
- * Owns the card's listeners and its receiver/radio subscriptions. The Radio
- * panel is one listening surface: starting local FM stops internet radio, and
+ * Owns the card's listeners and its receiver/radio subscriptions; the Radio
+ * view renders the card from what this publishes (`gev-radio` store). The
+ * Radio panel is one listening surface: starting local FM stops internet radio, and
  * starting internet radio stops local FM.
  */
 export class LocalSdrControls {
@@ -53,6 +52,7 @@ export class LocalSdrControls {
    * @param {object} [options.radio] Internet-radio port (subscribe, stopPlayback).
    * @param {object} [options.actions] Application actions:
    *   setLocalAdsbEnabled(enabled), isLocalAdsbEnabled(), scheduleLayout().
+   * @param {object} [options.store] Store the card's view is published to.
    */
   constructor({
     document: doc,
@@ -60,7 +60,9 @@ export class LocalSdrControls {
     feeds = null,
     radio = null,
     actions = {},
+    store = useRadioStore(applicationPinia()),
   }) {
+    this.store = store;
     this.receiver = receiver;
     this.feeds = feeds;
     this.radio = radio;
@@ -78,6 +80,7 @@ export class LocalSdrControls {
     this._radioAudioActive = false;
     this._renderFrame = null;
     this._destroyed = false;
+    this._view = null;
     if (!this.elements.card) return;
     this._labelGainOptions();
     this._bind();
@@ -180,7 +183,7 @@ export class LocalSdrControls {
     this._listen(el.volume, 'input', () => {
       const value = Number(el.volume.value);
       this.receiver.setVolume(value / 100);
-      setText(el.volumeValue, `${value}%`);
+      if (this._view) this._publish({ ...this._view, volumeText: `${value}%` });
     });
   }
 
@@ -217,69 +220,24 @@ export class LocalSdrControls {
     });
   }
 
+  _publish(view) {
+    this._view = view;
+    this.store?.publishSdr(view);
+  }
+
   _render() {
-    const el = this.elements;
     const view = localSdrCardView(this._state);
-    const doc = el.card?.ownerDocument;
-    setText(el.connectionState, view.connectionLabel);
-    el.connectionState?.classList.toggle('active', view.connectionActive);
-    if (el.connect) {
-      setText(el.connect, view.connectLabel);
-      el.connect.disabled = view.connectDisabled;
-      el.connect.classList.toggle('active', view.connectPressed);
-      el.connect.setAttribute('aria-pressed', String(view.connectPressed));
-    }
-    for (const [button, active] of [
-      [el.modeFm, view.fmActive],
-      [el.modeAdsb, view.adsbActive],
-    ]) {
-      if (!button) continue;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', String(active));
-      button.disabled = view.modeDisabled;
-    }
-    if (el.locate) {
-      setText(el.locate, view.locateLabel);
-      el.locate.disabled = view.locateDisabled;
-      el.locate.classList.toggle('active', view.locateActive);
-    }
-    if (el.changeDevice) el.changeDevice.disabled = view.changeDeviceDisabled;
-    if (el.gain) {
-      if (doc?.activeElement !== el.gain && el.gain.value !== view.gainValue)
-        el.gain.value = view.gainValue;
-      el.gain.disabled = view.gainDisabled;
-    }
-    if (el.stats) el.stats.hidden = view.statsHidden;
-    setText(el.statRate, view.stats.rate);
-    setText(el.statHeard, view.stats.heard);
-    setText(el.statPositioned, view.stats.positioned);
-    setText(el.statIq, view.stats.iq);
-    if (el.frequency) {
-      el.frequency.disabled = view.frequencyDisabled;
-      if (doc?.activeElement !== el.frequency && view.frequencyValue !== null)
-        el.frequency.value = view.frequencyValue;
-    }
-    if (el.tune) el.tune.disabled = view.tuneDisabled;
-    if (el.seekBack) el.seekBack.disabled = view.seekDisabled;
-    if (el.seekForward) el.seekForward.disabled = view.seekDisabled;
-    if (el.volume) {
-      if (doc?.activeElement !== el.volume)
-        el.volume.value = String(view.volumePercent);
-      el.volume.disabled = view.volumeDisabled;
-    }
-    setText(el.volumeValue, `${view.volumePercent}%`);
-    if (el.status) {
-      setText(el.status, view.statusText);
-      el.status.classList.toggle('error', view.statusError);
-    }
     const feedLine = localSdrFeedLine(this.feeds?.getState?.() || null);
-    if (el.feedStatus) {
-      el.feedStatus.hidden = feedLine === null;
-      setText(el.feedStatus, feedLine || '');
-    }
-    el.card
-      ?.closest?.('#radio-panel')
-      ?.classList.toggle('sdr-connected', view.connectionActive);
+    // The card leaves a focused field, and the FM frequency outside FM, as
+    // they are.
+    this._publish({
+      ...view,
+      gain: view.gainValue,
+      frequency: view.frequencyValue,
+      volume: view.volumePercent,
+      volumeText: `${view.volumePercent}%`,
+      feedLine,
+    });
     // Only structural changes move the rail; per-block text updates do not.
     const layoutKey = `${view.statsHidden}|${view.connectionActive}|${feedLine === null}`;
     if (layoutKey !== this._layoutKey) {

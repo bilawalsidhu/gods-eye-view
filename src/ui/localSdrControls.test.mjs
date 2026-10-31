@@ -184,15 +184,16 @@ test('the card shows one read-only decoder-feed line after a single probe', asyn
       for (const listener of listeners) listener(state);
     },
   };
+  let shown = null;
   const controls = new LocalSdrControls({
     document: doc,
     receiver: stubReceiver(),
     feeds,
+    store: { publishSdr: (view) => (shown = view) },
   });
   t.after(() => controls.destroy());
-  const line = doc.getElementById('sdr-feed-status');
   assert.equal(probes, 1);
-  assert.equal(line.hidden, true);
+  assert.equal(shown.feedLine, null);
   feeds.set({
     configured: true,
     polling: true,
@@ -202,6 +203,5 @@ test('the card shows one read-only decoder-feed line after a single probe', asyn
     ],
   });
   await new Promise((resolve) => setTimeout(resolve, 30));
-  assert.equal(line.hidden, false);
-  assert.equal(line.textContent, 'Decoder feeds: 1090 live · 978 live');
+  assert.equal(shown.feedLine, 'Decoder feeds: 1090 live · 978 live');
 });

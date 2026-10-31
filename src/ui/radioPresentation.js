@@ -164,9 +164,10 @@ export function renderRadioState(state) {
     this._cockpitRadioPlayBtn.title = playbackAction;
   }
   // A slider the person is dragging keeps the value they are setting.
-  if (document.activeElement !== this._radioVolume)
-    this._radioVolumeShown = Math.round(state.volume * 100);
-  else this._radioVolumeShown ??= Number(this._radioVolume?.value ?? 80);
+  this._radioVolumeShown =
+    this._radioVolume && document.activeElement === this._radioVolume
+      ? Number(this._radioVolume.value)
+      : Math.round(state.volume * 100);
   if (
     this._cockpitRadioVolume &&
     document.activeElement !== this._cockpitRadioVolume

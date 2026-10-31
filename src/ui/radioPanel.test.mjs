@@ -13,6 +13,7 @@ import {
   showRadioVolume,
 } from './radioPresentation.js';
 import { setLocale } from '../i18n/index.js';
+import { LocalSdrControls } from './localSdrControls.js';
 
 function fixture(t) {
   document.body.replaceChildren();
@@ -216,4 +217,149 @@ test('a toggle that ends mid-transition does not leave Enable marked idle', asyn
   await render({});
   assert.equal(enable.getAttribute('aria-busy'), 'true', 'the next render reports it');
   assert.equal(enable.getAttribute('aria-disabled'), 'true');
+});
+
+function sdrReceiver() {
+  const listeners = new Set();
+  let state = {
+    webUsbSupported: true,
+    connected: false,
+    status: 'idle',
+    message: 'Connect an RTL-SDR to begin.',
+    mode: 'fm',
+    frequencyHz: 98_500_000,
+    volume: 0.8,
+    gain: 'auto',
+    locationStatus: 'unknown',
+  };
+  return {
+    volumes: [],
+    getState: () => ({ ...state }),
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    emit(patch) {
+      state = { ...state, ...patch };
+      for (const listener of listeners) listener({ ...state });
+    },
+    setVolume(value) {
+      this.volumes.push(value);
+    },
+  };
+}
+
+test('the RTL-SDR card renders what LocalSdrControls presents', async (t) => {
+  const { $, owner } = fixture(t);
+  const receiver = sdrReceiver();
+  const controls = new LocalSdrControls({ document, receiver, store: owner.store });
+  t.after(() => controls.destroy());
+  const frame = () => new Promise((resolve) => setTimeout(resolve, 40));
+  await nextTick();
+  assert.equal($('sdr-connection-state').getAttribute('class'), null);
+  assert.equal($('sdr-connect-btn').textContent, 'CONNECT');
+  assert.equal($('sdr-connect-btn').disabled, false);
+  assert.equal($('sdr-mode-fm-btn').className, 'active');
+  assert.equal($('sdr-mode-adsb-btn').getAttribute('aria-pressed'), 'false');
+  assert.equal($('sdr-adsb-stats').hidden, true);
+  assert.equal($('sdr-frequency-input').value, '98.5');
+  assert.equal($('sdr-feed-status').hidden, true);
+
+  receiver.emit({
+    connected: true,
+    status: 'streaming',
+    mode: 'adsb',
+    gain: 20.7,
+    aircraftHeard: 3,
+    aircraftPositioned: 2,
+    messagesPerSecond: 41.25,
+  });
+  await frame();
+  const panel = $('radio-panel');
+  assert.equal(panel.classList.contains('sdr-connected'), true);
+  assert.equal(panel.classList.contains('collapsed'), true, 'chrome keeps its class');
+  assert.equal($('sdr-connection-state').className, 'active');
+  assert.equal($('sdr-connect-btn').textContent, 'DISCONNECT');
+  assert.equal($('sdr-connect-btn').className, 'panel-layer-toggle active');
+  assert.equal($('sdr-mode-fm-btn').className, '');
+  assert.equal($('sdr-mode-adsb-btn').className, 'active');
+  assert.equal($('sdr-adsb-stats').hidden, false);
+  assert.equal($('sdr-stat-heard').textContent, '3');
+  assert.equal($('sdr-stat-positioned').textContent, '2');
+  assert.equal($('sdr-gain-select').value, '20.7');
+  assert.equal($('sdr-frequency-input').disabled, true);
+
+  // A focused field keeps the value the person is setting (FM volume).
+  receiver.emit({ mode: 'fm' });
+  await frame();
+  const volume = $('sdr-volume');
+  assert.equal(volume.disabled, false);
+  volume.focus();
+  volume.value = '35';
+  volume.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.deepEqual(receiver.volumes, [0.35]);
+  assert.equal($('sdr-volume-value').textContent, '35%');
+  receiver.emit({ volume: 0.6 });
+  await frame();
+  assert.equal(volume.value, '35');
+  volume.blur();
+  receiver.emit({ volume: 0.6, connected: false, status: 'idle' });
+  await frame();
+  assert.equal(volume.value, '60');
+  assert.equal($('sdr-volume-value').textContent, '60%');
+  assert.equal(panel.classList.contains('sdr-connected'), false);
+});
+
+test('focused RTL-SDR fields keep what the person typed or picked', async (t) => {
+  const { $, owner, render } = fixture(t);
+  const receiver = sdrReceiver();
+  let feeds = { configured: null, polling: false, feeds: [] };
+  const feedListeners = new Set();
+  const controls = new LocalSdrControls({
+    document,
+    receiver,
+    store: owner.store,
+    feeds: {
+      getState: () => feeds,
+      subscribe(listener) {
+        feedListeners.add(listener);
+        return () => feedListeners.delete(listener);
+      },
+      probe: async () => {},
+    },
+  });
+  t.after(() => controls.destroy());
+  const frame = () => new Promise((resolve) => setTimeout(resolve, 40));
+  receiver.emit({ connected: true, status: 'streaming' });
+  await frame();
+  const frequency = $('sdr-frequency-input');
+  frequency.focus();
+  frequency.value = '101.1';
+  receiver.emit({ frequencyHz: 98_700_000 });
+  await frame();
+  assert.equal(frequency.value, '101.1', 'typing is not undone');
+  await render({});
+  assert.equal(frequency.value, '101.1', 'nor by a Radio render');
+  frequency.blur();
+  receiver.emit({ frequencyHz: 98_700_000 });
+  await frame();
+  assert.equal(frequency.value, '98.7');
+
+  const gain = $('sdr-gain-select');
+  gain.focus();
+  gain.value = '20.7';
+  receiver.emit({ gain: 'auto' });
+  await frame();
+  assert.equal(gain.value, '20.7', 'the pick stands while focused');
+
+  feeds = {
+    configured: true,
+    polling: true,
+    feeds: [{ band: '1090', status: 'live' }],
+  };
+  for (const listener of feedListeners) listener(feeds);
+  await frame();
+  assert.equal($('sdr-feed-status').hidden, false);
+  assert.equal($('sdr-feed-status').textContent, 'Decoder feeds: 1090 live');
 });
