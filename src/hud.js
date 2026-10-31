@@ -9,7 +9,7 @@ import { applicationServices } from './services/application.js';
  * real-time at configurable cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
- * selected and supports three layout variants: tactical, operator, minimal.
+ * selected and supports the layout variants: tactical, minimal, cyber.
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
@@ -76,7 +76,6 @@ const MODE_LABELS = Object.freeze({
   thermal: msg('FLIR'),
   anime: msg('ANIME'),
   noir: msg('NOIR'),
-  snow: msg('SNOW'),
 });
 
 /** Region ids from _regionLabel() and the name shown for each. */
@@ -203,7 +202,13 @@ export class IntelHUD {
     this._dataManagerUnsubscribe = null;
     this._summaryDirty = true;
     this._summaryRequest = null;
+    this._summaryUnconfigured = false;
+    // The last place lookup and the view it answered for (see
+    // getBasemapLabelContext), reused until the view changes enough.
+    this._placeLabels = null;
     this._lastSummarySignature = '';
+    /** The reply painted for `_lastSummarySignature`, when it was accepted. */
+    this._lastSummaryText = null;
     this._summaryRevision = 0;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
@@ -281,12 +286,6 @@ export class IntelHUD {
     // i18n-ignore: sensor codes and a classification banner; the rest uses t()
     this._el.innerHTML = `
       <div class="hud-sonar" aria-hidden="true"></div>
-
-      <div class="hud-top-bar">
-        <span class="hud-readout"><span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span></span>
-        <span class="hud-readout"><span class="hud-top-bar-center">${this._missionId}</span></span>
-        <span class="hud-readout"><span class="hud-top-bar-right">PAGE 1/1</span></span>
-      </div>
 
       <div class="hud-corner hud-top-left">
         <div class="hud-bracket">┌</div>
@@ -829,6 +828,15 @@ export class IntelHUD {
     if (this.summaryPolicy.canRequest?.() === false) return;
 
     const revision = this._summaryRevision;
+    // The place lookups below are paid Google requests made only to feed the
+    // AI summary, so a server without one must not be asked to make them.
+    if (!(await this._summaryAvailable())) {
+      if (revision !== this._summaryRevision) return;
+      this._summaryDirty = false;
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
+    if (revision !== this._summaryRevision) return;
     // Every caller invokes this as `void this._updateSummary(...)`, so nothing
     // owns the returned promise — a rejection escaping from here lands as an
     // unhandled rejection in the console. Building the context walks the live
@@ -851,6 +859,9 @@ export class IntelHUD {
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
       this._summaryDirty = false;
+      // A settle painted the fallback line over the reply this context
+      // already has; reused place labels make that common, so restore it.
+      if (this._lastSummaryText) this._setSummaryText(this._lastSummaryText);
       return;
     }
     if (this._summaryRequest) return;
@@ -858,6 +869,7 @@ export class IntelHUD {
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
+    this._lastSummaryText = null;
     const controller = new AbortController();
     let timedOut = false;
     const timeout = window.setTimeout(() => {
@@ -873,18 +885,16 @@ export class IntelHUD {
       const data = response.data;
       if (revision !== this._summaryRevision) return;
       if (isHudSummaryUnconfigured(response.status, data)) {
+        this._summaryUnconfigured = true;
         this._setSummaryText(fallbackText, animate);
         return;
       }
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      this._setSummaryText(
-        hudSummaryMatchesProvenance(data.summary, context.feedProvenance)
-          ? data.summary
-          : fallbackText,
-        animate,
-      );
+      if (hudSummaryMatchesProvenance(data.summary, context.feedProvenance))
+        this._lastSummaryText = data.summary;
+      this._setSummaryText(this._lastSummaryText || fallbackText, animate);
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
       // destroy's) is not.
@@ -918,12 +928,31 @@ export class IntelHUD {
     if (el) el.textContent = text;
   }
 
+  /**
+   * False once the summary service reports no AI summary: by its capability
+   * probe, when it has one, or by a deliberate unconfigured reply. Unknown
+   * stays available, as before.
+   */
+  async _summaryAvailable() {
+    if (this._summaryUnconfigured) return false;
+    try {
+      if ((await this.summaryService?.configured?.()) === false)
+        this._summaryUnconfigured = true;
+    } catch {
+      /* an unanswered probe leaves the summary as it was */
+    }
+    return !this._summaryUnconfigured;
+  }
+
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(
-      this.viewer,
-      this.placeSearch,
-      this.basemapContext,
-    );
+    const revision = this._summaryRevision;
+    const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, {
+      ...this.basemapContext,
+      previous: this._placeLabels,
+    });
+    // A slower build for a view the camera has left must not replace the
+    // newer view's lookup.
+    if (revision === this._summaryRevision) this._placeLabels = labels;
     const enabledLayers =
       this._dataManager
         ?.getAll?.()
@@ -1027,7 +1056,7 @@ export class IntelHUD {
    * Switch the HUD layout variant. Falls back to `'tactical'` if the
    * name is unrecognized. Cyber also applies a coordinated skin to the full
    * application shell; leaving Cyber restores the standard shell tokens.
-   * @param {string} variantName - One of `'tactical'`, `'operator'`, `'minimal'`, `'cyber'`.
+   * @param {string} variantName - One of `'tactical'`, `'minimal'`, `'cyber'`.
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);

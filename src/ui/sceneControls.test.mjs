@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from './sceneControls.js';
 import { SceneDirector } from '../scenes/director.js';
+import { mountSceneSharing } from './sceneSharing.js';
+import { setLocale } from '../i18n/index.js';
 
 function fixture() {
   class Element extends EventTarget {
@@ -164,6 +166,46 @@ test('Scene controls render the supplied selection and running/download states',
     assert.equal(f.elements.progress.style.width, '100%');
     f.owner.setProgress(-1);
     assert.equal(f.elements.progress.textContent, '0%');
+  } finally {
+    f.restore();
+  }
+});
+
+test('Authoring disables idle actions that would do nothing', () => {
+  const f = fixture();
+  try {
+    assert.equal(f.elements.start.textContent, 'PLAY');
+    assert.equal(f.elements.start.disabled, false);
+    assert.equal(f.elements.update.disabled, false);
+    assert.equal(f.elements.panel.classList.contains('has-shots'), true);
+
+    f.state.selectedShotId = null;
+    f.owner.setButtons(false);
+    assert.equal(f.elements.update.disabled, true);
+    assert.equal(f.elements.start.disabled, false);
+
+    // PLAY and NEXT run on into the following scenes, so an empty selected
+    // scene beside one with shots keeps them available.
+    f.state.scenes[0].shots = [];
+    f.state.scenes.push({ id: 'scene-b', title: 'B', shots: [{ id: 'b1' }] });
+    f.owner.setButtons(false);
+    assert.equal(f.elements.start.disabled, false);
+    assert.equal(f.elements.next.disabled, false);
+    assert.equal(f.elements.update.disabled, true);
+
+    f.state.scenes.pop();
+    f.owner.setButtons(false);
+    assert.equal(f.elements.start.disabled, true);
+    assert.equal(f.elements.next.disabled, true);
+    assert.equal(f.elements.capture.disabled, false);
+    assert.equal(f.elements.panel.classList.contains('has-shots'), false);
+
+    f.state.scenes = [];
+    f.state.selectedSceneId = null;
+    f.owner.setButtons(false);
+    assert.equal(f.elements.delete.disabled, true);
+    assert.equal(f.elements.capture.disabled, true);
+    assert.equal(f.elements.new.disabled, false);
   } finally {
     f.restore();
   }
@@ -433,5 +475,144 @@ test('Scene controls consume current state, preserve rows on progress, and unsub
     channel.destroy();
   } finally {
     f.restore();
+  }
+});
+
+test('Authoring refreshes idle buttons from published changes', () => {
+  const f = fixture();
+  try {
+    f.owner.destroy();
+    const channel = createStateChannel(() => f.state);
+    const owner = new SceneControls({
+      read: () => f.state,
+      actions: f.actions,
+      elements: f.elements,
+      subscribe: (listener) => channel.subscribe(listener),
+    });
+    const disabled = (name) => f.elements[name].disabled;
+    assert.equal(disabled('start'), false);
+    assert.equal(f.elements.panel.classList.contains('has-shots'), true);
+
+    f.state.selectedShotId = null;
+    channel.publish({ type: 'selection-changed' });
+    assert.equal(disabled('update'), true);
+
+    f.state.scenes[0].shots = [];
+    channel.publish({ type: 'shot-deleted' });
+    assert.equal(disabled('start'), true);
+    assert.equal(disabled('next'), true);
+    assert.equal(f.elements.panel.classList.contains('has-shots'), false);
+
+    // A run that ends hands the buttons back with the idle rules applied.
+    f.state.running = true;
+    channel.publish({ type: 'buttons-changed' });
+    assert.equal(disabled('capture'), true);
+    assert.equal(disabled('stop'), false);
+    f.state.running = false;
+    channel.publish({ type: 'buttons-changed' });
+    assert.equal(disabled('capture'), false);
+    assert.equal(disabled('start'), true);
+
+    f.state.scenes = [];
+    f.state.selectedSceneId = null;
+    channel.publish({ type: 'scene-deleted' });
+    assert.equal(disabled('delete'), true);
+    assert.equal(disabled('capture'), true);
+    assert.equal(disabled('new'), false);
+
+    f.state.scenes = [{ id: 'scene-b', title: 'B', shots: [{ id: 's' }] }];
+    f.state.selectedSceneId = 'scene-b';
+    f.state.selectedShotId = 's';
+    channel.publish({ type: 'project-imported' });
+    assert.equal(disabled('start'), false);
+    assert.equal(f.elements.panel.classList.contains('has-shots'), true);
+
+    owner.destroy();
+    assert.equal(f.elements.panel.classList.contains('has-shots'), false);
+    channel.destroy();
+  } finally {
+    f.restore();
+  }
+});
+
+test('Authoring PLAY uses the scene context, not the radio PLAY', (context) => {
+  context.after(() => setLocale('en'));
+  setLocale('es');
+  const f = fixture();
+  try {
+    assert.equal(f.elements.start.textContent, 'REPROD.');
+  } finally {
+    f.restore();
+  }
+});
+
+test('The sharing row sits under SAVE & SHARE, after the file row', () => {
+  const saved = globalThis.document;
+  const node = (className = '') => {
+    const element = {
+      className,
+      children: [],
+      dataset: {},
+      parent: null,
+      addEventListener() {},
+      removeEventListener() {},
+      append(...items) {
+        for (const item of items) {
+          item.parent = element;
+          element.children.push(item);
+        }
+      },
+      appendChild(item) {
+        element.append(item);
+      },
+      after(item) {
+        const siblings = element.parent.children;
+        item.parent = element.parent;
+        siblings.splice(siblings.indexOf(element) + 1, 0, item);
+      },
+      remove() {
+        const siblings = element.parent?.children;
+        if (siblings) siblings.splice(siblings.indexOf(element), 1);
+      },
+      querySelector(selector) {
+        const name = selector.slice(1);
+        const walk = (at) => {
+          for (const child of at.children) {
+            if (child.className.split(' ').includes(name)) return child;
+            const found = walk(child);
+            if (found) return found;
+          }
+          return null;
+        };
+        return walk(element);
+      },
+    };
+    return element;
+  };
+  globalThis.document = { createElement: () => node() };
+  try {
+    const panel = node();
+    const inner = node('scene-panel-inner');
+    const fileRow = node('scene-controls scene-file-controls');
+    const status = node('scene-status');
+    panel.append(inner);
+    inner.append(fileRow, status);
+    const dispose = mountSceneSharing({ edit() {}, share() {} }, panel);
+    const bar = inner.children[1];
+    assert.equal(bar.className, 'scene-controls');
+    assert.equal(inner.children[2], status);
+    assert.ok(bar.children.every((button) => button.title));
+    dispose();
+    assert.deepEqual(inner.children, [fileRow, status]);
+
+    // Without the file row, the bar still lands inside the panel.
+    const plain = node();
+    const plainInner = node('scene-panel-inner');
+    plain.append(plainInner);
+    mountSceneSharing({ edit() {}, share() {} }, plain)();
+    mountSceneSharing({ edit() {}, share() {} }, plain);
+    assert.equal(plainInner.children.length, 1);
+  } finally {
+    globalThis.document = saved;
   }
 });
