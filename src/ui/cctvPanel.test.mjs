@@ -37,6 +37,9 @@ function panel(t) {
       ...elements,
       _cctvPanel: document.getElementById('cctv-panel'),
       _cctvSourceBadge: document.getElementById('cctv-source-badge'),
+      _cctvFrame: document.getElementById('cctv-frame'),
+      _cctvFrameWrap: document.getElementById('cctv-frame-wrap'),
+      _cctvSummary: document.getElementById('cctv-summary'),
       _cctvCalReadout: document.getElementById('cctv-cal-readout'),
       _cctvAdjustBtn: document.getElementById('cctv-adjust-btn'),
       _cctvCalibSaveBtn: document.getElementById('cctv-calib-save-btn'),
@@ -146,29 +149,19 @@ test('the buttons stay the elements the controls listen on', async (t) => {
   assert.equal(byId('cctv-nearest-btn').disabled, true);
 });
 
-test('re-renders leave what the controls write alone', async (t) => {
+test('re-renders leave the picker options the controls fill alone', async (t) => {
   const { controls, byId } = panel(t);
   const select = byId('cctv-camera-select');
   const option = document.createElement('option');
   option.value = 'a';
   option.textContent = 'Austin · Congress Ave';
   select.append(option);
-  byId('cctv-frame').setAttribute('src', 'https://example.test/a.jpg');
-  byId('cctv-summary').textContent = 'Typed summary';
-  const heading = document.querySelector('[data-cal-field="heading"]');
-  heading.textContent = 'HDG 92°';
   for (const enabled of [true, false, true]) {
     controls._renderCctvState({ enabled, count: 1, cameraIndex: [] });
     await nextTick();
   }
   assert.equal(select.options.length, 1);
   assert.equal(select.options[0].value, 'a');
-  assert.equal(
-    byId('cctv-frame').getAttribute('src'),
-    'https://example.test/a.jpg',
-  );
-  assert.equal(byId('cctv-summary').textContent, 'Typed summary');
-  assert.equal(heading.textContent, 'HDG 92°');
 });
 
 test('FOCUS waits for an active camera while the other buttons work', () => {
@@ -389,4 +382,119 @@ test('a second edit of the same chip gets a fresh input', async (t) => {
   const second = chip.querySelector('input');
   assert.ok(second && second !== first, 'a new input');
   assert.equal(second.value, '30.0');
+});
+
+test('the frame preview renders each step of a camera frame request', async (t) => {
+  const prior = globalThis.Image;
+  const requests = [];
+  globalThis.Image = class {
+    constructor() {
+      requests.push(this);
+    }
+  };
+  t.after(() => {
+    globalThis.Image = prior;
+  });
+  const { controls, byId } = panel(t);
+  const frame = byId('cctv-frame');
+  const wrap = byId('cctv-frame-wrap');
+  const badge = byId('cctv-source-badge');
+  const state = {
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'a',
+    activeCamera: {
+      ...camera,
+      frameUrl: 'a.jpg',
+      sourceKind: 'snapshot',
+      sourceStatus: 'ok',
+    },
+  };
+  controls._renderCctvState(state);
+  await nextTick();
+  assert.equal(frame.dataset.cameraId, 'a');
+  assert.equal(frame.dataset.loading, 'true');
+  assert.equal(frame.hasAttribute('src'), false);
+  assert.equal(wrap.classList.contains('loading'), true);
+  assert.equal(badge.textContent, 'FRAME · LOADING');
+  assert.equal(badge.dataset.frameState, 'loading');
+  requests[0].onload();
+  await nextTick();
+  assert.equal(frame.getAttribute('src'), 'a.jpg');
+  assert.equal(frame.dataset.loading, '');
+  assert.equal(frame.classList.contains('active'), true);
+  assert.equal(wrap.classList.contains('has-frame'), true);
+  assert.equal(wrap.classList.contains('loading'), false);
+  assert.equal(badge.textContent, 'SNAPSHOT · OK');
+  // A failed refresh keeps the settled pixels.
+  const refreshed = {
+    ...state,
+    activeCamera: { ...state.activeCamera, frameUrl: 'a2.jpg' },
+  };
+  controls._renderCctvState(refreshed);
+  requests[1].onerror();
+  await nextTick();
+  assert.equal(frame.getAttribute('src'), 'a.jpg');
+  assert.equal(frame.dataset.error, 'true');
+  assert.equal(wrap.classList.contains('has-frame'), true);
+  assert.equal(badge.textContent, 'SNAPSHOT · OK');
+  // Another camera clears them while its frame loads.
+  controls._renderCctvState({
+    ...state,
+    activeCameraId: 'b',
+    activeCamera: { ...state.activeCamera, id: 'b', frameUrl: 'b.jpg' },
+  });
+  await nextTick();
+  assert.equal(frame.hasAttribute('src'), false);
+  assert.equal(frame.dataset.cameraId, 'b');
+  assert.equal(wrap.classList.contains('has-frame'), false);
+  assert.equal(badge.textContent, 'FRAME · LOADING');
+  controls._renderCctvState({ ...state, enabled: false });
+  await nextTick();
+  assert.equal(frame.hasAttribute('src'), false);
+  assert.equal(frame.dataset.cameraId, '');
+  assert.equal(wrap.classList.contains('has-frame'), false);
+  assert.equal(badge.textContent, 'SOURCE · UNKNOWN');
+  assert.equal(badge.dataset.frameState, 'idle');
+});
+
+test('a live camera swaps the still frame for the video canvas', async (t) => {
+  const { controls, byId } = panel(t);
+  assert.equal(byId('cctv-video').hidden, true);
+  controls._renderCctvState({
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'a',
+    activeCamera: { ...camera, isVideo: true },
+  });
+  await nextTick();
+  assert.equal(byId('cctv-video').hidden, false);
+  assert.equal(byId('cctv-frame').hidden, true);
+  controls._renderCctvState({
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'a',
+    activeCamera: camera,
+  });
+  await nextTick();
+  assert.equal(byId('cctv-video').hidden, true);
+  assert.equal(byId('cctv-frame').hidden, false);
+});
+
+test('the scene summary types in, then holds the whole text', async (t) => {
+  const { controls, byId } = panel(t);
+  const text = 'Austin CCTV · 5th St / Congress Ave';
+  controls._typeCctvSummary(text);
+  await nextTick();
+  assert.equal(byId('cctv-summary').textContent, '');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  await nextTick();
+  const partial = byId('cctv-summary').textContent;
+  assert.ok(partial.length > 0 && partial.length < text.length, partial);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  await nextTick();
+  assert.equal(byId('cctv-summary').textContent, text);
 });

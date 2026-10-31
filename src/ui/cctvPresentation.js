@@ -249,9 +249,8 @@ export function _renderCctvState(state) {
   this.store.publish(presentCctvPanel(state, enabled));
 
   const liveIntent = enabled && !!activeCamera?.isVideo;
+  this.store.setLive(liveIntent);
   if (this._cctvVideo) {
-    this._cctvVideo.hidden = !liveIntent;
-    if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
     const visible =
       liveIntent &&
       !document.hidden &&
@@ -271,16 +270,15 @@ export function _renderCctvState(state) {
   if (this._cctvFrame && !liveIntent) {
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
-    const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
-    const frameLoading = this._cctvFrame.dataset.loading === 'true';
+    const cameraChanged = this._frame.cameraId !== nextCameraId;
+    const frameLoading = this._frame.loading;
     // A same-camera refresh waits for the current image to settle. Replacing
     // src every 10 seconds can cancel a slow but healthy decode forever and
     // leave SNAPSHOT · OK beside a blank/loading preview. Camera changes are
     // immediate so navigation never waits on the prior camera's request.
     if (
       nextSrc &&
-      (cameraChanged ||
-        (!frameLoading && this._cctvFrame.dataset.currentSrc !== nextSrc))
+      (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
       this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
     }
@@ -305,18 +303,18 @@ export function _typeCctvSummary(text) {
   this._lastCctvSummaryText = nextText;
 
   clearInterval(this._cctvSummaryTypingTimer);
-  this._cctvSummary.textContent = '';
+  this.store.setSummary('');
   let idx = 0;
   this._cctvSummaryTypingTimer = setInterval(() => {
     if (this.destroyed) return;
     idx += 3;
     if (idx >= nextText.length) {
-      this._cctvSummary.textContent = nextText;
+      this.store.setSummary(nextText);
       clearInterval(this._cctvSummaryTypingTimer);
       this._cctvSummaryTypingTimer = null;
       return;
     }
-    this._cctvSummary.textContent = nextText.slice(0, idx);
+    this.store.setSummary(nextText.slice(0, idx));
   }, 20);
 }
 

@@ -2,10 +2,10 @@ import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
 
 /**
- * The CCTV panel's buttons, CAL chip, meta line and calibration readout as
- * its view renders them. CctvControls presents them (`presentCctvPanel()`)
- * and publishes here; it keeps its listeners on the buttons and paints the
- * picker, frame, source badge and summary itself.
+ * The CCTV panel as its view renders it. CctvControls presents the buttons,
+ * CAL chip, meta line and calibration readout (`presentCctvPanel()`), runs
+ * the frame preview, source badge and typed summary, and publishes them
+ * here; it keeps its listeners on the buttons and fills the picker itself.
  */
 export const useCctvStore = defineStore('gev-cctv', () => {
   /** The presented panel; null until the controls first render. */
@@ -16,6 +16,15 @@ export const useCctvStore = defineStore('gev-cctv', () => {
    * finish(commit, typedText)}`, or null.
    */
   const calEdit = shallowRef(null);
+
+  /** The preview: requested and shown frame, loading and error state. */
+  const frame = shallowRef(null);
+  /** Whether the live video surface replaces the still frame. */
+  const live = shallowRef(false);
+  /** `{label, state}` for the source badge; null until first synced. */
+  const sourceBadge = shallowRef(null);
+  /** The scene summary as typed so far; null until the first one. */
+  const summary = shallowRef(null);
 
   /** @param {object} next A fresh presentation; every publish re-renders. */
   function publish(next) {
@@ -29,5 +38,38 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     calEdit.value = edit ? markRaw({ ...edit, id: ++editCount }) : null;
   }
 
-  return { view, calEdit, publish, setCalEdit };
+  /** @param {object} next */
+  function setFrame(next) {
+    frame.value = markRaw(next);
+  }
+
+  /** @param {boolean} on */
+  function setLive(on) {
+    live.value = Boolean(on);
+  }
+
+  /** @param {{label: string, state: string}} next */
+  function setSourceBadge(next) {
+    sourceBadge.value = markRaw(next);
+  }
+
+  /** @param {string} text */
+  function setSummary(text) {
+    summary.value = text;
+  }
+
+  return {
+    view,
+    calEdit,
+    frame,
+    live,
+    sourceBadge,
+    summary,
+    publish,
+    setCalEdit,
+    setFrame,
+    setLive,
+    setSourceBadge,
+    setSummary,
+  };
 });

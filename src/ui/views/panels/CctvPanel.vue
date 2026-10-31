@@ -1,14 +1,27 @@
 <script setup>
 import { storeToRefs } from 'pinia';
+import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import CctvCalValue from '../../cctv/CctvCalValue.vue';
 import { useCctvStore } from '../../stores/cctv.js';
 
-// The CCTV panel, its buttons, CAL chip and meta line rendered from what
-// CctvControls presents; until it renders, the panel shows its initial
-// markup. The picker, frame, source badge and summary are written by the
-// controls, so their elements carry no bindings.
-const { view } = storeToRefs(useCctvStore());
+// The CCTV panel, rendered from what CctvControls presents and publishes;
+// until it renders, the panel shows its initial markup. The controls fill
+// the picker's options, and draw the live video into its canvas.
+const { view, frame, live, sourceBadge, summary } = storeToRefs(useCctvStore());
+// The frame's request state, as data attributes that read "true" or are
+// empty; none until the controls first publish.
+const flag = (on) => (on ? 'true' : '');
+const frameData = computed(() =>
+  frame.value
+    ? {
+        'data-camera-id': frame.value.cameraId,
+        'data-current-src': frame.value.currentSrc,
+        'data-loading': flag(frame.value.loading),
+        'data-error': flag(frame.value.error),
+      }
+    : {},
+);
 </script>
 
 <template>
@@ -21,12 +34,12 @@ const { view } = storeToRefs(useCctvStore());
       <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel" data-i18n-title>+</button>
     </div>
     <div class="cyber-panel-body" data-rail-scroller>
-    <div id="cctv-frame-wrap" class="cctv-frame-wrap">
+    <div id="cctv-frame-wrap" :class="['cctv-frame-wrap', { loading: frame?.wrapLoading, 'has-frame': frame?.hasFrame }]">
       <span class="cctv-frame-caption" aria-hidden="true" data-i18n>ACQUIRING FRAME</span>
-      <img id="cctv-frame" alt="CCTV feed frame" />
-      <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
+      <img id="cctv-frame" alt="CCTV feed frame" :class="{ active: frame?.hasFrame }" :src="frame?.src || undefined" :hidden="live" v-bind="frameData" />
+      <canvas id="cctv-video" class="cctv-frame" :hidden="!live"></canvas>
     </div>
-    <div id="cctv-source-badge" class="gev-status-badge" role="status" aria-live="polite" data-i18n>SOURCE · UNKNOWN</div>
+    <div id="cctv-source-badge" class="gev-status-badge" role="status" aria-live="polite" :data-frame-state="sourceBadge?.state">{{ sourceBadge?.label ?? t('SOURCE · UNKNOWN') }}</div>
     <div id="cctv-meta">{{ view?.meta ?? t('Enable CCTV to load camera intersections') }}</div>
     <div class="cctv-controls">
       <button id="cctv-enable-btn" :class="['scene-btn', { active: view?.enabled }]">{{ view?.enabled ? t('CCTV ON') : t('CCTV OFF') }}</button>
@@ -66,7 +79,7 @@ const { view } = storeToRefs(useCctvStore());
       </div>
     </div>
     <div class="cctv-summary-label" data-i18n>SCENE SUMMARY</div>
-    <div id="cctv-summary" data-i18n>Enable CCTV to start camera-linked intelligence summaries.</div>
+    <div id="cctv-summary">{{ summary ?? t('Enable CCTV to start camera-linked intelligence summaries.') }}</div>
     </div>
   </div>
 </div>

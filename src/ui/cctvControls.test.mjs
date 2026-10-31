@@ -55,8 +55,8 @@ test('a late image completion cannot replace a newer camera preview', (t) => {
   assert.equal(requests[0].onload, null);
   requests[1].onload();
   stale();
-  assert.equal(controls._cctvFrame.src, 'second.jpg');
-  assert.equal(controls._cctvFrame.dataset.cameraId, 'b');
+  assert.equal(controls._frame.src, 'second.jpg');
+  assert.equal(controls._frame.cameraId, 'b');
 });
 
 test('failed refresh preserves settled pixels, but changing cameras clears them', (t) => {
@@ -65,11 +65,11 @@ test('failed refresh preserves settled pixels, but changing cameras clears them'
   requests[0].onload();
   controls._queueCctvFrame('refresh.jpg', 'a', false);
   requests[1].onerror();
-  assert.equal(controls._cctvFrame.src, 'first.jpg');
-  assert.equal(controls._cctvFrameWrap.classList.contains('has-frame'), true);
+  assert.equal(controls._frame.src, 'first.jpg');
+  assert.equal(controls._frame.hasFrame, true);
   controls._queueCctvFrame('other.jpg', 'b', true);
-  assert.equal(controls._cctvFrame.src, '');
-  assert.equal(controls._cctvFrameWrap.classList.contains('has-frame'), false);
+  assert.equal(controls._frame.src, '');
+  assert.equal(controls._frame.hasFrame, false);
 });
 
 test('destroy invalidates image callbacks and releases each subscription once', (t) => {
@@ -90,7 +90,7 @@ test('destroy invalidates image callbacks and releases each subscription once', 
   assert.equal(unsubscribed, 2);
   assert.equal(requests[0].onload, null);
   assert.equal(requests[0].onerror, null);
-  assert.equal(controls._cctvFrame.src, '');
+  assert.equal(controls._frame.src, '');
   controls._queueCctvFrame('late.jpg', 'b', true);
   assert.equal(requests.length, 1);
 });

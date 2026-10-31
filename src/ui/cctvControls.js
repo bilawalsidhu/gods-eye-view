@@ -1,6 +1,8 @@
 import {
+  EMPTY_CCTV_FRAME,
   _clearCctvFrame,
   _queueCctvFrame,
+  _setCctvFrame,
   _settleCctvFrame,
   _syncCctvSourceBadge,
 } from './cctvFrames.js';
@@ -46,6 +48,7 @@ export class CctvControls {
     this._cctvChipWasBusy = false;
     this._cctvFrameRequestToken = 0;
     this._cctvFramePreloader = null;
+    this._frame = EMPTY_CCTV_FRAME;
     this._calibrationEdit = null;
     this._actionGeneration = 0;
     this._initCctvPanel();
@@ -83,6 +86,9 @@ export class CctvControls {
   }
   _clearCctvFrame(...args) {
     return _clearCctvFrame.call(this, ...args);
+  }
+  _setCctvFrame(...args) {
+    return _setCctvFrame.call(this, ...args);
   }
   _queueCctvFrame(...args) {
     return _queueCctvFrame.call(this, ...args);
