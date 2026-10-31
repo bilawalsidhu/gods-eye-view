@@ -208,12 +208,8 @@ export class StyleManager extends ShellFacade {
         setScopeMaskFeather: services.setScopeMaskFeather,
       },
       elements: {
-        _celestialBtn: this._celestialBtn,
         _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
         _ppToggles: this._ppToggles,
-        _scopeBtn: this._scopeBtn,
-        _scopeFeatherSlider: this._scopeFeatherSlider,
-        _scopeFeatherValue: this._scopeFeatherValue,
         _sliderContainer: this._sliderContainer,
         _sliderPanel: this._sliderPanel,
         _styleIndicator: this._styleIndicator,
@@ -491,9 +487,7 @@ export class StyleManager extends ShellFacade {
       viewer,
       services: {
         cycleDetectionMode: services.cycleDetectionMode,
-        setScopeMaskEnabled: services.setScopeMaskEnabled,
         isScopeMaskEnabled: services.isScopeMaskEnabled,
-        setScopeMaskFeather: services.setScopeMaskFeather,
       },
       elements: {
         _locationSearch: this._locationSearch,
@@ -520,7 +514,6 @@ export class StyleManager extends ShellFacade {
         _detectionAllocationBtns: this._detectionAllocationBtns,
         _celestialBtn: this._celestialBtn,
         _models3dBtn: this._models3dBtn,
-        _scopeFeatherValue: this._scopeFeatherValue,
       },
       operations: {
         setStyle: (...args) => this.setStyle(...args),
@@ -540,6 +533,7 @@ export class StyleManager extends ShellFacade {
         _setDetectionAllocation: (...args) =>
           this._setDetectionAllocation(...args),
         _setDetectionFade: (...args) => this._setDetectionFade(...args),
+        _setScope: (...args) => this._visualSettings._setScope(...args),
         setCelestialRingEnabled: (...args) =>
           this.setCelestialRingEnabled(...args),
         _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),

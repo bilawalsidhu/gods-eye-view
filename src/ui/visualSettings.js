@@ -1,5 +1,4 @@
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
-import { syncScopeControls } from './displayControls.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
 import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import { useDisplayStore } from './stores/display.js';
@@ -49,12 +48,7 @@ const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
 /** Own visual preferences, detection overrides and display-control state. */
 export class VisualSettings {
   async restoreShareState(state) {
-    const {
-      setScopeMaskEnabled,
-      setScopeMaskFeather,
-      setScopeTerminusOverride,
-      clampScopeTerminusPct,
-    } = this.services;
+    const { setScopeTerminusOverride, clampScopeTerminusPct } = this.services;
     const {
       style,
       bloom,
@@ -139,17 +133,7 @@ export class VisualSettings {
         focus: false,
       });
     }
-    if (typeof scopeEnabled === 'boolean') {
-      setScopeMaskEnabled(scopeEnabled);
-      syncScopeControls(this._scopeBtn, this._scopeFeatherSlider, scopeEnabled);
-    }
-    if (typeof scopeFeatherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = clampScopeFeatherPct(scopeFeatherPct);
-      this._scopeFeatherSlider.value = String(pct);
-      if (this._scopeFeatherValue)
-        this._scopeFeatherValue.textContent = `${pct}%`;
-      setScopeMaskFeather(pct / 100);
-    }
+    this._setScope({ enabled: scopeEnabled, featherPct: scopeFeatherPct });
     // null restores the altitude-adaptive ramp; a number pins the terminus
     // (clamped to the supported 94..100 band, same as the `sce` hash key).
     if (scopeTerminusPct === null) setScopeTerminusOverride(null);
@@ -218,6 +202,10 @@ export class VisualSettings {
     this._hudVisibleShown = null;
     this._hudVariantShown = null;
     this._sonarShown = null;
+    // What the Scope and Celestial controls show; null until first set.
+    this._scopeEnabledShown = null;
+    this._scopeFeatherShown = null;
+    this._celestialShown = null;
     this.activeStyle = 'normal';
     this._preCyberStyle = null;
     this._cyberStyleUserSelected = false;
@@ -483,7 +471,29 @@ export class VisualSettings {
       detection: this._presentDetection(),
       hud: { visible: this._hudVisibleShown, variant: this._hudVariantShown },
       sonar: this._sonarShown,
+      scope: {
+        enabled: this._scopeEnabledShown,
+        featherPct: this._scopeFeatherShown,
+      },
+      celestial: this._celestialShown,
     };
+  }
+
+  /**
+   * Apply the Scope mask and show it on its controls; a field that is not
+   * given stays as it is. `apply: false` only shows the mask's state.
+   */
+  _setScope({ enabled, featherPct } = {}, { apply = true } = {}) {
+    if (typeof enabled === 'boolean') {
+      if (apply) this.services.setScopeMaskEnabled(enabled);
+      this._scopeEnabledShown = enabled;
+    }
+    if (typeof featherPct === 'number') {
+      const pct = clampScopeFeatherPct(featherPct);
+      if (apply) this.services.setScopeMaskFeather(pct / 100);
+      this._scopeFeatherShown = pct;
+    }
+    this._publishDisplay();
   }
 
   /** Detection's button, rows, sliders and allocation segments. */
@@ -1150,15 +1160,8 @@ export class VisualSettings {
     if (syncShare) this.shareLinkManager?.claimRestoreLane?.('visual');
     const nextEnabled = styleSupported && enabled;
     this.celestialRing?.setEnabled(nextEnabled);
-    this._celestialBtn?.classList.toggle('active', nextEnabled);
-    this._celestialBtn?.setAttribute('aria-pressed', String(nextEnabled));
-    if (this._celestialBtn) {
-      this._celestialBtn.disabled = !styleSupported;
-      this._celestialBtn.setAttribute('aria-disabled', String(!styleSupported));
-      this._celestialBtn.title = styleSupported
-        ? t('Celestial ring — reveal the full globe')
-        : t('Celestial ring — available in Normal style');
-    }
+    this._celestialShown = { active: nextEnabled, supported: styleSupported };
+    this._publishDisplay();
     let cameraFocused = false;
     if (nextEnabled && focus) {
       cameraFocused = !!this.celestialRing?.focusFullGlobe();
@@ -1220,7 +1223,6 @@ export class VisualSettings {
   }
 
   async applyVisualState(state = {}, { isCurrent = null } = {}) {
-    const { setScopeMaskEnabled, setScopeMaskFeather } = this.services;
     const superseded = () => typeof isCurrent === 'function' && !isCurrent();
     if (superseded()) return false;
 
@@ -1258,21 +1260,10 @@ export class VisualSettings {
     }
 
     const scopeState = state.scope || {};
-    if (typeof scopeState.enabled === 'boolean') {
-      setScopeMaskEnabled(scopeState.enabled);
-      syncScopeControls(
-        this._scopeBtn,
-        this._scopeFeatherSlider,
-        scopeState.enabled,
-      );
-    }
-    if (typeof scopeState.featherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = clampScopeFeatherPct(scopeState.featherPct);
-      this._scopeFeatherSlider.value = String(pct);
-      if (this._scopeFeatherValue)
-        this._scopeFeatherValue.textContent = `${pct}%`;
-      setScopeMaskFeather(pct / 100);
-    }
+    this._setScope({
+      enabled: scopeState.enabled,
+      featherPct: scopeState.featherPct,
+    });
 
     const detectionState = state.detection || {};
     if (typeof detectionState.density === 'number')

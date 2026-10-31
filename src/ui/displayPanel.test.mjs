@@ -253,3 +253,47 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
   assert.equal($('cyber-sonar-sector').value, '30');
   assert.equal($('cyber-sonar-sector-value').textContent, '30°');
 });
+
+test('Scope and Celestial render what VisualSettings shows', async (t) => {
+  const { store, $ } = fixture(t);
+  const { owner } = settings(store);
+  const mask = { enabled: true, feather: 0.35 };
+  owner.services = {
+    ...owner.services,
+    setScopeMaskEnabled: (on) => (mask.enabled = on),
+    setScopeMaskFeather: (value) => (mask.feather = value),
+  };
+  assert.equal($('scope-toggle').checked, true);
+  assert.equal($('scope-feather-value').textContent, '100%');
+  assert.equal($('celestial-toggle').hasAttribute('aria-disabled'), false);
+
+  owner._setScope({ enabled: false }, { apply: false });
+  await nextTick();
+  assert.equal($('scope-toggle').checked, false);
+  assert.equal($('scope-feather-slider').disabled, true);
+  assert.equal(mask.enabled, true, 'only shown');
+
+  owner._setScope({ enabled: true, featherPct: 250 });
+  await nextTick();
+  assert.equal($('scope-toggle').checked, true);
+  assert.equal($('scope-feather-slider').disabled, false);
+  assert.equal($('scope-feather-slider').value, '200', 'clamped');
+  assert.equal($('scope-feather-value').textContent, '200%');
+  assert.deepEqual(mask, { enabled: true, feather: 2 });
+
+  owner._celestialShown = { active: false, supported: false };
+  owner._publishDisplay();
+  await nextTick();
+  const celestial = $('celestial-toggle');
+  assert.equal(celestial.disabled, true);
+  assert.equal(celestial.getAttribute('aria-disabled'), 'true');
+  assert.equal(celestial.title, 'Celestial ring — available in Normal style');
+
+  owner._celestialShown = { active: true, supported: true };
+  owner._publishDisplay();
+  await nextTick();
+  assert.equal(celestial.disabled, false);
+  assert.equal(celestial.getAttribute('aria-pressed'), 'true');
+  assert.equal(celestial.classList.contains('active'), true);
+  assert.equal(celestial.title, 'Celestial ring — reveal the full globe');
+});

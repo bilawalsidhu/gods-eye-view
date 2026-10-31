@@ -5,9 +5,9 @@ import { t } from '../../../i18n/index.js';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import { useDisplayStore } from '../../stores/display.js';
 
-// The Display panel. VisualSettings presents the HUD, Sonar, detection,
-// bloom and sharpen and publishes them; until it does, the panel shows its
-// initial markup. The other groups keep their owners' element bindings.
+// The Display panel. VisualSettings presents the HUD, Sonar, Scope,
+// Celestial, detection, bloom and sharpen and publishes them; until it does,
+// the panel shows its initial markup. The other groups keep their owners' element bindings.
 const { view } = storeToRefs(useDisplayStore());
 const pct = (value) => `${value}%`;
 const hud = computed(() => view.value?.hud ?? null);
@@ -16,6 +16,14 @@ const sonarOn = computed(() => sonar.value?.enabled ?? true);
 const detection = computed(() => view.value?.detection ?? null);
 const detectButton = computed(() => detection.value?.button ?? null);
 const allocation = computed(() => detection.value?.allocation ?? 'ELASTIC');
+const scopeOn = computed(() => view.value?.scope.enabled ?? true);
+const scopeFeather = computed(() => view.value?.scope.featherPct ?? 100);
+const celestial = computed(() => view.value?.celestial ?? null);
+const celestialTitle = computed(() =>
+  celestial.value && !celestial.value.supported
+    ? t('Celestial ring — available in Normal style')
+    : t('Celestial ring — reveal the full globe'),
+);
 const allocationSegment = (value) => ({
   class: { active: allocation.value === value },
   'aria-checked': String(allocation.value === value),
@@ -133,12 +141,12 @@ const allocationSegment = (value) => ({
     <label class="pp-toggle-btn pp-scope-toggle" title="Scope — the circular viewport mask" data-i18n-title>
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
       <span class="pp-label" data-i18n>Scope</span>
-      <input type="checkbox" id="scope-toggle" checked />
+      <input type="checkbox" id="scope-toggle" :checked="scopeOn" />
     </label>
     <div class="pp-slider-row visible" id="scope-slider-row">
       <span class="pp-slider-mini-label" data-i18n>Feather</span>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="scope-feather-slider" min="0" max="200" value="100" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius" data-i18n-aria-label data-i18n-title />
-      <span class="pp-slider-value" id="scope-feather-value">100%</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="scope-feather-slider" min="0" max="200" value="100" v-range-value="scopeFeather" :disabled="!scopeOn" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius" data-i18n-aria-label data-i18n-title />
+      <span class="pp-slider-value" id="scope-feather-value">{{ pct(scopeFeather) }}</span>
     </div>
   </div>
   <div class="pp-toggle-group">
@@ -177,7 +185,7 @@ const allocationSegment = (value) => ({
     <span class="draw-hint geo-import-hint" id="geo-import-hint" aria-live="polite"></span>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" aria-pressed="false" data-i18n-title>
+    <button class="pp-toggle-btn" :class="{ active: celestial?.active }" id="celestial-toggle" :title="celestialTitle" :aria-pressed="String(celestial?.active ?? false)" :disabled="celestial ? !celestial.supported : undefined" :aria-disabled="celestial ? String(!celestial.supported) : undefined">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
       <span class="pp-label" data-i18n>Celestial</span>
     </button>

@@ -32,7 +32,6 @@ export function readShellElements(document = globalThis.document) {
     _celestialBtn: document.getElementById('celestial-toggle'),
     _scopeBtn: document.getElementById('scope-toggle'),
     _scopeFeatherSlider: document.getElementById('scope-feather-slider'),
-    _scopeFeatherValue: document.getElementById('scope-feather-value'),
     _mapStackChips: document.getElementById('map-stack-chips'),
     _mapStackStatus: document.getElementById('map-stack-status'),
     _cleanViewBtn: document.getElementById('clean-view-toggle'),

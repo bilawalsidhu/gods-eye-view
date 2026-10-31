@@ -1,7 +1,6 @@
-import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { createFrameRateMonitor } from './frameRateMonitor.js';
 import { bindApplicationShortcuts } from './visualInput.js';
-import { bindDisplayControls, syncScopeControls } from './displayControls.js';
+import { bindDisplayControls } from './displayControls.js';
 
 /** Own keyboard/display event subscriptions; settings remain with their state owners. */
 export class DisplayBindings {
@@ -45,12 +44,7 @@ export class DisplayBindings {
     return this.readState()._models3dModeBtns;
   }
   _initUI() {
-    const {
-      cycleDetectionMode,
-      setScopeMaskEnabled,
-      isScopeMaskEnabled,
-      setScopeMaskFeather,
-    } = this.services;
+    const { cycleDetectionMode, isScopeMaskEnabled } = this.services;
     this._applicationShortcuts?.destroy();
     this._frameRateMonitor?.destroy();
     this._frameRateMonitor = createFrameRateMonitor({
@@ -89,11 +83,7 @@ export class DisplayBindings {
       },
     });
 
-    syncScopeControls(
-      this._scopeBtn,
-      this._scopeFeatherSlider,
-      isScopeMaskEnabled(),
-    );
+    this._setScope({ enabled: isScopeMaskEnabled() }, { apply: false });
     this._displayControls?.destroy();
     this._displayControls = bindDisplayControls({
       elements: {
@@ -139,16 +129,12 @@ export class DisplayBindings {
         },
         setScopeEnabled: (enabled) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
-          setScopeMaskEnabled(enabled);
-          syncScopeControls(this._scopeBtn, this._scopeFeatherSlider, enabled);
+          this._setScope({ enabled });
           this._syncShareState();
         },
         setScopeFeather: (value) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
-          const pct = clampScopeFeatherPct(value);
-          if (this._scopeFeatherValue)
-            this._scopeFeatherValue.textContent = `${pct}%`;
-          setScopeMaskFeather(pct / 100);
+          this._setScope({ featherPct: value });
           this._syncShareState();
         },
         setSharpenIntensity: (pct) => {
