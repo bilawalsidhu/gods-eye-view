@@ -575,7 +575,8 @@
       "src/ui/rail/RailCards.vue",
       "src/ui/rail/utcClock.js",
       "src/ui/rail/RailTimeline.vue",
-      "src/ui/rail/rangeValue.js"
+      "src/ui/rail/rangeValue.js",
+      "src/ui/weather/WeatherReadout.vue"
     ],
     "external": ["vue"]
   },
@@ -942,7 +943,8 @@
       "src/ui/rail/RailCards.vue",
       "src/ui/rail/utcClock.js",
       "src/ui/rail/RailTimeline.vue",
-      "src/ui/rail/rangeValue.js"
+      "src/ui/rail/rangeValue.js",
+      "src/ui/weather/WeatherReadout.vue"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -2904,7 +2906,8 @@
       "src/ui/rail/RailCardBlocks.vue",
       "src/ui/rail/utcClock.js",
       "src/ui/rail/RailTimeline.vue",
-      "src/ui/rail/rangeValue.js"
+      "src/ui/rail/rangeValue.js",
+      "src/ui/weather/WeatherReadout.vue"
     ],
     "external": [
       "hls.js",

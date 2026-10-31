@@ -81,7 +81,8 @@ They contain no application state.
    the rail cards, card blocks and timeline (`src/ui/rail/`) render through
    Vue's synchronous `render()` behind `createRailCards()`,
    `createRailCardBlocks()` and `createRailTimeline()`. Order: Scenes (done: `SceneOptions` and
-   `SceneShotList` over the `gev-scenes` store), Weather, Recent imagery,
+   `SceneShotList` over the `gev-scenes` store), Weather (done: the owner
+   renders `WeatherReadout` from the view it computes), Recent imagery,
    Street level, CCTV, Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
