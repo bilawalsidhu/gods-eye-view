@@ -12,6 +12,7 @@ import {
   OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
   OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT,
 } from './constants.js';
+import { resolveVoiceLanguage } from '../../../src/voice/voiceLanguage.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
 import {
@@ -269,10 +270,19 @@ function createRealtimeTokenHandler({
     const transcribeModel =
       process.env.OPENAI_REALTIME_TRANSCRIBE_MODEL ||
       OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT;
+    // The interface language, requested as ?lang=: the model speaks it and
+    // the captions are transcribed as it. Unshipped or hostile values resolve
+    // to null, which leaves the session exactly as an English one.
+    const language = resolveVoiceLanguage(query.get('lang'));
     const transcription =
       transcribeModel.toLowerCase() === 'off'
         ? {}
-        : { transcription: { model: transcribeModel } };
+        : {
+            transcription: {
+              model: transcribeModel,
+              ...(language ? { language } : {}),
+            },
+          };
     const sessionConfig = {
       session: {
         type: 'realtime',
@@ -298,7 +308,7 @@ function createRealtimeTokenHandler({
           },
           output: { voice },
         },
-        instructions: realtimeInstructions(annotationGuidance),
+        instructions: realtimeInstructions(annotationGuidance, { language }),
         tools,
         tool_choice: 'auto',
       },
@@ -323,6 +333,7 @@ function createRealtimeTokenHandler({
       // verbatim), so these headers are the authoritative echo — including the
       // case where a bogus ?tier= was silently downgraded to standard.
       res.setHeader('X-GEV-Voice-Tier', tier);
+      res.setHeader('X-GEV-Voice-Language', language || 'en');
       res.setHeader('X-GEV-Voice-Model', model);
       res.setHeader(
         'X-GEV-Voice-Auth',
