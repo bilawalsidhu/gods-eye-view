@@ -20,7 +20,9 @@ import {
   clearPredictiveRoute,
 } from './cockpitInstruments.js';
 import { updateContext } from './cockpitContext.js';
+import { createBriefState } from './cockpitBriefPages.js';
 import {
+  publishBriefView,
   showBriefPage,
   setBriefAutoRotate,
   startBriefRotation,
@@ -58,6 +60,7 @@ export class CockpitViewController {
       onEntered = null,
       onExited = null,
       restoreTrackingFrame = null,
+      publishBrief = () => {},
     } = {},
   ) {
     this.viewer = viewer;
@@ -162,36 +165,11 @@ export class CockpitViewController {
     this.signalStream = document.getElementById('cockpit-signal-stream');
     this.signalList = document.getElementById('cockpit-signal-list');
     this.signalToggle = document.getElementById('cockpit-signal-toggle');
-    this.briefKicker = document.getElementById('cockpit-brief-kicker');
-    this.briefSubtitle = document.getElementById('cockpit-brief-subtitle');
     this.briefPrevious = document.getElementById('cockpit-brief-previous');
     this.briefNext = document.getElementById('cockpit-brief-next');
     this.briefAutoToggle = document.getElementById('cockpit-brief-auto');
-    this.briefPosition = document.getElementById('cockpit-brief-position');
-    this.briefSource = document.getElementById('cockpit-brief-source');
-    this.briefPages = Array.from(
-      document.querySelectorAll('[data-cockpit-brief-page]'),
-    );
     this.briefTabs = Array.from(
       document.querySelectorAll('[data-cockpit-brief-index]'),
-    );
-    this.newsStatus = document.getElementById('cockpit-news-status');
-    this.newsList = document.getElementById('cockpit-news-list');
-    this.localPlace = document.getElementById('cockpit-local-place');
-    this.localCoordinates = document.getElementById(
-      'cockpit-local-coordinates',
-    );
-    this.localTemperature = document.getElementById(
-      'cockpit-local-temperature',
-    );
-    this.localWind = document.getElementById('cockpit-local-wind');
-    this.localWindDirection = document.getElementById(
-      'cockpit-local-wind-direction',
-    );
-    this.localCondition = document.getElementById('cockpit-local-condition');
-    this.localCloud = document.getElementById('cockpit-local-cloud');
-    this.localPrecipitation = document.getElementById(
-      'cockpit-local-precipitation',
     );
     this.signalCollapsed = false;
     this.signalUserCollapsed = false;
@@ -199,6 +177,9 @@ export class CockpitViewController {
     this.signalSignatures = new Map();
     this.briefPageIndex = 0;
     this.briefAutoRotateEnabled = false;
+    // CockpitBriefing renders what publishBrief receives.
+    this.publishBrief = publishBrief;
+    this.brief = createBriefState();
     this.briefTimer = null;
     this.lastAircraftInfo = null;
     this.regionalBrief = null;
@@ -351,6 +332,9 @@ export class CockpitViewController {
   }
   updateContext(info, heading) {
     return updateContext.call(this, info, heading);
+  }
+  publishBriefView() {
+    return publishBriefView.call(this);
   }
   showBriefPage(index, options) {
     return showBriefPage.call(this, index, options);

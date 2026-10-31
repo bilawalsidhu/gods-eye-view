@@ -57,6 +57,7 @@ import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocationStore } from './stores/location.js';
+import { useCockpitStore } from './stores/cockpit.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -374,6 +375,8 @@ export class StyleManager extends ShellFacade {
         _models3dBtn: this._models3dBtn,
       },
       operations: {
+        publishCockpitBrief: (view) =>
+          useCockpitStore(applicationPinia()).publishBrief(view),
         _layoutRightPanels: (...args) => this._layoutRightPanels(...args),
         _setCockpitVision: (...args) => this._setCockpitVision(...args),
         _stampNavigation: (...args) => this._stampNavigation(...args),
@@ -832,11 +835,6 @@ export class StyleManager extends ShellFacade {
           t('SPACE MISSIONS — launches & orbital assets'),
         ),
       );
-    }
-    // Leading space after the live dot, as showBriefPage writes it.
-    const briefKicker = document.querySelector('#cockpit-brief-kicker');
-    if (briefKicker) {
-      this._setHeaderText(briefKicker, ` ${t('LIVE SIGNALS')}`);
     }
   }
 

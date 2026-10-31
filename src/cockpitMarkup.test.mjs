@@ -23,7 +23,11 @@ import {
   setContextCollapsed,
   setSignalCollapsed,
 } from './ui/cockpitLayout.js';
-import { setBriefAutoRotate } from './ui/cockpitBriefing.js';
+import { createBriefState } from './ui/cockpitBriefPages.js';
+import {
+  publishBriefView,
+  setBriefAutoRotate,
+} from './ui/cockpitBriefing.js';
 import { CockpitDisplayPortal } from './ui/cockpitDisplayPortal.js';
 import { _handleContextLayerChange } from './ui/contextLayerChanges.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
@@ -1269,15 +1273,22 @@ test('cockpit briefing cycle control keeps its state as the accessible name', ()
     /title="Cycle briefing pages automatically every 9 seconds \(Signals → News → Local\)\./,
   );
 
-  const update = setBriefAutoRotate.toString();
-  assert.ok(update, 'cockpit briefing cycle state updater is missing');
-  assert.match(
-    update,
-    /const label = this\.briefAutoRotateEnabled \? 'CYCLE ON' : 'CYCLE OFF';/,
-  );
-  assert.match(update, /setAttribute\('aria-label', label\)/);
-  assert.match(update, /\.title = help;/);
-  assert.doesNotMatch(update, /setAttribute\('aria-label', help\)/);
+  // The presented label is the state; the help is only the tooltip.
+  const views = [];
+  const owner = {
+    brief: createBriefState(),
+    publishBrief: (view) => views.push(view),
+    publishBriefView,
+    startBriefRotation() {},
+    stopBriefRotation() {},
+  };
+  setBriefAutoRotate.call(owner, true);
+  assert.equal(views.at(-1).autoLabel, 'CYCLE ON');
+  assert.equal(views.at(-1).autoRotate, true);
+  assert.match(views.at(-1).autoHelp, /^Stop automatic page cycling\./);
+  setBriefAutoRotate.call(owner, false);
+  assert.equal(views.at(-1).autoLabel, 'CYCLE OFF');
+  assert.match(views.at(-1).autoHelp, /^Cycle briefing pages automatically/);
 });
 
 test('voice Cockpit entry honours a requested contact layer before it enters', () => {

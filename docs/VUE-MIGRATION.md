@@ -127,7 +127,12 @@ They contain no application state.
    publishes to the `gev-display` store, teleporting the tab bar and sheet
    backdrop to the end of the page from the first publish until the shell
    is destroyed; the shell takes their clicks from the document), then
-   Cockpit. Layers that write into the right rail
+   Cockpit (in progress: `CockpitBriefing` renders the briefing card's
+   pages, cycle toggle, regional news and local conditions from the
+   `gev-cockpit` store that the Cockpit controller publishes to, starting
+   from `cockpitBriefPages.js`, which both read; the controls keep the
+   controller's listeners, and the route card and signal list keep their
+   owners' bindings for now). Layers that write into the right rail
    directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion and the attribute
