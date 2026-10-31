@@ -1,6 +1,6 @@
 # Translating God's Eye View
 
-Shipped languages: **English** (source and fallback), **Spanish** (`es`), **Russian** (`ru`), **Simplified Chinese** (`zh-CN`) and **Traditional Chinese** (`zh-Hant`).
+Shipped languages: **English** (source and fallback), **German** (`de`), **Spanish** (`es`), **French** (`fr`), **Italian** (`it`), **Japanese** (`ja`), **Brazilian Portuguese** (`pt`), **Russian** (`ru`), **Ukrainian** (`uk`), **Simplified Chinese** (`zh-CN`) and **Traditional Chinese** (`zh-Hant`).
 
 ## How it works
 
@@ -63,4 +63,4 @@ These are contracts, not copy: layer ids and registry keys, status enums and oth
 
 ## Language notes
 
-Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Spanish](./translations/es.md), [Russian](./translations/ru.md), [Simplified Chinese](./translations/zh-CN.md), [Traditional Chinese](./translations/zh-Hant.md). Read it before translating, and add a term there when you settle on one.
+Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [German](./translations/de.md), [Spanish](./translations/es.md), [French](./translations/fr.md), [Italian](./translations/it.md), [Japanese](./translations/ja.md), [Brazilian Portuguese](./translations/pt.md), [Russian](./translations/ru.md), [Ukrainian](./translations/uk.md), [Simplified Chinese](./translations/zh-CN.md), [Traditional Chinese](./translations/zh-Hant.md). Read it before translating, and add a term there when you settle on one.

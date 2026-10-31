@@ -200,8 +200,8 @@ const checkResponsiveStyleFocus = async (width) => {
     await page.focus('#control-panel-toggle');
     await pressTabs(2); // disclosure -> pin -> Normal
   }
-  for (const [index, style] of ['normal', 'thermal', 'snow'].entries()) {
-    if (index) await pressTabs(3);
+  for (const [tabs, style] of [[0, 'normal'], [3, 'thermal'], [2, 'noir']]) {
+    if (tabs) await pressTabs(tabs);
     const state = await styleFocusMetrics();
     check(`${width} px ${style} keyboard ring is visible and unclipped`,
       hasVisibleStyleFocus(state, style) && state.selectedStyle === 'normal'
@@ -567,13 +567,13 @@ try {
   // Visual Styles precede the five Map Source tiles. Keep the existing opening
   // handoff to selected OSM, then use the user's real Shift+Tab path into styles.
   await pressTabs(5, true);
-  const snowFocus = await styleFocusMetrics();
-  check('Shift+Tab reaches Snow with a visible ring while Normal and OSM stay selected',
-    hasVisibleStyleFocus(snowFocus, 'snow') && !snowFocus.selected
-      && snowFocus.selectedStyle === 'normal' && snowFocus.selectedMap === 'osm',
-    JSON.stringify(snowFocus));
+  const noirFocus = await styleFocusMetrics();
+  check('Shift+Tab reaches Noir with a visible ring while Normal and OSM stay selected',
+    hasVisibleStyleFocus(noirFocus, 'noir') && !noirFocus.selected
+      && noirFocus.selectedStyle === 'normal' && noirFocus.selectedMap === 'osm',
+    JSON.stringify(noirFocus));
   await page.screenshot({ path: path.join(shotsDir, 'keyboard-style-focus.png') });
-  await pressTabs(3, true);
+  await pressTabs(2, true);
   const middleFocus = await styleFocusMetrics();
   check('Shift+Tab traverses the middle FLIR style without activating it',
     hasVisibleStyleFocus(middleFocus, 'thermal') && !middleFocus.selected

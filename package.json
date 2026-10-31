@@ -70,9 +70,9 @@
   },
   "devDependencies": {
     "prettier": "3.9.6",
-    "puppeteer": "^25.10.0",
+    "puppeteer": "^25.16.0",
     "sharp": "^0.35.4",
-    "vite": "^6.0.0",
+    "vite": "^6.4.4",
     "vite-plugin-cesium": "^1.2.23",
     "ws": "^8.21.0"
   },

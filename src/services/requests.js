@@ -71,6 +71,7 @@ export function createApplicationRequestServices({
   // Discovery is bounded; failed, malformed or timed-out probes are forgotten and not
   // retried for a short backoff, during which queries go to the server as
   // they would against an older server without the probe.
+  let summaryCapability = null;
   let boundaryCapability = null;
   let boundaryProbeRetryAt = 0;
   function boundariesConfigured() {
@@ -175,6 +176,23 @@ export function createApplicationRequestServices({
       },
     },
     summary: {
+      // The capability probe, asked once per page: true or false from a
+      // server that answers it, null (unknown) from one that does not.
+      configured() {
+        summaryCapability ??= request(`${urls.summary}/status`, {
+          signal: AbortSignal.timeout(3000),
+        }).then(
+          (response) =>
+            response.ok && typeof response.data?.configured === 'boolean'
+              ? response.data.configured
+              : null,
+          (error) => {
+            if (lifetime?.aborted) throw error;
+            return null;
+          },
+        );
+        return summaryCapability;
+      },
       async summarize(context, { signal } = {}) {
         return request(urls.summary, {
           method: 'POST',
