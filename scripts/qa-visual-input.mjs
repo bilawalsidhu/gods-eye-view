@@ -140,9 +140,11 @@ try {
       hudBefore,
     ),
   );
-  const displayBefore = await page.evaluate(() => {
+  const displayBefore = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     manager._setBloomEnabled(true);
+    // The Display view shows the slider row on its next render.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     manager._bloomSlider.value = '80';
     manager._bloomSlider.dispatchEvent(new Event('input', { bubbles: true }));
     manager._bloomSlider.focus();

@@ -459,6 +459,26 @@ test('the scene select follows option renders, as before', async () => {
   }
 });
 
+test('an option render restores the published scene after a local pick', async () => {
+  const f = fixture();
+  try {
+    f.state.scenes.push({ id: 'scene-b', title: 'B', shots: [] });
+    f.owner.renderSceneSelect();
+    await nextTick();
+    assert.equal(f.elements.select.value, 'scene-a');
+    // The person picks B; the owner re-renders the shot list only.
+    f.elements.select.value = 'scene-b';
+    f.owner.renderShotList();
+    await nextTick();
+    // Something reloads A and renders the options with the same choice.
+    f.owner.renderSceneSelect();
+    await nextTick();
+    assert.equal(f.elements.select.value, 'scene-a');
+  } finally {
+    f.restore();
+  }
+});
+
 test('Scene controls consume current state, preserve rows on progress, and unsubscribe on destruction', async () => {
   const f = fixture();
   try {

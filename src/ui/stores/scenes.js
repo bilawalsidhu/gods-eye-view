@@ -21,6 +21,9 @@ export const useSceneStore = defineStore('gev-scenes', () => {
   const selectedShotId = shallowRef(null);
   // The select's choice, updated only when its options are rendered.
   const listedSceneId = shallowRef(null);
+  // Counts option renders: each one re-applies the select's choice, which
+  // the person may have changed since.
+  const listedRevision = shallowRef(0);
   /** Whether an owner presents the project; until then the list is empty. */
   const attached = shallowRef(false);
   /** @type {{handlers: SceneRowHandlers}|null} */
@@ -48,6 +51,7 @@ export const useSceneStore = defineStore('gev-scenes', () => {
   function publishOptions(state) {
     publish(state);
     listedSceneId.value = state.selectedSceneId ?? null;
+    listedRevision.value++;
   }
 
   /** @param {string|null} id */
@@ -79,6 +83,7 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     selectedSceneId,
     selectedShotId,
     listedSceneId,
+    listedRevision,
     attached,
     attach,
     publish,
