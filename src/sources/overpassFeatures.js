@@ -89,6 +89,9 @@ export function createOverpassFeatureSource({
     }
   }
   return {
+    // Only this concrete OSM adapter declares outline origin; generic injected
+    // feature sources do not acquire attribution from their feature IDs.
+    outlineCredit: 'osm',
     getFocusFootprints({ lat, lon }, options = {}) {
       validPoint(lat, lon);
       return query(

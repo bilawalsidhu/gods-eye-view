@@ -24,6 +24,28 @@ export function escapeFsDenyPath(path) {
 
 const REPO_ROOT_GLOB = escapeFsDenyPath(REPO_ROOT);
 
+/** Browser-safe form of the optional Photon endpoint build input. */
+function photonEndpointSetting(value) {
+  if (value === undefined) return undefined;
+  const text = String(value ?? '').trim();
+  if (!text || ['off', 'none', 'disabled'].includes(text.toLowerCase()))
+    return null;
+  try {
+    const url = new URL(text);
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    )
+      return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
  * No inline script is permitted, and the only foreign script origins are the
@@ -142,12 +164,14 @@ export function createBrowserViteConfig({
   publicDir,
   googleApiKey,
   cesiumToken,
+  photonUrl,
   mapillaryToken,
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
   command,
 } = {}) {
+  const photonSetting = photonEndpointSetting(photonUrl);
   return {
     plugins: [
       // First, so every API response, including a Host refusal, carries them.
@@ -211,6 +235,12 @@ export function createBrowserViteConfig({
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      // Only expose a validated URL or the explicit disabled sentinel.
+      ...(photonSetting === undefined
+        ? {}
+        : {
+            'import.meta.env.PHOTON_URL': JSON.stringify(photonSetting),
+          }),
       // Mapillary client tokens are public by design (see SECURITY.md).
       'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
         mapillaryToken ?? '',

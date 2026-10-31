@@ -157,9 +157,10 @@ export function createScreenAnnotationRenderer(
     if (anno.type === 'area' && anno.ring && anno.ring.length >= 3) {
       // Synthesized (buffered/approximate) areas render DASHED + fainter, with no
       // "draw-on" gesture, so they never masquerade as an authoritative boundary.
-      parts.poly = svgEl('polygon', {
+      parts.poly = svgEl('path', {
         class: anno.synthesized ? 'gev-anno-area' : 'gev-anno-area gev-draw',
         fill: c,
+        'fill-rule': 'evenodd',
         stroke: c,
         'fill-opacity': anno.synthesized ? '0.08' : '0.14',
         'stroke-width': '2.5',
@@ -358,7 +359,7 @@ export function createScreenAnnotationRenderer(
     // Area-type updates route through the hybrid proxy only.
   }
 
-  function project(lon, lat) {
+  function project(lon, lat, allowOffscreen = false) {
     // Anchor at the real surface height (cached + validated), so marks sit on
     // the ground/building instead of at sea level. The settle-once cache keeps
     // it stable (no per-frame jitter that earlier broke nearby projections).
@@ -382,7 +383,11 @@ export function createScreenAnnotationRenderer(
     // Reject absurd off-screen projections (anchor not in view).
     const w = scene.canvas.clientWidth || scene.canvas.width;
     const h = scene.canvas.clientHeight || scene.canvas.height;
-    if (win.x < -w || win.x > 2 * w || win.y < -h || win.y > 2 * h) return null;
+    if (
+      !allowOffscreen &&
+      (win.x < -w || win.x > 2 * w || win.y < -h || win.y > 2 * h)
+    )
+      return null;
     return { x: win.x, y: win.y };
   }
 
@@ -487,20 +492,40 @@ export function createScreenAnnotationRenderer(
       group.setAttribute('opacity', String(anno.alpha ?? 1));
 
       if (anno.type === 'area' && parts.poly) {
-        const pts = [];
+        const paths = [];
         let cx = 0;
         let cy = 0;
         let n = 0;
-        for (const [lon, lat] of anno.ring) {
-          const p = project(lon, lat);
-          if (!p) continue;
-          pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
-          cx += p.x;
-          cy += p.y;
-          n++;
+        const polygons = anno.polygons?.length ? anno.polygons : [[anno.ring]];
+        for (const polygon of polygons) {
+          const projectedRings = polygon.map((ring) =>
+            ring.map(([lon, lat]) => project(lon, lat, polygon.length > 1)),
+          );
+          // Keep the historical visible-outer projection, but never fill over
+          // an unprojectable hole or hide another independently visible part.
+          const outer = projectedRings[0].filter(Boolean);
+          const holes = projectedRings.slice(1);
+          if (
+            outer.length < 3 ||
+            (holes.length && projectedRings[0].some((p) => !p)) ||
+            holes.some((ring) => ring.length < 3 || ring.some((p) => !p))
+          )
+            continue;
+          for (const projected of [outer, ...holes]) {
+            paths.push(
+              `M ${projected.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ')} Z`,
+            );
+          }
+          if (!n) {
+            for (const p of outer) {
+              cx += p.x;
+              cy += p.y;
+              n++;
+            }
+          }
         }
-        if (pts.length >= 3) {
-          parts.poly.setAttribute('points', pts.join(' '));
+        if (paths.length) {
+          parts.poly.setAttribute('d', paths.join(' '));
           group.style.display = '';
           if (parts.label)
             positionCallout(parts.label, cx / n, cy / n - 6, true);
@@ -628,6 +653,7 @@ export function createScreenAnnotationRenderer(
       }
     }
     if (placed.length > 1) decollideCallouts(placed);
+    placeCalloutsAboveVoicePreview(placed, svg, w, h);
 
     // Tracked-entity z-order — runs AFTER all geometry + callout de-collision so each
     // group's bbox reflects its final on-screen extent. Any mark whose bbox INTERSECTS
@@ -826,6 +852,70 @@ function decollideCallouts(callouts) {
           a._leader.setAttribute('y2', a._y.toFixed(1));
         }
       }
+    }
+  }
+}
+
+/** Keep an overlapping callout above the actual open Voice Preview, when it fits. */
+function placeCalloutsAboveVoicePreview(callouts, svg, width, height) {
+  if (!callouts.length) return;
+  const panel = document.getElementById('gev-voice-panel');
+  if (
+    !panel ||
+    panel.hidden ||
+    panel.dataset.view !== 'preview' ||
+    panel.checkVisibility?.({
+      opacityProperty: true,
+      visibilityProperty: true,
+    }) === false
+  )
+    return;
+  const rect = panel.getBoundingClientRect(),
+    bounds = svg.getBoundingClientRect();
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    bounds.width <= 0 ||
+    bounds.height <= 0
+  )
+    return;
+  // The overlay uses preserveAspectRatio="none": each axis scales independently.
+  const sx = width / bounds.width,
+    sy = height / bounds.height;
+  const blocked = {
+    _x: (rect.left - bounds.left) * sx,
+    _y: (rect.top - bounds.top) * sy,
+    width: rect.width * sx,
+    height: rect.height * sy,
+  };
+  const intersects = (a, b) =>
+    a._x < b._x + b.width &&
+    a._x + a.width > b._x &&
+    a._y < b._y + b.height &&
+    a._y + a.height > b._y;
+  for (const callout of callouts) {
+    if (!intersects(callout, blocked) || callout.width > width - 16) continue;
+    const candidate = {
+      _x: Math.max(8, Math.min(callout._x, width - callout.width - 8)),
+      _y: blocked._y - callout.height - 8,
+      width: callout.width,
+      height: callout.height,
+    };
+    if (
+      candidate._y < 8 ||
+      candidate._y + candidate.height > height - 8 ||
+      callouts.some(
+        (other) => other !== callout && intersects(candidate, other),
+      )
+    )
+      continue;
+    positionCallout(callout, candidate._x, candidate._y, false);
+    if (callout._leader) {
+      callout._leader.setAttribute('x2', candidate._x.toFixed(1));
+      callout._leader.setAttribute(
+        'y2',
+        (candidate._y + candidate.height).toFixed(1),
+      );
     }
   }
 }

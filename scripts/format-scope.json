@@ -1118,5 +1118,22 @@
   "src/testSupport/shareViewFixtures.mjs",
   "src/ui/shareLinks.test.mjs",
   "src/ui/shareButton.test.mjs",
-  "src/share/shareLinkPath.test.mjs"
+  "src/share/shareLinkPath.test.mjs",
+  "src/sources/phaseTiming.test.mjs",
+  "scripts/build-census-places.mjs",
+  "src/data/placeBoundaries.test.mjs",
+  "src/data/boundaryLabels.test.mjs",
+  "src/data/packGeometry.test.mjs",
+  "src/annotations/placeOutline.test.mjs",
+  "src/annotations/outlineIdentity.test.mjs",
+  "src/annotations/outlineRungs.test.mjs",
+  "src/annotations/outlineRungsFallback.test.mjs",
+  "src/search/photonSetting.test.mjs",
+  "src/sources/nominatimOutlines.test.mjs",
+  "src/sources/openFreeMapOutlines.test.mjs",
+  "src/sources/openFreeMapOutlinesEdges.test.mjs",
+  "src/standalone/layerSources.test.mjs",
+  "src/tooling/nominatimGuardLifecycle.test.mjs",
+  "src/tooling/nominatimLockOwnership.test.mjs",
+  "src/tooling/nominatimOutlineRoute.test.mjs"
 ]

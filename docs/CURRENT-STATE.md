@@ -5306,13 +5306,33 @@ must match exactly, so `12junk, 34oops` and `austin, tx` both reach the
 geocoders instead of being answered from the bundle. Degrees/minutes/seconds and
 grid references are not parsed. An answer either provider gives is exact, so
 nearby-landmark recovery stands aside for it — otherwise a typed coordinate
-could be replaced by whatever Places finds near the current view. The portable `./search` export
+could be replaced by whatever Places finds near the current view. The portable `./search` export uses
 Google first when configured, Photon/OpenStreetMap as fallback (including Google
 transport failures or declined requests), and the local `/api/geocode` route
-over Nominatim as a last resort when neither answers. That route keeps to the
-public instance's usage policy: an identifying `User-Agent` and `Referer`, at
-most one request per second shared with the cockpit's reverse lookups, answers
-cached for five minutes, one upstream call shared between identical searches
+over Nominatim as a last resort when neither answers and an operator explicitly
+configures `NOMINATIM_URL`. Unset, empty and invalid values disable Nominatim.
+`GET /api/geocode/status` answers `{configured}`; the browser asks once per
+page, and when Nominatim is not configured neither the last-resort search nor
+the voice outline client asks `/api/geocode`, so a default install sends no
+lookup it would refuse. A missing or failed probe leaves the capability unknown
+and lookups proceed as before.
+Explicit public-service configuration retains an identifying `User-Agent` and `Referer`, at
+least 1.1 seconds between public search and outline starts, a shared durable
+per-install daily allowance and pause state that fail closed when unusable.
+The shared state lock covers actual fetch invocation and recording the next
+start. An unfinished dispatch marker disables further public requests until
+operator recovery; it is never automatically reclaimed. These controls do not
+establish an application-wide public-service allowance or authorize its use.
+For manual recovery, stop every process sharing the state file and account for
+the interrupted dispatch before removing only its confirmed orphan
+`state.json.dispatch.*` marker. Preserve the state file's count, pause and next
+start, and wait at least the public spacing interval after the last possible
+invocation. `stats().persistence.dispatchPending` exposes the marker; an unlocked
+status read can also briefly see a live dispatch. Do not clear markers while an
+owner is active or reset usage state to restore access.
+Answers are cached
+for 30 days (search), 90 days (outline) or 24 hours (genuine no result),
+one upstream call shared between identical searches
 already in flight, a queue bounded at four waiting searches (a burst past it is
 refused with 429 and `Retry-After`, never held), and a queued search dropped
 once its caller has given up rather than spending a slot on an answer nobody
@@ -5383,7 +5403,7 @@ request viewbox and continues searching without that geographic preference.
 
 - Runtime entry: `src/main.js` calls `initAnnotations({ viewer, tileset })`, exposes `window.__gevAnnotations`, and passes the engine into the voice action runner.
 - Engine contract: `src/annotations/annotationEngine.js` owns annotation state, TTL/fade lifecycle, concurrent anchor resolution, duplicate detection keyed on geometry, cancellation on clear/newer generations, and a hard cap of 120 live marks. Deferred outline upgrades drain FIFO at concurrency 2; queued work retains the owning abort controller and is discarded on a generation change before it can fetch.
-- Resolver contract: `src/annotations/annotationResolver.js` converts names/coords/screen pixels into world anchors and optional geometry. The resolver is type-aware: Google Geocode/Places gives a centroid + scope, operator-configured OSM/Overpass supplies admin/place/footprint/street/enclosing-area geometry, route requests use `/api/route`, and ambiguous/far results are rejected or recovered near the current view instead of drawing misleading blobs. Only explicitly country/state/county-scoped asks bypass near-view recovery and proximity gating; state scope requires a leading `state of …`/`the state of …` phrase, while bare names, proper names ending in “State,” and administrative geocode result types alone remain guarded. Overpass throttles remain distinct from normal transients: `Retry-After` is honored for one retry, and a repeated throttle ends only that mark's outline upgrade.
+- Resolver contract: `src/annotations/resolver.js` converts names, coordinates and screen pixels into world anchors and optional geometry. Google Geocode/Places supplies a centroid and scope; route requests use `/api/route`; ambiguous or distant results are rejected or recovered near the current view instead of drawing misleading blobs. Outline resolution keeps this order: bundled admin/place/neighborhood/Natural Earth geometry; OpenFreeMap street or pointed-building geometry where applicable; the configured OSM/Overpass admin/place/footprint/street/enclosing-area ladder; guarded Nominatim for eligible named cities, admin units, landmarks, buildings and grounds; then an OpenFreeMap building fallback that accepts a named building only when its resolved anchor lies in the selected filled footprint. Pointed-at building requests retain nearby selection within 40 m. Tile building and grounds answers also need the tile holding the anchor: when that tile fails to load and only neighbours arrive, no neighbouring building or area stands in. Tile grounds answer a named grounds ask only from an area of the same name, or, when the ask's head noun names a kind of grounds (school, university/college, hospital, cemetery, stadium, zoo; "campus" alone names none), from the part of the smallest unnamed area of that class that holds the anchor (a class word elsewhere in a name, as in "University Avenue Park", does not count); a differently named area never answers. If no rung can supply honest geometry, the mark remains a point or reports the capability unavailable. A real polygon, definitive miss, configured-ladder approximation, rate limit or transient result keeps its existing finality; Nominatim is only tried after higher-priority configured sources cannot answer. Building tile selection returns the selected component and its holes; a shared vector feature ID does not establish that unrelated components are one building. Other trusted multi-part outlines and holes are retained in `anno.polygons`, with `ring` anchored to the part whose filled area contains the resolved point, outside its holes, when possible. Missing capability never invents a radius outline. Only explicitly country/state/county-scoped asks bypass near-view recovery and proximity gating; state scope requires a leading `state of …`/`the state of …` phrase, while bare names, proper names ending in “State,” and administrative geocode result types alone remain guarded. Overpass throttles remain distinct from normal transients: `Retry-After` is honored for one retry, and a repeated throttle ends only that mark's outline upgrade.
 - With no detailed-feature capability, annotations retain their pins and say
   "Detailed outline unavailable"; location focus reports the same result without
   retrying. Missing capability never synthesizes an outline from a radius.
@@ -5422,6 +5442,28 @@ request viewbox and continues searching without that geographic preference.
   Berlin inside Brandenburg). Each pack loads on the first ask that needs it,
   never at start-up; the analyst region lookup uses the same packs. Gate:
   `scripts/qa-admin-outlines.mjs`.
+- Bundled place and neighborhood outlines (`src/data/placeBoundaries.js`):
+  US Census places (`src/data/local_data/us_census_places/`, one file per
+  state, public domain, `scripts/build-census-places.mjs`) and Who's On First
+  neighborhoods (`src/data/local_data/wof_neighborhoods/`, quadtree tiles,
+  per-source licences, `scripts/build-wof-neighborhoods.py`). After the admin
+  packs, an area ask named at or near the view is drawn from, in order, a
+  Census place ("Austin"; a state qualifier narrows the search to that state
+  wherever the camera is: "Springfield, Illinois"), the San Francisco DataSF
+  pack, then WOF ("Notting Hill", "Le Marais"). "Near" reaches half the view
+  radius. A district ask takes a neighborhood first and a place only when the
+  view is inside it; without an entity kind, the candidate holding the view
+  wins, else the nearer. "City of X" asks for an incorporated place; when
+  several places still fit and nothing decides, the geocoder answers.
+  Compound, grounds, monument and "around" asks skip these, as do names that
+  end like a landmark ("Central Park") unless asked as a district, and a
+  qualified neighborhood ("Williamsburg, Virginia") goes to the geocoder. A
+  geocoded city or neighborhood is drawn from the same packs when one carries
+  the name and holds the point, before any boundary lookup. Only the index and
+  the state files or tiles around the point are fetched (files under 4 KB are
+  inlined into the bundle), and the recently used ones are kept (12 state
+  files, 24 tiles). Gate:
+  `node scripts/qa-voice-routing.mjs --layer behavior --behavior outlines`.
 - Renderer contract: `src/annotations/hybridAnnotationRenderer.js` routes draped `area`/`route` geometry to world-space Cesium rendering and reticles/pins/arrows/callouts to the screen-space SVG renderer. Area labels are screen-space callouts so all captions share one visual language; progressive outline upgrades convert the existing screen group in place when the anchor snaps to the resolved centroid.
 - Tooling: voice has `annotate_map` and `clear_annotations` tools. Annotations accumulate and persist by default; clearing is explicit only. Partial failures, approximate synthesized zones, and route fallbacks are returned as structured tool results so the voice layer can be honest.
 - Console/dev API: `window.__gevAnnotations.tour()`, `.demo()`, `.annotate()`, `.clear()`, `.count()`, and `.list()` are the deterministic no-mic test surface.
@@ -5928,8 +5970,14 @@ easier to meet (detection is now on more often), but does not create it.
   Only eligible road geometry receives dots;
   reverse one-way lines are reversed. The shared tile source caps each view at
   16 tiles per pass (32 OpenFreeMap tiles total), four concurrent requests and 4 MiB per response. OpenFreeMap retains
-  up to 192 decoded tiles/64 MiB (four times body bytes as a storage estimate);
-  other tile sources retain the 64-tile/24 MiB defaults. Identical source-version/XYZ
+  up to 192 decoded tiles/32 MiB in one shared decoded cache (four times body
+  bytes as a storage estimate); traffic and installations each keep their own
+  slice of those tiles within 12 MiB and outlines within 8 MiB, charged at the
+  slice's estimated object size. The charged budgets total 64 MiB, the budget
+  of the single OpenFreeMap source traffic and installations shared before;
+  they are estimates, not a measured heap bound, and each consumer slice is a
+  copy (`structuredClone`) made once per cached tile. Other tile sources retain
+  the 64-tile/24 MiB defaults. Identical source-version/XYZ
   requests share one download/decode, with independent caller cancellation. Parsed road views have a separate 24 MiB/64-entry cap; incomplete
   views are not retained as complete snapshots. Buffer geometry is clipped and sub-12 m line slivers dropped; tile
   road fragments are not stitched. Roads preserve bends and insert
