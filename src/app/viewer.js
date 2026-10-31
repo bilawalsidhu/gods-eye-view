@@ -1,6 +1,10 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 import { StarrySky } from '../sky/starrySky.js';
+import {
+  RESOLUTION_POLICY,
+  installResolutionGovernor,
+} from './resolutionGovernor.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
@@ -123,12 +127,22 @@ export function applicationViewerOptions(creditContainer) {
     skyBox: new StarrySky(),
     creditContainer,
     msaaSamples: 4,
+    // Draw in device pixels; the resolution governor sets the ratio.
+    useBrowserRecommendedResolution: false,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
   };
 }
 
-/** Create the standard globe viewer in caller-owned, visible containers. */
-export function createApplicationViewer({ container, creditContainer }) {
+/**
+ * Create the standard globe viewer in caller-owned, visible containers.
+ * It draws at up to `maxPixelRatio` device pixels per CSS pixel and steps
+ * down while frames run over budget (see app/resolutionGovernor.js).
+ */
+export function createApplicationViewer({
+  container,
+  creditContainer,
+  maxPixelRatio = RESOLUTION_POLICY.maxPixelRatio,
+}) {
   if (!container || !creditContainer)
     throw new TypeError('Viewer and credit containers are required');
   const viewer = new Cesium.Viewer(
@@ -146,6 +160,14 @@ export function createApplicationViewer({ container, creditContainer }) {
     // atmosphere fails to LINK on Apple's Metal backend and kills the
     // render loop. See app/atmosphereCompat.js.
     applyModelAtmosphereWorkaround(viewer.scene);
+    // Framebuffer sides above the GPU limit throw and stop rendering (#905).
+    installResolutionGovernor(viewer, {
+      maxPixelRatio,
+      maxTextureSize: Math.min(
+        Cesium.ContextLimits.maximumTextureSize,
+        Cesium.ContextLimits.maximumRenderbufferSize,
+      ),
+    });
     viewer.scene.globe.show = false;
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
