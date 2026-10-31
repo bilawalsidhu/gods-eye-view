@@ -65,6 +65,7 @@ function styleOwner(t, initialVariant = 'cyber') {
   const owner = Object.create(VisualSettings.prototype);
   Object.assign(owner, {
     activeStyle: 'normal',
+    store: { publish() {} },
     readHud: () => hud,
     readShareLinks: () => ({ onStyleChange() {} }),
     _visualEffects: {
@@ -76,7 +77,6 @@ function styleOwner(t, initialVariant = 'cyber') {
       ),
     },
     services: { governorRequestRender() {}, setDetectionStyle() {} },
-    _hudLayoutSelect: { value: initialVariant },
     _styleIndicator: {},
     _setBloomEnabled: (value) => calls.push(['bloom', value]),
     _setSharpenEnabled: (value) => calls.push(['sharpen', value]),
@@ -116,7 +116,6 @@ test('visual styles retain Cyber through real preset application without droppin
     assert.equal(owner.activeStyle, style);
     assert.equal(hud.getVariant(), 'cyber');
     assert.equal(root.dataset.uiTheme, 'cyber');
-    assert.equal(owner._hudLayoutSelect.value, 'cyber');
     assert.deepEqual(calls.at(-1), ['share', 'cyber']);
   }
   assert.equal(owner.stages.thermal.uniforms.sensitivity, 0.85);

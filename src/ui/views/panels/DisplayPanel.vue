@@ -5,11 +5,14 @@ import { t } from '../../../i18n/index.js';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import { useDisplayStore } from '../../stores/display.js';
 
-// The Display panel. VisualSettings presents bloom, sharpen and detection
-// and publishes them; until it does, the panel shows its initial markup.
-// The other groups keep their owners' element bindings.
+// The Display panel. VisualSettings presents the HUD, Sonar, detection,
+// bloom and sharpen and publishes them; until it does, the panel shows its
+// initial markup. The other groups keep their owners' element bindings.
 const { view } = storeToRefs(useDisplayStore());
 const pct = (value) => `${value}%`;
+const hud = computed(() => view.value?.hud ?? null);
+const sonar = computed(() => view.value?.sonar ?? null);
+const sonarOn = computed(() => sonar.value?.enabled ?? true);
 const detection = computed(() => view.value?.detection ?? null);
 const detectButton = computed(() => detection.value?.button ?? null);
 const allocation = computed(() => detection.value?.allocation ?? 'ELASTIC');
@@ -29,13 +32,13 @@ const allocationSegment = (value) => ({
   </div>
   <div class="pp-panel-body" data-rail-scroller>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" id="hud-toggle" title="Intelligence HUD (H)" data-i18n-title>
+    <button class="pp-toggle-btn" :class="{ active: hud?.visible }" id="hud-toggle" title="Intelligence HUD (H)" data-i18n-title>
       <span class="pp-icon">&#x25CE;</span>
       <span class="pp-label" translate="no">HUD</span>
     </button>
-    <div class="pp-slider-row" id="hud-layout-row">
+    <div class="pp-slider-row" :class="{ visible: hud?.visible }" id="hud-layout-row">
       <span class="pp-slider-mini-label" data-i18n>Layout</span>
-      <select id="hud-layout-select" class="pp-select gev-field gev-field--compact" aria-label="HUD layout" data-i18n-aria-label>
+      <select id="hud-layout-select" class="pp-select gev-field gev-field--compact" v-range-value="hud?.variant ?? 'tactical'" aria-label="HUD layout" data-i18n-aria-label>
         <option value="tactical" data-i18n>Tactical</option>
         <option value="minimal" data-i18n>Minimal</option>
         <option value="cyber" data-i18n>Cyber</option>
@@ -43,33 +46,33 @@ const allocationSegment = (value) => ({
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-toggle-row" id="cyber-sonar-row">
       <span class="pp-slider-mini-label" data-i18n>Sonar</span>
-      <button class="pp-mode-btn active" id="cyber-sonar-toggle" title="Cyber sonar contact scanner" aria-label="Cyber sonar contact scanner" aria-pressed="true" data-i18n-title data-i18n-aria-label data-i18n>ON</button>
+      <button class="pp-mode-btn" :class="{ active: sonarOn }" id="cyber-sonar-toggle" title="Cyber sonar contact scanner" aria-label="Cyber sonar contact scanner" :aria-pressed="String(sonarOn)" data-i18n-title data-i18n-aria-label>{{ sonarOn ? t('ON') : t('OFF') }}</button>
     </div>
     <output id="cyber-sonar-status" class="cyber-sonar-control" role="status"></output>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-rings-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-rings" data-i18n>Rings</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-rings" min="3" max="12" step="1" value="8" aria-label="Sonar ring count" data-i18n-aria-label />
-      <span class="pp-slider-value" id="cyber-sonar-rings-value">8</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-rings" min="3" max="12" step="1" value="8" v-range-value="sonar?.rings ?? 8" aria-label="Sonar ring count" data-i18n-aria-label />
+      <span class="pp-slider-value" id="cyber-sonar-rings-value">{{ sonar?.rings ?? 8 }}</span>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-range-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-range" data-i18n>Range</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-range" min="60" max="120" step="1" value="100" aria-label="Sonar ring range" data-i18n-aria-label />
-      <span class="pp-slider-value" id="cyber-sonar-range-value">100%</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-range" min="60" max="120" step="1" value="100" v-range-value="sonar?.range ?? 100" aria-label="Sonar ring range" data-i18n-aria-label />
+      <span class="pp-slider-value" id="cyber-sonar-range-value">{{ pct(sonar?.range ?? 100) }}</span>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-intensity-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-intensity" data-i18n>Power</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-intensity" min="0" max="100" step="1" value="70" aria-label="Sonar intensity" data-i18n-aria-label />
-      <span class="pp-slider-value" id="cyber-sonar-intensity-value">70%</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-intensity" min="0" max="100" step="1" value="70" v-range-value="sonar?.intensity ?? 70" aria-label="Sonar intensity" data-i18n-aria-label />
+      <span class="pp-slider-value" id="cyber-sonar-intensity-value">{{ pct(sonar?.intensity ?? 70) }}</span>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-opacity-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-opacity" data-i18n>Opacity</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-opacity" min="35" max="100" step="1" value="84" aria-label="Cyber contact and label opacity" title="Minimum opacity for map dots, icons, models, brackets, and labels between sonar passes" data-i18n-aria-label data-i18n-title />
-      <span class="pp-slider-value" id="cyber-sonar-opacity-value">84%</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-opacity" min="35" max="100" step="1" value="84" v-range-value="sonar?.opacity ?? 84" aria-label="Cyber contact and label opacity" title="Minimum opacity for map dots, icons, models, brackets, and labels between sonar passes" data-i18n-aria-label data-i18n-title />
+      <span class="pp-slider-value" id="cyber-sonar-opacity-value">{{ pct(sonar?.opacity ?? 84) }}</span>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-sector-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-sector" data-i18n>Sector</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-sector" min="8" max="60" step="1" value="24" aria-label="Sonar sector width" data-i18n-aria-label />
-      <span class="pp-slider-value" id="cyber-sonar-sector-value">24°</span>
+      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-sector" min="8" max="60" step="1" value="24" v-range-value="sonar?.sector ?? 24" aria-label="Sonar sector width" data-i18n-aria-label />
+      <span class="pp-slider-value" id="cyber-sonar-sector-value">{{ `${sonar?.sector ?? 24}°` }}</span>
     </div>
   </div>
   <div class="pp-toggle-group">

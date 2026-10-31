@@ -213,6 +213,11 @@ export class VisualSettings {
     this._detectionOutsidePct = 1;
     this._detectionModeLabel = null;
     this._detectionAllocationShown = null;
+    // What the HUD and Sonar controls show; null until first synced, so the
+    // initial markup stands.
+    this._hudVisibleShown = null;
+    this._hudVariantShown = null;
+    this._sonarShown = null;
     this.activeStyle = 'normal';
     this._preCyberStyle = null;
     this._cyberStyleUserSelected = false;
@@ -476,6 +481,8 @@ export class VisualSettings {
       bloom: { active: this.bloomEnabled, intensity: this.bloomIntensityPct },
       sharpen: { active: this.sharpenEnabled, intensity: this._sharpenPct },
       detection: this._presentDetection(),
+      hud: { visible: this._hudVisibleShown, variant: this._hudVariantShown },
+      sonar: this._sonarShown,
     };
   }
 
@@ -666,9 +673,8 @@ export class VisualSettings {
       this._preCyberStyle = this.activeStyle;
       this._cyberStyleUserSelected = false;
     }
-    if (this._hudLayoutSelect && this._hudLayoutSelect.value !== nextVariant) {
-      this._hudLayoutSelect.value = nextVariant;
-    }
+    this._hudVariantShown = nextVariant;
+    this._publishDisplay();
     const visualDefaults = cyberVisualDefaultsForHudTransition(
       previousVariant,
       nextVariant,
@@ -709,37 +715,16 @@ export class VisualSettings {
   }
 
   _syncCyberSonarControl() {
-    if (!this._cyberSonarBtn) return;
-    const enabled = isCyberSonarEnabled();
     const settings = applyCyberSonarSettings(readCyberSonarSettings());
-    this._cyberSonarBtn.classList.toggle('active', enabled);
-    this._cyberSonarBtn.setAttribute('aria-pressed', String(enabled));
-    this._cyberSonarBtn.textContent = enabled ? t('ON') : t('OFF');
-    for (const [input, output, value, suffix] of [
-      [this._cyberSonarRings, this._cyberSonarRingsValue, settings.rings, ''],
-      [this._cyberSonarRange, this._cyberSonarRangeValue, settings.range, '%'],
-      [
-        this._cyberSonarIntensity,
-        this._cyberSonarIntensityValue,
-        settings.intensity,
-        '%',
-      ],
-      [
-        this._cyberSonarOpacity,
-        this._cyberSonarOpacityValue,
-        settings.opacity,
-        '%',
-      ],
-      [
-        this._cyberSonarSector,
-        this._cyberSonarSectorValue,
-        settings.sector,
-        '°',
-      ],
-    ]) {
-      if (input) input.value = String(value);
-      if (output) output.textContent = `${value}${suffix}`;
-    }
+    this._sonarShown = {
+      enabled: isCyberSonarEnabled(),
+      rings: settings.rings,
+      range: settings.range,
+      intensity: settings.intensity,
+      opacity: settings.opacity,
+      sector: settings.sector,
+    };
+    this._publishDisplay();
   }
 
   _setCyberSonarEnabled(enabled = !isCyberSonarEnabled()) {
@@ -1587,10 +1572,17 @@ export class VisualSettings {
   }
 
   _updateHudButtonState() {
-    this._hudBtn.classList.toggle('active', this.hud.visible);
-    if (this._hudLayoutRow) {
-      this._hudLayoutRow.classList.toggle('visible', this.hud.visible);
-    }
+    this._syncHudControls();
+  }
+
+  /**
+   * Show the HUD's current visibility and layout on its controls; the layout
+   * row's visibility changes the panel's height, so the rails settle again.
+   */
+  _syncHudControls() {
+    this._hudVisibleShown = Boolean(this.hud.visible);
+    this._hudVariantShown = this.hud.getVariant();
+    this._publishDisplay();
     this._scheduleAdaptivePanelLayout({ settle: true });
   }
 

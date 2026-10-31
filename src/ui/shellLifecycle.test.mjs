@@ -200,7 +200,11 @@ test('recording restores the original HUD after repeated entry and revokes retai
   try {
     let mode = 'auto',
       variant = 'tactical';
-    const owner = new RecordingControls({ syncShareState() {} });
+    const hudSyncs = [];
+    const owner = new RecordingControls({
+      syncShareState() {},
+      syncHudControls: () => hudSyncs.push(variant),
+    });
     owner.hud = {
       getMode: () => mode,
       getVariant: () => variant,
@@ -218,6 +222,11 @@ test('recording restores the original HUD after repeated entry and revokes retai
     owner.setRecordingMode(true);
     assert.equal(mode, 'auto');
     assert.equal(variant, 'tactical');
+    assert.deepEqual(
+      hudSyncs,
+      ['minimal', 'minimal', 'tactical'],
+      'each change shows the HUD layout it leaves',
+    );
     assert.equal(document.body.classList.contains('recording-mode'), false);
     assert.equal(
       f.nodes.get('safe-frame-overlay').classList.contains('active'),

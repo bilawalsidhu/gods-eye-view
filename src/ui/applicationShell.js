@@ -116,6 +116,7 @@ export class StyleManager extends ShellFacade {
     this._lifetime = new UiLifetime();
     this._recording = new RecordingControls({
       syncShareState: () => this._syncShareState(),
+      syncHudControls: () => this._visualSettings._syncHudControls(),
     });
     Object.assign(this, readShellElements());
     this._panelChrome = new PanelChrome({
@@ -209,20 +210,6 @@ export class StyleManager extends ShellFacade {
       elements: {
         _celestialBtn: this._celestialBtn,
         _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
-        _hudBtn: this._hudBtn,
-        _cyberSonarBtn: this._cyberSonarBtn,
-        _cyberSonarRings: this._cyberSonarRings,
-        _cyberSonarRingsValue: this._cyberSonarRingsValue,
-        _cyberSonarRange: this._cyberSonarRange,
-        _cyberSonarRangeValue: this._cyberSonarRangeValue,
-        _cyberSonarIntensity: this._cyberSonarIntensity,
-        _cyberSonarIntensityValue: this._cyberSonarIntensityValue,
-        _cyberSonarOpacity: this._cyberSonarOpacity,
-        _cyberSonarOpacityValue: this._cyberSonarOpacityValue,
-        _cyberSonarSector: this._cyberSonarSector,
-        _cyberSonarSectorValue: this._cyberSonarSectorValue,
-        _hudLayoutRow: this._hudLayoutRow,
-        _hudLayoutSelect: this._hudLayoutSelect,
         _ppToggles: this._ppToggles,
         _scopeBtn: this._scopeBtn,
         _scopeFeatherSlider: this._scopeFeatherSlider,
@@ -1693,9 +1680,6 @@ export class StyleManager extends ShellFacade {
    */
 
   _initHUDToggle() {
-    if (this._hudLayoutSelect) {
-      this._hudLayoutSelect.value = 'tactical';
-    }
     this._setHudVariant('tactical');
     this.hud.setMode('on');
     this._updateHudButtonState();

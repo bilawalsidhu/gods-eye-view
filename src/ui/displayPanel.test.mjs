@@ -205,3 +205,51 @@ test('detection renders its mode, rows, sliders and allocation', async (t) => {
   assert.equal(button.className, 'pp-toggle-btn');
   assert.equal($('detection-slider-row').classList.contains('visible'), false);
 });
+
+test('the HUD and Sonar controls render what VisualSettings shows', async (t) => {
+  const { store, $ } = fixture(t);
+  const { owner } = settings(store);
+  let visible = true;
+  let variant = 'minimal';
+  owner.readHud = () => ({
+    get visible() {
+      return visible;
+    },
+    getVariant: () => variant,
+  });
+  owner._scheduleAdaptivePanelLayout = () => {};
+  assert.equal($('cyber-sonar-toggle').textContent, 'ON');
+  assert.equal($('cyber-sonar-toggle').getAttribute('aria-pressed'), 'true');
+
+  owner._syncHudControls();
+  await nextTick();
+  assert.equal($('hud-toggle').classList.contains('active'), true);
+  assert.equal($('hud-layout-row').classList.contains('visible'), true);
+  assert.equal($('hud-layout-select').value, 'minimal');
+
+  visible = false;
+  owner._updateHudButtonState();
+  await nextTick();
+  assert.equal($('hud-toggle').classList.contains('active'), false);
+  assert.equal($('hud-layout-row').classList.contains('visible'), false);
+
+  owner._sonarShown = {
+    enabled: false,
+    rings: 5,
+    range: 90,
+    intensity: 40,
+    opacity: 60,
+    sector: 30,
+  };
+  owner._publishDisplay();
+  await nextTick();
+  const toggle = $('cyber-sonar-toggle');
+  assert.equal(toggle.textContent, 'OFF');
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  assert.equal(toggle.classList.contains('active'), false);
+  assert.equal($('cyber-sonar-rings').value, '5');
+  assert.equal($('cyber-sonar-rings-value').textContent, '5');
+  assert.equal($('cyber-sonar-range-value').textContent, '90%');
+  assert.equal($('cyber-sonar-sector').value, '30');
+  assert.equal($('cyber-sonar-sector-value').textContent, '30°');
+});

@@ -48,6 +48,8 @@ test('real runner and facade use visual settings, preserve visibility and return
   const renders = [];
   const visual = Object.create(VisualSettings.prototype);
   visual.services = { governorRequestRender: (reason) => renders.push(reason) };
+  // No Display panel here: the controls' render is not under test.
+  visual._publishDisplay = () => {};
   const owner = Object.create(StyleManager.prototype);
   owner._visualSettings = visual;
   Object.defineProperty(owner, 'hud', { value: f.owner.hud });

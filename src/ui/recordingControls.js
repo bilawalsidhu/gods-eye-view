@@ -1,7 +1,9 @@
 /** Own recording chrome, safe frames and the pre-recording HUD snapshot. */
 export class RecordingControls {
-  constructor({ syncShareState }) {
+  constructor({ syncShareState, syncHudControls }) {
     this._syncShareState = syncShareState;
+    // Shows the HUD's visibility and layout on the Display controls.
+    this._syncHudControls = syncHudControls;
     this.destroyed = false;
     this._recordingMode = false;
     this._recordingConfig = {
@@ -12,8 +14,6 @@ export class RecordingControls {
     this._preRecordingHudState = null;
     this._safeFrameOverlay = document.getElementById('safe-frame-overlay');
     this._safeFrameBox = document.getElementById('safe-frame-box');
-    this._hudLayoutSelect = document.getElementById('hud-layout-select');
-    this._hudBtn = document.getElementById('hud-toggle');
     this.hud = null;
   }
   _initRecordingOverlay() {
@@ -63,8 +63,6 @@ export class RecordingControls {
       } else if (hudMode === 'full' || hudMode === 'minimal') {
         this.hud.setMode('on');
         this.hud.setVariant(hudMode === 'minimal' ? 'minimal' : 'tactical');
-        if (this._hudLayoutSelect)
-          this._hudLayoutSelect.value = this.hud.getVariant();
       } else {
         this.hud.setMode('auto');
       }
@@ -73,8 +71,6 @@ export class RecordingControls {
       this._preRecordingHudState = null;
       if (saved) {
         this.hud.setVariant(saved.variant);
-        if (this._hudLayoutSelect)
-          this._hudLayoutSelect.value = this.hud.getVariant();
       }
       this.hud.setMode(saved ? saved.mode : 'auto');
       if (this._safeFrameOverlay) {
@@ -85,7 +81,7 @@ export class RecordingControls {
         );
       }
     }
-    this._hudBtn.classList.toggle('active', this.hud.visible);
+    this._syncHudControls();
     this._syncShareState();
   }
   destroy() {
