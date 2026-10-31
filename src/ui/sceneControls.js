@@ -2,25 +2,47 @@
 import { t, msg } from '../i18n/index.js';
 import {
   sceneElements,
-  renderSceneOptions,
-  renderSceneShots,
-  presentSceneSelection,
   presentSceneButtons,
   presentSceneProgress,
   presentSceneRuntime,
 } from './scenePresentation.js';
+import { useSceneStore } from './stores/scenes.js';
+import { applicationPinia } from './vueRuntime.js';
 
 export class SceneControls {
-  constructor({ read, actions, subscribe, elements = sceneElements() }) {
+  /**
+   * @param {object} options
+   * @param {object} [options.store] Scene store the panel views render.
+   */
+  constructor({
+    read,
+    actions,
+    subscribe,
+    elements = sceneElements(),
+    store = useSceneStore(applicationPinia()),
+  }) {
     this.read = read;
     this.actions = actions;
     this.elements = elements;
+    this.store = store;
     this.destroyed = false;
     this.actionGeneration = 0;
     this.removers = [];
-    this.rowRemovers = [];
     this.playbackKeyRemover = null;
     if (!elements.select) return;
+    // The SceneShotList view renders the rows; their actions come back here.
+    this.storeToken = store.attach({
+      select: (id) => {
+        this.run('selectShot', id);
+        if (this.destroyed) return;
+        store.selectShot(this.read().selectedShotId);
+        this.setButtons(this.read().running);
+      },
+      rename: (sceneId, shotId, title) =>
+        this.run('renameShot', sceneId, shotId, title),
+      load: (sceneId, shotId) => this.run('load', sceneId, shotId),
+      remove: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
+    });
     // The radio's PLAY means "listen"; this one plays the scene.
     const playLabel = t('PLAY', { context: 'scene' });
     if (elements.start) elements.start.textContent = playLabel;
@@ -96,7 +118,7 @@ export class SceneControls {
     )
       this.renderShotList();
     if (type === 'selection-changed')
-      presentSceneSelection(this.elements.shots, state.selectedShotId);
+      this.store.selectShot(state.selectedShotId);
     if (
       initial ||
       [
@@ -127,13 +149,13 @@ export class SceneControls {
       this.setButtons(state.running);
   }
 
-  listen(target, type, callback, removers = this.removers) {
+  listen(target, type, callback) {
     if (!target) return;
     const listener = (event) => {
       if (!this.destroyed) return callback(event);
     };
     target.addEventListener(type, listener);
-    removers.push(() => target.removeEventListener(type, listener));
+    this.removers.push(() => target.removeEventListener(type, listener));
   }
 
   run(action, ...args) {
@@ -151,8 +173,9 @@ export class SceneControls {
     }
   }
 
+  /** Publish the project to the SceneOptions and SceneShotList views. */
   renderSceneSelect() {
-    if (!this.destroyed) renderSceneOptions(this.elements.select, this.read());
+    if (!this.destroyed) this.store.publishOptions(this.read());
   }
 
   createScene() {
@@ -193,22 +216,7 @@ export class SceneControls {
   }
 
   renderShotList() {
-    if (this.destroyed) return;
-    for (const remove of this.rowRemovers.splice(0)) remove();
-    renderSceneShots(this.elements.shots, this.read(), {
-      listen: (element, type, callback) =>
-        this.listen(element, type, callback, this.rowRemovers),
-      select: (id) => {
-        this.run('selectShot', id);
-        if (this.destroyed) return;
-        presentSceneSelection(this.elements.shots, this.read().selectedShotId);
-        this.setButtons(this.read().running);
-      },
-      rename: (sceneId, shotId, title) =>
-        this.run('renameShot', sceneId, shotId, title),
-      load: (sceneId, shotId) => this.run('load', sceneId, shotId),
-      remove: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
-    });
+    if (!this.destroyed) this.store.publish(this.read());
   }
 
   setButtons(running) {
@@ -270,12 +278,8 @@ export class SceneControls {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.setPlaybackKeyboardEnabled(false);
-    for (const remove of [
-      ...this.removers.splice(0),
-      ...this.rowRemovers.splice(0),
-    ])
-      remove();
-    if (this.elements.shots) this.elements.shots.textContent = '';
+    for (const remove of this.removers.splice(0)) remove();
+    if (this.storeToken) this.store.detach(this.storeToken);
     this.elements.panel?.classList.toggle('has-shots', false);
     presentSceneRuntime(this.elements.runtime, '');
     this.setPlaybackActive(false);

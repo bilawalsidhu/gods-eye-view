@@ -1,88 +1,40 @@
-import test from 'node:test';
+import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStateChannel } from '../app/stateChannel.js';
-import { SceneControls } from './sceneControls.js';
-import { SceneDirector } from '../scenes/director.js';
+import { sceneElements } from './scenePresentation.js';
 import { mountSceneSharing } from './sceneSharing.js';
 import { setLocale } from '../i18n/index.js';
+import { installVueDom } from '../testSupport/vueDom.mjs';
 
+// Vue binds the document when it loads, so it loads after the DOM.
+let createApp;
+let nextTick;
+let SceneControls;
+let SceneDirector;
+let LayerPanelsView;
+let applicationPinia;
+
+let uninstallDom;
+before(async () => {
+  uninstallDom = installVueDom();
+  ({ createApp, nextTick } = await import('vue'));
+  ({ SceneControls } = await import('./sceneControls.js'));
+  ({ SceneDirector } = await import('../scenes/director.js'));
+  ({ applicationPinia } = await import('./vueRuntime.js'));
+  LayerPanelsView = (await import('./views/LayerPanelsView.vue')).default;
+});
+after(() => uninstallDom());
+
+/** Mount the real Scene panel view and an owner over it. */
 function fixture() {
-  class Element extends EventTarget {
-    constructor() {
-      super();
-      this.children = [];
-      this.style = {};
-      this.dataset = {};
-      this.value = '';
-      this._text = '';
-      const classes = new Set();
-      this.classList = {
-        toggle(name, active) {
-          if (active) classes.add(name);
-          else classes.delete(name);
-        },
-        contains: (name) => classes.has(name),
-      };
-    }
-    appendChild(element) {
-      this.children.push(element);
-      element.parentNode = this;
-    }
-    append(...nodes) {
-      for (const node of nodes) this.appendChild(node);
-    }
-    remove() {
-      if (this.parentNode)
-        this.parentNode.children = this.parentNode.children.filter(
-          (node) => node !== this,
-        );
-    }
-    setAttribute(name, value) {
-      this[name] = value;
-    }
-    focus() {}
-    select() {}
-    set textContent(value) {
-      this._text = value;
-      this.children = [];
-    }
-    get textContent() {
-      return (
-        this._text + this.children.map((node) => node.textContent).join('')
-      );
-    }
-    click() {
-      this.dispatchEvent(new Event('click'));
-    }
-  }
-  const saved = { document: globalThis.document, window: globalThis.window };
-  const document = Object.assign(new EventTarget(), {
-    createElement: () => new Element(),
-    body: new Element(),
-  });
-  globalThis.document = document;
-  globalThis.window = { prompt: () => 'Renamed' };
-  const elements = Object.fromEntries(
-    [
-      'panel',
-      'select',
-      'new',
-      'delete',
-      'capture',
-      'update',
-      'shots',
-      'start',
-      'stop',
-      'next',
-      'export',
-      'import',
-      'file',
-      'download',
-      'status',
-      'progress',
-      'runtime',
-    ].map((name) => [name, new Element()]),
-  );
+  const saved = { prompt: window.prompt, confirm: window.confirm };
+  document.body.innerHTML =
+    '<div id="layer-panels-host"></div><div id="scene-runtime"></div>';
+  const view = createApp(LayerPanelsView).use(applicationPinia());
+  view.mount(document.getElementById('layer-panels-host'));
+  window.prompt = () => 'Renamed';
+  const elements = sceneElements(document);
+  elements.shots = document.getElementById('scene-shot-list');
   const state = {
     scenes: [
       {
@@ -137,21 +89,26 @@ function fixture() {
     elements,
     calls,
     document,
+    /** The first shot row's label, once the view has rendered. */
+    label: () => elements.shots.children[0]?.children[0].children[0],
     restore() {
       owner.destroy();
-      Object.assign(globalThis, saved);
+      view.unmount();
+      Object.assign(window, saved);
     },
   };
 }
 
-test('Scene controls render the supplied selection and running/download states', () => {
+test('Scene controls render the supplied selection and running/download states', async () => {
   const f = fixture();
   try {
+    await nextTick();
     assert.equal(f.elements.select.children[0].textContent, '<Scene A>');
     assert.equal(f.elements.select.value, 'scene-a');
+    assert.equal(f.label().textContent, '<Shot A>');
     assert.equal(
-      f.elements.shots.children[0].children[0].children[0].textContent,
-      '<Shot A>',
+      f.elements.shots.children[0].children[1].textContent,
+      'NORMAL · OFF · 4.0s + 0.9s',
     );
     assert.equal(f.elements.stop.disabled, true);
     assert.equal(f.elements.download.disabled, true);
@@ -211,16 +168,18 @@ test('Authoring disables idle actions that would do nothing', () => {
   }
 });
 
-test('Scene controls dispatch explicit actions and revoke replaced shot-row listeners', () => {
+test('Scene controls dispatch panel and shot-row actions, and rows outlive republishing', async () => {
   const f = fixture();
   try {
+    await nextTick();
     const row = f.elements.shots.children[0];
-    const label = row.children[0].children[0];
+    const label = f.label();
     const load = row.children[0].children[1].children[0];
     f.elements.capture.click();
     f.elements.start.click();
     label.click();
     label.dispatchEvent(new Event('dblclick'));
+    await nextTick();
     label.children[0].value = 'Renamed';
     label.children[0].dispatchEvent(new Event('blur'));
     load.click();
@@ -232,11 +191,21 @@ test('Scene controls dispatch explicit actions and revoke replaced shot-row list
       ['load', 'scene-a', 'shot-a'],
     ]);
     f.owner.renderShotList();
-    label.click();
-    load.click();
-    assert.equal(f.calls.length, 5);
-    f.elements.shots.children[0].children[0].children[1].children[0].click();
-    assert.equal(f.calls.length, 6);
+    await nextTick();
+    assert.equal(f.elements.shots.children[0], row);
+    // An owner destroyed after a newer one attached leaves the newer list.
+    const newer = new SceneControls({
+      read: () => f.state,
+      actions: f.actions,
+      elements: f.elements,
+    });
+    f.owner.destroy();
+    await nextTick();
+    f.label().click();
+    assert.deepEqual(f.calls.at(-1), ['selectShot', 'shot-a']);
+    newer.destroy();
+    await nextTick();
+    assert.equal(f.elements.shots.children.length, 0);
   } finally {
     f.restore();
   }
@@ -270,7 +239,6 @@ test('Scene Escape and recording presentation follow playback and release on des
     );
     assert.equal(f.elements.runtime.textContent, '');
     assert.equal(f.owner.removers.length, 0);
-    assert.equal(f.owner.rowRemovers.length, 0);
   } finally {
     f.restore();
   }
@@ -284,8 +252,14 @@ test('a file import finishing after disposal cannot clear the retained file cont
       new Promise((resolve) => {
         finish = resolve;
       });
-    f.elements.file.files = [{ name: 'project.json' }];
-    f.elements.file.value = 'project.json';
+    // A file input's files and value are read-only to scripts.
+    Object.defineProperty(f.elements.file, 'files', {
+      value: [{ name: 'project.json' }],
+    });
+    Object.defineProperty(f.elements.file, 'value', {
+      value: 'project.json',
+      writable: true,
+    });
     f.elements.file.dispatchEvent(new Event('change'));
     f.owner.destroy();
     finish();
@@ -373,60 +347,55 @@ test('the real director preserves a selected shot label for the following double
   let director;
   try {
     f.owner.destroy();
-    const ids = {
-      'scene-panel': 'panel',
-      'scene-select': 'select',
-      'scene-new-btn': 'new',
-      'scene-delete-btn': 'delete',
-      'scene-capture-btn': 'capture',
-      'scene-update-shot-btn': 'update',
-      'scene-shot-list': 'shots',
-      'scene-start-btn': 'start',
-      'scene-stop-btn': 'stop',
-      'scene-next-btn': 'next',
-      'scene-export-btn': 'export',
-      'scene-import-btn': 'import',
-      'scene-import-file': 'file',
-      'scene-download-btn': 'download',
-      'scene-status': 'status',
-      'scene-progress-fill': 'progress',
-      'scene-runtime': 'runtime',
-    };
-    f.document.getElementById = (id) => f.elements[ids[id]] || null;
-    globalThis.localStorage = {
-      getItem: () => JSON.stringify({ version: 3, scenes: f.state.scenes }),
-      setItem() {},
-    };
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      writable: true,
+      value: {
+        getItem: () => JSON.stringify({ version: 3, scenes: f.state.scenes }),
+        setItem() {},
+      },
+    });
     director = new SceneDirector({ camera: { cancelFlight() {} } }, {}, {});
-    const label = f.elements.shots.children[0].children[0].children[0];
+    await nextTick();
+    const label = f.label();
     label.click();
-    assert.equal(f.elements.shots.children[0].children[0].children[0], label);
+    await nextTick();
+    assert.equal(f.label(), label);
     label.dispatchEvent(new Event('dblclick'));
+    await nextTick();
     label.children[0].value = 'Renamed';
     label.children[0].dispatchEvent(new Event('blur'));
     assert.equal(director._getSelectedScene().shots[0].title, 'Renamed');
   } finally {
     await director?.destroy();
-    globalThis.localStorage = previousStorage;
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      writable: true,
+      value: previousStorage,
+    });
     f.restore();
   }
 });
 
-test('inline shot names save on Enter, cancel on Escape, and reject blank names', () => {
+test('inline shot names save on Enter, cancel on Escape, and reject blank names', async () => {
   const f = fixture();
-  const key = (name) => Object.assign(new Event('keydown'), { key: name });
+  const key = (name) => new KeyboardEvent('keydown', { key: name });
   try {
-    const label = f.elements.shots.children[0].children[0].children[0];
+    await nextTick();
+    const label = f.label();
     for (const [value, commitKey] of [
       ['Cancelled', 'Escape'],
       ['   ', 'Enter'],
       [' New name ', 'Enter'],
     ]) {
       label.dispatchEvent(new Event('dblclick'));
+      await nextTick();
       const input = label.children[0];
+      assert.equal(document.activeElement, input);
       input.value = value;
       input.dispatchEvent(key(commitKey));
       input.dispatchEvent(new Event('blur'));
+      await nextTick();
     }
     assert.deepEqual(f.calls, [
       ['renameShot', 'scene-a', 'shot-a', 'New name'],
@@ -441,7 +410,55 @@ test('inline shot names save on Enter, cancel on Escape, and reject blank names'
   }
 });
 
-test('Scene controls consume current state, preserve rows on progress, and unsubscribe on destruction', () => {
+test('a rename keeps typed text across republishing and ends with its scene', async () => {
+  const f = fixture();
+  try {
+    await nextTick();
+    const label = f.label();
+    label.dispatchEvent(new Event('dblclick'));
+    await nextTick();
+    label.children[0].value = 'Typing';
+    f.owner.renderShotList();
+    await nextTick();
+    assert.equal(label.children[0].value, 'Typing');
+    f.state.scenes.push({
+      id: 'scene-b',
+      title: 'B',
+      shots: [{ id: 'b1', title: 'B1', durationSec: 1, holdSec: 1 }],
+    });
+    f.state.selectedSceneId = 'scene-b';
+    f.owner.renderShotList();
+    await nextTick();
+    f.state.selectedSceneId = 'scene-a';
+    f.owner.renderShotList();
+    await nextTick();
+    assert.equal(f.label().children.length, 0);
+    assert.equal(f.label().textContent, '<Shot A>');
+  } finally {
+    f.restore();
+  }
+});
+
+test('the scene select follows option renders, as before', async () => {
+  const f = fixture();
+  try {
+    await nextTick();
+    f.state.scenes.push({ id: 'scene-b', title: 'B', shots: [] });
+    f.owner.renderSceneSelect();
+    await nextTick();
+    f.state.selectedSceneId = 'scene-b';
+    f.owner.renderShotList();
+    await nextTick();
+    assert.equal(f.elements.select.value, 'scene-a');
+    f.owner.renderSceneSelect();
+    await nextTick();
+    assert.equal(f.elements.select.value, 'scene-b');
+  } finally {
+    f.restore();
+  }
+});
+
+test('Scene controls consume current state, preserve rows on progress, and unsubscribe on destruction', async () => {
   const f = fixture();
   try {
     f.owner.destroy();
@@ -460,9 +477,11 @@ test('Scene controls consume current state, preserve rows on progress, and unsub
       subscribe: (listener) => channel.subscribe(listener),
     });
     assert.equal(f.elements.status.textContent, 'Ready to resume');
+    await nextTick();
     const row = f.elements.shots.children[0];
     f.state.progress = 0.5;
     channel.publish({ type: 'progress-changed' });
+    await nextTick();
     assert.equal(f.elements.shots.children[0], row);
     f.state.status = 'Project exported';
     channel.publish({ type: 'project-exported' });

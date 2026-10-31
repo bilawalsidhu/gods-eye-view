@@ -431,13 +431,19 @@ function markupFiles() {
   );
 }
 
-/** A file's markup; for a single-file component, its template block. */
+/**
+ * A file's markup; for a single-file component, its template block without
+ * interpolations, which are code: their t() calls are read with the sources.
+ */
 function readMarkup(file) {
   const source = readFileSync(path.join(ROOT, file), 'utf8');
   if (!file.endsWith('.vue')) return source;
   const start = source.indexOf('<template>');
   const end = source.lastIndexOf('</template>');
-  return start === -1 ? '' : source.slice(start + '<template>'.length, end);
+  if (start === -1) return '';
+  return source
+    .slice(start + '<template>'.length, end)
+    .replace(/\{\{[\s\S]*?\}\}/g, '');
 }
 
 // Text that never reaches the page as UI: tool results and descriptions for

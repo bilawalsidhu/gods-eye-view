@@ -28,7 +28,23 @@
       "src/ui/views/LayerPanelsView.vue",
       "src/ui/views/ProviderSettingsView.vue",
       "src/ui/views/SceneChromeView.vue",
-      "src/ui/views/WelcomeView.vue"
+      "src/ui/views/WelcomeView.vue",
+      "src/ui/views/SceneOptions.vue",
+      "src/ui/views/SceneShotList.vue",
+      "src/ui/stores/scenes.js",
+      "src/ui/scenePresentation.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/de.json",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/fr.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/pt.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/i18n/locales/zh-Hant.json"
     ],
     "external": ["vue", "pinia"]
   },
@@ -708,6 +724,9 @@
       "src/ui/scenes.js",
       "src/ui/sceneControls.js",
       "src/ui/scenePresentation.js",
+      "src/ui/stores/scenes.js",
+      "src/ui/views/SceneOptions.vue",
+      "src/ui/views/SceneShotList.vue",
       "src/ui/actionButton.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
@@ -721,9 +740,10 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/unitLabels.js"
+      "src/ui/unitLabels.js",
+      "src/ui/vueRuntime.js"
     ],
-    "external": []
+    "external": ["vue", "pinia"]
   },
   "ui-shell": {
     "exports": ["./ui/shell"],
@@ -842,6 +862,9 @@
       "src/ui/rightPanelRail.js",
       "src/ui/sceneControls.js",
       "src/ui/scenePresentation.js",
+      "src/ui/stores/scenes.js",
+      "src/ui/views/SceneOptions.vue",
+      "src/ui/views/SceneShotList.vue",
       "src/ui/actionButton.js",
       "src/ui/scenes.js",
       "src/ui/shareFollow.js",
@@ -979,6 +1002,9 @@
       "src/ui/scenes.js",
       "src/ui/sceneControls.js",
       "src/ui/scenePresentation.js",
+      "src/ui/stores/scenes.js",
+      "src/ui/views/SceneOptions.vue",
+      "src/ui/views/SceneShotList.vue",
       "src/ui/actionButton.js",
       "src/contextModePolicy.js",
       "src/director/clock.js",
@@ -1025,9 +1051,10 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/ui/vueRuntime.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "vue", "pinia"]
   },
   "live-observations": {
     "exports": ["./sources/live"],
@@ -2519,6 +2546,9 @@
       "src/ui/rightPanelRail.js",
       "src/ui/sceneControls.js",
       "src/ui/scenePresentation.js",
+      "src/ui/stores/scenes.js",
+      "src/ui/views/SceneOptions.vue",
+      "src/ui/views/SceneShotList.vue",
       "src/ui/actionButton.js",
       "src/ui/scenes.js",
       "src/ui/shareFollow.js",

@@ -61,11 +61,23 @@ They contain no application state.
    need no change. Views belong to the page and are never unmounted. The
    loading screen stays static so it paints before any script runs. Markup
    tests read `renderApplicationHtml()` from `src/testSupport`, which renders
-   the views on the server. Vue keeps the whitespace between elements as a
-   single space, so a view renders as its template did; no view markup sits
-   under a `white-space: pre` rule. The markup has moved, unchanged: every
-   template except the loading screen is a view. Next each view takes over
-   its wiring. Order: Scenes, Weather, Recent imagery,
+   the views on the server. Templates compile with Vue's `preserve`
+   whitespace, which keeps the whitespace between elements as a single
+   space, so a view renders as its template did; no view markup sits under a
+   `white-space: pre` rule. Application views (`src/ui/views/*View.vue`) are
+   kept out of Prettier; other components are formatted with strict
+   whitespace sensitivity, so their source spacing is what renders. The
+   markup has moved, unchanged:
+   every template except the loading screen is a view.
+
+   Next each view takes over its wiring: markup an owner builds with
+   `createElement` becomes component markup that renders from a Pinia store
+   the owner publishes to, and user actions come back to the owner through
+   the store, so the owner keeps every decision. Static markup that the
+   translation pass rewrites (`data-i18n*`) stays outside `v-if` and
+   `v-for`, because re-rendering it would bring back the English; component
+   text uses `t()` instead. Order: Scenes (done: `SceneOptions` and
+   `SceneShotList` over the `gev-scenes` store), Weather, Recent imagery,
    Street level, CCTV, Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.

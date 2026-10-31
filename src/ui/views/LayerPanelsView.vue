@@ -1,3 +1,8 @@
+<script setup>
+import SceneOptions from './SceneOptions.vue';
+import SceneShotList from './SceneShotList.vue';
+</script>
+
 <template>
   <div id="left-panel-stack">
   <!-- Data Layer Toggle Panel -->
@@ -154,7 +159,7 @@
       </div>
       <p class="scene-step-heading" data-i18n>SCENE</p>
       <div class="scene-controls">
-        <select class="gev-field" id="scene-select" aria-label="Scene" data-i18n-aria-label></select>
+        <select class="gev-field" id="scene-select" aria-label="Scene" data-i18n-aria-label><SceneOptions /></select>
         <button id="scene-new-btn" type="button" class="gev-action-button scene-btn" title="Start a new, empty scene" data-i18n data-i18n-title>NEW SCENE</button>
         <button id="scene-delete-btn" type="button" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" title="Delete this scene and all of its shots" data-i18n data-i18n-title>DELETE</button>
       </div>
@@ -163,7 +168,7 @@
         <button id="scene-capture-btn" type="button" class="gev-action-button scene-btn scene-btn-primary" title="Add the current view, style and layers as the next shot" data-i18n data-i18n-title>+ CAPTURE SHOT</button>
         <button id="scene-update-shot-btn" type="button" class="gev-action-button scene-btn" title="Replace the selected shot with the current view" data-i18n data-i18n-title>UPDATE SHOT</button>
       </div>
-      <div id="scene-shot-list" class="scene-shot-list"></div>
+      <SceneShotList />
       <p class="scene-shot-hint" data-i18n>Click a shot to select it, double-click to rename.</p>
       <p class="scene-step-heading" data-i18n>PREVIEW</p>
       <div class="scene-controls">

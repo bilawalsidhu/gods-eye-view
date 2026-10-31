@@ -9,7 +9,11 @@ import { VUE_TEMPLATE_OPTIONS } from './vueOptions.js';
  * Styles are dropped: tests read the global stylesheet separately.
  */
 export function compileVueModule(source, filename) {
-  const { descriptor, errors } = parse(source, { filename });
+  // The template is parsed with the SFC; parse it as the browser build does.
+  const { descriptor, errors } = parse(source, {
+    filename,
+    templateParseOptions: VUE_TEMPLATE_OPTIONS.compilerOptions,
+  });
   if (errors.length) throw errors[0];
   const id = filename;
   if (descriptor.scriptSetup) {
