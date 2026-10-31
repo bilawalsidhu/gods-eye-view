@@ -1,3 +1,14 @@
+<script setup>
+import { storeToRefs } from 'pinia';
+import { t } from '../../i18n/index.js';
+import { vClassToggle } from '../rail/classToggle.js';
+import { useDisplayStore } from '../stores/display.js';
+
+// VisualSettings publishes the active style; until it does, the dock shows
+// its initial markup. The style buttons keep their owner's listeners.
+const { style } = storeToRefs(useDisplayStore());
+</script>
+
 <template>
   <!-- Unified bottom command dock: locations, voice (injected at runtime), visual presets -->
   <div id="command-dock" aria-label="Navigation, voice, and visual preset controls" data-i18n-aria-label>
@@ -14,32 +25,32 @@
       <div id="control-panel-popover" class="dock-popover-content">
       <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open" data-i18n-aria-label data-i18n-title><img src="/pin.svg" alt="" /></button>
       <div id="style-buttons" class="button-grid">
-        <button class="style-btn active" data-style="normal" title="Show the globe without a visual filter." data-i18n-title>
+        <button class="style-btn active" data-style="normal" v-class-toggle="{ ...(style && { active: style.name === 'normal' }) }" title="Show the globe without a visual filter." data-i18n-title>
           <span class="btn-icon">◯</span>
           <span class="btn-label" data-i18n>Normal</span>
           <span class="btn-key">1</span>
         </button>
-        <button class="style-btn" data-style="retro" title="Emulate a green phosphor CRT with scanlines and screen curvature." data-i18n-title>
+        <button class="style-btn" data-style="retro" v-class-toggle="{ ...(style && { active: style.name === 'retro' }) }" title="Emulate a green phosphor CRT with scanlines and screen curvature." data-i18n-title>
           <span class="btn-icon">▦</span>
           <span class="btn-label" data-i18n>CRT</span>
           <span class="btn-key">2</span>
         </button>
-        <button class="style-btn" data-style="surveillance" title="Simulate night-vision goggles with green intensification and a tube vignette." data-i18n-title>
+        <button class="style-btn" data-style="surveillance" v-class-toggle="{ ...(style && { active: style.name === 'surveillance' }) }" title="Simulate night-vision goggles with green intensification and a tube vignette." data-i18n-title>
           <span class="btn-icon">🌙</span>
           <span class="btn-label" data-i18n>NVG</span>
           <span class="btn-key">3</span>
         </button>
-        <button class="style-btn" data-style="thermal" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color." data-i18n-title>
+        <button class="style-btn" data-style="thermal" v-class-toggle="{ ...(style && { active: style.name === 'thermal' }) }" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color." data-i18n-title>
           <span class="btn-icon">🌡️</span>
           <span class="btn-label" data-i18n>FLIR</span>
           <span class="btn-key">4</span>
         </button>
-        <button class="style-btn" data-style="anime" title="Apply bright cel-shaded color and illustrated outlines." data-i18n-title>
+        <button class="style-btn" data-style="anime" v-class-toggle="{ ...(style && { active: style.name === 'anime' }) }" title="Apply bright cel-shaded color and illustrated outlines." data-i18n-title>
           <span class="btn-icon">✦</span>
           <span class="btn-label" data-i18n>Anime</span>
           <span class="btn-key">5</span>
         </button>
-        <button class="style-btn" data-style="noir" title="Apply high-contrast monochrome film-noir grading." data-i18n-title>
+        <button class="style-btn" data-style="noir" v-class-toggle="{ ...(style && { active: style.name === 'noir' }) }" title="Apply high-contrast monochrome film-noir grading." data-i18n-title>
           <span class="btn-icon">◐</span>
           <span class="btn-label" data-i18n>Noir</span>
           <span class="btn-key">6</span>
@@ -55,7 +66,7 @@
       </div>
       <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
         <span class="panel-mini-label" data-i18n>Style</span>
-        <span id="style-mini-value" class="panel-mini-value" data-i18n>NORMAL</span>
+        <span id="style-mini-value" class="panel-mini-value">{{ style ? style.label : t('NORMAL') }}</span>
       </div>
     </div>
   </div>

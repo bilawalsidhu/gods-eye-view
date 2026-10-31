@@ -1,3 +1,12 @@
+<script setup>
+import { storeToRefs } from 'pinia';
+import { t } from '../../i18n/index.js';
+import { useDisplayStore } from '../stores/display.js';
+
+// The ACTIVE STYLE corner shows the style VisualSettings publishes.
+const { style } = storeToRefs(useDisplayStore());
+</script>
+
 <template>
   <div id="cesiumContainer"></div>
   <div id="world-overlay-root" aria-hidden="true">
@@ -18,7 +27,7 @@
   <!-- Style indicator -->
   <div id="style-indicator">
     <span class="indicator-label scene-text-holdout" data-i18n>ACTIVE STYLE</span>
-    <span class="indicator-value scene-text-holdout" id="active-style-name" data-i18n>NORMAL</span>
+    <span class="indicator-value scene-text-holdout" id="active-style-name">{{ style ? style.label : t('NORMAL') }}</span>
   </div>
 
   <!-- Top-center camera and share actions -->

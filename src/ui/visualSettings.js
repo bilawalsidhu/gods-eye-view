@@ -1517,16 +1517,8 @@ export class VisualSettings {
       this._applyStylePresetDefaults(styleName);
     }
 
-    // Update button UI
-    document.querySelectorAll('.style-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.style === styleName);
-    });
-
-    // Update style indicator
-    this._styleIndicator.textContent = STYLE_STATUS_LABELS[styleName]
-      ? t(STYLE_STATUS_LABELS[styleName])
-      : styleName.toUpperCase();
-    this._updateStyleMiniStatus(styleName);
+    // The style buttons, the dock's mini status and the ACTIVE STYLE corner.
+    this._publishActiveStyle(styleName);
 
     // Update parameter sliders
     this._updateSliderPanel(styleName, { reveal: revealParameters });
@@ -1555,11 +1547,15 @@ export class VisualSettings {
     this._visualEffects.startTransition(styleName, fromValue, toValue);
   }
 
-  _updateStyleMiniStatus(styleName = this.activeStyle) {
-    if (!this._styleMiniValue) return;
-    this._styleMiniValue.textContent = STYLE_STATUS_LABELS[styleName]
-      ? t(STYLE_STATUS_LABELS[styleName])
-      : String(styleName || 'normal').toUpperCase();
+  /** Publish the active style and its label in the UI language. */
+  _publishActiveStyle(styleName = this.activeStyle) {
+    const name = String(styleName || 'normal');
+    this.store.publishStyle({
+      name,
+      label: STYLE_STATUS_LABELS[name]
+        ? t(STYLE_STATUS_LABELS[name])
+        : name.toUpperCase(),
+    });
   }
 
   _updateHudButtonState() {

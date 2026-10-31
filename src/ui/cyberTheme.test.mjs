@@ -77,7 +77,6 @@ function styleOwner(t, initialVariant = 'cyber') {
       ),
     },
     services: { governorRequestRender() {}, setDetectionStyle() {} },
-    _styleIndicator: {},
     _setBloomEnabled: (value) => calls.push(['bloom', value]),
     _setSharpenEnabled: (value) => calls.push(['sharpen', value]),
     _applyDetectionPreset: (value) => calls.push(['detection', value]),
@@ -86,7 +85,7 @@ function styleOwner(t, initialVariant = 'cyber') {
   for (const name of [
     'setCelestialRingEnabled',
     '_startTransition',
-    '_updateStyleMiniStatus',
+    '_publishActiveStyle',
     '_updateSliderPanel',
     '_updateHudButtonState',
     '_syncIrBoost',

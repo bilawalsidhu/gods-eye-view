@@ -1304,8 +1304,8 @@ export class ShellFacade {
    * @param {string} [styleName=this.activeStyle] - Style name to display.
    * @returns {void}
    */
-  _updateStyleMiniStatus(styleName = this.activeStyle) {
-    return this._visualSettings._updateStyleMiniStatus(...arguments);
+  _publishActiveStyle(styleName = this.activeStyle) {
+    return this._visualSettings._publishActiveStyle(...arguments);
   }
 
   _initOrbit(...args) {

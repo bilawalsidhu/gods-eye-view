@@ -2,7 +2,6 @@
 export function readShellElements(document = globalThis.document) {
   return {
     _rightPanelStack: document.getElementById('right-context-rail'),
-    _styleIndicator: document.getElementById('active-style-name'),
     _sliderPanel: document.getElementById('param-slider-panel'),
     _sliderContainer: document.getElementById('param-sliders'),
     _ppToggles: document.getElementById('pp-toggles'),
@@ -132,7 +131,6 @@ export function readShellElements(document = globalThis.document) {
     _locationPills: document.getElementById('location-pills'),
     _poiRow: document.getElementById('poi-row'),
     _locationBarDivider: document.getElementById('location-bar-divider'),
-    _styleMiniValue: document.getElementById('style-mini-value'),
     _locationMiniCity: document.getElementById('location-mini-city'),
     _locationMiniPoi: document.getElementById('location-mini-poi'),
     _safeFrameOverlay: document.getElementById('safe-frame-overlay'),

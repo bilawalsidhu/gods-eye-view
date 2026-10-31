@@ -5,7 +5,8 @@ import { markRaw, shallowRef } from 'vue';
  * The Display panel as its view renders it. VisualSettings presents its
  * groups (`_presentDisplay()`), AircraftDisplay the 3D aircraft group, the
  * draw tool its controls and the file import its list, and each publishes
- * here; each keeps its listeners on the controls.
+ * here; each keeps its listeners on the controls. VisualSettings also
+ * publishes the active style, which the dock and the scene chrome show.
  */
 export const useDisplayStore = defineStore('gev-display', () => {
   /** The presented panel; null until VisualSettings first renders. */
@@ -40,6 +41,14 @@ export const useDisplayStore = defineStore('gev-display', () => {
     geoImport.value = markRaw(next);
   }
 
+  /** The active visual style; null until VisualSettings first presents it. */
+  const style = shallowRef(null);
+
+  /** @param {{name: string, label: string}} next The active style and its label. */
+  function publishStyle(next) {
+    style.value = markRaw(next);
+  }
+
   return {
     view,
     publish,
@@ -49,5 +58,7 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishDraw,
     geoImport,
     publishGeoImport,
+    style,
+    publishStyle,
   };
 });

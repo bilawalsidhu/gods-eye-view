@@ -213,8 +213,6 @@ export class StyleManager extends ShellFacade {
         _ppToggles: this._ppToggles,
         _sliderContainer: this._sliderContainer,
         _sliderPanel: this._sliderPanel,
-        _styleIndicator: this._styleIndicator,
-        _styleMiniValue: this._styleMiniValue,
       },
       operations: {
         _restorePanelState: (...args) => this._restorePanelState(...args),
@@ -586,7 +584,7 @@ export class StyleManager extends ShellFacade {
     this._initRecordingOverlay();
     this._startAnimationLoop();
     this._startTrafficChipTicker();
-    this._updateStyleMiniStatus();
+    this._publishActiveStyle();
     this._updateLocationMiniStatus();
 
     this._shareRestoration.start();

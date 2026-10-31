@@ -115,7 +115,10 @@ They contain no application state.
    publishes through `subscribePanel()`, the first layer to hand its rail
    content to a view, and `MissionRoster` and `MissionDetail` the Space
    Missions roster and selected mission that the launches layer publishes
-   the same way), the command dock,
+   the same way), the command dock (in progress: the style buttons, the
+   dock's style mini status and the ACTIVE STYLE corner render the style
+   VisualSettings publishes to the `gev-display` store; the buttons keep
+   their owner's listeners),
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 
