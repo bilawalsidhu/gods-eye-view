@@ -7,6 +7,7 @@
   ["bikeshare", "b"],
   ["cctv", "c"],
   ["directions", "n"],
+  ["drone-airspace", "6"],
   ["earthquakes", "e"],
   ["fire-perimeters", "2"],
   ["flights", "f"],
