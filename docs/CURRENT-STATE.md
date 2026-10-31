@@ -1437,11 +1437,11 @@ The application supplies actions and retains effect settings, restore claims and
 rendering. Native keyboard editing, model modes and current defaults are preserved.
 Destroying the UI removes these listeners before asynchronous teardown.
 
-Ordinary sliders share the native range component in `ui/slider.js` and the
-`gev-quantitative-slider` surface in `ui/styles/slider.css`. Display, shader
+Ordinary sliders share the native `gev-quantitative-slider` surface in
+`ui/styles/slider.css`. Display, shader
 parameters, volume, replay speed, weather settings/history, imagery opacity and
 Street View's date filter use the same rail, thumb, value styling, keyboard focus and disabled state.
-Generated controls use `createSlider`; static templates and components apply the same class.
+Templates, components and generated controls apply the same class.
 Feature owners retain bounds, steps, formatted values, input/change timing and
 listener cleanup. The radio tuning dial, imagery comparison divider and event
 comparison/progression controls keep their specialized presentation and behavior.

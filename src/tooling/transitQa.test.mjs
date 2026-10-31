@@ -1,3 +1,4 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,6 +19,9 @@ import {
 } from '../data/detection.js';
 
 const pause = async () => {};
+// The page fixture swaps the globals for stand-ins; generated rows render
+// into a real element, so keep the registered document.
+const realDocument = globalThis.document;
 class Element extends EventTarget {
   constructor() {
     super();
@@ -67,8 +71,7 @@ function pageFixture(t) {
       const label = selector.match(/aria-label="([^"]+)"/)[1];
       return elements
         .get('param-sliders')
-        .children.flatMap((row) => row.children)
-        .find((el) => el.getAttribute('aria-label') === label);
+        .querySelector(`input.param-slider[aria-label="${label}"]`);
     }
     return elements.get(selector.slice(1));
   };
@@ -128,8 +131,7 @@ test('live visual cities follow local operating hours in summer and winter', () 
 
 test('thermal controls wait for activation and use the real generated parameter rows', async (t) => {
   const { page, document, elements } = pageFixture(t);
-  const container = new Element();
-  container.ownerDocument = document;
+  const container = realDocument.createElement('div');
   elements.set('param-sliders', container);
   const parameters = createStyleParameters({ container });
   t.after(() => parameters.destroy());
@@ -159,9 +161,7 @@ test('thermal controls wait for activation and use the real generated parameter 
   page.$eval = async (selector, fn, ...args) => {
     if (selector.startsWith('.style-btn')) return fn(new Element(), ...args);
     const label = selector.match(/aria-label="([^"]+)"/)[1];
-    const slider = container.children
-      .flatMap((row) => row.children)
-      .find((el) => el.getAttribute('aria-label') === label);
+    const slider = container.querySelector(`[aria-label="${label}"]`);
     assert.ok(slider);
     return fn(slider, ...args);
   };

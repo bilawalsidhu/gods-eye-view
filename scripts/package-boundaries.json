@@ -479,7 +479,7 @@
       "src/ui/visualInput.js",
       "src/ui/applicationShortcuts.js",
       "src/ui/styleParameters.js",
-      "src/ui/slider.js",
+      "src/ui/rail/rangeValue.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/de.json",
@@ -493,7 +493,7 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json"
     ],
-    "external": []
+    "external": ["vue"]
   },
   "display-controls": {
     "exports": ["./ui/display"],
@@ -550,7 +550,6 @@
       "src/ui/weatherPanel.js",
       "src/ui/railCards.js",
       "src/ui/railCardBlocks.js",
-      "src/ui/slider.js",
       "src/ui/layerRowText.js",
       "src/ui/layerPanel/LayerRows.vue",
       "src/ui/layerPanel/RowText.vue",
@@ -896,7 +895,6 @@
       "src/ui/shellElements.js",
       "src/ui/shellFeedback.js",
       "src/ui/styleParameters.js",
-      "src/ui/slider.js",
       "src/ui/surfaceKeyboard.js",
       "src/ui/uiLifetime.js",
       "src/ui/visualEffects.js",
@@ -2591,7 +2589,6 @@
       "src/ui/shellElements.js",
       "src/ui/shellFeedback.js",
       "src/ui/styleParameters.js",
-      "src/ui/slider.js",
       "src/ui/surfaceKeyboard.js",
       "src/ui/uiLifetime.js",
       "src/ui/visualEffects.js",
@@ -3669,7 +3666,7 @@
       "src/ui/applicationShortcuts.js",
       "src/ui/effects.js",
       "src/ui/styleParameters.js",
-      "src/ui/slider.js",
+      "src/ui/rail/rangeValue.js",
       "src/ui/uiLifetime.js",
       "src/ui/visualEffects.js",
       "src/ui/visualInput.js",

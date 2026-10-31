@@ -1,5 +1,6 @@
+import { h, render, withDirectives } from 'vue';
 import { formatNumber, t } from '../i18n/index.js';
-import { createSlider } from './slider.js';
+import { vRangeValue } from './rail/rangeValue.js';
 
 /** A slider value in the UI language: 0.85 in English, 0,85 in Spanish. */
 const formatParam = (value, digits) =>
@@ -10,65 +11,98 @@ const formatParam = (value, digits) =>
   });
 
 /**
- * Own generated parameter rows and their input listeners.
+ * The generated rows: a label, the shared native slider and its value in the
+ * UI language. A render function, so the portable input package needs no
+ * single-file-component compiler.
+ */
+const StyleParameterRows = {
+  props: {
+    rows: { type: Array, required: true },
+    onInput: { type: Function, required: true },
+  },
+  render() {
+    return this.rows.map((row) =>
+      h('div', { key: row.name, class: 'param-slider-row' }, [
+        h('span', { class: 'param-label' }, row.label),
+        withDirectives(
+          h('input', {
+            type: 'range',
+            class: 'gev-quantitative-slider param-slider',
+            min: row.min,
+            max: row.max,
+            step: row.step,
+            'aria-label': row.label,
+            onInput: (event) => this.onInput(row.name, event.target.value),
+          }),
+          [[vRangeValue, row.value]],
+        ),
+        h('span', { class: 'param-value' }, row.text),
+      ]),
+    );
+  },
+};
+
+/**
+ * Own generated parameter rows and their input handling. Renders
+ * StyleParameterRows into `container` and patches it synchronously.
  * The caller supplies uniform metadata/value access and rendering/persistence
  * callbacks. Replacing or destroying rows revokes all old input handlers.
  * @param {object} options
  * @param {HTMLElement} options.container Container owned by this component.
- * @param {Document} [options.documentRef] Document used to construct rows.
  * @returns {{render: Function, clear: Function, destroy: Function}}
  */
-export function createStyleParameters({
-  container,
-  documentRef = container.ownerDocument,
-}) {
-  let listeners = [];
+export function createStyleParameters({ container }) {
+  let rows = [];
+  let onInput = () => {};
+  // Each render's handlers act only while that render is current.
+  let generation = 0;
   let destroyed = false;
+  const paint = () =>
+    render(h(StyleParameterRows, { rows, onInput }), container);
   const clear = () => {
     if (destroyed) return;
-    for (const [slider, listener] of listeners)
-      slider.removeEventListener('input', listener);
-    listeners = [];
-    container.replaceChildren();
+    generation++;
+    rows = [];
+    onInput = () => {};
+    render(null, container);
   };
   return {
     /** Render uniform metadata with readValue, writeValue and onChange callbacks. */
     render({ uniforms, readValue, writeValue, onChange }) {
       if (destroyed) return;
       clear();
-      for (const [name, metadata] of Object.entries(uniforms)) {
-        const row = documentRef.createElement('div');
-        row.className = 'param-slider-row';
-        const label = documentRef.createElement('span');
-        label.className = 'param-label';
-        label.textContent = t(metadata.label);
-        const slider = createSlider({
-          documentRef,
-          className: 'param-slider',
-          ariaLabel: t(metadata.label),
-          min: metadata.min,
-          max: metadata.max,
-          step: metadata.max <= 1 ? '0.01' : '0.1',
-          value: readValue(name),
-        });
-        const digits = metadata.max <= 1 ? 2 : 1;
-        const valueDisplay = documentRef.createElement('span');
-        valueDisplay.className = 'param-value';
-        valueDisplay.textContent = formatParam(
-          parseFloat(slider.value),
-          digits,
+      const current = generation;
+      rows = Object.entries(uniforms).map(([name, metadata]) => ({
+        name,
+        label: t(metadata.label),
+        min: metadata.min,
+        max: metadata.max,
+        step: metadata.max <= 1 ? '0.01' : '0.1',
+        digits: metadata.max <= 1 ? 2 : 1,
+        value: readValue(name),
+        text: '',
+      }));
+      onInput = (name, raw) => {
+        if (destroyed || current !== generation) return;
+        const value = parseFloat(raw);
+        writeValue(name, value);
+        rows = rows.map((row) =>
+          row.name === name
+            ? { ...row, value, text: formatParam(value, row.digits) }
+            : row,
         );
-        const onInput = () => {
-          const value = parseFloat(slider.value);
-          writeValue(name, value);
-          valueDisplay.textContent = formatParam(value, digits);
-          onChange();
-        };
-        slider.addEventListener('input', onInput);
-        listeners.push([slider, onInput]);
-        row.append(label, slider, valueDisplay);
-        container.appendChild(row);
-      }
+        paint();
+        onChange();
+      };
+      paint();
+      // The readout shows the value the slider holds once the browser has
+      // clamped and snapped it to its step.
+      const sliders = container.querySelectorAll('input.param-slider');
+      rows = rows.map((row, index) => ({
+        ...row,
+        text: formatParam(parseFloat(sliders[index].value), row.digits),
+      }));
+      paint();
     },
     clear,
     destroy() {
