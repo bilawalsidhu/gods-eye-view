@@ -297,13 +297,13 @@ compactStatus, blocks }` in place. Their full-width native button headers expose
 adapter owns accordion state. Generic cards do not select data or enable layers.
 
 `blocks` is an ordered array of loose, optional `{ id, type, ... }` descriptors,
-rendered by `railCardBlocks.js`. There are no per-section disclosures:
+rendered by `rail/RailCardBlocks.vue`. There are no per-section disclosures:
 
 - `summary`: `text`, a single summary line.
-- `list`: `list: { ariaLabel, items }`, reconciled by `syncRowList` in `rowList.js`.
+- `list`: `list: { ariaLabel, items }`, keyed by `rail/RailRowList.vue`.
 - `lines`: keyed `lines: [{ id, text, muted? }]` for details and status.
 - `settings`: `settings: [{ id, label, chips }]`; each labelled row has a 56 px
-  label column and a wrapping `syncChipGroup` from `chipGroup.js`.
+  label column and wrapping keyed chips from `rail/RailChips.vue`.
 - `legend`: `legend: { colors, labels, units?, zeroIndex?, categorical? }` for a
   ramp/scale (including a physical freezing anchor) or separate keyed swatches.
 - `actions`: keyed `actions: [{ id, label, params?, href?, onClick?, disabled?,

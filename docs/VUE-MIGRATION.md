@@ -90,7 +90,10 @@ They contain no application state.
    the whole panel from the `gev-cctv` store, including the camera picker,
    the inline pose editor, the frame preview, source badge and typed
    summary; `CctvControls` keeps its listeners, the frame requests and the
-   live video surface), Layers, Display, Context and Radio, the command dock,
+   live video surface), Layers (done: `LayerPanel` presents each row and
+   renders `LayerRows` synchronously; keyed chips and list items keep focus
+   through the refresh their own click triggers, and clicks re-read the live
+   descriptor before acting), Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 
