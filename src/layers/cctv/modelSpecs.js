@@ -387,33 +387,67 @@ const BRAND_ALIASES = {
   Hikvision: ['hiwatch'],
 };
 
-function brandWords(record) {
-  return new Set([
-    ...words(record.brand),
-    ...(BRAND_ALIASES[record.brand] || []),
-  ]);
-}
-
 /**
- * One entry per record name (model + aliases). `required` is every
- * non-generic word of the name — all must appear in a query, so a generation
- * or suffix ("Mk II", "7000i" vs "7000") is never dropped. `hasCode` marks
- * names carrying a letter+digit model code; names without one ("3950",
- * "01959-004", "AUTODOME 800 Series") match only when the brand does.
+ * Builds a model lookup over a record table, so another layer can resolve its
+ * own vendored records with the same matching rules (see lookupModelSpec).
+ * @param {Object[]} records - Spec records in this module's shape.
+ * @param {Object<string, string[]>} [brandAliases] - Extra manufacturer words
+ *   accepted per record brand.
+ * @returns {(model: string, manufacturer?: string) => (Object|null)} Lookup.
  */
-const NAME_INDEX = RECORDS.flatMap((record) => {
-  const brand = brandWords(record);
-  return [record.model, ...(record.aliases || [])].map((name) => {
-    const nameWords = words(name);
-    return {
-      record,
-      brand,
-      allowed: new Set(nameWords),
-      required: nameWords.filter((word) => !isGeneric(word)),
-      hasCode: nameWords.some(isModelCode),
-    };
+export function createModelSpecLookup(records, brandAliases = BRAND_ALIASES) {
+  /**
+   * One entry per record name (model + aliases). `required` is every
+   * non-generic word of the name — all must appear in a query, so a
+   * generation or suffix ("Mk II", "7000i" vs "7000") is never dropped.
+   * `hasCode` marks names carrying a letter+digit model code; names without
+   * one ("3950", "01959-004", "AUTODOME 800 Series") match only when the
+   * brand does.
+   */
+  const nameIndex = records.flatMap((record) => {
+    const brand = new Set([
+      ...words(record.brand),
+      ...(brandAliases[record.brand] || []),
+    ]);
+    return [record.model, ...(record.aliases || [])].map((name) => {
+      const nameWords = words(name);
+      return {
+        record,
+        brand,
+        allowed: new Set(nameWords),
+        required: nameWords.filter((word) => !isGeneric(word)),
+        hasCode: nameWords.some(isModelCode),
+      };
+    });
   });
-});
+  return (model, manufacturer) => {
+    const query = words(model).map(stripVariantSuffix);
+    if (!query.length) return null;
+    const maker = words(manufacturer);
+    const found = new Set();
+    for (const entry of nameIndex) {
+      const makerMatches = maker.some((word) => entry.brand.has(word));
+      if (maker.length && !makerMatches) continue;
+      if (
+        !entry.hasCode &&
+        !makerMatches &&
+        !query.some((word) => entry.brand.has(word))
+      )
+        continue;
+      if (!entry.required.length) continue;
+      if (!entry.required.every((word) => query.includes(word))) continue;
+      if (
+        !query.every(
+          (word) =>
+            entry.allowed.has(word) || entry.brand.has(word) || isGeneric(word),
+        )
+      )
+        continue;
+      found.add(entry.record);
+    }
+    return found.size === 1 ? [...found][0] : null;
+  };
+}
 
 /**
  * Looks up a spec record for a hardware-model string.
@@ -433,33 +467,7 @@ const NAME_INDEX = RECORDS.flatMap((record) => {
  * @param {string} [manufacturer] - The source's manufacturer, when published.
  * @returns {Object|null} The verbatim spec record, or null when unknown.
  */
-export function lookupModelSpec(model, manufacturer) {
-  const query = words(model).map(stripVariantSuffix);
-  if (!query.length) return null;
-  const maker = words(manufacturer);
-  const found = new Set();
-  for (const entry of NAME_INDEX) {
-    const makerMatches = maker.some((word) => entry.brand.has(word));
-    if (maker.length && !makerMatches) continue;
-    if (
-      !entry.hasCode &&
-      !makerMatches &&
-      !query.some((word) => entry.brand.has(word))
-    )
-      continue;
-    if (!entry.required.length) continue;
-    if (!entry.required.every((word) => query.includes(word))) continue;
-    if (
-      !query.every(
-        (word) =>
-          entry.allowed.has(word) || entry.brand.has(word) || isGeneric(word),
-      )
-    )
-      continue;
-    found.add(entry.record);
-  }
-  return found.size === 1 ? [...found][0] : null;
-}
+export const lookupModelSpec = createModelSpecLookup(RECORDS);
 
 /**
  * Datasheet horizontal FOV as the range the hardware can cover. Only
@@ -539,7 +547,10 @@ export function specFovCapabilityToken(
 export function specSummary(spec) {
   if (!spec) return '';
   const parts = [`${spec.brand} ${spec.model}`];
-  if (spec.resolution?.label) parts.push(spec.resolution.label);
+  const { label, w, h, mp } = spec.resolution || {};
+  if (label) parts.push(label);
+  else if (w && h) parts.push(`${w}x${h}`);
+  else if (mp) parts.push(`${mp}MP`);
   if (spec.night_vision) {
     parts.push(
       `${spec.night_vision.type.toUpperCase()}${spec.night_vision.range_m ? ` ${spec.night_vision.range_m}m` : ''}`,

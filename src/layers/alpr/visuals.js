@@ -1,5 +1,7 @@
 import * as Cesium from 'cesium';
 import { destinationPointDeg } from './model.js';
+import { lookupAlprModelSpec } from './modelSpecs.js';
+import { specSummary } from '../cctv/modelSpecs.js';
 import {
   DIRECTION_CONE_M,
   DIRECTION_CONE_HALF_ANGLE_DEG,
@@ -42,7 +44,10 @@ export function alprDisplayId(record) {
   return `ALPR-${String(record.osmId).slice(-4).padStart(4, '0')}`;
 }
 
-/** Show only supplied metadata, with the actual source named for custom adapters. */
+/**
+ * Show only supplied metadata, with the actual source named for custom
+ * adapters, plus the datasheet summary when the mapped model is known.
+ */
 export function alprLabelDetails(record, source) {
   const sourceName =
     source.attribution?.name || source.label || 'Camera source';
@@ -63,6 +68,9 @@ export function alprLabelDetails(record, source) {
     ),
   ];
   if (equipment.length) details.push(equipment.join(' · '));
+  // Only a datasheet match is shown: the raw OSM `model` text never is.
+  const spec = lookupAlprModelSpec(record.model, record.manufacturer);
+  if (spec) details.push(`SPEC ${specSummary(spec).toUpperCase()}`);
   if (sourceName === 'OpenStreetMap') details.push('PUBLIC MAP DATA');
   return details;
 }

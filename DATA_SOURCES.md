@@ -237,6 +237,13 @@ commercial use with attribution and applicable database share-alike/access
 obligations; it does not license the application code. Trimmed test-only tile
 fixtures retain their provenance in `src/data/fixtures/README.md`.
 
+A mapped `model` tag that names datasheet hardware adds a spec line to the
+selected card. The specs are 16 verbatim CC0-1.0 records from the CCTV Camera
+Database model-enrichment extract (v2.29.0), compiled into
+`src/layers/alpr/modelSpecs.js`; nothing is fetched at runtime, and an
+unrecognised tag is never displayed. The hourly extract does not carry `model`
+yet, so only an Overpass-backed source shows these lines today.
+
 ### CCTV Camera Database (`src/layers/cctv/modelSpecs.js`)
 
 The CCTV layer's hardware-model specs are a small verbatim extract (v2.26.0) of the
