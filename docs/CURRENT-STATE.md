@@ -1304,6 +1304,27 @@ The images are periodically updated road-condition photographs, not continuous
 video; camera poses use the existing low-confidence heading prior.
 `CCTV_LITHUANIA_MAX_SOURCES` sets its cap (default 400, bounded to 1–1000).
 
+## Auckland NZTA CCTV source pack
+
+The CCTV catalog can include Greater Auckland traffic cameras from Waka Kotahi
+NZ Transport Agency. The pack is off unless `CCTV_AUCKLAND_ENABLED=1`: the
+camera list is the Journeys site's own map-data-cache asset rather than the
+documented Traffic and Travel API, the site terms (clause 4.2) name CC BY 4.0 in
+the text but link CC BY-NC 4.0, and clause 5.2(b) restricts automated access, so
+the licence for the catalog and the camera stills is unconfirmed. With the flag
+unset, empty or any other value, the server makes no request to NZTA.
+
+Once enabled, the server reads the keyless camera list at
+`https://www.journeys.nzta.govt.nz/assets/map-data-cache/cameras.json` and
+keeps RegionID 7 cameras that are online and inside the metro bounding box.
+Frame URLs are built from each camera's `ExternalId` under
+`https://www.trafficnz.info/camera/<id>.jpg`; they are never taken from the
+payload. Dedicated `Direction` values become high-confidence headings. The 120
+cameras nearest downtown, Albany, Manukau, the airport and Henderson load;
+`CCTV_AUCKLAND_MAX_SOURCES` sets the pack cap (8-200). The catalog-wide ceiling
+is shared round-robin, so enabling this pack does not silently drop another
+region.
+
 ## Taiwan CCTV source pack
 
 The CCTV catalog includes Taiwan national freeway cameras from the Freeway
@@ -3898,7 +3919,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + Auckland NZTA (opt-in) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
