@@ -164,7 +164,7 @@ try {
       ['curated', true, 'rgb(255, 208, 138)'],
     ]) {
       const result = await page.evaluate(
-        ({ calBadge, dirty }) => {
+        async ({ calBadge, dirty }) => {
           const owner = window.__godsEyeView.styleManager._cctvControls;
           document.getElementById('cctv-next-btn').focus();
           owner._renderCctvState({
@@ -175,6 +175,8 @@ try {
               calDirty: dirty,
             },
           });
+          // The panel view renders the chip on Vue's next flush.
+          await new Promise((resolve) => requestAnimationFrame(resolve));
           const badge = document.getElementById('cctv-quality-chip');
           return {
             state: badge.dataset.calBadge,

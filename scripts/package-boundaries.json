@@ -46,6 +46,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/views/panels/StreetLevelPanel.vue",
+      "src/ui/views/panels/CctvPanel.vue",
+      "src/ui/stores/cctv.js",
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue"
     ],
@@ -654,9 +656,11 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/ui/vueRuntime.js",
+      "src/ui/stores/cctv.js"
     ],
-    "external": []
+    "external": ["vue", "pinia"]
   },
   "context-controls": {
     "exports": ["./ui/context", "./ui/context/policy"],
@@ -948,7 +952,8 @@
       "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
-      "src/ui/stores/streetLevel.js"
+      "src/ui/stores/streetLevel.js",
+      "src/ui/stores/cctv.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -2914,7 +2919,8 @@
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/recentImagery/RecentImageryCard.vue",
       "src/ui/recentImagery/RecentImageryReadout.vue",
-      "src/ui/stores/streetLevel.js"
+      "src/ui/stores/streetLevel.js",
+      "src/ui/stores/cctv.js"
     ],
     "external": [
       "hls.js",

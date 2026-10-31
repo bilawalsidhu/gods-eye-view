@@ -17,11 +17,23 @@ import {
   _updateCctvSyncChip,
 } from './cctvPresentation.js';
 import { _initCctvPanel } from './cctvBindings.js';
+import { useCctvStore } from './stores/cctv.js';
+import { applicationPinia } from './vueRuntime.js';
 
-/** Own camera-panel interaction and presentation; receive the camera port and application actions. */
+/**
+ * Own camera-panel interaction and presentation; receive the camera port and
+ * application actions. The panel view renders the buttons, CAL chip and meta
+ * line from what this publishes (`gev-cctv` store).
+ */
 export class CctvControls {
-  constructor({ elements, cctv, actions }) {
+  constructor({
+    elements,
+    cctv,
+    actions,
+    store = useCctvStore(applicationPinia()),
+  }) {
     Object.assign(this, elements);
+    this.store = store;
     this.cctv = cctv;
     this.actions = actions;
     this.destroyed = false;

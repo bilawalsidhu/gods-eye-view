@@ -78,7 +78,7 @@ test('the documented outcomes hold: default, stored open, stored shut, and a sha
   const { PanelPositionControls } =
     await import('../ui/panelPositionControls.js');
   const html = await readFile(
-    path.join(root, 'src/ui/views/LayerPanelsView.vue'),
+    path.join(root, 'src/ui/views/panels/CctvPanel.vue'),
     'utf8',
   );
   assert.match(

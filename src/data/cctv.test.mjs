@@ -1312,10 +1312,6 @@ test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay hones
       // Nothing active clears the pick; only the outside-view note may show.
       /else if \(!activeId\)[\s\S]*?selectedIndex =[^;]*\? 0 : -1;/,
     );
-    assert.match(
-      renderer[0],
-      /_cctvFocusBtn\.disabled\s*=\s*!enabled\s*\|\|\s*catalogCount === 0\s*\|\|\s*!activeId/,
-    );
   } finally {
     cctvLayer.setParams({ autoHop: false });
     _setCctvOverlayHostForTest();

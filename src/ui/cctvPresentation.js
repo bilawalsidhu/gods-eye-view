@@ -1,4 +1,3 @@
-import { updateStatusBadge } from './statusBadge.js';
 import { t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
@@ -23,6 +22,106 @@ function outsideNoteText(count) {
     '{count} more camera outside this view · pan or zoom out',
     '{count} more cameras outside this view · pan or zoom out',
   );
+}
+
+/**
+ * The panel's buttons, CAL chip and meta line for a camera state, as the CCTV
+ * panel view renders them. Pure: the picker, frame, source badge, calibration
+ * readout and summary stay with the controls.
+ * @param {object|null} state Camera layer UI state.
+ * @param {boolean} enabled Whether the layer is on.
+ */
+export function presentCctvPanel(state, enabled) {
+  const cameras = state?.cameraIndex || state?.cameras || [];
+  const catalogCount = Number.isFinite(state?.count)
+    ? state.count
+    : cameras.length;
+  const activeId = state?.activeCameraId || '';
+  const activeCamera = state?.activeCamera || null;
+  // Tri-state (viewshed design §3b): off → on (wireframes) → viewshed
+  // (color-coded volumes). The click handler cycles; this renders.
+  const coverage = state?.coverageMode || (state?.showCoverage ? 'on' : 'off');
+  const autoHop = !!state?.autoHop;
+  const showProjection = state?.showProjection !== false;
+  // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only, no
+  // in-world tint): three states from cctv.js's deriveCalBadge. Unsaved live
+  // edits show EDITED over the persisted state (viewshed design §3e): SAVE
+  // CAL promotes to CALIBRATED, RESET CAL clears.
+  const badge = activeCamera?.calBadge || null;
+  const dirty = !!activeCamera?.calDirty;
+  return {
+    enabled,
+    navDisabled: !enabled || catalogCount === 0,
+    focusDisabled: !enabled || catalogCount === 0 || !activeId,
+    toggleDisabled: !enabled,
+    coverage: {
+      active: coverage !== 'off',
+      text:
+        coverage === 'viewshed'
+          ? t('VIEWSHED ON')
+          : coverage === 'on'
+            ? t('COVERAGE ON')
+            : t('COVERAGE OFF'),
+    },
+    autoHop: {
+      active: autoHop,
+      text: autoHop ? t('AUTO HOP ON') : t('AUTO HOP OFF'),
+    },
+    projection: {
+      active: showProjection,
+      text: showProjection ? t('PROJECTION ON') : t('PROJECTION OFF'),
+    },
+    quality: {
+      label: dirty
+        ? t('CAL · EDITED (UNSAVED)')
+        : t('CAL · {badge}', { badge: _calBadgeLabel(badge) }),
+      calBadge: dirty ? 'edited' : badge || '',
+    },
+    meta: metaText(state, enabled, activeCamera, catalogCount),
+  };
+}
+
+function metaText(state, enabled, activeCamera, catalogCount) {
+  if (activeCamera) {
+    const provider = cctvSourceLabelText(
+      activeCamera.sourceLabel || activeCamera.provider || 'Configured Source',
+    );
+    const statusMsg = activeCamera.sourceMessage
+      ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
+      : '';
+    // A partner-supplied feed inside a pack names its owner here.
+    const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
+    const calBadge = activeCamera.calBadge
+      ? _calBadgeLabel(activeCamera.calBadge)
+      : '';
+    const projLabel = state?.showProjection !== false ? t('MONITOR') : t('OFF');
+    return t(
+      '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
+      {
+        city: activeCamera.city,
+        heading: `${Math.round(activeCamera.headingDeg)}°`,
+        fov: `${Math.round(activeCamera.fovDeg)}°`,
+        range: Math.round(activeCamera.rangeM),
+        projection: projLabel,
+        calBadge: calBadge ? ` · ${calBadge}` : '',
+        provider,
+        status: `${credit}${statusMsg}`,
+      },
+    );
+  }
+  if (catalogCount > 0)
+    return enabled
+      ? tn(
+          catalogCount,
+          '{count} camera loaded · click a camera to activate',
+          '{count} cameras loaded · click a camera to activate',
+        )
+      : tn(
+          catalogCount,
+          '{count} camera loaded · enable CCTV to activate',
+          '{count} cameras loaded · enable CCTV to activate',
+        );
+  return t('Enable CCTV to load camera intersections');
 }
 
 export function _renderCctvState(state) {
@@ -67,11 +166,6 @@ export function _renderCctvState(state) {
   this._lastSeenCctvActiveId = effectiveActiveId;
 
   this._updateCctvSyncChip(state?.loading, enabled);
-
-  if (this._cctvEnableBtn) {
-    this._cctvEnableBtn.classList.toggle('active', enabled);
-    this._cctvEnableBtn.textContent = enabled ? t('CCTV ON') : t('CCTV OFF');
-  }
 
   if (this._cctvSelect) {
     // The index keeps its identity until the view or the active camera
@@ -150,120 +244,8 @@ export function _renderCctvState(state) {
     }
   }
 
-  for (const btn of [
-    this._cctvNearestBtn,
-    this._cctvPrevBtn,
-    this._cctvNextBtn,
-  ]) {
-    if (!btn) continue;
-    btn.disabled = !enabled || catalogCount === 0;
-  }
-  if (this._cctvFocusBtn) {
-    this._cctvFocusBtn.disabled = !enabled || catalogCount === 0 || !activeId;
-  }
-
-  if (this._cctvCoverageBtn) {
-    // Tri-state (viewshed design §3b): off → on (wireframes) → viewshed
-    // (color-coded volumes). The click handler cycles; this renders.
-    const mode = state?.coverageMode || (state?.showCoverage ? 'on' : 'off');
-    this._cctvCoverageBtn.classList.toggle('active', mode !== 'off');
-    this._cctvCoverageBtn.textContent =
-      mode === 'viewshed'
-        ? t('VIEWSHED ON')
-        : mode === 'on'
-          ? t('COVERAGE ON')
-          : t('COVERAGE OFF');
-    this._cctvCoverageBtn.disabled = !enabled;
-  }
-
-  if (this._cctvAutoHopBtn) {
-    const autoHop = !!state?.autoHop;
-    this._cctvAutoHopBtn.classList.toggle('active', autoHop);
-    this._cctvAutoHopBtn.textContent = autoHop
-      ? t('AUTO HOP ON')
-      : t('AUTO HOP OFF');
-    this._cctvAutoHopBtn.disabled = !enabled;
-  }
-
-  if (this._cctvProjectionBtn) {
-    const showProjection = state?.showProjection !== false;
-    this._cctvProjectionBtn.classList.toggle('active', showProjection);
-    this._cctvProjectionBtn.textContent = showProjection
-      ? t('PROJECTION ON')
-      : t('PROJECTION OFF');
-    this._cctvProjectionBtn.disabled = !enabled;
-  }
-
-  if (this._cctvQualityChip) {
-    // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only,
-    // no in-world tint): three states driven by cctv.js's deriveCalBadge,
-    // no client-side scoring math. Casing is unified via _calBadgeLabel so
-    // the chip and the meta line never drift onto different conventions.
-    // Save-gated persistence (viewshed design §3e): unsaved live edits show
-    // EDITED on top of whatever the persisted badge state is — SAVE CAL
-    // promotes to CALIBRATED, RESET CAL clears.
-    const badge = activeCamera?.calBadge || null;
-    const dirty = !!activeCamera?.calDirty;
-    updateStatusBadge(this._cctvQualityChip, {
-      label: dirty
-        ? t('CAL · EDITED (UNSAVED)')
-        : t('CAL · {badge}', {
-            badge: this._calBadgeLabel(badge),
-          }),
-    });
-    this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : badge || '';
-  }
-
+  this.store.publish(presentCctvPanel(state, enabled));
   this._syncCctvCalReadout(enabled, activeCamera);
-
-  if (this._cctvMeta) {
-    if (activeCamera) {
-      const provider = cctvSourceLabelText(
-        activeCamera.sourceLabel ||
-          activeCamera.provider ||
-          'Configured Source',
-      );
-      const statusMsg = activeCamera.sourceMessage
-        ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
-        : '';
-      // A partner-supplied feed inside a pack names its owner here.
-      const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
-      const calBadge = activeCamera.calBadge
-        ? this._calBadgeLabel(activeCamera.calBadge)
-        : '';
-      const projLabel =
-        state?.showProjection !== false ? t('MONITOR') : t('OFF');
-      this._cctvMeta.textContent = t(
-        '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
-        {
-          city: activeCamera.city,
-          heading: `${Math.round(activeCamera.headingDeg)}°`,
-          fov: `${Math.round(activeCamera.fovDeg)}°`,
-          range: Math.round(activeCamera.rangeM),
-          projection: projLabel,
-          calBadge: calBadge ? ` · ${calBadge}` : '',
-          provider,
-          status: `${credit}${statusMsg}`,
-        },
-      );
-    } else if (catalogCount > 0) {
-      this._cctvMeta.textContent = enabled
-        ? tn(
-            catalogCount,
-            '{count} camera loaded · click a camera to activate',
-            '{count} cameras loaded · click a camera to activate',
-          )
-        : tn(
-            catalogCount,
-            '{count} camera loaded · enable CCTV to activate',
-            '{count} cameras loaded · enable CCTV to activate',
-          );
-    } else {
-      this._cctvMeta.textContent = t(
-        'Enable CCTV to load camera intersections',
-      );
-    }
-  }
 
   const liveIntent = enabled && !!activeCamera?.isVideo;
   if (this._cctvVideo) {

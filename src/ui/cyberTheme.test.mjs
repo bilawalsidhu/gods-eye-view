@@ -17,7 +17,7 @@ import { VisualSettings } from './visualSettings.js';
 import { STYLES } from './visualPresets.js';
 
 test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () => {
-  for (const file of ['LayerPanelsView.vue', 'ContextView.vue']) {
+  for (const file of ['panels/CctvPanel.vue', 'ContextView.vue']) {
     const markup = readFileSync(
       new URL(`./views/${file}`, import.meta.url),
       'utf8',
