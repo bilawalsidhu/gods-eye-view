@@ -14,6 +14,13 @@
   picker, and Node tests that import application modules register the
   component loader with `--import=<core>/build/register-vue` (samehkhamis).
 
+- `./ui/display`'s `bindDisplayControls` takes the keyhole fade and outside
+  opacity sliders as `fadeSlider` and `outsideOpacitySlider`, and their
+  actions receive whole percentages; `fadeSliders` still works.
+  `syncScopeControls` (`./ui/display`) and `shouldHideCollapsedRightPanels`
+  (`./ui/layout`) are deprecated: the Display view and the rail now own what
+  they did. `./ui/input` imports Vue (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

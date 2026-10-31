@@ -60,3 +60,16 @@ export function resolveHudRailLayout({
     constrained: panelHeight > availableHeight,
   };
 }
+
+/**
+ * Whether the Tactical layout hid collapsed right panels beside an expanded
+ * one. The rail now enforces one open panel per side in every layout; this
+ * stays exported from `./ui/layout` for hosts that imported it.
+ * @deprecated
+ */
+export function shouldHideCollapsedRightPanels({
+  hudVariant,
+  hasExpandedPanel,
+}) {
+  return hudVariant === 'tactical' && Boolean(hasExpandedPanel);
+}

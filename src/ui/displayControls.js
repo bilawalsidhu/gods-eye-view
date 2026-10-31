@@ -67,9 +67,27 @@ export function bindDisplayControls({ elements, actions }) {
   }
   listen(elements.fadeSlider, 'input', 'setFade', integer);
   listen(elements.outsideOpacitySlider, 'input', 'setOutsideOpacity', integer);
+  // Hosts written before the two sliders were told apart pass `fadeSliders`
+  // and read both values in `setFade` themselves.
+  for (const el of elements.fadeSliders || []) {
+    if (el === elements.fadeSlider || el === elements.outsideOpacitySlider)
+      continue;
+    listen(el, 'input', 'setFade');
+  }
   return {
     destroy() {
       for (const remove of removers.splice(0)) remove();
     },
   };
+}
+
+/**
+ * Keep a native Scope checkbox and feather availability in step with the
+ * mask. The Display view renders both from VisualSettings now; this stays
+ * exported from `./ui/display` for hosts that imported it.
+ * @deprecated
+ */
+export function syncScopeControls(toggle, featherSlider, enabled) {
+  if (toggle) toggle.checked = enabled;
+  if (featherSlider) featherSlider.disabled = !enabled;
 }

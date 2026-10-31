@@ -159,6 +159,20 @@ test('optional controls are absent safely and subscriptions stay instance-owned'
   two.destroy();
 });
 
+test('legacy fadeSliders bind once and skip sliders passed by name', () => {
+  const calls = [];
+  const fade = element('40');
+  const legacy = element('25');
+  const control = bindDisplayControls({
+    elements: { fadeSlider: fade, fadeSliders: [fade, legacy] },
+    actions: { setFade: (value) => calls.push(value) },
+  });
+  fade.dispatchEvent(new Event('input'));
+  legacy.dispatchEvent(new Event('input'));
+  assert.deepEqual(calls, [40, undefined]);
+  control.destroy();
+});
+
 test('the native Scope checkbox reads checked state on change and disposes its listener', () => {
   const scopeToggle = element();
   scopeToggle.checked = true;
