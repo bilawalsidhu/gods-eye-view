@@ -3013,5 +3013,19 @@
   "Load scenes from an exported JSON file": "Carica le scene da un file JSON esportato",
   "Download the timing log of the last play": "Scarica il log dei tempi dell'ultima riproduzione",
   "Edit anchors, data packs and shot details": "Modifica ancore, pacchetti dati e dettagli degli scatti",
-  "Download this scene as JSON or an asset bundle": "Scarica questa scena come JSON o pacchetto di risorse"
+  "Download this scene as JSON or an asset bundle": "Scarica questa scena come JSON o pacchetto di risorse",
+  "Highway message signs": "Pannelli a messaggio variabile",
+  "MnDOT · Minnesota only": "MnDOT · solo Minnesota",
+  "MnDOT network error": "MnDOT: errore di rete",
+  "{count} signs lit": {
+    "one": "{count} pannello acceso",
+    "many": "{count} di pannelli accesi",
+    "other": "{count} pannelli accesi"
+  },
+  "Message sign, {location}": "Pannello a messaggio variabile, {location}",
+  "SIGN · {location}": "PANNELLO · {location}",
+  "MnDOT data {age}": "Dati MnDOT {age}",
+  "STALE · MnDOT data {age}": "OBSOLETO · dati MnDOT {age}",
+  "Page {n} of {total}": "Pagina {n} di {total}",
+  "Graphic only": "Solo grafica"
 }
