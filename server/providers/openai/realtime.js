@@ -19,10 +19,12 @@ import {
   readCodexOAuthAccessToken,
   createCodexOAuthLogin,
 } from './codex-auth.js';
+import { hasProxySignals } from '../../../src/localRequestGate.mjs';
 
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 function isLoopbackRequest(req) {
+  if (hasProxySignals(req.headers || {})) return false;
   return LOOPBACK_ADDRESSES.has(String(req.socket?.remoteAddress || ''));
 }
 
