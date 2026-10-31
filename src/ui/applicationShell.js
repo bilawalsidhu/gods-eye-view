@@ -606,6 +606,7 @@ export class StyleManager extends ShellFacade {
     this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
+    this._initSkyView();
     this._initClearSelectedLayersButton();
     this._initHUDToggle();
     this._initModels3dToggle();
@@ -1646,6 +1647,18 @@ export class StyleManager extends ShellFacade {
         this._navigation.runOrientation(noun, navigate),
       showToast: (message) => this._showToast(message),
     });
+  }
+
+  /**
+   * Mount the Sky view (loaded as a separate chunk after shell init: the sky catalogues and the
+   * satellite worker stay out of the main bundle until the shell is up).
+   */
+  _initSkyView() {
+    import('../skyView/skyView.js')
+      .then((sky) => {
+        if (!this._disposed) sky.mountSkyViewForShell(this);
+      })
+      .catch((error) => console.warn('[Sky] view unavailable:', error));
   }
 
   // ── Share Button ─────────────────────────────

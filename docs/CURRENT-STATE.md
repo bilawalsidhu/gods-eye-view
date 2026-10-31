@@ -1415,6 +1415,54 @@ Anime band coverage against a Vite dev server.
 `scripts/qa-sky-model-lighting.mjs` compares a lit `airplane.glb` against
 black and white environment maps in isolated scenes.
 
+## Sky view
+
+The **Sky** button puts the camera at eye height on a chosen point (a
+picked point on the globe, the browser location, or typed `lat, lon` / a
+place name through the keyless geocoder) and looks up. Drag, pinch, wheel
+and arrow keys look around; zoom changes the field of view. **Back to map**
+restores the previous camera, inputs, clock and scene flags. Code is in
+`src/skyView/`, mounted from `ApplicationShell._initSkyView()` as a lazy
+`import()` so the sky catalogues and the satellite worker stay out of the
+startup bundle.
+
+- **Horizon.** The real terrain profile when terrain is loaded, a flat
+  painted ground otherwise; the sky brightness follows the Sun's altitude
+  at Sky time.
+- **Satellites.** The satellite module worker reads the same TLE groups as
+  the satellites layer (`/api/celestrak/<group>`, parsed by
+  `src/sources/tle.js`) and propagates them with `satellite.js` SGP4. An
+  "Overhead now" panel lists what is above the horizon; "Next passes" scans
+  48 h for stations and bright objects (`src/data/satellitePass.js`).
+  Magnitudes are estimates (`brightness.js`, class offsets). An RCS table
+  can be injected through `createSatSky({ fetchRcs })`; this host serves
+  none, so objects without it fall back to their class.
+- **Stars and planets.** 8,920 HYG v4.4 stars to magnitude 6.5, the 88
+  western constellations with IAU boundaries (Stellarium), and the Sun,
+  Moon and planets from `astronomy-engine`. Search finds constellations,
+  planets, bright stars and satellites. Attribution: `DATA_SOURCES.md`,
+  `src/data/dataCredits.js`, `src/skyView/NOTICE.md`.
+- **Point at the sky (phones).** Orientation events turn the view with the
+  phone. True north uses the WMM2025 declination (`geomagnetism`, valid to
+  2029-11-13; outside that range the compass says so). iOS permission is
+  requested inside the tap. A drag always takes over. Needs a secure
+  (`https://`) page; otherwise the view explains why and keeps dragging.
+- **Sky time.** `skyClock.js` is the only time for the overlay, the
+  satellite ticks, the ephemeris and `viewer.clock`: live, fixed, or
+  playing at a chosen rate. The control has step, play, reverse and a rate selector, plus
+  the presets Sunset, Twilight end, Midnight, Moonrise and ISS pass. The
+  state is shared as `?sv=` (and `svf=`); banners explain stale elements
+  and out-of-range times.
+- **Clear view.** The eye button, a double-tap on the sky or `H` hides every
+  control; `Esc` brings them back. While the sky is shown `H` does not
+  toggle the HUD.
+
+Gates: `scripts/qa-sky-render.mjs`, `qa-sky-render-series.mjs`, `qa-sky-phone.mjs`,
+`qa-sky-time.mjs`, `qa-sky-passscroll.mjs`, `qa-sky-satsearch.mjs` and
+`qa-sky-livesats-perf.mjs` drive the real app; `node --test
+src/skyView/*.test.mjs` covers the pure modules. `scripts/build-sky-data.mjs`
+regenerates the star and constellation data.
+
 ## Model atmosphere on Apple Metal
 
 Cesium's per-vertex model atmosphere is kept out of the pipeline on devices

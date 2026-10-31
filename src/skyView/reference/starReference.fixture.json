@@ -1,0 +1,248 @@
+{
+ "source": "Skyfield 1.53, de421.bsp, Hipparcos 1997 main catalogue (hip_main.dat via CDS)",
+ "method": "observer.at(t).observe(Star.from_dataframe(hip)).apparent().altaz() - no refraction",
+ "script": "src/skyView/reference/starReference.py",
+ "sites": [
+  {
+   "name": "Houston",
+   "latDeg": 29.7604,
+   "lonDeg": -95.3698,
+   "heightM": 15
+  },
+  {
+   "name": "Reykjavik",
+   "latDeg": 64.1466,
+   "lonDeg": -21.9426,
+   "heightM": 30
+  },
+  {
+   "name": "Sydney",
+   "latDeg": -33.8688,
+   "lonDeg": 151.2093,
+   "heightM": 50
+  }
+ ],
+ "dates": [
+  "2026-10-12T03:00:00Z",
+  "2031-01-15T12:00:00Z",
+  "2036-07-04T20:00:00Z"
+ ],
+ "rows": [
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Houston",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 296.399372,
+   "elDeg": 47.553799
+  },
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Houston",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 58.104202,
+   "elDeg": 25.294132
+  },
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Houston",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 22.798615,
+   "elDeg": -16.454847
+  },
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Reykjavik",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 316.086962,
+   "elDeg": 21.872088
+  },
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Reykjavik",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 167.897894,
+   "elDeg": 64.359807
+  },
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Reykjavik",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 80.423971,
+   "elDeg": 39.368885
+  },
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Sydney",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 43.813764,
+   "elDeg": -2.921717
+  },
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Sydney",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 298.319276,
+   "elDeg": -78.045252
+  },
+  {
+   "star": "Vega",
+   "hip": 91262,
+   "site": "Sydney",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 301.853498,
+   "elDeg": -23.986315
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Houston",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 299.992512,
+   "elDeg": -11.498143
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Houston",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 125.078436,
+   "elDeg": 72.728884
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Houston",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 75.032298,
+   "elDeg": 12.396042
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Reykjavik",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 9.081259,
+   "elDeg": -6.47944
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Reykjavik",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 249.469857,
+   "elDeg": 30.560571
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Reykjavik",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 162.975873,
+   "elDeg": 44.021085
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Sydney",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 356.800712,
+   "elDeg": 37.024122
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Sydney",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 94.321648,
+   "elDeg": -41.933242
+  },
+  {
+   "star": "Arcturus",
+   "hip": 69673,
+   "site": "Sydney",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 234.708012,
+   "elDeg": -66.998781
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Houston",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 87.951317,
+   "elDeg": -20.17545
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Houston",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 278.325872,
+   "elDeg": -30.32509
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Houston",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 239.163373,
+   "elDeg": 29.576134
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Reykjavik",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 144.162134,
+   "elDeg": 12.996829
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Reykjavik",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 16.372739,
+   "elDeg": -33.167833
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Reykjavik",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 296.42793,
+   "elDeg": -21.043815
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Sydney",
+   "utc": "2026-10-12T03:00:00Z",
+   "azDeg": 231.480635,
+   "elDeg": -32.087467
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Sydney",
+   "utc": "2031-01-15T12:00:00Z",
+   "azDeg": 344.436615,
+   "elDeg": 63.516462
+  },
+  {
+   "star": "Rigel",
+   "hip": 24436,
+   "site": "Sydney",
+   "utc": "2036-07-04T20:00:00Z",
+   "azDeg": 82.344905,
+   "elDeg": 25.699267
+  }
+ ]
+}
