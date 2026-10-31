@@ -48,6 +48,7 @@
       "src/ui/views/panels/StreetLevelPanel.vue",
       "src/ui/views/panels/CctvPanel.vue",
       "src/ui/cctv/CctvCalValue.vue",
+      "src/ui/cctv/CctvPicker.vue",
       "src/ui/stores/cctv.js",
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue"

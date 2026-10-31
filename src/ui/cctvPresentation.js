@@ -16,6 +16,11 @@ export function _calBadgeLabel(badge) {
   }
 }
 
+/** A picker option for a camera. */
+function pickerOption(camera, id = camera.id) {
+  return { value: id, label: `${camera.city} · ${camera.name}` };
+}
+
 /** The picker's closing line for the cameras the view leaves out. */
 function outsideNoteText(count) {
   return tn(
@@ -170,80 +175,58 @@ export function _renderCctvState(state) {
   this._updateCctvSyncChip(state?.loading, enabled);
 
   if (this._cctvSelect) {
-    // The index keeps its identity until the view or the active camera
-    // changes, so an unchanged list skips the per-option comparison. A
-    // focused picker is not rebuilt under the user; blur re-renders it.
-    const picking = document.activeElement === this._cctvSelect;
+    // A focused picker keeps the options it shows; blur re-renders it. One
+    // about to be disabled cannot hold focus, so it does not count.
+    const disabled = !enabled || cameras.length === 0;
+    const picking = document.activeElement === this._cctvSelect && !disabled;
     // Cameras the view leaves out get one closing line, so a short list
     // does not read as the whole catalog. A disabled layer has no view.
     const outside = enabled ? Math.max(0, catalogCount - cameras.length) : 0;
-    const shouldRebuild =
-      !picking &&
-      (this._cctvSelectSource !== cameras ||
-        this._cctvSelectOutside !== outside) &&
-      (this._cctvSelectOutside !== outside ||
-        this._cctvSelect.options.length !==
-          cameras.length + (outside ? 1 : 0) ||
-        cameras.some(
-          (cam, idx) => this._cctvSelect.options[idx]?.value !== cam.id,
-        ));
-    if (!picking) {
-      this._cctvSelectSource = cameras;
-      this._cctvSelectOutside = outside;
-    }
-    if (shouldRebuild) {
-      const options = document.createDocumentFragment();
-      for (const camera of cameras) {
-        const option = document.createElement('option');
-        option.value = camera.id;
-        option.textContent = `${camera.city} · ${camera.name}`;
-        options.appendChild(option);
-      }
-      if (outside) {
-        const note = document.createElement('option');
-        note.value = '';
-        note.disabled = true;
-        note.dataset.cctvOutside = '';
-        note.textContent = outsideNoteText(outside);
-        options.appendChild(note);
-      }
-      this._cctvSelect.replaceChildren(options);
-    }
-    this._cctvSelect.disabled = !enabled || cameras.length === 0;
-    // A deferred rebuild can miss a camera activated meanwhile (auto-hop,
-    // voice); add it so the picker does not go blank.
-    if (
+    let picker = this._picker;
+    // The index keeps its identity until the view or the active camera
+    // changes, so an unchanged list keeps its options.
+    if (!picking && (picker?.source !== cameras || picker.outside !== outside))
+      picker = {
+        source: cameras,
+        outside,
+        options: cameras.map((camera) => pickerOption(camera)),
+        note: outside ? outsideNoteText(outside) : '',
+      };
+    else if (
       picking &&
       activeId &&
       activeCamera &&
-      ![...this._cctvSelect.options].some((option) => option.value === activeId)
+      !picker?.options.some((option) => option.value === activeId)
     ) {
-      const option = document.createElement('option');
-      option.value = activeId;
-      option.textContent = `${activeCamera.city} · ${activeCamera.name}`;
-      this._cctvSelect.prepend(option);
-      // The added camera is one fewer outside the view.
-      const note = [...this._cctvSelect.options].find(
-        (entry) => entry.dataset?.cctvOutside !== undefined,
-      );
-      if (note) {
-        const left = Math.max(
-          0,
-          catalogCount - (this._cctvSelect.options.length - 1),
-        );
-        if (left) note.textContent = outsideNoteText(left);
-        else note.remove();
-      }
+      // A deferred rebuild can miss a camera activated meanwhile (auto-hop,
+      // voice); add it so the picker does not go blank. It is one fewer
+      // outside the view.
+      const options = [
+        pickerOption(activeCamera, activeId),
+        ...(picker?.options || []),
+      ];
+      const left = Math.max(0, catalogCount - options.length);
+      picker = {
+        ...picker,
+        options,
+        note: picker?.note && left ? outsideNoteText(left) : '',
+      };
     }
-    // The active camera is always one of the listed records.
-    if (activeId && activeCamera) {
-      this._cctvSelect.value = activeId;
-    } else if (!activeId) {
-      // With nothing in view, the closed picker says where the cameras are.
-      // A focused picker keeps its old options, so it only clears.
-      this._cctvSelect.selectedIndex =
-        !picking && cameras.length === 0 && outside ? 0 : -1;
-    }
+    this._picker = picker;
+    this.store.setPicker({
+      options: picker?.options || [],
+      note: picker?.note || '',
+      disabled,
+      // The active camera is always one of the listed records. With nothing
+      // active the closed picker shows the note when nothing is in view; a
+      // focused picker keeps its old options, so it only clears.
+      selection:
+        activeId && activeCamera
+          ? { value: activeId }
+          : !activeId
+            ? { index: !picking && cameras.length === 0 && outside ? 0 : -1 }
+            : null,
+    });
   }
 
   this.store.publish(presentCctvPanel(state, enabled));

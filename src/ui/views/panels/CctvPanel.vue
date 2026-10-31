@@ -3,11 +3,12 @@ import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import CctvCalValue from '../../cctv/CctvCalValue.vue';
+import CctvPicker from '../../cctv/CctvPicker.vue';
 import { useCctvStore } from '../../stores/cctv.js';
 
 // The CCTV panel, rendered from what CctvControls presents and publishes;
-// until it renders, the panel shows its initial markup. The controls fill
-// the picker's options, and draw the live video into its canvas.
+// until it renders, the panel shows its initial markup. The controls draw
+// the live video into its canvas.
 const { view, frame, live, sourceBadge, summary } = storeToRefs(useCctvStore());
 // The frame's request state, as data attributes that read "true" or are
 // empty; none until the controls first publish.
@@ -47,7 +48,7 @@ const frameData = computed(() =>
     </div>
     <div class="cctv-controls">
       <button id="cctv-prev-btn" type="button" class="gev-action-button scene-btn" :disabled="view?.navDisabled" data-i18n>PREV</button>
-      <select class="gev-field" id="cctv-camera-select" aria-label="CCTV camera" data-i18n-aria-label></select>
+      <CctvPicker class="gev-field" id="cctv-camera-select" aria-label="CCTV camera" data-i18n-aria-label />
       <button id="cctv-next-btn" type="button" class="gev-action-button scene-btn" :disabled="view?.navDisabled" data-i18n>NEXT</button>
     </div>
     <div class="cctv-controls">

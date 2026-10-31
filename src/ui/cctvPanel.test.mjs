@@ -149,21 +149,6 @@ test('the buttons stay the elements the controls listen on', async (t) => {
   assert.equal(byId('cctv-nearest-btn').disabled, true);
 });
 
-test('re-renders leave the picker options the controls fill alone', async (t) => {
-  const { controls, byId } = panel(t);
-  const select = byId('cctv-camera-select');
-  const option = document.createElement('option');
-  option.value = 'a';
-  option.textContent = 'Austin · Congress Ave';
-  select.append(option);
-  for (const enabled of [true, false, true]) {
-    controls._renderCctvState({ enabled, count: 1, cameraIndex: [] });
-    await nextTick();
-  }
-  assert.equal(select.options.length, 1);
-  assert.equal(select.options[0].value, 'a');
-});
-
 test('FOCUS waits for an active camera while the other buttons work', () => {
   const loaded = { enabled: true, count: 2, cameraIndex: [] };
   const view = presentCctvPanel(loaded, true);

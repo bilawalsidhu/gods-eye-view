@@ -86,10 +86,11 @@ They contain no application state.
    (done: `RecentImageryReadout` and its day cards, the same way),
    Street level (done: `StreetLevelPanel` renders the `gev-street-level`
    store that `StreetLevelControls` publishes to; the controls keep their
-   listeners, EXPAND, focus and resizing), CCTV (in progress: `CctvPanel`
-   renders the whole panel from the `gev-cctv` store, including the inline
-   pose editor, the frame preview, source badge and typed summary;
-   `CctvControls` still fills the picker's options), Layers, Display, Context and Radio, the command dock,
+   listeners, EXPAND, focus and resizing), CCTV (done: `CctvPanel` renders
+   the whole panel from the `gev-cctv` store, including the camera picker,
+   the inline pose editor, the frame preview, source badge and typed
+   summary; `CctvControls` keeps its listeners, the frame requests and the
+   live video surface), Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 
