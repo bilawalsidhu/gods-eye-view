@@ -443,6 +443,37 @@ export const NYC_ANCHORS = [
   { lat: 40.5795, lon: -74.1502 }, // Staten Island
 ];
 
+/** Houston TranStar cameras: one keyless JSON list for the metro (~1,000
+ * cameras with a numeric id). Frames are stills synthesized from that id on
+ * the city's snapshot host — never taken from the payload. The catalog is
+ * served as `application/javascript`; asking for `application/json` gets HTTP
+ * 406, so the loader accepts any media type. */
+export const HOUSTON_CAMERAS_URL =
+  'https://traffic.houstontranstar.org/data/layers/cctvSnapshots_json.js';
+/** The only origin Houston camera frames may come from. The catalog's `url`
+ * is a `showWin(...)` viewer helper and is ignored; the registered path is
+ * always this origin plus `/snapshots/cctv/<id>.jpg`. */
+export const HOUSTON_IMAGE_ORIGIN = 'https://www.houstontranstar.org/';
+export const HOUSTON_IMAGE_URL = (id) =>
+  `${HOUSTON_IMAGE_ORIGIN}snapshots/cctv/${id}.jpg`;
+/** Numeric TranStar snapshot ids: 3–5 digits, no leading zero. Id `0` is a
+ * different (non-snapshot) camera class in the same list. */
+export const HOUSTON_CAMERA_ID_RE = /^[1-9]\d{2,4}$/;
+export const DEFAULT_HOUSTON_MAX_SOURCES = 250;
+export const HOUSTON_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Ground-elevation prior in metres. The TranStar payload carries none, and
+ * Houston sits a few metres above sea level. */
+export const HOUSTON_GROUND_ELEVATION_M = 15;
+/** Downtown Houston (Main @ Texas): the primary prioritization anchor. */
+export const HOUSTON_DOWNTOWN = { lat: 29.7604, lon: -95.3698 };
+export const HOUSTON_ANCHORS = [
+  { lat: 29.7604, lon: -95.3698 }, // Downtown
+  { lat: 29.739, lon: -95.461 }, // Uptown / Galleria
+  { lat: 29.71, lon: -95.398 }, // Texas Medical Center
+  { lat: 29.9902, lon: -95.3368 }, // IAH
+  { lat: 29.3013, lon: -94.7977 }, // Galveston
+];
+
 /** Autostrada del Brennero (A22, Brenner–Modena) webcams: the keyless Open
  * Data Hub (NOI Techpark, South Tyrol) tourism API republishes Autobrennero's
  * own camera list with coordinates, one request for the whole motorway

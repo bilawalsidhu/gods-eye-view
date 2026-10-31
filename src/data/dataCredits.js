@@ -298,6 +298,12 @@ export const DATA_CREDITS = [
       'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
   },
   {
+    key: 'houston-cctv',
+    html:
+      'CCTV cameras &amp; frames (Houston): ' +
+      '<a href="https://traffic.houstontranstar.org/cctv/transtar/" target="_blank" rel="noopener">Houston TranStar</a>',
+  },
+  {
     key: 'hk-cctv',
     html:
       'Traffic snapshot cameras (Hong Kong): ' +
