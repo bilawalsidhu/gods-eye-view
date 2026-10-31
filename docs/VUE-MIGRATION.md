@@ -78,9 +78,9 @@ They contain no application state.
    `v-for`, because re-rendering it would bring back the English; component
    text uses `t()` instead. Shared builders become components first and
    keep their imperative entry points until their owners are components:
-   the rail cards and card blocks (`src/ui/rail/`) render through Vue's
-   synchronous `render()` behind `createRailCards()` and
-   `createRailCardBlocks()`. Order: Scenes (done: `SceneOptions` and
+   the rail cards, card blocks and timeline (`src/ui/rail/`) render through
+   Vue's synchronous `render()` behind `createRailCards()`,
+   `createRailCardBlocks()` and `createRailTimeline()`. Order: Scenes (done: `SceneOptions` and
    `SceneShotList` over the `gev-scenes` store), Weather, Recent imagery,
    Street level, CCTV, Layers, Display, Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail

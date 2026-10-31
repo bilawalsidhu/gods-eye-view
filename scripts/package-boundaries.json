@@ -573,6 +573,8 @@
       "src/ui/rail/RailCardBlocks.vue",
       "src/ui/rail/RailCard.vue",
       "src/ui/rail/RailCards.vue",
+      "src/ui/rail/utcClock.js",
+      "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js"
     ],
     "external": ["vue"]
@@ -938,6 +940,8 @@
       "src/ui/rail/RailCardBlocks.vue",
       "src/ui/rail/RailCard.vue",
       "src/ui/rail/RailCards.vue",
+      "src/ui/rail/utcClock.js",
+      "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js"
     ],
     "external": ["cesium", "vue", "pinia"]
@@ -2898,6 +2902,8 @@
       "src/ui/rail/RailCard.vue",
       "src/ui/rail/RailCards.vue",
       "src/ui/rail/RailCardBlocks.vue",
+      "src/ui/rail/utcClock.js",
+      "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js"
     ],
     "external": [
