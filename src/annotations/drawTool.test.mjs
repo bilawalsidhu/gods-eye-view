@@ -89,7 +89,9 @@ test('the Draw control markup carries the ids the tool binds to', () => {
     );
   }
   // The rows and the hint render what the tool publishes; it binds the rest.
-  const bound = ids.filter((id) => id !== 'draw-label-row' && id !== 'draw-hint');
+  const bound = ids.filter(
+    (id) => id !== 'draw-label-row' && id !== 'draw-hint',
+  );
   for (const id of bound) {
     assert.match(
       tool(),
