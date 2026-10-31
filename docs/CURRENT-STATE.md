@@ -158,6 +158,13 @@ authentication. Large-response continuations remain process-local and require
 consistent tool-call routing. Two-process reproduction is covered locally;
 Windows/Claude Desktop Cowork confirmation remains outstanding (#927).
 
+Route annotations in views and share links retain an optional `mode` of `walk`,
+`car` or `bike`. `show_in_gods_eye_view` accepts the same modes, so the existing
+annotation router and distance/duration label use the requested travel mode.
+Views and actions passing mode aliases (such as `driving` or `cycling`) are
+canonicalised to their short form. Omitting it preserves walking; other
+annotation kinds do not retain a mode.
+
 ## Tools and local MCP server — October 1, 2026
 
 Tool argument string lengths follow JSON Schema Unicode code-point counts, so supplementary characters count once rather than as two UTF-16 units.
