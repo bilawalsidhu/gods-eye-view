@@ -6,9 +6,10 @@ import { vRangeValue } from '../../rail/rangeValue.js';
 import { useDisplayStore } from '../../stores/display.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
-// Celestial, detection, bloom and sharpen and publishes them; until it does,
-// the panel shows its initial markup. The other groups keep their owners' element bindings.
-const { view } = storeToRefs(useDisplayStore());
+// Celestial, detection, bloom and sharpen and AircraftDisplay the 3D group,
+// and each publishes them; until they do, the panel shows its initial
+// markup. The other groups keep their owners' element bindings.
+const { view, models3d } = storeToRefs(useDisplayStore());
 const pct = (value) => `${value}%`;
 const hud = computed(() => view.value?.hud ?? null);
 const sonar = computed(() => view.value?.sonar ?? null);
@@ -24,10 +25,15 @@ const celestialTitle = computed(() =>
     ? t('Celestial ring — available in Normal style')
     : t('Celestial ring — reveal the full globe'),
 );
-const allocationSegment = (value) => ({
-  class: { active: allocation.value === value },
-  'aria-checked': String(allocation.value === value),
+const models3dOn = computed(() => models3d.value?.pressed ?? true);
+const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
+// A segmented control's segment, selected when `current` holds its value.
+const segment = (current) => (value) => ({
+  class: { active: current.value === value },
+  'aria-checked': String(current.value === value),
 });
+const modelsSegment = segment(modelsMode);
+const allocationSegment = segment(allocation);
 </script>
 
 <template>
@@ -125,15 +131,15 @@ const allocationSegment = (value) => ({
          button ships lit and the mode row ships open — the same markup-carries-the-default
          convention as #scope-toggle. ui.js re-syncs both from durable layer state, which
          is what flips them back for a share link or a stored session carrying 3D off. -->
-    <button class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true" title="3D aircraft — flat icons zoomed out, 3D models up close" data-i18n-title>
+    <button class="pp-toggle-btn" :class="{ active: models3dOn }" id="models3d-toggle" :aria-pressed="String(models3dOn)" title="3D aircraft — flat icons zoomed out, 3D models up close" data-i18n-title>
       <span class="pp-icon">&#x2708;</span>
       <span class="pp-label">3D</span>
     </button>
-    <div class="pp-slider-row visible" id="models3d-mode-row">
+    <div class="pp-slider-row" :class="{ visible: models3d?.rowVisible ?? true }" id="models3d-mode-row">
       <span class="pp-slider-mini-label" data-i18n>Models</span>
       <div class="gev-segmented pp-mode-seg" role="radiogroup" aria-label="3D model coverage" data-i18n-aria-label>
-        <button class="gev-segment pp-mode-btn active" id="models3d-mode-proximity" data-mode="proximity" role="radio" aria-checked="true" data-i18n>Proximity</button>
-        <button class="gev-segment pp-mode-btn" id="models3d-mode-all" data-mode="all" role="radio" aria-checked="false" data-i18n>All</button>
+        <button class="gev-segment pp-mode-btn" id="models3d-mode-proximity" data-mode="proximity" role="radio" v-bind="modelsSegment('proximity')" data-i18n>Proximity</button>
+        <button class="gev-segment pp-mode-btn" id="models3d-mode-all" data-mode="all" role="radio" v-bind="modelsSegment('all')" data-i18n>All</button>
       </div>
     </div>
   </div>

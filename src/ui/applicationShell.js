@@ -447,7 +447,6 @@ export class StyleManager extends ShellFacade {
     this._aircraftDisplay = new AircraftDisplay({
       elements: {
         _models3dBtn: this._models3dBtn,
-        _models3dModeRow: this._models3dModeRow,
       },
       readDataManager: () => this._dataManager,
       layout: () => this._layoutRightPanels(),

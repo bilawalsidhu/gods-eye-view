@@ -2,9 +2,9 @@ import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
 
 /**
- * The Display panel as its view renders it. VisualSettings presents the
- * post-processing groups (`_presentDisplay()`) and publishes them here;
- * it keeps its listeners on the panel's controls.
+ * The Display panel as its view renders it. VisualSettings presents its
+ * groups (`_presentDisplay()`) and AircraftDisplay the 3D aircraft group,
+ * and each publishes here; both keep their listeners on the controls.
  */
 export const useDisplayStore = defineStore('gev-display', () => {
   /** The presented panel; null until VisualSettings first renders. */
@@ -15,5 +15,13 @@ export const useDisplayStore = defineStore('gev-display', () => {
     view.value = markRaw(next);
   }
 
-  return { view, publish };
+  /** The 3D aircraft group; null until AircraftDisplay first renders. */
+  const models3d = shallowRef(null);
+
+  /** @param {object} next A fresh presentation of the 3D aircraft group. */
+  function publishModels3d(next) {
+    models3d.value = markRaw(next);
+  }
+
+  return { view, publish, models3d, publishModels3d };
 });

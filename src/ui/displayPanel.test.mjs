@@ -7,6 +7,7 @@ import { createPinia } from 'pinia';
 import { createApp, nextTick } from 'vue';
 import { useDisplayStore } from './stores/display.js';
 import DisplayPanel from './views/panels/DisplayPanel.vue';
+import { AircraftDisplay } from './aircraftDisplay.js';
 import { VisualSettings } from './visualSettings.js';
 
 function fixture(t) {
@@ -296,4 +297,49 @@ test('Scope and Celestial render what VisualSettings shows', async (t) => {
   assert.equal(celestial.getAttribute('aria-pressed'), 'true');
   assert.equal(celestial.classList.contains('active'), true);
   assert.equal(celestial.title, 'Celestial ring — reveal the full globe');
+});
+
+test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
+  const { store, $ } = fixture(t);
+  const params = [];
+  const owner = new AircraftDisplay({
+    elements: { _models3dBtn: $('models3d-toggle') },
+    readDataManager: () => ({
+      setLayerParams: (id, next) => params.push([id, next]),
+    }),
+    layout() {},
+    store,
+  });
+  const button = $('models3d-toggle');
+  const row = $('models3d-mode-row');
+  const all = $('models3d-mode-all');
+  assert.equal(button.className, 'pp-toggle-btn active');
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+  assert.equal(row.classList.contains('visible'), true);
+  assert.equal($('models3d-mode-proximity').getAttribute('aria-checked'), 'true');
+
+  // The button leaves the row to its own sync.
+  owner._setModels3dEnabled(false);
+  await nextTick();
+  assert.equal(button.className, 'pp-toggle-btn');
+  assert.equal(button.getAttribute('aria-pressed'), 'false');
+  assert.equal(row.classList.contains('visible'), true);
+  owner._syncModels3dModeRow();
+  await nextTick();
+  assert.equal(row.classList.contains('visible'), false);
+
+  owner._setModels3dMode('all');
+  await nextTick();
+  assert.equal(all.classList.contains('active'), true);
+  assert.equal(all.getAttribute('aria-checked'), 'true');
+  assert.equal($('models3d-mode-proximity').classList.contains('active'), false);
+  assert.deepEqual(params.at(-1), ['military', { models3dMode: 'all' }]);
+
+  owner._syncModels3dFromLayerState({
+    options: { flights: { models3d: true, models3dMode: 'proximity' } },
+  });
+  await nextTick();
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+  assert.equal(row.classList.contains('visible'), true);
+  assert.equal(all.getAttribute('aria-checked'), 'false');
 });

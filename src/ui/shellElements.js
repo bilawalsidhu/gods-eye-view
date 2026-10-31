@@ -142,6 +142,5 @@ export function readShellElements(document = globalThis.document) {
     _safeFrameBox: document.getElementById('safe-frame-box'),
     _detectionBtn: document.getElementById('detection-toggle'),
     _models3dBtn: document.getElementById('models3d-toggle'),
-    _models3dModeRow: document.getElementById('models3d-mode-row'),
   };
 }

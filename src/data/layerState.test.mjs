@@ -744,8 +744,17 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   );
   assert.match(
     ui,
-    /this\._models3dBtn\?\.setAttribute\(\s*'aria-pressed',\s*String\(this\.(?:flightState\.)?_models3dEnabled\),?\s*\)/,
-    'ui.js: and keeps aria-pressed synchronized, so the lit state is not colour-only',
+    /this\._models3dPressedShown = this\._models3dEnabled;/,
+    'ui.js: and keeps the pressed state synchronized, so the lit state is not colour-only',
+  );
+  const panel = await readFile(
+    new URL('../ui/views/panels/DisplayPanel.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    panel,
+    /id="models3d-toggle" :aria-pressed="String\(models3dOn\)"/,
+    'DisplayPanel.vue: the view renders aria-pressed with the lit state',
   );
   assert.match(
     html,

@@ -95,8 +95,9 @@ They contain no application state.
    through the refresh their own click triggers, and clicks re-read the live
    descriptor before acting), Display (in progress: `DisplayPanel` renders
    the HUD, Sonar, Scope, Celestial, detection, bloom and sharpen from the
-   `gev-display` store, which VisualSettings publishes to; the other groups
-   follow one owner at a time), Context and Radio, the command dock,
+   `gev-display` store, which VisualSettings publishes to, and the 3D
+   aircraft group, which AircraftDisplay publishes beside it; the other
+   groups follow one owner at a time), Context and Radio, the command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 
