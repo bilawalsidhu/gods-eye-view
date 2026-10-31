@@ -778,8 +778,8 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /mask-image: linear-gradient\(/);
   assert.match(cyberStyles, /flex: 1 1 auto;/);
   assert.match(cyberStyles, /#left-panel-stack:has/);
-  assert.match(cyberStyles, /left: 54px;/);
-  assert.match(cyberStyles, /right: 62px;/);
+  assert.match(cyberStyles, /left: calc\(54px \+ var\(--panel-rail-clearance\)\);/);
+  assert.match(cyberStyles, /right: calc\(62px \+ var\(--panel-rail-clearance\)\);/);
   assert.match(cyberStyles, /bottom: calc\(2vh \+ 13rem\);/);
   assert.doesNotMatch(cyberStyles, /NAV 01  \/\/  COMMAND BUS  \/\/  VIS 03/);
   assert.match(cyberStyles, /data-layer-id='satellites'/);

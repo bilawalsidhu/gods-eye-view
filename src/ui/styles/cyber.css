@@ -1652,7 +1652,7 @@
   :root[data-ui-theme='cyber'] #left-panel-stack {
     top: var(--cyber-left-rail-top) !important;
     bottom: calc(2vh + 13rem);
-    left: 54px;
+    left: calc(54px + var(--panel-rail-clearance));
     width: 300px;
     padding-left: 10px;
     border-left: 1px solid rgba(196, 84, 84, 0.72);
@@ -1734,7 +1734,7 @@
   :root[data-ui-theme='cyber'] #right-context-rail {
     --right-display-collapsed-width: var(--cyber-panel-collapsed-width);
     --right-context-collapsed-width: var(--cyber-panel-collapsed-width);
-    right: 62px;
+    right: calc(62px + var(--panel-rail-clearance));
     width: 312px;
   }
 
