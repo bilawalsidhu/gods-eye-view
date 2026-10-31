@@ -1,3 +1,4 @@
+import { nextTick } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -851,6 +852,11 @@ export class StyleManager extends ShellFacade {
       onSheetsClosed: () => this._syncShareState(),
       onTabOpened: (sheet) => {
         void this._onMobileTabOpened(sheet);
+      },
+      publish: (view) =>
+        useDisplayStore(applicationPinia()).publishPhoneShell(view),
+      afterPublish: (callback) => {
+        void nextTick(callback);
       },
     });
   }

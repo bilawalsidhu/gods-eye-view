@@ -66,6 +66,14 @@ export const useDisplayStore = defineStore('gev-display', () => {
     mapSourceControls.value = controls && markRaw(controls);
   }
 
+  /** The phone shell's tab bar; null until the shell first presents it. */
+  const phoneShell = shallowRef(null);
+
+  /** @param {?{enabled: boolean, sheet: string|null, tabs: object[]}} next The phone shell's tabs, whether it is on and its open sheet. */
+  function publishPhoneShell(next) {
+    phoneShell.value = next && markRaw(next);
+  }
+
   return {
     view,
     publish,
@@ -77,6 +85,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishGeoImport,
     style,
     publishStyle,
+    phoneShell,
+    publishPhoneShell,
     mapSource,
     publishMapSource,
     mapSourceControls,

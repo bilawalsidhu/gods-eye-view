@@ -4,6 +4,7 @@ import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
 import { useLocationStore } from '../stores/location.js';
+import PhoneTabBar from './panels/PhoneTabBar.vue';
 
 // VisualSettings publishes the active style and the map source controls
 // their chip row; until they do, the dock shows its initial markup. The
@@ -112,5 +113,6 @@ function selectMapSource(chip) {
       </div>
     </div>
   </div>
+  <PhoneTabBar />
   </div>
 </template>

@@ -9,6 +9,7 @@ import { setLocale } from '../i18n/index.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocationStore } from './stores/location.js';
 import { LocationControls } from './locationControls.js';
+import { MOBILE_TABS, initMobileShell } from './mobileShell.js';
 import CommandDockView from './views/CommandDockView.vue';
 import SceneChromeView from './views/SceneChromeView.vue';
 import { VisualSettings } from './visualSettings.js';
@@ -251,4 +252,164 @@ test('the location tray renders what LocationControls publishes', async (t) => {
   assert.equal($('#location-search-error').textContent, '');
   assert.equal(row.classList.contains('expanded'), false);
   assert.equal($('#location-bar-divider').classList.contains('visible'), false);
+});
+
+// These compare nodes by identity in a boolean: a failing assertion on a
+// happy-dom node would try to print the whole document.
+test('the phone tab bar joins the end of the page while the shell publishes', async (t) => {
+  const { $, pinia } = fixture(t);
+  assert.equal($('#mobile-tab-bar') === null, true);
+  assert.equal($('#mobile-sheet-backdrop') === null, true);
+  // The scene adds its credits after the views mount; the bar follows them.
+  const credits = document.body.appendChild(document.createElement('div'));
+  const store = useDisplayStore(pinia);
+  store.publishPhoneShell({ enabled: true, sheet: null, tabs: MOBILE_TABS });
+  await nextTick();
+  const bar = $('#mobile-tab-bar');
+  const backdrop = $('#mobile-sheet-backdrop');
+  assert.equal(document.body.lastElementChild === bar, true);
+  assert.equal(bar.previousElementSibling === backdrop, true);
+  assert.equal(backdrop.previousElementSibling === credits, true);
+  assert.equal(bar.getAttribute('aria-label'), 'Panels');
+  assert.equal(bar.getAttribute('aria-hidden'), 'false');
+  assert.equal(backdrop.hidden, true);
+  const tabs = [...bar.querySelectorAll('.mobile-tab')];
+  assert.deepEqual(
+    tabs.map(
+      (tab) =>
+        `${tab.dataset.mobileSheet}:${tab.querySelector('.mobile-tab-icon').textContent}:${tab.querySelector('.mobile-tab-label').textContent}`,
+    ),
+    [
+      'layers:layers:Layers',
+      'cameras:videocam:Cameras',
+      'context:radar:Context',
+      'search:search:Search',
+      'more:more_horiz:More',
+    ],
+  );
+  assert.deepEqual(
+    tabs.map((tab) => tab.getAttribute('aria-expanded')),
+    ['false', 'false', 'false', 'false', 'false'],
+  );
+  store.publishPhoneShell({
+    enabled: true,
+    sheet: 'context',
+    tabs: MOBILE_TABS,
+  });
+  await nextTick();
+  assert.equal(backdrop.hidden, false);
+  assert.deepEqual(
+    tabs.map((tab) => tab.getAttribute('aria-expanded')),
+    ['false', 'false', 'true', 'false', 'false'],
+  );
+  store.publishPhoneShell({ enabled: false, sheet: null, tabs: MOBILE_TABS });
+  await nextTick();
+  assert.equal(bar.getAttribute('aria-hidden'), 'true');
+  assert.equal(backdrop.hidden, true);
+  assert.deepEqual(
+    tabs.map((tab) => tab.getAttribute('aria-expanded')),
+    ['false', 'false', 'false', 'false', 'false'],
+  );
+  store.publishPhoneShell(null);
+  await nextTick();
+  assert.equal($('#mobile-tab-bar') === null, true);
+  assert.equal($('#mobile-sheet-backdrop') === null, true);
+});
+
+test('the phone tabs are labelled in the UI language', async (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('ru');
+  const { $, pinia } = fixture(t);
+  useDisplayStore(pinia).publishPhoneShell({
+    enabled: true,
+    sheet: null,
+    tabs: MOBILE_TABS,
+  });
+  await nextTick();
+  assert.equal($('#mobile-tab-bar').getAttribute('aria-label'), 'Панели');
+  assert.equal(
+    $('#mobile-tab-bar [data-mobile-sheet="layers"] .mobile-tab-label')
+      .textContent,
+    'Слои',
+  );
+});
+
+test('closing a sheet returns focus to its tab once the tab bar shows it closed', async (t) => {
+  const { $, pinia } = fixture(t);
+  const store = useDisplayStore(pinia);
+  const init = () =>
+    initMobileShell({
+      documentRef: document,
+      matchMedia: () => ({ matches: true }),
+      ResizeObserverImpl: null,
+      requestFrame: () => 0,
+      setPanelCollapsed() {},
+      publish: (view) => store.publishPhoneShell(view),
+      afterPublish: (callback) => {
+        void nextTick(callback);
+      },
+    });
+  let shell = init();
+  t.after(() => shell.destroy());
+  await nextTick();
+  const tab = $('#mobile-tab-bar [data-mobile-sheet="search"]');
+  tab.focus();
+  tab.click();
+  await nextTick();
+  assert.equal(tab.getAttribute('aria-expanded'), 'true');
+  assert.equal(document.activeElement?.id, 'location-search');
+  let expandedAtFocus = null;
+  tab.addEventListener('focus', () => {
+    expandedAtFocus = tab.getAttribute('aria-expanded');
+  });
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  await nextTick();
+  await nextTick();
+  assert.equal(document.activeElement === tab, true);
+  assert.equal(expandedAtFocus, 'false');
+  assert.equal($('#mobile-sheet-backdrop').hidden, true);
+  // Reopening before the closed tab bar renders keeps focus in the sheet.
+  const layers = $('#mobile-tab-bar [data-mobile-sheet="layers"]');
+  const inSheet = document.body.appendChild(document.createElement('button'));
+  const escape = () =>
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+  layers.focus();
+  layers.click();
+  inSheet.focus();
+  escape();
+  layers.click();
+  await nextTick();
+  await nextTick();
+  assert.equal(document.body.dataset.mobileSheet, 'layers');
+  assert.equal(document.activeElement === inSheet, true);
+  // So does destroying the shell with a sheet open.
+  escape();
+  layers.focus();
+  layers.click();
+  inSheet.focus();
+  shell.destroy();
+  shell = init();
+  await nextTick();
+  await nextTick();
+  assert.equal(document.activeElement === inSheet, true);
+  // A destroyed shell takes its bar along; a new one brings it back.
+  shell.destroy();
+  await nextTick();
+  assert.equal($('#mobile-tab-bar') === null, true);
+  shell = init();
+  await nextTick();
+  assert.equal(document.querySelectorAll('#mobile-tab-bar').length, 1);
+  $('#mobile-tab-bar [data-mobile-sheet="more"]').click();
+  await nextTick();
+  assert.equal(
+    $('#mobile-tab-bar [data-mobile-sheet="more"]').getAttribute(
+      'aria-expanded',
+    ),
+    'true',
+  );
+  assert.equal($('#mobile-sheet-backdrop').hidden, false);
 });

@@ -122,8 +122,12 @@ They contain no application state.
    what `createMapSourceControls()` publishes beside it, so `./ui/maps`
    needs no Vue; the location tray's city and landmark pills, mini status
    and search error render what `LocationControls` publishes to the
-   `gev-location` store, and the search field keeps its listeners),
-   the phone shell, then Cockpit. Layers that write into the right rail
+   `gev-location` store, and the search field keeps its listeners), the
+   phone shell (`PhoneTabBar` renders the tabs and open sheet the shell
+   publishes to the `gev-display` store, teleporting the tab bar and sheet
+   backdrop to the end of the page from the first publish until the shell
+   is destroyed; the shell takes their clicks from the document), then
+   Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion and the attribute
