@@ -439,7 +439,7 @@ test('the application composition wires the import and owns its teardown', () =>
   );
   assert.ok(tools.indexOf('defer(() => geoFileImport?.destroy());') > importAt);
   const markup = fs.readFileSync(
-    new URL('./views/DisplayControlsView.vue', import.meta.url),
+    new URL('./views/panels/DisplayPanel.vue', import.meta.url),
     'utf8',
   );
   for (const id of [

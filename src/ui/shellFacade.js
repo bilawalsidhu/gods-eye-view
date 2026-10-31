@@ -697,13 +697,13 @@ export class ShellFacade {
   }
 
   /**
-   * Maps a normalized sharpen value (0-1) to the unsharp-mask `amount` uniform.
-   * Range: 0.1 (subtle) to 2.1 (aggressive edge enhancement).
-   * @param {number} val - Normalized sharpen intensity (0.0 to 1.0).
+   * Sets the sharpen amount the Display slider shows and applies it.
+   * @param {number} pct - Sharpen intensity, 0 to 100.
+   * @param {{syncShare?: boolean}} [options]
    * @returns {void}
    */
-  _applySharpenIntensity(val) {
-    return this._visualSettings._applySharpenIntensity(...arguments);
+  _setSharpenIntensity(pct, { syncShare = true } = {}) {
+    return this._visualSettings._setSharpenIntensity(...arguments);
   }
 
   /**

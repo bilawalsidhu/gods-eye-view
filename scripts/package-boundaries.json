@@ -51,7 +51,10 @@
       "src/ui/cctv/CctvPicker.vue",
       "src/ui/stores/cctv.js",
       "src/ui/stores/streetLevel.js",
-      "src/ui/rail/RailChips.vue"
+      "src/ui/rail/RailChips.vue",
+      "src/ui/views/panels/DisplayPanel.vue",
+      "src/ui/stores/display.js",
+      "src/ui/rail/rangeValue.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -955,7 +958,8 @@
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/stores/streetLevel.js",
-      "src/ui/stores/cctv.js"
+      "src/ui/stores/cctv.js",
+      "src/ui/stores/display.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -2922,7 +2926,8 @@
       "src/ui/recentImagery/RecentImageryCard.vue",
       "src/ui/recentImagery/RecentImageryReadout.vue",
       "src/ui/stores/streetLevel.js",
-      "src/ui/stores/cctv.js"
+      "src/ui/stores/cctv.js",
+      "src/ui/stores/display.js"
     ],
     "external": [
       "hls.js",
@@ -3670,6 +3675,8 @@
       "src/ui/visualInput.js",
       "src/ui/visualPresets.js",
       "src/ui/visualSettings.js",
+      "src/ui/stores/display.js",
+      "src/ui/vueRuntime.js",
       "src/ui/segmentedControl.js",
       "src/i18n/marker.js",
       "src/i18n/index.js",
@@ -3688,7 +3695,7 @@
       "src/ui/displayControls.js",
       "src/visualStylePolicy.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "vue", "pinia"]
   },
   "ui-panel-chrome": {
     "exports": ["./ui/panel-chrome"],

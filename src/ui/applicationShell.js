@@ -207,10 +207,6 @@ export class StyleManager extends ShellFacade {
         setScopeMaskFeather: services.setScopeMaskFeather,
       },
       elements: {
-        _bloomBtn: this._bloomBtn,
-        _bloomSlider: this._bloomSlider,
-        _bloomSliderRow: this._bloomSliderRow,
-        _bloomSliderValue: this._bloomSliderValue,
         _celestialBtn: this._celestialBtn,
         _cockpitDisplayToggleBtn: this._cockpitDisplayToggleBtn,
         _detectionAllocationRow: this._detectionAllocationRow,
@@ -242,10 +238,6 @@ export class StyleManager extends ShellFacade {
         _scopeBtn: this._scopeBtn,
         _scopeFeatherSlider: this._scopeFeatherSlider,
         _scopeFeatherValue: this._scopeFeatherValue,
-        _sharpenBtn: this._sharpenBtn,
-        _sharpenSlider: this._sharpenSlider,
-        _sharpenSliderRow: this._sharpenSliderRow,
-        _sharpenSliderValue: this._sharpenSliderValue,
         _sliderContainer: this._sliderContainer,
         _sliderPanel: this._sliderPanel,
         _styleIndicator: this._styleIndicator,
@@ -552,7 +544,6 @@ export class StyleManager extends ShellFacade {
         _celestialBtn: this._celestialBtn,
         _models3dBtn: this._models3dBtn,
         _scopeFeatherValue: this._scopeFeatherValue,
-        _sharpenSliderValue: this._sharpenSliderValue,
         _detectionDensityValue: this._detectionDensityValue,
       },
       operations: {
@@ -565,8 +556,7 @@ export class StyleManager extends ShellFacade {
         _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
         _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
         _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
-        _applySharpenIntensity: (...args) =>
-          this._applySharpenIntensity(...args),
+        _setSharpenIntensity: (...args) => this._setSharpenIntensity(...args),
         _setHudVariant: (...args) => this._setHudVariant(...args),
         _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
         _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
@@ -1484,15 +1474,11 @@ export class StyleManager extends ShellFacade {
       detection: this.getDetectionState(),
       bloom: {
         enabled: !!this.bloomEnabled,
-        intensityPct: this._bloomSlider
-          ? parseInt(this._bloomSlider.value, 10)
-          : null,
+        intensityPct: this._visualSettings.bloomIntensityPct,
       },
       sharpen: {
         enabled: !!this.sharpenEnabled,
-        intensityPct: this._sharpenSlider
-          ? parseInt(this._sharpenSlider.value, 10)
-          : null,
+        intensityPct: this._visualSettings.sharpenIntensityPct,
       },
       celestialRing: {
         enabled: this.celestialRingEnabled,

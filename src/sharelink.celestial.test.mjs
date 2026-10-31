@@ -522,7 +522,7 @@ test('every explicit visual UI gesture claims restore authority before it mutate
     ['toggleSharpen:', 'setScopeEnabled:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
     ['setScopeEnabled:', 'setScopeFeather:', 'setScopeMaskEnabled(', 'setScopeEnabled control'],
     ['setScopeFeather:', 'setSharpenIntensity:', 'setScopeMaskFeather(', 'setScopeFeather control'],
-    ['setSharpenIntensity:', 'setHudLayout:', 'this._applySharpenIntensity(', 'setSharpenIntensity control'],
+    ['setSharpenIntensity:', 'setHudLayout:', 'this._setSharpenIntensity(', 'setSharpenIntensity control'],
     ['setHudLayout:', 'toggleCleanView:', 'this._setHudVariant(', 'setHudLayout control'],
     ['setDensity:', 'setAllocation:', 'this._applyDetectionDensityFromUi()', 'setDensity control'],
     ['setAllocation:', 'setFade:', 'this._setDetectionAllocation(', 'setAllocation control'],
@@ -632,7 +632,7 @@ test('every explicit visual control facade claims restore authority before mutat
     ['  setHudLayout(variantName) {', '  getDetectionState() {', 'this._setHudVariant(', 'setHudLayout'],
     ['  setDetection({ enabled, mode, densityPct, allocationStrategy, fadePct, outsideOpacityPct } = {}) {', '  async setMapStack(stackId) {', 'this._setDetectionAllocation(', 'setDetection'],
     ['  setBloom({ enabled, intensityPct } = {}) {', '  setSharpen({ enabled, intensityPct } = {}) {', 'this._setBloomIntensity(', 'setBloom'],
-    ['  setSharpen({ enabled, intensityPct } = {}) {', '  get celestialRingEnabled() {', 'this._applySharpenIntensity(', 'setSharpen'],
+    ['  setSharpen({ enabled, intensityPct } = {}) {', '  get celestialRingEnabled() {', 'this._setSharpenIntensity(', 'setSharpen'],
     ['  setCelestialRingEnabled(enabled, { syncShare = true, focus = false } = {}) {', '  setOrbit(enabled) {', 'this.celestialRing?.setEnabled(', 'setCelestialRingEnabled'],
   ];
   for (const [start, end, mutation, label] of facadeRoutes) {

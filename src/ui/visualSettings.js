@@ -3,6 +3,8 @@ import { syncScopeControls } from './displayControls.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
 import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import { syncSegmentedControl } from './segmentedControl.js';
+import { useDisplayStore } from './stores/display.js';
+import { applicationPinia } from './vueRuntime.js';
 import { t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
@@ -102,16 +104,12 @@ export class VisualSettings {
       }
       this._updateSliderPanel(style, { reveal: false });
     }
-    if (typeof bloomIntensity === 'number' && this._bloomSlider) {
+    if (typeof bloomIntensity === 'number') {
       const intensity = decodeBloomIntensity(bloomIntensity, bloomVersion);
       this._setBloomIntensity(intensity, { syncShare: false });
     }
-    if (typeof sharpenIntensity === 'number' && this._sharpenSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(sharpenIntensity)));
-      this._sharpenSlider.value = String(pct);
-      this._sharpenSliderValue.textContent = `${pct}%`;
-      this._applySharpenIntensity(pct / 100);
-    }
+    if (typeof sharpenIntensity === 'number')
+      this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
     if (typeof bloom === 'boolean') this._setBloomEnabled(bloom);
     if (typeof sharpen === 'boolean') this._setSharpenEnabled(sharpen);
     if (hudVariant) this._setHudVariant(hudVariant);
@@ -188,7 +186,9 @@ export class VisualSettings {
     readContextMode,
     readContextChanging,
     readDisplayPortalActive,
+    store = useDisplayStore(applicationPinia()),
   }) {
+    this.store = store;
     Object.assign(this, elements, operations, {
       viewer,
       services,
@@ -209,6 +209,9 @@ export class VisualSettings {
       holdRender: services.holdContinuousRender,
       releaseRender: services.releaseContinuousRender,
     });
+    // The sharpen amount as a whole percentage. VisualEffects keeps the
+    // fraction it applies, and drops writes once it is stopped.
+    this._sharpenPct = 49;
     this.activeStyle = 'normal';
     this._preCyberStyle = null;
     this._cyberStyleUserSelected = false;
@@ -270,6 +273,16 @@ export class VisualSettings {
 
   get sharpenEnabled() {
     return this._visualEffects.sharpenEnabled;
+  }
+
+  /** Bloom intensity as the Display slider shows it, 0-200. */
+  get bloomIntensityPct() {
+    return clampBloomIntensity(this._getBloomIntensity());
+  }
+
+  /** Sharpen amount as the Display slider shows it, 0-100. */
+  get sharpenIntensityPct() {
+    return this._sharpenPct;
   }
 
   _initStages() {
@@ -456,9 +469,25 @@ export class VisualSettings {
   }
 
   _initBloomSharpen() {
-    this._visualEffects.initPostProcess(
-      this._sharpenSlider ? parseInt(this._sharpenSlider.value, 10) / 100 : 0.6,
-    );
+    this._visualEffects.initPostProcess(this._sharpenPct / 100);
+    this._publishDisplay();
+  }
+
+  /** Present the Display panel's post-processing groups. */
+  _presentDisplay() {
+    const bloom = this.bloomIntensityPct;
+    return {
+      bloom: { active: this.bloomEnabled, intensity: bloom, text: `${bloom}%` },
+      sharpen: {
+        active: this.sharpenEnabled,
+        intensity: this._sharpenPct,
+        text: `${this._sharpenPct}%`,
+      },
+    };
+  }
+
+  _publishDisplay() {
+    this.store.publish(this._presentDisplay());
   }
 
   _getBloomIntensity() {
@@ -472,11 +501,8 @@ export class VisualSettings {
   _setBloomIntensity(intensity, { syncShare = true } = {}) {
     const { governorRequestRender } = this.services;
     governorRequestRender('bloom');
-    const clamped = clampBloomIntensity(intensity);
-    if (this._bloomSlider) this._bloomSlider.value = String(clamped);
-    if (this._bloomSliderValue)
-      this._bloomSliderValue.textContent = `${clamped}%`;
-    this._applyBloomIntensity(clamped);
+    this._applyBloomIntensity(clampBloomIntensity(intensity));
+    this._publishDisplay();
     if (syncShare) this._syncShareState();
   }
 
@@ -489,8 +515,7 @@ export class VisualSettings {
     governorRequestRender('bloom');
     this._visualEffects.setBloomEnabled(enabled);
     this._syncBloomStageEnabled();
-    this._bloomBtn.classList.toggle('active', this.bloomEnabled);
-    this._bloomSliderRow.classList.toggle('visible', this.bloomEnabled);
+    this._publishDisplay();
     if (this.bloomEnabled) {
       this._applyBloomIntensity(this._getBloomIntensity());
     }
@@ -502,19 +527,22 @@ export class VisualSettings {
     this._visualEffects.applySharpenIntensity(val);
   }
 
+  /** Set the sharpen amount, a percentage clamped to 0-100, and apply it. */
+  _setSharpenIntensity(pct, { syncShare = true } = {}) {
+    if (!Number.isFinite(pct)) return;
+    this._sharpenPct = Math.max(0, Math.min(100, Math.round(pct)));
+    this._applySharpenIntensity(this._sharpenPct / 100);
+    this._publishDisplay();
+    if (syncShare) this._syncShareState();
+  }
+
   _setSharpenEnabled(enabled) {
     const { governorRequestRender } = this.services;
     governorRequestRender('sharpen');
     this._visualEffects.setSharpenEnabled(enabled);
-    this._sharpenBtn.classList.toggle('active', this.sharpenEnabled);
-    if (this._sharpenSliderRow) {
-      this._sharpenSliderRow.classList.toggle('visible', this.sharpenEnabled);
-    }
-    if (this.sharpenEnabled && this._sharpenSlider) {
-      this._applySharpenIntensity(
-        parseInt(this._sharpenSlider.value, 10) / 100,
-      );
-    }
+    this._publishDisplay();
+    if (this.sharpenEnabled)
+      this._applySharpenIntensity(this._sharpenPct / 100);
     this._syncShareState();
     this._layoutRightPanels();
   }
@@ -745,7 +773,7 @@ export class VisualSettings {
     }
 
     const bloomInput = preset.bloom || {};
-    if (typeof bloomInput.intensity === 'number' && this._bloomSlider) {
+    if (typeof bloomInput.intensity === 'number') {
       this._setBloomIntensity(clampBloomIntensity(bloomInput.intensity), {
         syncShare: false,
       });
@@ -755,15 +783,8 @@ export class VisualSettings {
     }
 
     const sharpenInput = preset.sharpen || {};
-    if (typeof sharpenInput.intensity === 'number' && this._sharpenSlider) {
-      const sharpenPct = Math.max(
-        0,
-        Math.min(100, Math.round(sharpenInput.intensity)),
-      );
-      this._sharpenSlider.value = String(sharpenPct);
-      this._sharpenSliderValue.textContent = `${sharpenPct}%`;
-      this._applySharpenIntensity(sharpenPct / 100);
-    }
+    if (typeof sharpenInput.intensity === 'number')
+      this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
     if (typeof sharpenInput.enabled === 'boolean') {
       this._setSharpenEnabled(sharpenInput.enabled);
     }
@@ -801,7 +822,7 @@ export class VisualSettings {
 
   _applyGlobalPostDefaults() {
     const defaults = GLOBAL_POST_DEFAULTS;
-    if (typeof defaults.bloom?.intensity === 'number' && this._bloomSlider) {
+    if (typeof defaults.bloom?.intensity === 'number') {
       this._setBloomIntensity(clampBloomIntensity(defaults.bloom.intensity), {
         syncShare: false,
       });
@@ -810,18 +831,10 @@ export class VisualSettings {
       this._setBloomEnabled(defaults.bloom.enabled);
     }
 
-    if (
-      typeof defaults.sharpen?.intensity === 'number' &&
-      this._sharpenSlider
-    ) {
-      const sharpenPct = Math.max(
-        0,
-        Math.min(100, Math.round(defaults.sharpen.intensity)),
-      );
-      this._sharpenSlider.value = String(sharpenPct);
-      this._sharpenSliderValue.textContent = `${sharpenPct}%`;
-      this._applySharpenIntensity(sharpenPct / 100);
-    }
+    if (typeof defaults.sharpen?.intensity === 'number')
+      this._setSharpenIntensity(defaults.sharpen.intensity, {
+        syncShare: false,
+      });
     if (typeof defaults.sharpen?.enabled === 'boolean') {
       this._setSharpenEnabled(defaults.sharpen.enabled);
     }
@@ -892,7 +905,7 @@ export class VisualSettings {
       options: {
         bloomIntensity: this._getBloomIntensity(),
         bloomVersion: BLOOM_SCALE_VERSION,
-        sharpenIntensity: parseInt(this._sharpenSlider?.value || '49', 10),
+        sharpenIntensity: this._sharpenPct,
         hudVariant: this.hud.getVariant(),
         hudVisible: this.hud.visible,
         detectionMode: detection.mode,
@@ -1078,9 +1091,7 @@ export class VisualSettings {
   setBloom({ enabled, intensityPct } = {}) {
     const current = () => ({
       enabled: !!this.bloomEnabled,
-      intensityPct: this._bloomSlider
-        ? parseInt(this._bloomSlider.value, 10)
-        : null,
+      intensityPct: this.bloomIntensityPct,
     });
     if (enabled !== undefined && typeof enabled !== 'boolean') {
       return {
@@ -1118,9 +1129,7 @@ export class VisualSettings {
   setSharpen({ enabled, intensityPct } = {}) {
     const current = () => ({
       enabled: !!this.sharpenEnabled,
-      intensityPct: this._sharpenSlider
-        ? parseInt(this._sharpenSlider.value, 10)
-        : null,
+      intensityPct: this.sharpenIntensityPct,
     });
     if (enabled !== undefined && typeof enabled !== 'boolean') {
       return {
@@ -1144,12 +1153,7 @@ export class VisualSettings {
     if (hasExplicitVisualChange)
       this.shareLinkManager?.claimRestoreLane?.('visual');
     if (intensityPct !== undefined) {
-      const pct = Math.round(Math.max(0, Math.min(100, intensityPct)));
-      if (this._sharpenSlider) this._sharpenSlider.value = String(pct);
-      if (this._sharpenSliderValue)
-        this._sharpenSliderValue.textContent = `${pct}%`;
-      this._applySharpenIntensity(pct / 100);
-      this._syncShareState();
+      this._setSharpenIntensity(intensityPct);
     }
     if (enabled !== undefined) this._setSharpenEnabled(enabled);
     return {
@@ -1243,7 +1247,7 @@ export class VisualSettings {
       },
       sharpen: {
         enabled: this.sharpenEnabled,
-        intensity: parseInt(this._sharpenSlider?.value || '49', 10),
+        intensity: this._sharpenPct,
       },
       hud: {
         visible: this.hud.visible,
@@ -1279,7 +1283,7 @@ export class VisualSettings {
     }
 
     const bloomState = state.bloom || {};
-    if (typeof bloomState.intensity === 'number' && this._bloomSlider) {
+    if (typeof bloomState.intensity === 'number') {
       const intensity = decodeBloomIntensity(
         bloomState.intensity,
         bloomState.version ?? state.bloomVersion ?? BLOOM_SCALE_VERSION,
@@ -1291,15 +1295,8 @@ export class VisualSettings {
     }
 
     const sharpenState = state.sharpen || {};
-    if (typeof sharpenState.intensity === 'number' && this._sharpenSlider) {
-      const pct = Math.max(
-        0,
-        Math.min(100, Math.round(sharpenState.intensity)),
-      );
-      this._sharpenSlider.value = String(pct);
-      this._sharpenSliderValue.textContent = `${pct}%`;
-      this._applySharpenIntensity(pct / 100);
-    }
+    if (typeof sharpenState.intensity === 'number')
+      this._setSharpenIntensity(sharpenState.intensity, { syncShare: false });
     if (typeof sharpenState.enabled === 'boolean') {
       this._setSharpenEnabled(sharpenState.enabled);
     }
@@ -1440,15 +1437,8 @@ export class VisualSettings {
       typeof preset.sharpen === 'object'
         ? preset.sharpen
         : { enabled: preset.sharpen };
-    if (typeof sharpenInput.intensity === 'number' && this._sharpenSlider) {
-      const sharpenPct = Math.max(
-        0,
-        Math.min(100, Math.round(sharpenInput.intensity)),
-      );
-      this._sharpenSlider.value = String(sharpenPct);
-      this._sharpenSliderValue.textContent = `${sharpenPct}%`;
-      this._applySharpenIntensity(sharpenPct / 100);
-    }
+    if (typeof sharpenInput.intensity === 'number')
+      this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
     if (typeof sharpenInput.enabled === 'boolean') {
       this._setSharpenEnabled(sharpenInput.enabled);
     } else if (typeof sharpenInput.intensity === 'number') {

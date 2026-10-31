@@ -94,6 +94,9 @@ function styleOwner(t, initialVariant = 'cyber') {
     '_syncCyberSonarControl',
     '_scheduleAdaptivePanelLayout',
     '_applyDetectionFadeFromUi',
+    // Intensities: the fixture has no post-process stages to drive.
+    '_setBloomIntensity',
+    '_setSharpenIntensity',
   ])
     owner[name] = () => {};
   return { owner, hud, root, calls };
@@ -647,7 +650,7 @@ test('Cyber visual defaults update the style, thermal palette and render state',
 });
 
 test('the Display selector, voice schema and final stylesheet expose Cyber', () => {
-  const display = read('./views/DisplayControlsView.vue');
+  const display = read('./views/panels/DisplayPanel.vue');
   const stylesheet = read('../../style.css');
   const rightRail = read('./rightPanelRail.js');
   const hud = read('../hud.js');
@@ -877,7 +880,7 @@ test('Cyber panels retain clean edges without the added footer band', () => {
 
 test('Cyber keeps Sonar on/off without the removed CSS effect switch or dimmer', () => {
   const template = readFileSync(
-    new URL('./views/DisplayControlsView.vue', import.meta.url),
+    new URL('./views/panels/DisplayPanel.vue', import.meta.url),
     'utf8',
   );
   assert.match(template, /id="cyber-sonar-toggle"/);

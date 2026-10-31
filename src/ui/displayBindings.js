@@ -156,10 +156,7 @@ export class DisplayBindings {
         },
         setSharpenIntensity: (pct) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
-          if (this._sharpenSliderValue)
-            this._sharpenSliderValue.textContent = `${pct}%`;
-          this._applySharpenIntensity(pct / 100);
-          this._syncShareState();
+          this._setSharpenIntensity(pct);
         },
         setHudLayout: (value) => {
           this.shareLinkManager?.claimRestoreLane?.('visual');

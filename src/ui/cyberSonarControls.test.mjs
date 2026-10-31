@@ -82,7 +82,7 @@ test('real runner and facade use visual settings, preserve visibility and return
 });
 
 test('native sonar sliders represent every accepted integer without browser snapping', () => {
-  const html = readFileSync(new URL('./views/DisplayControlsView.vue', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('./views/panels/DisplayPanel.vue', import.meta.url), 'utf8');
   for (const name of ['rings', 'range', 'intensity', 'opacity', 'sector']) {
     assert.match(html, new RegExp(`id="cyber-sonar-${name}"[^>]*step="1"`));
   }
