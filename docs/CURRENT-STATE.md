@@ -4586,8 +4586,9 @@ programmatic activation do not trigger this reveal.
 
 Radio directory admission is atomic on both sides of the proxy boundary. A
 refresh is healthy only when it reaches the minimum accepted-query and station
-coverage; schema-valid responses with zero normalized stations count as failed
-queries rather than inflating refresh health. Each specialist query also needs
+coverage from broad/specialist queries; their schema-valid responses with zero
+normalized stations count as failed queries rather than inflating refresh health.
+Optional priority-country outcomes do not gate catalog health. Each specialist query also needs
 an accepted station whose normalized tags match that requested category; rows
 tagged only for another category remain usable catalog data but do not earn
 specialist health credit. A partial cold result remains
@@ -6116,6 +6117,45 @@ explicitly. Each constructed layer owns its catalog, audio and lifecycle state.
 Existing catalog validation, category filters, tuning and voice playback behavior
 remain unchanged. Audio connects directly to the broadcaster after an explicit
 play action; the source does not relay or record streams.
+
+### Radio priority-country coverage
+
+Optional `RADIO_PRIORITY_COUNTRIES` is a server-owned comma-separated list of
+up to eight ISO alpha-2 codes (for example `IN,PL`). Restart after changing it.
+It needs no API key and adds no POWER UP entry. An empty list preserves the
+existing global/tag-based directory. Invalid configuration fails at startup.
+
+Each country adds one Radio Browser search capped at 200 rows, with existing
+HTTPS/geolocation/codec validation and an additional matching-country check.
+Up to 40 unique accepted stations per country are seeded before the specialist
+tag queries and global popularity fill, within the unchanged 750-station cap.
+No country gets exhaustive coverage. A valid, in-limit country response with
+zero eligible stations succeeds with zero selected stations.
+The response's `coverage.priorityCountries` reports accepted query status and
+selected counts when configured. The existing broad/specialist health policy
+still applies separately. Country outcomes are advisory: failed, malformed or
+oversized country queries report unsuccessful coverage but cannot degrade or
+block admission of an otherwise healthy global catalog. Queries share the existing
+three-worker pool, single-flight refresh and 45-minute cache.
+Structurally malformed rows are skipped and counted in the upstream
+`rejectedStationCount` diagnostic; mixed country responses retain their valid
+rows, while an entirely malformed nonempty country response reports unsuccessful
+coverage. The diagnostic does not block catalog admission.
+
+For every installation, including those with no priority countries configured,
+at most three mirrors are tried per request; fallback mirrors beyond the first
+three candidates are not attempted. Failed or partial catalog refreshes retry
+after one minute, so a cold-start failure can continue returning 503 for that
+minute even if upstream recovers sooner. Healthy catalogs retain the 45-minute
+cache. The seven-day last-good expiry and known-station-only click reporting
+remain in force.
+
+Validation: `node --test src/data/radioProxy.test.mjs` covers configuration,
+country quotas under global popularity pressure, duplicate records, concurrency,
+cache reuse, country mismatch/oversize/empty/ineligible responses, failure isolation on cold
+and warm refreshes beyond seven days, and retry/backoff recovery both with and
+without configured countries. `node scripts/qa-radio.mjs --url http://localhost:4173` covers the existing
+750-station browser presentation and playback contract.
 
 ## Local RTL-SDR and Local ADS-B
 
