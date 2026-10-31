@@ -332,7 +332,6 @@
   "STALE": "DESATUALIZADO",
   "PARTIAL": "PARCIAL",
   "FALLBACK": "ALTERNATIVO",
-  "{state} {layers}": "{state}: {layers}",
   "view band|STREET": "RUA",
   "view band|CITY": "CIDADE",
   "view band|METRO": "METRÓPOLE",

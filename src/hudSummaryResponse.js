@@ -1,6 +1,14 @@
 import {
+  SNAPSHOT_FEED_STATES,
   feedProvenanceEnvelope,
   layerSnapshots,
+  provenanceTag,
+} from './data/layerSnapshot.js';
+import { DEFAULT_LOCALE, normalizeLocale } from './i18n/locale.js';
+
+export {
+  hudSummaryMatchesProvenance,
+  provenanceTag,
 } from './data/layerSnapshot.js';
 
 export const HUD_SUMMARY_UNCONFIGURED_CODE = 'OPENAI_NOT_CONFIGURED';
@@ -43,18 +51,136 @@ export function isHudSummaryUnconfigured(status, data) {
 }
 
 /**
- * HUD summary model instructions. The five-word line may only describe
- * supplied labels, and must carry feed-state when any enabled layer is not
- * nominal.
+ * HUD summary model instructions. The five words may only describe supplied
+ * labels; the feed state comes back as its own canonical field, so the check
+ * does not depend on the summary's language or wording.
  */
 export const HUD_SUMMARY_INSTRUCTIONS = [
   "Write one concise intelligence-HUD summary for God's Eye View.",
   'Use only the supplied place, street, nearby-place, enabled-layer labels, and feedProvenance.',
   'Prefer the clearest named place and include a relevant enabled layer only when useful.',
-  'If any enabled layer is not nominal, the five words MUST include that feedState token (STALE, DEGRADED, FALLBACK, LOADING, or UNAVAILABLE) and must not present the view as live.',
+  'In the summary, name layers only as in enabledLayerLabels; never copy layer names or state words from feedProvenance into it.',
+  'Set feedState to feedProvenance.overall exactly as given, or none when it is null.',
+  'If feedProvenance.overall is partial, do not present the coverage as complete; if it is any other state but nominal, do not present the view as live or healthy.',
   'Do not infer from coordinates or invent a place or feed state.',
-  'Output exactly five words with no title, punctuation, markdown, or introductory phrase.',
+  'The summary is exactly five words with no title, punctuation, markdown, or introductory phrase.',
 ].join(' ');
+
+/** Longest summary, in characters, for a script written without spaces. */
+export const HUD_SUMMARY_MAX_UNSPACED_CHARS = 20;
+
+/** feedState values the model may return; none stands for a null overall. */
+export const HUD_SUMMARY_FEED_STATES = Object.freeze([
+  ...SNAPSHOT_FEED_STATES,
+  'none',
+]);
+
+/** Responses API structured output: the five words plus the canonical state. */
+export const HUD_SUMMARY_RESPONSE_FORMAT = Object.freeze({
+  type: 'json_schema',
+  name: 'hud_summary',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      summary: { type: 'string' },
+      feedState: { type: 'string', enum: [...HUD_SUMMARY_FEED_STATES] },
+    },
+    required: ['summary', 'feedState'],
+    additionalProperties: false,
+  },
+});
+
+/** A shipped locale for the request, English when missing or unsupported. */
+export function hudSummaryLocale(value) {
+  return normalizeLocale(value) || DEFAULT_LOCALE;
+}
+
+// Names Intl.DisplayNames gets wrong for the shipped catalogs: pt is the
+// Brazilian variant, and zh-Hant is the zh-CN wording in Traditional script.
+const SUMMARY_LANGUAGES = Object.freeze({
+  pt: 'Brazilian Portuguese',
+  'zh-CN': 'Simplified Chinese',
+  'zh-Hant': 'Chinese in Traditional characters (mainland wording)',
+});
+
+/** Scripts written without spaces, where five words do not apply. */
+const UNSPACED_LOCALES = /^(?:ja|zh)(?:-|$)/;
+
+/**
+ * Whether a non-English summary echoes English the HUD does not show: a
+ * feed-state id or a translated layer's English name. Only Latin letters
+ * extend a word, so `stale` flush against kana or Han still counts.
+ * @param {string} summary The model's words.
+ * @param {unknown} locale The request locale.
+ * @param {string[]} [words] The English words the summary must not carry.
+ * @returns {boolean}
+ */
+export function hudSummaryHasEnglish(summary, locale, words = []) {
+  if (hudSummaryLocale(locale) === DEFAULT_LOCALE) return false;
+  const flat = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/-/g, ' ');
+  const text = flat(summary);
+  const latin = (char) => /\p{Script=Latin}/u.test(char ?? '');
+  return words.some((word) => {
+    const needle = flat(word);
+    if (!needle) return false;
+    for (
+      let at = text.indexOf(needle);
+      at >= 0;
+      at = text.indexOf(needle, at + 1)
+    ) {
+      if (!latin(text[at - 1]) && !latin(text[at + needle.length])) return true;
+    }
+    return false;
+  });
+}
+
+/** Whether the summary for this locale is capped in characters, not words. */
+export function hudSummaryIsUnspaced(locale) {
+  return UNSPACED_LOCALES.test(hudSummaryLocale(locale));
+}
+
+/** The language a request's summary is written in, named in English. */
+function summaryLanguage(tag) {
+  if (SUMMARY_LANGUAGES[tag]) return SUMMARY_LANGUAGES[tag];
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(tag) || tag;
+  } catch {
+    return tag;
+  }
+}
+
+/**
+ * Build the summary instructions for the requested locale.
+ * @param {unknown} locale The `locale` the HUD sent.
+ * @returns {string}
+ */
+export function hudSummaryInstructions(locale) {
+  const tag = hudSummaryLocale(locale);
+  if (tag === DEFAULT_LOCALE) return HUD_SUMMARY_INSTRUCTIONS;
+  const language = summaryLanguage(tag);
+  const length = hudSummaryIsUnspaced(tag)
+    ? ` Instead of five words, write one phrase of at most ${HUD_SUMMARY_MAX_UNSPACED_CHARS} characters.`
+    : '';
+  return `${HUD_SUMMARY_INSTRUCTIONS} Write the summary in ${language} (${tag}), not English, giving places their usual ${language} names and layers the names in enabledLayerLabels; feedState stays the English value.${length}`;
+}
+
+/**
+ * The model input: the HUD context, led by the summary language when it is
+ * not English. A small model follows the language far more reliably when it
+ * is part of the input as well as the instructions.
+ * @param {object} context The HUD summary context.
+ * @returns {string}
+ */
+export function hudSummaryInput(context) {
+  const tag = hudSummaryLocale(context?.locale);
+  const json = JSON.stringify(context ?? {});
+  if (tag === DEFAULT_LOCALE) return json;
+  return `Summary language: ${summaryLanguage(tag)} (${tag}).\n${json}`;
+}
 
 /**
  * Stamp HUD summary context with the same layer snapshots voice tools use.
@@ -83,32 +209,13 @@ export function hudSummaryLayerContext(layers = [], options) {
 }
 
 /**
- * The feed state and up to two layer names for the HUD telemetry suffix when
- * an enabled feed is not nominal. Values stay English (`state` is a feed-state
- * id, `names` are `layer.name`); the HUD translates them for display.
+ * The warning for the HUD telemetry line when an enabled feed is not
+ * nominal.
  * @param {Array<object>} [layers]
  * @param {{ now?: number }} [options]
  * @returns {{ state: string, names: string[] }|null}
  */
 export function hudTelemetryProvenance(layers = [], options) {
   const snapshots = layerSnapshots(layers, options).filter((s) => s.enabled);
-  const envelope = feedProvenanceEnvelope(snapshots, options);
-  if (!envelope.overall || envelope.overall === 'nominal') return null;
-  const names = envelope.layers
-    .filter(
-      (s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off',
-    )
-    .map((s) => String(s.name || s.id || 'LAYER'))
-    .slice(0, 2);
-  return { state: envelope.overall, names };
-}
-
-/** Require the supplied non-nominal state before showing an AI summary. */
-export function hudSummaryMatchesProvenance(summary, provenance) {
-  const state = provenance?.overall;
-  if (!state || state === 'nominal' || state === 'off') return true;
-  return String(summary || '')
-    .toUpperCase()
-    .split(/\W+/)
-    .includes(String(state).toUpperCase());
+  return provenanceTag(feedProvenanceEnvelope(snapshots, options));
 }

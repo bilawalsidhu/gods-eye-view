@@ -332,7 +332,6 @@
   "STALE": "OBSOLETO",
   "PARTIAL": "PARZIALE",
   "FALLBACK": "RISERVA",
-  "{state} {layers}": "{state} {layers}",
   "view band|STREET": "STRADA",
   "view band|CITY": "CITTÀ",
   "view band|METRO": "METRO",

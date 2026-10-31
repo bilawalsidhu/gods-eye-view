@@ -1,7 +1,11 @@
 /** Composite queries that combine other tools' answers for one area. */
 
 import { suggestView } from '../views.js';
-import { feedProvenanceEnvelope } from '../../data/layerSnapshot.js';
+import {
+  feedProvenanceEnvelope,
+  hudSummaryMatchesProvenance,
+  provenanceTag,
+} from '../../data/layerSnapshot.js';
 import { defineTool, ToolError } from '../catalog.js';
 import {
   AREA_SCHEMA,
@@ -232,6 +236,7 @@ export const getHudCaption = defineTool({
         feedState: sectionFeedState(brief[key]),
       }),
     );
+    const feedProvenance = feedProvenanceEnvelope(layers);
     const response = await context.services.summary.summarize(
       {
         placeLabels: [area.label],
@@ -244,16 +249,31 @@ export const getHudCaption = defineTool({
           name,
           feedState,
         })),
-        feedProvenance: feedProvenanceEnvelope(layers),
+        feedProvenance,
       },
       { signal: context.signal },
     );
-    const caption = response?.data?.summary;
-    if (!response?.ok || typeof caption !== 'string' || !caption)
+    const words = response?.data?.summary;
+    if (!response?.ok || typeof words !== 'string' || !words)
       throw new ToolError('unavailable', 'The caption service did not answer');
+    // As on the HUD: the app's own state leads and its layers trail, and a
+    // reply that names another state than the app's keeps only the place.
+    const tag = provenanceTag(feedProvenance);
+    const text = hudSummaryMatchesProvenance(response.data, feedProvenance)
+      ? words
+      : area.label;
+    const caption = tag
+      ? [tag.state.toUpperCase(), text, tag.names.join('/').toUpperCase()]
+          .filter(Boolean)
+          .join(' | ')
+      : text;
     return {
       summary: caption,
-      data: { area: area.label, caption },
+      data: {
+        area: area.label,
+        caption,
+        feedState: feedProvenance.overall,
+      },
     };
   },
 });

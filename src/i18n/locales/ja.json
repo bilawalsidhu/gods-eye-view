@@ -326,7 +326,6 @@
   "STALE": "更新遅延",
   "PARTIAL": "部分的",
   "FALLBACK": "フォールバック",
-  "{state} {layers}": "{state} {layers}",
   "view band|STREET": "街路",
   "view band|CITY": "市街",
   "view band|METRO": "都市圏",

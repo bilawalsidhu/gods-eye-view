@@ -335,7 +335,6 @@
   "STALE": "ЗАСТАРІЛО",
   "PARTIAL": "ЧАСТКОВО",
   "FALLBACK": "РЕЗЕРВ",
-  "{state} {layers}": "{state}: {layers}",
   "view band|STREET": "ВУЛИЦЯ",
   "view band|CITY": "МІСТО",
   "view band|METRO": "АГЛОМЕРАЦІЯ",
