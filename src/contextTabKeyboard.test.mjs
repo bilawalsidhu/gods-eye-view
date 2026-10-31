@@ -130,16 +130,20 @@ test('Context tabs draw a visible keyboard-focus outline including active tabs',
 test('Context async action buttons remain focused while busy', () => {
   const init = _initGlobalContextPanel.toString();
   const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this.listen(this._cockpitRadioToggleBtn,'));
-  const radioSync = radioPresentation.slice(0, radioPresentation.indexOf('if (this._radioFilter)'));
+  const radioSync = radioPresentation.slice(0, radioPresentation.indexOf('this._radioView = {'));
+  const radioPanel = readFileSync(new URL('./ui/views/panels/RadioPanel.vue', import.meta.url), 'utf8');
   const clear = clearSelectedLayers.toString();
 
   assert.match(init, /button\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(init, /button\.disabled\s*=\s*true/);
   assert.match(radio, /trigger\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(radio, /trigger\.disabled\s*=\s*true/);
-  for (const name of ['_radioEnableBtn', '_cockpitRadioEnableBtn']) {
-    assert.match(radioSync, new RegExp(`${name}\\.disabled = false`));
-  }
+  assert.match(radioSync, /_cockpitRadioEnableBtn\.disabled = false/);
+  // The Radio view never disables its Enable button; it marks it busy.
+  const enable = radioPanel.match(/<button id="radio-enable-btn"[^>]*>/)?.[0];
+  assert.ok(enable, 'Radio Enable button is missing');
+  assert.doesNotMatch(enable, /disabled(?!=")|:disabled/);
+  assert.match(enable, /:aria-busy=/);
   assert.doesNotMatch(clear, /_clearSelectedLayersBtn\.disabled\s*=\s*true/);
   assert.match(clear, /this\.setClearBusy\(true\)/);
   const control = readFileSync(new URL('./ui/clearLayersControl.js', import.meta.url), 'utf8');

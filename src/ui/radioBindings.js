@@ -1,4 +1,5 @@
 import { t, msg } from '../i18n/index.js';
+import { showRadioEnableBusy, showRadioVolume } from './radioPresentation.js';
 import {
   radioTunerSlot,
   radioTunerCommitSlot,
@@ -338,13 +339,23 @@ export function bindRadioControls() {
       return;
     }
   };
+  // The panel's Enable button renders from the Radio store; the Cockpit one
+  // is still written directly.
+  const setTriggerBusy = (trigger, busy) => {
+    if (
+      trigger === this._radioEnableBtn &&
+      showRadioEnableBusy.call(this, busy)
+    )
+      return;
+    trigger.setAttribute('aria-disabled', String(busy));
+    trigger.setAttribute('aria-busy', String(busy));
+  };
   const toggleRadio = async (trigger) => {
     if (!this.actions.isRegistered()) return;
     if (trigger.getAttribute('aria-busy') === 'true') return;
     const enabling = !this.actions.isEnabled();
     const revealAfterEnable = enabling && trigger === this._radioEnableBtn;
-    trigger.setAttribute('aria-disabled', 'true');
-    trigger.setAttribute('aria-busy', 'true');
+    setTriggerBusy(trigger, true);
     try {
       const toggled = await this.actions.runUserAction(
         (notificationToken) =>
@@ -377,8 +388,7 @@ export function bindRadioControls() {
         await this._revealRadioControlsAfterExplicitEnable(trigger);
     } finally {
       if (!this.destroyed) {
-        trigger.setAttribute('aria-disabled', 'false');
-        trigger.setAttribute('aria-busy', 'false');
+        setTriggerBusy(trigger, false);
         if (revealAfterEnable && trigger.isConnected)
           trigger.focus({ preventScroll: true });
       }
@@ -505,8 +515,7 @@ export function bindRadioControls() {
   );
   this.listen(this._radioVolume, 'input', () => {
     const value = Number(this._radioVolume.value);
-    if (this._radioVolumeValue)
-      this._radioVolumeValue.textContent = `${value}%`;
+    showRadioVolume.call(this, value);
     this.actions.setParams({ volume: value / 100 }, { origin: 'user' });
   });
   // Cockpit owns the Cesium camera even though it intentionally clears

@@ -21,6 +21,10 @@
   (`./ui/layout`) are deprecated: the Display view and the rail now own what
   they did. `./ui/input` imports Vue (samehkhamis).
 
+- `./ui/cctv` and `./ui/radio` import Vue and Pinia: their controllers
+  publish the panel's state to a store that the CCTV and Radio views render,
+  instead of writing the panel's markup themselves (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

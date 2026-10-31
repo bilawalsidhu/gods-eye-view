@@ -24,6 +24,7 @@
       "src/ui/views/CockpitView.vue",
       "src/ui/views/CommandDockView.vue",
       "src/ui/views/ContextView.vue",
+      "src/ui/views/panels/RadioPanel.vue",
       "src/ui/views/DisplayControlsView.vue",
       "src/ui/views/LayerPanelsView.vue",
       "src/ui/views/ProviderSettingsView.vue",
@@ -50,11 +51,13 @@
       "src/ui/cctv/CctvCalValue.vue",
       "src/ui/cctv/CctvPicker.vue",
       "src/ui/stores/cctv.js",
+      "src/ui/stores/radio.js",
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue",
       "src/ui/views/panels/DisplayPanel.vue",
       "src/ui/stores/display.js",
-      "src/ui/rail/rangeValue.js"
+      "src/ui/rail/rangeValue.js",
+      "src/ui/rail/classToggle.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -622,6 +625,8 @@
       "src/ui/radioControls.js",
       "src/ui/radioBindings.js",
       "src/ui/radioPresentation.js",
+      "src/ui/vueRuntime.js",
+      "src/ui/stores/radio.js",
       "src/ui/radioTunerModel.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
@@ -636,7 +641,7 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json"
     ],
-    "external": []
+    "external": ["vue", "pinia"]
   },
   "cctv-controls": {
     "exports": ["./ui/cctv"],
@@ -959,6 +964,7 @@
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/stores/streetLevel.js",
       "src/ui/stores/cctv.js",
+      "src/ui/stores/radio.js",
       "src/ui/stores/display.js"
     ],
     "external": ["cesium", "vue", "pinia"]
@@ -2927,6 +2933,7 @@
       "src/ui/recentImagery/RecentImageryReadout.vue",
       "src/ui/stores/streetLevel.js",
       "src/ui/stores/cctv.js",
+      "src/ui/stores/radio.js",
       "src/ui/stores/display.js"
     ],
     "external": [

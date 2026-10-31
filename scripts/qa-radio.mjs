@@ -2957,7 +2957,7 @@ async function main() {
     await page.evaluate(async () => {
       await window.__godsEyeView.dataManager.layers.get('radio').module.update();
     });
-    const tunerRefreshRelease = await page.evaluate((target) => {
+    const tunerRefreshRelease = await page.evaluate(async (target) => {
       const gev = window.__godsEyeView;
       const slider = document.getElementById('radio-tuner-slider');
       const displayedBeforeRelease = document.getElementById('radio-tuner-station').textContent;
@@ -2970,6 +2970,10 @@ async function main() {
         clientY: target.clientY,
       }));
       const state = gev.dataManager.layers.get('radio').module.getUIState();
+      // The playback line renders from the Radio store once Vue flushes.
+      const message = await Promise.resolve().then(
+        () => document.getElementById('radio-playback-state').textContent,
+      );
       return {
         displayedBeforeRelease,
         frozenGeneration,
@@ -2978,7 +2982,7 @@ async function main() {
         plays: window.__qaRadioPlayCalls.length,
         value: document.getElementById('radio-tuner-value').textContent,
         stationText: document.getElementById('radio-tuner-station').textContent,
-        message: document.getElementById('radio-playback-state').textContent,
+        message,
         targetId: target.id,
       };
     }, tunerRefreshTarget);

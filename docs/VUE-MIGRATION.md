@@ -102,7 +102,11 @@ They contain no application state.
    style parameter rows render through Vue behind `createStyleParameters()`,
    as a render function so the portable `./ui/input` entry needs no
    component compiler; the other groups follow one owner at a time),
-   Context and Radio, the command dock,
+   Context and Radio (in progress: `RadioPanel` renders the directory row,
+   station card, transport, volume and playback line from the `gev-radio`
+   store that RadioControls publishes to; the tuner, the local SDR card and
+   the Cockpit radio controls keep their owners' element bindings), the
+   command dock,
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 

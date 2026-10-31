@@ -1,10 +1,23 @@
 import { bindRadioControls } from './radioBindings.js';
 import { renderRadioState } from './radioPresentation.js';
+import { useRadioStore } from './stores/radio.js';
+import { applicationPinia } from './vueRuntime.js';
 
-/** Own Radio DOM, tuner interaction and subscription; receive playback and application actions. */
+/**
+ * Own Radio interaction, the tuner and the subscription; receive playback and
+ * application actions. The panel view renders the rest of the Radio panel
+ * from what this publishes (`gev-radio` store).
+ */
 export class RadioControls {
-  constructor({ elements, radio, actions, canvas }) {
+  constructor({
+    elements,
+    radio,
+    actions,
+    canvas,
+    store = useRadioStore(applicationPinia()),
+  }) {
     Object.assign(this, elements);
+    this.store = store;
     this.radio = radio;
     this.actions = actions;
     this.canvas = canvas;
@@ -12,7 +25,10 @@ export class RadioControls {
     this.listeners = new AbortController();
     this._radioUnsubscribe = null;
     this._radioState = null;
+    this._radioView = null;
     this._radioCategorySignature = '';
+    this._radioFilterOptions = null;
+    this._radioVolumeShown = null;
     this._radioTunerStations = [];
     this._radioTunerPool = [];
     this._radioTunerDragging = false;

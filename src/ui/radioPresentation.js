@@ -1,4 +1,9 @@
-/** Render Radio state without making playback or Context decisions. */
+/**
+ * Present Radio state without making playback or Context decisions: the
+ * panel view renders the directory row, station card, transport, volume and
+ * playback line from what this publishes (`gev-radio` store); the tuner and
+ * the Cockpit radio controls are still written here.
+ */
 import { t } from '../i18n/index.js';
 
 export function renderRadioState(state) {
@@ -24,22 +29,17 @@ export function renderRadioState(state) {
   document
     .getElementById('title-bar')
     ?.classList.toggle('radio-broadcasting', state.audioState === 'playing');
-  this._radioPanel.classList.toggle('radio-enabled', enabled);
-  this._radioPanel.classList.toggle('lifecycle-uncertain', uncertain);
-  this._radioLayerState?.classList.toggle('active', enabled);
   const lifecycleLabel =
     lifecycleState === 'enabling' ? t('ENABLING') : t('DISABLING');
-  if (this._radioLayerState) {
-    this._radioLayerState.textContent = transitioning
-      ? lifecycleLabel
-      : uncertain
-        ? t('UNCERTAIN')
-        : state.loading
-          ? t('SYNC')
-          : enabled
-            ? `${state.filteredCount}/${state.stationCount}`
-            : t('OFF');
-  }
+  const layerStateText = transitioning
+    ? lifecycleLabel
+    : uncertain
+      ? t('UNCERTAIN')
+      : state.loading
+        ? t('SYNC')
+        : enabled
+          ? `${state.filteredCount}/${state.stationCount}`
+          : t('OFF');
   const enableLabel = uncertain
     ? t('RECONCILE')
     : enabled
@@ -50,17 +50,6 @@ export function renderRadioState(state) {
     : enabled
       ? t('Disable Radio')
       : t('Enable Radio');
-  if (this._radioEnableBtn) {
-    this._radioEnableBtn.classList.toggle('active', enabled);
-    this._radioEnableBtn.setAttribute('aria-pressed', String(enabled));
-    this._radioEnableBtn.textContent = transitioning
-      ? lifecycleLabel
-      : enableLabel;
-    this._radioEnableBtn.setAttribute('aria-label', enableAria);
-    this._radioEnableBtn.disabled = false;
-    this._radioEnableBtn.setAttribute('aria-disabled', String(transitioning));
-    this._radioEnableBtn.setAttribute('aria-busy', String(transitioning));
-  }
   if (this._cockpitRadioEnableBtn) {
     this._cockpitRadioEnableBtn.classList.toggle('active', enabled);
     this._cockpitRadioEnableBtn.setAttribute('aria-pressed', String(enabled));
@@ -79,36 +68,26 @@ export function renderRadioState(state) {
     );
   }
 
-  if (this._radioFilter) {
-    const prior = state.filter || 'all';
-    const categorySignature = state.categories
-      .map((category) => `${category.id}:${category.count}:${category.color}`)
-      .join('|');
-    if (categorySignature !== this._radioCategorySignature) {
-      this._radioFilter.replaceChildren(
-        ...state.categories.map((category) => {
-          const option = document.createElement('option');
-          option.value = category.id;
-          const label = t('{category} ({count})', {
-            category: category.label,
-            count: category.count,
-          });
-          option.textContent = `● ${label}`;
-          option.dataset.radioColor = category.color;
-          option.style.color = category.color;
-          option.setAttribute('aria-label', label);
-          return option;
-        }),
-      );
-      this._radioCategorySignature = categorySignature;
-    }
-    this._radioFilter.value = prior;
-    const activeCategory = state.categories.find(
-      (category) => category.id === prior,
-    );
-    this._radioFilter.style.color = activeCategory?.color || '';
-    this._radioFilter.disabled = !interactive || !state.stationCount;
+  const filter = state.filter || 'all';
+  const categories = state.categories || [];
+  // The options change only with the categories; until they first do, the
+  // markup's own option stands.
+  const categorySignature = categories
+    .map((category) => `${category.id}:${category.count}:${category.color}`)
+    .join('|');
+  if (categorySignature !== (this._radioCategorySignature ?? '')) {
+    this._radioCategorySignature = categorySignature;
+    this._radioFilterOptions = categories.map((category) => ({
+      id: category.id,
+      color: category.color,
+      label: t('{category} ({count})', {
+        category: category.label,
+        count: category.count,
+      }),
+    }));
   }
+  const filterColor =
+    categories.find((category) => category.id === filter)?.color || '';
 
   const tunerAvailable = interactive && state.filteredCount > 0;
   if (this._radioTuner) this._radioTuner.hidden = !tunerAvailable;
@@ -141,42 +120,22 @@ export function renderRadioState(state) {
     this._radioTunerSelectedId = null;
   }
 
-  if (this._radioStationName)
-    this._radioStationName.textContent =
-      selected?.name || t('NO STATION SELECTED');
-  if (this._radioStationMeta) {
-    const place = selected
-      ? [selected.state, selected.countryCode].filter(Boolean).join(' · ')
-      : '';
-    const signal = selected
-      ? [selected.codec, selected.bitrate ? `${selected.bitrate} kbps` : '']
-          .filter(Boolean)
-          .join(' · ')
-      : '';
-    this._radioStationMeta.textContent = selected
-      ? [place, signal].filter(Boolean).join('  /  ') ||
-        t('Directory metadata only')
-      : state.loading
-        ? t('Loading station directory…')
-        : t('Choose a globe marker or use next.');
-  }
-  if (this._radioStationTags) {
-    const tags = Array.isArray(selected?.tags) ? selected.tags.slice(0, 8) : [];
-    this._radioStationTags.textContent = tags.length
-      ? t('TAGS · {tags}', { tags: tags.join(' · ') })
-      : '';
-  }
-  if (this._radioStationHomepage) {
-    const homepage = selected?.homepage || '';
-    this._radioStationHomepage.hidden = !homepage;
-    if (homepage) this._radioStationHomepage.href = homepage;
-    else this._radioStationHomepage.removeAttribute('href');
-  }
+  const place = selected
+    ? [selected.state, selected.countryCode].filter(Boolean).join(' · ')
+    : '';
+  const signal = selected
+    ? [selected.codec, selected.bitrate ? `${selected.bitrate} kbps` : '']
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+  const stationMeta = selected
+    ? [place, signal].filter(Boolean).join('  /  ') ||
+      t('Directory metadata only')
+    : state.loading
+      ? t('Loading station directory…')
+      : t('Choose a globe marker or use next.');
+  const tags = Array.isArray(selected?.tags) ? selected.tags.slice(0, 8) : [];
 
-  if (this._radioPrevBtn)
-    this._radioPrevBtn.disabled = !interactive || !hasStations;
-  if (this._radioNextBtn)
-    this._radioNextBtn.disabled = !interactive || !hasStations;
   if (this._cockpitRadioPrevBtn)
     this._cockpitRadioPrevBtn.disabled = !interactive || !hasStations;
   if (this._cockpitRadioNextBtn)
@@ -197,12 +156,6 @@ export function renderRadioState(state) {
     action: playbackAction,
     target: playTargetWord,
   });
-  if (this._radioPlayBtn) {
-    this._radioPlayBtn.disabled = !interactive || !hasStations;
-    this._radioPlayBtn.classList.toggle('active', activePlayback);
-    this._radioPlayBtn.textContent = playbackButtonLabel;
-    this._radioPlayBtn.setAttribute('aria-label', playAria);
-  }
   if (this._cockpitRadioPlayBtn) {
     this._cockpitRadioPlayBtn.disabled = !interactive || !hasStations;
     this._cockpitRadioPlayBtn.classList.toggle('active', activePlayback);
@@ -210,15 +163,10 @@ export function renderRadioState(state) {
     this._cockpitRadioPlayBtn.setAttribute('aria-label', playAria);
     this._cockpitRadioPlayBtn.title = playbackAction;
   }
-  if (this._radioStopBtn)
-    this._radioStopBtn.disabled =
-      !interactive || state.audioState === 'stopped';
-  if (this._radioVolume) this._radioVolume.disabled = !interactive;
-  if (this._radioVolume && document.activeElement !== this._radioVolume) {
-    this._radioVolume.value = String(Math.round(state.volume * 100));
-    if (this._radioVolumeValue)
-      this._radioVolumeValue.textContent = `${Math.round(state.volume * 100)}%`;
-  }
+  // A slider the person is dragging keeps the value they are setting.
+  if (document.activeElement !== this._radioVolume)
+    this._radioVolumeShown = Math.round(state.volume * 100);
+  else this._radioVolumeShown ??= Number(this._radioVolume?.value ?? 80);
   if (
     this._cockpitRadioVolume &&
     document.activeElement !== this._cockpitRadioVolume
@@ -235,7 +183,9 @@ export function renderRadioState(state) {
       ? t('UNCERTAIN')
       : selected?.name || (state.loading ? t('SYNCING') : t('READY'));
   }
-  if (this._radioPlaybackState) {
+  let playbackText = '';
+  let playbackError = false;
+  {
     const stationName = selected?.name || t('station');
     const catalogSuffix = state.degraded
       ? state.stale
@@ -284,17 +234,50 @@ export function renderRadioState(state) {
       : null;
     // Directory errors are msg() literals from the radio layer's ingestion.
     const directoryError = state.error ? t(state.error) : null;
-    this._radioPlaybackState.textContent = `${uncertainMessage || unavailable || lifecycleMessage || directoryError || messages[state.audioState] || t('Ready')}${tuningSuffix}${voiceSuffix}${catalogSuffix}${outsideFilter}`;
-    this._radioPlaybackState.classList.toggle(
-      'error',
-      Boolean(
-        uncertainMessage ||
-        unavailable ||
-        state.error ||
-        state.audioState === 'error',
-      ),
+    playbackText = `${uncertainMessage || unavailable || lifecycleMessage || directoryError || messages[state.audioState] || t('Ready')}${tuningSuffix}${voiceSuffix}${catalogSuffix}${outsideFilter}`;
+    playbackError = Boolean(
+      uncertainMessage ||
+      unavailable ||
+      state.error ||
+      state.audioState === 'error',
     );
   }
+  this._radioView = {
+    enabled,
+    uncertain,
+    layerState: { active: enabled, text: layerStateText },
+    enable: {
+      active: enabled,
+      text: transitioning ? lifecycleLabel : enableLabel,
+      label: enableAria,
+      busy: transitioning,
+    },
+    filter: {
+      options: this._radioFilterOptions ?? null,
+      value: filter,
+      color: filterColor,
+      disabled: !interactive || !state.stationCount,
+    },
+    station: {
+      name: selected?.name || t('NO STATION SELECTED'),
+      meta: stationMeta,
+      tags: tags.length ? t('TAGS · {tags}', { tags: tags.join(' · ') }) : '',
+      homepage: selected?.homepage || '',
+    },
+    transport: {
+      stepDisabled: !interactive || !hasStations,
+      play: {
+        disabled: !interactive || !hasStations,
+        active: activePlayback,
+        text: playbackButtonLabel,
+        label: playAria,
+      },
+      stopDisabled: !interactive || state.audioState === 'stopped',
+    },
+    volume: { disabled: !interactive, value: this._radioVolumeShown },
+    playback: { text: playbackText, error: playbackError },
+  };
+  this.store?.publish(this._radioView);
   if (
     !enabled &&
     !transitioning &&
@@ -304,4 +287,34 @@ export function renderRadioState(state) {
     this.actions.setPanelCollapsed('radio-panel', true);
   }
   this.actions.scheduleLayout();
+}
+
+/**
+ * Show the volume the person is setting before the layer reports it.
+ * @param {number} value Percent, as the slider holds it.
+ */
+export function showRadioVolume(value) {
+  this._radioVolumeShown = value;
+  if (!this._radioView) return;
+  this._radioView = {
+    ...this._radioView,
+    volume: { ...this._radioView.volume, value },
+  };
+  this.store?.publish(this._radioView);
+}
+
+/**
+ * Mark the panel's Enable button busy while its own toggle runs, as a render
+ * would until the next one reports the lifecycle.
+ * @param {boolean} busy
+ * @returns {boolean} False before the first render, when nothing is shown yet.
+ */
+export function showRadioEnableBusy(busy) {
+  if (!this._radioView) return false;
+  this._radioView = {
+    ...this._radioView,
+    enable: { ...this._radioView.enable, busy },
+  };
+  this.store?.publish(this._radioView);
+  return true;
 }
