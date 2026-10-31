@@ -88,13 +88,13 @@ const MODE_LABELS = [
 ];
 const START_HERE_TITLES = {
   clear: msg('Newest low-cloud day for this box · scene cloud, not box cloud'),
-  cloudy: msg('Newest day covering this box · cloudier than 20%'),
+  cloudy: msg('Least cloudy day covering this box · cloudier than 20%'),
   partial: msg('Newest day with imagery for this box · partial coverage'),
   overview: msg('Newest daily overview for this box'),
 };
 const START_HERE_REASONS = {
   clear: msg('newest clear day'),
-  cloudy: msg('newest day (cloudy)'),
+  cloudy: msg('least cloudy day'),
   partial: msg('newest day (partial coverage)'),
   overview: msg('newest overview'),
 };
