@@ -118,7 +118,9 @@ They contain no application state.
    the same way), the command dock (in progress: the style buttons, the
    dock's style mini status and the ACTIVE STYLE corner render the style
    VisualSettings publishes to the `gev-display` store; the buttons keep
-   their owner's listeners),
+   their owner's listeners; the map source chips and status badge render
+   what `createMapSourceControls()` publishes beside it, so `./ui/maps`
+   needs no Vue),
    the phone shell, then Cockpit. Layers that write into the right rail
    directly gain a slot instead.
 

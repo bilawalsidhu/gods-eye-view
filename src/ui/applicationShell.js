@@ -54,6 +54,7 @@ import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useDisplayStore } from './stores/display.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -890,11 +891,12 @@ export class StyleManager extends ShellFacade {
   _initMapStackControl() {
     if (!this.mapStackController) return;
 
+    const displayStore = useDisplayStore(applicationPinia());
     this._mapSourceControls?.destroy();
+    displayStore.publishMapSource(null);
     this._mapSourceControls = createMapSourceControls({
-      container: this._mapStackChips,
-      statusElement: this._mapStackStatus,
       controller: this.mapStackController,
+      publish: (view) => displayStore.publishMapSource(view),
       subscribe: (onChange) => {
         window.addEventListener('gev:map-stack-changed', onChange);
         return () =>
@@ -904,6 +906,7 @@ export class StyleManager extends ShellFacade {
       onStateChanged: () => this._syncShareState(),
       onError: (message) => this._showToast(message),
     });
+    displayStore.connectMapSource(this._mapSourceControls);
   }
 
   /**
@@ -1768,6 +1771,8 @@ export class StyleManager extends ShellFacade {
 
     this._displayBindings.destroy();
     this._mapSourceControls?.destroy();
+    useDisplayStore(applicationPinia()).connectMapSource(null);
+    useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();

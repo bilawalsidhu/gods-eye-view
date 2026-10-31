@@ -4,9 +4,15 @@ import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
 
-// VisualSettings publishes the active style; until it does, the dock shows
-// its initial markup. The style buttons keep their owner's listeners.
-const { style } = storeToRefs(useDisplayStore());
+// VisualSettings publishes the active style and the map source controls
+// their chip row; until they do, the dock shows its initial markup. The
+// style buttons keep their owner's listeners; a chip calls the controls.
+const { style, mapSource, mapSourceControls } = storeToRefs(useDisplayStore());
+
+function selectMapSource(chip) {
+  if (!chip.available) return;
+  void mapSourceControls.value?.select(chip.id).catch(() => {});
+}
 </script>
 
 <template>
@@ -59,9 +65,9 @@ const { style } = storeToRefs(useDisplayStore());
       <section class="map-source-section" aria-labelledby="map-source-label">
         <div class="map-source-heading">
           <span data-i18n id="map-source-label">MAP SOURCE</span>
-          <span id="map-stack-status" class="pp-stack-status" aria-live="polite">3D</span>
+          <span id="map-stack-status" class="pp-stack-status" v-class-toggle="{ warn: !!mapSource?.status.warn }" aria-live="polite">{{ mapSource ? mapSource.status.text : '3D' }}</span>
         </div>
-        <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source" data-i18n-aria-label></div>
+        <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source" data-i18n-aria-label><button v-for="chip in mapSource?.chips" :key="chip.id" type="button" class="map-stack-chip" v-class-toggle="{ active: chip.active, unavailable: !chip.available }" :data-stack-id="chip.id" :title="chip.title" :aria-pressed="String(chip.active)" :aria-disabled="String(!chip.available)" :aria-label="chip.ariaLabel" @click="selectMapSource(chip)"><span class="map-stack-chip-label">{{ chip.label }}</span><span v-if="chip.requirement" class="map-stack-chip-req">{{ chip.requirement }}</span></button></div>
       </section>
       </div>
       <div id="style-mini-status" class="panel-mini-status" aria-live="polite">

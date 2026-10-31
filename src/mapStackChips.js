@@ -81,6 +81,8 @@ export function mapStackChipModels(stacks, activeId) {
 
 /**
  * Renders the chip row into `container`, replacing any previous chips.
+ * @deprecated Core's dock renders the row from `createMapSourceControls()`'s
+ *   published view; this DOM builder is no longer used by Core.
  * @param {HTMLElement} container - Row element.
  * @param {Array<object>} stacks - `MapStackController.getStacks()` output.
  * @param {object} [options]
@@ -155,7 +157,8 @@ export function renderMapStackChips(
 }
 
 /**
- * Re-points the active chip at controller state. Availability never changes at
+ * Re-points the active chip at controller state.
+ * @deprecated Core's dock renders the active chip from the published view. Availability never changes at
  * runtime (it tracks the ion token), so only the active/pressed pair is synced.
  * @param {HTMLElement} container - Row element.
  * @param {string|null} activeId - Currently active stack id.

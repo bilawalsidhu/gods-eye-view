@@ -6,7 +6,8 @@ import { markRaw, shallowRef } from 'vue';
  * groups (`_presentDisplay()`), AircraftDisplay the 3D aircraft group, the
  * draw tool its controls and the file import its list, and each publishes
  * here; each keeps its listeners on the controls. VisualSettings also
- * publishes the active style, which the dock and the scene chrome show.
+ * publishes the active style, which the dock and the scene chrome show, and
+ * the map source controls publish their chip row beside it.
  */
 export const useDisplayStore = defineStore('gev-display', () => {
   /** The presented panel; null until VisualSettings first renders. */
@@ -49,6 +50,22 @@ export const useDisplayStore = defineStore('gev-display', () => {
     style.value = markRaw(next);
   }
 
+  /** The map source chips and status; null until the controls first render. */
+  const mapSource = shallowRef(null);
+
+  /** @param {object} next A fresh presentation of the map source row. */
+  function publishMapSource(next) {
+    mapSource.value = next && markRaw(next);
+  }
+
+  /** The map source controls whose `select(id)` a chip calls. */
+  const mapSourceControls = shallowRef(null);
+
+  /** @param {?object} controls The map source controls, or null to disconnect. */
+  function connectMapSource(controls) {
+    mapSourceControls.value = controls && markRaw(controls);
+  }
+
   return {
     view,
     publish,
@@ -60,5 +77,9 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishGeoImport,
     style,
     publishStyle,
+    mapSource,
+    publishMapSource,
+    mapSourceControls,
+    connectMapSource,
   };
 });

@@ -530,9 +530,13 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
     /return this\._mapSourceControls\.select\(stackId, \{ syncShare \}\)/,
     'the application action uses the component selection path',
   );
+  const dock = readFileSync(
+    new URL('./ui/views/CommandDockView.vue', import.meta.url),
+    'utf8',
+  );
   assert.match(
-    controls,
-    /onSelect: [\s\S]*?select\(id\)/,
+    dock,
+    /mapSourceControls\.value\?\.select\(chip\.id\)/,
     'chip clicks use the same component selection path',
   );
   assert.match(

@@ -44,6 +44,12 @@
   `restoreMissionRosterFocus` helpers are gone; the roster keeps focus itself
   (samehkhamis).
 
+- `createMapSourceControls()` (`./ui/maps`) no longer renders the map source
+  chips into a `container` or writes a `statusElement`: it presents the chip
+  row and status badge and hands them to its `publish` option, and Core's
+  dock renders them and calls `select()`. `renderMapStackChips` and
+  `syncMapStackChips` are deprecated (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption
