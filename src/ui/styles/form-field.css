@@ -1,11 +1,11 @@
-/* Native selects and numeric inputs. Features own options, constraints and
-   commit timing; density variants do not introduce custom keyboard behavior. */
+/* Native selects and numeric inputs. This file owns the field surface/states;
+   features and themes supply palette variables and retain their own layout. */
 .gev-field {
   min-width: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--gev-field-background, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--gev-field-border-color, rgba(255, 255, 255, 0.14));
   border-radius: 7px;
-  color: var(--text-primary);
+  color: var(--gev-field-color, var(--text-primary));
   padding: 6px 8px;
   font-family: var(--font-sans);
   font-size: 12px;
@@ -18,7 +18,7 @@
 }
 
 .gev-field:disabled {
-  opacity: 0.45;
+  opacity: var(--gev-field-disabled-opacity, 0.45);
 }
 
 .gev-field--compact {
@@ -30,15 +30,14 @@
   padding: 2px 6px;
 }
 
-/* Effective-pose editors must fit inside CCTV value chips. Retain their
-   existing spinner-free surface; calibration conversion stays with the owner. */
+/* Compact inline editors share density and hide native number spinners.
+   Their containing feature sets width to fit the surrounding readout. */
 .gev-field--inline {
-  width: 58px;
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.7px;
-  background: rgba(0, 212, 255, 0.1);
-  border-color: rgba(0, 212, 255, 0.5);
+  --gev-field-background: rgba(0, 212, 255, 0.1);
+  --gev-field-border-color: rgba(0, 212, 255, 0.5);
   border-radius: 4px;
   padding: 1px 3px;
   -moz-appearance: textfield;

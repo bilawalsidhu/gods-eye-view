@@ -1,3 +1,4 @@
+import { updateStatusBadge } from './statusBadge.js';
 import { t, tn, formatNumber } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
@@ -13,6 +14,15 @@ export function _calBadgeLabel(badge) {
     default:
       return '--';
   }
+}
+
+/** The picker's closing line for the cameras the view leaves out. */
+function outsideNoteText(count) {
+  return tn(
+    count,
+    '{count} more camera outside this view · pan or zoom out',
+    '{count} more cameras outside this view · pan or zoom out',
+  );
 }
 
 export function _renderCctvState(state) {
@@ -33,6 +43,10 @@ export function _renderCctvState(state) {
     localScope &&
     state?.activeCamera &&
     !discovery.localIds.has(state.activeCameraId);
+  const catalogCount = Number.isFinite(state?.count)
+    ? state.count
+    : (state?.discoveryIndex || state?.cameraIndex || state?.cameras || [])
+        .length;
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
   const activeId = outsideView ? '' : state?.activeCameraId || '';
   const activeCamera = outsideView ? null : state?.activeCamera || null;
@@ -95,36 +109,85 @@ export function _renderCctvState(state) {
     return `${camera.city} · ${camera.name}${distance ? ` · ${distance}` : ''}`;
   };
   if (this._cctvSelect) {
-    // Keep option identity across map moves: distances update in place and
-    // only membership/order changes touch the select's child list.
-    const existing = new Map(
-      Array.from(this._cctvSelect.options, (option) => [option.value, option]),
-    );
-    const wanted = new Set(cameras.map((camera) => camera.id));
-    for (const [id, option] of existing) {
-      if (!wanted.has(id)) option.remove();
-    }
-    cameras.forEach((camera, index) => {
-      const option =
-        existing.get(camera.id) || document.createElement('option');
-      option.value = camera.id;
-      const label = cameraLabel(camera);
-      if (option.textContent !== label) option.textContent = label;
-      if (this._cctvSelect.options[index] !== option) {
-        this._cctvSelect.insertBefore(
+    const picking = document.activeElement === this._cctvSelect;
+    const outside =
+      enabled && this._cctvScope?.value !== 'all'
+        ? Math.max(
+            0,
+            catalogCount -
+              (this.actions.readMapView
+                ? discovery.localIds.size
+                : cameras.length),
+          )
+        : 0;
+    if (!picking) {
+      const existing = new Map(
+        Array.from(this._cctvSelect.options, (option) => [
+          option.value,
           option,
-          this._cctvSelect.options[index] || null,
-        );
+        ]),
+      );
+      const wanted = new Set(cameras.map((camera) => camera.id));
+      if (outside) wanted.add('');
+      for (const [id, option] of existing) {
+        if (!wanted.has(id)) option.remove();
       }
-    });
+      cameras.forEach((camera, index) => {
+        const option =
+          existing.get(camera.id) || document.createElement('option');
+        option.value = camera.id;
+        const label = cameraLabel(camera);
+        if (option.textContent !== label) option.textContent = label;
+        if (this._cctvSelect.options[index] !== option) {
+          this._cctvSelect.insertBefore(
+            option,
+            this._cctvSelect.options[index] || null,
+          );
+        }
+      });
+      if (outside) {
+        const note = existing.get('') || document.createElement('option');
+        note.value = '';
+        note.disabled = true;
+        note.dataset.cctvOutside = '';
+        note.textContent = outsideNoteText(outside);
+        this._cctvSelect.insertBefore(note, null);
+      }
+    }
     this._cctvSelect.disabled = !enabled || cameras.length === 0;
+    // A deferred rebuild can miss a camera activated meanwhile (auto-hop,
+    // voice); add it so the picker does not go blank.
     if (
+      picking &&
       activeId &&
-      Array.from(this._cctvSelect.options).some((opt) => opt.value === activeId)
+      activeCamera &&
+      ![...this._cctvSelect.options].some((option) => option.value === activeId)
     ) {
+      const option = document.createElement('option');
+      option.value = activeId;
+      option.textContent = `${activeCamera.city} · ${activeCamera.name}`;
+      this._cctvSelect.prepend(option);
+      // The added camera is one fewer outside the view.
+      const note = [...this._cctvSelect.options].find(
+        (entry) => entry.dataset?.cctvOutside !== undefined,
+      );
+      if (note) {
+        const left = Math.max(
+          0,
+          catalogCount - (this._cctvSelect.options.length - 1),
+        );
+        if (left) note.textContent = outsideNoteText(left);
+        else note.remove();
+      }
+    }
+    // The active camera is always one of the listed records.
+    if (activeId && activeCamera) {
       this._cctvSelect.value = activeId;
-    } else {
-      this._cctvSelect.selectedIndex = -1;
+    } else if (!activeId) {
+      // With nothing in view, the closed picker says where the cameras are.
+      // A focused picker keeps its old options, so it only clears.
+      this._cctvSelect.selectedIndex =
+        !picking && cameras.length === 0 && outside ? 0 : -1;
     }
   }
 
@@ -135,10 +198,9 @@ export function _renderCctvState(state) {
   if (this._cctvNearestBtn)
     this._cctvNearestBtn.disabled =
       !enabled ||
-      (!cameras.length &&
-        (discovery.localIds.size > 0 || !state?.cameras?.length));
+      (!cameras.length && (discovery.localIds.size > 0 || catalogCount === 0));
   if (this._cctvFocusBtn) {
-    this._cctvFocusBtn.disabled = !enabled || cameras.length === 0 || !activeId;
+    this._cctvFocusBtn.disabled = !enabled || catalogCount === 0 || !activeId;
   }
 
   if (this._cctvCoverageBtn) {
@@ -183,11 +245,13 @@ export function _renderCctvState(state) {
     // promotes to CALIBRATED, RESET CAL clears.
     const badge = activeCamera?.calBadge || null;
     const dirty = !!activeCamera?.calDirty;
-    this._cctvQualityChip.textContent = dirty
-      ? t('CAL · EDITED (UNSAVED)')
-      : t('CAL · {badge}', {
-          badge: this._calBadgeLabel(badge),
-        });
+    updateStatusBadge(this._cctvQualityChip, {
+      label: dirty
+        ? t('CAL · EDITED (UNSAVED)')
+        : t('CAL · {badge}', {
+            badge: this._calBadgeLabel(badge),
+          }),
+    });
     this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : badge || '';
   }
 
@@ -223,15 +287,15 @@ export function _renderCctvState(state) {
           status: `${credit}${statusMsg}`,
         },
       );
-    } else if (cameras.length > 0) {
+    } else if (catalogCount > 0) {
       this._cctvMeta.textContent = enabled
         ? tn(
-            cameras.length,
+            catalogCount,
             '{count} camera loaded · click a camera to activate',
             '{count} cameras loaded · click a camera to activate',
           )
         : tn(
-            cameras.length,
+            catalogCount,
             '{count} camera loaded · enable CCTV to activate',
             '{count} cameras loaded · enable CCTV to activate',
           );

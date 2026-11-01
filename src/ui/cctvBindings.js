@@ -66,6 +66,12 @@ export function _initCctvPanel() {
     );
   });
 
+  // The picker defers rebuilds while focused; catch up once it lets go.
+  this.listen(this._cctvSelect, 'blur', () => {
+    this._cctvSelectSource = null;
+    this._renderCctvState(this._cctvState);
+  });
+
   this.listen(this._cctvSelect, 'change', async () => {
     const generation = ++this._actionGeneration;
     const activeId = this._cctvState?.activeCameraId;

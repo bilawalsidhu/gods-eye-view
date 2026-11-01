@@ -18,7 +18,6 @@ export function bindDisplayControls({ elements, actions }) {
   for (const [name, action] of [
     ['bloomButton', 'toggleBloom'],
     ['sharpenButton', 'toggleSharpen'],
-    ['scopeButton', 'toggleScope'],
     ['cleanViewButton', 'toggleCleanView'],
     ['cleanViewExitButton', 'exitCleanView'],
     ['celestialButton', 'toggleCelestial'],
@@ -34,6 +33,7 @@ export function bindDisplayControls({ elements, actions }) {
     ['scopeFeatherSlider', 'setScopeFeather'],
   ])
     listen(elements[name], 'input', action, integer);
+  listen(elements.scopeToggle, 'change', 'setScopeEnabled', (el) => el.checked);
   listen(elements.densitySlider, 'input', 'setDensity', (el) => el.value);
   listen(elements.hudLayout, 'change', 'setHudLayout', (el) => el.value);
   for (const [name, action] of [
@@ -71,4 +71,10 @@ export function bindDisplayControls({ elements, actions }) {
       for (const remove of removers.splice(0)) remove();
     },
   };
+}
+
+/** Keep the native Scope checkbox and feather availability in step with the mask. */
+export function syncScopeControls(toggle, featherSlider, enabled) {
+  if (toggle) toggle.checked = enabled;
+  if (featherSlider) featherSlider.disabled = !enabled;
 }

@@ -46,6 +46,7 @@ export class PanelChrome {
     readInitialShare,
     readScrollRestoreOwner,
     readDisplayScrollTop,
+    readSharedCollapsed = () => undefined,
   }) {
     Object.assign(this, elements, operations, {
       readHud,
@@ -54,6 +55,7 @@ export class PanelChrome {
       readInitialShare,
       readScrollRestoreOwner,
       readDisplayScrollTop,
+      readSharedCollapsed,
     });
     this._disposed = false;
     this._lifetime = new UiLifetime();
@@ -69,8 +71,7 @@ export class PanelChrome {
         variant: this.hud.getVariant(),
       }),
       scheduleCockpitLayout: () => this.cockpitView?.scheduleContextLayout(),
-      syncPanelCollapseButton: (panel) =>
-        this._syncRailPanelCollapseButton(panel),
+      syncPanelCollapseButton: (panel) => this._syncPanelCollapseButton(panel),
       readDisplayScrollTop: () =>
         this._displayPortalScrollRestoreOwner === 'standard'
           ? this._standardDisplayScrollTop
@@ -149,6 +150,9 @@ export class PanelChrome {
   }
 
   _collapsePanelOnEscape(event, panelId) {
+    // In a phone sheet, Escape closes the sheet (mobileShell.js), not a panel.
+    if (globalThis.document?.body?.hasAttribute?.('data-mobile-sheet'))
+      return false;
     return collapsePanelOnEscape(event, {
       panel: document.getElementById(panelId),
       onChange: (collapsed, options) =>
@@ -250,7 +254,10 @@ export class PanelChrome {
       disclosure: panel.querySelector(`[data-dock-toggle-target="${panelId}"]`),
       openDelayMs,
       closeDelayMs,
-      isActive: () => !this._disposed,
+      // A phone sheet holds its trays open; the tab bar closes them.
+      isActive: () =>
+        !this._disposed &&
+        !globalThis.document?.body?.hasAttribute?.('data-mobile-sheet'),
       onChange: (collapsed, options) =>
         this.setPanelCollapsed(panelId, collapsed, options),
       onEscape: (event) => this._collapsePanelOnEscape(event, panelId),
@@ -282,19 +289,6 @@ export class PanelChrome {
 
   _scheduleLeftPanelLayout(options0) {
     return this._panelLayout._scheduleLeftPanelLayout(options0);
-  }
-
-  _syncRailPanelCollapseButton(panelEl) {
-    // Adaptive rail layout may directly restore an auto-collapsed Context
-    // without invoking setPanelCollapsed(). Enforce Radio ownership there too.
-    if (
-      panelEl?.id === 'global-context-panel' &&
-      !panelEl.classList.contains('collapsed') &&
-      this._contextRadioDock?.classList.contains('disclosure-open')
-    ) {
-      this._setRadioDisclosure?.(false);
-    }
-    this._syncPanelCollapseButton(panelEl);
   }
 
   _syncPanelCollapseButton(panelEl) {
@@ -357,15 +351,6 @@ export class PanelChrome {
       dockToggle.setAttribute('aria-label', t(titleKey, { name: panelName }));
       dockToggle.title = t(titleKey, { name: panelName });
     }
-    if (panelEl.id === 'radio-panel' && this._contextRadioDetailsBtn) {
-      this._contextRadioDetailsBtn.setAttribute(
-        'aria-expanded',
-        String(!collapsed),
-      );
-    }
-    if (panelEl.id === 'radio-panel' || panelEl.id === 'global-context-panel') {
-      this._syncContextRadioLauncherState();
-    }
   }
 
   _buildSharePanelState() {
@@ -380,7 +365,11 @@ export class PanelChrome {
         panelEl.classList.contains('cyber-accordion-collapsed')
           ? false
           : panelEl.classList.contains('collapsed');
-      const entry = { id: spec.id, collapsed };
+      // A panel the phone shell only borrowed for a sheet shares its own state.
+      const entry = {
+        id: spec.id,
+        collapsed: this.readSharedCollapsed(spec.id) ?? collapsed,
+      };
       if (spec.pinnable)
         entry.pinned = panelEl.classList.contains('dock-pinned');
       specs.push(entry);
@@ -439,7 +428,9 @@ export class PanelChrome {
       !restore &&
       !nextCollapsed &&
       document.documentElement?.dataset.uiTheme === 'cyber' &&
-      panelEl.parentElement === this._rightPanelStack
+      panelEl.parentElement === this._rightPanelStack &&
+      // Phone sheets show several rail panels at once.
+      !document.body?.classList?.contains('mobile-shell')
     ) {
       for (const peer of this._rightPanelStack.children) {
         if (
@@ -503,15 +494,6 @@ export class PanelChrome {
         syncShare,
       });
     }
-    // A repeated Context-open request must clear a stale compact Radio mini
-    // even when no collapsed class changes.
-    if (
-      !nextCollapsed &&
-      panelId === 'global-context-panel' &&
-      this._contextRadioDock?.classList.contains('disclosure-open')
-    ) {
-      this._setRadioDisclosure?.(false);
-    }
     if (
       panelEl.classList.contains('collapsed') === nextCollapsed &&
       !wasAutoCollapsed
@@ -539,13 +521,6 @@ export class PanelChrome {
       if (this._cockpitContextCollapsedForDataPanel) {
         this.cockpitView.setContextCollapsed(true);
       }
-    }
-    if (
-      !nextCollapsed &&
-      panelId === 'global-context-panel' &&
-      this._contextRadioDock?.classList.contains('disclosure-open')
-    ) {
-      this._setRadioDisclosure?.(false);
     }
     if (
       !nextCollapsed &&

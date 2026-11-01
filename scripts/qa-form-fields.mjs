@@ -196,7 +196,10 @@ try {
     document.getElementById('cctv-camera-select').disabled = false;
   });
   const begin = async (field) => {
-    await page.evaluate((field) => {
+    await page.evaluate(async (field) => {
+      document.activeElement?.blur();
+      window.__godsEyeView.styleManager.setPanelCollapsed('cctv-panel', false, { explicit: true, persist: false, syncShare: false });
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const owner = window.__godsEyeView.styleManager._cctvControls;
       owner._beginCctvCalValueEdit(
         document.querySelector(`[data-cal-field="${field}"]`),

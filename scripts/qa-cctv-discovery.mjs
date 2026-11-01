@@ -49,7 +49,8 @@ try {
     };
     window.state = {
       enabled: true,
-      cameras,
+      discoveryIndex: cameras,
+      get cameras() { throw new Error('Full camera state must not be read by discovery'); },
       activeCameraId: 'vancouver',
       activeCamera: cameras[0],
     };
@@ -85,7 +86,7 @@ try {
     window.controls.connect();
   });
   const options = () =>
-    page.$$eval('#cctv-camera-select option', (opts) =>
+    page.$$eval('#cctv-camera-select option:not(:disabled)', (opts) =>
       opts.map((o) => o.value),
     );
   assert.deepEqual(await options(), ['cape']);
@@ -128,7 +129,7 @@ try {
   await page.select('#cctv-camera-scope', 'all');
   const stableOptions = await page.evaluate(() => {
     const select = document.getElementById('cctv-camera-select');
-    window.state.cameras = Array.from({ length: 4000 }, (_, i) => ({
+    window.state.discoveryIndex = Array.from({ length: 4000 }, (_, i) => ({
       id: `camera-${i}`,
       city: 'Fixture',
       name: `Camera ${i}`,

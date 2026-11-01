@@ -78,12 +78,15 @@ export class CctvControls {
     if (this.cctv.getUIState) this._renderCctvState(this.cctv.getUIState());
   }
   discoverCameras(state) {
-    return discoverCctvCameras(state?.cameras || [], {
-      view: this.actions.readMapView?.(),
-      scope:
-        this._cctvScope?.value || (this.actions.readMapView ? 'view' : 'all'),
-      query: this._cctvSearch?.value || '',
-    });
+    return discoverCctvCameras(
+      state?.discoveryIndex || state?.cameraIndex || state?.cameras || [],
+      {
+        view: this.actions.readMapView?.(),
+        scope:
+          this._cctvScope?.value || (this.actions.readMapView ? 'view' : 'all'),
+        query: this._cctvSearch?.value || '',
+      },
+    );
   }
   /** Select a result without flying; only explicit Nearest may leave an empty view. */
   selectNearestDiscoveredCamera({ fallbackToAll = false } = {}) {
@@ -91,10 +94,13 @@ export class CctvControls {
     const discovery = this.discoverCameras(state);
     let camera = discovery.cameras[0];
     if (!camera && fallbackToAll && !discovery.localIds.size) {
-      camera = discoverCctvCameras(state?.cameras || [], {
-        view: this.actions.readMapView?.(),
-        scope: 'all',
-      }).cameras.find((candidate) => Number.isFinite(candidate.distanceKm));
+      camera = discoverCctvCameras(
+        state?.discoveryIndex || state?.cameraIndex || state?.cameras || [],
+        {
+          view: this.actions.readMapView?.(),
+          scope: 'all',
+        },
+      ).cameras.find((candidate) => Number.isFinite(candidate.distanceKm));
     }
     return camera && this.cctv.selectCamera(camera.id) ? camera.id : null;
   }

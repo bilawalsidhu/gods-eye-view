@@ -555,6 +555,21 @@ export function advanceFocusEvidenceNowMs(deltaMs) {
   return _focusEvidenceNowMs;
 }
 
+/**
+ * True when a sprite holds no dimming state, or has settled at full emphasis
+ * with nothing pending. Advancing such a sprite without a screen position (a
+ * hidden sprite) changes neither its state nor its alpha, so a layer pass may
+ * skip it.
+ * @param {object} sprite
+ * @returns {boolean}
+ */
+export function spriteFocusAtRest(sprite) {
+  const state = _spriteStates.get(sprite);
+  return (
+    !state || (state.factor === 1 && state.desired === 1 && !state.wasFarther)
+  );
+}
+
 /** Forget state when a primitive is removed from its owning collection. */
 export function forgetSpriteFocus(sprite) {
   if (sprite) _spriteStates.delete(sprite);

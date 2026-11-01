@@ -129,28 +129,79 @@ test('map changes refresh discovery, navigation stays in results, and disposal r
 
 test('explicit Nearest reaches global coverage from an empty view without changing enable behavior', () => {
   let mapView = {
-    west: 20, east: 21, south: -34, north: -33,
+    west: 20,
+    east: 21,
+    south: -34,
+    north: -33,
     center: { lat: -33.92, lon: 20.5 },
   };
   const selected = [];
   const controls = new CctvControls({
     elements: { _cctvSearch: { value: 'Vancouver' } },
-    cctv: { selectCamera(id) { selected.push(id); return true; } },
+    cctv: {
+      selectCamera(id) {
+        selected.push(id);
+        return true;
+      },
+    },
     actions: { readMapView: () => mapView },
   });
   controls._cctvState = { cameras };
   assert.equal(controls.selectNearestDiscoveredCamera(), null);
-  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), 'cape-far');
+  assert.equal(
+    controls.selectNearestDiscoveredCamera({ fallbackToAll: true }),
+    'cape-far',
+  );
   assert.deepEqual(selected, ['cape-far']);
   // Search misses in a covered view still remain empty.
   mapView = view;
-  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), null);
+  assert.equal(
+    controls.selectNearestDiscoveredCamera({ fallbackToAll: true }),
+    null,
+  );
   controls._cctvSearch.value = 'Harbour';
-  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), 'cape-far');
+  assert.equal(
+    controls.selectNearestDiscoveredCamera({ fallbackToAll: true }),
+    'cape-far',
+  );
   mapView = undefined;
-  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), null);
+  assert.equal(
+    controls.selectNearestDiscoveredCamera({ fallbackToAll: true }),
+    null,
+  );
   controls._cctvState = { cameras: [] };
   mapView = view;
-  assert.equal(controls.selectNearestDiscoveredCamera({ fallbackToAll: true }), null);
+  assert.equal(
+    controls.selectNearestDiscoveredCamera({ fallbackToAll: true }),
+    null,
+  );
+  controls.destroy();
+});
+
+test('discovery and global nearest use lightweight metadata, never full camera state', () => {
+  const state = {
+    discoveryIndex: cameras,
+    cameraIndex: [],
+    get cameras() {
+      throw new Error('expensive full state read');
+    },
+  };
+  let mapView = view;
+  let selected;
+  const controls = new CctvControls({
+    elements: {},
+    cctv: {
+      getUIState: () => state,
+      selectCamera(id) {
+        selected = id;
+        return true;
+      },
+    },
+    actions: { isEnabled: () => true, readMapView: () => mapView },
+  });
+  assert.equal(controls.discoverCameras(state).cameras[0].id, 'cape-near');
+  mapView = { ...view, south: 0, north: 1, center: { lat: 0.5, lon: 18.4 } };
+  controls.selectNearestDiscoveredCamera({ fallbackToAll: true });
+  assert.equal(selected, 'cape-far');
   controls.destroy();
 });

@@ -50,10 +50,6 @@
 .weather-readout[hidden] {
   display: none !important;
 }
-#weather-panel.collapsed .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.8px;
-}
 #weather-panel.collapsed .panel-header {
   margin-bottom: 2px;
 }
@@ -133,7 +129,6 @@
   margin-left: auto;
   text-align: right;
 }
-.rail-card-badge,
 .rail-card-line,
 .rail-timeline-readout {
   font-family: var(--font-mono);
@@ -303,9 +298,6 @@ html:not([lang='en']) .rail-card-zero::after {
 .rail-card-header:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 3px;
-}
-.rail-card-badge {
-  text-transform: uppercase;
 }
 .rail-card-compact {
   grid-column: 1 / -1;
