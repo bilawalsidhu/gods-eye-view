@@ -2,13 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { gevCachePath } from '../cacheDir.js';
 
 /** Where the install's panel key lives: beside the other local state, which
  * git ignores, at the checkout root rather than the client's working
  * directory (an MCP client may start the server anywhere). */
-export const DEFAULT_PANEL_KEY_FILE = fileURLToPath(
-  new URL('../../.gev-cache/mcp-panel-key', import.meta.url),
-);
+export const DEFAULT_PANEL_KEY_FILE = process.env.GEV_STATE_DIR
+  ? gevCachePath('mcp-panel-key')
+  : fileURLToPath(new URL('../../.gev-cache/mcp-panel-key', import.meta.url));
 
 const KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const newKey = () => randomBytes(32).toString('base64url');

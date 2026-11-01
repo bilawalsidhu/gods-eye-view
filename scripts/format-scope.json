@@ -92,6 +92,7 @@
   "src/tooling/placeProviders.test.mjs",
   "server/providers/common/same-site.js",
   "server/providers/space.js",
+  "server/cacheDir.js",
   "server/providers/space/celestrak.js",
   "server/providers/space/launch-library.js",
   "src/data/spaceProviderRequests.js",

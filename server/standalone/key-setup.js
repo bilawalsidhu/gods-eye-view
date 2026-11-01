@@ -71,6 +71,13 @@ const DEV_FRESH_EXTERNAL_KEYS_AT_BOOT = new Set(
  * the panel's status fetch fails and the client removes the whole surface.
  */
 function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
+  // GEV_STATE_DIR names a writable directory that owns the .env store, for
+  // installs whose source tree is read-only or replaced on upgrade (the
+  // desktop app). Unset, the store stays the repo-root .env. Read once, at
+  // boot, from the real environment (never from a dotenv file).
+  const stateRoot = process.env.GEV_STATE_DIR
+    ? path.resolve(process.env.GEV_STATE_DIR)
+    : sourceRoot;
   const respond = (res, statusCode, payload) => {
     res.statusCode = statusCode;
     res.setHeader('Content-Type', 'application/json');
@@ -95,10 +102,9 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   const storeName = () =>
     pinokioManaged() ? 'pinokio-environment' : 'env-file';
   const storePath = () =>
-    path.join(
-      sourceRoot,
-      ...(pinokioManaged() ? ['pinokio', 'ENVIRONMENT'] : ['.env']),
-    );
+    pinokioManaged()
+      ? path.join(sourceRoot, 'pinokio', 'ENVIRONMENT')
+      : path.join(stateRoot, '.env');
   // Read the store, distinguishing "no store yet" from "cannot read this
   // store". Only ENOENT means empty. Every other failure — a permission error,
   // an I/O fault, an undecodable file — must ABORT the save: upserting into a
