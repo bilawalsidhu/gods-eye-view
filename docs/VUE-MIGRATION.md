@@ -48,9 +48,9 @@ existing stylesheet and custom properties; a kit class such as
 `ui-button--icon` carries no Core style yet, and a converted control keeps
 its own classes beside it. They contain no application state.
 `UiPanel` takes ui-vue's `title`, slots and `v-model:collapsed`, but its
-`collapsed` drives only the button and `ui-panel--collapsed`: the panel's
-owner hides the body by writing the root's `collapsed` class at once, and
-there is no `closable`, since Core's panels collapse rather than close.
+`collapsed` drives only the button and `ui-panel--collapsed`: the root's
+`collapsed` class, which hides the body, is drawn at once by `v-panel-state`
+from the panel chrome store, and there is no `closable`, since Core's panels collapse rather than close.
 `UiSegmented` adds `keyboard` (`none`, `arrows` as in ui-vue, or `radio` with
 Home and End), since each of Core's groups keeps its own keyboard policy, and
 `itemClass`/`activeClass` for Core's segment classes. A key moves focus at

@@ -18,6 +18,11 @@ scene playback and voice. It delegates; new behavior belongs with its owner.
 | `shareRestoration.js` | Initial share/layer restoration and cancellation |
 | `shellFeedback.js` | Loading feedback, notices and toast lifetime |
 
+Owners that present UI do so through Vue: they publish plain view objects to a
+Pinia store in `src/ui/stores/`, views in `src/ui/views/` render them, and user
+actions return through the handlers the owner connects to that store. See
+[Building UI](../CONTRIBUTING.md#building-ui).
+
 Owners receive named services, elements, operations and readers. They do not
 receive the application shell itself. Readers resolve a replaceable collaborator
 at use time; operations cross an ownership boundary without copying its state.
