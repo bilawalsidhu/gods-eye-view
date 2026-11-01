@@ -199,7 +199,6 @@
   "scripts/qa-scope-hud.mjs",
   "scripts/qa-segmented-controls.mjs",
   "src/ui/displayControls.js",
-  "src/ui/segmentedControl.test.mjs",
   "src/ui/styles/segmented-control.css",
   "src/ui/cameraOrientationControls.js",
   "src/ui/cameraOrientationControls.test.mjs",

@@ -1495,14 +1495,15 @@ Browser acceptance: `QA_BASE_URL=http://127.0.0.1:4179 node scripts/qa-action-bu
 
 ## Segmented selectors
 
-Segmented selectors use the controlled DOM adapter in `ui/segmentedControl.js`
-and the shared `gev-segmented` / `gev-segment` surface. Model coverage, label
+Segmented selectors are the kit's `UiSegmented` (`ui/kit/UiSegmented.vue`) on
+the shared `gev-segmented` / `gev-segment` surface. Model coverage, label
 allocation, drawing shape, Street View fit/panorama filters and imagery mode keep
-their feature-owned values, actions and persistence. Painting a restored value
-does not emit a change or move focus. Existing keyboard policies remain explicit:
-Street View uses arrows/Home/End with one tab stop, imagery mode uses arrows from
-its controlled selection, and Display keeps its existing native button behavior.
-Pure value navigation is separate from DOM rendering for reuse by a future view.
+their feature-owned values, actions and persistence: the view renders the
+owner's value and sends a choice back through its store. Rendering a restored
+value does not emit a change or move focus. Each group names its keyboard
+policy: Street View uses `radio` (arrows/Home/End with one tab stop), imagery
+mode `arrows` from its controlled selection, and Display `none`, its native
+button behavior.
 Segments keep their word minimum width: compact inline groups such as FIT/FILL
 and ALL/360°/FLAT must not break short labels mid-word. Collapsed Weather follows
 the same exclusive-rail hiding rule as the other readouts.

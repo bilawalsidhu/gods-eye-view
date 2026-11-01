@@ -1,5 +1,4 @@
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
-import { createSegmentedControl } from './segmentedControl.js';
 import {
   presentStreetLevelPanel,
   SINCE_STOPS,
@@ -33,6 +32,15 @@ export class StreetLevelControls {
       setSinceStop: (stop) =>
         this._setParams({ sinceDays: SINCE_STOPS[stop]?.days ?? 0 }),
       describeSinceStop: (stop) => t(SINCE_STOPS[stop]?.label ?? ''),
+      setPano: (pano) => this._setParams({ pano }),
+      setRenderMode: (mode) => {
+        this.layer.setViewerRenderMode?.(mode);
+        try {
+          localStorage.setItem(RENDER_MODE_KEY, mode);
+        } catch {
+          /* storage unavailable */
+        }
+      },
     });
     this.destroyed = false;
     this.listeners = new AbortController();
@@ -51,9 +59,6 @@ export class StreetLevelControls {
 
   _collect() {
     const byId = (id) => this.root?.querySelector(`#${id}`) || null;
-    const all = (selector) => [
-      ...(this.root?.querySelectorAll(selector) || []),
-    ];
     return {
       status: byId('sl-status'),
       providerChips: byId('sl-provider-chips'),
@@ -62,8 +67,6 @@ export class StreetLevelControls {
       viewerExpand: byId('sl-viewer-expand'),
       viewerClose: byId('sl-viewer-close'),
       viewer: byId('sl-viewer'),
-      panoButtons: all('[data-sl-pano]'),
-      renderButtons: all('[data-sl-render]'),
     };
   }
 
@@ -92,13 +95,6 @@ export class StreetLevelControls {
         return;
       }
       this._toggleProvider(button.dataset.chipId);
-    });
-    createSegmentedControl({
-      buttons: el.panoButtons,
-      valueOf: (button) => button.dataset.slPano,
-      onChange: (pano) => this._setParams({ pano }),
-      keyboard: 'radio',
-      listen: (target, type, handler) => this.listen(target, type, handler),
     });
     this.listen(el.nearestBtn, 'click', () => {
       const nearest = this._view?.nearest;
@@ -137,20 +133,6 @@ export class StreetLevelControls {
       });
     }
     this.store.setExpandAvailable(Boolean(this._expandMode));
-    createSegmentedControl({
-      buttons: el.renderButtons,
-      valueOf: (button) => button.dataset.slRender,
-      keyboard: 'radio',
-      listen: (target, type, handler) => this.listen(target, type, handler),
-      onChange: (mode) => {
-        this.layer.setViewerRenderMode?.(mode);
-        try {
-          localStorage.setItem(RENDER_MODE_KEY, mode);
-        } catch {
-          /* storage unavailable */
-        }
-      },
-    });
     try {
       const stored = localStorage.getItem(RENDER_MODE_KEY);
       if (stored === 'fill' || stored === 'letterbox')

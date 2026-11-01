@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { computed, shallowRef, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiSegmented from '../../kit/UiSegmented.vue';
 import RailPanel from '../../rail/RailPanel.vue';
 import RailChips from '../../rail/RailChips.vue';
 import { useStreetLevelStore } from '../../stores/streetLevel.js';
@@ -36,12 +37,29 @@ const shows = computed(
 );
 const pano = computed(() => view.value?.filter.pano ?? 'all');
 
-/** A radio segment; the chosen one is the group's tab stop once rendered. */
-const segment = (value, option) => ({
-  class: `gev-segment sl-seg-btn${value === option ? ' is-active' : ''}`,
-  'aria-checked': String(value === option),
-  tabindex: value === option ? (view.value ? '0' : undefined) : '-1',
-});
+const renderModeOptions = [
+  {
+    value: 'letterbox',
+    label: t('FIT'),
+    attrs: {
+      'data-sl-render': 'letterbox',
+      title: t('Fit: show the whole photo, with dark bars where its shape differs from the frame'),
+    },
+  },
+  {
+    value: 'fill',
+    label: t('FILL'),
+    attrs: {
+      'data-sl-render': 'fill',
+      title: t('Fill: fill the frame edge to edge, cropping the photo'),
+    },
+  },
+];
+const panoOptions = [
+  { value: 'all', label: t('ALL'), attrs: { 'data-sl-pano': 'all' } },
+  { value: 'pano', label: '360°', attrs: { 'data-sl-pano': 'pano' } },
+  { value: 'flat', label: t('FLAT'), attrs: { 'data-sl-pano': 'flat' } },
+];
 
 // The image line and OPEN keep what they last showed while hidden.
 const image = shallowRef({
@@ -109,10 +127,7 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
         <div class="sl-viewer-bar">
           <div class="sl-viewer-tools">
             <button id="sl-viewer-expand" class="scene-btn" type="button" :hidden="!expandAvailable" :aria-pressed="String(Boolean(expanded))" :aria-label="expanded === null ? undefined : expanded ? t('Shrink') : t('Expand')" title="Show the street-level view full screen (Esc shrinks it)" data-i18n-title><span class="sl-btn-icon" aria-hidden="true">{{ expanded ? '⤡' : '⤢' }}</span><span class="sl-btn-text">{{ expanded ? t('SHRINK') : t('EXPAND') }}</span></button>
-            <div class="gev-segmented sl-seg" role="radiogroup" aria-label="Image fit" data-i18n-aria-label :hidden="!viewer.renderModes">
-              <button type="button" v-bind="segment(viewer.renderMode, 'letterbox')" data-sl-render="letterbox" role="radio" title="Fit: show the whole photo, with dark bars where its shape differs from the frame" data-i18n-title data-i18n>FIT</button>
-              <button type="button" v-bind="segment(viewer.renderMode, 'fill')" data-sl-render="fill" role="radio" title="Fill: fill the frame edge to edge, cropping the photo" data-i18n-title data-i18n>FILL</button>
-            </div>
+            <UiSegmented class="sl-seg" item-class="sl-seg-btn" active-class="is-active" keyboard="radio" :hidden="!viewer.renderModes" :label="t('Image fit')" :options="renderModeOptions" :model-value="viewer.renderMode" @update:model-value="store.act('setRenderMode', $event)" />
           </div>
           <div class="sl-viewer-tools sl-viewer-tools-right">
             <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image" data-i18n-title data-i18n-aria-label>×</button>
@@ -140,11 +155,7 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
       <fieldset id="sl-controls" class="sl-controls" :disabled="Boolean(view?.controlsDisabled)" :hidden="!shows.pano && !shows.since">
         <div id="sl-pano-row" class="sl-filters" :hidden="!shows.pano" role="group" aria-label="Imagery filters" data-i18n-aria-label>
           <span class="cctv-summary-label" data-i18n>IMAGERY</span>
-          <div class="gev-segmented sl-seg" role="radiogroup" aria-label="Panorama filter" data-i18n-aria-label>
-            <button type="button" v-bind="segment(pano, 'all')" data-sl-pano="all" role="radio" data-i18n>ALL</button>
-            <button type="button" v-bind="segment(pano, 'pano')" data-sl-pano="pano" role="radio">360°</button>
-            <button type="button" v-bind="segment(pano, 'flat')" data-sl-pano="flat" role="radio" data-i18n>FLAT</button>
-          </div>
+          <UiSegmented class="sl-seg" item-class="sl-seg-btn" active-class="is-active" keyboard="radio" :disabled="Boolean(view?.controlsDisabled)" :label="t('Panorama filter')" :options="panoOptions" :model-value="pano" @update:model-value="store.act('setPano', $event)" />
         </div>
         <div id="sl-since-row" class="sl-since" :hidden="!shows.since">
           <label class="cctv-summary-label" for="sl-since" data-i18n>SINCE</label>

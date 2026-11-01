@@ -51,7 +51,11 @@ its own classes beside it. They contain no application state.
 owner hides the body by writing the root's `collapsed` class at once, and
 there is no `closable`, since Core's panels collapse rather than close.
 `UiSegmented` adds `keyboard` (`none`, `arrows` as in ui-vue, or `radio` with
-Home and End), since each of Core's groups keeps its own keyboard policy.
+Home and End), since each of Core's groups keeps its own keyboard policy, and
+`itemClass`/`activeClass` for Core's segment classes. A key moves focus at
+once and asks for a change only when it lands on another option. Every
+segmented group in Core is a `UiSegmented`; the old `segmentedControl.js`
+adapter is gone.
 
 Controls share one skin, so every panel reads the same. Every scrolling
 surface carries the kit's `.ui-scroll` (ui-vue's name), which draws the thin

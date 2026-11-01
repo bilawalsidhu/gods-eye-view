@@ -1,18 +1,27 @@
 <script setup>
+import { computed } from 'vue';
 import { t } from '../../i18n/index.js';
+import UiSegmented from '../kit/UiSegmented.vue';
 import RailCardBlocks from '../rail/RailCardBlocks.vue';
 import RailCards from '../rail/RailCards.vue';
 import { vRangeValue } from '../rail/rangeValue.js';
 import RecentImageryCard from './RecentImageryCard.vue';
 
 // Every block exists from the start, in its final order. The owner computes
-// the view and listens on the root; the mode buttons are painted by its
-// segmented control.
-defineProps({
+// the view and listens on the root; a mode choice calls `onSetMode`.
+const props = defineProps({
   view: { type: Object, required: true },
   modes: { type: Array, required: true },
   onOpenDetails: { type: Function, default: () => {} },
+  onSetMode: { type: Function, default: () => {} },
 });
+const modeOptions = computed(() =>
+  props.modes.map(([mode, label]) => ({
+    value: mode,
+    label: t(label),
+    attrs: { 'data-mode': mode },
+  })),
+);
 </script>
 
 <template>
@@ -81,21 +90,16 @@ defineProps({
       class="ri-block ri-selection"
       :aria-label="t('On the map')"
       :data-mode="view.mode"
-      ><div
+      ><UiSegmented
         id="ri-mode"
-        class="gev-segmented ri-mode"
-        role="radiogroup"
-        :aria-label="t('Mode')"
-        ><button
-          v-for="[mode, label] in modes"
-          :key="mode"
-          class="gev-segment ri-mode-btn"
-          type="button"
-          :data-mode="mode"
-          role="radio"
-          >{{ t(label) }}</button
-        ></div
-      ><div
+        class="ri-mode"
+        item-class="ri-mode-btn"
+        keyboard="arrows"
+        :label="t('Mode')"
+        :options="modeOptions"
+        :model-value="view.mode"
+        @update:model-value="onSetMode"
+      /><div
         v-for="slot in view.slots"
         :id="`ri-slot-${slot.id}`"
         :key="slot.id"

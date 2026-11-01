@@ -11,7 +11,6 @@
 import { h, render as renderVue } from 'vue';
 import { formatNumber, msg, t, tn, translateKnown } from '../i18n/index.js';
 import { createImagerySplit } from './imagerySplit.js';
-import { createSegmentedControl } from './segmentedControl.js';
 import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
@@ -236,6 +235,7 @@ export function createRecentImageryPanel({
         view: buildView(),
         modes: MODE_LABELS,
         onOpenDetails,
+        onSetMode: (mode) => layer.setMode(mode),
       }),
       container,
     );
@@ -245,16 +245,6 @@ export function createRecentImageryPanel({
   const zoomIn = root.querySelector('#ri-zoom-in');
   const swap = root.querySelector('#ri-swap');
   const opacity = root.querySelector('#ri-opacity');
-  const modeGroup = root.querySelector('#ri-mode');
-  const modeControl = createSegmentedControl({
-    buttons: modeGroup.querySelectorAll('.ri-mode-btn'),
-    valueOf: (button) => button.dataset.mode,
-    onChange: (mode) => layer.setMode(mode),
-    keyboard: 'arrows',
-    keyTarget: modeGroup,
-    readValue: () => snapshot.mode,
-    listen,
-  });
 
   /**
    * The body is the scroll container and no render may move it: a
@@ -758,7 +748,6 @@ export function createRecentImageryPanel({
     preserveScroll(() => {
       renderPanel();
       paint();
-      modeControl.update(snapshot.mode, { rovingFocus: true });
       renderSplit();
       reportVisibleRange();
     });

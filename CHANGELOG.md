@@ -55,7 +55,10 @@
   `initGeoFileImport` takes `connect(actions)` the same way and no longer
   listens on the Import button, picker or list, nor restores focus itself:
   the `GeoImport` view does both, and its `publish` need not settle once the
-  list renders. `syncScopeControls` (`./ui/display`) and
+  list renders. Street Level's fit and panorama filters and Recent Imagery's
+  mode are `UiSegmented` too: the Street Level store's owner answers
+  `setPano` and `setRenderMode`, and `RecentImageryReadout` takes
+  `onSetMode`. `syncScopeControls` (`./ui/display`) and
   `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the Display
   view and the rail now own what they did. `./ui/input` imports Vue
   (samehkhamis).

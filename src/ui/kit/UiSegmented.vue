@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick } from 'vue';
+import { computed } from 'vue';
 
 // Core's segmented control, with @halfpixel/ui-vue UiSegmented's
 // v-model, options, label, stacked and disabled so the two kits can merge.
@@ -50,8 +50,12 @@ function choose(index) {
   if (!option || optionOff(option)) return;
   emit('update:modelValue', option.value);
 }
-/** Select the option `delta` away, wrapping past disabled ones, or `to` an end. */
-function move({ delta = 0, to = null }) {
+/**
+ * Select the option `delta` away from `from`, wrapping past disabled ones, or
+ * `to` an end. A key that lands where it started (Home on the first) only
+ * moves focus.
+ */
+function move({ delta = 0, to = null, from }) {
   const count = props.options.length;
   if (!count || props.disabled) return;
   const enabled = props.options
@@ -62,23 +66,28 @@ function move({ delta = 0, to = null }) {
   if (to === 'first') target = enabled[0];
   else if (to === 'last') target = enabled.at(-1);
   else {
-    target =
-      selectedIndex.value < 0 ? (delta > 0 ? -1 : count) : selectedIndex.value;
+    target = from < 0 ? (delta > 0 ? -1 : count) : from;
     do target = (((target + delta) % count) + count) % count;
     while (props.options[target].disabled);
   }
-  choose(target);
-  // Focus follows the selection once the options re-render.
-  nextTick(() => items[target]?.focus());
+  if (target !== from) choose(target);
+  // Focus moves at once, as a radio group's does; the option is already there.
+  items[target]?.focus();
 }
 const STEPS = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
 function onKey(event) {
   if (props.keyboard === 'none') return;
-  if (STEPS[event.key]) move({ delta: STEPS[event.key] });
+  // A radio group moves from the option holding focus, `arrows` from the
+  // selection.
+  const from =
+    props.keyboard === 'radio'
+      ? items.indexOf(event.target)
+      : selectedIndex.value;
+  if (STEPS[event.key]) move({ delta: STEPS[event.key], from });
   else if (props.keyboard === 'radio' && event.key === 'Home')
-    move({ to: 'first' });
+    move({ to: 'first', from });
   else if (props.keyboard === 'radio' && event.key === 'End')
-    move({ to: 'last' });
+    move({ to: 'last', from });
   else return;
   event.preventDefault();
 }

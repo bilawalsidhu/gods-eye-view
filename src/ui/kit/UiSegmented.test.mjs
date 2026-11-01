@@ -81,9 +81,19 @@ test('keyboard arrows: one roving stop, arrows skip disabled options and wrap', 
 
 test('keyboard radio: Home and End reach the ends', async () => {
   const wrapper = mountGroup({ keyboard: 'radio', modelValue: 'c' });
-  await wrapper.get('#seg-a').trigger('keydown', { key: 'Home' });
-  await wrapper.get('#seg-a').trigger('keydown', { key: 'End' });
+  const [a, , c] = wrapper.findAll('button');
+  await c.trigger('keydown', { key: 'Home' });
+  await wrapper.setProps({ modelValue: 'a' });
+  await a.trigger('keydown', { key: 'End' });
   assert.deepEqual(wrapper.emitted('update:modelValue'), [['a'], ['c']]);
+  wrapper.unmount();
+});
+
+test('a key that lands where it started moves focus without a change', async () => {
+  const wrapper = mountGroup({ keyboard: 'radio', modelValue: 'a' });
+  await wrapper.get('#seg-a').trigger('keydown', { key: 'Home' });
+  assert.equal(wrapper.emitted('update:modelValue'), undefined);
+  assert.ok(document.activeElement === wrapper.get('#seg-a').element);
   wrapper.unmount();
 });
 
@@ -94,4 +104,16 @@ test('a disabled group answers nothing and leaves the tab order', async () => {
   await wrapper.get('#seg-a').trigger('keydown', { key: 'ArrowRight' });
   assert.equal(wrapper.emitted('update:modelValue'), undefined);
   wrapper.unmount();
+});
+
+test('a radio group moves from the focused option, an arrows group from the selection', async () => {
+  // The selection was restored to c while a keeps focus.
+  const radio = mountGroup({ keyboard: 'radio', modelValue: 'c' });
+  await radio.get('#seg-a').trigger('keydown', { key: 'ArrowLeft' });
+  assert.deepEqual(radio.emitted('update:modelValue'), [['c']]);
+  radio.unmount();
+  const arrows = mountGroup({ keyboard: 'arrows', modelValue: 'c' });
+  await arrows.get('#seg-a').trigger('keydown', { key: 'ArrowLeft' });
+  assert.deepEqual(arrows.emitted('update:modelValue'), [['a']]);
+  arrows.unmount();
 });
