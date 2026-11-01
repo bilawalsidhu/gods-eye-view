@@ -247,7 +247,9 @@ export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
       altitudeFt: altitude,
       groundSpeedKt: finiteOrNull(entry.gs),
       trackDeg: normalizeTrack(entry.track),
-      verticalRateFpm: finiteOrNull(entry.baro_rate),
+      // A GNSS-sourced rate is sent as geom_rate instead of baro_rate.
+      verticalRateFpm:
+        finiteOrNull(entry.baro_rate) ?? finiteOrNull(entry.geom_rate),
       lastPositionAt: hasPosition
         ? receivedAt - Math.max(0, seenPosS) * 1000
         : null,
