@@ -322,14 +322,14 @@ export class StyleManager extends ShellFacade {
       elements: {
         _locationSearch: this._locationSearch,
         _searchToggle: this._searchToggle,
-        _resetGlobeBtn: this._resetGlobeBtn,
-        _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
       },
       operations: {
         _publishLocation: (view) =>
           useLocationStore(applicationPinia()).publish(view),
         _connectLocation: (controls) =>
           useLocationStore(applicationPinia()).connect(controls),
+        _connectGlobeReset: (controls) => this._connectGlobeReset(controls),
+        _publishGlobeResetting: (busy) => this._publishGlobeResetting(busy),
         _beginDeferredNavigation: (...args) =>
           this._beginDeferredNavigation(...args),
         _reassertNavigationHandoff: (...args) =>
@@ -1650,6 +1650,32 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
+   * Answer the globe and cockpit reset buttons through the location controls,
+   * or stop answering them (null).
+   */
+  _connectGlobeReset(controls) {
+    const store = useGlobeActionsStore(applicationPinia());
+    if (this._resetToken) store.detach(this._resetToken);
+    this._resetToken = controls
+      ? store.connect({ reset: () => controls.reset() })
+      : null;
+    // A reset under way as the controls are replaced stays on the buttons.
+    if (this._resetToken && this._globeResetting != null)
+      store.publishResetting(this._resetToken, this._globeResetting);
+  }
+
+  /** Publish a reset to the full globe view under way. */
+  _publishGlobeResetting(busy) {
+    if (this._disposed) return;
+    this._globeResetting = Boolean(busy);
+    if (this._resetToken)
+      useGlobeActionsStore(applicationPinia()).publishResetting(
+        this._resetToken,
+        busy,
+      );
+  }
+
+  /**
    * Stop answering the globe actions. Its clear under way goes with its
    * owner, and its camera state too; a newer shell's stays.
    */
@@ -1659,7 +1685,9 @@ export class StyleManager extends ShellFacade {
     if (this._clearLayersToken) store.detach(this._clearLayersToken);
     if (this._shareToken) store.detach(this._shareToken);
     if (this._orientationToken) store.detach(this._orientationToken);
+    if (this._resetToken) store.detach(this._resetToken);
     this._clearLayersToken = this._shareToken = this._orientationToken = null;
+    this._resetToken = null;
   }
 
   /** Wire Google Maps-style tilt and north-up camera actions. */

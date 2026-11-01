@@ -19,7 +19,8 @@ const LOCATION_MINI_SEARCHED_PLACEHOLDER = Object.freeze(
  * mini status, the search error and the ORBIT indicator are presented as a
  * plain view and handed to `publish`; Core's dock renders them and calls
  * `chooseCity()` and `choosePoi()`, and the scene chrome shows the indicator.
- * The search field and reset buttons keep their listeners.
+ * The globe actions and the cockpit call `reset()`. The search field keeps its
+ * listeners.
  */
 export class LocationControls {
   constructor({
@@ -90,8 +91,6 @@ export class LocationControls {
     this.bind(elements.search, 'blur', () => {
       if (!elements.search.value) onSearchEdit?.();
     });
-    for (const button of elements.resetButtons)
-      this.bind(button, 'click', onReset);
     this.present();
   }
   bind(element, event, handler, removers = this.removers) {
@@ -131,6 +130,10 @@ export class LocationControls {
   /** A city pill was clicked. */
   chooseCity(id) {
     if (!this.destroyed) this.onCity(id);
+  }
+  /** A reset to the full globe view was asked for. */
+  reset() {
+    if (!this.destroyed) return this.onReset();
   }
   /** A landmark pill of the shown city was clicked. */
   choosePoi(index) {

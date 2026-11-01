@@ -61,7 +61,6 @@ function fixture() {
   const elements = {
     search: node(),
     searchToggle: node(),
-    resetButtons: [node(), node()],
   };
   const doc = node();
   doc.createElement = node;
@@ -168,7 +167,7 @@ test('destruction revokes document, search, reset, city and POI actions and remo
   f.elements.search.value = 'Place';
   f.elements.search.fire('keydown', { key: 'Enter' });
   f.doc.fire('keydown', { key: 'Q' });
-  f.elements.resetButtons[0].fire('click');
+  f.controls.reset();
   f.frames.get(0)();
   assert.deepEqual(f.calls, []);
   assert.equal(f.views.length, published);
@@ -187,7 +186,7 @@ test('location and POI keys route once while form controls retain typing', () =>
   const f = fixture();
   f.doc.fire('keydown', { key: 'W', target: { matches: () => false } });
   f.doc.fire('keydown', { key: 'Q', target: { matches: () => true } });
-  f.elements.resetButtons[1].fire('click');
+  f.controls.reset();
   assert.deepEqual(f.calls, [['poi', 'a', 1], ['reset']]);
 });
 test('typing clears a failed search error and closing the emptied field drops it too', () => {

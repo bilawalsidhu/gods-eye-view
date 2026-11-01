@@ -72,9 +72,9 @@
   are the kit's new `UiChip`. The selects are the kit's new `UiSelect`, the
   status badges its new `UiBadge` and the one-line empty states its new
   `UiEmpty`.
-  The top-center clear, share, tilt and north-up buttons call the shell
-  through the new globe actions store, which also carries the camera's tilt
-  and compass heading. `syncScopeControls` (`./ui/display`),
+  The top-center clear, share, tilt, north-up and reset buttons, and the
+  cockpit's reset, call the shell through the new globe actions store,
+  which also carries the camera's tilt and compass heading. `syncScopeControls` (`./ui/display`),
   `shouldHideCollapsedRightPanels` (`./ui/layout`) and
   `bindClearLayersControl` (`./ui/layers`) are deprecated: the Display view,
   the rail and the globe actions view now own what they did. `./ui/input` imports Vue
@@ -113,8 +113,9 @@
   landmark pills or writes the mini status: it presents the tray, including
   the search error (`setSearchError()`), and hands it to its `publish`
   option, and Core's dock renders it and calls `chooseCity()` and
-  `choosePoi()`. Its `elements` are now only `search`, `searchToggle` and
-  `resetButtons`. `createOrbitIndicator()` is replaced by
+  `choosePoi()`. Its `elements` are now only `search` and `searchToggle`:
+  `resetButtons` is gone, and the reset buttons call its new `reset()`.
+  `createOrbitIndicator()` is replaced by
   `showOrbit(active)`, which adds the ORBIT indicator to the presented tray
   as `orbit: { active }` (null until offered) (samehkhamis).
 

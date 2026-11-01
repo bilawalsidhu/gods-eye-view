@@ -97,7 +97,6 @@ export class CockpitViewController {
     this.tr3bToggle = document.getElementById('tr3b-toggle');
     this._tr3bSignature = null;
     this.mapViewButton = document.getElementById('map-view-switch');
-    this.resetGlobeButton = document.getElementById('cockpit-reset-globe');
     this.hud = document.getElementById('cockpit-hud');
     this.entryFocusOrigin = null;
     this.visionPrevious = document.getElementById('cockpit-vision-previous');

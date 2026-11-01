@@ -795,35 +795,29 @@ test('Reset releases Contact camera ownership through its selection-preserving r
   assert.ok(resetStart >= 0);
   assert.ok(contextRelease > resetStart);
   assert.ok(satelliteRelease > contextRelease);
-  assert.match(
-    readShellElements.toString(),
-    /_cockpitResetGlobeBtn: document\.getElementById\('cockpit-reset-globe'\)/,
-  );
   const controls = fs.readFileSync(
     path.join(ROOT, 'src', 'ui', 'locationControls.js'),
     'utf8',
   );
-  assert.match(
-    ui,
-    /resetButtons: \[this\._resetGlobeBtn, this\._cockpitResetGlobeBtn\]/,
-  );
   assert.match(ui, /onReset: \(\) => this\.resetToGlobeView\(\)/);
-  assert.match(
-    controls,
-    /for \(const button of elements\.resetButtons\)[\s\S]*?this\.bind\(button, 'click', onReset\)/,
-    'both reset controls delegate to the same supplied reset action',
+  assert.match(ui, /this\._connectGlobeReset\?\.\(this\._locationControls\)/);
+  assert.match(controls, /reset\(\) \{\s*if \(!this\.destroyed\) return this\.onReset\(\);/);
+  // Both reset buttons ask the one reset owner.
+  const globeActions = fs.readFileSync(
+    path.join(ROOT, 'src', 'ui', 'views', 'panels', 'GlobeActions.vue'),
+    'utf8',
   );
+  assert.match(globeActions, /id="reset-globe-view"[^>]*@click="act\('reset'\)"/);
+  const cockpitView = readRadioSource(
+    new URL('./ui/views/CockpitView.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(cockpitView, /id="cockpit-reset-globe"[^>]*@click="globe\.act\('reset'\)"/);
   assert.match(
     cockpitEnter.toString(),
     /Object\.assign\(this\.presence, \{\s*active: true,/,
   );
-  assert.match(
-    readRadioSource(
-      new URL('./ui/views/CockpitView.vue', import.meta.url),
-      'utf8',
-    ),
-    /id="cockpit-reset-globe"[^>]*:hidden="!active"/,
-  );
+  assert.match(cockpitView, /id="cockpit-reset-globe"[^>]*:hidden="!active"/);
 });
 
 test('Location navigation releases immediate routes before flight and deferred routes after resolution', () => {

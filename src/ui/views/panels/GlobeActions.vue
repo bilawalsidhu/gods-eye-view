@@ -11,7 +11,7 @@ import GlobeCompass from './GlobeCompass.vue';
 // changes on every frame a rotating camera draws, so only the compass reads
 // it; the bar renders again only when the tilt changes.
 const globe = useGlobeActionsStore();
-const { clearBusy, camera } = storeToRefs(globe);
+const { clearBusy, resetBusy, camera } = storeToRefs(globe);
 const { act } = globe;
 const tilted = computed(() => Boolean(camera.value?.tilted));
 </script>
@@ -28,7 +28,7 @@ const tilted = computed(() => Boolean(camera.value?.tilted));
     <span class="material-symbols-outlined" aria-hidden="true">view_in_ar</span>
   </button>
   <GlobeCompass @click="act('northUp')" />
-  <button id="reset-globe-view" type="button" aria-label="Reset to full globe view" title="Reset camera and return to full globe view" data-i18n-aria-label data-i18n-title>
+  <button id="reset-globe-view" type="button" :aria-label="resetBusy ? t('Resetting to full globe view') : t('Reset to full globe view')" title="Reset camera and return to full globe view" data-i18n-title @click="act('reset')">
     <span class="material-symbols-outlined" aria-hidden="true">public</span>
   </button>
 </nav>

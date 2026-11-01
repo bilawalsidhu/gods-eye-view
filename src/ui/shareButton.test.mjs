@@ -300,3 +300,26 @@ test('an older shell that answers again shows its clear and its unchanged camera
   older._cameraOrientationControls.destroy();
   StyleManager.prototype._releaseGlobeActions.call(older);
 });
+
+test('the location controls answer both reset buttons until they go', () => {
+  const store = useGlobeActionsStore(applicationPinia());
+  const calls = [];
+  const owner = { _disposed: false };
+  const controls = { reset: () => calls.push('reset') };
+  StyleManager.prototype._connectGlobeReset.call(owner, controls);
+  store.act('reset');
+  StyleManager.prototype._publishGlobeResetting.call(owner, true);
+  assert.equal(store.resetBusy, true);
+  // Controls replaced mid-reset keep the reset on the buttons.
+  StyleManager.prototype._connectGlobeReset.call(owner, controls);
+  assert.equal(store.resetBusy, true);
+  StyleManager.prototype._publishGlobeResetting.call(owner, false);
+  assert.equal(store.resetBusy, false);
+  StyleManager.prototype._connectGlobeReset.call(owner, null);
+  store.act('reset');
+  assert.deepEqual(calls, ['reset']);
+  assert.equal(store.resetBusy, null);
+  // A reset finishing after the controls went changes nothing.
+  StyleManager.prototype._publishGlobeResetting.call(owner, false);
+  assert.equal(store.resetBusy, null);
+});

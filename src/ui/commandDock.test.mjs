@@ -169,7 +169,6 @@ test('the ORBIT indicator sits on the body while offered and lights while orbiti
     elements: {
       search: $('#location-search'),
       searchToggle: $('#search-toggle'),
-      resetButtons: [],
     },
     cities: {},
     getExpandedCity: () => null,
@@ -211,7 +210,6 @@ test('the location tray renders what LocationControls publishes', async (t) => {
     elements: {
       search: $('#location-search'),
       searchToggle: $('#search-toggle'),
-      resetButtons: [],
     },
     cities: {
       paris: { name: 'Paris', pois: [{ name: 'Louvre' }, { name: 'Eiffel' }] },

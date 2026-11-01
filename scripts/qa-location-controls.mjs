@@ -296,7 +296,7 @@ try {
     'native reset returns through the existing camera handoff',
     await page.evaluate(async () => {
       const ui = window.__godsEyeView.styleManager;
-      ui._resetGlobeBtn.click();
+      document.getElementById('reset-globe-view').click();
       const pending = ui._globeResetPromise;
       if (!pending) return false;
       await pending;
@@ -317,7 +317,7 @@ try {
         .getElementById('location-pills')
         .querySelector('button')
         ?.click();
-      ui._resetGlobeBtn.click();
+      document.getElementById('reset-globe-view').click();
       ui._locationSearch.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
       );

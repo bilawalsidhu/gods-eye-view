@@ -144,7 +144,6 @@ export class LocationNavigation {
       elements: {
         search: this._locationSearch,
         searchToggle: this._searchToggle,
-        resetButtons: [this._resetGlobeBtn, this._cockpitResetGlobeBtn],
       },
       publish: (view) => this._publishLocation?.(view),
       cities: CITY_POIS,
@@ -156,6 +155,7 @@ export class LocationNavigation {
       onReset: () => this.resetToGlobeView(),
     });
     this._connectLocation?.(this._locationControls);
+    this._connectGlobeReset?.(this._locationControls);
   }
 
   _beginWorldJumpTransition() {
@@ -390,14 +390,7 @@ export class LocationNavigation {
           longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(2)),
         },
       };
-      this._resetGlobeBtn?.setAttribute(
-        'aria-label',
-        t('Reset to full globe view'),
-      );
-      this._cockpitResetGlobeBtn?.setAttribute(
-        'aria-label',
-        t('Reset cockpit to full globe view'),
-      );
+      this._publishGlobeResetting?.(false);
       this._globeResetPromise = null;
       this._cancelGlobeReset = null;
       resolveReset(result);
@@ -410,14 +403,7 @@ export class LocationNavigation {
           Math.abs(height - GLOBE_VIEW.heightM) > 1000,
       );
     }, 4200);
-    this._resetGlobeBtn?.setAttribute(
-      'aria-label',
-      t('Resetting to full globe view'),
-    );
-    this._cockpitResetGlobeBtn?.setAttribute(
-      'aria-label',
-      t('Resetting cockpit to full globe view'),
-    );
+    this._publishGlobeResetting?.(true);
     const target = flyToGlobeView(this.viewer, {
       onComplete: () => finish(false),
       onCancel: () => finish(true),
@@ -436,6 +422,7 @@ export class LocationNavigation {
     this._locationLookup?.destroy();
     this._locationControls?.destroy();
     this._connectLocation?.(null);
+    this._connectGlobeReset?.(null);
     this._publishLocation?.(null);
     this._cancelGlobeReset?.();
     this._cancelGlobeReset = null;

@@ -54,7 +54,6 @@ test('ru: location pills and the mini-status show the translated city', () => {
   const elements = {
     search: element(),
     searchToggle: element(),
-    resetButtons: [],
   };
   const doc = { ...element(), createElement: element };
   const cities = { tokyo: CITY_POIS.tokyo };

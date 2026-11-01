@@ -9,6 +9,7 @@ import {
 } from '../cockpitInstrumentState.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
+import { useGlobeActionsStore } from '../stores/globeActions.js';
 import CockpitBriefing from './panels/CockpitBriefing.vue';
 import CockpitContext from './panels/CockpitContext.vue';
 import CockpitRollingValue from './panels/CockpitRollingValue.vue';
@@ -21,6 +22,8 @@ import CockpitUtilityControls from './panels/CockpitUtilityControls.vue';
 // keep its listeners.
 const { presence, instruments, route, vision } = storeToRefs(useCockpitStore());
 const active = computed(() => Boolean(presence.value?.active));
+const globe = useGlobeActionsStore();
+const { resetBusy } = storeToRefs(globe);
 const initialInstruments = createInstrumentState();
 const initialRoute = createRouteState();
 const initialVision = createVisionState();
@@ -188,7 +191,7 @@ const tickStyle = (tick) =>
   </section>
 
   <nav id="view-switcher" aria-label="View switcher" data-i18n-aria-label>
-    <button id="cockpit-reset-globe" type="button" aria-label="Reset cockpit to full globe view" title="Exit cockpit and return to full globe view" :hidden="!active" data-i18n-aria-label data-i18n-title>
+    <button id="cockpit-reset-globe" type="button" :aria-label="resetBusy ? t('Resetting cockpit to full globe view') : t('Reset cockpit to full globe view')" title="Exit cockpit and return to full globe view" :hidden="!active" data-i18n-title @click="globe.act('reset')">
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
       <span data-i18n>RESET</span>
     </button>

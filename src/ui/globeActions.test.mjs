@@ -8,6 +8,7 @@ import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import GlobeActions from './views/panels/GlobeActions.vue';
+import CockpitView from './views/CockpitView.vue';
 
 function mount(t) {
   document.body.replaceChildren();
@@ -19,6 +20,7 @@ function mount(t) {
     share: () => calls.push('share'),
     tilt: () => calls.push('tilt'),
     northUp: () => calls.push('northUp'),
+    reset: () => calls.push('reset'),
   });
   const app = createApp(GlobeActions).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
@@ -33,7 +35,8 @@ test('every button calls its owner', (t) => {
   $('share-btn').click();
   $('tilt-map-view').click();
   $('north-up-view').click();
-  assert.deepEqual(calls, ['clear', 'share', 'tilt', 'northUp']);
+  $('reset-globe-view').click();
+  assert.deepEqual(calls, ['clear', 'share', 'tilt', 'northUp', 'reset']);
 });
 
 test('the tilt and compass buttons show the published camera', async (t) => {
@@ -129,4 +132,44 @@ test('the same camera state again changes nothing', () => {
   store.publishCamera({ tilted: true, heading: 13 });
   assert.notEqual(store.camera, kept);
   assert.deepEqual(store.camera, { tilted: true, heading: 13 });
+});
+
+test('a reset under way relabels the reset button for its owner', async (t) => {
+  const { store, token } = mount(t);
+  const reset = $('reset-globe-view');
+  assert.equal(reset.getAttribute('aria-label'), 'Reset to full globe view');
+  store.publishResetting(token, true);
+  await nextTick();
+  assert.equal(
+    reset.getAttribute('aria-label'),
+    'Resetting to full globe view',
+  );
+  assert.equal(store.clearBusy, null, 'a reset is not a clear');
+  store.detach(token);
+  await nextTick();
+  assert.equal(reset.getAttribute('aria-label'), 'Reset to full globe view');
+});
+
+test('the cockpit reset asks the reset owner and shows its reset', async (t) => {
+  document.body.replaceChildren();
+  const pinia = createPinia();
+  const store = useGlobeActionsStore(pinia);
+  const calls = [];
+  const token = store.connect({ reset: () => calls.push('reset') });
+  const app = createApp(CockpitView).use(pinia);
+  app.mount(document.body.appendChild(document.createElement('div')));
+  t.after(() => app.unmount());
+  const reset = $('cockpit-reset-globe');
+  assert.equal(
+    reset.getAttribute('aria-label'),
+    'Reset cockpit to full globe view',
+  );
+  reset.click();
+  assert.deepEqual(calls, ['reset']);
+  store.publishResetting(token, true);
+  await nextTick();
+  assert.equal(
+    reset.getAttribute('aria-label'),
+    'Resetting cockpit to full globe view',
+  );
 });

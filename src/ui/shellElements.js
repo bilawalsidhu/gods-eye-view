@@ -63,8 +63,6 @@ export function readShellElements(document = globalThis.document) {
     _cctvSourceBadge: document.getElementById('cctv-source-badge'),
     _cctvMeta: document.getElementById('cctv-meta'),
     _cctvSummary: document.getElementById('cctv-summary'),
-    _resetGlobeBtn: document.getElementById('reset-globe-view'),
-    _cockpitResetGlobeBtn: document.getElementById('cockpit-reset-globe'),
     _locationSearch: document.getElementById('location-search'),
     _searchToggle: document.getElementById('search-toggle'),
     _safeFrameOverlay: document.getElementById('safe-frame-overlay'),
