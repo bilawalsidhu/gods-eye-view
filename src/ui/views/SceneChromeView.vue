@@ -6,6 +6,7 @@ import { useLocationStore } from '../stores/location.js';
 import { useStatusStore } from '../stores/status.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import ImagerySplitView from './panels/ImagerySplitView.vue';
+import DataPacks from './panels/DataPacks.vue';
 import SceneInteractions from './panels/SceneInteractions.vue';
 import SplitFlapText from './panels/SplitFlapText.vue';
 
@@ -96,5 +97,6 @@ const vToastText = {
   </Teleport>
 
   <ImagerySplitView />
+  <DataPacks />
   <SceneInteractions />
 </template>

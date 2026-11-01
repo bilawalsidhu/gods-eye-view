@@ -1134,5 +1134,7 @@
   "src/ui/toast.js",
   "src/ui/toastView.test.mjs",
   "src/ui/stores/sceneInteractions.js",
+  "src/scenes/dataPacks/presentationView.test.mjs",
+  "src/ui/stores/dataPacks.js",
   "src/scenes/interactionsView.test.mjs"
 ]

@@ -152,7 +152,10 @@ a feature supplying only its accent.
    owner's own timer), the Scene actions panel (`SceneInteractions`
    teleports what the scene interactions owner publishes to the
    `gev-scene-interactions` store into the viewer's container; the owner
-   keeps the pick handler and focuses the picked action), then
+   keeps the pick handler and focuses the picked action), the data-pack
+   attribution cards (`DataPacks` teleports what the data-pack presentations
+   publish to the `gev-data-packs` store into the viewer's container and
+   stops a removed card's player), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
