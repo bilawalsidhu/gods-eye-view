@@ -372,10 +372,6 @@
     "one": "{count} Kamera geladen · CCTV aktivieren",
     "other": "{count} Kameras geladen · CCTV aktivieren"
   },
-  "{count} more cameras outside this view · pan or zoom out": {
-    "one": "{count} weitere Kamera außerhalb dieser Ansicht · verschieben oder herauszoomen",
-    "other": "{count} weitere Kameras außerhalb dieser Ansicht · verschieben oder herauszoomen"
-  },
   "Enable CCTV to load camera intersections": "CCTV aktivieren, um Kreuzungskameras zu laden",
   "Enable CCTV to start camera-linked intelligence summaries.": "CCTV aktivieren, um kameragestützte Lagezusammenfassungen zu starten.",
   "No summary available.": "Keine Zusammenfassung verfügbar.",
@@ -1458,7 +1454,6 @@
   "Low-accuracy score 2–10%": "Ungenauigkeitswert 2–10 %",
   "Low-accuracy score > 10%": "Ungenauigkeitswert > 10 %",
   "GNSS integrity source unavailable": "GNSS-Integritätsquelle nicht verfügbar",
-  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "Regionale Stichprobe · Radius 250 NM · Zellen aus besuchten Ansichten über {minutes} min",
   "Retrying automatically at {time} UTC": "Automatischer neuer Versuch um {time} UTC",
   "Retrying automatically after provider cooldown": "Automatischer neuer Versuch nach der Sperrzeit des Anbieters",
   "Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.": "Aktualisiert sich nach Schwenken oder Zoomen und einmal pro Minute automatisch. Der öffentliche Feed deckt einen Kreis von 250 Seemeilen um die Bildmitte ab; Herauszoomen macht daraus keinen weltweiten Snapshot. Leere Zellen liegen außerhalb der Stichprobe oder haben zu wenige Beobachtungen.",
@@ -2921,6 +2916,18 @@
   "STALE · Roads: {source} · Flow: cached TomTom tiles": "VERALTET · Straßen: {source} · Verkehrsfluss: TomTom-Kacheln aus dem Cache",
   "routing busy — too many routes at once": "Routing-Dienst ausgelastet – zu viele Routen gleichzeitig",
   "route proxy error": "Fehler des Routen-Proxys",
+  "Approximate location; coverage not calibrated.": "Ungefährer Standort; Abdeckung nicht kalibriert.",
+  "LOCATION · APPROXIMATE": "STANDORT · UNGEFÄHR",
+  "Open official camera page ↗": "Offizielle Kameraseite öffnen ↗",
+  "PLAYER IN PANEL": "PLAYER IM PANEL",
+  "PUBLIC PLAYER · EXTERNAL": "ÖFFENTLICHER PLAYER · EXTERN",
+  "{camera} — public player": "{camera} — öffentlicher Player",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ÖFFENTLICHER PLAYER · UNGEFÄHRER STANDORT · ABDECKUNG NICHT KALIBRIERT",
+  "{count} more cameras outside this view · pan or zoom out": {
+    "one": "{count} weitere Kamera außerhalb dieser Ansicht · verschieben oder herauszoomen",
+    "other": "{count} weitere Kameras außerhalb dieser Ansicht · verschieben oder herauszoomen"
+  },
+  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "Regionale Stichprobe · Radius 250 NM · Zellen aus besuchten Ansichten über {minutes} min",
   "scene|PLAY": "START",
   "AUTHORING": "ERSTELLUNG",
   "Create and edit scenes": "Szenen erstellen und bearbeiten",

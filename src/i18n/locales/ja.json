@@ -749,7 +749,6 @@
   "Low-accuracy score 2–10%": "低精度スコア 2–10%",
   "Low-accuracy score > 10%": "低精度スコア > 10%",
   "GNSS integrity source unavailable": "GNSSインテグリティのソースを利用できません",
-  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "地域サンプル · 半径250海里 · {minutes}分以内に表示したビューのセル",
   "Retrying automatically at {time} UTC": "{time} UTCに自動で再試行します",
   "Retrying automatically after provider cooldown": "プロバイダーのクールダウン後に自動で再試行します",
   "Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.": "パンやズームの後、および1分ごとに自動で更新されます。公開フィードは表示中心から半径250海里の円をカバーします。ズームアウトしても全世界のスナップショットにはなりません。空白のセルは、サンプリング範囲外か観測が不十分です。",
@@ -1578,9 +1577,6 @@
   },
   "{count} cameras loaded · enable CCTV to activate": {
     "other": "カメラ {count}台を読込済み · CCTVを有効にして使用"
-  },
-  "{count} more cameras outside this view · pan or zoom out": {
-    "other": "この表示範囲外にさらに {count}台のカメラ · 移動またはズームアウト"
   },
   "Enable CCTV to load camera intersections": "CCTVを有効にすると、カメラのある交差点を読み込みます",
   "Enable CCTV to start camera-linked intelligence summaries.": "CCTVを有効にすると、カメラ連動のインテリジェンス概要を開始します。",
@@ -2851,6 +2847,17 @@
   "route proxy error": "ルート検索プロキシでエラーが発生しました",
   "Malformed cyclone snapshot": "サイクロンのスナップショットの形式が不正です",
   "Cyclone request timed out": "サイクロンのリクエストがタイムアウトしました",
+  "Approximate location; coverage not calibrated.": "位置は概算です。撮影範囲は未校正です。",
+  "LOCATION · APPROXIMATE": "位置 · 概算",
+  "Open official camera page ↗": "カメラの公式ページを開く ↗",
+  "PLAYER IN PANEL": "パネル内プレーヤー",
+  "PUBLIC PLAYER · EXTERNAL": "公開プレーヤー · 外部",
+  "{camera} — public player": "{camera} — 公開プレーヤー",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · 公開プレーヤー · 概算位置 · 撮影範囲は未校正",
+  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "地域サンプル · 半径250海里 · {minutes}分以内に表示したビューのセル",
+  "{count} more cameras outside this view · pan or zoom out": {
+    "other": "この表示範囲外にさらに {count}台のカメラ · 移動またはズームアウト"
+  },
   "scene|PLAY": "再生",
   "AUTHORING": "作成",
   "Create and edit scenes": "シーンを作成・編集",

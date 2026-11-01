@@ -781,7 +781,6 @@
   "Low-accuracy score 2–10%": "Показник неточності 2–10%",
   "Low-accuracy score > 10%": "Показник неточності > 10%",
   "GNSS integrity source unavailable": "Джерело даних про цілісність GNSS недоступне",
-  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "Регіональна вибірка · радіус 250 мор. миль · комірки з переглянутих ділянок карти за {minutes} хв",
   "Retrying automatically at {time} UTC": "Автоматичний повтор о {time} UTC",
   "Retrying automatically after provider cooldown": "Автоматичний повтор після паузи постачальника",
   "Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.": "Оновлюється автоматично після зсуву чи масштабування карти та раз на хвилину. Публічний потік даних охоплює коло радіусом 250 морських миль навколо центру карти; у разі віддалення карта не стає знімком усього світу. Порожні комірки — поза охопленням вибірки або з недостатньою кількістю спостережень.",
@@ -1646,12 +1645,6 @@
     "few": "{count} камери завантажено · увімкніть CCTV, щоб активувати",
     "many": "{count} камер завантажено · увімкніть CCTV, щоб активувати",
     "other": "{count} камери завантажено · увімкніть CCTV, щоб активувати"
-  },
-  "{count} more cameras outside this view · pan or zoom out": {
-    "one": "Ще {count} камера поза цим видом · посуньте або віддаліть",
-    "few": "Ще {count} камери поза цим видом · посуньте або віддаліть",
-    "many": "Ще {count} камер поза цим видом · посуньте або віддаліть",
-    "other": "Ще {count} камери поза цим видом · посуньте або віддаліть"
   },
   "Enable CCTV to load camera intersections": "Увімкніть CCTV, щоб завантажити камери на перехрестях",
   "Enable CCTV to start camera-linked intelligence summaries.": "Увімкніть CCTV, щоб отримувати розвідувальні зведення за даними камер.",
@@ -3061,6 +3054,20 @@
   "Tip: the GEV MIC button in the dock lets you talk to the map.": "Порада: кнопка МІК у доку дає змогу говорити з картою.",
   "Malformed cyclone snapshot": "Некоректний знімок циклонів",
   "Cyclone request timed out": "Минув час очікування запиту циклонів",
+  "Approximate location; coverage not calibrated.": "Приблизне розташування; покриття не відкалібровано.",
+  "LOCATION · APPROXIMATE": "РОЗТАШУВАННЯ · ПРИБЛИЗНЕ",
+  "Open official camera page ↗": "Відкрити офіційну сторінку камери ↗",
+  "PLAYER IN PANEL": "ПРОГРАВАЧ НА ПАНЕЛІ",
+  "PUBLIC PLAYER · EXTERNAL": "ПУБЛІЧНИЙ ПРОГРАВАЧ · ЗОВНІШНІЙ",
+  "{camera} — public player": "{camera} — публічний програвач",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ПУБЛІЧНИЙ ПРОГРАВАЧ · ПРИБЛИЗНЕ РОЗТАШУВАННЯ · ПОКРИТТЯ НЕ ВІДКАЛІБРОВАНО",
+  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "Регіональна вибірка · радіус 250 мор. миль · комірки з переглянутих ділянок карти за {minutes} хв",
+  "{count} more cameras outside this view · pan or zoom out": {
+    "one": "Ще {count} камера поза цим видом · посуньте або віддаліть",
+    "few": "Ще {count} камери поза цим видом · посуньте або віддаліть",
+    "many": "Ще {count} камер поза цим видом · посуньте або віддаліть",
+    "other": "Ще {count} камери поза цим видом · посуньте або віддаліть"
+  },
   "scene|PLAY": "СТАРТ",
   "AUTHORING": "РЕДАКТОР",
   "Create and edit scenes": "Створення й редагування сцен",
