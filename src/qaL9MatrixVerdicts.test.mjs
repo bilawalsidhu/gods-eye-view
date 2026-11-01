@@ -127,9 +127,10 @@ test('an unevaluable engines range reports unknown rather than guessing', () => 
 // A full pass run under `mise exec node@24 --` still re-execed system Node 25
 // through npm; the forced gate refused ("received 25.6.1") and A3 reported it
 // as a product failure. A3 now invokes the binary directly and checks it.
-test('only a parseable Node 24 counts as the calibrated allocation runtime', () => {
+test('every supported Node major counts as a calibrated allocation runtime', () => {
   assert.equal(isCalibratedAllocationRuntime('v24.19.0'), true);
   assert.equal(isCalibratedAllocationRuntime('24.19.0'), true, 'the v prefix is optional');
+  assert.equal(isCalibratedAllocationRuntime('v26.3.0'), true);
   assert.equal(isCalibratedAllocationRuntime('v25.6.1'), false, 'the npm re-resolution case');
   assert.equal(isCalibratedAllocationRuntime('v22.21.1'), false);
   for (const junk of ['', '   ', 'node', undefined, null]) {
