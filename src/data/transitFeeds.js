@@ -377,6 +377,54 @@ function burlingtonRouteLabel(routeId) {
 }
 
 /**
+ * TransLink (Queensland) route ids are `<route>-<version>`. Rail lines are two
+ * two-letter station codes (`BRBN`, `SHCL`), ferries are `F<n>` plus the
+ * Southern Moreton Bay Islands service `SMBI`, and the Gold Coast light rail
+ * is `L1`. `SHUT` is the rail-replacement bus. Everything else is a bus, left
+ * to the feed default so movement plausibility treats it as a guess.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function translinkRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  const route = routeId.replace(/-\d+$/, '');
+  if (/^F\d+$/.test(route) || route === 'SMBI') return 'ferry';
+  if (route === 'L1') return 'tram';
+  if (/^[A-Z]{4}$/.test(route) && route !== 'SHUT') return 'rail';
+  return 'unknown';
+}
+
+/** Adelaide Metro train and tram route ids, from its static routes.txt. */
+const ADELAIDE_RAIL_ROUTES = new Set([
+  'BEL',
+  'FLNDRS',
+  'GAW',
+  'GAWC',
+  'GRNG',
+  'NOAR',
+  'OSBORN',
+  'OUTHA',
+  'PTDOCK',
+  'SALIS',
+  'SEAFRD',
+]);
+const ADELAIDE_TRAM_ROUTES = new Set(['BTANIC', 'FESTVL', 'GLNELG']);
+
+/**
+ * Adelaide Metro route ids are the line codes; all-letter bus routes exist
+ * (`INDSTA`), so trains and trams are listed rather than pattern-matched.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function adelaideMetroRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  if (ADELAIDE_RAIL_ROUTES.has(routeId)) return 'rail';
+  if (ADELAIDE_TRAM_ROUTES.has(routeId)) return 'tram';
+  if (routeId === 'SEALNK') return 'ferry';
+  return 'unknown';
+}
+
+/**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
  * @type {ReadonlyArray<Readonly<{
@@ -522,7 +570,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     url: 'https://gtfsrt.api.translink.com.au/api/realtime/seq/VehiclePositions',
     license: 'CC BY 4.0',
     licenseUrl: 'https://translink.com.au/about-translink/open-data',
-    attribution: 'TransLink — Queensland Government (CC BY 4.0)',
+    attribution: 'Translink, Department of Transport and Main Roads',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
@@ -530,6 +578,53 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'No key, no stated rate limit, no caching rule. Logos and network imagery need separate approval, so the credit is text only.',
     }),
     defaultMode: 'bus',
+    routeMode: translinkRouteMode,
+  }),
+  Object.freeze({
+    id: 'translink-cairns',
+    name: 'TransLink',
+    operator: 'TransLink (Queensland Government)',
+    region: 'Cairns, Australia',
+    center: Object.freeze({ lat: -16.9186, lon: 145.7781 }),
+    loadRadiusKm: 60,
+    url: 'https://gtfsrt.api.translink.com.au/api/realtime/CNS/VehiclePositions',
+    license: 'CC BY 4.0',
+    licenseUrl: 'https://translink.com.au/about-translink/open-data',
+    attribution: 'Translink, Department of Transport and Main Roads',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'Our data is licensed under a Creative Commons Attribution 4.0 International License. Authentication is not required to use the feed.',
+      note: 'The same open-data page lists Cairns (CNS) vehicle positions beside South East Queensland; same terms, text-only credit.',
+    }),
+    defaultMode: 'bus',
+    routeMode: translinkRouteMode,
+  }),
+  Object.freeze({
+    id: 'adelaide-metro',
+    name: 'Adelaide Metro',
+    operator:
+      'Adelaide Metro (Department for Infrastructure and Transport, South Australia)',
+    region: 'Adelaide, Australia',
+    center: Object.freeze({ lat: -34.9285, lon: 138.6007 }),
+    loadRadiusKm: 80,
+    url: 'https://gtfs.adelaidemetro.com.au/v1/realtime/vehicle_positions',
+    // The gateway negotiates on Accept: the proxy's default list gets
+    // application/json carrying base64 protobuf; its own type gets raw bytes.
+    headers: Object.freeze({ Accept: 'application/x-google-protobuf' }),
+    license: 'CC BY 4.0',
+    licenseUrl:
+      'https://data.sa.gov.au/data/dataset/adelaide-metro-real-time-passenger-information',
+    attribution:
+      'Adelaide Metro – Department for Infrastructure and Transport, South Australia',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'Adelaide Metro provides Real-Time information in SIRI and GTFS-R format',
+      note: 'Quoted from the data.sa.gov.au catalogue entry "Adelaide Metro Real-Time Passenger Information", published by the Department for Infrastructure and Transport under Creative Commons Attribution 4.0. The feed needs no key (its API description declares no security scheme) and is marked BETA, subject to change. adelaidemetro.com.au refuses automated readers (HTTP 403).',
+    }),
+    defaultMode: 'bus',
+    routeMode: adelaideMetroRouteMode,
   }),
   Object.freeze({
     id: 'ttc-toronto',
