@@ -2,20 +2,19 @@ import { readFileSync } from 'node:fs';
 import { createPinia } from 'pinia';
 import { createSSRApp } from 'vue';
 import { renderToString } from 'vue/server-renderer';
-import { expandApplicationHtml } from '../../build/application-html.js';
 import { APPLICATION_VIEWS } from '../ui/views/index.js';
 
 const HOST = /<div class="gev-view" data-gev-view="([^"]+)"><\/div>/g;
 
 /**
- * Expand application markup as the browser shows it once views are mounted:
- * static templates inline, and each view rendered into its host. Markup tests
- * read this instead of the raw template expansion.
- * @param {string} html Document with `gev:template` markers.
+ * Application markup as the browser shows it once views are mounted: each
+ * view rendered into its host. Markup tests read this instead of the page
+ * source.
+ * @param {string} html Document with `.gev-view` hosts.
  * @returns {Promise<string>}
  */
 export async function renderApplicationHtml(html) {
-  let output = expandApplicationHtml(html);
+  let output = html;
   for (const [host, name] of [...output.matchAll(HOST)]) {
     const view = APPLICATION_VIEWS[name];
     if (!view) throw new Error(`Unknown application view: ${name}`);

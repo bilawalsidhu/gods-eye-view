@@ -200,11 +200,13 @@ its pending results. Source disposal does not silently reinstate a default.
 `ui/composition` supplies the default engines to the shell. Applications can
 supply a HUD implementation or request policy through control services. The
 shared chrome owns the welcome/loading transition; standalone composition adds
-Provider Settings. `build/html` expands an allowlist of component markers:
-most become hosts for the Vue views in `src/ui/views`, which
-`createApplication()` renders before anything reads the page, and the loading
-screen is inlined from `src/ui/templates`. Unknown names cannot read arbitrary
-filesystem paths. A host that does not initialize Core's locale passes
+Provider Settings. A page places each Vue view in `src/ui/views` with a host,
+`<div class="gev-view" data-gev-view="NAME"></div>`, and writes its own loading
+screen (`#loading-screen` with a `.loader-status` line) as static markup so it
+paints before any script runs. `createApplication()` renders the views before
+anything reads the page; `omitViews` names views the application leaves out,
+such as `provider-settings`, and their hosts are removed. An unknown view name
+is an error. A host that does not initialize Core's locale passes
 `localePicker: false` to `createApplicationControls` instead of editing the
 markup. Node tests that import application modules register the component
 loader with `node --import=<core package>/build/register-vue`.

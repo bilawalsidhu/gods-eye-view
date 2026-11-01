@@ -10,8 +10,9 @@ import SceneChromeView from './SceneChromeView.vue';
 import ProviderSettingsView from './ProviderSettingsView.vue';
 
 /**
- * Application views by template name (build/applicationViews.js lists the
- * same names). Each renders the markup its static template held.
+ * Application views by name. A page places each one with a host element,
+ * `<div class="gev-view" data-gev-view="NAME"></div>` (`display: contents`),
+ * where the view's markup belongs.
  */
 export const APPLICATION_VIEWS = Object.freeze({
   'provider-settings': ProviderSettingsView,
@@ -24,21 +25,38 @@ export const APPLICATION_VIEWS = Object.freeze({
   welcome: WelcomeView,
 });
 
-const mounted = new WeakSet();
+const mounted = new WeakMap();
 
 /**
  * Render every application view into its host. Views belong to the page, as
- * their static markup did, so they are never unmounted. Call before anything
+ * their static markup did, so they are unmounted only when a later call omits
+ * them; omit views before any control code is wired to them. Call before anything
  * reads or translates the page; repeated calls are harmless.
  * @param {Document} [doc] Page document.
+ * @param {{omit?: string[]}} [options] Views this page leaves out; their
+ *   hosts are removed, unmounting a view an earlier call rendered.
  */
-export function mountApplicationViews(doc = globalThis.document) {
+export function mountApplicationViews(
+  doc = globalThis.document,
+  { omit = [] } = {},
+) {
+  for (const name of omit) {
+    if (!Object.hasOwn(APPLICATION_VIEWS, name))
+      throw new Error(`Unknown application view: ${name}`);
+  }
   for (const host of doc?.querySelectorAll?.('[data-gev-view]') ?? []) {
-    if (mounted.has(host)) continue;
     const name = host.getAttribute('data-gev-view');
-    const view = APPLICATION_VIEWS[name];
-    if (!view) throw new Error(`Unknown application view: ${name}`);
-    createApp(view).use(applicationPinia()).mount(host);
-    mounted.add(host);
+    if (omit.includes(name)) {
+      mounted.get(host)?.unmount();
+      mounted.delete(host);
+      host.remove();
+      continue;
+    }
+    if (mounted.has(host)) continue;
+    if (!Object.hasOwn(APPLICATION_VIEWS, name))
+      throw new Error(`Unknown application view: ${name}`);
+    const app = createApp(APPLICATION_VIEWS[name]).use(applicationPinia());
+    app.mount(host);
+    mounted.set(host, app);
   }
 }

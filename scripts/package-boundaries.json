@@ -98,14 +98,12 @@
   },
   "vite-build": {
     "runtime": "node",
-    "exports": ["./build/vite", "./build/html", "./build/register-vue"],
+    "exports": ["./build/vite", "./build/register-vue"],
     "modules": [
       "build/vite.js",
-      "build/application-html.js",
       "build/allowedHosts.js",
       "build/embed-framing.js",
       "build/panel.js",
-      "build/applicationViews.js",
       "build/vueOptions.js",
       "build/registerVue.js",
       "build/vueLoader.js"

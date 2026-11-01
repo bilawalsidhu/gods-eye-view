@@ -63,13 +63,13 @@ a feature supplying only its accent.
 2. **Rail.** `PanelChrome` enforces one panel per side; the panel store
    mirrors each side's panels and the rail renders from it. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
-   classes, `data-i18n` text and CSS. A converted template is listed in
-   `build/applicationViews.js`; its `gev:template` marker then expands to a
+   classes, `data-i18n` text and CSS. The page places each view with a
    `.gev-view` host (`display: contents`), and `mountApplicationViews()`
    (`src/ui/views/index.js`) renders the view into it before the page is
-   translated and wired. `createApplication()` calls it too, so host pages
-   need no change. Views belong to the page and are never unmounted. The
-   loading screen stays static so it paints before any script runs. Markup
+   translated and wired. `createApplication()` calls it too, removing the
+   hosts of any views its `omitViews` names. Views belong to the page and are
+   unmounted only when a later call omits them. The loading screen is static markup in the page so it
+   paints before any script runs. Markup
    tests read `renderApplicationHtml()` from `src/testSupport`, which renders
    the views on the server. Templates compile with Vue's `preserve`
    whitespace, which keeps the whitespace between elements as a single
@@ -168,8 +168,9 @@ a feature supplying only its accent.
    Display popover's slots stay static for the Cockpit display portal).
    Layers that write into the right rail directly gain a slot instead.
 
-4. **Cleanup.** The build-time template expansion and the attribute
-   translation pass are retired once nothing uses them. Hosts register panels
+4. **Cleanup.** The build-time template expansion is retired: `index.html`
+   lists the view hosts and the loading screen itself. The attribute
+   translation pass goes with the move to vue-i18n. Hosts register panels
    and rail items through an explicit API instead of editing markup.
    Markup-string tests are replaced by component tests.
 

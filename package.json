@@ -219,9 +219,6 @@
     "./voice/actions": "./src/voice/gevActions.js",
     "./annotations": "./src/annotations/index.js",
     "./context": "./src/data/contextStore.js",
-    "./build/html": {
-      "node": "./build/application-html.js"
-    },
     "./build/register-vue": {
       "node": "./build/registerVue.js"
     },

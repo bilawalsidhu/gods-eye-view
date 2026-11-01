@@ -8,8 +8,7 @@
 // lists it.
 //
 // Messages are the English literals passed to t(), tn() and msg() in src/,
-// plus the markup opted in with data-i18n* in index.html, src/ui/templates and
-// the Vue views.
+// plus the markup opted in with data-i18n* in index.html and the Vue views.
 // It also lists UI text that is not marked at all (see findUnmarked).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -422,13 +421,9 @@ export function findUnmarked() {
   });
 }
 
-/** Static markup opted in with data-i18n*: the page, its templates and views. */
+/** Static markup opted in with data-i18n*: the page and its views. */
 function markupFiles() {
-  return trackedFiles(
-    'index.html',
-    'src/ui/templates/*.html',
-    'src/ui/views/*.vue',
-  );
+  return trackedFiles('index.html', 'src/ui/views/*.vue');
 }
 
 /**

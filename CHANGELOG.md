@@ -14,6 +14,12 @@
   picker, and Node tests that import application modules register the
   component loader with `--import=<core>/build/register-vue` (samehkhamis).
 
+- Pages place each view with a `<div class="gev-view" data-gev-view="NAME">`
+  host and write their own loading screen; the `build/html` template
+  expansion and its `gev:template` markers are gone. `createApplication`
+  takes `omitViews` (for example `['provider-settings']`) for views an
+  application leaves out (samehkhamis).
+
 - `./ui/display`'s `bindDisplayControls` takes the keyhole fade and outside
   opacity sliders as `fadeSlider` and `outsideOpacitySlider`, and their
   actions receive whole percentages; `fadeSliders` still works.

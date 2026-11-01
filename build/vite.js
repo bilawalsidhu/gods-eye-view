@@ -1,5 +1,4 @@
 import { fileURLToPath } from 'node:url';
-import { applicationHtmlPlugin } from './application-html.js';
 import cesium from 'vite-plugin-cesium';
 import vue from '@vitejs/plugin-vue';
 import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
@@ -157,7 +156,6 @@ export function createBrowserViteConfig({
       // Next, so no provider route answers a Host the server does not allow.
       hostCheckPlugin(),
       cesium(),
-      applicationHtmlPlugin(),
       // Application views are Vue single-file components.
       vue(VUE_PLUGIN_OPTIONS),
       ...plugins,
