@@ -20,6 +20,10 @@
   takes `omitViews` (for example `['provider-settings']`) for views an
   application leaves out (samehkhamis).
 
+- `./scenes` presents the scene sharing dialogs and the EDIT DETAILS / SHARE
+  SCENE bar through a store that the scene panels view renders, so a page
+  that omits `layer-panels` shows neither (samehkhamis).
+
 - `./ui/display`'s `bindDisplayControls` takes the keyhole fade and outside
   opacity sliders as `fadeSlider` and `outsideOpacitySlider`, and their
   actions receive whole percentages; `fadeSliders` still works.

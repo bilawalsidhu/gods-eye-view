@@ -205,8 +205,9 @@ Provider Settings. A page places each Vue view in `src/ui/views` with a host,
 screen (`#loading-screen` with a `.loader-status` line) as static markup so it
 paints before any script runs. `createApplication()` renders the views before
 anything reads the page; `omitViews` names views the application leaves out,
-such as `provider-settings`, and their hosts are removed. An unknown view name
-is an error. A host that does not initialize Core's locale passes
+such as `provider-settings`, and their hosts are removed. Leaving out
+`layer-panels` also leaves out the scene sharing dialogs it draws. An unknown
+view name is an error. A host that does not initialize Core's locale passes
 `localePicker: false` to `createApplicationControls` instead of editing the
 markup. Node tests that import application modules register the component
 loader with `node --import=<core package>/build/register-vue`.

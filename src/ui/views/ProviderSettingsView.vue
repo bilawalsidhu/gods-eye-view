@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
 import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { vFieldValue } from '../rail/fieldValue.js';
+import { vStatusText } from '../rail/statusText.js';
 import { useLocaleStore } from '../stores/locale.js';
 import { useProviderSettingsStore } from '../stores/providerSettings.js';
 import LocalePicker from './panels/LocalePicker.vue';
@@ -34,17 +35,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => themeObserver?.disconnect());
 
-// The status line is a live region: write each message, even a repeated one,
-// so a screen reader announces it again.
-const vStatusText = {
-  mounted(el, { value }) {
-    el.textContent = value.text;
-  },
-  updated(el, { value, oldValue }) {
-    if (value.seq !== oldValue?.seq || value.text !== oldValue?.text)
-      el.textContent = value.text;
-  },
-};
+// The status line is a live region; vStatusText re-announces repeats.
 const statusText = computed(() => ({
   text:
     view.value?.status ??

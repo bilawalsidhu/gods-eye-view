@@ -1,8 +1,16 @@
 <script setup>
+import { storeToRefs } from 'pinia';
+import { t } from '../../i18n/index.js';
+import { useSceneSharingStore } from '../stores/sceneSharing.js';
+import SceneDialog from './panels/SceneDialog.vue';
 import SceneOptions from './SceneOptions.vue';
 import SceneShotList from './SceneShotList.vue';
 import CctvPanel from './panels/CctvPanel.vue';
 import StreetLevelPanel from './panels/StreetLevelPanel.vue';
+
+// Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
+// its dialog through this store; without this view, neither is drawn.
+const { toolbar, dialog } = storeToRefs(useSceneSharingStore());
 </script>
 
 <template>
@@ -61,6 +69,10 @@ import StreetLevelPanel from './panels/StreetLevelPanel.vue';
         <button id="scene-download-btn" type="button" class="gev-action-button scene-btn" title="Download the timing log of the last play" data-i18n data-i18n-title>RUN LOG</button>
         <input type="file" id="scene-import-file" accept="application/json,.json" hidden />
       </div>
+      <div v-if="toolbar" data-director-authoring class="scene-controls">
+        <button type="button" class="gev-action-button scene-btn" :title="t('Edit anchors, data packs and shot details')" @click="toolbar.edit()">{{ t('EDIT DETAILS') }}</button>
+        <button type="button" class="gev-action-button scene-btn" :title="t('Download this scene as JSON or an asset bundle')" @click="toolbar.share()">{{ t('SHARE SCENE') }}</button>
+      </div>
       <div class="scene-progress">
         <div id="scene-progress-fill">0%</div>
       </div>
@@ -69,4 +81,7 @@ import StreetLevelPanel from './panels/StreetLevelPanel.vue';
   </div>
 
   </div>
+  <Teleport to="body">
+    <SceneDialog v-if="dialog" :key="dialog.id" :view="dialog" />
+  </Teleport>
 </template>

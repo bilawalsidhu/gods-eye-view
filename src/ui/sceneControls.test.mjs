@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { createStateChannel } from '../app/stateChannel.js';
 import { sceneElements } from './scenePresentation.js';
-import { mountSceneSharing } from './sceneSharing.js';
 import { setLocale } from '../i18n/index.js';
 import { installVueDom } from '../testSupport/vueDom.mjs';
 
@@ -583,76 +582,5 @@ test('Authoring PLAY uses the scene context, not the radio PLAY', (context) => {
     assert.equal(f.elements.start.textContent, 'REPROD.');
   } finally {
     f.restore();
-  }
-});
-
-test('The sharing row sits under SAVE & SHARE, after the file row', () => {
-  const saved = globalThis.document;
-  const node = (className = '') => {
-    const element = {
-      className,
-      children: [],
-      dataset: {},
-      parent: null,
-      addEventListener() {},
-      removeEventListener() {},
-      append(...items) {
-        for (const item of items) {
-          item.parent = element;
-          element.children.push(item);
-        }
-      },
-      appendChild(item) {
-        element.append(item);
-      },
-      after(item) {
-        const siblings = element.parent.children;
-        item.parent = element.parent;
-        siblings.splice(siblings.indexOf(element) + 1, 0, item);
-      },
-      remove() {
-        const siblings = element.parent?.children;
-        if (siblings) siblings.splice(siblings.indexOf(element), 1);
-      },
-      querySelector(selector) {
-        const name = selector.slice(1);
-        const walk = (at) => {
-          for (const child of at.children) {
-            if (child.className.split(' ').includes(name)) return child;
-            const found = walk(child);
-            if (found) return found;
-          }
-          return null;
-        };
-        return walk(element);
-      },
-    };
-    return element;
-  };
-  globalThis.document = { createElement: () => node() };
-  try {
-    const panel = node();
-    const inner = node('scene-panel-inner');
-    const fileRow = node('scene-controls scene-file-controls');
-    const status = node('scene-status');
-    panel.append(inner);
-    inner.append(fileRow, status);
-    const dispose = mountSceneSharing({ edit() {}, share() {} }, panel);
-    const bar = inner.children[1];
-    assert.equal(bar.className, 'scene-controls');
-    assertSameNode(inner.children[2], status);
-    assert.ok(bar.children.every((button) => button.title));
-    dispose();
-    assert.deepEqual(inner.children, [fileRow, status]);
-
-    // Without the file row, the bar still lands inside the panel.
-    const plain = node();
-    const plainInner = node('scene-panel-inner');
-    plain.append(plainInner);
-    mountSceneSharing({ edit() {}, share() {} }, plain)();
-    mountSceneSharing({ edit() {}, share() {} }, plain);
-    assert.equal(plainInner.children.length, 1);
-  } finally {
-    globalThis.document = saved;
   }
 });

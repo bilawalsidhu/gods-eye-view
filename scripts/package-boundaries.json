@@ -28,6 +28,7 @@
       "src/ui/views/panels/SdrCard.vue",
       "src/ui/views/panels/RadioTuner.vue",
       "src/ui/views/panels/LocalePicker.vue",
+      "src/ui/views/panels/SceneDialog.vue",
       "src/ui/localePicker.js",
       "src/ui/views/panels/PhoneTabBar.vue",
       "src/ui/views/panels/CockpitBriefing.vue",
@@ -76,6 +77,7 @@
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
       "src/ui/stores/providerSettings.js",
+      "src/ui/stores/sceneSharing.js",
       "src/ui/stores/location.js",
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue",
@@ -84,7 +86,8 @@
       "src/ui/rail/rangeValue.js",
       "src/ui/rail/classToggle.js",
       "src/ui/rail/focusSafeChildren.js",
-      "src/ui/rail/fieldValue.js"
+      "src/ui/rail/fieldValue.js",
+      "src/ui/rail/statusText.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -1004,6 +1007,7 @@
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
       "src/ui/stores/providerSettings.js",
+      "src/ui/stores/sceneSharing.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js"
     ],
@@ -1118,6 +1122,7 @@
       "src/director/authoring.js",
       "src/scenes/sharing.js",
       "src/ui/sceneSharing.js",
+      "src/ui/stores/sceneSharing.js",
       "src/data/cameraArrival.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
@@ -2816,6 +2821,7 @@
       "src/director/authoring.js",
       "src/scenes/sharing.js",
       "src/ui/sceneSharing.js",
+      "src/ui/stores/sceneSharing.js",
       "src/layers/weather/imageryOrder.js",
       "src/layers/weather/imageryHost.js",
       "src/layers/cyclones/index.js",
@@ -2983,6 +2989,7 @@
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
       "src/ui/stores/providerSettings.js",
+      "src/ui/stores/sceneSharing.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js"
     ],
