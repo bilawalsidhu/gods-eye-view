@@ -3,8 +3,11 @@ import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
+import { computed } from 'vue';
 import { useLocationStore } from '../stores/location.js';
+import { useVoiceStore } from '../stores/voice.js';
 import PhoneTabBar from './panels/PhoneTabBar.vue';
+import VoiceControl from './panels/VoiceControl.vue';
 
 // VisualSettings publishes the active style and the map source controls
 // their chip row; until they do, the dock shows its initial markup. The
@@ -14,6 +17,21 @@ const { style, mapSource, mapSourceControls } = storeToRefs(useDisplayStore());
 // and the search field keeps their listeners.
 const { view: loc, controls: locationControls } = storeToRefs(useLocationStore());
 
+// The voice control, while a voice session presents one. It sits between the
+// location bar and the visual presets; the trays keep their elements when the
+// order changes.
+const { view: voice } = storeToRefs(useVoiceStore());
+// Once voice has taken its place, the location bar stays first.
+let voiceShown = false;
+const dockOrder = computed(() => {
+  if (voice.value) voiceShown = true;
+  return voice.value
+    ? ['location', 'voice', 'control']
+    : voiceShown
+      ? ['location', 'control']
+      : ['control', 'location'];
+});
+
 function selectMapSource(chip) {
   if (!chip.available) return;
   void mapSourceControls.value?.select(chip.id).catch(() => {});
@@ -21,10 +39,11 @@ function selectMapSource(chip) {
 </script>
 
 <template>
-  <!-- Unified bottom command dock: locations, voice (injected at runtime), visual presets -->
+  <!-- Unified bottom command dock: locations, voice, visual presets -->
   <div id="command-dock" class="ui-scroll" aria-label="Navigation, voice, and visual preset controls" data-i18n-aria-label>
+  <template v-for="slot in dockOrder" :key="slot">
   <!-- Control panel -->
-  <div id="control-panel" class="panel-collapsible collapsed">
+  <div v-if="slot === 'control'" id="control-panel" class="panel-collapsible collapsed">
     <div class="panel-glow"></div>
     <div class="panel-inner">
       <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
@@ -82,8 +101,10 @@ function selectMapSource(chip) {
     </div>
   </div>
 
+  <VoiceControl v-else-if="slot === 'voice'" :key="voice.id" :view="voice" />
+
   <!-- Location bar -->
-  <div id="location-bar" class="panel-collapsible collapsed">
+  <div v-else-if="slot === 'location'" id="location-bar" class="panel-collapsible collapsed">
     <div class="panel-glow"></div>
     <div class="location-inner">
       <div class="location-toolbar">
@@ -113,6 +134,7 @@ function selectMapSource(chip) {
       </div>
     </div>
   </div>
+  </template>
   <PhoneTabBar />
   </div>
 </template>

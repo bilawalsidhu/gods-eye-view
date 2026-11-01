@@ -20,6 +20,14 @@
   takes `omitViews` (for example `['provider-settings']`) for views an
   application leaves out (samehkhamis).
 
+- `./voice/control`'s `createVoiceControl({ panel })` returns the voice
+  control's presenter instead of element handles: owners write it by part
+  (`update('detail', { text })`) and listen with `on('button', fn)`, and the
+  command dock renders it from a store. `createVoiceCommands`' `createControl`
+  and `VoiceCardControls` (`{ ui }` instead of `{ root }`) take the same
+  presenter; the `reset` option is gone, since a newer control replaces the
+  previous one (samehkhamis).
+
 - `./scenes` presents the scene sharing dialogs and the EDIT DETAILS / SHARE
   SCENE bar through a store that the scene panels view renders, so a page
   that omits `layer-panels` shows neither (samehkhamis).

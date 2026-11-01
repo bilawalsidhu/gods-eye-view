@@ -22,13 +22,10 @@ export function createRealtimeSession({
     sendMapEvent: (event) => controller.notifyMapEvent(event),
     ignoreButtonClick: () => Boolean(controller.spaceKeyHeld),
     bindControls() {
-      if (controller.ui.tierButton) {
-        controller.tierHandler = () => controller.toggleVoiceTier();
-        controller.ui.tierButton.addEventListener(
-          'click',
-          controller.tierHandler,
-        );
-      }
+      // Kept as the remover; a full stop releases it.
+      controller.tierHandler = controller.ui.on('tier', () =>
+        controller.toggleVoiceTier(),
+      );
       controller.syncCostUi();
       controller.bindPushToTalkShortcut();
     },
