@@ -135,39 +135,39 @@ const vThumb = {
       <div id="sl-viewer-wrap" class="sl-viewer-wrap" :hidden="!viewer.open">
         <div class="sl-viewer-bar">
           <div class="sl-viewer-tools">
-            <UiButton id="sl-viewer-expand" class="scene-btn" :hidden="!expandAvailable" :pressed="Boolean(expanded)" :aria-label="expanded === null ? undefined : expanded ? t('Shrink') : t('Expand')" title="Show the street-level view full screen (Esc shrinks it)" data-i18n-title><span class="sl-btn-icon" aria-hidden="true">{{ expanded ? '⤡' : '⤢' }}</span><span class="sl-btn-text">{{ expanded ? t('SHRINK') : t('EXPAND') }}</span></UiButton>
+            <UiButton id="sl-viewer-expand" class="scene-btn" :hidden="!expandAvailable" :pressed="Boolean(expanded)" :aria-label="expanded === null ? undefined : expanded ? t('Shrink') : t('Expand')" :title="t('Show the street-level view full screen (Esc shrinks it)')"><span class="sl-btn-icon" aria-hidden="true">{{ expanded ? '⤡' : '⤢' }}</span><span class="sl-btn-text">{{ expanded ? t('SHRINK') : t('EXPAND') }}</span></UiButton>
             <UiSegmented class="sl-seg" item-class="sl-seg-btn" active-class="is-active" keyboard="radio" :hidden="!viewer.renderModes" :label="t('Image fit')" :options="renderModeOptions" :model-value="viewer.renderMode" @update:model-value="store.act('setRenderMode', $event)" />
           </div>
           <div class="sl-viewer-tools sl-viewer-tools-right">
-            <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image" data-i18n-title data-i18n-aria-label>×</button>
+            <button id="sl-viewer-close" class="sl-viewer-x" type="button" :title="t('Close the image and deselect it on the map')" :aria-label="t('Close the street-level image')">×</button>
           </div>
         </div>
         <div class="sl-viewer-stage">
           <div id="sl-viewer-placeholder" class="sl-viewer-placeholder" :hidden="!viewer.loading"></div>
-          <div id="sl-viewer" class="sl-viewer" aria-label="Street-level viewer" data-i18n-aria-label></div>
+          <div id="sl-viewer" class="sl-viewer" :aria-label="t('Street-level viewer')"></div>
         </div>
         <div id="sl-image-meta" class="sl-image-meta">
           <span id="sl-image-by" class="sl-image-by">{{ image.captionLeft }}</span>
           <span class="sl-image-right">
             <span id="sl-image-when" class="sl-image-when">{{ image.captionRight }}</span>
-            <a id="sl-image-link" class="sl-image-link" :href="image.href" target="_blank" rel="noopener noreferrer" title="Open this image on the provider's site" data-i18n-title :hidden="!image.link">{{ image.linkLabel }}</a>
+            <a id="sl-image-link" class="sl-image-link" :href="image.href" target="_blank" rel="noopener noreferrer" :title="t('Open this image on the provider\'s site')" :hidden="!image.link">{{ image.linkLabel }}</a>
           </span>
         </div>
       </div>
-      <div class="sl-providers" role="group" aria-label="Imagery providers" data-i18n-aria-label>
-        <span class="cctv-summary-label" data-i18n>PROVIDERS</span>
+      <div class="sl-providers" role="group" :aria-label="t('Imagery providers')">
+        <span class="cctv-summary-label">{{ t('PROVIDERS') }}</span>
         <div id="sl-provider-chips" class="sl-chips"><RailChips :chips="view ? view.providers : []" /></div>
       </div>
       <div id="sl-error" class="sl-error" role="alert" :hidden="!view?.error"><span aria-hidden="true">⚠</span> <span id="sl-error-text">{{ view?.error || '' }}</span></div>
       <!-- A missing key gates the filters only: the chips above stay
            focusable so their tooltip can say how to add the key. -->
       <fieldset id="sl-controls" class="sl-controls" :disabled="Boolean(view?.controlsDisabled)" :hidden="!shows.pano && !shows.since">
-        <div id="sl-pano-row" class="sl-filters" :hidden="!shows.pano" role="group" aria-label="Imagery filters" data-i18n-aria-label>
-          <span class="cctv-summary-label" data-i18n>IMAGERY</span>
+        <div id="sl-pano-row" class="sl-filters" :hidden="!shows.pano" role="group" :aria-label="t('Imagery filters')">
+          <span class="cctv-summary-label">{{ t('IMAGERY') }}</span>
           <UiSegmented class="sl-seg" item-class="sl-seg-btn" active-class="is-active" keyboard="radio" :disabled="Boolean(view?.controlsDisabled)" :label="t('Panorama filter')" :options="panoOptions" :model-value="pano" @update:model-value="store.act('setPano', $event)" />
         </div>
         <div id="sl-since-row" class="sl-since" :hidden="!shows.since">
-          <label class="cctv-summary-label" for="sl-since" data-i18n>SINCE</label>
+          <label class="cctv-summary-label" for="sl-since">{{ t('SINCE') }}</label>
           <UiSlider id="sl-since" v-thumb="view?.since" class="sl-range" min="0" max="8" step="1" :aria-valuetext="sinceLabel" aria-describedby="sl-since-label sl-since-note" @input="onSinceInput" @change="onSinceChange" />
           <span class="sl-since-value">
             <output id="sl-since-label" class="sl-since-label" for="sl-since">{{ sinceLabel }}</output>
@@ -178,7 +178,7 @@ const vThumb = {
       <!-- The hint says how to open imagery; the button does it without a pointer. -->
       <div class="sl-meta-row">
         <div id="sl-coverage-meta" class="sl-meta">{{ view?.meta ?? '' }}</div>
-        <UiButton id="sl-nearest-btn" class="scene-btn sl-nearest-btn" type="button" :hidden="!view?.nearest.visible" :title="nearest.title || undefined" :disabled="nearest.disabled" data-i18n-runtime>{{ nearest.label }}</UiButton>
+        <UiButton id="sl-nearest-btn" class="scene-btn sl-nearest-btn" type="button" :hidden="!view?.nearest.visible" :title="nearest.title || undefined" :disabled="nearest.disabled">{{ nearest.label }}</UiButton>
       </div>
     </div>
 </RailPanel>

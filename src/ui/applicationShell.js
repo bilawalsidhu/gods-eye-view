@@ -575,8 +575,6 @@ export class StyleManager extends ShellFacade {
     });
     this._initUI();
     this._initMapStackControl();
-    // Headers first: panel chrome builds its toggle labels from them.
-    this._applyRuntimeStaticHeaderText();
     this._initPanelChrome();
     this._panelNavigation = new PanelNavigation({
       ui: this._ui,
@@ -798,55 +796,6 @@ export class StyleManager extends ShellFacade {
       document.documentElement.style.setProperty(
         '--pp-label-chars',
         String(longest),
-      );
-    }
-  }
-
-  /**
-   * Rewrites a header's last text node, keeping the leading icon span that a
-   * textContent write would destroy.
-   * @param {Element|null} element
-   * @param {string} text
-   * @returns {void}
-   */
-  _setHeaderText(element, text) {
-    if (!element) return;
-    const textNode = Array.from(element.childNodes)
-      .reverse()
-      .find(
-        (node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim(),
-      );
-    if (textNode) textNode.nodeValue = text;
-    else element.textContent = text;
-  }
-
-  /**
-   * Translates at boot the header texts that share their element with an
-   * icon or a <br> (data-i18n-runtime in the templates).
-   * @returns {void}
-   */
-  _applyRuntimeStaticHeaderText() {
-    this._setHeaderText(
-      document.querySelector('#control-panel .panel-title'),
-      t('VISUAL PRESETS'),
-    );
-    this._setHeaderText(
-      document.querySelector('#location-bar .location-toolbar-label'),
-      t('LOCATION'),
-    );
-    // One span holds both mode descriptions around a <br>; keep the <br>.
-    const standbyDescription = document.querySelector(
-      '#context-mode-standby span',
-    );
-    if (standbyDescription) {
-      standbyDescription.replaceChildren(
-        document.createTextNode(
-          t('CONTACTS — nearest planes · vessels · sites'),
-        ),
-        document.createElement('br'),
-        document.createTextNode(
-          t('SPACE MISSIONS — launches & orbital assets'),
-        ),
       );
     }
   }

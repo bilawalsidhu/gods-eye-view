@@ -37,19 +37,19 @@ function leaveSignals() {
 </script>
 
 <template>
-  <aside id="cockpit-signal-stream" class="cockpit-signal-window" aria-label="Cockpit briefing carousel" :hidden="!presence?.active" data-i18n-aria-label v-bind="streamState" ref="stream">
+  <aside id="cockpit-signal-stream" class="cockpit-signal-window" :aria-label="t('Cockpit briefing carousel')" :hidden="!presence?.active" v-bind="streamState" ref="stream">
     <CockpitRoute />
     <header class="cockpit-card-header cockpit-signal-header">
       <div class="cockpit-brief-heading">
         <span id="cockpit-brief-kicker" class="cockpit-card-kicker cockpit-signal-kicker"><i aria-hidden="true"></i> {{ b.kicker }}</span>
         <strong id="cockpit-brief-subtitle">{{ b.subtitle }}</strong>
       </div>
-      <nav class="cockpit-card-actions cockpit-brief-actions" aria-label="Cockpit briefing controls" data-i18n-aria-label>
-        <button id="cockpit-brief-previous" type="button" aria-label="Previous briefing page" title="Previous briefing page" data-i18n-aria-label data-i18n-title>
+      <nav class="cockpit-card-actions cockpit-brief-actions" :aria-label="t('Cockpit briefing controls')">
+        <button id="cockpit-brief-previous" type="button" :aria-label="t('Previous briefing page')" :title="t('Previous briefing page')">
           <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
         </button>
         <span id="cockpit-brief-position" aria-live="polite">{{ b.position }}</span>
-        <button id="cockpit-brief-next" type="button" aria-label="Next briefing page" title="Next briefing page" data-i18n-aria-label data-i18n-title>
+        <button id="cockpit-brief-next" type="button" :aria-label="t('Next briefing page')" :title="t('Next briefing page')">
           <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
         </button>
         <UiButton id="cockpit-brief-auto" :aria-label="b.autoLabel" :pressed="Boolean(b.autoRotate)" :title="b.autoHelp">{{ b.autoLabel }}</UiButton>
@@ -59,33 +59,33 @@ function leaveSignals() {
       </nav>
     </header>
     <div class="cockpit-brief-stage">
-      <section data-cockpit-brief-page="signals" aria-label="Live signals" data-i18n-aria-label :hidden="b.pageId !== 'signals'">
+      <section data-cockpit-brief-page="signals" :aria-label="t('Live signals')" :hidden="b.pageId !== 'signals'">
         <CockpitSignalList :leave="leaveSignals" />
       </section>
-      <section data-cockpit-brief-page="news" aria-label="Latest regional news" data-i18n-aria-label :hidden="b.pageId !== 'news'">
+      <section data-cockpit-brief-page="news" :aria-label="t('Latest regional news')" :hidden="b.pageId !== 'news'">
         <div id="cockpit-news-status" class="cockpit-brief-status" :hidden="b.news.statusHidden" :data-state="b.news.state ?? undefined">{{ b.news.status }}</div>
         <ol id="cockpit-news-list" class="cockpit-news-list" aria-live="polite"><li v-for="article in b.news.articles" :key="article.key"><a :href="article.url" target="_blank" rel="noopener noreferrer"><strong>{{ article.title }}</strong><span>{{ article.meta }}</span></a></li></ol>
       </section>
-      <section data-cockpit-brief-page="local" aria-label="Location-based information" data-i18n-aria-label :hidden="b.pageId !== 'local'">
+      <section data-cockpit-brief-page="local" :aria-label="t('Location-based information')" :hidden="b.pageId !== 'local'">
         <div class="cockpit-local-place">
           <strong id="cockpit-local-place">{{ b.local.place }}</strong>
           <small id="cockpit-local-coordinates">{{ b.local.coordinates }}</small>
         </div>
         <div class="cockpit-local-grid">
-          <div><span data-i18n>TEMP</span><strong id="cockpit-local-temperature">{{ b.local.temperature }}</strong><small translate="no">OPEN-METEO</small></div>
-          <div><span data-i18n>WIND</span><strong id="cockpit-local-wind">{{ b.local.wind }}</strong><small id="cockpit-local-wind-direction">{{ b.local.windDirection }}</small></div>
-          <div><span data-i18n>SKY</span><strong id="cockpit-local-condition">{{ b.local.condition }}</strong><small id="cockpit-local-cloud">{{ b.local.cloud }}</small></div>
-          <div><span data-i18n>PRECIP</span><strong id="cockpit-local-precipitation">{{ b.local.precipitation }}</strong><small data-i18n>MM</small></div>
+          <div><span>{{ t('TEMP') }}</span><strong id="cockpit-local-temperature">{{ b.local.temperature }}</strong><small translate="no">OPEN-METEO</small></div>
+          <div><span>{{ t('WIND') }}</span><strong id="cockpit-local-wind">{{ b.local.wind }}</strong><small id="cockpit-local-wind-direction">{{ b.local.windDirection }}</small></div>
+          <div><span>{{ t('SKY') }}</span><strong id="cockpit-local-condition">{{ b.local.condition }}</strong><small id="cockpit-local-cloud">{{ b.local.cloud }}</small></div>
+          <div><span>{{ t('PRECIP') }}</span><strong id="cockpit-local-precipitation">{{ b.local.precipitation }}</strong><small>{{ t('MM') }}</small></div>
         </div>
-        <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener" data-i18n>Weather data by Open-Meteo.com</a>
+        <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">{{ t('Weather data by Open-Meteo.com') }}</a>
       </section>
     </div>
     <footer class="cockpit-signal-footer">
       <span id="cockpit-brief-source">{{ b.source }}</span>
-      <nav class="cockpit-brief-tabs" aria-label="Cockpit briefing pages" data-i18n-aria-label>
-        <button type="button" data-cockpit-brief-index="0" aria-label="Show Live Signals" :aria-current="String(b.pageIndex === 0)" data-i18n-aria-label data-i18n>SIG</button>
-        <button type="button" data-cockpit-brief-index="1" aria-label="Show Regional News" :aria-current="brief ? String(b.pageIndex === 1) : undefined" data-i18n-aria-label data-i18n>NEWS</button>
-        <button type="button" data-cockpit-brief-index="2" aria-label="Show Local Info" :aria-current="brief ? String(b.pageIndex === 2) : undefined" data-i18n-aria-label data-i18n>LOCAL</button>
+      <nav class="cockpit-brief-tabs" :aria-label="t('Cockpit briefing pages')">
+        <button type="button" data-cockpit-brief-index="0" :aria-label="t('Show Live Signals')" :aria-current="String(b.pageIndex === 0)">{{ t('SIG') }}</button>
+        <button type="button" data-cockpit-brief-index="1" :aria-label="t('Show Regional News')" :aria-current="brief ? String(b.pageIndex === 1) : undefined">{{ t('NEWS') }}</button>
+        <button type="button" data-cockpit-brief-index="2" :aria-label="t('Show Local Info')" :aria-current="brief ? String(b.pageIndex === 2) : undefined">{{ t('LOCAL') }}</button>
       </nav>
     </footer>
   </aside>

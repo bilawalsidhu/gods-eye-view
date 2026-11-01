@@ -74,11 +74,11 @@ const vTunerDragging = {
     <input id="radio-tuner-slider" type="range" min="0" :max="tuner ? tuner.max : 0" step="1" value="0" v-range-value="tuner ? tuner.slot : 0"
       @pointerdown="act('tunerPointerDown', $event)" @pointermove="act('tunerPointerMove', $event)" @pointerup="act('tunerPointerUp', $event)" @pointercancel="act('tunerPointerCancel', $event)" @lostpointercapture="act('tunerLostPointerCapture', $event)"
       @keydown="act('tunerKeyDown', $event)" @keyup="act('tunerKeyUp', $event)" @input="act('tunerInput')" @change="act('tunerChange')" @blur="act('tunerBlur')"
-      aria-label="Tune available internet radio stations" :aria-valuetext="tuner?.valuetext ?? t('No station available')" :disabled="tuner ? !tuner.available : true" data-i18n-aria-label />
+      :aria-label="t('Tune available internet radio stations')" :aria-valuetext="tuner?.valuetext ?? t('No station available')" :disabled="tuner ? !tuner.available : true" />
   </div>
   <div class="radio-tuner-readout">
     <span id="radio-tuner-station">{{ tuner?.station ?? t('ALL · DRAG THE NEEDLE') }}</span>
-    <span data-i18n>SNAPS TO AVAILABLE STATIONS</span>
+    <span>{{ t('SNAPS TO AVAILABLE STATIONS') }}</span>
   </div>
 </div>
 </template>

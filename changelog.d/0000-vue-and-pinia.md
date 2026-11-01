@@ -1,3 +1,9 @@
+- The application views translate their text with `t()` as they render,
+  so it follows the active locale; they no longer carry `data-i18n*`
+  attributes, and `npm run i18n` rejects those in a Vue template. The boot
+  pass (`applyDocumentTranslations`) still translates static page markup
+  such as the loading screen and a host's own markup (samehkhamis, #0000).
+
 - The page's locale lives in a vue-i18n instance installed in every
   application view, and `t()`, `tn()` and the Intl formatters read it from
   there, so a view that translates while rendering renders again when the

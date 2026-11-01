@@ -126,7 +126,7 @@ The highest-leverage places to jump in:
 - ES modules, **2-space indent, single quotes, semicolons.**
 - JSDoc on exported/public functions.
 - Match the surrounding code — comment density, naming, and idiom.
-- User-visible text goes through `t()` or `tn()`, with `msg()` marking English that is stored and translated later. Static page markup that predates the views keeps its `data-i18n*` attributes; components use `t()`. `npm run i18n` must pass. See [docs/I18N.md](docs/I18N.md).
+- User-visible text goes through `t()` or `tn()`, with `msg()` marking English that is stored and translated later. Components call `t()` in their templates, so their text follows the locale; `data-i18n*` attributes are only for static page markup such as the loading screen, and `npm run i18n` rejects them in a template. `npm run i18n` must pass. See [docs/I18N.md](docs/I18N.md).
 - Prefer small, reviewable commits. Conventional-commit-style prefixes (`feat:`, `fix:`, `perf:`, `docs:`) are appreciated but not required.
 
 ## Building UI

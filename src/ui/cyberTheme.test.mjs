@@ -654,11 +654,11 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   const militaryRendering = read('../layers/military/rendering.js');
   const setHud = GEV_ACTION_SCHEMAS.find((schema) => schema.name === 'set_hud');
 
-  assert.match(display, /<option value="cyber" data-i18n>Cyber<\/option>/);
+  assert.match(display, /<option value="cyber">\{\{ t\('Cyber'\) \}\}<\/option>/);
   assert.match(display, /id="cyber-sonar-toggle"/);
   assert.match(
     display,
-    /id="cyber-sonar-opacity"[^>]*:model-value="sonar\?\.opacity \?\? 84" aria-label="Cyber contact and label opacity"/,
+    /id="cyber-sonar-opacity"[^>]*:model-value="sonar\?\.opacity \?\? 84" :aria-label="t\('Cyber contact and label opacity'\)"/,
   );
   assert.match(display, /id="cyber-sonar-sector"/);
   assert.deepEqual(setHud.parameters.properties.layout.enum, HUD_LAYOUTS);

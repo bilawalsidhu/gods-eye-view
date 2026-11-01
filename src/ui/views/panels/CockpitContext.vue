@@ -29,35 +29,35 @@ const weatherLabel = computed(() =>
 </script>
 
 <template>
-  <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" :hidden="!presence?.context" data-i18n-aria-label :data-state="c.state ?? undefined" :data-collapsed="presence ? String(collapsed) : undefined">
+  <aside id="cockpit-context" class="cockpit-context-window" :aria-label="t('Contact cockpit summary')" :hidden="!presence?.context" :data-state="c.state ?? undefined" :data-collapsed="presence ? String(collapsed) : undefined">
     <header class="cockpit-card-header cockpit-context-header">
       <div>
-        <span data-i18n class="cockpit-card-kicker cockpit-context-kicker">CONTACT</span>
+        <span class="cockpit-card-kicker cockpit-context-kicker">{{ t('CONTACT') }}</span>
         <strong id="cockpit-context-subject">{{ c.subject }}</strong>
       </div>
-      <nav class="cockpit-card-actions cockpit-context-actions" aria-label="Contact navigation" data-i18n-aria-label>
-        <button id="cockpit-context-previous" type="button" :disabled="!c.canPrevious" aria-label="Previous — prior visited contact in the 250 km window" title="Previous — prior visited contact in the 250 km window" data-i18n-aria-label data-i18n-title>
+      <nav class="cockpit-card-actions cockpit-context-actions" :aria-label="t('Contact navigation')">
+        <button id="cockpit-context-previous" type="button" :disabled="!c.canPrevious" :aria-label="t('Previous — prior visited contact in the 250 km window')" :title="t('Previous — prior visited contact in the 250 km window')">
           <span class="material-symbols-outlined" aria-hidden="true">skip_previous</span>
         </button>
-        <button id="cockpit-context-next" type="button" :disabled="!c.canNext" aria-label="Next — nearest unvisited contact in the 250 km window" title="Next — nearest unvisited contact in the 250 km window" data-i18n-aria-label data-i18n-title>
+        <button id="cockpit-context-next" type="button" :disabled="!c.canNext" :aria-label="t('Next — nearest unvisited contact in the 250 km window')" :title="t('Next — nearest unvisited contact in the 250 km window')">
           <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
         </button>
         <button id="cockpit-context-toggle" type="button" :aria-label="collapsed ? t('Expand Contact panel') : t('Collapse Contact panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand contact panel') : t('Collapse contact panel')">
           <span class="material-symbols-outlined" aria-hidden="true">{{ collapsed ? 'chevron_right' : 'chevron_left' }}</span>
         </button>
       </nav>
-      <span class="cockpit-context-qualifier" data-i18n>CONTEXT ONLY</span>
+      <span class="cockpit-context-qualifier">{{ t('CONTEXT ONLY') }}</span>
     </header>
-    <div class="cockpit-context-cohorts" role="list" aria-label="Nearby cohort counts" data-i18n-aria-label>
-      <div v-class-toggle="{ unknown: c.cohorts.flights.unknown }" role="listitem" data-context-cohort="flights"><span data-i18n>FLT</span><strong>{{ c.cohorts.flights.count }}</strong><small translate="no">OpenSky</small></div>
-      <div v-class-toggle="{ unknown: c.cohorts.military.unknown }" role="listitem" data-context-cohort="military"><span data-i18n>MIL</span><strong>{{ c.cohorts.military.count }}</strong><small translate="no">adsb.lol</small></div>
+    <div class="cockpit-context-cohorts" role="list" :aria-label="t('Nearby cohort counts')">
+      <div v-class-toggle="{ unknown: c.cohorts.flights.unknown }" role="listitem" data-context-cohort="flights"><span>{{ t('FLT') }}</span><strong>{{ c.cohorts.flights.count }}</strong><small translate="no">OpenSky</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts.military.unknown }" role="listitem" data-context-cohort="military"><span>{{ t('MIL') }}</span><strong>{{ c.cohorts.military.count }}</strong><small translate="no">adsb.lol</small></div>
       <div v-class-toggle="{ unknown: c.cohorts['ais-live-vessels'].unknown }" role="listitem" data-context-cohort="ais-live-vessels"><span translate="no">AIS</span><strong>{{ c.cohorts['ais-live-vessels'].count }}</strong><small translate="no">AISStream</small></div>
-      <div v-class-toggle="{ unknown: c.cohorts['military-installations'].unknown }" role="listitem" data-context-cohort="military-installations"><span data-i18n>SITE</span><strong>{{ c.cohorts['military-installations'].count }}</strong><small translate="no">OpenStreetMap</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts['military-installations'].unknown }" role="listitem" data-context-cohort="military-installations"><span>{{ t('SITE') }}</span><strong>{{ c.cohorts['military-installations'].count }}</strong><small translate="no">OpenStreetMap</small></div>
     </div>
     <div class="cockpit-context-nearest">
       <span id="cockpit-context-direction" v-class-toggle="{ unknown: c.direction.unknown }" class="material-symbols-outlined" :style="directionStyle" aria-hidden="true">navigation</span>
       <div>
-        <small data-i18n>NEAREST OBSERVED / MAPPED</small>
+        <small>{{ t('NEAREST OBSERVED / MAPPED') }}</small>
         <strong id="cockpit-context-nearest-label" :aria-label="c.nearest.ariaLabel ?? undefined">{{ c.nearest.label }}</strong>
       </div>
       <span id="cockpit-context-bearing">{{ c.bearing }}</span>
@@ -66,7 +66,7 @@ const weatherLabel = computed(() =>
     <footer class="cockpit-context-footer">
       <span id="cockpit-context-uncertainty">{{ c.uncertainty }}</span>
       <UiButton id="cockpit-weather-toggle" class="cockpit-context-weather" :aria-label="weatherLabel" :pressed="Boolean(c.weather)" :title="weatherLabel">
-        <span data-i18n>WX</span>
+        <span>{{ t('WX') }}</span>
         <strong id="cockpit-weather-state">{{ c.weather ? t('ON') : t('OFF') }}</strong>
       </UiButton>
       <time id="cockpit-context-updated">{{ c.updated }}</time>

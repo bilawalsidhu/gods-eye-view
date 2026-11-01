@@ -1,6 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { computed, ref } from 'vue';
+import { t } from '../../../i18n/index.js';
 import { vFocusSafeChildren } from '../../rail/focusSafeChildren.js';
 import { useDisplayStore } from '../../stores/display.js';
 
@@ -57,12 +58,12 @@ function leave() {
 
 <template>
   <div class="pp-toggle-group" id="geo-import-group">
-    <button ref="importButton" class="pp-toggle-btn" id="geo-import-button" type="button" @click="openPicker" title="Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). File bytes stay on this device; overlays can appear in map screenshots shared with voice." data-i18n-title>
+    <button ref="importButton" class="pp-toggle-btn" id="geo-import-button" type="button" @click="openPicker" :title="t('Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). File bytes stay on this device; overlays can appear in map screenshots shared with voice.')">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">upload_file</span>
-      <span class="pp-label" data-i18n>Import</span>
+      <span class="pp-label">{{ t('Import') }}</span>
     </button>
-    <input ref="picker" type="file" id="geo-import-input" accept=".geojson,.json,.kml,.kmz,.gpx" multiple hidden @change="pick" aria-label="Choose GeoJSON, KML, KMZ or GPX files" data-i18n-aria-label>
-    <ul class="geo-import-list" :class="{ visible: listed }" id="geo-import-list" v-focus-safe-children="leave" aria-label="Imported files" data-i18n-aria-label><li v-for="row in rows" :key="row.id" class="geo-import-row" :data-import-id="row.id"><span :class="['geo-import-swatch', { 'own-styles': row.ownStyles }]" :style="row.ownStyles ? null : { background: row.color }"></span><span class="geo-import-name" :title="row.title">{{ row.name }}</span><button v-for="item in row.actions" :key="item.action" type="button" class="geo-import-action" :data-action="item.action" :title="item.label" :aria-label="item.label" :aria-pressed="item.pressed" @click="display.act(ROW_ACTIONS[item.action], row.id)"><span class="material-symbols-outlined" aria-hidden="true">{{ item.icon }}</span></button></li></ul>
+    <input ref="picker" type="file" id="geo-import-input" accept=".geojson,.json,.kml,.kmz,.gpx" multiple hidden @change="pick" :aria-label="t('Choose GeoJSON, KML, KMZ or GPX files')">
+    <ul class="geo-import-list" :class="{ visible: listed }" id="geo-import-list" v-focus-safe-children="leave" :aria-label="t('Imported files')"><li v-for="row in rows" :key="row.id" class="geo-import-row" :data-import-id="row.id"><span :class="['geo-import-swatch', { 'own-styles': row.ownStyles }]" :style="row.ownStyles ? null : { background: row.color }"></span><span class="geo-import-name" :title="row.title">{{ row.name }}</span><button v-for="item in row.actions" :key="item.action" type="button" class="geo-import-action" :data-action="item.action" :title="item.label" :aria-label="item.label" :aria-pressed="item.pressed" @click="display.act(ROW_ACTIONS[item.action], row.id)"><span class="material-symbols-outlined" aria-hidden="true">{{ item.icon }}</span></button></li></ul>
     <span class="draw-hint geo-import-hint" id="geo-import-hint" aria-live="polite">{{ geoImport?.hint ?? '' }}</span>
   </div>
 </template>

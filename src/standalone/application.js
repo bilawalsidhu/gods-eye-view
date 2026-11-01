@@ -29,12 +29,13 @@ export function createStandaloneApplication({
   constructed = true;
   // Locale is resolved before any UI initialization so <html lang>/<html dir>
   // and every catalog lookup agree from the first painted frame. Module
-  // scripts execute after parsing, so the DOM is ready here and every
-  // data-i18n* element honors the resolved locale without a reload.
+  // scripts execute after parsing, so the DOM is ready here: the views
+  // translate as they render, and the page's static data-i18n* markup (the
+  // loading screen) is translated once.
   const activeLocale = resolveLocale();
   setLocale(activeLocale);
   applyDocumentLanguage(document, activeLocale);
-  // Views render the page's markup; translation and wiring read it.
+  // Views render the page's markup; wiring reads it.
   mountApplicationViews(document);
   applyDocumentTranslations(document);
   const loadingScreen = document.getElementById('loading-screen');

@@ -66,7 +66,7 @@ function selectMapSource(chip) {
 
 <template>
   <!-- Unified bottom command dock: locations, voice, visual presets -->
-  <div id="command-dock" class="ui-scroll" aria-label="Navigation, voice, and visual preset controls" data-i18n-aria-label>
+  <div id="command-dock" class="ui-scroll" :aria-label="t('Navigation, voice, and visual preset controls')">
   <template v-for="slot in dockOrder" :key="slot">
   <!-- Control panel -->
   <div v-if="slot === 'control'" id="control-panel" v-panel-state="'control-panel'" class="panel-collapsible collapsed">
@@ -75,53 +75,53 @@ function selectMapSource(chip) {
       <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
         data-dock-toggle-target="control-panel" :aria-expanded="String(panels['control-panel']?.collapsed === false)"
         aria-controls="control-panel-popover" :aria-label="trayWords('control-panel', t('VISUAL PRESETS'), t('Expand Visual Presets'))" :title="trayWords('control-panel', t('VISUAL PRESETS'), undefined)">
-        <span class="panel-title" data-i18n-runtime><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>VISUAL PRESETS</span>
+        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>{{ t('VISUAL PRESETS') }}</span>
         <span class="panel-divider"></span>
       </button>
       <div id="control-panel-popover" class="dock-popover-content">
       <UiButton variant="icon" class="dock-pin-btn" data-pin-target="control-panel" :label="t('Pin visual presets')" :title="t('Keep visual presets open')" :pressed="!!panels['control-panel']?.pinned" @click="pin($event, 'control-panel')"><img src="/pin.svg" alt="" /></UiButton>
       <div id="style-buttons" class="button-grid">
-        <button class="style-btn active" data-style="normal" @click="display.act('setStyle', 'normal')" v-class-toggle="{ ...(style && { active: style.name === 'normal' }) }" title="Show the globe without a visual filter." data-i18n-title>
+        <button class="style-btn active" data-style="normal" @click="display.act('setStyle', 'normal')" v-class-toggle="{ ...(style && { active: style.name === 'normal' }) }" :title="t('Show the globe without a visual filter.')">
           <span class="btn-icon">◯</span>
-          <span class="btn-label" data-i18n>Normal</span>
+          <span class="btn-label">{{ t('Normal') }}</span>
           <span class="btn-key">1</span>
         </button>
-        <button class="style-btn" data-style="retro" @click="display.act('setStyle', 'retro')" v-class-toggle="{ ...(style && { active: style.name === 'retro' }) }" title="Emulate a green phosphor CRT with scanlines and screen curvature." data-i18n-title>
+        <button class="style-btn" data-style="retro" @click="display.act('setStyle', 'retro')" v-class-toggle="{ ...(style && { active: style.name === 'retro' }) }" :title="t('Emulate a green phosphor CRT with scanlines and screen curvature.')">
           <span class="btn-icon">▦</span>
-          <span class="btn-label" data-i18n>CRT</span>
+          <span class="btn-label">{{ t('CRT') }}</span>
           <span class="btn-key">2</span>
         </button>
-        <button class="style-btn" data-style="surveillance" @click="display.act('setStyle', 'surveillance')" v-class-toggle="{ ...(style && { active: style.name === 'surveillance' }) }" title="Simulate night-vision goggles with green intensification and a tube vignette." data-i18n-title>
+        <button class="style-btn" data-style="surveillance" @click="display.act('setStyle', 'surveillance')" v-class-toggle="{ ...(style && { active: style.name === 'surveillance' }) }" :title="t('Simulate night-vision goggles with green intensification and a tube vignette.')">
           <span class="btn-icon">🌙</span>
-          <span class="btn-label" data-i18n>NVG</span>
+          <span class="btn-label">{{ t('NVG') }}</span>
           <span class="btn-key">3</span>
         </button>
-        <button class="style-btn" data-style="thermal" @click="display.act('setStyle', 'thermal')" v-class-toggle="{ ...(style && { active: style.name === 'thermal' }) }" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color." data-i18n-title>
+        <button class="style-btn" data-style="thermal" @click="display.act('setStyle', 'thermal')" v-class-toggle="{ ...(style && { active: style.name === 'thermal' }) }" :title="t('Simulate FLIR-style thermal contrast. Turn up Ironbow for color.')">
           <span class="btn-icon">🌡️</span>
-          <span class="btn-label" data-i18n>FLIR</span>
+          <span class="btn-label">{{ t('FLIR') }}</span>
           <span class="btn-key">4</span>
         </button>
-        <button class="style-btn" data-style="anime" @click="display.act('setStyle', 'anime')" v-class-toggle="{ ...(style && { active: style.name === 'anime' }) }" title="Apply bright cel-shaded color and illustrated outlines." data-i18n-title>
+        <button class="style-btn" data-style="anime" @click="display.act('setStyle', 'anime')" v-class-toggle="{ ...(style && { active: style.name === 'anime' }) }" :title="t('Apply bright cel-shaded color and illustrated outlines.')">
           <span class="btn-icon">✦</span>
-          <span class="btn-label" data-i18n>Anime</span>
+          <span class="btn-label">{{ t('Anime') }}</span>
           <span class="btn-key">5</span>
         </button>
-        <button class="style-btn" data-style="noir" @click="display.act('setStyle', 'noir')" v-class-toggle="{ ...(style && { active: style.name === 'noir' }) }" title="Apply high-contrast monochrome film-noir grading." data-i18n-title>
+        <button class="style-btn" data-style="noir" @click="display.act('setStyle', 'noir')" v-class-toggle="{ ...(style && { active: style.name === 'noir' }) }" :title="t('Apply high-contrast monochrome film-noir grading.')">
           <span class="btn-icon">◐</span>
-          <span class="btn-label" data-i18n>Noir</span>
+          <span class="btn-label">{{ t('Noir') }}</span>
           <span class="btn-key">6</span>
         </button>
       </div>
       <section class="map-source-section" aria-labelledby="map-source-label">
         <div class="map-source-heading">
-          <span data-i18n id="map-source-label">MAP SOURCE</span>
+          <span id="map-source-label">{{ t('MAP SOURCE') }}</span>
           <span id="map-stack-status" class="pp-stack-status" v-class-toggle="{ warn: !!mapSource?.status.warn }" aria-live="polite">{{ mapSource ? mapSource.status.text : '3D' }}</span>
         </div>
-        <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source" data-i18n-aria-label><UiButton v-for="chip in mapSource?.chips" :key="chip.id" class="map-stack-chip" :pressed="Boolean(chip.active)" pressed-class="active" v-class-toggle="{ unavailable: !chip.available }" :data-stack-id="chip.id" :title="chip.title" :aria-disabled="String(!chip.available)" :aria-label="chip.ariaLabel" @click="selectMapSource(chip)"><span class="map-stack-chip-label">{{ chip.label }}</span><span v-if="chip.requirement" class="map-stack-chip-req">{{ chip.requirement }}</span></UiButton></div>
+        <div id="map-stack-chips" class="map-stack-chip-row" role="group" :aria-label="t('Map source')"><UiButton v-for="chip in mapSource?.chips" :key="chip.id" class="map-stack-chip" :pressed="Boolean(chip.active)" pressed-class="active" v-class-toggle="{ unavailable: !chip.available }" :data-stack-id="chip.id" :title="chip.title" :aria-disabled="String(!chip.available)" :aria-label="chip.ariaLabel" @click="selectMapSource(chip)"><span class="map-stack-chip-label">{{ chip.label }}</span><span v-if="chip.requirement" class="map-stack-chip-req">{{ chip.requirement }}</span></UiButton></div>
       </section>
       </div>
       <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
-        <span class="panel-mini-label" data-i18n>Style</span>
+        <span class="panel-mini-label">{{ t('Style') }}</span>
         <span id="style-mini-value" class="panel-mini-value">{{ style ? style.label : t('NORMAL') }}</span>
       </div>
     </div>
@@ -135,9 +135,9 @@ function selectMapSource(chip) {
     <div class="location-inner">
       <div class="location-toolbar">
         <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" :aria-expanded="String(panels['location-bar']?.collapsed === false)" :aria-label="trayWords('location-bar', t('LOCATION'), t('Expand LOCATION'))" :title="trayWords('location-bar', t('LOCATION'), t('Expand LOCATION'))">
-          <span class="location-toolbar-label" data-i18n-runtime><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>LOCATION</span>
+          <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>{{ t('LOCATION') }}</span>
         </button>
-        <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel" data-i18n-title @click="chrome.act('toggle', 'location-bar')">+</button>
+        <button class="panel-collapse-btn" data-collapse-target="location-bar" :title="t('Collapse panel')" @click="chrome.act('toggle', 'location-bar')">+</button>
       </div>
       <div id="location-mini-status" class="location-mini-status" aria-live="polite">
         <div id="location-mini-city" class="location-mini-city">{{ loc ? loc.status.city : t('📍 Location: --') }}</div>
@@ -150,10 +150,10 @@ function selectMapSource(chip) {
         <div class="location-city-row">
           <div id="location-pills" class="location-pills"><UiButton v-for="city in loc?.cities" :key="city.id" class="location-pill" :pressed="Boolean(city.active)" pressed-class="active" :data-location-id="city.id" @click="locationControls?.chooseCity(city.id)">{{ city.label }}</UiButton></div>
           <div class="location-search-wrap">
-            <button id="search-toggle" class="search-toggle-btn" title="Search any location" data-i18n-title @click="locationControls?.toggleSearch()">
+            <button id="search-toggle" class="search-toggle-btn" :title="t('Search any location')" @click="locationControls?.toggleSearch()">
               <span>&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" v-class-toggle="{ expanded: !!loc?.searchExpanded, searching: !!loc?.searching }" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" :aria-invalid="loc?.searchError ? 'true' : null" :aria-describedby="loc?.searchError ? 'location-search-error' : null" data-i18n-aria-label data-i18n-placeholder />
+            <input type="text" id="location-search" v-class-toggle="{ expanded: !!loc?.searchExpanded, searching: !!loc?.searching }" :placeholder="t('Search any location...')" autocomplete="off" spellcheck="false" :aria-label="t('Search location by name or coordinates')" :aria-invalid="loc?.searchError ? 'true' : null" :aria-describedby="loc?.searchError ? 'location-search-error' : null" />
           </div>
         </div>
         <p id="location-search-error" class="location-search-error" role="alert">{{ loc?.searchError }}</p>

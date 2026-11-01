@@ -61,11 +61,11 @@ onUpdated(() => {
 </script>
 
 <template>
-  <div id="space-mission-roster" ref="root" class="space-mission-roster" aria-label="Available Space Missions" data-i18n-aria-label>
+  <div id="space-mission-roster" ref="root" class="space-mission-roster" :aria-label="t('Available Space Missions')">
     <div class="space-mission-roster-header">
       <div>
-        <strong data-i18n>AVAILABLE MISSIONS</strong>
-        <span data-i18n>SELECT A MISSION TO INSPECT</span>
+        <strong>{{ t('AVAILABLE MISSIONS') }}</strong>
+        <span>{{ t('SELECT A MISSION TO INSPECT') }}</span>
       </div>
       <output data-mission-roster-count>{{ roster ? roster.count : '—' }}</output>
     </div>
@@ -74,6 +74,6 @@ onUpdated(() => {
       <UiEmpty v-else-if="!roster.entries.length" class="space-mission-roster-empty" :title="roster.empty" />
       <button v-for="entry in roster?.entries" v-else :key="entry.id" type="button" class="space-mission-roster-item" :data-mission-roster-index="entry.index" :data-mission-roster-id="entry.id" :aria-label="entry.ariaLabel" @click="layer?.selectMissionAt(entry.index)" @mouseenter="enter(entry.index)" @mousemove="move(entry.index)" @mouseleave="layer?.rosterPointerLeave()" @focus="layer?.rosterFocus(entry.index)" @blur="blur"><span class="space-mission-roster-marker" :style="{ '--mission-roster-color': entry.color }" aria-hidden="true"></span><span class="space-mission-roster-copy"><strong>{{ entry.label }}</strong><small>{{ entry.provider }} · {{ entry.date }}</small></span><span class="space-mission-roster-chevron" aria-hidden="true">›</span></button>
     </div>
-    <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation data-i18n>TAB PREVIEWS · ENTER / SPACE SELECTS</p>
+    <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation>{{ t('TAB PREVIEWS · ENTER / SPACE SELECTS') }}</p>
   </div>
 </template>

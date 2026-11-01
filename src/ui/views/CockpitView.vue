@@ -55,7 +55,7 @@ const tickStyle = (tick) =>
 
 <template>
   <!-- Aircraft first-person view. It can be entered from the visible view switcher. -->
-  <section id="cockpit-hud" aria-label="Aircraft cockpit view" :hidden="!active" :style="utilityStyle" v-class-toggle="{ 'signals-active': active, 'context-active': Boolean(presence?.context) }" data-i18n-aria-label :data-layer="hud.layer ?? undefined">
+  <section id="cockpit-hud" :aria-label="t('Aircraft cockpit view')" :hidden="!active" :style="utilityStyle" v-class-toggle="{ 'signals-active': active, 'context-active': Boolean(presence?.context) }" :data-layer="hud.layer ?? undefined">
     <!-- One optical coordinate system: every targeting mark shares this center.
          Decorative only; telemetry and interactive panels remain separate. -->
     <svg class="cockpit-frame-lines" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-hidden="true" focusable="false">
@@ -117,19 +117,19 @@ const tickStyle = (tick) =>
         <span>+20</span><span>+10</span><span class="active">00</span><span>−10</span><span>−20</span>
       </div>
       <div class="cockpit-horizon-guide">
-        <span></span><small data-i18n>LEVEL</small><span></span>
+        <span></span><small>{{ t('LEVEL') }}</small><span></span>
       </div>
-      <div id="cockpit-route-direction" class="cockpit-route-direction" :hidden="!direction.visible" aria-label="Estimated destination direction" data-i18n-aria-label :style="direction.angle === null ? undefined : { '--route-angle': direction.angle }">
+      <div id="cockpit-route-direction" class="cockpit-route-direction" :hidden="!direction.visible" :aria-label="t('Estimated destination direction')" :style="direction.angle === null ? undefined : { '--route-angle': direction.angle }">
         <svg class="cockpit-route-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M12 2 4.58 19.93c-.34.83.51 1.63 1.31 1.27L12 18.47l6.11 2.73c.8.36 1.65-.44 1.31-1.27L12 2Z" />
         </svg>
         <small id="cockpit-route-direction-label">{{ direction.label }}</small>
       </div>
-      <div class="cockpit-visor-status cockpit-visor-status-left" data-i18n>OPTICAL PLANE · 01</div>
-      <div class="cockpit-visor-status cockpit-visor-status-right" data-i18n>VISOR LOCK · ACTIVE</div>
+      <div class="cockpit-visor-status cockpit-visor-status-left">{{ t('OPTICAL PLANE · 01') }}</div>
+      <div class="cockpit-visor-status cockpit-visor-status-right">{{ t('VISOR LOCK · ACTIVE') }}</div>
     </div>
     <div id="cockpit-speed-rim" class="cockpit-altitude-rim cockpit-speed-rim" v-class-toggle="{ unavailable: hud.speedRim.unavailable }">
-      <span class="cockpit-altitude-rim-label" data-i18n>GROUND SPEED · KTS</span>
+      <span class="cockpit-altitude-rim-label">{{ t('GROUND SPEED · KTS') }}</span>
       <div class="cockpit-altitude-rim-rail"></div>
       <div class="cockpit-altitude-rim-scale">
         <span v-for="(tick, index) in hud.speedRim.ticks" :key="index" data-speed-rim-tick :hidden="tick.hidden" :class="{ major: tick.major }" :style="tickStyle(tick)"><b>{{ tick.label }}</b><i></i></span>
@@ -140,7 +140,7 @@ const tickStyle = (tick) =>
       </div>
     </div>
     <div id="cockpit-altitude-rim" class="cockpit-altitude-rim" v-class-toggle="{ unavailable: hud.altitudeRim.unavailable }">
-      <span class="cockpit-altitude-rim-label" data-i18n>ALTITUDE · FT</span>
+      <span class="cockpit-altitude-rim-label">{{ t('ALTITUDE · FT') }}</span>
       <div class="cockpit-altitude-rim-rail"></div>
       <div class="cockpit-altitude-rim-scale">
         <span v-for="(tick, index) in hud.altitudeRim.ticks" :key="index" data-altitude-rim-tick :hidden="tick.hidden" :class="{ major: tick.major }" :style="tickStyle(tick)"><b>{{ tick.label }}</b><i></i></span>
@@ -152,38 +152,38 @@ const tickStyle = (tick) =>
     </div>
     <div class="cockpit-topline">
       <div>
-        <span class="cockpit-kicker" data-i18n>FIRST PERSON</span>
+        <span class="cockpit-kicker">{{ t('FIRST PERSON') }}</span>
         <strong id="cockpit-callsign">{{ hud.callsign }}</strong>
         <span id="cockpit-aircraft-meta" v-class-toggle="{ emergency: hud.meta.emergency }" class="cockpit-aircraft-meta">{{ hud.meta.text }}</span>
       </div>
-      <div class="cockpit-vision-controls" role="group" aria-label="Cockpit vision style" data-i18n-aria-label>
-        <button id="cockpit-vision-previous" class="cockpit-vision-nav" type="button" aria-label="Previous cockpit vision style" title="Previous vision style" data-i18n-aria-label data-i18n-title>
+      <div class="cockpit-vision-controls" role="group" :aria-label="t('Cockpit vision style')">
+        <button id="cockpit-vision-previous" class="cockpit-vision-nav" type="button" :aria-label="t('Previous cockpit vision style')" :title="t('Previous vision style')">
           <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-          <small data-i18n>PREV</small>
+          <small>{{ t('PREV') }}</small>
         </button>
         <button id="cockpit-vision-current" class="cockpit-vision-current" type="button" :data-cockpit-vision="v.mode" :aria-label="visionLabel" :title="visionTitle">
-          <small data-i18n>CURRENT</small>
+          <small>{{ t('CURRENT') }}</small>
           <strong id="cockpit-vision-current-label" aria-live="polite">{{ v.label }}</strong>
         </button>
-        <button id="cockpit-vision-next" class="cockpit-vision-nav" type="button" aria-label="Next cockpit vision style" title="Next vision style" data-i18n-aria-label data-i18n-title>
-          <small data-i18n>NEXT</small>
+        <button id="cockpit-vision-next" class="cockpit-vision-nav" type="button" :aria-label="t('Next cockpit vision style')" :title="t('Next vision style')">
+          <small>{{ t('NEXT') }}</small>
           <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
         </button>
       </div>
     </div>
     <div class="cockpit-reticle material-symbols-outlined" aria-hidden="true">my_location</div>
-    <div class="cockpit-compass" aria-label="Current aircraft heading" data-i18n-aria-label>
+    <div class="cockpit-compass" :aria-label="t('Current aircraft heading')">
       <div class="cockpit-instrument-row">
         <div class="cockpit-readout cockpit-speed">
-          <span class="cockpit-readout-label" data-i18n>GROUND SPEED</span>
+          <span class="cockpit-readout-label">{{ t('GROUND SPEED') }}</span>
           <CockpitRollingValue id="cockpit-speed-value" tag="strong" :reading="hud.speed" placeholder="---" />
-          <span class="cockpit-readout-unit" data-i18n>KTS</span>
+          <span class="cockpit-readout-unit">{{ t('KTS') }}</span>
         </div>
         <div class="cockpit-heading-value"><CockpitRollingValue id="cockpit-heading-value" :reading="hud.heading" placeholder="---" :circular-range="360" /><small>°</small></div>
         <div class="cockpit-readout cockpit-altitude">
-          <span class="cockpit-readout-label" data-i18n>ALTITUDE</span>
+          <span class="cockpit-readout-label">{{ t('ALTITUDE') }}</span>
           <CockpitRollingValue id="cockpit-altitude-value" tag="strong" :reading="hud.altitude" placeholder="-----" />
-          <span class="cockpit-readout-unit" data-i18n>FT</span>
+          <span class="cockpit-readout-unit">{{ t('FT') }}</span>
         </div>
       </div>
       <span class="cockpit-heading-caret material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
@@ -196,17 +196,17 @@ const tickStyle = (tick) =>
     <CockpitContext />
     <CockpitBriefing />
     <CockpitUtilityControls />
-    <div class="cockpit-help"><bdi data-i18n>ESC EXIT</bdi> <span>·</span> <bdi data-i18n>C TOGGLE</bdi></div>
+    <div class="cockpit-help"><bdi>{{ t('ESC EXIT') }}</bdi> <span>·</span> <bdi>{{ t('C TOGGLE') }}</bdi></div>
   </section>
 
-  <nav id="view-switcher" aria-label="View switcher" data-i18n-aria-label>
-    <button id="cockpit-reset-globe" type="button" :aria-label="resetBusy ? t('Resetting cockpit to full globe view') : t('Reset cockpit to full globe view')" title="Exit cockpit and return to full globe view" :hidden="!active" data-i18n-title @click="globe.act('reset')">
+  <nav id="view-switcher" :aria-label="t('View switcher')">
+    <button id="cockpit-reset-globe" type="button" :aria-label="resetBusy ? t('Resetting cockpit to full globe view') : t('Reset cockpit to full globe view')" :title="t('Exit cockpit and return to full globe view')" :hidden="!active" @click="globe.act('reset')">
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
-      <span data-i18n>RESET</span>
+      <span>{{ t('RESET') }}</span>
     </button>
-    <button id="map-view-switch" type="button" aria-label="Exit cockpit view" aria-keyshortcuts="Escape C" title="Exit cockpit view" :hidden="!active" data-i18n-aria-label data-i18n-title>
+    <button id="map-view-switch" type="button" :aria-label="t('Exit cockpit view')" aria-keyshortcuts="Escape C" :title="t('Exit cockpit view')" :hidden="!active">
       <span class="material-symbols-outlined" aria-hidden="true">close_fullscreen</span>
-      <span data-i18n>EXIT COCKPIT</span>
+      <span>{{ t('EXIT COCKPIT') }}</span>
     </button>
   </nav>
 </template>

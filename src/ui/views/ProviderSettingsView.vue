@@ -66,13 +66,13 @@ const removeTitle = (title) =>
   <aside v-if="available" id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" :hidden="dialog.hidden" v-class-toggle="{ visible: dialog.visible }" :data-ready="view?.ready ? 'true' : undefined" @transitionend="controls?.transitionEnd()">
     <div class="key-setup-scanline" aria-hidden="true"></div>
     <header class="key-setup-header">
-      <span class="key-setup-kicker" data-i18n>GROUND STATION · PROVIDER SETTINGS</span>
-      <button type="button" class="key-setup-close" data-key-setup-close aria-label="Close key setup" data-i18n-aria-label @click="controls?.close()">
+      <span class="key-setup-kicker">{{ t('GROUND STATION · PROVIDER SETTINGS') }}</span>
+      <button type="button" class="key-setup-close" data-key-setup-close :aria-label="t('Close key setup')" @click="controls?.close()">
         <span class="material-symbols-outlined" aria-hidden="true">close</span>
       </button>
     </header>
-    <h2 id="key-setup-title" data-i18n>Power up the globe</h2>
-    <p id="key-setup-description" data-i18n>The globe already flies keyless. Every key below switches on another real feed — paste one and it's saved into this app's local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.</p>
+    <h2 id="key-setup-title">{{ t('Power up the globe') }}</h2>
+    <p id="key-setup-description">{{ t('The globe already flies keyless. Every key below switches on another real feed — paste one and it\'s saved into this app\'s local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.') }}</p>
     <div class="key-setup-rows ui-scroll" data-key-setup-rows>
       <section v-for="key in view?.rows ?? []" :key="`${key.id}:${view.generation}`" class="key-setup-row" :data-key-id="key.id" :data-set="String(key.set)" :data-managed="key.managed || undefined">
         <div class="key-setup-row-head">
@@ -95,8 +95,8 @@ const removeTitle = (title) =>
       </section>
     </div>
     <div class="key-setup-footer">
-      <button type="button" class="key-setup-apply" data-key-setup-apply :aria-disabled="view?.saving == null ? undefined : String(view.saving)" data-i18n @click="controls?.apply()">SAVE KEYS</button>
-      <span class="key-setup-hint" data-i18n>ESC to close</span>
+      <button type="button" class="key-setup-apply" data-key-setup-apply :aria-disabled="view?.saving == null ? undefined : String(view.saving)" @click="controls?.apply()">{{ t('SAVE KEYS') }}</button>
+      <span class="key-setup-hint">{{ t('ESC to close') }}</span>
     </div>
     <p class="key-setup-note" data-key-setup-status role="status" aria-live="polite" v-status-text="statusText"></p>
   </aside>

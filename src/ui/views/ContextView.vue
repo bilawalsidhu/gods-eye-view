@@ -30,37 +30,37 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
   <!-- Global Context is deliberately independent from the left layer accordion. -->
   <aside id="right-context-rail" class="ui-scroll" v-class-toggle="{ 'bhote-event-active': !!bhotePanel }">
     <RailPanel id="weather-panel" hidden :title="t('WEATHER')" sideways rail-scroller>
-      <template #badge><span id="weather-panel-count" aria-label="Active weather products" data-i18n-aria-label>0</span></template>
+      <template #badge><span id="weather-panel-count" :aria-label="t('Active weather products')">0</span></template>
       <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
     <RailPanel id="recent-imagery-panel" hidden :title="t('RECENT IMAGERY')" sideways rail-scroller>
-      <template #badge><span id="recent-imagery-panel-count" aria-label="Imagery days in the box" data-i18n-aria-label></span></template>
+      <template #badge><span id="recent-imagery-panel-count" :aria-label="t('Imagery days in the box')"></span></template>
       <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
     <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :title="t('CONTEXT')" sideways scroll rail-scroller>
         <div class="cyber-panel-body ui-scroll" data-rail-scroller>
-        <div class="global-context-modes" role="tablist" aria-label="Context mode" data-i18n-aria-label>
-          <button id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" aria-label="CONTACTS" title="Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently." data-i18n-aria-label data-i18n-title>
+        <div class="global-context-modes" role="tablist" :aria-label="t('Context mode')">
+          <button id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" :aria-label="t('CONTACTS')" :title="t('Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.')">
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>
-            <span data-i18n>CONTACTS</span>
+            <span>{{ t('CONTACTS') }}</span>
           </button>
           <button id="global-context-missions-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.missionsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.missionsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-missions-view">
             <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
-            <span data-i18n>SPACE MISSIONS</span>
+            <span>{{ t('SPACE MISSIONS') }}</span>
           </button>
         </div>
         <div id="context-mode-standby" class="context-mode-standby" :hidden="ctx?.enabled">
-          <strong data-i18n>SELECT CONTEXT</strong>
-          <span data-i18n-runtime>CONTACTS — nearest planes · vessels · sites<br>SPACE MISSIONS — launches &amp; orbital assets</span>
+          <strong>{{ t('SELECT CONTEXT') }}</strong>
+          <span>{{ t('CONTACTS — nearest planes · vessels · sites') }}<br>{{ t('SPACE MISSIONS — launches & orbital assets') }}</span>
         </div>
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" :hidden="!ctx?.flightsActive">
-          <div class="global-context-actions" aria-label="Contact Context actions" data-i18n-aria-label>
+          <div class="global-context-actions" :aria-label="t('Contact Context actions')">
             <button id="cockpit-entry" type="button" :hidden="!cockpit?.entryAvailable">
               <span class="material-symbols-outlined" aria-hidden="true">flight</span>
-              <span data-i18n>COCKPIT</span>
+              <span>{{ t('COCKPIT') }}</span>
             </button>
-            <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)" data-i18n>SEARCH NEARBY SITES</button>
-            <UiButton id="tr3b-toggle" class="tr3b-toggle" :pressed="!!cockpit?.tr3b?.converted" :hidden="!cockpit?.tr3b" aria-label="Reclassify tracked contact as TR-3B" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')" data-i18n-aria-label>🛸</UiButton>
+            <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)">{{ t('SEARCH NEARBY SITES') }}</button>
+            <UiButton id="tr3b-toggle" class="tr3b-toggle" :pressed="!!cockpit?.tr3b?.converted" :hidden="!cockpit?.tr3b" :aria-label="t('Reclassify tracked contact as TR-3B')" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')">🛸</UiButton>
           </div>
           <AwarenessPanel />
         </section>

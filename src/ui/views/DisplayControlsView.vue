@@ -1,4 +1,5 @@
 <script setup>
+import { t } from '../../i18n/index.js';
 import { useDisplayStore } from '../stores/display.js';
 import DisplayPanel from './panels/DisplayPanel.vue';
 
@@ -7,5 +8,5 @@ const display = useDisplayStore();
 
 <template>
   <DisplayPanel />
-  <button id="clean-view-exit" @click="display.act('exitCleanView')" title="Return UI controls" data-i18n-title data-i18n>EXIT CLEAN VIEW</button>
+  <button id="clean-view-exit" @click="display.act('exitCleanView')" :title="t('Return UI controls')">{{ t('EXIT CLEAN VIEW') }}</button>
 </template>

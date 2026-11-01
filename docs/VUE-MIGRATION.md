@@ -153,10 +153,9 @@ a feature supplying only its accent.
    Next each view takes over its wiring: markup an owner builds with
    `createElement` becomes component markup that renders from a Pinia store
    the owner publishes to, and user actions come back to the owner through
-   the store, so the owner keeps every decision. Static markup that the
-   translation pass rewrites (`data-i18n*`) stays outside `v-if` and
-   `v-for`, because re-rendering it would bring back the English; component
-   text uses `t()` instead. Shared builders become components first and
+   the store, so the owner keeps every decision. Component text uses
+   `t()`, which follows the locale as the view renders; the views carry no
+   `data-i18n*` markers, which `npm run i18n` rejects in a template. Shared builders become components first and
    keep their imperative entry points until their owners are components:
    the rail cards, card blocks and timeline (`src/ui/rail/`) render through
    Vue's synchronous `render()` behind `createRailCards()`,
@@ -344,8 +343,10 @@ a feature supplying only its accent.
    now requires the pattern for new UI. The page-level markup tests read
    `renderApplicationHtml()`, the real views rendered on the server, and new
    tests mount components; three tests still read a `.vue` file's source
-   (`cyberTheme`, `panelStorageDocs`, `geoFileImport`). The attribute translation pass goes with the move to
-   vue-i18n. An explicit API for hosts to register panels and rail items is
+   (`cyberTheme`, `panelStorageDocs`, `geoFileImport`). The views translate with `t()`
+   while rendering, and vue-i18n holds the locale they read; the attribute
+   translation pass is left for static page markup (the loading screen and a
+   host's own markup). An explicit API for hosts to register panels and rail items is
    deferred until a host adds one: no host does today (the hosted
    application's account interface is its own markup), and the first such
    panel, the hosted timeline, will shape it.

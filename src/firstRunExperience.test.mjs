@@ -814,7 +814,7 @@ test('markup, startup ordering and accessibility remain pinned', async () => {
   // passing edit — changing it needs the owner, not a nicer-sounding rewrite.
   assert.ok(
     html.includes(
-      '<p id="first-run-description" data-i18n-runtime>It feels like a forbidden cockpit' +
+      '<p id="first-run-description">It feels like a forbidden cockpit' +
         '—then you realize the sources are public and the data is real.</p>',
     ),
     'the owner-authored first-run line must ship exactly as written',
@@ -903,8 +903,8 @@ test('the card closes without a keyboard: the ESC hint is a button, kept on phon
     footer,
     /<button type="button" class="first-run-dismiss" data-first-run-dismiss>/,
   );
-  assert.match(footer, /data-i18n>ESC to dismiss</);
-  assert.match(footer, /data-i18n>DISMISS</);
+  assert.match(footer, />ESC to dismiss</);
+  assert.match(footer, />DISMISS</);
   // It closes the way ESC does, through the one dismiss path, so the session
   // flag and focus handling are the same: firstRunLauncherView.test.mjs.
   // Phones used to hide the hint, leaving no way out but picking a mission.

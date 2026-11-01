@@ -63,7 +63,7 @@ const vToastText = {
   <div id="world-overlay-root" aria-hidden="true">
     <canvas id="world-overlay-canvas"></canvas>
   </div>
-  <div id="world-overlay-actions" class="world-overlay-accessibility" role="region" aria-label="Visible map targets" data-i18n-aria-label>
+  <div id="world-overlay-actions" class="world-overlay-accessibility" role="region" :aria-label="t('Visible map targets')">
     <div id="world-overlay-action-list"><UiButton v-for="item in targets?.items ?? []" :key="item.key" :aria-label="item.label" :pressed="Boolean(item.selected)" :data-overlay-action-key="item.key" :onClick="onOverlayAction(targets.owner, item.key)">{{ item.label }}</UiButton></div>
     <div id="world-overlay-status" v-overlay-status="targets" role="status" aria-live="polite" aria-atomic="true"></div>
   </div>
@@ -72,13 +72,13 @@ const vToastText = {
   <div id="title-bar">
     <div class="title-glow"></div>
     <h1><span class="title-logo brand-logo" data-logo-gaze data-logo-src="/logo.svg" aria-hidden="true"><img src="/logo.svg" alt="" /></span> <span translate="no">GOD'S EYE <span class="title-accent">VIEW</span></span></h1>
-    <p class="subtitle scene-text-holdout" data-i18n>NO PLACE LEFT BEHIND</p>
+    <p class="subtitle scene-text-holdout">{{ t('NO PLACE LEFT BEHIND') }}</p>
     <div v-if="fps" class="frame-rate-readout scene-text-holdout" :hidden="!fps.visible" :title="t('Rendered globe frames per second · toggle with `')">{{ fps.text }}</div>
   </div>
 
   <!-- Style indicator -->
   <div id="style-indicator">
-    <span class="indicator-label scene-text-holdout" data-i18n>ACTIVE STYLE</span>
+    <span class="indicator-label scene-text-holdout">{{ t('ACTIVE STYLE') }}</span>
     <span class="indicator-value scene-text-holdout" id="active-style-name">{{ style ? style.label : t('NORMAL') }}</span>
   </div>
 

@@ -156,7 +156,7 @@ const SKIP_TAGS = new Set(['script', 'style', 'svg', 'code', 'pre', 'title']);
 /**
  * User-visible markup text without data-i18n*. Skipped, with everything
  * inside: translate="no" (text that stays as is, as in HTML),
- * data-i18n-runtime (code sets this text through t()), and icons
+ * data-i18n-runtime (page markup whose text code sets through t()), and icons
  * (aria-hidden, Material Symbols).
  */
 export function unmarkedMarkup(file, html) {
@@ -404,8 +404,13 @@ export function unmarkedScript(file, original) {
  */
 export function findUnmarked() {
   const found = [];
-  for (const file of markupFiles())
+  for (const file of markupFiles()) {
     found.push(...unmarkedMarkup(file, readMarkup(file)));
+  }
+  for (const file of trackedFiles('src/**/*.vue'))
+    found.push(
+      ...markedTemplate(file, readFileSync(path.join(ROOT, file), 'utf8')),
+    );
   for (const file of sourceFiles().filter(
     (name) => !NOT_UI.some((pattern) => pattern.test(name)),
   ))
@@ -421,7 +426,38 @@ export function findUnmarked() {
   });
 }
 
-/** Static markup opted in with data-i18n*: the page and its views. */
+/**
+ * data-i18n* in a Vue template: views translate with t() as they render, so
+ * their text follows the locale; the attributes are for static page markup.
+ * Reads the whole single-file component, so lines are the file's own.
+ */
+export function markedTemplate(file, source) {
+  const start = source.indexOf('<template>');
+  if (start === -1) return [];
+  const end = source.lastIndexOf('</template>');
+  // Comments and attribute values are blanked, keeping every offset.
+  const blank = (text) => text.replace(/[^\n]/g, ' ');
+  const template = source
+    .slice(0, end === -1 ? undefined : end)
+    .replace(/<!--[\s\S]*?-->/g, blank);
+  const found = [];
+  const TAG = /<[a-zA-Z][\w-]*((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+  TAG.lastIndex = start + '<template>'.length;
+  for (let tag; (tag = TAG.exec(template));) {
+    const attrs = tag[1].replace(/"[^"]*"|'[^']*'/g, blank);
+    const offset = tag.index + tag[0].length - 1 - tag[1].length;
+    for (const match of attrs.matchAll(
+      /(?<=\s)(?::|v-bind:)?(data-i18n[\w-]*)(?=[\s=/]|$)/g,
+    ))
+      found.push({
+        where: `${file}:${lineAt(source, offset + match.index)}`,
+        text: `${match[1]}: use t() in a Vue template`,
+      });
+  }
+  return found;
+}
+
+/** Markup checked for unmarked text: the page and its views. */
 function markupFiles() {
   return trackedFiles('index.html', 'src/ui/views/*.vue');
 }

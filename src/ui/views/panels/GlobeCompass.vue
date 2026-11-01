@@ -20,7 +20,7 @@ const label = computed(() =>
 </script>
 
 <template>
-<button id="north-up-view" type="button" :aria-label="label" :data-north-up="heading == null ? undefined : String(heading === 0)" :style="heading == null ? undefined : { '--camera-heading': `${heading}deg` }" title="Reset map bearing to north" data-i18n-title @click="$emit('click')">
+<button id="north-up-view" type="button" :aria-label="label" :data-north-up="heading == null ? undefined : String(heading === 0)" :style="heading == null ? undefined : { '--camera-heading': `${heading}deg` }" :title="t('Reset map bearing to north')" @click="$emit('click')">
   <span class="camera-compass-n" aria-hidden="true">N</span>
   <span class="camera-compass-needle material-symbols-outlined" aria-hidden="true">navigation</span>
 </button>
