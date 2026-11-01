@@ -5,6 +5,7 @@ import { t } from '../../../i18n/index.js';
 import { createContextState } from '../../cockpitContextState.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The Cockpit Contact card. The Cockpit controller presents its scope,
 // navigation, cohort counts, nearest contact and weather toggle; until it
@@ -64,10 +65,10 @@ const weatherLabel = computed(() =>
     </div>
     <footer class="cockpit-context-footer">
       <span id="cockpit-context-uncertainty">{{ c.uncertainty }}</span>
-      <button id="cockpit-weather-toggle" class="cockpit-context-weather" type="button" :aria-label="weatherLabel" :aria-pressed="String(c.weather)" :title="weatherLabel">
+      <UiButton id="cockpit-weather-toggle" class="cockpit-context-weather" :aria-label="weatherLabel" :pressed="Boolean(c.weather)" :title="weatherLabel">
         <span data-i18n>WX</span>
         <strong id="cockpit-weather-state">{{ c.weather ? t('ON') : t('OFF') }}</strong>
-      </button>
+      </UiButton>
       <time id="cockpit-context-updated">{{ c.updated }}</time>
     </footer>
   </aside>

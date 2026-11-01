@@ -9,6 +9,7 @@ import UiSegmented from '../../kit/UiSegmented.vue';
 import UiSlider from '../../kit/UiSlider.js';
 import GeoImport from './GeoImport.vue';
 import { useDisplayStore } from '../../stores/display.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
 // Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group and
@@ -75,7 +76,7 @@ const allocationOptions = [
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-toggle-row" id="cyber-sonar-row">
       <span class="pp-slider-mini-label" data-i18n>Sonar</span>
-      <button class="pp-mode-btn" :class="{ active: sonarOn }" id="cyber-sonar-toggle" @click="act('toggleSonar')" title="Cyber sonar contact scanner" aria-label="Cyber sonar contact scanner" :aria-pressed="String(sonarOn)" data-i18n-title data-i18n-aria-label>{{ sonarOn ? t('ON') : t('OFF') }}</button>
+      <UiButton class="pp-mode-btn" :pressed="sonarOn" pressed-class="active" id="cyber-sonar-toggle" @click="act('toggleSonar')" title="Cyber sonar contact scanner" aria-label="Cyber sonar contact scanner" data-i18n-title data-i18n-aria-label>{{ sonarOn ? t('ON') : t('OFF') }}</UiButton>
     </div>
     <output id="cyber-sonar-status" class="cyber-sonar-control" role="status"></output>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-rings-row">
@@ -105,10 +106,10 @@ const allocationOptions = [
     </div>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: detectButton?.active, panoptic: detectButton?.panoptic }" id="detection-toggle" @click="act('cycleDetection')" title="Detection Overlay (D)" :aria-label="detectButton?.ariaLabel ?? t('Detection overlay')" :aria-pressed="String(detectButton?.pressed ?? false)" data-i18n-title>
+    <UiButton class="pp-toggle-btn" :class="{ active: detectButton?.active, panoptic: detectButton?.panoptic }" :pressed="detectButton?.pressed ?? false" id="detection-toggle" @click="act('cycleDetection')" title="Detection Overlay (D)" :aria-label="detectButton?.ariaLabel ?? t('Detection overlay')" data-i18n-title>
       <span class="pp-icon">&#x25A3;</span>
       <span class="pp-label">{{ detectButton?.label ?? t('DETECT') }}</span>
-    </button>
+    </UiButton>
     <div class="pp-slider-row detection-slider-row" :class="{ visible: detection?.rowsVisible }" id="detection-slider-row">
       <label class="pp-slider-mini-label" for="detection-density-slider" data-i18n>Density</label>
       <UiSlider class="pp-slider" id="detection-density-slider" @update:model-value="act('setDensity', $event)" min="0" max="100" step="25" :model-value="detection?.densityPct ?? 50" aria-label="Detection label density" data-i18n-aria-label />
@@ -143,10 +144,10 @@ const allocationOptions = [
          button ships lit and the mode row ships open — the same markup-carries-the-default
          convention as #scope-toggle. ui.js re-syncs both from durable layer state, which
          is what flips them back for a share link or a stored session carrying 3D off. -->
-    <button class="pp-toggle-btn" :class="{ active: models3dOn }" id="models3d-toggle" @click="act('toggleModels')" :aria-pressed="String(models3dOn)" title="3D aircraft — flat icons zoomed out, 3D models up close" data-i18n-title>
+    <UiButton class="pp-toggle-btn" :pressed="models3dOn" pressed-class="active" id="models3d-toggle" @click="act('toggleModels')" title="3D aircraft — flat icons zoomed out, 3D models up close" data-i18n-title>
       <span class="pp-icon">&#x2708;</span>
       <span class="pp-label">3D</span>
-    </button>
+    </UiButton>
     <div class="pp-slider-row" :class="{ visible: models3d?.rowVisible ?? true }" id="models3d-mode-row">
       <span class="pp-slider-mini-label" data-i18n>Models</span>
       <UiSegmented class="pp-mode-seg" item-class="pp-mode-btn" keyboard="none" :label="t('3D model coverage')" :options="modelsOptions" :model-value="modelsMode" @update:model-value="act('setModelsMode', $event)" />
@@ -165,10 +166,10 @@ const allocationOptions = [
     </div>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: draw?.active }" id="draw-toggle" @click="act('toggleDraw')" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" :aria-pressed="String(draw?.active ?? false)" data-i18n-title>
+    <UiButton class="pp-toggle-btn" :pressed="draw?.active ?? false" pressed-class="active" id="draw-toggle" @click="act('toggleDraw')" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" data-i18n-title>
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">draw</span>
       <span class="pp-label" data-i18n>Draw</span>
-    </button>
+    </UiButton>
     <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-mode-row">
       <span class="pp-slider-mini-label" data-i18n>Shape</span>
       <UiSegmented class="pp-mode-seg" item-class="pp-mode-btn" keyboard="none" :label="t('Shape to draw')" :options="drawShapeOptions" :model-value="drawShape" @update:model-value="act('setDrawShape', $event)" />
@@ -188,10 +189,10 @@ const allocationOptions = [
   </div>
   <GeoImport />
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: celestial?.active }" id="celestial-toggle" @click="act('toggleCelestial')" :title="celestialTitle" :aria-pressed="String(celestial?.active ?? false)" :disabled="celestial ? !celestial.supported : undefined" :aria-disabled="celestial ? String(!celestial.supported) : undefined">
+    <UiButton class="pp-toggle-btn" :pressed="celestial?.active ?? false" pressed-class="active" id="celestial-toggle" @click="act('toggleCelestial')" :title="celestialTitle" :disabled="celestial ? !celestial.supported : undefined" :aria-disabled="celestial ? String(!celestial.supported) : undefined">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
       <span class="pp-label" data-i18n>Celestial</span>
-    </button>
+    </UiButton>
   </div>
   <button class="pp-toggle-btn" id="clean-view-toggle" @click="act('toggleCleanView')" title="Hide UI chrome" data-i18n-title>
     <span class="pp-icon">&#x25A1;</span>

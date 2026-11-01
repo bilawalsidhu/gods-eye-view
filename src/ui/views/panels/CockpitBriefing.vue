@@ -6,6 +6,7 @@ import { createBriefState } from '../../cockpitBriefPages.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import CockpitRoute from './CockpitRoute.vue';
 import CockpitSignalList from './CockpitSignalList.vue';
+import UiButton from '../../kit/UiButton.vue';
 
 // The Cockpit briefing card. The Cockpit controller presents its pages,
 // cycle toggle, regional news and local conditions; until it does, the card
@@ -51,7 +52,7 @@ function leaveSignals() {
         <button id="cockpit-brief-next" type="button" aria-label="Next briefing page" title="Next briefing page" data-i18n-aria-label data-i18n-title>
           <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
         </button>
-        <button id="cockpit-brief-auto" type="button" :aria-label="b.autoLabel" :aria-pressed="String(b.autoRotate)" :title="b.autoHelp">{{ b.autoLabel }}</button>
+        <UiButton id="cockpit-brief-auto" :aria-label="b.autoLabel" :pressed="Boolean(b.autoRotate)" :title="b.autoHelp">{{ b.autoLabel }}</UiButton>
         <button id="cockpit-signal-toggle" type="button" :aria-label="collapsed ? t('Expand cockpit briefing panel') : t('Collapse cockpit briefing panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand briefing panel') : t('Collapse briefing panel')">
           <span class="material-symbols-outlined" aria-hidden="true">{{ collapsed ? 'right_panel_open' : 'right_panel_close' }}</span>
         </button>

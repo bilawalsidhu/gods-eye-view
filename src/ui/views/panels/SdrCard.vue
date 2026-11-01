@@ -8,6 +8,7 @@ import { vClassToggle } from '../../rail/classToggle.js';
 import { vFieldValue } from '../../rail/fieldValue.js';
 import UiSlider from '../../kit/UiSlider.js';
 import { useRadioStore } from '../../stores/radio.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The local RTL-SDR card in the Radio panel. LocalSdrControls presents it and
 // publishes it; until it does, the card shows its initial markup. Its
@@ -29,13 +30,13 @@ const tune = () => act('tuneSdr', frequency.value.value);
   </div>
   <p data-i18n>Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.</p>
   <div class="sdr-radio-actions">
-    <button id="sdr-connect-btn" @click="act('toggleSdrConnection')" class="panel-layer-toggle" :class="{ active: sdr?.connectPressed }" type="button" :aria-pressed="String(sdr?.connectPressed ?? false)" :disabled="sdr?.connectDisabled">{{ sdr ? sdr.connectLabel : t('CONNECT') }}</button>
+    <UiButton id="sdr-connect-btn" @click="act('toggleSdrConnection')" class="panel-layer-toggle" :pressed="sdr?.connectPressed ?? false" pressed-class="active" :disabled="sdr?.connectDisabled">{{ sdr ? sdr.connectLabel : t('CONNECT') }}</UiButton>
     <button id="sdr-locate-btn" type="button" @click="act('locateSdr')" v-class-toggle="{ active: sdr?.locateActive }" title="Use your location for faster ADS-B position decoding" :disabled="sdr?.locateDisabled" data-i18n-title>{{ sdr ? sdr.locateLabel : t('LOCATE') }}</button>
     <button id="sdr-change-device-btn" type="button" @click="act('changeSdrDevice')" title="Choose a different RTL-SDR or receiver channel" :disabled="sdr?.changeDeviceDisabled" data-i18n-title data-i18n>CHANGE DEVICE</button>
   </div>
   <div class="sdr-mode-row" role="group" aria-label="RTL-SDR receiver mode" data-i18n-aria-label>
-    <button id="sdr-mode-fm-btn" @click="act('setSdrMode', 'fm')" class="active" v-class-toggle="sdr ? { active: sdr.fmActive } : null" type="button" :aria-pressed="String(sdr ? sdr.fmActive : true)" :disabled="sdr?.modeDisabled" translate="no">FM</button>
-    <button id="sdr-mode-adsb-btn" type="button" @click="act('setSdrMode', 'adsb')" v-class-toggle="{ active: sdr?.adsbActive }" :aria-pressed="String(sdr?.adsbActive ?? false)" :disabled="sdr?.modeDisabled" translate="no">ADS-B · 1090</button>
+    <UiButton id="sdr-mode-fm-btn" @click="act('setSdrMode', 'fm')" :pressed="sdr ? sdr.fmActive : true" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">FM</UiButton>
+    <UiButton id="sdr-mode-adsb-btn" @click="act('setSdrMode', 'adsb')" :pressed="sdr?.adsbActive ?? false" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">ADS-B · 1090</UiButton>
   </div>
   <div class="sdr-gain-row">
     <label for="sdr-gain-select" data-i18n>GAIN</label>

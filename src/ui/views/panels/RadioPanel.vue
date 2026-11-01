@@ -9,6 +9,7 @@ import { vRangeValue } from '../../rail/rangeValue.js';
 import { useRadioStore } from '../../stores/radio.js';
 import RadioTuner from './RadioTuner.vue';
 import SdrCard from './SdrCard.vue';
+import UiButton from '../../kit/UiButton.vue';
 
 // The Radio panel inside Context. RadioControls presents the directory row,
 // station card, transport, volume and playback line and publishes them;
@@ -38,7 +39,7 @@ const radioWords = {
 <RailPanel id="radio-panel" tag="section" start-collapsed v-class-toggle="{ ...(radio && { 'radio-enabled': radio.enabled, 'lifecycle-uncertain': radio.uncertain }), ...(sdrConnected !== null && { 'sdr-connected': sdrConnected }) }" aria-label="Internet radio and local SDR" data-i18n-aria-label :title="t('RADIO')" :toggle-words="radioWords" :glow="false" scroll>
   <template #badge><span id="radio-layer-state" class="radio-layer-state" :class="{ active: radio?.layerState.active }">{{ radio ? radio.layerState.text : t('OFF') }}</span></template>
     <div class="radio-directory-row">
-      <button id="radio-enable-btn" @click="act('toggleRadio', 'panel')" class="panel-layer-toggle" :class="{ active: radio?.enable.active }" type="button" :aria-pressed="String(radio?.enable.active ?? false)" :aria-label="radio?.enable.label" :aria-disabled="radio ? String(radio.enable.busy) : undefined" :aria-busy="radio ? String(radio.enable.busy) : undefined">{{ radio ? radio.enable.text : t('ENABLE') }}</button>
+      <UiButton id="radio-enable-btn" @click="act('toggleRadio', 'panel')" class="panel-layer-toggle" :pressed="radio?.enable.active ?? false" pressed-class="active" :aria-label="radio?.enable.label" :aria-disabled="radio ? String(radio.enable.busy) : undefined" :aria-busy="radio ? String(radio.enable.busy) : undefined">{{ radio ? radio.enable.text : t('ENABLE') }}</UiButton>
       <label class="radio-filter-label" for="radio-filter" data-i18n>STATION TAG</label>
       <select class="gev-field" id="radio-filter" @change="setFilter($event.target)" aria-label="Filter stations by station tag" :disabled="radio ? radio.filter.disabled : true" v-bind="radio?.filter.color ? { style: { color: radio.filter.color } } : {}" v-range-value="radio ? radio.filter.value : 'all'" data-i18n-aria-label>
         <option v-if="!radio?.filter.options" value="all">{{ t('All', { context: 'radio tag' }) }}</option><template v-else><option v-for="option in radio.filter.options" :key="option.id" :value="option.id" :data-radio-color="option.color" :style="{ color: option.color }" :aria-label="option.label">● {{ option.label }}</option></template>

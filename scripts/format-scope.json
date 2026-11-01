@@ -1130,6 +1130,8 @@
   "src/ui/kit/UiSegmented.test.mjs",
   "src/ui/kit/UiSlider.js",
   "src/ui/kit/UiSlider.test.mjs",
+  "src/ui/kit/UiButton.vue",
+  "src/ui/kit/UiButton.test.mjs",
   "src/ui/displayPanelActions.test.mjs",
   "src/testSupport/vueDom.mjs",
   "build/vueLoader.js",

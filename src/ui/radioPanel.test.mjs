@@ -14,6 +14,9 @@ import {
 } from './radioPresentation.js';
 import { setLocale } from '../i18n/index.js';
 import { LocalSdrControls } from './localSdrControls.js';
+// Core's classes on an element, without the kit's `ui-` classes.
+const coreClasses = (el) =>
+  [...el.classList].filter((name) => !name.startsWith('ui-')).join(' ');
 
 function fixture(t) {
   document.body.replaceChildren();
@@ -96,7 +99,7 @@ test('the panel renders the presented directory, station, transport and playback
   assert.equal($('radio-layer-state').className, 'radio-layer-state active');
   assert.equal($('radio-layer-state').textContent, '3/3');
   const enable = $('radio-enable-btn');
-  assert.equal(enable.className, 'panel-layer-toggle active');
+  assert.equal(coreClasses(enable), 'panel-layer-toggle active');
   assert.equal(enable.textContent, 'DISABLE');
   assert.equal(enable.getAttribute('aria-pressed'), 'true');
   assert.equal(enable.getAttribute('aria-label'), 'Disable Radio');
@@ -259,7 +262,7 @@ test('the RTL-SDR card renders what LocalSdrControls presents', async (t) => {
   assert.equal($('sdr-connection-state').getAttribute('class'), null);
   assert.equal($('sdr-connect-btn').textContent, 'CONNECT');
   assert.equal($('sdr-connect-btn').disabled, false);
-  assert.equal($('sdr-mode-fm-btn').className, 'active');
+  assert.equal(coreClasses($('sdr-mode-fm-btn')), 'active');
   assert.equal($('sdr-mode-adsb-btn').getAttribute('aria-pressed'), 'false');
   assert.equal($('sdr-adsb-stats').hidden, true);
   assert.equal($('sdr-frequency-input').value, '98.5');
@@ -280,9 +283,9 @@ test('the RTL-SDR card renders what LocalSdrControls presents', async (t) => {
   assert.equal(panel.classList.contains('collapsed'), true, 'chrome keeps its class');
   assert.equal($('sdr-connection-state').className, 'active');
   assert.equal($('sdr-connect-btn').textContent, 'DISCONNECT');
-  assert.equal($('sdr-connect-btn').className, 'panel-layer-toggle active');
-  assert.equal($('sdr-mode-fm-btn').className, '');
-  assert.equal($('sdr-mode-adsb-btn').className, 'active');
+  assert.equal(coreClasses($('sdr-connect-btn')), 'panel-layer-toggle active');
+  assert.equal(coreClasses($('sdr-mode-fm-btn')), '');
+  assert.equal(coreClasses($('sdr-mode-adsb-btn')), 'active');
   assert.equal($('sdr-adsb-stats').hidden, false);
   assert.equal($('sdr-stat-heard').textContent, '3');
   assert.equal($('sdr-stat-positioned').textContent, '2');

@@ -78,12 +78,12 @@ test('Context async action buttons remain focused while busy', () => {
   assert.match(radio, /trigger\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(radio, /trigger\.disabled\s*=\s*true/);
   const cockpitRadio = readFileSync(new URL('./ui/views/panels/CockpitUtilityControls.vue', import.meta.url), 'utf8');
-  const cockpitEnable = cockpitRadio.match(/<button id="cockpit-radio-enable-btn"[^>]*>/)?.[0];
+  const cockpitEnable = cockpitRadio.match(/<UiButton id="cockpit-radio-enable-btn"[^>]*>/)?.[0];
   assert.ok(cockpitEnable, 'Cockpit Radio Enable button is missing');
   assert.doesNotMatch(cockpitEnable, /disabled(?!=")|:disabled/);
   assert.match(cockpitEnable, /:aria-busy=/);
   // The Radio view never disables its Enable button; it marks it busy.
-  const enable = radioPanel.match(/<button id="radio-enable-btn"[^>]*>/)?.[0];
+  const enable = radioPanel.match(/<UiButton id="radio-enable-btn"[^>]*>/)?.[0];
   assert.ok(enable, 'Radio Enable button is missing');
   assert.doesNotMatch(enable, /disabled(?!=")|:disabled/);
   assert.match(enable, /:aria-busy=/);

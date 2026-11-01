@@ -37,8 +37,9 @@ one-panel rule too. Share links continue to record which panels are open.
 ## Component kit
 
 `src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`,
-`UiButton`, `UiPanel` and `UiSegmented` so far, with more (`UiSlider`,
-`UiSelect` and so on) joining as the controls they serve are converted. One component
+`UiButton`, `UiPanel`, `UiSegmented` and `UiSlider` so far, with more
+(`UiSelect`, `UiChip` and so on) joining as the controls they serve are
+converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. Names, props,
 events and class names follow Halfpixel's `ui-vue` kit so the two can merge
@@ -56,6 +57,11 @@ Home and End), since each of Core's groups keeps its own keyboard policy, and
 once and asks for a change only when it lands on another option. Every
 segmented group in Core is a `UiSegmented`; the old `segmentedControl.js`
 adapter is gone.
+`UiButton` adds `pressedClass`, Core's class on a pressed toggle (most use
+`active`); its pressed classes toggle through `classList`, so a class other
+code adds (a voice highlight) survives a press. Every pressed toggle in the
+views is a `UiButton` except Bhote Koshi's cinematic button and the
+tilt-map button, whose owners still write their state into the DOM.
 `UiSlider` keeps the native range input where ui-vue draws a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
 it takes ui-vue's `v-model`, `min`, `max`, `step` and `disabled`, emits a

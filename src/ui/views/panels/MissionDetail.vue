@@ -4,6 +4,7 @@ import { nextTick, ref, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
 import UiSlider from '../../kit/UiSlider.js';
 import { useContextStore } from '../../stores/context.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The selected space mission inside Context. The launches layer presents it
 // and hides the panel while none is selected; the roster beside it hides
@@ -67,7 +68,7 @@ watch(
     </div>
     <div class="mission-action-row">
       <button type="button" class="mission-focus-button" data-mission-focus @click="layer?.focusSelectedLaunchSite()">{{ t('FOCUS') }}</button>
-      <button type="button" class="mission-replay-button" data-mission-replay :aria-pressed="String(m?.replay.active ?? false)" :title="t('Replay the estimated ascent with a following camera')" :hidden="m && (m.replay.active || !m.replay.available)" :disabled="m && !m.replay.available" @click="layer?.startSelectedReplay()">{{ t('REPLAY ASCENT') }}</button>
+      <UiButton class="mission-replay-button" data-mission-replay :pressed="m?.replay.active ?? false" :title="t('Replay the estimated ascent with a following camera')" :hidden="m && (m.replay.active || !m.replay.available)" :disabled="m && !m.replay.available" @click="layer?.startSelectedReplay()">{{ t('REPLAY ASCENT') }}</UiButton>
       <div class="mission-replay-transport" :class="{ 'is-paused': m?.replay.paused }" data-mission-replay-transport :hidden="!m?.replay.active" :aria-label="m?.replay.transportLabel">
         <button type="button" data-mission-replay-toggle :title="m ? m.replay.toggleLabel : t('Pause replay')" :aria-label="m ? m.replay.toggleLabel : t('Pause replay')" :disabled="m && !m.replay.active" @click="layer?.toggleReplayPause()">{{ m ? m.replay.toggleText : 'Ⅱ' }}</button>
         <button type="button" class="cancel" data-mission-replay-cancel :title="t('Cancel replay')" :aria-label="t('Cancel replay')" @click="layer?.cancelReplay()"><span aria-hidden="true">×</span></button>

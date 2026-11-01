@@ -15,6 +15,7 @@ import WindInspectionMarker from './panels/WindInspectionMarker.vue';
 import CelestialRing from './panels/CelestialRing.vue';
 import ScreenAnnotations from './panels/ScreenAnnotations.vue';
 import AwarenessDirection from './panels/AwarenessDirection.vue';
+import UiButton from '../kit/UiButton.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
@@ -59,7 +60,7 @@ const vToastText = {
     <canvas id="world-overlay-canvas"></canvas>
   </div>
   <div id="world-overlay-actions" class="world-overlay-accessibility" role="region" aria-label="Visible map targets" data-i18n-aria-label>
-    <div id="world-overlay-action-list"><button v-for="item in targets?.items ?? []" :key="item.key" type="button" :aria-label="item.label" :aria-pressed="String(item.selected)" :data-overlay-action-key="item.key" :onClick="onOverlayAction(targets.owner, item.key)">{{ item.label }}</button></div>
+    <div id="world-overlay-action-list"><UiButton v-for="item in targets?.items ?? []" :key="item.key" :aria-label="item.label" :pressed="Boolean(item.selected)" :data-overlay-action-key="item.key" :onClick="onOverlayAction(targets.owner, item.key)">{{ item.label }}</UiButton></div>
     <div id="world-overlay-status" v-overlay-status="targets" role="status" aria-live="polite" aria-atomic="true"></div>
   </div>
 

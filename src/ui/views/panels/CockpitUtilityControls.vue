@@ -5,6 +5,7 @@ import { t } from '../../../i18n/index.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import UiSlider from '../../kit/UiSlider.js';
 import { useRadioStore } from '../../stores/radio.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The Cockpit's Display and Radio launchers and their popovers. RadioControls
 // presents which popover is open and the compact Radio controls; until it
@@ -52,7 +53,7 @@ const radioLabel = computed(() =>
       </div>
       <div id="cockpit-radio-panel" class="cockpit-utility-popover cockpit-radio-compact" role="group" aria-label="Cockpit compact Radio controls" :hidden="!open.radio" data-i18n-aria-label>
         <strong id="cockpit-radio-station" class="cockpit-radio-station">{{ cockpit ? cockpit.station : t('READY') }}</strong>
-        <button id="cockpit-radio-enable-btn" @click="act('toggleRadio', 'cockpit')" class="panel-layer-toggle" v-class-toggle="{ active: cockpit?.enable.active }" type="button" :aria-pressed="String(cockpit?.enable.active ?? false)" :aria-label="cockpit?.enable.label" :aria-disabled="cockpit ? String(cockpit.enable.busy) : undefined" :aria-busy="cockpit ? String(cockpit.enable.busy) : undefined">{{ cockpit ? cockpit.enable.text : t('ENABLE') }}</button>
+        <UiButton id="cockpit-radio-enable-btn" @click="act('toggleRadio', 'cockpit')" class="panel-layer-toggle" :pressed="cockpit?.enable.active ?? false" pressed-class="active" :aria-label="cockpit?.enable.label" :aria-disabled="cockpit ? String(cockpit.enable.busy) : undefined" :aria-busy="cockpit ? String(cockpit.enable.busy) : undefined">{{ cockpit ? cockpit.enable.text : t('ENABLE') }}</UiButton>
         <div class="cockpit-radio-transport">
           <button id="cockpit-radio-prev-btn" @click="act('cycleRadio', -1, { rotate: false })" type="button" aria-label="Previous filtered radio station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label>◀◀</button>
           <button id="cockpit-radio-play-btn" @click="act('toggleRadioPlayback')" type="button" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected radio station')" :title="cockpit?.play.title" :disabled="radio ? radio.transport.play.disabled : true">{{ cockpit ? cockpit.play.glyph : '▶' }}</button>

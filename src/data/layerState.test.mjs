@@ -739,7 +739,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   );
   assert.match(
     html,
-    /class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true"/,
+    /<button(?=[^>]*\sid="models3d-toggle")(?=[^>]*\sclass="(?=[^"]*\bpp-toggle-btn\b)(?=[^"]*\bactive\b))(?=[^>]*\saria-pressed="true")/,
     'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so',
   );
   assert.match(
@@ -753,7 +753,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   );
   assert.match(
     panel,
-    /id="models3d-toggle" @click="act\('toggleModels'\)" :aria-pressed="String\(models3dOn\)"/,
+    /:pressed="models3dOn" pressed-class="active" id="models3d-toggle"/,
     'DisplayPanel.vue: the view renders aria-pressed with the lit state',
   );
   assert.match(

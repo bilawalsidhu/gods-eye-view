@@ -5,6 +5,7 @@ import { vClassToggle } from '../../rail/classToggle.js';
 import { useVoiceStore } from '../../stores/voice.js';
 import VoiceCard from './VoiceCard.vue';
 import VoiceVisualizer from './VoiceVisualizer.vue';
+import UiButton from '../../kit/UiButton.vue';
 
 // The voice control in the command dock, as its presenter
 // (src/voice/control.js) holds it. The session owners write the presenter;
@@ -59,14 +60,14 @@ const rootData = (root) => ({
         <div id="gev-voice-status">{{ view.status.text }}</div>
         <span v-if="view.panel" id="gev-voice-cost-warning" class="gev-voice-cost-value gev-voice-cost-warning" :hidden="view.costWarning.hidden" :title="optional(view.costWarning.title)" :data-level="optional(view.costWarning.level)" role="status" aria-live="polite">{{ view.costWarning.text }}</span>
         <div v-else class="gev-voice-cost">
-          <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" :hidden="view.tier.hidden" :aria-pressed="String(view.tier.pressed)" :title="view.tier.title" @click="emit('tier')">{{ view.tier.text }}</button>
+          <UiButton id="gev-voice-tier" class="gev-voice-tier-btn" :hidden="view.tier.hidden" :pressed="Boolean(view.tier.pressed)" :title="view.tier.title" @click="emit('tier')">{{ view.tier.text }}</UiButton>
           <span id="gev-voice-cost-value" class="gev-voice-cost-value" :hidden="view.cost.hidden" :data-level="view.cost.level" :title="view.cost.title">{{ view.cost.text }}</span>
         </div>
       </div>
-      <button id="gev-voice-button" type="button" :aria-label="view.button.label" :aria-pressed="optional(view.button.pressed)" aria-describedby="gev-voice-help" @click="emit('button')">
+      <UiButton id="gev-voice-button" :aria-label="view.button.label" :pressed="view.button.pressed ?? undefined" aria-describedby="gev-voice-help" @click="emit('button')">
         <span class="gev-mic-orbit"><img src="/mic.svg" alt="" /></span>
         <span class="gev-mic-label">{{ view.mic.text }}</span>
-      </button>
+      </UiButton>
       <VoiceVisualizer />
       <div class="gev-voice-readout">
         <div id="gev-voice-detail" :title="optional(view.detail.title)">{{ view.detail.text }}</div>
@@ -108,7 +109,7 @@ const rootData = (root) => ({
             <div class="gev-voice-cost-settings">
               <div class="gev-voice-cost-setting-row">
                 <span>{{ t('Voice model tier — applies next session') }}</span>
-                <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" :hidden="view.tier.hidden" :aria-pressed="String(view.tier.pressed)" :title="view.tier.title" @click="emit('tier')">{{ view.tier.text }}</button>
+                <UiButton id="gev-voice-tier" class="gev-voice-tier-btn" :hidden="view.tier.hidden" :pressed="Boolean(view.tier.pressed)" :title="view.tier.title" @click="emit('tier')">{{ view.tier.text }}</UiButton>
               </div>
               <div class="gev-voice-cost-setting-row">
                 <span>{{ t('Estimated session cost') }}</span>

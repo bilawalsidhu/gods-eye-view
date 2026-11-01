@@ -1176,7 +1176,7 @@ test('cockpit aircraft handoff invalidates the prior world-position anchor', () 
 
 test('cockpit weather control is off before JavaScript restores an explicit opt-in', () => {
   const match = html.match(
-    /<button\s+id="cockpit-weather-toggle"[\s\S]*?<\/button>/,
+    /<button[^>]*\sid="cockpit-weather-toggle"[\s\S]*?<\/button>/,
   );
   assert.ok(match, 'cockpit weather toggle markup is missing');
   assert.match(match[0], /aria-label="Enable cockpit weather effects"/);
@@ -1262,7 +1262,7 @@ test('Global Context standby describes both chooser modes', () => {
 
 test('cockpit briefing cycle control keeps its state as the accessible name', () => {
   const match = html.match(
-    /<button\s+id="cockpit-brief-auto"[\s\S]*?<\/button>/,
+    /<button[^>]*\sid="cockpit-brief-auto"[\s\S]*?<\/button>/,
   );
   assert.ok(match, 'cockpit briefing cycle toggle is missing');
   assert.match(match[0], /aria-label="CYCLE OFF"/);

@@ -10,6 +10,9 @@ import DisplayPanel from './views/panels/DisplayPanel.vue';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { VisualSettings } from './visualSettings.js';
 import { initGeoFileImport } from './geoFileImport.js';
+// Core's classes on an element, without the kit's `ui-` classes.
+const coreClasses = (el) =>
+  [...el.classList].filter((name) => !name.startsWith('ui-')).join(' ');
 
 function fixture(t) {
   document.body.replaceChildren();
@@ -167,7 +170,7 @@ test('detection renders its mode, rows, sliders and allocation', async (t) => {
   assert.equal(button.querySelector('.pp-label').textContent, 'DENSE');
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.equal(button.getAttribute('aria-label'), 'Detection overlay: dense');
-  assert.equal(button.className, 'pp-toggle-btn active panoptic');
+  assert.equal(coreClasses(button), 'pp-toggle-btn active panoptic');
   for (const id of [
     'detection-slider-row',
     'detection-allocation-row',
@@ -204,7 +207,7 @@ test('detection renders its mode, rows, sliders and allocation', async (t) => {
   await nextTick();
   assert.equal(button.querySelector('.pp-label').textContent, 'DETECT');
   assert.equal(button.getAttribute('aria-label'), 'Detection overlay: off');
-  assert.equal(button.className, 'pp-toggle-btn');
+  assert.equal(coreClasses(button), 'pp-toggle-btn');
   assert.equal($('detection-slider-row').classList.contains('visible'), false);
 });
 
@@ -314,7 +317,7 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   const button = $('models3d-toggle');
   const row = $('models3d-mode-row');
   const all = $('models3d-mode-all');
-  assert.equal(button.className, 'pp-toggle-btn active');
+  assert.equal(coreClasses(button), 'pp-toggle-btn active');
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.equal(row.classList.contains('visible'), true);
   assert.equal($('models3d-mode-proximity').getAttribute('aria-checked'), 'true');
@@ -322,7 +325,7 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   // The button leaves the row to its own sync.
   owner._setModels3dEnabled(false);
   await nextTick();
-  assert.equal(button.className, 'pp-toggle-btn');
+  assert.equal(coreClasses(button), 'pp-toggle-btn');
   assert.equal(button.getAttribute('aria-pressed'), 'false');
   assert.equal(row.classList.contains('visible'), true);
   owner._syncModels3dModeRow();
@@ -356,7 +359,7 @@ test('the Draw controls render what the draw tool publishes', async (t) => {
 
   store.publishDraw({ active: true, shape: 'line', hint: 'Click to add points.' });
   await nextTick();
-  assert.equal(toggle.className, 'pp-toggle-btn active');
+  assert.equal(coreClasses(toggle), 'pp-toggle-btn active');
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
   assert.equal($('draw-mode-row').classList.contains('visible'), true);
   assert.equal($('draw-label-row').classList.contains('visible'), true);
@@ -367,7 +370,7 @@ test('the Draw controls render what the draw tool publishes', async (t) => {
 
   store.publishDraw({ active: false, shape: 'line', hint: '' });
   await nextTick();
-  assert.equal(toggle.className, 'pp-toggle-btn');
+  assert.equal(coreClasses(toggle), 'pp-toggle-btn');
   assert.equal($('draw-mode-row').classList.contains('visible'), false);
   assert.equal($('draw-label-row').classList.contains('visible'), false);
 });

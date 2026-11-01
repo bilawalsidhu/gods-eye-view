@@ -121,12 +121,12 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
 
 <template>
 <RailPanel id="street-level-panel" start-collapsed :data-sl-enabled="view ? String(view.enabled) : undefined" :title="t('STREET LEVEL')" sideways scroll rail-scroller>
-  <template #actions><button id="sl-status" :class="`sl-status${status.tone ? ` is-${status.tone}` : ''}`" type="button" :aria-pressed="String(status.pressed)" :title="status.title">{{ status.text }}</button></template>
+  <template #actions><UiButton id="sl-status" :class="`sl-status${status.tone ? ` is-${status.tone}` : ''}`" :pressed="Boolean(status.pressed)" :title="status.title">{{ status.text }}</UiButton></template>
     <div id="sl-body" class="sl-body">
       <div id="sl-viewer-wrap" class="sl-viewer-wrap" :hidden="!viewer.open">
         <div class="sl-viewer-bar">
           <div class="sl-viewer-tools">
-            <button id="sl-viewer-expand" class="scene-btn" type="button" :hidden="!expandAvailable" :aria-pressed="String(Boolean(expanded))" :aria-label="expanded === null ? undefined : expanded ? t('Shrink') : t('Expand')" title="Show the street-level view full screen (Esc shrinks it)" data-i18n-title><span class="sl-btn-icon" aria-hidden="true">{{ expanded ? '⤡' : '⤢' }}</span><span class="sl-btn-text">{{ expanded ? t('SHRINK') : t('EXPAND') }}</span></button>
+            <UiButton id="sl-viewer-expand" class="scene-btn" :hidden="!expandAvailable" :pressed="Boolean(expanded)" :aria-label="expanded === null ? undefined : expanded ? t('Shrink') : t('Expand')" title="Show the street-level view full screen (Esc shrinks it)" data-i18n-title><span class="sl-btn-icon" aria-hidden="true">{{ expanded ? '⤡' : '⤢' }}</span><span class="sl-btn-text">{{ expanded ? t('SHRINK') : t('EXPAND') }}</span></UiButton>
             <UiSegmented class="sl-seg" item-class="sl-seg-btn" active-class="is-active" keyboard="radio" :hidden="!viewer.renderModes" :label="t('Image fit')" :options="renderModeOptions" :model-value="viewer.renderMode" @update:model-value="store.act('setRenderMode', $event)" />
           </div>
           <div class="sl-viewer-tools sl-viewer-tools-right">

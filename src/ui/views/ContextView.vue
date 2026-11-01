@@ -13,6 +13,7 @@ import BhoteKoshiPanel from './panels/BhoteKoshiPanel.vue';
 import MissionDetail from './panels/MissionDetail.vue';
 import MissionRoster from './panels/MissionRoster.vue';
 import RadioPanel from './panels/RadioPanel.vue';
+import UiButton from '../kit/UiButton.vue';
 
 // ContextControls presents the mode switch and the nearby sites search and
 // publishes them; until it does, the panel shows its initial markup.
@@ -59,7 +60,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
               <span data-i18n>COCKPIT</span>
             </button>
             <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)" data-i18n>SEARCH NEARBY SITES</button>
-            <button id="tr3b-toggle" class="tr3b-toggle" type="button" :aria-pressed="String(!!cockpit?.tr3b?.converted)" :hidden="!cockpit?.tr3b" aria-label="Reclassify tracked contact as TR-3B" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')" data-i18n-aria-label>🛸</button>
+            <UiButton id="tr3b-toggle" class="tr3b-toggle" :pressed="!!cockpit?.tr3b?.converted" :hidden="!cockpit?.tr3b" aria-label="Reclassify tracked contact as TR-3B" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')" data-i18n-aria-label>🛸</UiButton>
           </div>
           <AwarenessPanel />
         </section>

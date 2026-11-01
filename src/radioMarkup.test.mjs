@@ -293,9 +293,9 @@ test('Radio is nested inside Context with its own disclosure and power controls'
   // The Context header carries no Radio shortcut; Radio lives in its own
   // section below the modes, with one power control.
   assert.doesNotMatch(html, /context-radio-/);
-  assert.match(html, /id="radio-enable-btn"[^>]*aria-pressed="false"/);
+  assert.match(html, /<button(?=[^>]*\sid="radio-enable-btn")(?=[^>]*\saria-pressed="false")/);
   assert.match(html, /id="cockpit-radio-panel"[^>]*aria-label="Cockpit compact Radio controls"[^>]*hidden/);
-  assert.match(html, /id="cockpit-radio-enable-btn"[^>]*aria-pressed="false"/);
+  assert.match(html, /<button(?=[^>]*\sid="cockpit-radio-enable-btn")(?=[^>]*\saria-pressed="false")/);
   assert.match(html, /id="cockpit-radio-(?:prev|play|next)-btn"/);
   assert.match(html, /id="cockpit-radio-volume"/);
   assert.match(html, /id="radio-tuner"[^>]*hidden/);

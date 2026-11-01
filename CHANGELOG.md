@@ -64,9 +64,10 @@
   `connect`/`act`; the card labels its gain options itself. `act` returns
   what the answering action returned. The Display, Radio, RTL-SDR, Cockpit,
   mission replay and style parameter sliders are the kit's `UiSlider`, a
-  native range input that emits numbers. `syncScopeControls` (`./ui/display`)
-  and `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the
-  Display view and the rail now own what they did. `./ui/input` imports Vue
+  native range input that emits numbers, and the pressed toggles are the
+  kit's `UiButton`, which gains `pressedClass`. `syncScopeControls`
+  (`./ui/display`) and `shouldHideCollapsedRightPanels` (`./ui/layout`) are
+  deprecated: the Display view and the rail now own what they did. `./ui/input` imports Vue
   (samehkhamis).
 
 - `./ui/cctv` and `./ui/radio` import Vue and Pinia: their controllers
