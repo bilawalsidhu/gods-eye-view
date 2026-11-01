@@ -8,6 +8,12 @@
   the bottom tab bar. The rail is the first view built with Vue and Pinia,
   which now ship with the app; see docs/VUE-MIGRATION.md (samehkhamis).
 
+- The Authoring, shot list and CCTV buttons and Street Level's nearest button
+  are the kit's `UiButton` (danger buttons in the `alert` tone, primary ones the `primary`
+  variant), keeping their classes; the CCTV on/off, coverage, auto-hop,
+  projection and adjust toggles now say their state with `aria-pressed`
+  (samehkhamis).
+
 - The Data, Authoring, Weather, Recent Imagery, Context, CCTV, Street Level
   and Radio panels are one component, `UiPanel` (`src/ui/kit/`), with the
   same markup plus the kit's `ui-panel` classes, their titles translated by

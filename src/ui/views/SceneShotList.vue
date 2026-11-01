@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { describeShot } from '../scenePresentation.js';
+import UiButton from '../kit/UiButton.vue';
 import { useSceneStore } from '../stores/scenes.js';
 
 // The selected scene's shots. Rows keep their identity across selection so a
@@ -100,17 +101,16 @@ function onRenameKey(shot, event) {
               /><template v-else>{{ shownTitle(shot) }}</template></div
             >
             <div class="scene-shot-actions">
-              <button
-                type="button"
+              <UiButton
                 class="gev-action-button gev-action-button--compact scene-shot-btn"
                 @click="act('load', shot)"
-                >{{ t('LOAD') }}</button
+                >{{ t('LOAD') }}</UiButton
               >
-              <button
-                type="button"
+              <UiButton
+                tone="alert"
                 class="gev-action-button gev-action-button--danger gev-action-button--compact scene-shot-btn scene-shot-danger"
                 @click="act('remove', shot)"
-                >{{ t('DEL') }}</button
+                >{{ t('DEL') }}</UiButton
               >
             </div>
           </div>

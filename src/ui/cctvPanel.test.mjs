@@ -126,6 +126,13 @@ test('an active camera renders the switch, toggles, CAL chip and meta line', asy
   assert.equal(byId('cctv-auto-hop-btn').textContent, 'AUTO HOP ON');
   assert.equal(byId('cctv-projection-btn').textContent, 'PROJECTION OFF');
   assert.equal(byId('cctv-projection-btn').classList.contains('active'), false);
+  // The toggles say their state to assistive technology, not only by colour.
+  const pressed = (id) => byId(id).getAttribute('aria-pressed');
+  assert.equal(pressed('cctv-enable-btn'), 'true');
+  assert.equal(pressed('cctv-coverage-btn'), 'true');
+  assert.equal(pressed('cctv-auto-hop-btn'), 'true');
+  assert.equal(pressed('cctv-projection-btn'), 'false');
+  assert.equal(pressed('cctv-adjust-btn'), 'false');
   assert.equal(byId('cctv-quality-chip').textContent, 'CAL · CURATED');
   assert.equal(byId('cctv-quality-chip').dataset.calBadge, 'curated');
   assert.equal(

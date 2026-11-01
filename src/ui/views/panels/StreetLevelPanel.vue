@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed, shallowRef, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
+import UiButton from '../../kit/UiButton.vue';
 import RailPanel from '../../rail/RailPanel.vue';
 import RailChips from '../../rail/RailChips.vue';
 import { useStreetLevelStore } from '../../stores/streetLevel.js';
@@ -157,7 +158,7 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
       <!-- The hint says how to open imagery; the button does it without a pointer. -->
       <div class="sl-meta-row">
         <div id="sl-coverage-meta" class="sl-meta">{{ view?.meta ?? '' }}</div>
-        <button id="sl-nearest-btn" class="scene-btn sl-nearest-btn" type="button" :hidden="!view?.nearest.visible" :title="nearest.title || undefined" :disabled="nearest.disabled" data-i18n-runtime>{{ nearest.label }}</button>
+        <UiButton id="sl-nearest-btn" class="scene-btn sl-nearest-btn" type="button" :hidden="!view?.nearest.visible" :title="nearest.title || undefined" :disabled="nearest.disabled" data-i18n-runtime>{{ nearest.label }}</UiButton>
       </div>
     </div>
 </RailPanel>
