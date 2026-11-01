@@ -5226,6 +5226,8 @@ and unreachable upstream (502/504) separately from road geometry.
   cannot race the nearest-aircraft query ahead of layer enablement. A healthy fallback feed is
   queried normally and its source is returned with the selection; fallback with
   no airborne records remains an honest no-data result, not an enable failure.
+  The spoken reply and the card leave out an altitude the feed did not report
+  rather than reading it as 0 feet.
 - Voice treats the parent Context panel and Contacts as separate intents. An
   explicit request to open Context expands only `global-context-panel`; it does
   not choose a mode. An explicit request to open Contacts expands that parent

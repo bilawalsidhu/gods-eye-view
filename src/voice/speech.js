@@ -74,9 +74,9 @@ function listPhrase(items) {
 }
 
 function feetRounded(meters) {
-  const value = Number(meters);
-  return Number.isFinite(value)
-    ? Math.round((value * 3.28084) / 100) * 100
+  // A missing altitude is unknown, not sea level: Number(null) is 0.
+  return Number.isFinite(meters)
+    ? Math.round((meters * 3.28084) / 100) * 100
     : null;
 }
 
