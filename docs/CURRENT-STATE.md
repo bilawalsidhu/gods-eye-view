@@ -1131,7 +1131,8 @@ The tracked-aircraft descriptor both flight layers hand to the cockpit carries
 `verticalRate` and military records as `verticalRateMps`; the query seam maps both to
 one name, so `resolveTrackedAircraftInfo` returns a single shape for either layer. The
 rate is reported, never derived: a blank poll keeps the last transmitted value and an
-absent rate stays null rather than reading as level flight.
+absent rate stays null rather than reading as level flight. A military readsb row
+without `baro_rate` reports its GNSS rate as `geom_rate`, which is used instead.
 
 ## Transponder emergency highlighting
 
