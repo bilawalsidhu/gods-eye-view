@@ -337,10 +337,18 @@ a feature supplying only its accent.
    Layers that write into the right rail directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion is retired: `index.html`
-   lists the view hosts and the loading screen itself. The attribute
-   translation pass goes with the move to vue-i18n. Hosts register panels
-   and rail items through an explicit API instead of editing markup.
-   Markup-string tests are replaced by component tests.
+   lists the view hosts and the loading screen itself. Every owner that
+   showed UI state through hand-written DOM writes now publishes to a store
+   that a view renders, apart from the imperative parts this document
+   records surface by surface; [Building UI](../CONTRIBUTING.md#building-ui)
+   now requires the pattern for new UI. The page-level markup tests read
+   `renderApplicationHtml()`, the real views rendered on the server, and new
+   tests mount components; three tests still read a `.vue` file's source
+   (`cyberTheme`, `panelStorageDocs`, `geoFileImport`). The attribute translation pass goes with the move to
+   vue-i18n. An explicit API for hosts to register panels and rail items is
+   deferred until a host adds one: no host does today (the hosted
+   application's account interface is its own markup), and the first such
+   panel, the hosted timeline, will shape it.
 
 ## Verification
 
