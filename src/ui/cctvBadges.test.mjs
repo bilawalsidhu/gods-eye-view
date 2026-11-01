@@ -6,6 +6,12 @@ import { setLocale, t } from '../i18n/index.js';
 
 function fixture(t, onWrite) {
   const { document } = railFixture(onWrite);
+  const priorDocument = globalThis.document;
+  globalThis.document = document;
+  t.after(() => {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  });
   const controls = new CctvControls({
     elements: {
       _cctvQualityChip: document.createElement('span'),

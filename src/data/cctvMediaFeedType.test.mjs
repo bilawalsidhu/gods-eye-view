@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
+import fs from 'node:fs';
 import { cctvProxy } from '../../server/providers/cctv.js';
 
 const STILL = {
@@ -299,15 +300,29 @@ test('cross-site media creation, segment reads and release fail before any catal
       },
     },
   });
+  const catalogProbe = t.mock.method(fs, 'existsSync');
+  const catalogRead = t.mock.method(fs, 'readFileSync');
   for (const headers of [
     { origin: 'https://foreign.example' },
     { origin: 'null' },
+    { origin: 'https://foreign.example', 'sec-fetch-site': 'same-origin' },
+    {
+      origin: 'https://foreign.example',
+      'x-forwarded-host': 'foreign.example',
+      'x-forwarded-proto': 'https',
+    },
+    { origin: 'https://localhost:4173', 'x-forwarded-proto': 'https,http' },
     { 'sec-fetch-site': 'cross-site' },
     { 'sec-fetch-site': 'same-site' },
-    { 'x-forwarded-for': '192.0.2.1' },
-    { forwarded: 'for=192.0.2.1' },
+    { 'sec-fetch-site': 'cross-site', 'x-forwarded-for': '192.0.2.1' },
+    { origin: 'https://foreign.example', forwarded: 'for=192.0.2.1' },
   ]) {
     for (const [method, url] of [
+      ['GET', '/sources'],
+      ['GET', '/health'],
+      ['GET', '/stream/camera'],
+      ['GET', '/frame/camera'],
+      ['OPTIONS', '/media/camera?lease=test'],
       ['GET', '/media/camera?lease=test'],
       ['DELETE', '/media/camera?lease=test'],
       ['GET', '/media/camera/seg_0.ts?lease=test'],
@@ -326,6 +341,8 @@ test('cross-site media creation, segment reads and release fail before any catal
     }
   }
   assert.equal(calls, 0);
+  assert.equal(catalogProbe.mock.callCount(), 0, 'no catalog file probe');
+  assert.equal(catalogRead.mock.callCount(), 0, 'no catalog file read');
 });
 
 /** An upstream Response whose body records whether it was cancelled. */
@@ -546,9 +563,7 @@ test('a forwarded same-origin request reaches every CCTV route but not the Stree
     const label = JSON.stringify(forwarded);
     assert.equal((await app.call('/sources', headers)).statusCode, 200, label);
     const media = await app.call(`/media/${VIDEO.id}`, headers);
-    // Media retains #1267's direct-peer admission, including non-HLS feeds.
-    const hasProxyIdentity = Object.values(forwarded).some((value) => value.trim());
-    assert.equal(media.statusCode, hasProxyIdentity ? 403 : 200, label);
+    assert.equal(media.statusCode, 200, label);
     const frame = await app.call(`/frame/${STILL.id}`, headers);
     assert.equal(frame.statusCode, 200, label);
     assert.equal(frame.headers['X-CCTV-Source'], 'synthetic', label);

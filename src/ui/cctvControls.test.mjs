@@ -135,6 +135,20 @@ test('the camera panel owns the embedded player across visibility, selection and
     player,
     'health refreshes do not reload the player',
   );
+  controls._cctvPanel.getClientRects = () => [];
+  render();
+  assert.equal(
+    children.size,
+    0,
+    'a sheet-hidden expanded panel unloads its player',
+  );
+  controls._cctvPanel.getClientRects = () => [{}];
+  render();
+  assert.equal(
+    children.size,
+    2,
+    'showing the sheet recreates the selected player',
+  );
   controls._cctvPanel.classList.add('collapsed');
   render();
   assert.equal(children.size, 0);

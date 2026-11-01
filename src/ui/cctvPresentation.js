@@ -280,23 +280,20 @@ export function _renderCctvState(state) {
   }
 
   const embedIntent = enabled && embedded;
+  const liveIntent = enabled && !embedded && !!activeCamera?.isVideo;
+  const panelVisible =
+    (embedIntent || liveIntent) &&
+    !document.hidden &&
+    !this._cctvPanel?.hidden &&
+    !this._cctvPanel?.classList.contains('collapsed') &&
+    this._cctvPanel?.getClientRects?.().length !== 0;
   if (embedIntent && this._cctvFrameWrap && !this._cctvEmbed)
     this._cctvEmbed = createCctvEmbed(this._cctvFrameWrap);
-  this._cctvEmbed?.update(
-    activeCamera,
-    embedIntent &&
-      !document.hidden &&
-      !this._cctvPanel?.hidden &&
-      !this._cctvPanel?.classList.contains('collapsed'),
-  );
-  const liveIntent = enabled && !embedded && !!activeCamera?.isVideo;
+  this._cctvEmbed?.update(activeCamera, embedIntent && panelVisible);
   if (this._cctvFrame) this._cctvFrame.hidden = liveIntent || embedIntent;
   if (this._cctvVideo) {
     this._cctvVideo.hidden = !liveIntent;
-    const visible =
-      liveIntent &&
-      !document.hidden &&
-      !this._cctvPanel?.classList.contains('collapsed');
+    const visible = liveIntent && panelVisible;
     if (!visible || this._cctvVideoCameraId !== activeId) {
       this._cctvVideoSurface?.stop();
       this._cctvVideoSurface = null;

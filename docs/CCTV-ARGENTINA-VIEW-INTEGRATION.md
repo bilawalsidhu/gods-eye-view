@@ -60,3 +60,26 @@ so both allocation files were executed separately with
 
 Both allocation files passed: 1 focus-allocation probe and 14 world-overlay
 probes, 15 passed, zero failures or skips. Budgets and thresholds are unchanged.
+
+## Independent relay reconciliation — 2026-10-31
+
+Reconciled this existing branch with #1165's independent relay, the independent
+#1162 player prerequisite and main `3824a47d`. Removed the strict media gate,
+socket-IP ownership and per-peer quotas. The unchanged main keyless gate runs
+before catalog work. Active session and consumer-lease capabilities remain;
+no user authentication or session fairness is claimed. #1267 need not merge.
+Its independent branch is unchanged and its release fragment is absent here.
+
+The 64-camera JSON and 14 stable IPCamLive aliases are unchanged. Preserve
+#1485's light cameraIndex, full record map for off-screen ID selection, working
+set and neighbor caching, external player lifecycle, no-public-feed states and
+approximate-location labels. Public-player translations follow the current
+#1162 wording while retaining Argentina's no-public-feed messages. Runtime
+12 MiB media / 256 KiB init / 24 MiB session bounds and recovery/discontinuity
+handling match #1165 exactly. Panel badge fixtures now provide the document
+required by visibility handling; runtime visibility checks are unchanged.
+
+On Node 24.22.1, all 568 CCTV/source/player/UI/layer tests passed, zero failures.
+Production build, formatting, boundaries, ten locale catalogs and changelog
+checks passed. #1165 carries the full unit/allocation run; this regional update
+has focused tests, not a new complete-suite, browser FPS or live-camera run.
