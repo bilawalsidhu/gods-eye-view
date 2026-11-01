@@ -569,13 +569,21 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             ? source?.url
             : '');
 
+        const fetchOutcome = { transient: false };
         const upstreamImage =
           source?.sourceKind === 'txdot-its'
-            ? await fetchTxdotSnapshot(upstreamCandidate)
-            : await fetchCctvImageFromUpstream(upstreamCandidate);
-        // Learn cameras with no public picture.
+            ? await fetchTxdotSnapshot(upstreamCandidate, {
+                outcome: fetchOutcome,
+              })
+            : await fetchCctvImageFromUpstream(upstreamCandidate, {
+                outcome: fetchOutcome,
+              });
+        // Learn cameras with no public picture. A 5xx/timeout is not
+        // evidence of that (see feedAvailability.js).
         if (source && upstreamCandidate)
-          feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok);
+          feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok, {
+            transient: fetchOutcome.transient,
+          });
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
             status: 'ok',
