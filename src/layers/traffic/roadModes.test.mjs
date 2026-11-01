@@ -163,6 +163,14 @@ test('a TomTom side paired along only part of its length keeps its share', () =>
   assert.equal(weightOfFlow(partner(-97.7434)), 1);
   assert.equal(weightOfFlow(partner(-97.7428)), 0.5);
 });
+test('a TomTom side that doubles back beside itself is not its own pair', () => {
+  // East along `coordinates`, then back west about 1 m north.
+  const hairpin = {
+    ...flow,
+    coords: [...coordinates, [-97.742, 30.26701], [-97.744, 30.26701]],
+  };
+  assert.equal(flowSegmentsToRoads([hairpin])[0].densityWeight ?? 1, 1);
+});
 test('bearing and distance reject nearby crossing and separate OSM roads', () => {
   const parallel = {
     ...main,

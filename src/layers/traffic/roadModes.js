@@ -126,7 +126,8 @@ function pairedSampleShare(segment, index) {
         xs[i - 1] + dx * t,
         ys[i - 1] + dy * t,
         reverse,
-        () => PAIRED_SIDE_RADIUS_M,
+        // A line that doubles back beside itself is not its own pair.
+        (piece) => (piece.flow === segment ? 0 : PAIRED_SIDE_RADIUS_M),
       ).best
     )
       paired++;
