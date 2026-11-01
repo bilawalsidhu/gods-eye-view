@@ -30,34 +30,32 @@ function input() {
   };
 }
 
-function settle(searchInput, options) {
-  const owner = { _activeLocationSearchGeneration: 4, searchInput };
+function settle(options) {
+  const asked = [];
+  const owner = {
+    _activeLocationSearchGeneration: 4,
+    settleSearch: (settled) => asked.push(settled),
+  };
   NavigationController.prototype._settleLocationSearchUi.call(
     owner,
     4,
     options,
   );
-  return owner;
+  return { owner, asked };
 }
 
-test('a search that found nothing keeps its query, the open field and focus', () => {
-  const field = input();
-  const owner = settle(field, { keepQuery: true });
+// The location controls keep or clear the field (src/ui/locationControls.test.mjs).
+test('a search that found nothing asks the field to keep its query', () => {
+  const { owner, asked } = settle({ keepQuery: true });
   assert.equal(owner._activeLocationSearchGeneration, null);
-  assert.equal(field.value, 'Pariss');
-  assert.equal(field.classList.contains('expanded'), true);
-  assert.equal(field.classList.contains('searching'), false);
-  assert.equal(field.focused, true);
-  assert.equal(field.selected, true);
+  assert.deepEqual(asked, [{ keepQuery: true }]);
 });
 
-test('a search that arrived still clears and closes the field', () => {
-  const field = input();
-  field.focused = true;
-  settle(field);
-  assert.equal(field.value, '');
-  assert.equal(field.classList.contains('expanded'), false);
-  assert.equal(field.focused, false);
+test('a search that arrived asks the field to clear, once', () => {
+  const { owner, asked } = settle();
+  assert.deepEqual(asked, [{ keepQuery: false }]);
+  NavigationController.prototype._settleLocationSearchUi.call(owner, 4);
+  assert.deepEqual(asked, [{ keepQuery: false }]);
 });
 
 function navigation() {
@@ -103,3 +101,21 @@ for (const [status, text] of [
     assert.equal(n.errors.at(-1), null);
   });
 }
+
+test('Escape closes the search field only while it is open; panel collapse always', () => {
+  let closed = 0;
+  const owner = {
+    _locationControls: {
+      searchExpanded: false,
+      closeSearch: () => (closed += 1),
+    },
+  };
+  LocationNavigation.prototype.closeSearch.call(owner, { ifOpen: true });
+  assert.equal(closed, 0);
+  owner._locationControls.searchExpanded = true;
+  LocationNavigation.prototype.closeSearch.call(owner, { ifOpen: true });
+  assert.equal(closed, 1);
+  owner._locationControls.searchExpanded = false;
+  LocationNavigation.prototype.closeSearch.call(owner);
+  assert.equal(closed, 2);
+});

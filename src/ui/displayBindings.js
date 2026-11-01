@@ -55,13 +55,7 @@ export class DisplayBindings {
       searchInput: this._locationSearch,
       actions: {
         setStyle: (style) => this.setStyle(style, { userInitiated: true }),
-        dismissSearch: () => {
-          if (this._locationSearch.classList.contains('expanded')) {
-            this._locationSearch.classList.remove('expanded');
-            this._locationSearch.value = '';
-            this._locationSearch.blur();
-          }
-        },
+        dismissSearch: () => this._closeLocationSearch?.({ ifOpen: true }),
         toggleHud: () => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this.hud.toggle();

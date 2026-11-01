@@ -176,10 +176,7 @@ export class PanelChrome {
       onChange: (collapsed, options) =>
         this.setPanelCollapsed(panelId, collapsed, options),
       beforeCollapse: () => {
-        if (panelId !== 'location-bar' || !this._locationSearch) return;
-        this._locationSearch.classList.remove('expanded');
-        this._locationSearch.value = '';
-        this._locationSearch.blur();
+        if (panelId === 'location-bar') this._closeLocationSearch?.();
       },
       // A desktop side panel hides entirely once collapsed; its rail item
       // takes the focus its own disclosure can no longer hold.

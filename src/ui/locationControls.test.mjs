@@ -57,10 +57,9 @@ function node() {
     },
   };
 }
-function fixture() {
+function fixture(options = {}) {
   const elements = {
     search: node(),
-    searchToggle: node(),
   };
   const doc = node();
   doc.createElement = node;
@@ -90,6 +89,7 @@ function fixture() {
       return id;
     },
     cancelFrame: (id) => cancelled.push(id),
+    ...options,
   });
   const view = () => views.at(-1);
   return { elements, doc, controls, calls, frames, cancelled, views, view };
@@ -106,6 +106,8 @@ test('the tray presents its cities, empty status and no landmarks at first', () 
     poisExpanded: false,
     status: { city: '📍 Location: --', poi: 'Landmark: --' },
     searchError: null,
+    searchExpanded: false,
+    searching: false,
     orbit: null,
   });
   f.controls.highlightCity('b');
@@ -198,4 +200,67 @@ test('typing clears a failed search error and closing the emptied field drops it
   f.elements.search.value = '';
   f.elements.search.fire('blur');
   assert.deepEqual(f.calls, [['edit'], ['edit']]);
+});
+test('the search field opens and closes through the toggle and marks a lookup', () => {
+  const f = fixture();
+  const field = f.elements.search;
+  f.controls.toggleSearch();
+  assert.equal(f.view().searchExpanded, true);
+  assert.equal(field.focused, true);
+  f.controls.setSearching(true);
+  assert.equal(f.view().searching, true);
+  f.controls.toggleSearch();
+  assert.equal(f.view().searchExpanded, false);
+  f.controls.toggleSearch();
+  field.value = 'Paris';
+  f.controls.closeSearch();
+  assert.equal(f.view().searchExpanded, false);
+  assert.equal(field.value, '');
+});
+test('a lookup that found nothing keeps its query, the open field and focus', () => {
+  const f = fixture();
+  const field = f.elements.search;
+  let selected = false;
+  field.select = () => {
+    selected = true;
+  };
+  f.controls.toggleSearch();
+  f.controls.setSearching(true);
+  field.value = 'Pariss';
+  field.focused = false;
+  f.controls.settleSearch({ keepQuery: true });
+  assert.equal(f.view().searching, false);
+  assert.equal(f.view().searchExpanded, true);
+  assert.equal(field.value, 'Pariss');
+  assert.equal(field.focused, true);
+  assert.equal(selected, true);
+});
+test('a lookup that arrived clears and closes the field', () => {
+  const f = fixture();
+  const field = f.elements.search;
+  let blurred = false;
+  field.blur = () => {
+    blurred = true;
+  };
+  f.controls.toggleSearch();
+  f.controls.setSearching(true);
+  field.value = 'Paris';
+  f.controls.settleSearch();
+  assert.equal(f.view().searching, false);
+  assert.equal(f.view().searchExpanded, false);
+  assert.equal(field.value, '');
+  assert.equal(blurred, true);
+  // Destroyed controls change nothing.
+  f.controls.destroy();
+  const after = f.views.length;
+  f.controls.toggleSearch();
+  f.controls.setSearching(true);
+  f.controls.settleSearch();
+  f.controls.closeSearch();
+  assert.equal(f.views.length, after);
+});
+test('controls that replace others can start with the field open', () => {
+  const f = fixture({ searchExpanded: true });
+  assert.equal(f.controls.presentation().searchExpanded, true);
+  assert.equal(f.elements.search.focused, undefined);
 });

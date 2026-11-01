@@ -113,8 +113,15 @@
   landmark pills or writes the mini status: it presents the tray, including
   the search error (`setSearchError()`), and hands it to its `publish`
   option, and Core's dock renders it and calls `chooseCity()` and
-  `choosePoi()`. Its `elements` are now only `search` and `searchToggle`:
-  `resetButtons` is gone, and the reset buttons call its new `reset()`.
+  `choosePoi()`. Its `elements` are now only `search`: `resetButtons` and
+  `searchToggle` are gone, and the reset buttons and the search toggle call
+  its new `reset()` and `toggleSearch()`. It presents the search field's
+  open and searching state too (`searchExpanded`, `searching`; a
+  `searchExpanded` option starts it open), set through `setSearching()`,
+  `settleSearch()` and `closeSearch()`, and a host renders the field's
+  `expanded` and `searching` classes from it; `LocationSearch`
+  takes a `setSearching` option in place of writing the field's class, and
+  `NavigationController` a `settleSearch` option in place of `searchInput`.
   `createOrbitIndicator()` is replaced by
   `showOrbit(active)`, which adds the ORBIT indicator to the presented tray
   as `orbit: { active }` (null until offered) (samehkhamis).

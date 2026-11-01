@@ -19,8 +19,9 @@ const LOCATION_MINI_SEARCHED_PLACEHOLDER = Object.freeze(
  * mini status, the search error and the ORBIT indicator are presented as a
  * plain view and handed to `publish`; Core's dock renders them and calls
  * `chooseCity()` and `choosePoi()`, and the scene chrome shows the indicator.
- * The globe actions and the cockpit call `reset()`. The search field keeps its
- * listeners.
+ * The globe actions and the cockpit call `reset()`. The search field's open
+ * and searching state is presented too, and the dock's toggle calls
+ * `toggleSearch()`; the field keeps its own key, input and blur listeners.
  */
 export class LocationControls {
   constructor({
@@ -32,6 +33,7 @@ export class LocationControls {
     onSearch,
     onSearchEdit,
     onReset,
+    searchExpanded = false,
     publish = () => {},
     doc = document,
     requestFrame = (callback) => requestAnimationFrame(callback),
@@ -63,6 +65,9 @@ export class LocationControls {
       poi: t('Landmark: --'),
     };
     this.searchError = null;
+    // The search field: whether it is open, and whether a lookup runs.
+    this.searchExpanded = Boolean(searchExpanded);
+    this.searching = false;
     // The ORBIT indicator: null until the shell offers it, then whether the
     // camera orbits.
     this.orbit = null;
@@ -77,11 +82,6 @@ export class LocationControls {
       const index = POI_KEYS.indexOf(event.key.toUpperCase());
       if (index !== -1 && index < (cities[cityId]?.pois.length || 0))
         onPoi(cityId, index);
-    });
-    this.bind(elements.searchToggle, 'click', () => {
-      elements.search.classList.toggle('expanded');
-      if (elements.search.classList.contains('expanded'))
-        elements.search.focus();
     });
     this.bind(elements.search, 'keydown', (event) => {
       if (event.key === 'Enter') void onSearch(elements.search.value);
@@ -124,6 +124,8 @@ export class LocationControls {
       poisExpanded: this.poisExpanded,
       status: { ...this.status },
       searchError: this.searchError,
+      searchExpanded: this.searchExpanded,
+      searching: this.searching,
       orbit: this.orbit && { ...this.orbit },
     };
   }
@@ -207,6 +209,43 @@ export class LocationControls {
     if (this.destroyed) return;
     this.searchError = message || null;
     this.present();
+  }
+  /** The search toggle was clicked: open the field and focus it, or close it. */
+  toggleSearch() {
+    if (this.destroyed) return;
+    this.searchExpanded = !this.searchExpanded;
+    this.present();
+    if (this.searchExpanded) this.elements.search?.focus();
+  }
+  /** Mark the search field while a lookup runs. */
+  setSearching(active) {
+    if (this.destroyed) return;
+    this.searching = Boolean(active);
+    this.present();
+  }
+  /**
+   * A lookup settled. One that found nothing keeps its query, the open field
+   * and focus so it can be corrected; any other clears and closes the field.
+   */
+  settleSearch({ keepQuery = false } = {}) {
+    if (this.destroyed) return;
+    this.searching = false;
+    if (!keepQuery) {
+      this.closeSearch();
+      return;
+    }
+    this.present();
+    this.elements.search?.focus();
+    this.elements.search?.select?.();
+  }
+  /** Close the search field and drop its query. */
+  closeSearch() {
+    if (this.destroyed) return;
+    this.searchExpanded = false;
+    this.present();
+    const field = this.elements.search;
+    if (field) field.value = '';
+    field?.blur?.();
   }
   /** Offer the ORBIT indicator, lit while the camera orbits. */
   showOrbit(active = false) {

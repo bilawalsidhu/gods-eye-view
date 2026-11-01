@@ -134,11 +134,11 @@ export class StyleManager extends ShellFacade {
     this._panelChrome = new PanelChrome({
       elements: {
         _leftPanelStack: this._leftPanelStack,
-        _locationSearch: this._locationSearch,
         _ppToggles: this._ppToggles,
         _rightPanelStack: this._rightPanelStack,
       },
       operations: {
+        _closeLocationSearch: () => this._locationNavigation?.closeSearch(),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
         _showToast: (...args) => this._showToast(...args),
@@ -171,7 +171,8 @@ export class StyleManager extends ShellFacade {
         militaryAwarenessLayer,
         rocketLaunchesLayer: services.rocketLaunchesLayer,
       },
-      searchInput: this._locationSearch,
+      settleSearch: (options) =>
+        this._locationNavigation?.settleSearch(options),
       interruptCameraMotion: services.interruptCameraMotion,
       interruptGlobeRotation: services.interruptGlobeRotation,
       isCockpitActive: () => !!this.cockpitView?.active,
@@ -321,7 +322,6 @@ export class StyleManager extends ShellFacade {
       },
       elements: {
         _locationSearch: this._locationSearch,
-        _searchToggle: this._searchToggle,
       },
       operations: {
         _publishLocation: (view) =>
@@ -528,6 +528,8 @@ export class StyleManager extends ShellFacade {
         _locationSearch: this._locationSearch,
       },
       operations: {
+        _closeLocationSearch: (options) =>
+          this._locationNavigation?.closeSearch(options),
         setStyle: (...args) => this.setStyle(...args),
         _updateHudButtonState: (...args) => this._updateHudButtonState(...args),
         _syncShareState: (...args) => this._syncShareState(...args),

@@ -168,7 +168,6 @@ test('the ORBIT indicator sits on the body while offered and lights while orbiti
   const controls = new LocationControls({
     elements: {
       search: $('#location-search'),
-      searchToggle: $('#search-toggle'),
     },
     cities: {},
     getExpandedCity: () => null,
@@ -209,7 +208,6 @@ test('the location tray renders what LocationControls publishes', async (t) => {
   const controls = new LocationControls({
     elements: {
       search: $('#location-search'),
-      searchToggle: $('#search-toggle'),
     },
     cities: {
       paris: { name: 'Paris', pois: [{ name: 'Louvre' }, { name: 'Eiffel' }] },
@@ -454,4 +452,37 @@ test('closing a sheet returns focus to its tab once the tab bar shows it closed'
     'true',
   );
   assert.equal($('#mobile-sheet-backdrop').hidden, false);
+});
+
+test('the search toggle opens the field, and a lookup marks it', async (t) => {
+  const { $, pinia } = fixture(t);
+  const store = useLocationStore(pinia);
+  const controls = new LocationControls({
+    elements: { search: $('#location-search') },
+    cities: {},
+    getExpandedCity: () => null,
+    onCity() {},
+    onPoi() {},
+    onSearch() {},
+    onReset() {},
+    publish: (view) => store.publish(view),
+    requestFrame() {},
+    cancelFrame() {},
+  });
+  t.after(() => controls.destroy());
+  store.connect(controls);
+  await nextTick();
+  const field = $('#location-search');
+  assert.equal(field.classList.contains('expanded'), false);
+  $('#search-toggle').click();
+  await nextTick();
+  assert.equal(field.classList.contains('expanded'), true);
+  assert.equal(document.activeElement, field);
+  controls.setSearching(true);
+  await nextTick();
+  assert.equal(field.classList.contains('searching'), true);
+  controls.settleSearch();
+  await nextTick();
+  assert.equal(field.classList.contains('searching'), false);
+  assert.equal(field.classList.contains('expanded'), false);
 });

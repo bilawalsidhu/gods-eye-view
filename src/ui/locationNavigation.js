@@ -115,11 +115,14 @@ export class LocationNavigation {
 
   _initLocationBar() {
     const { CITY_POIS, searchAndFlyTo, LocationSearch } = this.services;
+    // An open field stays open in the new controls.
+    const searchExpanded = Boolean(this._locationControls?.searchExpanded);
     this._locationControls?.destroy();
     this._locationLookupUnsubscribe?.();
     this._locationLookup?.destroy();
     this._locationLookup = new LocationSearch({
       input: this._locationSearch,
+      setSearching: (active) => this._locationControls?.setSearching(active),
       begin: () => this._beginDeferredNavigation('location'),
       isCurrent: (generation) =>
         !this._disposed && generation === this._navigationGeneration,
@@ -135,15 +138,9 @@ export class LocationNavigation {
       },
       onError: (error) => console.error('[Search] Geocoding failed:', error),
     });
-    this._locationLookupUnsubscribe = this._locationLookup.subscribe(
-      ({ initial, change }) => {
-        this._locationState.publish(initial ? { type: 'reset' } : change);
-      },
-    );
     this._locationControls = new LocationControls({
       elements: {
         search: this._locationSearch,
-        searchToggle: this._searchToggle,
       },
       publish: (view) => this._publishLocation?.(view),
       cities: CITY_POIS,
@@ -153,7 +150,15 @@ export class LocationNavigation {
       onSearch: (query) => this._locationLookup.run(query),
       onSearchEdit: () => this._setLocationSearchError(null),
       onReset: () => this.resetToGlobeView(),
+      searchExpanded,
     });
+    // The new lookup's reset settles a replaced lookup's search through the
+    // new controls, so it subscribes once they are in place.
+    this._locationLookupUnsubscribe = this._locationLookup.subscribe(
+      ({ initial, change }) => {
+        this._locationState.publish(initial ? { type: 'reset' } : change);
+      },
+    );
     this._connectLocation?.(this._locationControls);
     this._connectGlobeReset?.(this._locationControls);
   }
@@ -410,6 +415,18 @@ export class LocationNavigation {
     });
     if (!target) finish(true);
     return resetPromise;
+  }
+
+  /** Settle the search field once its lookup has (LocationControls.settleSearch). */
+  settleSearch(options) {
+    this._locationControls?.settleSearch(options);
+  }
+
+  /** Close the search field; with `ifOpen`, only when it is open. */
+  closeSearch({ ifOpen = false } = {}) {
+    const controls = this._locationControls;
+    if (ifOpen && !controls?.searchExpanded) return;
+    controls?.closeSearch();
   }
 
   /** Revoke callbacks and settle owned camera work before the viewer is released. */

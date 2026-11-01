@@ -150,10 +150,10 @@ function selectMapSource(chip) {
         <div class="location-city-row">
           <div id="location-pills" class="location-pills"><UiButton v-for="city in loc?.cities" :key="city.id" class="location-pill" :pressed="Boolean(city.active)" pressed-class="active" :data-location-id="city.id" @click="locationControls?.chooseCity(city.id)">{{ city.label }}</UiButton></div>
           <div class="location-search-wrap">
-            <button id="search-toggle" class="search-toggle-btn" title="Search any location" data-i18n-title>
+            <button id="search-toggle" class="search-toggle-btn" title="Search any location" data-i18n-title @click="locationControls?.toggleSearch()">
               <span>&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" :aria-invalid="loc?.searchError ? 'true' : null" :aria-describedby="loc?.searchError ? 'location-search-error' : null" data-i18n-aria-label data-i18n-placeholder />
+            <input type="text" id="location-search" v-class-toggle="{ expanded: !!loc?.searchExpanded, searching: !!loc?.searching }" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" :aria-invalid="loc?.searchError ? 'true' : null" :aria-describedby="loc?.searchError ? 'location-search-error' : null" data-i18n-aria-label data-i18n-placeholder />
           </div>
         </div>
         <p id="location-search-error" class="location-search-error" role="alert">{{ loc?.searchError }}</p>

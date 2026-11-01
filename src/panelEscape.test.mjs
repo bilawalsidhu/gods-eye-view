@@ -151,17 +151,12 @@ test('a collapsed nested panel does not block the next Escape from closing its p
 
 test('Location Escape clears a hidden draft search before restoring disclosure focus', () => {
   const fixture = panelFixture({ id: 'location-bar' });
-  const removed = [];
-  let blurred = false;
-  fixture.manager._locationSearch = {
-    classList: { remove: (...names) => removed.push(...names) },
-    value: 'focus cleanup',
-    blur: () => { blurred = true; },
-  };
+  // The location controls close the field and drop its draft
+  // (src/ui/locationControls.test.mjs).
+  let closed = 0;
+  fixture.manager._closeLocationSearch = () => { closed += 1; };
   assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'location-bar'), true);
-  assert.deepEqual(removed, ['expanded']);
-  assert.equal(fixture.manager._locationSearch.value, '');
-  assert.equal(blurred, true);
+  assert.equal(closed, 1);
   assert.equal(fixture.focused(), true);
 });
 
