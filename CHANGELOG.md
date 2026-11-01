@@ -62,7 +62,9 @@
   the tuner slider's events call `RadioControls`, and the local RTL-SDR
   card's controls `LocalSdrControls`, through the radio store's new
   `connect`/`act`; the card labels its gain options itself. `act` returns
-  what the answering action returned. `syncScopeControls` (`./ui/display`)
+  what the answering action returned. The Display, Radio, RTL-SDR, Cockpit,
+  mission replay and style parameter sliders are the kit's `UiSlider`, a
+  native range input that emits numbers. `syncScopeControls` (`./ui/display`)
   and `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the
   Display view and the rail now own what they did. `./ui/input` imports Vue
   (samehkhamis).

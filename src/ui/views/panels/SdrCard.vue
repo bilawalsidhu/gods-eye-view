@@ -6,6 +6,7 @@ import { R820T_GAIN_STEPS_DB } from '../../../sdr/gain.js';
 import { localSdrGainOptionLabel } from '../../localSdrPresentation.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { vFieldValue } from '../../rail/fieldValue.js';
+import UiSlider from '../../kit/UiSlider.js';
 import { useRadioStore } from '../../stores/radio.js';
 
 // The local RTL-SDR card in the Radio panel. LocalSdrControls presents it and
@@ -60,7 +61,7 @@ const tune = () => act('tuneSdr', frequency.value.value);
   </div>
   <label class="radio-volume-row" for="sdr-volume">
     <span data-i18n>SDR VOL</span>
-    <input id="sdr-volume" @input="act('setSdrVolume', $event.target.value)" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Local SDR volume" :disabled="sdr?.volumeDisabled" v-field-value="sdr ? sdr.volume : 80" data-i18n-aria-label />
+    <UiSlider id="sdr-volume" hold @update:model-value="act('setSdrVolume', $event)" min="0" max="100" aria-label="Local SDR volume" :disabled="sdr?.volumeDisabled" :model-value="sdr ? sdr.volume : 80" data-i18n-aria-label />
     <output id="sdr-volume-value" class="gev-slider-value" for="sdr-volume">{{ sdr ? sdr.volumeText : '80%' }}</output>
   </label>
   <div id="sdr-status" class="radio-playback-state" :class="{ error: sdr?.statusError }" role="status" aria-live="polite">{{ sdr ? sdr.statusText : t('Connect an RTL-SDR to begin.') }}</div>

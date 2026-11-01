@@ -133,7 +133,8 @@
       "src/ui/stores/panelChrome.js",
       "src/ui/rail/PanelCollapseButton.vue",
       "src/ui/rail/panelState.js",
-      "src/sdr/gain.js"
+      "src/sdr/gain.js",
+      "src/ui/kit/UiSlider.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -568,7 +569,9 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/ui/rail/fieldValue.js",
+      "src/ui/kit/UiSlider.js"
     ],
     "external": ["vue"]
   },
@@ -1061,7 +1064,9 @@
       "src/ui/stores/awarenessDirection.js",
       "src/ui/stores/hud.js",
       "src/ui/stores/panelChrome.js",
-      "src/ui/rail/panelState.js"
+      "src/ui/rail/panelState.js",
+      "src/ui/rail/fieldValue.js",
+      "src/ui/kit/UiSlider.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -3069,7 +3074,9 @@
       "src/ui/stores/firstRun.js",
       "src/firstRunCopy.js",
       "src/ui/stores/panelChrome.js",
-      "src/ui/rail/panelState.js"
+      "src/ui/rail/panelState.js",
+      "src/ui/rail/fieldValue.js",
+      "src/ui/kit/UiSlider.js"
     ],
     "external": [
       "hls.js",
@@ -3843,7 +3850,9 @@
       "src/i18n/locales/zh-Hant.json",
       "src/scopeMaskPolicy.js",
       "src/ui/displayControls.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/ui/rail/fieldValue.js",
+      "src/ui/kit/UiSlider.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },

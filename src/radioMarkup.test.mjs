@@ -270,7 +270,7 @@ test('Radio volume and mission speed share the Sharpen slider visual language', 
   }
   assert.match(
     missionDetail,
-    /id="space-mission-replay-speed" class="gev-quantitative-slider" type="range" min="0\.25" max="4" step="0\.25" value="1"/,
+    /<UiSlider id="space-mission-replay-speed" hold min="0\.25" max="4" step="0\.25"[^>]*:model-value="m \? m\.replay\.speed : 1"/,
   );
   assert.match(missionDetail, /class="gev-slider-value"[^>]*data-mission-replay-speed-output/);
   assert.match(css, /\.gev-quantitative-slider\s*\{[\s\S]*?min-width: 0;[\s\S]*?height: 18px;/);

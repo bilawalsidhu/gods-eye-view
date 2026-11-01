@@ -64,7 +64,7 @@ test('the panel’s Enable, transport and volume call RadioControls', (t) => {
     ['toggleRadioPlayback'],
     ['cycleRadio', 1],
     ['stopRadio'],
-    ['setRadioVolume', '35'],
+    ['setRadioVolume', 35],
   ]);
 });
 

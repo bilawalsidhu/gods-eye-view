@@ -87,7 +87,7 @@ test('buttons, sliders, the layout select and the Scope checkbox call their acti
     ['setSonarOpacity', 60],
     ['setSonarSector', 30],
     // Density passes the slider's own value, as it always has.
-    ['setDensity', '75'],
+    ['setDensity', 75],
     ['setFade', 12],
     ['setOutsideOpacity', 3],
     ['setScopeFeather', 150],

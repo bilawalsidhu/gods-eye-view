@@ -4,7 +4,7 @@ import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import RailPanel from '../../rail/RailPanel.vue';
 import { vClassToggle } from '../../rail/classToggle.js';
-import { vFieldValue } from '../../rail/fieldValue.js';
+import UiSlider from '../../kit/UiSlider.js';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import { useRadioStore } from '../../stores/radio.js';
 import RadioTuner from './RadioTuner.vue';
@@ -58,7 +58,7 @@ const radioWords = {
     </div>
     <label class="radio-volume-row" for="radio-volume">
       <span data-i18n>VOLUME</span>
-      <input id="radio-volume" @input="act('setRadioVolume', $event.target.value)" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Radio volume" :disabled="radio?.volume.disabled" v-field-value="radio ? radio.volume.value : 80" data-i18n-aria-label />
+      <UiSlider id="radio-volume" hold @update:model-value="act('setRadioVolume', $event)" min="0" max="100" aria-label="Radio volume" :disabled="radio?.volume.disabled" :model-value="radio ? radio.volume.value : 80" data-i18n-aria-label />
       <output id="radio-volume-value" class="gev-slider-value" for="radio-volume">{{ radio ? `${radio.volume.value}%` : '80%' }}</output>
     </label>
     <div id="radio-playback-state" class="radio-playback-state" :class="{ error: radio?.playback.error }" role="status" aria-live="polite">{{ radio ? radio.playback.text : t('Radio off') }}</div>

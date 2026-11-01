@@ -1,6 +1,6 @@
-import { h, render, withDirectives } from 'vue';
+import { h, render } from 'vue';
 import { formatNumber, t } from '../i18n/index.js';
-import { vRangeValue } from './rail/rangeValue.js';
+import UiSlider from './kit/UiSlider.js';
 
 /** A slider value in the UI language: 0.85 in English, 0,85 in Spanish. */
 const formatParam = (value, digits) =>
@@ -11,8 +11,8 @@ const formatParam = (value, digits) =>
   });
 
 /**
- * The generated rows: a label, the shared native slider and its value in the
- * UI language. A render function, so the portable input package needs no
+ * The generated rows: a label, the kit's slider and its value in the UI
+ * language. A render function, so the portable input package needs no
  * single-file-component compiler.
  */
 const StyleParameterRows = {
@@ -24,18 +24,15 @@ const StyleParameterRows = {
     return this.rows.map((row) =>
       h('div', { key: row.name, class: 'param-slider-row' }, [
         h('span', { class: 'param-label' }, row.label),
-        withDirectives(
-          h('input', {
-            type: 'range',
-            class: 'gev-quantitative-slider param-slider',
-            min: row.min,
-            max: row.max,
-            step: row.step,
-            'aria-label': row.label,
-            onInput: (event) => this.onInput(row.name, event.target.value),
-          }),
-          [[vRangeValue, row.value]],
-        ),
+        h(UiSlider, {
+          class: 'param-slider',
+          min: row.min,
+          max: row.max,
+          step: row.step,
+          'aria-label': row.label,
+          modelValue: row.value,
+          'onUpdate:modelValue': (value) => this.onInput(row.name, value),
+        }),
         h('span', { class: 'param-value' }, row.text),
       ]),
     );
@@ -82,9 +79,8 @@ export function createStyleParameters({ container }) {
         value: readValue(name),
         text: '',
       }));
-      onInput = (name, raw) => {
+      onInput = (name, value) => {
         if (destroyed || current !== generation) return;
-        const value = parseFloat(raw);
         writeValue(name, value);
         rows = rows.map((row) =>
           row.name === name

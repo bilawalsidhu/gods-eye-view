@@ -111,7 +111,7 @@ test('before the layer presents, the roster loads and no mission shows', (t) => 
   );
   assert.equal($('#space-mission-panel').hidden, true);
   assert.equal($('[data-mission-replay-speed-output]').textContent, '1×');
-  assert.equal($('[data-mission-replay-speed]').getAttribute('value'), '1');
+  assert.equal($('[data-mission-replay-speed]').value, '1');
 });
 
 test('the roster lists missions and drives selection and preview', async (t) => {
@@ -316,7 +316,7 @@ test('the replay controls follow the layer and call its commands', async (t) => 
     ['replay'],
     ['toggle'],
     ['cancel'],
-    ['speed', '3'],
+    ['speed', 3],
     ['focus'],
     ['previous'],
     ['next'],

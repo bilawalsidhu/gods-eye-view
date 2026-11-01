@@ -6,6 +6,7 @@ import { vPanelState } from '../../rail/panelState.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import UiSegmented from '../../kit/UiSegmented.vue';
+import UiSlider from '../../kit/UiSlider.js';
 import GeoImport from './GeoImport.vue';
 import { useDisplayStore } from '../../stores/display.js';
 
@@ -17,7 +18,6 @@ const display = useDisplayStore();
 const { view, models3d, draw } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings or the draw tool).
 const act = (name, ...args) => display.act(name, ...args);
-const integer = (event) => parseInt(event.target.value, 10);
 const pct = (value) => `${value}%`;
 const hud = computed(() => view.value?.hud ?? null);
 const sonar = computed(() => view.value?.sonar ?? null);
@@ -80,27 +80,27 @@ const allocationOptions = [
     <output id="cyber-sonar-status" class="cyber-sonar-control" role="status"></output>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-rings-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-rings" data-i18n>Rings</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-rings" @input="act('setSonarRings', integer($event))" min="3" max="12" step="1" value="8" v-range-value="sonar?.rings ?? 8" aria-label="Sonar ring count" data-i18n-aria-label />
+      <UiSlider class="pp-slider" id="cyber-sonar-rings" @update:model-value="act('setSonarRings', $event)" min="3" max="12" step="1" :model-value="sonar?.rings ?? 8" aria-label="Sonar ring count" data-i18n-aria-label />
       <span class="pp-slider-value" id="cyber-sonar-rings-value">{{ sonar?.rings ?? 8 }}</span>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-range-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-range" data-i18n>Range</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-range" @input="act('setSonarRange', integer($event))" min="60" max="120" step="1" value="100" v-range-value="sonar?.range ?? 100" aria-label="Sonar ring range" data-i18n-aria-label />
+      <UiSlider class="pp-slider" id="cyber-sonar-range" @update:model-value="act('setSonarRange', $event)" min="60" max="120" step="1" :model-value="sonar?.range ?? 100" aria-label="Sonar ring range" data-i18n-aria-label />
       <span class="pp-slider-value" id="cyber-sonar-range-value">{{ pct(sonar?.range ?? 100) }}</span>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-intensity-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-intensity" data-i18n>Power</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-intensity" @input="act('setSonarIntensity', integer($event))" min="0" max="100" step="1" value="70" v-range-value="sonar?.intensity ?? 70" aria-label="Sonar intensity" data-i18n-aria-label />
+      <UiSlider class="pp-slider" id="cyber-sonar-intensity" @update:model-value="act('setSonarIntensity', $event)" min="0" max="100" step="1" :model-value="sonar?.intensity ?? 70" aria-label="Sonar intensity" data-i18n-aria-label />
       <span class="pp-slider-value" id="cyber-sonar-intensity-value">{{ pct(sonar?.intensity ?? 70) }}</span>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-opacity-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-opacity" data-i18n>Opacity</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-opacity" @input="act('setSonarOpacity', integer($event))" min="35" max="100" step="1" value="84" v-range-value="sonar?.opacity ?? 84" aria-label="Cyber contact and label opacity" title="Minimum opacity for map dots, icons, models, brackets, and labels between sonar passes" data-i18n-aria-label data-i18n-title />
+      <UiSlider class="pp-slider" id="cyber-sonar-opacity" @update:model-value="act('setSonarOpacity', $event)" min="35" max="100" step="1" :model-value="sonar?.opacity ?? 84" aria-label="Cyber contact and label opacity" title="Minimum opacity for map dots, icons, models, brackets, and labels between sonar passes" data-i18n-aria-label data-i18n-title />
       <span class="pp-slider-value" id="cyber-sonar-opacity-value">{{ pct(sonar?.opacity ?? 84) }}</span>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-sector-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-sector" data-i18n>Sector</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="cyber-sonar-sector" @input="act('setSonarSector', integer($event))" min="8" max="60" step="1" value="24" v-range-value="sonar?.sector ?? 24" aria-label="Sonar sector width" data-i18n-aria-label />
+      <UiSlider class="pp-slider" id="cyber-sonar-sector" @update:model-value="act('setSonarSector', $event)" min="8" max="60" step="1" :model-value="sonar?.sector ?? 24" aria-label="Sonar sector width" data-i18n-aria-label />
       <span class="pp-slider-value" id="cyber-sonar-sector-value">{{ `${sonar?.sector ?? 24}°` }}</span>
     </div>
   </div>
@@ -111,7 +111,7 @@ const allocationOptions = [
     </button>
     <div class="pp-slider-row detection-slider-row" :class="{ visible: detection?.rowsVisible }" id="detection-slider-row">
       <label class="pp-slider-mini-label" for="detection-density-slider" data-i18n>Density</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-density-slider" @input="act('setDensity', $event.target.value)" min="0" max="100" step="25" value="50" v-range-value="detection?.densityPct ?? 50" aria-label="Detection label density" data-i18n-aria-label />
+      <UiSlider class="pp-slider" id="detection-density-slider" @update:model-value="act('setDensity', $event)" min="0" max="100" step="25" :model-value="detection?.densityPct ?? 50" aria-label="Detection label density" data-i18n-aria-label />
       <span class="pp-slider-value" id="detection-density-value">{{ pct(detection?.densityPct ?? 50) }}</span>
     </div>
     <div class="pp-slider-row detection-allocation-row" :class="{ visible: detection?.rowsVisible }" id="detection-allocation-row">
@@ -120,12 +120,12 @@ const allocationOptions = [
     </div>
     <div class="pp-slider-row detection-fade-row" :class="{ visible: detection?.rowsVisible }" id="detection-fade-row">
       <label class="pp-slider-mini-label" for="detection-fade-slider" data-i18n>Fade</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-fade-slider" @input="act('setFade', integer($event))" min="0" max="40" step="1" value="7" v-range-value="detection?.fadePct ?? 7" aria-label="Detection fade distance" title="World-overlay fade distance outside the keyhole as a percentage of its radius" data-i18n-aria-label data-i18n-title />
+      <UiSlider class="pp-slider" id="detection-fade-slider" @update:model-value="act('setFade', $event)" min="0" max="40" step="1" :model-value="detection?.fadePct ?? 7" aria-label="Detection fade distance" title="World-overlay fade distance outside the keyhole as a percentage of its radius" data-i18n-aria-label data-i18n-title />
       <span class="pp-slider-value" id="detection-fade-value">{{ pct(detection?.fadePct ?? 7) }}</span>
     </div>
     <div class="pp-slider-row detection-opacity-row" :class="{ visible: detection?.rowsVisible }" id="detection-opacity-row">
       <label class="pp-slider-mini-label" for="detection-opacity-slider" data-i18n>Outside</label>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="detection-opacity-slider" @input="act('setOutsideOpacity', integer($event))" min="0" max="100" step="1" value="1" v-range-value="detection?.outsideOpacityPct ?? 1" aria-label="Detection opacity outside the keyhole" title="World-overlay label and card opacity beyond the fade distance" data-i18n-aria-label data-i18n-title />
+      <UiSlider class="pp-slider" id="detection-opacity-slider" @update:model-value="act('setOutsideOpacity', $event)" min="0" max="100" step="1" :model-value="detection?.outsideOpacityPct ?? 1" aria-label="Detection opacity outside the keyhole" title="World-overlay label and card opacity beyond the fade distance" data-i18n-aria-label data-i18n-title />
       <span class="pp-slider-value" id="detection-opacity-value">{{ pct(detection?.outsideOpacityPct ?? 1) }}</span>
     </div>
   </div>
@@ -160,7 +160,7 @@ const allocationOptions = [
     </label>
     <div class="pp-slider-row visible" id="scope-slider-row">
       <span class="pp-slider-mini-label" data-i18n>Feather</span>
-      <input type="range" class="gev-quantitative-slider pp-slider" id="scope-feather-slider" @input="act('setScopeFeather', integer($event))" min="0" max="200" value="100" v-range-value="scopeFeather" :disabled="!scopeOn" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius" data-i18n-aria-label data-i18n-title />
+      <UiSlider class="pp-slider" id="scope-feather-slider" @update:model-value="act('setScopeFeather', $event)" min="0" max="200" :model-value="scopeFeather" :disabled="!scopeOn" aria-label="Scope edge feather" title="Scope edge feather as a percentage of the keyhole radius" data-i18n-aria-label data-i18n-title />
       <span class="pp-slider-value" id="scope-feather-value">{{ pct(scopeFeather) }}</span>
     </div>
   </div>
@@ -203,7 +203,7 @@ const allocationOptions = [
       <span class="pp-label" data-i18n>Bloom</span>
     </button>
     <div class="pp-slider-row" :class="{ visible: view?.bloom.active }" id="bloom-slider-row">
-      <input type="range" class="gev-quantitative-slider pp-slider" id="bloom-intensity-slider" @input="act('setBloomIntensity', integer($event))" min="0" max="200" value="0" v-range-value="view?.bloom.intensity ?? 0" aria-label="Bloom intensity" data-i18n-aria-label />
+      <UiSlider class="pp-slider" id="bloom-intensity-slider" @update:model-value="act('setBloomIntensity', $event)" min="0" max="200" :model-value="view?.bloom.intensity ?? 0" aria-label="Bloom intensity" data-i18n-aria-label />
       <span class="pp-slider-value" id="bloom-intensity-value">{{ pct(view?.bloom.intensity ?? 0) }}</span>
     </div>
   </div>
@@ -213,7 +213,7 @@ const allocationOptions = [
       <span class="pp-label" data-i18n>Sharpen</span>
     </button>
     <div class="pp-slider-row" :class="{ visible: view?.sharpen.active }" id="sharpen-slider-row">
-      <input type="range" class="gev-quantitative-slider pp-slider" id="sharpen-intensity-slider" @input="act('setSharpenIntensity', integer($event))" min="0" max="100" value="49" v-range-value="view?.sharpen.intensity ?? 49" aria-label="Sharpen intensity" data-i18n-aria-label />
+      <UiSlider class="pp-slider" id="sharpen-intensity-slider" @update:model-value="act('setSharpenIntensity', $event)" min="0" max="100" :model-value="view?.sharpen.intensity ?? 49" aria-label="Sharpen intensity" data-i18n-aria-label />
       <span class="pp-slider-value" id="sharpen-intensity-value">{{ pct(view?.sharpen.intensity ?? 49) }}</span>
     </div>
   </div>

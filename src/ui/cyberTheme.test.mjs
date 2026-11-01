@@ -658,7 +658,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(display, /id="cyber-sonar-toggle"/);
   assert.match(
     display,
-    /id="cyber-sonar-opacity"[^>]*value="84"[^>]*aria-label="Cyber contact and label opacity"/,
+    /id="cyber-sonar-opacity"[^>]*:model-value="sonar\?\.opacity \?\? 84" aria-label="Cyber contact and label opacity"/,
   );
   assert.match(display, /id="cyber-sonar-sector"/);
   assert.deepEqual(setHud.parameters.properties.layout.enum, HUD_LAYOUTS);

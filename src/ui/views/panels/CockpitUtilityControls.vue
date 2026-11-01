@@ -3,7 +3,7 @@ import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { vClassToggle } from '../../rail/classToggle.js';
-import { vFieldValue } from '../../rail/fieldValue.js';
+import UiSlider from '../../kit/UiSlider.js';
 import { useRadioStore } from '../../stores/radio.js';
 
 // The Cockpit's Display and Radio launchers and their popovers. RadioControls
@@ -60,7 +60,7 @@ const radioLabel = computed(() =>
         </div>
         <label class="cockpit-radio-volume" for="cockpit-radio-volume">
           <span data-i18n>VOLUME</span>
-          <input id="cockpit-radio-volume" @input="act('setRadioVolume', $event.target.value)" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Cockpit Radio volume" :disabled="cockpit ? cockpit.volume.disabled : true" v-field-value="cockpit ? cockpit.volume.value : 80" data-i18n-aria-label />
+          <UiSlider id="cockpit-radio-volume" hold @update:model-value="act('setRadioVolume', $event)" min="0" max="100" aria-label="Cockpit Radio volume" :disabled="cockpit ? cockpit.volume.disabled : true" :model-value="cockpit ? cockpit.volume.value : 80" data-i18n-aria-label />
           <output id="cockpit-radio-volume-value" class="gev-slider-value" for="cockpit-radio-volume">{{ cockpit ? `${cockpit.volume.value}%` : '80%' }}</output>
         </label>
       </div>

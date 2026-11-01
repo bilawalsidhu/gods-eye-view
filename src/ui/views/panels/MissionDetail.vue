@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { nextTick, ref, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
-import { vFieldValue } from '../../rail/fieldValue.js';
+import UiSlider from '../../kit/UiSlider.js';
 import { useContextStore } from '../../stores/context.js';
 
 // The selected space mission inside Context. The launches layer presents it
@@ -62,7 +62,7 @@ watch(
     </section>
     <div class="mission-replay-speed-control" :hidden="m && !m.replay.available">
       <div class="mission-replay-speed-header"><label for="space-mission-replay-speed">{{ t('REPLAY SPEED') }}</label><output class="gev-slider-value" for="space-mission-replay-speed" data-mission-replay-speed-output>{{ m ? m.replay.speedText : '1×' }}</output></div>
-      <input id="space-mission-replay-speed" class="gev-quantitative-slider" type="range" min="0.25" max="4" step="0.25" value="1" data-mission-replay-speed :aria-label="t('Replay speed multiplier')" v-field-value="m?.replay.speed" :style="m && { '--replay-speed-progress': m.replay.speedProgress }" @input="layer?.setReplaySpeed($event.currentTarget.value)">
+      <UiSlider id="space-mission-replay-speed" hold min="0.25" max="4" step="0.25" data-mission-replay-speed :aria-label="t('Replay speed multiplier')" :model-value="m ? m.replay.speed : 1" :style="m && { '--replay-speed-progress': m.replay.speedProgress }" @update:model-value="layer?.setReplaySpeed($event)" />
       <div class="mission-replay-speed-scale" aria-hidden="true"><span>0.25×</span><span>1×</span><span>4×</span></div>
     </div>
     <div class="mission-action-row">

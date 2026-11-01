@@ -68,7 +68,7 @@ test('the card’s buttons, gain, tuning and volume call LocalSdrControls', (t) 
     ['setSdrGain', '20.7'],
     ['tuneSdr', '101.1'],
     ['tuneSdr', '95.3'],
-    ['setSdrVolume', '40'],
+    ['setSdrVolume', 40],
   ]);
 });
 

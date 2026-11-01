@@ -1128,6 +1128,8 @@
   "src/ui/kit/UiRail.test.mjs",
   "src/ui/kit/UiSegmented.vue",
   "src/ui/kit/UiSegmented.test.mjs",
+  "src/ui/kit/UiSlider.js",
+  "src/ui/kit/UiSlider.test.mjs",
   "src/ui/displayPanelActions.test.mjs",
   "src/testSupport/vueDom.mjs",
   "build/vueLoader.js",

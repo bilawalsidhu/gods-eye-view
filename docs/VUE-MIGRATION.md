@@ -56,6 +56,17 @@ Home and End), since each of Core's groups keeps its own keyboard policy, and
 once and asks for a change only when it lands on another option. Every
 segmented group in Core is a `UiSegmented`; the old `segmentedControl.js`
 adapter is gone.
+`UiSlider` keeps the native range input where ui-vue draws a
+`role="slider"` track, so Core's keyboard, form behaviour and styling stay;
+it takes ui-vue's `v-model`, `min`, `max`, `step` and `disabled`, emits a
+number, and adds `hold` (never rewrite a focused handle, and take the model
+back on blur). It is a functional render-function component, so the
+portable `./ui/input` rows use it without a component compiler. The
+Display, Radio, RTL-SDR, Cockpit, mission replay and style parameter
+sliders are `UiSlider`s; Street Level's date slider, Bhote Koshi's split
+and progress ranges and the rail card settings' ranges keep their own
+inputs for now. Merging the kits means settling native input against the
+drawn track.
 
 Controls share one skin, so every panel reads the same. Every scrolling
 surface carries the kit's `.ui-scroll` (ui-vue's name), which draws the thin
