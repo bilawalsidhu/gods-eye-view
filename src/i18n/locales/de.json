@@ -781,7 +781,7 @@
   "Stop radio playback": "Radiowiedergabe stoppen",
   "Radio volume": "Radio-Lautstärke",
   "STATION SITE": "SENDER-WEBSITE",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "Beim Starten der Wiedergabe wird eine direkte Verbindung zum Sender hergestellt. Die IP-Adresse ist für diesen Sender sichtbar.",
+  "Audio connects directly to the broadcaster when you press play, finish tuning or choose a station on the globe. Your IP is visible to that broadcaster.": "Beim Starten der Wiedergabe, nach dem Abstimmen oder bei der Wahl eines Senders auf dem Globus wird eine direkte Verbindung zum Sender hergestellt. Die IP-Adresse ist für diesen Sender sichtbar.",
   "Intelligence HUD (H)": "Lagebild-HUD (H)",
   "Layout": "Layout",
   "HUD layout": "HUD-Layout",

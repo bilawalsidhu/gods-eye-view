@@ -1850,7 +1850,7 @@ test('voice Radio resolves Austin and exposes semantic selection, volume, pause,
   assert.equal(result.radioAction, 'play');
   assert.equal(result.stationId, 'nearest');
   assert.equal('station' in result, false);
-  assert.deepEqual(calls.at(-1), ['cycle', 1, { focus: false, autoplay: false }]);
+  assert.deepEqual(calls.at(-1), ['cycle', 1, { focus: false, autoplay: false, fallback: true }]);
 
   for (const invalidCoordinates of [
     { latitude: null, longitude: null },

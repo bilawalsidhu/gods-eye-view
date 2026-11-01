@@ -2830,7 +2830,7 @@
   "Radio volume": "Volume radio",
   "STATION SITE": "SITO STAZIONE",
   "DIRECTORY: RADIO BROWSER": "ELENCO: RADIO BROWSER",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "L'audio si collega direttamente all'emittente dopo aver premuto play. Il tuo IP è visibile a quell'emittente.",
+  "Audio connects directly to the broadcaster when you press play, finish tuning or choose a station on the globe. Your IP is visible to that broadcaster.": "L'audio si collega direttamente all'emittente dopo aver premuto play, terminato la sintonizzazione o scelto una stazione sul globo. Il tuo IP è visibile a quell'emittente.",
   "Local RTL-SDR receiver": "Ricevitore RTL-SDR locale",
   "LOCAL RTL-SDR": "RTL-SDR LOCALE",
   "Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.": "Chrome/Edge · WebUSB · un sintonizzatore locale condiviso tra FM e il livello ADS-B locale.",

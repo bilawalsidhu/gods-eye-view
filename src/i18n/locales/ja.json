@@ -2688,7 +2688,7 @@
   "Radio volume": "ラジオの音量",
   "STATION SITE": "放送局サイト",
   "DIRECTORY: RADIO BROWSER": "ディレクトリ：Radio Browser",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "再生ボタンを押すと、音声は放送局に直接接続されます。お使いのIPアドレスは放送局側から見えます。",
+  "Audio connects directly to the broadcaster when you press play, finish tuning or choose a station on the globe. Your IP is visible to that broadcaster.": "再生ボタンを押す、選局を終える、または地球儀で局を選ぶと、音声は放送局に直接接続されます。お使いのIPアドレスは放送局側から見えます。",
   "Local RTL-SDR receiver": "ローカルRTL-SDR受信機",
   "LOCAL RTL-SDR": "ローカルRTL-SDR",
   "Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.": "Chrome/Edge · WebUSB · FMとローカルADS-Bレイヤーで1台のローカルチューナーを共有します。",
