@@ -43,11 +43,12 @@ export function createState({ services }) {
     subjectClearListener: null,
     runtimeListenersAttached: false,
     preRenderRemover: null,
-    directionRoot: null,
-    compassRing: null,
-    compassLabels: [],
-    compassHeading: null,
-    directionMarkers: [],
+    /** The published direction overlay, its signature and its subscribers. */
+    directionView: null,
+    directionSignature: '',
+    directionListeners: new Set(),
+    /** Each marker's last stable screen angle. */
+    directionAngles: [0, 0, 0],
     navigationHistory: [],
     navigationVisited: new Set(),
     navigationIndex: -1,

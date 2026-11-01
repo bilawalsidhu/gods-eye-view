@@ -14,6 +14,7 @@ import SplitFlapText from './panels/SplitFlapText.vue';
 import WindInspectionMarker from './panels/WindInspectionMarker.vue';
 import CelestialRing from './panels/CelestialRing.vue';
 import ScreenAnnotations from './panels/ScreenAnnotations.vue';
+import AwarenessDirection from './panels/AwarenessDirection.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
@@ -127,4 +128,5 @@ const vToastText = {
   <WindInspectionMarker />
   <MissionReplayOverlay />
   <ScreenAnnotations />
+  <AwarenessDirection />
 </template>

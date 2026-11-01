@@ -57,6 +57,7 @@ import { useContextStore } from './stores/context.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
+import { useAwarenessDirectionStore } from './stores/awarenessDirection.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
@@ -1042,6 +1043,15 @@ export class StyleManager extends ShellFacade {
     this._awarenessPanelUnsubscribe = militaryAwarenessLayer?.subscribePanel?.(
       (view) => contextStore.publishAwareness(view),
     );
+    // And its compass and contact bearings, which the scene chrome renders.
+    const awarenessDirectionStore =
+      useAwarenessDirectionStore(applicationPinia());
+    this._awarenessDirectionUnsubscribe?.();
+    awarenessDirectionStore.publish(null);
+    this._awarenessDirectionUnsubscribe =
+      militaryAwarenessLayer?.subscribeDirectionOverlay?.((view) =>
+        awarenessDirectionStore.publish(view),
+      );
     // The Space Missions layer publishes its roster and selected mission.
     contextStore.connectMissions(rocketLaunchesLayer);
     this._missionsPanelUnsubscribe?.();
@@ -1805,6 +1815,9 @@ export class StyleManager extends ShellFacade {
     this._localSdrControls?.destroy();
     this._awarenessPanelUnsubscribe?.();
     this._awarenessPanelUnsubscribe = null;
+    this._awarenessDirectionUnsubscribe?.();
+    this._awarenessDirectionUnsubscribe = null;
+    useAwarenessDirectionStore(applicationPinia()).publish(null);
     this._missionsPanelUnsubscribe?.();
     this._missionsPanelUnsubscribe = null;
     this._missionReplayUnsubscribe?.();

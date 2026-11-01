@@ -113,7 +113,9 @@
       "src/ui/views/panels/CelestialRing.vue",
       "src/ui/stores/screenAnnotations.js",
       "src/ui/views/panels/ScreenAnnotations.vue",
-      "src/ui/stores/worldOverlayActions.js"
+      "src/ui/stores/worldOverlayActions.js",
+      "src/ui/stores/awarenessDirection.js",
+      "src/ui/views/panels/AwarenessDirection.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -1036,7 +1038,8 @@
       "src/ui/toast.js",
       "src/ui/stores/missionReplay.js",
       "src/ui/stores/celestialRing.js",
-      "src/ui/stores/worldOverlayActions.js"
+      "src/ui/stores/worldOverlayActions.js",
+      "src/ui/stores/awarenessDirection.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -3036,7 +3039,8 @@
       "src/ui/stores/bhoteKoshiPanel.js",
       "src/ui/stores/celestialRing.js",
       "src/ui/stores/screenAnnotations.js",
-      "src/ui/stores/worldOverlayActions.js"
+      "src/ui/stores/worldOverlayActions.js",
+      "src/ui/stores/awarenessDirection.js"
     ],
     "external": [
       "hls.js",

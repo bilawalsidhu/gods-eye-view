@@ -57,6 +57,7 @@ export function createAwarenessLayer({ services, source }) {
       historySubjectSnapshot: parts.history.historySubjectSnapshot,
       findCompatibleHistoryIndex: parts.history.findCompatibleHistoryIndex,
       subscribePanel: parts.panel.subscribePanel,
+      subscribeDirectionOverlay: parts.rendering.subscribeDirectionOverlay,
       awarenessResultsAreLive: parts.panel.awarenessResultsAreLive,
       awarenessNeedsContinuousRender:
         parts.model.awarenessNeedsContinuousRender,

@@ -230,12 +230,7 @@ export function createLifecycle({
       this.disable();
       detachRuntimeListeners();
       parts.panel.clearPanel();
-      layerState.directionRoot?.remove();
-      layerState.directionRoot = null;
-      layerState.compassRing = null;
-      layerState.compassLabels = [];
-      layerState.compassHeading = null;
-      layerState.directionMarkers = [];
+      parts.rendering.removeDirectionOverlay();
       layerState.subjectListener = null;
       layerState.contextListener = null;
       layerState.clearListener = null;

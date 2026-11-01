@@ -189,7 +189,12 @@ a feature supplying only its accent.
    the application shell publishes to the `gev-world-overlay-actions` store
    and answers with `activateWorldOverlayAction()`; the module needs no Vue
    for the portable transit entry, and its card and detection canvases stay
-   painting surfaces it draws on, like the Cesium canvas), then
+   painting surfaces it draws on, like the Cesium canvas), the Global
+   Context compass and contact bearings (`AwarenessDirection` teleports into
+   the globe container what the awareness layer presents through
+   `subscribeDirectionOverlay()`, which the application shell publishes to
+   the `gev-awareness-direction` store, so the portable `./layers/awareness`
+   entry needs no Vue), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest

@@ -86,7 +86,7 @@ export function createPanel({ state: layerState, parts }) {
           ? t('SELECT A FLIGHT, VESSEL, OR MAPPED INSTALLATION')
           : t('ENABLE TO LOAD OBSERVED / MAPPED PROXIMITY'),
       });
-    if (layerState.directionRoot) layerState.directionRoot.hidden = true;
+    parts.rendering.hideDirectionOverlay();
   }
 
   /** Clear the panel when the layer is destroyed. */
