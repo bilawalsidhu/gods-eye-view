@@ -211,7 +211,8 @@ out `scene-chrome` the before/after imagery dividers (the imagery still splits,
 with no line or handle to move it), the status chips, the toast, the ORBIT
 indicator, the FPS readout, the Scene actions panel, the data-pack attribution
 cards, the wind inspection marker, the Space Missions replay vehicle, the
-full-globe celestial ring and the screen-space map annotations;
+full-globe celestial ring, the screen-space map annotations and the
+visible map target list;
 leaving out `command-dock` the voice control and its pointer reticle; and
 leaving out `context` the Bhote Koshi reconstruction panel. An unknown
 view name is an error. A host that does not initialize Core's locale passes

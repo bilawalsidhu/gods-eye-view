@@ -4,6 +4,7 @@ import { t } from '../../i18n/index.js';
 import { useDisplayStore } from '../stores/display.js';
 import { useLocationStore } from '../stores/location.js';
 import { useStatusStore } from '../stores/status.js';
+import { useWorldOverlayActionsStore } from '../stores/worldOverlayActions.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import ImagerySplitView from './panels/ImagerySplitView.vue';
 import MissionReplayOverlay from './panels/MissionReplayOverlay.vue';
@@ -21,6 +22,24 @@ const { style } = storeToRefs(useDisplayStore());
 const { loading, traffic, cctv, toast, fps } = storeToRefs(useStatusStore());
 // The ORBIT indicator LocationControls offers with the location tray.
 const { view: location } = storeToRefs(useLocationStore());
+// The focusable mirror of the overlay cards the world overlay painted.
+const { actions: targets, controls: overlayControls } = storeToRefs(
+  useWorldOverlayActionsStore(),
+);
+// Each button activates the target of the list it was rendered for.
+const onOverlayAction = (owner, key) => () =>
+  overlayControls.value?.activate(owner, key);
+// Every accepted focus rewrites the status, so the live region announces a
+// repeated focus again.
+const vOverlayStatus = {
+  mounted(el, { value }) {
+    el.textContent = value?.status ?? '';
+  },
+  updated(el, { value, oldValue }) {
+    if (value?.announced !== oldValue?.announced || !value)
+      el.textContent = value?.status ?? '';
+  },
+};
 // Every show rewrites the toast's text, so the live region announces a
 // repeated message again; hiding leaves it as it fades.
 const vToastText = {
@@ -39,8 +58,8 @@ const vToastText = {
     <canvas id="world-overlay-canvas"></canvas>
   </div>
   <div id="world-overlay-actions" class="world-overlay-accessibility" role="region" aria-label="Visible map targets" data-i18n-aria-label>
-    <div id="world-overlay-action-list"></div>
-    <div id="world-overlay-status" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="world-overlay-action-list"><button v-for="item in targets?.items ?? []" :key="item.key" type="button" :aria-label="item.label" :aria-pressed="String(item.selected)" :data-overlay-action-key="item.key" :onClick="onOverlayAction(targets.owner, item.key)">{{ item.label }}</button></div>
+    <div id="world-overlay-status" v-overlay-status="targets" role="status" aria-live="polite" aria-atomic="true"></div>
   </div>
 
   <!-- Title -->

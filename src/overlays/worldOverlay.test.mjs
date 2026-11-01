@@ -21,7 +21,9 @@ import {
   getOverlayPaintRect,
   getWorldOverlayDiagnostics,
   hitTestWorldOverlay,
+  activateWorldOverlayAction,
   initWorldOverlay,
+  subscribeWorldOverlayActions,
   isOverlayPointVisible,
   normalizeOverlayEntry,
   paintLaneForOverlayEntry,
@@ -1019,7 +1021,14 @@ test('accessible actions announce only accepted focus and expose selected state'
   const env = installMockEnvironment();
   let acceptedActivations = 0;
   let staleActivations = 0;
+  let actions = null;
+  const unsubscribe = subscribeWorldOverlayActions((view) => {
+    actions = view;
+  });
   initWorldOverlay(env.viewer);
+  assert.deepEqual(actions.items, []);
+  assert.equal(actions.status, '');
+  assert.equal(actions.announced, 0);
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     interactive: true,
     accessibilityLabel: 'Focus vessel TEST, MMSI 123',
@@ -1030,15 +1039,20 @@ test('accessible actions announce only accepted focus and expose selected state'
   })]);
   env.postRender.raise();
 
-  const list = env.document.getElementById('world-overlay-action-list');
-  const status = env.document.getElementById('world-overlay-status');
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0]['aria-pressed'], 'true');
-  list.children[0].click();
+  assert.equal(actions.items.length, 1);
+  const [item] = actions.items;
+  assert.equal(item.label, 'Focus vessel TEST, MMSI 123');
+  assert.equal(item.selected, true);
+  const owner = actions.owner;
+  activateWorldOverlayAction({}, item.key);
+  assert.equal(acceptedActivations, 0, 'a list from another host cannot activate');
+  activateWorldOverlayAction(owner, item.key);
   assert.equal(acceptedActivations, 1);
-  assert.equal(status.textContent, 'Focusing Focus vessel TEST, MMSI 123');
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123');
+  assert.equal(actions.announced, 1);
+  activateWorldOverlayAction(owner, item.key);
+  assert.equal(actions.announced, 2, 'a repeated focus is a new announcement');
 
-  status.textContent = 'Focus unchanged';
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     selected: false,
     interactive: true,
@@ -1049,12 +1063,16 @@ test('accessible actions announce only accepted focus and expose selected state'
     },
   })]);
   env.postRender.raise();
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0]['aria-pressed'], 'false');
-  list.children[0].click();
+  assert.equal(actions.items.length, 1);
+  assert.equal(actions.items[0].selected, false);
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123', 'the list keeps its last announcement');
+  activateWorldOverlayAction(owner, actions.items[0].key);
   assert.equal(staleActivations, 1);
-  assert.equal(status.textContent, 'Focus unchanged');
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123', 'a refused focus announces nothing');
+  assert.equal(actions.announced, 2);
   env.cleanup();
+  assert.equal(actions, null, 'teardown withdraws the list');
+  unsubscribe();
 });
 
 test('viewport and horizon culling obey explicit policy inputs', () => {

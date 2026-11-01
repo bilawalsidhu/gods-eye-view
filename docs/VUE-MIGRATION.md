@@ -183,7 +183,13 @@ a feature supplying only its accent.
    parts as attribute records, the fading marks until they leave; the view
    hands back the callout text and mark groups the renderer measures, and
    the tracked-entity fade is measured once the frame is in the document;
-   the styles it injected now live in `src/ui/styles/annotations.css`), then
+   the styles it injected now live in `src/ui/styles/annotations.css`), the
+   visible map target list (the scene chrome renders the buttons and status
+   the world overlay presents through `subscribeWorldOverlayActions()`, which
+   the application shell publishes to the `gev-world-overlay-actions` store
+   and answers with `activateWorldOverlayAction()`; the module needs no Vue
+   for the portable transit entry, and its card and detection canvases stay
+   painting surfaces it draws on, like the Cesium canvas), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest

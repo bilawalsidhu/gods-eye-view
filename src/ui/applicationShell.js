@@ -56,6 +56,7 @@ import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
+import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
@@ -106,6 +107,8 @@ export class StyleManager extends ShellFacade {
       CelestialRing,
       initTrackedReadout,
       initWorldOverlay,
+      subscribeWorldOverlayActions,
+      activateWorldOverlayAction,
       initDetection,
       setDetectionStyle,
       trafficLayer,
@@ -479,6 +482,13 @@ export class StyleManager extends ShellFacade {
     // detection and tracked-readout initialize. It stays transparent until a
     // production source explicitly registers entries.
     initWorldOverlay(viewer);
+    // Its focusable mirror of the painted cards, which the scene chrome
+    // renders.
+    const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
+    overlayActionsStore.connect({ activate: activateWorldOverlayAction });
+    this._overlayActionsUnsubscribe = subscribeWorldOverlayActions((view) =>
+      overlayActionsStore.publish(view),
+    );
 
     // Initialize detection overlay BEFORE style stages so the composite
     // stage is first in the post-process pipeline
@@ -1834,7 +1844,12 @@ export class StyleManager extends ShellFacade {
     }
     destroyTrackedReadout();
     destroyDetection();
+    this._overlayActionsUnsubscribe?.();
+    this._overlayActionsUnsubscribe = null;
     destroyWorldOverlay();
+    const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
+    overlayActionsStore.connect(null);
+    overlayActionsStore.publish(null);
     this.celestialRing?.destroy();
     this._visualSettings.destroy();
   }
