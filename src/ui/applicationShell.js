@@ -55,6 +55,7 @@ import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
+import { useCelestialRingStore } from './stores/celestialRing.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
@@ -414,6 +415,7 @@ export class StyleManager extends ShellFacade {
     // Cesium canvas but below the HUD/detection/readout z ladder.
     this.celestialRing = new CelestialRing(viewer, {
       enabled: false,
+      store: useCelestialRingStore(applicationPinia()),
       onAutoDisable: () =>
         this.setCelestialRingEnabled(false, {
           syncShare: !!this.shareLinkManager,

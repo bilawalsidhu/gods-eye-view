@@ -11,6 +11,7 @@ import DataPacks from './panels/DataPacks.vue';
 import SceneInteractions from './panels/SceneInteractions.vue';
 import SplitFlapText from './panels/SplitFlapText.vue';
 import WindInspectionMarker from './panels/WindInspectionMarker.vue';
+import CelestialRing from './panels/CelestialRing.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
@@ -101,6 +102,7 @@ const vToastText = {
 
   <ImagerySplitView />
   <DataPacks />
+  <CelestialRing />
   <SceneInteractions />
   <WindInspectionMarker />
   <MissionReplayOverlay />

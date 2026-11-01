@@ -172,7 +172,12 @@ a feature supplying only its accent.
    renders what the event layer publishes to the `gev-bhote-koshi-panel`
    store: each control's text, hidden, disabled, value and attributes as
    the layer writes them, unchanged frames sending nothing; the rail takes
-   `bhote-event-active` while it shows), then
+   `bhote-event-active` while it shows), the full-globe celestial ring
+   (`CelestialRing` teleports into the globe container what `CelestialRing`
+   in `src/celestialRing.js` publishes to the `gev-celestial-ring` store and
+   hands its two canvases back for the owner to paint; the application shell
+   passes the store in, so the keyhole helpers other packages import need no
+   Vue), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest

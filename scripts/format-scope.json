@@ -1146,5 +1146,7 @@
   "src/ui/stores/missionReplay.js",
   "src/layers/launches/replayOverlay.test.mjs",
   "src/ui/stores/bhoteKoshiPanel.js",
-  "src/data/bhoteKoshiPanelView.test.mjs"
+  "src/data/bhoteKoshiPanelView.test.mjs",
+  "src/ui/stores/celestialRing.js",
+  "src/celestialRingView.test.mjs"
 ]
