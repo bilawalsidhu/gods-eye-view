@@ -65,8 +65,8 @@
 - `createMapSourceControls()` (`./ui/maps`) no longer renders the map source
   chips into a `container` or writes a `statusElement`: it presents the chip
   row and status badge and hands them to its `publish` option, and Core's
-  dock renders them and calls `select()`. `renderMapStackChips` and
-  `syncMapStackChips` are deprecated (samehkhamis).
+  dock renders them and calls `select()`. `renderMapStackChips`,
+  `syncMapStackChips` and `MAP_STACK_CHIP_CLASS` are removed (samehkhamis).
 
 - `LocationControls` (`./ui/location`) no longer builds the city and
   landmark pills or writes the mini status: it presents the tray, including

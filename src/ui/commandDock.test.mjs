@@ -127,6 +127,11 @@ test('the map source row renders the published chips and selects through the con
   );
   const [bing, esri, osm] = chips;
   assert.equal(bing.classList.contains('unavailable'), true);
+  assert.equal(
+    bing.disabled,
+    false,
+    'unavailable chips stay keyboard-reachable',
+  );
   assert.equal(bing.getAttribute('aria-disabled'), 'true');
   assert.equal(
     bing.getAttribute('aria-label'),

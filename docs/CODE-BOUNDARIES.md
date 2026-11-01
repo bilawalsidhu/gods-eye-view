@@ -399,9 +399,9 @@ remain in their callers.
 `ui/maps` owns source-chip presentation, selection feedback and its subscription
 lifetime. It receives the existing controller and explicit state/action callbacks;
 it imports no renderer or application. Source construction and availability policy
-remain with the map controller. Rebuilding controls removes their previous chip
-listeners, and destruction suppresses late completions without owning or destroying
-the supplied controller.
+remain with the map controller. The dock renders the chips; rebuilding controls
+drops their previous subscription, and destruction suppresses late completions
+without owning or destroying the supplied controller.
 
 ## Layer panel
 
