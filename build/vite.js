@@ -141,8 +141,6 @@ export function createBrowserViteConfig({
   plugins = [],
   publicDir,
   googleApiKey,
-  cesiumToken,
-  mapillaryToken,
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
@@ -208,13 +206,11 @@ export function createBrowserViteConfig({
     // The preview server serves the same documents, so it carries the same
     // framing + CSP hardening (one constant, no drift).
     preview: { headers: BROWSER_HEADERS },
+    // Only the Google Maps browser key is defined (restricted at Google, per
+    // SECURITY.md). Cesium ion and Mapillary tokens stay on the server
+    // (server/providers/keyIsolation, src/tooling/keyExposure.test.mjs).
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
-      'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
-      // Mapillary client tokens are public by design (see SECURITY.md).
-      'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
-        mapillaryToken ?? '',
-      ),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };
