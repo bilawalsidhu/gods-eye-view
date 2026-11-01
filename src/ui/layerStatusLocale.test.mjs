@@ -87,3 +87,21 @@ for (const locale of ['es', 'ru']) {
     }
   });
 }
+
+test('a source a layer marks as data is shown untranslated in the row', () => {
+  setLocale('ru');
+  try {
+    const row = (stats) =>
+      LayerPanel.prototype._buildMetaText({
+        id: 'weather-lightning',
+        enabled: true,
+        stats: { count: 1, lastUpdate: Date.now(), ...stats },
+      });
+    assert.match(row({ source: 'Local ADS-B' }), /Локальный ADS-B/);
+    const verbatim = row({ source: 'Local ADS-B', sourceVerbatim: true });
+    assert.match(verbatim, /Local ADS-B/);
+    assert.doesNotMatch(verbatim, /Локальный/);
+  } finally {
+    setLocale('en');
+  }
+});

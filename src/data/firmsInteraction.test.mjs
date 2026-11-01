@@ -8,6 +8,9 @@ import * as Cesium from 'cesium';
 import { createFirmsHeatmapLayer, applyFirmsOverlayPolicy, buildCellCard } from './firmsHeatmap.js';
 import { fireDetectionKey } from './firmsLabels.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import { getSelectedEntityContext } from './contextStore.js';
+import { setLocale } from '../i18n/index.js';
+import { shownEntityLabel } from '../voice/speech.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import path from 'node:path';
@@ -231,6 +234,27 @@ test('clicking a fire CARD behaves exactly like clicking its sprite', () => {
     assert.equal(h.requests[0].id, fireDetectionKey(fire));
   } finally {
     h.cleanup();
+  }
+});
+
+// The voice model reads these labels as data (track_entity, get_entity_context,
+// pointer_context); the voice card translates them where it shows them.
+test('fire labels stay English data in a translated interface', () => {
+  const h = harness({ fires: [makeFire()], picked: { id: 'firms-7' } });
+  try {
+    setLocale('ru');
+    h.click();
+    assert.equal(getSelectedEntityContext().label, 'Fire · FRP 1520 MW');
+    // The card's pattern must match what the producer actually writes.
+    assert.equal(
+      shownEntityLabel(getSelectedEntityContext().label),
+      'Пожар · FRP 1520 МВт',
+    );
+    assert.equal(h.layer.getSelectedInfo().label, 'Fire · FRP 1520 MW');
+    assert.equal(h.layer.getStrongestFire().label, 'Fire · FRP 1520 MW');
+  } finally {
+    h.cleanup();
+    setLocale('en');
   }
 });
 

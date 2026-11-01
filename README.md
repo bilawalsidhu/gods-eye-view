@@ -61,7 +61,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🎯 Click-to-track anything:** Camera locks on, draws a fading trail, surfaces full metadata — and a tracked fire or vessel hands you off to the nearest live camera in one click.
 - **🖊️ Voice whiteboard:** Speak annotations onto the world — real boundary polygons, marks, and routes.
 - **🛫 3D hangar:** Real per-class aircraft models — 787, ATR-72, Citation, Bell 206, MQ-9 — and a tracked contact swaps from glyph to 3D model as you close in.
-- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir, Snow.
+- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir.
 - **🟩 Detection overlay:** Screen-space bounding boxes and IDs on everything in view.
 - **🎖️ Military HUD:** Tactical heads-up display with intelligence-style telemetry.
 - **🌐 Global Context:** Stage the full situational picture with one switch — and get your exact view back when you leave.
@@ -111,13 +111,15 @@ app's **POWER UP** panel; [Keys & Costs](#-api-keys) explains the options.
 
 Available on **Windows, macOS, and Linux**. The Pinokio maintainer reports
 cross-platform testing of the fixed installer. The launcher installs the
-locked dependencies, finds a free local port, and opens the app.
+locked dependencies, finds a free local port, and opens the app in your system
+browser. The Server menu item keeps the launcher console available.
 
 **Tried before and installation failed?** Update Pinokio and try again.
 Version 8.2 fixes the launcher installation issue;
 [details from the Pinokio maintainer](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g).
 
-**Pinokio opens but the globe is very choppy?** Before treating that as a GPU
+**Using an older launcher or opening the embedded view manually?** If the globe
+is very choppy, before treating that as a GPU
 compatibility or minimum-hardware problem, copy the local server URL shown by
 Pinokio and open the same URL in your normal hardware-accelerated browser. One
 Pinokio 8.2.0 user reported severe stutter in Pinokio's embedded view that went
@@ -207,6 +209,8 @@ env UID=1026 GID=100 docker compose up -d
 
 Keep the `env`: bash treats `UID` as read-only, so a plain `UID=1026` in front of a command is silently ignored. If the container can't write the checkout, it says so at start. Docker Desktop on macOS and Windows maps ownership for you.
 
+On SELinux hosts (Fedora, RHEL), compose mounts the checkout with `:z` so the container may read it; Docker may relabel the checkout for container access, which can take a moment on a large checkout. Without that, the start fails with `Cannot find module '/app/scripts/docker-start.mjs'`.
+
 Behind a reverse proxy, put your keys in `.env` or pass them as environment variables - Provider Settings refuses proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)).
 
 </details>
@@ -290,14 +294,14 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Tracking the ISS along its orbital path as it crosses over Ukraine](docs/media/14-iss-over-ukraine.gif)
 
-6. **Switch the optics.** Tap `1`–`7` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
+6. **Switch the optics.** Tap `1`–`6` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
 7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
 
-**Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
+**Keyboard:** `1`–`6` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
 
 ---
 
@@ -395,7 +399,7 @@ Twenty layers and map sources. **Eighteen have a keyless path.** Some offer addi
 | 🌍 **Earthquakes**          | Global seismic activity, last 24h                                                                                                                                                                                                                                                                                                                                                   | USGS                                    | 🟢                                                                                                  |
 | ◍ **Air quality**           | Live AQHI on the published 1–10+ health-risk scale, with a Weather-panel card showing the band legend and the highest readings in view. **Canada only** — ECCC is the first registered provider | ECCC MSC GeoMet                          | 🟢                                                                                                  |
 | 🚗 **Traffic**              | Simulated vehicles on OSM roads. With TomTom, live flow speeds drive the simulation and congestion colors below ~8 km; individual vehicle positions are not live observations                                                                                                                                                                                                       | TomTom + OSM                            | 🟢 simulation · 🟡 live flow speeds                                                                 |
-| 📹 **CCTV Mesh**            | ~4,000 public cameras (shared cap) projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511, free developer key) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · Delaware (DelDOT live video) · New South Wales (Live Traffic NSW) · Calgary · Norway (Statens vegvesen) · Toronto · King County (WA) · Washington (WSDOT) · Catalonia (Servei Català de Trànsit) · Hong Kong (Transport Department) · Taiwan (Freeway Bureau, MOTC), plus opt-in New York City (NYC DOT TMC, needs your own NYC DOT agreement), opt-in Lithuania (Via Lietuva / Eismoinfo, photo licence unconfirmed) and opt-in Florida (FL511, individual personal use only; other use needs FDOT's written consent). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
+| 📹 **CCTV Mesh**            | ~4,000 public cameras (shared cap) projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511, free developer key) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · Delaware (DelDOT live video) · New South Wales (Live Traffic NSW) · Calgary · Norway (Statens vegvesen) · Toronto · King County (WA) · Washington (WSDOT) · Catalonia (Servei Català de Trànsit) · Hong Kong (Transport Department) · Taiwan (Freeway Bureau, MOTC) · Italy (A22 Brennero motorway), plus opt-in New York City (NYC DOT TMC, needs your own NYC DOT agreement), opt-in Lithuania (Via Lietuva / Eismoinfo, photo licence unconfirmed) and opt-in Florida (FL511, individual personal use only; other use needs FDOT's written consent). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
 | 📷 **Mapped ALPR Cameras**  | License-plate-reader camera locations tagged by OpenStreetMap contributors, loaded one city-sized view at a time, with **SHOW NEAREST**. Locations and tags only: no plate data, no video                                                                                                                                                                                           | OpenStreetMap (incl. DeFlock mapping)   | 🟢                                                                                                  |
 | 📷 **Street Level**         | Street-level photos behind one panel, one chip per provider: coverage on the streets, image cones, an embedded viewer with full-screen **EXPAND**. Mapillary, Google Street View, KartaView and Panoramax | Mapillary · Google · KartaView · Panoramax | 🟢 KartaView, Panoramax · 🟡 Mapillary token · 🔴 Google Maps key |
 | 📻 **Radio**                | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster                                                                                                                                                                                                                                                 | Radio Browser / broadcasters            | 🟢                                                                                                  |

@@ -22,8 +22,10 @@ module.exports = {
     if (starting) {
       const local = info.local('start.js');
       if (local?.url) {
+        // Open in the system browser without changing the app's framing policy.
+        // This also avoids relying on Pinokio's embedded browser behavior.
         return [
-          { default: true, icon: 'fa-solid fa-earth-americas', text: 'Open God\'s Eye View', href: local.url },
+          { default: true, icon: 'fa-solid fa-earth-americas', text: 'Open God\'s Eye View', href: local.url, popout: true },
           { icon: 'fa-solid fa-terminal', text: 'Server', href: 'start.js' },
         ];
       }

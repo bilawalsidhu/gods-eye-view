@@ -6,6 +6,15 @@ export function normalizeHeading(value) {
   return ((value % 360) + 360) % 360;
 }
 
+/**
+ * Three-digit heading readout, 000–359.
+ * Rounding 359.5° and above lands on north (000), not 360.
+ */
+export function formatHeadingReadout(degrees) {
+  if (!Number.isFinite(degrees)) return '---';
+  return String(Math.round(normalizeHeading(degrees)) % 360).padStart(3, '0');
+}
+
 /** Advance a displayed heading along the shortest arc without exceeding a slew rate. */
 export function slewHeading(current, target, maxStepDeg) {
   const from = normalizeHeading(current);

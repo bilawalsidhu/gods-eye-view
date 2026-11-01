@@ -15,6 +15,7 @@ import {
   formatCockpitContextScope,
   formatCockpitEmergency,
   formatCompassDivision,
+  formatHeadingReadout,
   formatSpeedRulerTick,
   normalizeHeading,
   relativeBearing,
@@ -153,6 +154,14 @@ test('compass divisions remain ordered across north', () => {
 test('compass labels use cardinals where exact and degrees elsewhere', () => {
   assert.equal(formatCompassDivision(270), 'W');
   assert.equal(formatCompassDivision(30), '030');
+});
+
+test('a heading that rounds to north reads 000, not 360', () => {
+  assert.equal(formatHeadingReadout(359.6), '000');
+  assert.equal(formatHeadingReadout(359.4), '359');
+  assert.equal(formatHeadingReadout(0), '000');
+  assert.equal(formatHeadingReadout(10.2), '010');
+  assert.equal(formatHeadingReadout(Number.NaN), '---');
 });
 
 test('great-circle bearing resolves cardinal directions', () => {
