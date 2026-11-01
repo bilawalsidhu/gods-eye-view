@@ -721,7 +721,6 @@
   "Low-accuracy score 2–10%": "低精度評分 2–10%",
   "Low-accuracy score > 10%": "低精度評分 > 10%",
   "GNSS integrity source unavailable": "GNSS 完好性數據源不可用",
-  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "區域採樣 · 半徑 250 海里 · {minutes} 分鐘內已訪問視圖中的網格",
   "Retrying automatically at {time} UTC": "將於 {time} UTC 自動重試",
   "Retrying automatically after provider cooldown": "服務商冷卻結束後自動重試",
   "Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.": "平移或縮放後以及每分鐘自動更新。公共數據源覆蓋以視野中心為圓心、半徑 250 海里的範圍；縮小地圖並不會使其成為全球快照。空白網格位於採樣覆蓋範圍之外，或觀測數據不足。",
@@ -1542,9 +1541,6 @@
   },
   "{count} cameras loaded · enable CCTV to activate": {
     "other": "已加載 {count} 個攝像頭 · 啟用 CCTV 以激活"
-  },
-  "{count} more cameras outside this view · pan or zoom out": {
-    "other": "此視圖外還有 {count} 個攝像頭 · 平移或縮小"
   },
   "Enable CCTV to load camera intersections": "啟用 CCTV 以加載路口攝像頭",
   "Enable CCTV to start camera-linked intelligence summaries.": "啟用 CCTV 以開始生成與攝像頭關聯的情報摘要。",
@@ -2851,6 +2847,17 @@
   "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 發布這些 KMZ 產品。新上傳的內容會在數秒內被檢測到，並自動替換舊版本。點擊標記查看報告。",
   "routing busy — too many routes at once": "路線服務繁忙：同時請求的路線過多",
   "route proxy error": "路線代理出錯",
+  "Approximate location; coverage not calibrated.": "位置為近似值；覆蓋範圍未校準。",
+  "LOCATION · APPROXIMATE": "位置 · 近似",
+  "Open official camera page ↗": "開啟攝影機官方頁面 ↗",
+  "PLAYER IN PANEL": "面板內播放器",
+  "PUBLIC PLAYER · EXTERNAL": "公開播放器 · 外部",
+  "{camera} — public player": "{camera} — 公開播放器",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · 公開播放器 · 近似位置 · 覆蓋範圍未校準",
+  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "區域採樣 · 半徑 250 海里 · {minutes} 分鐘內已訪問視圖中的網格",
+  "{count} more cameras outside this view · pan or zoom out": {
+    "other": "此視圖外還有 {count} 個攝像頭 · 平移或縮小"
+  },
   "AUTHORING": "創作",
   "Create and edit scenes": "創建和編輯場景",
   "SCENE": "場景",
@@ -2873,5 +2880,6 @@
   "Play from this scene through the rest of the project": "從此場景開始播放項目中的其餘場景",
   "Play the shot after the selected one, moving on to the next scene when needed": "播放所選鏡頭的下一個鏡頭，必要時進入下一個場景",
   "Edit anchors, data packs and shot details": "編輯錨點、數據包和鏡頭詳情",
-  "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包"
+  "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包",
+  "NO PUBLIC FEED": "無公開影像"
 }

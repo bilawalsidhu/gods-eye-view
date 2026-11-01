@@ -74,7 +74,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       mediaUrl: isVideoFeedType(feedType)
         ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
         : null,
-      frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+      frameUrl:
+        feedType === 'embed'
+          ? null
+          : `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+      embedUrl: feedType === 'embed' ? source?.embedUrl || null : null,
+      sourcePageUrl: source?.sourcePageUrl || null,
       provider: source?.provider || '',
       sourceKind:
         source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
@@ -172,6 +177,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
               feedType: normalizeFeedType(source.feedType),
+              embedUrl: source.embedUrl || '',
+              sourcePageUrl: source.sourcePageUrl || '',
+              locationNote: source.locationNote || '',
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               poseSource: source.poseSource,
@@ -200,6 +208,29 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
 
+        // A provider-hosted player has no frame or media proxy. Refuse before
+        // any upstream request or Street View/synthetic fallback can run.
+        const playerRoute = /^\/(?:frame|media)\/([^/]+)(?:\/|$)/.exec(
+          url.pathname,
+        );
+        if (
+          playerRoute &&
+          sourceById.get(decodeURIComponent(playerRoute[1]))?.feedType ===
+            'embed'
+        ) {
+          res.writeHead(409, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(
+            JSON.stringify({
+              error:
+                'This camera uses its public embedded player; frames are not available.',
+            }),
+          );
+          return;
+        }
+
         if (url.pathname.startsWith('/stream/')) {
           const cameraId =
             decodeURIComponent(url.pathname.replace('/stream/', '').trim()) ||
@@ -215,9 +246,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         }
 
         if (url.pathname.startsWith('/media/')) {
-          const match = /^\/media\/([^/]+)(?:\/(seg_(\d+)\.ts))?$/.exec(
-            url.pathname,
-          );
+          const match =
+            /^\/media\/([^/]+)(?:\/((?:seg_\d+\.(?:ts|mp4)|init_\d+\.mp4)))?$/.exec(
+              url.pathname,
+            );
           if (!match) {
             res.writeHead(404);
             res.end();
@@ -274,17 +306,18 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               return;
             }
             if (match[2]) {
-              const body = puller.getSegment(
+              const asset = puller.getAsset(
                 cameraId,
                 url.searchParams.get('session'),
-                Number(match[3]),
+                match[2],
                 leaseId,
               );
-              res.writeHead(body ? 200 : 404, {
-                'Content-Type': 'video/mp2t',
+              res.writeHead(asset ? 200 : 404, {
+                'Content-Type':
+                  asset?.contentType || 'application/octet-stream',
                 'Cache-Control': 'no-store',
               });
-              res.end(body || undefined);
+              res.end(asset?.body);
               return;
             }
             const downstream = watchDownstreamClose(res);

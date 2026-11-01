@@ -726,7 +726,6 @@
   "Low-accuracy score 2–10%": "低精度评分 2–10%",
   "Low-accuracy score > 10%": "低精度评分 > 10%",
   "GNSS integrity source unavailable": "GNSS 完好性数据源不可用",
-  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "区域采样 · 半径 250 海里 · {minutes} 分钟内已访问视图中的网格",
   "Retrying automatically at {time} UTC": "将于 {time} UTC 自动重试",
   "Retrying automatically after provider cooldown": "服务商冷却结束后自动重试",
   "Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.": "平移或缩放后以及每分钟自动更新。公共数据源覆盖以视野中心为圆心、半径 250 海里的范围；缩小地图并不会使其成为全球快照。空白网格位于采样覆盖范围之外，或观测数据不足。",
@@ -1552,9 +1551,6 @@
   },
   "{count} cameras loaded · enable CCTV to activate": {
     "other": "已加载 {count} 个摄像头 · 启用 CCTV 以激活"
-  },
-  "{count} more cameras outside this view · pan or zoom out": {
-    "other": "此视图外还有 {count} 个摄像头 · 平移或缩小"
   },
   "Enable CCTV to load camera intersections": "启用 CCTV 以加载路口摄像头",
   "Enable CCTV to start camera-linked intelligence summaries.": "启用 CCTV 以开始生成与摄像头关联的情报摘要。",
@@ -2851,6 +2847,18 @@
   "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 发布这些 KMZ 产品。新上传的内容会在数秒内被检测到，并自动替换旧版本。点击标记查看报告。",
   "routing busy — too many routes at once": "路线服务繁忙：同时请求的路线过多",
   "route proxy error": "路线代理出错",
+  "Approximate location; coverage not calibrated.": "位置为近似值；覆盖范围未经校准。",
+  "LOCATION · APPROXIMATE": "位置 · 近似",
+  "Open official camera page ↗": "打开摄像头官方页面 ↗",
+  "PLAYER IN PANEL": "面板内播放器",
+  "PUBLIC PLAYER · EXTERNAL": "公开播放器 · 外部",
+  "{camera} — public player": "{camera} — 公开播放器",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · 公开播放器 · 近似位置 · 覆盖范围未经校准",
+  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "区域采样 · 半径 250 海里 · {minutes} 分钟内已访问视图中的网格",
+  "{count} more cameras outside this view · pan or zoom out": {
+    "other": "此视图外还有 {count} 个摄像头 · 平移或缩小"
+  },
+  "NO PUBLIC FEED": "暂无公开画面",
   "AUTHORING": "创作",
   "Create and edit scenes": "创建和编辑场景",
   "SCENE": "场景",

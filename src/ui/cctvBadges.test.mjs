@@ -4,8 +4,14 @@ import { CctvControls } from './cctvControls.js';
 import { railFixture } from './railTestFixture.mjs';
 import { setLocale, t } from '../i18n/index.js';
 
-function fixture(t) {
-  const { document } = railFixture();
+function fixture(t, onWrite) {
+  const { document } = railFixture(onWrite);
+  const priorDocument = globalThis.document;
+  globalThis.document = document;
+  t.after(() => {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  });
   const controls = new CctvControls({
     elements: {
       _cctvQualityChip: document.createElement('span'),
@@ -109,4 +115,85 @@ test('localization changes badge copy while preserving machine state ids', (test
     t('CAL · EDITED (UNSAVED)'),
   );
   assert.equal(controls._cctvQualityChip.dataset.calBadge, 'edited');
+});
+
+test('external player badges stay approximate and avoid repeated live-region writes across locales', (testContext) => {
+  const writes = [];
+  const { controls } = fixture(testContext, (key) => {
+    if (key === 'textContent' || key === 'hidden') writes.push(key);
+  });
+  testContext.after(() => setLocale('en'));
+  const activeCamera = Object.freeze({
+    id: 'player',
+    feedType: 'embed',
+    sourceStatus: 'ok',
+    calBadge: 'calibrated',
+    calDirty: true,
+  });
+  const state = { enabled: true, activeCameraId: 'player', activeCamera };
+  for (const locale of ['en', 'es', 'ru']) {
+    setLocale(locale);
+    controls._cctvQualityChip.hidden = true;
+    controls._cctvSourceBadge.hidden = true;
+    controls._renderCctvState(state);
+    assert.equal(
+      controls._cctvQualityChip.textContent,
+      t('LOCATION · APPROXIMATE'),
+    );
+    assert.equal(controls._cctvQualityChip.dataset.calBadge, '');
+    assert.equal(controls._cctvQualityChip.hidden, false);
+    assert.equal(
+      controls._cctvSourceBadge.textContent,
+      t('PUBLIC PLAYER · EXTERNAL'),
+    );
+    assert.equal(controls._cctvSourceBadge.dataset.frameState, 'external');
+    assert.equal(controls._cctvSourceBadge.hidden, false);
+    writes.length = 0;
+    controls._renderCctvState(state);
+    assert.deepEqual(
+      writes,
+      [],
+      'unchanged player state must not rewrite badge text or visibility',
+    );
+    controls._renderCctvState({
+      enabled: true,
+      activeCameraId: 'native',
+      activeCamera: {
+        id: 'native',
+        sourceKind: 'snapshot',
+        sourceStatus: 'degraded',
+        calBadge: 'curated',
+      },
+    });
+    assert.equal(controls._cctvQualityChip.dataset.calBadge, 'curated');
+    assert.equal(
+      controls._cctvQualityChip.textContent,
+      t('CAL · {badge}', { badge: t('CURATED') }),
+    );
+    assert.equal(controls._cctvSourceBadge.dataset.frameState, 'ready');
+    assert.equal(
+      controls._cctvSourceBadge.textContent,
+      `${t('SNAPSHOT')} · ${t('DEGRADED')}`,
+    );
+    controls._renderCctvState(null);
+    assert.equal(controls._cctvSourceBadge.dataset.frameState, 'idle');
+  }
+});
+
+test('external player status takes precedence over stale native frame loading and errors', (testContext) => {
+  const { controls, document } = fixture(testContext);
+  controls._cctvFrame = document.createElement('img');
+  controls._cctvFrame.dataset.loading = 'true';
+  controls._cctvFrame.dataset.error = 'true';
+  controls._syncCctvSourceBadge(
+    { feedType: 'embed', sourceStatus: 'ok' },
+    true,
+  );
+  assert.equal(
+    controls._cctvSourceBadge.textContent,
+    'PUBLIC PLAYER · EXTERNAL',
+  );
+  assert.equal(controls._cctvSourceBadge.dataset.frameState, 'external');
+  // This fixture tests the badge alone; the frame teardown is covered separately.
+  controls._cctvFrame = null;
 });

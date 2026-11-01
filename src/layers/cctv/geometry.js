@@ -493,22 +493,25 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     if (!layerState._records.length) return new Set();
     // Coverage emphasis is relative to a selected camera. Without one, do not
     // invent an arbitrary catalog-order cohort.
-    if (!activeRecord) return new Set();
+    if (!activeRecord || activeRecord.camera?.feedType === 'embed')
+      return new Set();
 
-    const ranked = layerState._records.map((record) => {
-      if (record === activeRecord) {
-        return { record, distKm: -1 };
-      }
-      return {
-        record,
-        distKm: parts.model.haversineKm(
-          activeRecord.camera.lat,
-          activeRecord.camera.lon,
-          record.camera.lat,
-          record.camera.lon,
-        ),
-      };
-    });
+    const ranked = layerState._records
+      .filter((record) => record.camera?.feedType !== 'embed')
+      .map((record) => {
+        if (record === activeRecord) {
+          return { record, distKm: -1 };
+        }
+        return {
+          record,
+          distKm: parts.model.haversineKm(
+            activeRecord.camera.lat,
+            activeRecord.camera.lon,
+            record.camera.lat,
+            record.camera.lon,
+          ),
+        };
+      });
 
     ranked.sort((a, b) => a.distKm - b.distKm);
 
@@ -580,7 +583,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    */
 
   function coverageNeighborCount(targetRecord) {
-    if (!targetRecord) return 0;
+    if (!targetRecord || targetRecord.camera?.feedType === 'embed') return 0;
     // The summary asks on every notification; scan the catalog only when the
     // camera, its pose or the catalog changed.
     const { id, lat, lon, rangeM } = targetRecord.camera;
@@ -590,7 +593,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       return cached.count;
     let count = 0;
     for (const record of layerState._records) {
-      if (record === targetRecord) continue;
+      if (record === targetRecord || record.camera?.feedType === 'embed')
+        continue;
       const dKm = parts.model.haversineKm(
         targetRecord.camera.lat,
         targetRecord.camera.lon,
@@ -750,7 +754,12 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     const created = [];
     if (typeof buildEntities !== 'function') return created;
     for (const record of Array.isArray(records) ? records : []) {
-      if (!record || record.coverageEntities?.length || !isEligible(record))
+      if (
+        !record ||
+        record.camera?.feedType === 'embed' ||
+        record.coverageEntities?.length ||
+        !isEligible(record)
+      )
         continue;
       const entities = buildEntities(record);
       record.coverageEntities = Array.isArray(entities)

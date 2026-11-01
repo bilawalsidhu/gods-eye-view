@@ -15,6 +15,7 @@ How to read this:
 
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Argentina public webcam catalog** ([operator/source notes](docs/CCTV-ARGENTINA.md)) | 64 opt-in feeds: 25 external players, 24 HLS and 15 periodically updated stills | Media rights remain with each operator; Mendoza terrace CC BY 4.0; OSM-derived anchors ODbL | Each camera names and links its operator; the Data attribution panel includes the catalog |
 | **NOAA GFS (wind)** (`noaa-gfs-bdp-pds.s3.amazonaws.com`) | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind. Keyless; latest 6-hourly 0.25° cycle, byte-range GRIB2 reads, cached for an hour | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
 | **ECMWF IFS (wind)** (`data.ecmwf.int/forecasts`, ECMWF Open Data) | The alternative Wind model: 10 m wind, optional 2 m temperature and mean sea-level pressure. Keyless; latest 6-hourly 0.25° run, byte-range GRIB2 reads, cached for an hour | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) plus the [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) | "This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF)", with the CC BY 4.0 link, the modification notice and ECMWF's liability disclaimer — shown in-app |
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
@@ -106,6 +107,10 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
 
 ### Notes on the live sources
 
+- **Other public CCTV players.** Selecting Twitch, Angelcam or Roundshot loads that provider's third-party player, which may use cookies and analytics under its own terms. YouTube alone uses the privacy-enhanced host. The separate official-page link remains available outside the iframe sandbox.
+
+- **YouTube CCTV examples (Argentina, opt-in).** `config/cctv_sources.youtube.json` contains public player links for [Argentina News' Obelisco view](https://www.youtube.com/watch?v=r8Busmkpsh8) and [UADE's Campus Buenos Aires view](https://www.youtube.com/watch?v=NfsyRx50gAI). Discovered on SkylineWebcams' [Obelisco](https://www.skylinewebcams.com/es/webcam/argentina/buenos-aires/buenos-aires/obelisco.html) and [panorama](https://www.skylinewebcams.com/es/webcam/argentina/buenos-aires/buenos-aires/panorama.html) pages on 2026-10-15; YouTube's public oEmbed metadata identifies the original channels. [UADE's own homepage](https://www.uade.edu.ar/) embeds the same video and gives the campus address, Lima 757. Rounded anchors identify the Obelisco area and UADE campus, not verified camera positions; [OpenStreetMap / Nominatim](https://www.openstreetmap.org/copyright) supplies the landmark/campus locations (UADE node 12920363173), under ODbL. The Obelisco landmark is also identified by [Buenos Aires' official tourism page](https://turismo.buenosaires.gob.ar/es/otros-establecimientos/obelisco). Original channel credits appear in the camera panel. Playback uses [YouTube's official iframe](https://developers.google.com/youtube/player_parameters) in privacy-enhanced mode, subject to the uploader's embedding permission and YouTube's access rules. No open video license is asserted; no video, thumbnail, expiring stream URL or restricted token is copied, proxied or recorded. Video IDs may change when broadcasts restart. Skyline's [FAQ](https://www.skylinewebcams.com/es/support/faq.html) restricts embedding its own live streams to camera hosts; those streams are excluded. ArgosAtlas's private/paywalled catalog is not a data source for this feature.
+
 - **Air quality (ECCC AQHI).** Keyless. Read from the MSC GeoMet OGC API (`api.weather.gc.ca`): the `aqhi-stations` catalog plus `aqhi-observations-realtime`. **Coverage is Canada only** — ECCC is the single registered provider, and the layer row and readout card both say so. Roughly 134 stations across ECCC's five administrative zones (Atlantic, Quebec, Ontario, Prairies & North, Pacific & Yukon). AQHI publishes hourly, so readings poll every 20 minutes and the station catalog, which changes a few times a year, is refetched only every 12 hours. Observations are requested with `latest=true`; without it the collection returns the full history, roughly 2,000 rows nationally. Readings older than six hours are dropped rather than displayed as current.
 
   Readings are stored as `{ provider, scale, value, band }` rather than a bare number, because air-quality indices are not interchangeable: AQHI runs 1-10+ on health risk, the US AQI runs 0-500 on concentration breakpoints, and Europe's EAQI is a five-step category. Naming the index a value belongs to is what lets another network be added later without inventing a shared numeric meaning that does not exist.
@@ -191,6 +196,36 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
 - **Dynamic weather presentation.** While cockpit mode is active, `/api/weather-effects` requests current Open-Meteo observations for the aircraft/camera location, rounds coordinates into 0.1° cache cells, caches results for five minutes, and may retain a stale observation for up to 30 minutes during a transient outage. WMO condition code selects the visual family; observed cloud cover, precipitation, visibility, wind speed, and wind direction bound its strength and motion. Missing or expired weather renders no synthetic atmospheric effect, and normal globe view never renders the weather overlay.
 
 ---
+
+### Argentina public webcam catalog and public players
+
+The opt-in [Argentina webcam catalog](docs/CCTV-ARGENTINA.md) stores public
+operator URLs and attribution for 64 feeds, with a dated verification survey.
+Media is fetched at runtime, not bundled. YouTube, Twitch, Angelcam and Roundshot
+use provider-owned players and require the separate public-player integration.
+Public access is not an open media license: each operator retains its rights.
+The Mendoza municipal terrace player explicitly declares CC BY 4.0. OSM-derived
+approximate anchors retain object links and © OpenStreetMap contributors
+attribution under the [ODbL](https://www.openstreetmap.org/copyright).
+IPCamLive's documented public snapshots provide periodically updated stills for
+Comodoro, Las Heras and Cerro Bayo, not continuous video. The Vines' public still
+keeps its watermark; Roundshot keeps capture dates and provider controls.
+Operators expressly restricting republication are excluded. The survey retains
+those exclusion decisions and the original source pages, without subscription
+data, signed media URLs or tokens. Misiones belongs to its existing PR #1145.
+Varitech is excluded here and belongs to the separate opt-in pack in #1147,
+with its [provider restrictions](https://varitech.ar/terminos); the survey keeps
+its historical receipts under `separatePacks`.
+
+Public CCTV players may also use the operator's Twitch channel, Angelcam
+broadcast iframe or Roundshot panorama. These provider-owned players retain
+controls, attribution and access rules; their video/image resources are not
+extracted or proxied. Public accessibility is not an open media license. Only
+independently public operator links belong in a catalog, excluding operators
+that expressly restrict republication. Twitch requires the actual embedding
+hostname ([official embed documentation](https://dev.twitch.tv/docs/embed/video-and-clips/));
+Angelcam uses its [public broadcast iframe](https://help.angelcam.com/en/articles/1160742-working-with-broadcasting-embed-codes).
+The separate Argentina catalog supplies its own source and verification evidence.
 
 ## Bundled snapshots
 

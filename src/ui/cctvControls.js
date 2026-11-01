@@ -38,7 +38,10 @@ export class CctvControls {
     this._calibrationEdit = null;
     this._actionGeneration = 0;
     this._initCctvPanel();
-    if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
+    if (
+      (this._cctvVideo || this._cctvFrameWrap) &&
+      typeof MutationObserver !== 'undefined'
+    ) {
       this._videoVisibilityObserver = new MutationObserver(() =>
         this._renderCctvState(this._cctvState),
       );
@@ -46,6 +49,13 @@ export class CctvControls {
         this._videoVisibilityObserver.observe(this._cctvPanel, {
           attributes: true,
           attributeFilter: ['class', 'hidden'],
+        });
+      // Phone sheets hide the rail without collapsing its panels. Observe the
+      // shell as well so media stops even when the panel's own class is intact.
+      if (document.body)
+        this._videoVisibilityObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class', 'data-mobile-sheet'],
         });
       this.listen(document, 'visibilitychange', () =>
         this._renderCctvState(this._cctvState),
@@ -113,6 +123,7 @@ export class CctvControls {
     if (this.destroyed) return;
     this.destroyed = true;
     this._cctvVideoSurface?.stop();
+    this._cctvEmbed?.destroy();
     this._videoVisibilityObserver?.disconnect();
     this._actionGeneration++;
     this.listeners.abort();

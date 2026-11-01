@@ -342,12 +342,6 @@
     "many": "Загружено {count} камер · включите CCTV, чтобы активировать",
     "other": "Загружено {count} камеры · включите CCTV, чтобы активировать"
   },
-  "{count} more cameras outside this view · pan or zoom out": {
-    "one": "Ещё {count} камера вне этого вида · сдвиньте или отдалите",
-    "few": "Ещё {count} камеры вне этого вида · сдвиньте или отдалите",
-    "many": "Ещё {count} камер вне этого вида · сдвиньте или отдалите",
-    "other": "Ещё {count} камеры вне этого вида · сдвиньте или отдалите"
-  },
   "Enable CCTV to load camera intersections": "Включите CCTV, чтобы загрузить камеры на перекрёстках",
   "Enable CCTV to start camera-linked intelligence summaries.": "Включите CCTV, чтобы запускать сводки по камерам.",
   "No summary available.": "Сводка недоступна.",
@@ -2192,7 +2186,6 @@
   "Low-accuracy score 2–10%": "Доля неточных 2–10%",
   "Low-accuracy score > 10%": "Доля неточных > 10%",
   "GNSS integrity source unavailable": "Источник целостности GNSS недоступен",
-  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "Региональная выборка · радиус 250 мор. миль · ячейки из просмотренных видов за {minutes} мин",
   "Retrying automatically at {time} UTC": "Автоматический повтор в {time} UTC",
   "Retrying automatically after provider cooldown": "Автоматический повтор после паузы провайдера",
   "Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.": "Обновляется автоматически после сдвига или масштабирования карты и раз в минуту. Публичный поток данных охватывает круг радиусом 250 морских миль вокруг центра вида; при отдалении карта не становится снимком всего мира. Пустые ячейки — вне охвата выборки или с недостаточным числом наблюдений.",
@@ -3061,6 +3054,21 @@
   "Automatic stop is unavailable for this voice connection.": "Автоматическая остановка недоступна для этого голосового подключения.",
   "routing busy — too many routes at once": "сервис маршрутов занят: слишком много маршрутов одновременно",
   "route proxy error": "ошибка прокси маршрутов",
+  "Approximate location; coverage not calibrated.": "Приблизительное местоположение; зона обзора не откалибрована.",
+  "LOCATION · APPROXIMATE": "МЕСТОПОЛОЖЕНИЕ · ПРИБЛИЗИТЕЛЬНОЕ",
+  "Open official camera page ↗": "Открыть официальную страницу камеры ↗",
+  "PLAYER IN PANEL": "ПРОИГРЫВАТЕЛЬ В ПАНЕЛИ",
+  "PUBLIC PLAYER · EXTERNAL": "ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ВНЕШНИЙ",
+  "{camera} — public player": "{camera} — общедоступный проигрыватель",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · ОБЩЕДОСТУПНЫЙ ПРОИГРЫВАТЕЛЬ · ПРИБЛИЗИТЕЛЬНОЕ МЕСТОПОЛОЖЕНИЕ · ЗОНА ОБЗОРА НЕ ОТКАЛИБРОВАНА",
+  "{count} more cameras outside this view · pan or zoom out": {
+    "one": "Ещё {count} камера вне этого вида · сдвиньте или отдалите",
+    "few": "Ещё {count} камеры вне этого вида · сдвиньте или отдалите",
+    "many": "Ещё {count} камер вне этого вида · сдвиньте или отдалите",
+    "other": "Ещё {count} камеры вне этого вида · сдвиньте или отдалите"
+  },
+  "Regional sample · 250 nm radius · cells from visited views over {minutes} min": "Региональная выборка · радиус 250 мор. миль · ячейки из просмотренных видов за {minutes} мин",
+  "NO PUBLIC FEED": "НЕТ ПУБЛИЧНОГО ИЗОБРАЖЕНИЯ",
   "AUTHORING": "РЕДАКТОР",
   "Create and edit scenes": "Создание и редактирование сцен",
   "SCENE": "СЦЕНА",
