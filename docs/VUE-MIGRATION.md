@@ -147,7 +147,9 @@ a feature supplying only its accent.
    (the top-center loading status and the road network and camera grid
    chips render what ShellFeedback and CctvControls publish to the
    `gev-status` store; `SplitFlapText` plays the departure-board flip that
-   `splitFlap.js` plans, writing only the label's one text node), then
+   `splitFlap.js` plans, writing only the label's one text node; the toast
+   renders what each owner's `createToast()` publishes there, on that
+   owner's own timer), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest

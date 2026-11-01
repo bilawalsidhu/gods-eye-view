@@ -17,6 +17,7 @@ import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from '../ui/scenes.js';
+import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
 import * as Cesium from 'cesium';
@@ -252,7 +253,7 @@ export class SceneDirector {
       this._loadAbort?.abort();
       this._loadGeneration++;
       this.viewer.camera.cancelFlight();
-      clearTimeout(this._storageToastTimer);
+      this._storageToast?.cancel();
       await Promise.allSettled(this._pendingWork || []);
       this._clock.destroy();
       this._cancelActiveSceneTravel();
@@ -365,19 +366,8 @@ export class SceneDirector {
     message = t('Scene not saved — browser storage unavailable'),
   ) {
     this._updateStatus(message);
-    try {
-      const toast = document.getElementById('toast');
-      if (toast) {
-        toast.textContent = message;
-        toast.classList.add('visible');
-        clearTimeout(this._storageToastTimer);
-        this._storageToastTimer = setTimeout(() => {
-          toast.classList.remove('visible');
-        }, 2600);
-      }
-    } catch {
-      /* toast is best-effort */
-    }
+    this._storageToast ??= createToast({ durationMs: 2600 });
+    this._storageToast.show(message);
   }
 
   /** Immutable playback snapshots and completed editing actions. */

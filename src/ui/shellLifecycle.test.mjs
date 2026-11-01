@@ -53,7 +53,6 @@ function fixture() {
       'left-panel-stack',
       'right-context-rail',
       'pp-toggles',
-      'toast',
       'safe-frame-overlay',
       'safe-frame-box',
       'hud-toggle',
@@ -175,9 +174,15 @@ test('feedback disposal clears toast and polling work and rejects retained notic
   const f = fixture();
   try {
     const loading = [];
+    const toasts = [];
     const owner = new ShellFeedback({
       readLayers: () => [],
       store: {
+        toast: null,
+        publishToast(view) {
+          this.toast = view;
+          toasts.push(view);
+        },
         publishLoading: (view) => loading.push(view),
         publishTraffic() {},
       },
@@ -194,8 +199,13 @@ test('feedback disposal clears toast and polling work and rejects retained notic
     owner._startTrafficChipTicker();
     document.dispatchEvent(new Event('visibilitychange'));
     assert.equal(f.timers.size, 0);
-    assert.equal(f.nodes.get('toast').textContent, 'Saved');
-    assert.equal(f.nodes.get('toast').classList.contains('visible'), false);
+    assert.deepEqual(
+      toasts.map(({ text, visible }) => ({ text, visible })),
+      [
+        { text: 'Saved', visible: true },
+        { text: 'Saved', visible: false },
+      ],
+    );
     assert.equal(loading.at(-1).hidden, true);
     assert.equal(loading.at(-1).label, 'Saving', 'the hidden label stays');
   } finally {

@@ -1130,5 +1130,7 @@
   "src/ui/stores/panels.test.mjs",
   "src/ui/stores/status.js",
   "src/ui/statusChipsView.test.mjs",
-  "src/ui/statusChipOwners.test.mjs"
+  "src/ui/statusChipOwners.test.mjs",
+  "src/ui/toast.js",
+  "src/ui/toastView.test.mjs"
 ]

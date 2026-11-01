@@ -12,6 +12,7 @@ import { getLocale, t, msg } from '../i18n/index.js';
 import { localizeLayerName } from './layerPanel.js';
 import { translateFeedError } from './statusText.js';
 import { useStatusStore } from './stores/status.js';
+import { createToast } from './toast.js';
 import { applicationPinia } from './vueRuntime.js';
 
 // The server also loads loadingFeedback.js (through the HUD summary), so its
@@ -130,10 +131,7 @@ export class ShellFeedback {
     this._trafficSyncFeedbackState = createTrafficSyncFeedbackState();
     this._loadingFeedbackEvent = null;
     this._globalStatusNotice = null;
-    this._loadingFeedbackTicker =
-      this._trafficChipTicker =
-      this._toastTimer =
-        null;
+    this._loadingFeedbackTicker = this._trafficChipTicker = null;
     this._loadingVisibilityHandler = null;
     this._lastLoadingFeedbackUpdateAt = 0;
     this._lastTrafficChipUpdateAt = 0;
@@ -153,7 +151,7 @@ export class ShellFeedback {
       progress: '0%',
       stopped: false,
     };
-    this._toast = document.getElementById('toast');
+    this._toast = createToast({ durationMs: 2000, store });
   }
   observeVisibility() {
     if (this.destroyed || this._loadingVisibilityHandler) return;
@@ -326,27 +324,21 @@ export class ShellFeedback {
 
   _showToast(message) {
     if (this.destroyed) return;
-    this._toast.textContent = message;
-    this._toast.classList.add('visible');
-    clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => {
-      this._toast.classList.remove('visible');
-    }, 2000);
+    this._toast.show(message);
   }
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
     this._stopLoadingFeedbackTicker();
     clearInterval(this._trafficChipTicker);
-    clearTimeout(this._toastTimer);
-    this._trafficChipTicker = this._toastTimer = null;
+    this._trafficChipTicker = null;
     if (this._loadingVisibilityHandler)
       document.removeEventListener(
         'visibilitychange',
         this._loadingVisibilityHandler,
       );
     this._loadingVisibilityHandler = null;
-    this._toast?.classList.remove('visible');
+    this._toast.hide();
     // The labels rest at once; a cascade does not outlive its owner.
     this._publishLoading({ hidden: true, state: null, stopped: true });
     this._publishTraffic({ stopped: true });

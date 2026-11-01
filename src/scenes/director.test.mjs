@@ -1,4 +1,6 @@
 import { readShellSource } from '../testSupport/readShellSource.mjs';
+import { useStatusStore } from '../ui/stores/status.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 // Director-level pins for scene playback.
 //
 // scenePolicy.test.mjs pins the pure decisions; these pin the wiring, which is
@@ -1995,6 +1997,9 @@ test('a capture, update or import that cannot be saved keeps the "Scene not save
       { prepared: { project: structuredClone(PROJECT_FIXTURE), assets: [] } },
     ), true);
     assert.match(status, /^Scene not saved/, 'failed import keeps the save failure');
+    const toast = useStatusStore(applicationPinia()).toast;
+    assert.equal(toast.visible, true);
+    assert.match(toast.text, /^Scene not saved/, 'the page toast says so too');
   } finally { console.warn = warn; await director.destroy(); restore(); }
 });
 

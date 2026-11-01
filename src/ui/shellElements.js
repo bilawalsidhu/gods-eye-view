@@ -103,7 +103,6 @@ export function readShellElements(document = globalThis.document) {
     _resetGlobeBtn: document.getElementById('reset-globe-view'),
     _cockpitResetGlobeBtn: document.getElementById('cockpit-reset-globe'),
     _styleButtons: document.getElementById('style-buttons'),
-    _toast: document.getElementById('toast'),
     _locationSearch: document.getElementById('location-search'),
     _searchToggle: document.getElementById('search-toggle'),
     _safeFrameOverlay: document.getElementById('safe-frame-overlay'),

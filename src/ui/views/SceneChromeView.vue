@@ -9,8 +9,19 @@ import SplitFlapText from './panels/SplitFlapText.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
-// The status chips show what ShellFeedback and CctvControls publish.
-const { loading, traffic, cctv } = storeToRefs(useStatusStore());
+// The status chips and toast show what ShellFeedback, CctvControls and
+// createToast() publish.
+const { loading, traffic, cctv, toast } = storeToRefs(useStatusStore());
+// Every show rewrites the toast's text, so the live region announces a
+// repeated message again; hiding leaves it as it fades.
+const vToastText = {
+  mounted(el, { value }) {
+    el.textContent = value?.text ?? '';
+  },
+  updated(el, { value, oldValue }) {
+    if (value?.shown !== oldValue?.shown) el.textContent = value?.text ?? '';
+  },
+};
 </script>
 
 <template>
@@ -69,7 +80,7 @@ const { loading, traffic, cctv } = storeToRefs(useStatusStore());
   </div>
 
   <!-- Toast notification -->
-  <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="toast" v-toast-text="toast" role="status" aria-live="polite" aria-atomic="true" v-class-toggle="{ visible: !!toast?.visible }"></div>
 
   <!-- Safe frame guides for recording composition -->
   <div id="safe-frame-overlay">
