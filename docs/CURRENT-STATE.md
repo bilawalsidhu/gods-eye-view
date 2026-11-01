@@ -6469,3 +6469,26 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+## Docker image distribution
+
+Releases publish a multi-arch image (`linux/amd64`, `linux/arm64`) to
+`ghcr.io/<owner>/<repo>` from `.github/workflows/docker-release.yml`. Each
+architecture is built on a native runner, so `npm ci` fetches that
+architecture's esbuild and sharp binaries, and a merge job tags the combined
+manifest (`X.Y.Z`, `X.Y`, the commit SHA, and `latest` for stable releases only).
+Each platform image carries SLSA provenance and an SBOM pushed by
+build-push-action, and the merge job fails if `imagetools create` drops either.
+The release notes gain a "Release Artifacts" section naming the image tags and
+architectures; an informational Trivy count goes in the job summary. Pull requests build,
+smoke-test and scan the image on both architectures in `ci.yml` without pushing; the scan never fails the build.
+
+The Dockerfile has two targets. `dev` (what `compose.yaml` builds) keeps git and
+the bind-mounted checkout. `runtime` (the default, and what is published) runs as
+`1000:1000` with root-owned, read-only code and no git, npm or apt. Setting
+`GEV_DATA_DIR` (the image sets `/data`, a declared volume) moves what the app
+writes: the `.env` that Provider Settings saves (temp file and rename stay in
+that directory, and Vite loads it from there), `.gev-cache` and `.gev-logs`.
+Unset, those stay in the repository root, so native, Pinokio and compose runs
+are unchanged. The Docker launcher checks that directory for writability. Only
+`node_modules/.vite` and `node_modules/.vite-temp` are otherwise writable.

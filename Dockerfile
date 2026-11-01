@@ -4,7 +4,10 @@
 # proxies (ADS-B, AIS, Overpass, OpenAI Realtime, ...) as middleware, so there
 # is nothing else to containerise. See compose.yaml for the usual entry point.
 # Same Node as CI (package.json engines, .github/workflows), pinned by digest.
-FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8
+
+# `dev` is what compose.yaml builds; `runtime` (last) is the published image
+# and the default target.
+FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS dev
 
 # Puppeteer is only used by the QA scripts; skip its ~150MB Chromium download.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
@@ -47,4 +50,44 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 # The launcher is `npm run dev` plus one step: it trusts the container's
 # gateway address for Provider Settings, because that is where Docker delivers
 # the host's own browser from (never 127.0.0.1). See scripts/docker-start.mjs.
+CMD ["node", "scripts/docker-start.mjs"]
+
+# ---------------------------------------------------------------------------
+# Hardened image, published to GHCR. /app belongs to root and user 1000 cannot
+# change it; that user owns only the paths the app writes. The README's run
+# flags (read-only root, no capabilities) are defence in depth, not required.
+
+FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS deps
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+WORKDIR /app
+COPY package.json package-lock.json ./
+# Built here, per architecture, so esbuild and sharp are this platform's own.
+RUN npm ci && npm cache clean --force && rm -rf /root/.npm
+
+FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS runtime
+WORKDIR /app
+COPY --from=deps --chmod=u=rwX,go=rX /app/node_modules ./node_modules
+COPY --chmod=u=rwX,go=rX . .
+# Nothing at runtime calls npm, npx or corepack, so they and apt are removed.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /root/.npm /var/lib/apt/lists/* /usr/bin/apt /usr/bin/apt-* \
+ # Writable: Vite's caches (tmpfs when the root is read-only) and /data.
+ && mkdir -p node_modules/.vite node_modules/.vite-temp /data \
+ && chown 1000:1000 node_modules/.vite node_modules/.vite-temp /data
+
+# Everything the app keeps lives in /data: the .env that Provider Settings
+# saves, .gev-cache and .gev-logs. Mount one volume here. The saved .env is
+# replaced by temp-file-and-rename, which is why it cannot sit in /app.
+ENV GEV_DATA_DIR=/data
+VOLUME ["/data"]
+
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+ENV HOST=0.0.0.0
+ENV PORT=4173
+USER 1000:1000
+EXPOSE 4173
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(Number.parseInt(process.env.PORT,10)||4173)+'/').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 CMD ["node", "scripts/docker-start.mjs"]
