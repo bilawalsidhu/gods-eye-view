@@ -695,6 +695,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             ? source?.url
             : '');
 
+        const fetchOutcome = { transient: false };
         const upstreamImage =
           source?.pack === 'world-cameras'
             ? await fetchThrottledFrame(source, cameraId, upstreamCandidate)
@@ -705,9 +706,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                   ottawaAuthorizedFrameUrl(upstreamCandidate),
                 )
               : source?.sourceKind === 'txdot-its'
-                ? await fetchTxdotSnapshot(upstreamCandidate)
+                ? await fetchTxdotSnapshot(upstreamCandidate, {
+                    outcome: fetchOutcome,
+                  })
                 : await fetchCctvImageFromUpstream(upstreamCandidate, {
                     allowMjpeg: source?.sourceKind === 'taiwan-highway-motc',
+                    outcome: fetchOutcome,
                   });
         if (
           source?.sourceKind === 'mlit-river' &&
@@ -751,9 +755,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           );
           return;
         }
-        // Learn cameras with no public picture.
+        // Learn cameras with no public picture. A 5xx/timeout is not
+        // evidence of that (see feedAvailability.js).
         if (source && upstreamCandidate)
-          feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok);
+          feedAvailability.recordFrame(cameraId, !!upstreamImage?.ok, {
+            transient: fetchOutcome.transient,
+          });
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
             status: upstreamImage.stale ? 'degraded' : 'ok',

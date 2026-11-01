@@ -9,6 +9,7 @@ import {
   NO_FEED_CAMERA_TTL_MS,
   NO_FEED_GROUP_TTL_MS,
   NO_FEED_SUSPECT_TTL_MS,
+  NO_FEED_TRANSIENT_TTL_MS,
 } from './feedAvailability.js';
 
 // Cameras with no public picture are served location-only.
@@ -164,5 +165,44 @@ test('client treats feedType none as location-only', () => {
   assert.match(
     read('../../../src/layers/cctv/presentation.js'),
     /isNoFeedType\(/,
+  );
+});
+
+test('temporary failures make a short, unpersisted retry window', async () => {
+  let t = 1_000;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-avail-'));
+  const file = path.join(dir, 'a.json');
+  try {
+    const a = createFeedAvailability({ file, now: () => t });
+    a.recordFrame('c', false, { transient: true });
+    assert.equal(a.isUnavailable('c'), false);
+    a.recordFrame('c', false, { transient: true });
+    assert.equal(a.isUnavailable('c'), true);
+    await a.persistNow();
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).cameras, {});
+    assert.equal(createFeedAvailability({ file }).isUnavailable('c'), false);
+    t += NO_FEED_TRANSIENT_TTL_MS;
+    assert.equal(a.isUnavailable('c'), false);
+    a.recordFrame('c', false, { transient: true });
+    assert.equal(a.isUnavailable('c'), true, 'one more failure re-opens it');
+    a.recordFrame('c', true);
+    assert.equal(a.isUnavailable('c'), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a definitive failure keeps the 24 h mark even after temporary ones', () => {
+  let t = 1_000;
+  const a = createFeedAvailability({ now: () => t });
+  a.recordFrame('c', false, { transient: true });
+  a.recordFrame('c', false);
+  t += NO_FEED_TRANSIENT_TTL_MS + 1;
+  assert.equal(a.isUnavailable('c'), true);
+  a.recordFrame('c', false, { transient: true });
+  assert.equal(
+    a.isUnavailable('c'),
+    true,
+    'temporary failure never shortens it',
   );
 });
