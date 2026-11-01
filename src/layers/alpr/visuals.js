@@ -49,8 +49,9 @@ export function alprLabelDetails(record, source) {
   const details = [
     sourceName === 'OpenStreetMap' ? 'OSM MAPPED' : `Source: ${sourceName}`,
   ];
+  // Wrap after rounding: 359.6° rounds to 360°, which is north.
   if (Number.isFinite(record.directionDeg))
-    details.push(`DIRECTION ${Math.round(record.directionDeg)}°`);
+    details.push(`DIRECTION ${Math.round(record.directionDeg) % 360}°`);
   const equipment = [
     ...new Set(
       [record.manufacturer, record.operator, record.cameraType]
