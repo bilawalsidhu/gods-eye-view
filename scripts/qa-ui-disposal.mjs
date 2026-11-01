@@ -40,6 +40,8 @@ try {
         cancelable: true,
       }),
     );
+    // The title bar renders the readout on Vue's next flush.
+    await Promise.resolve();
     const fpsReadout = document.querySelector('.frame-rate-readout');
     const fpsWasVisible = fpsReadout && !fpsReadout.hidden;
     const watchObserver = (name) => {
@@ -220,7 +222,9 @@ try {
           ui._lifetime.timers.size === 0 &&
           ui._lifetime.removers.size === 0,
         frameRateReleased:
-          fpsWasVisible && !fpsReadout.isConnected && fpsReadout.hidden,
+          fpsWasVisible &&
+          !fpsReadout.isConnected &&
+          !document.querySelector('.frame-rate-readout'),
         stateStopped: stateNotifications === 0,
         idempotent: once === JSON.stringify(counts),
       };

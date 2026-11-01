@@ -5,7 +5,8 @@ import { markRaw, shallowRef } from 'vue';
  * The scene's status chips as their views render them. ShellFeedback
  * (src/ui/shellFeedback.js) publishes the top-center loading status and the
  * road network chip, CctvControls the camera grid chip; the toast shows
- * what any owner's createToast() (src/ui/toast.js) publishes. Each label keeps its
+ * what any owner's createToast() (src/ui/toast.js) publishes, and the title
+ * bar the FPS readout createFrameRateMonitor() publishes. Each label keeps its
  * last text while hidden, so the next change flaps from what was shown.
  */
 export const useStatusStore = defineStore('gev-status', () => {
@@ -24,6 +25,12 @@ export const useStatusStore = defineStore('gev-status', () => {
    * `shown` changes with every show, which rewrites the text.
    */
   const toast = shallowRef(null);
+
+  /**
+   * The title bar's FPS readout, `{visible, text}`; null while no monitor
+   * counts frames.
+   */
+  const fps = shallowRef(null);
 
   /** @param {?object} next A fresh presentation of the loading status. */
   function publishLoading(next) {
@@ -45,7 +52,14 @@ export const useStatusStore = defineStore('gev-status', () => {
     toast.value = next && markRaw(next);
   }
 
+  /** @param {?{visible: boolean, text: string}} next */
+  function publishFps(next) {
+    fps.value = next && markRaw(next);
+  }
+
   return {
+    fps,
+    publishFps,
     toast,
     publishToast,
     loading,

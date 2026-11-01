@@ -12,9 +12,9 @@ import SplitFlapText from './panels/SplitFlapText.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
-// The status chips and toast show what ShellFeedback, CctvControls and
-// createToast() publish.
-const { loading, traffic, cctv, toast } = storeToRefs(useStatusStore());
+// The status chips, toast and FPS readout show what ShellFeedback,
+// CctvControls, createToast() and createFrameRateMonitor() publish.
+const { loading, traffic, cctv, toast, fps } = storeToRefs(useStatusStore());
 // The ORBIT indicator LocationControls offers with the location tray.
 const { view: location } = storeToRefs(useLocationStore());
 // Every show rewrites the toast's text, so the live region announces a
@@ -44,6 +44,7 @@ const vToastText = {
     <div class="title-glow"></div>
     <h1><span class="title-logo brand-logo" data-logo-gaze data-logo-src="/logo.svg" aria-hidden="true"><img src="/logo.svg" alt="" /></span> <span translate="no">GOD'S EYE <span class="title-accent">VIEW</span></span></h1>
     <p class="subtitle scene-text-holdout" data-i18n>NO PLACE LEFT BEHIND</p>
+    <div v-if="fps" class="frame-rate-readout scene-text-holdout" :hidden="!fps.visible" :title="t('Rendered globe frames per second · toggle with `')">{{ fps.text }}</div>
   </div>
 
   <!-- Style indicator -->
