@@ -2,10 +2,15 @@
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { useDisplayStore } from '../stores/display.js';
+import { useStatusStore } from '../stores/status.js';
+import { vClassToggle } from '../rail/classToggle.js';
 import ImagerySplitView from './panels/ImagerySplitView.vue';
+import SplitFlapText from './panels/SplitFlapText.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
+// The status chips show what ShellFeedback and CctvControls publish.
+const { loading, traffic, cctv } = storeToRefs(useStatusStore());
 </script>
 
 <template>
@@ -50,17 +55,17 @@ const { style } = storeToRefs(useDisplayStore());
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
     </button>
   </nav>
-  <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>
-    <span id="global-loading-label" data-i18n>LOADING LIVE DATA</span>
-    <span id="global-loading-detail"></span>
+  <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" :hidden="loading ? loading.hidden : true" :data-state="loading?.state ?? undefined">
+    <SplitFlapText id="global-loading-label" :text="loading ? loading.label : t('LOADING LIVE DATA')" :stopped="!!loading?.stopped" />
+    <span id="global-loading-detail">{{ loading ? loading.detail : '' }}</span>
   </div>
-  <div id="traffic-sync-chip" aria-live="polite">
-    <span id="traffic-sync-label" data-i18n>syncing road network</span>
-    <span id="traffic-sync-progress">0%</span>
+  <div id="traffic-sync-chip" aria-live="polite" v-class-toggle="{ visible: !!traffic?.visible }">
+    <SplitFlapText id="traffic-sync-label" :text="traffic ? traffic.label : t('syncing road network')" :immediate="!!traffic?.immediate" :stopped="!!traffic?.stopped" />
+    <span id="traffic-sync-progress">{{ traffic ? traffic.progress : '0%' }}</span>
   </div>
-  <div id="cctv-sync-chip" aria-live="polite">
-    <span id="cctv-sync-label" data-i18n>loading frames</span>
-    <span id="cctv-sync-progress">0/0</span>
+  <div id="cctv-sync-chip" aria-live="polite" v-class-toggle="{ visible: !!cctv?.visible }">
+    <SplitFlapText id="cctv-sync-label" :text="cctv ? cctv.label : t('loading frames')" :immediate="!!cctv?.immediate" :stopped="!!cctv?.stopped" />
+    <span id="cctv-sync-progress">{{ cctv ? cctv.progress : '0/0' }}</span>
   </div>
 
   <!-- Toast notification -->

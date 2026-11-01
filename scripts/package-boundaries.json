@@ -94,7 +94,10 @@
       "src/ui/rail/statusText.js",
       "src/voice/control.js",
       "src/ui/views/panels/ImagerySplitView.vue",
-      "src/ui/stores/imagerySplit.js"
+      "src/ui/stores/imagerySplit.js",
+      "src/ui/stores/status.js",
+      "src/ui/views/panels/SplitFlapText.vue",
+      "src/splitFlap.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -702,7 +705,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/ui/vueRuntime.js",
-      "src/ui/stores/cctv.js"
+      "src/ui/stores/cctv.js",
+      "src/ui/stores/status.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -847,7 +851,6 @@
       "src/navigationPolicy.js",
       "src/panelStackLayout.js",
       "src/rightRailPolicy.js",
-      "src/splitFlap.js",
       "src/styles/anime.js",
       "src/styles/noir.js",
       "src/styles/retro.js",
@@ -1012,7 +1015,8 @@
       "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
       "src/ui/stores/location.js",
-      "src/ui/stores/display.js"
+      "src/ui/stores/display.js",
+      "src/ui/stores/status.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -2995,7 +2999,8 @@
       "src/ui/stores/voice.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js",
-      "src/ui/stores/imagerySplit.js"
+      "src/ui/stores/imagerySplit.js",
+      "src/ui/stores/status.js"
     ],
     "external": [
       "hls.js",

@@ -8,10 +8,11 @@ import {
   reduceLoadingFeedback,
   reduceTrafficSyncFeedback,
 } from '../loadingFeedback.js';
-import { setSplitFlapText, disposeSplitFlap } from '../splitFlap.js';
 import { getLocale, t, msg } from '../i18n/index.js';
 import { localizeLayerName } from './layerPanel.js';
 import { translateFeedError } from './statusText.js';
+import { useStatusStore } from './stores/status.js';
+import { applicationPinia } from './vueRuntime.js';
 
 // The server also loads loadingFeedback.js (through the HUD summary), so its
 // labels stay English. Translate the known ones; pass anything else (a live
@@ -116,8 +117,14 @@ export function localizeLoadingPresentation(presentation) {
   };
 }
 export class ShellFeedback {
-  constructor({ readLayers }) {
+  /**
+   * @param {object} options
+   * @param {() => object[]} options.readLayers The data layers' states.
+   * @param {object} [options.store] The status store the chips render from.
+   */
+  constructor({ readLayers, store = useStatusStore(applicationPinia()) }) {
     this.readLayers = readLayers;
+    this.store = store;
     this.destroyed = false;
     this._loadingFeedbackState = createLoadingFeedbackState();
     this._trafficSyncFeedbackState = createTrafficSyncFeedbackState();
@@ -131,18 +138,21 @@ export class ShellFeedback {
     this._lastLoadingFeedbackUpdateAt = 0;
     this._lastTrafficChipUpdateAt = 0;
     this._lastTrafficGlobalUpdateAt = 0;
-    this._globalLoadingStatus = document.getElementById(
-      'global-loading-status',
-    );
-    this._globalLoadingLabel = document.getElementById('global-loading-label');
-    this._globalLoadingDetail = document.getElementById(
-      'global-loading-detail',
-    );
-    this._trafficSyncChip = document.getElementById('traffic-sync-chip');
-    this._trafficSyncLabel = document.getElementById('traffic-sync-label');
-    this._trafficSyncProgress = document.getElementById(
-      'traffic-sync-progress',
-    );
+    // What the chips last showed; a label stays while its chip is hidden.
+    this._loadingView = {
+      hidden: true,
+      state: null,
+      label: t('LOADING LIVE DATA'),
+      detail: '',
+      stopped: false,
+    };
+    this._trafficView = {
+      visible: false,
+      label: t('syncing road network'),
+      immediate: false,
+      progress: '0%',
+      stopped: false,
+    };
     this._toast = document.getElementById('toast');
   }
   observeVisibility() {
@@ -158,12 +168,6 @@ export class ShellFeedback {
   }
   _updateTrafficSyncChip(forceShow = false, now = performance.now()) {
     if (this.destroyed) return;
-    if (
-      !this._trafficSyncChip ||
-      !this._trafficSyncLabel ||
-      !this._trafficSyncProgress
-    )
-      return;
     const layers = this.readLayers();
     const traffic = Array.isArray(layers)
       ? layers.find((layer) => layer.id === 'traffic')
@@ -178,30 +182,22 @@ export class ShellFeedback {
       now,
     );
     const presentation = this._trafficSyncFeedbackState;
-    // setSplitFlapText carries the same unchanged-text guard internally, and
-    // the flap keeps textContent equal to the settled label throughout, so
-    // this stays a no-op on the repeat ticks exactly as it did before.
-    if (presentation.label)
-      setSplitFlapText(
-        this._trafficSyncLabel,
-        localizeStatusLabel(presentation.label),
-        {
-          // Completion is a timing signal, not another animated loading stage.
-          immediate: !presentation.busy,
-        },
-      );
-    // Written on every change INCLUDING the empty settled value — the reducer
-    // clears the progress number once the sync lands, and a truthiness guard
-    // here would strand the last "..." beside the settled label.
-    if (this._trafficSyncProgress.textContent !== presentation.progressText) {
-      this._trafficSyncProgress.textContent = presentation.progressText;
-    }
-    this._trafficSyncChip.classList.toggle('visible', presentation.visible);
+    // The label flaps only when it changes; completion swaps it in, a timing
+    // signal rather than another animated loading stage. The progress is
+    // written on every change INCLUDING the empty settled value: the reducer
+    // clears it once the sync lands.
+    this._publishTraffic({
+      visible: presentation.visible,
+      ...(presentation.label && {
+        label: localizeStatusLabel(presentation.label),
+        immediate: !presentation.busy,
+      }),
+      progress: presentation.progressText,
+    });
   }
 
   _updateGlobalLoadingFeedback(now = performance.now()) {
     if (this.destroyed) return;
-    if (!this._globalLoadingStatus) return;
     const summary = aggregateLayerLoading(this.readLayers() || []);
     this._loadingFeedbackState = reduceLoadingFeedback(
       this._loadingFeedbackState,
@@ -230,20 +226,43 @@ export class ShellFeedback {
     if (this._loadingFeedbackState?.phase !== 'idle' || noticeNeedsTicker) {
       this._armLoadingFeedbackTicker();
     }
-    const localized = localizeLoadingPresentation(presentation);
-    this._globalLoadingStatus.hidden = !presentation;
     if (!presentation) {
-      delete this._globalLoadingStatus.dataset.state;
+      this._publishLoading({ hidden: true, state: null });
       return;
     }
-    this._globalLoadingStatus.dataset.state = presentation.state;
-    // Split-flap the LABEL only ("LOADING LIVE DATA" -> "LOAD COMPLETE").
-    // setSplitFlapText is a no-op when the text is unchanged, which matters
-    // here: this runs on every 60 ms and 500 ms tick. The detail line is the
-    // live layer roster inside an ellipsised, width-capped span — flapping a
-    // list that churns as layers join would be noise, not delight.
-    setSplitFlapText(this._globalLoadingLabel, localized.label);
-    this._globalLoadingDetail.textContent = localized.detail;
+    const localized = localizeLoadingPresentation(presentation);
+    // The LABEL flaps ("LOADING LIVE DATA" -> "LOAD COMPLETE") only when it
+    // changes, which matters here: this runs on every 60 ms and 500 ms tick.
+    // The detail is the live layer roster inside an ellipsised, width-capped
+    // span; flapping a list that churns as layers join would be noise.
+    this._publishLoading({
+      hidden: false,
+      state: presentation.state,
+      label: localized.label,
+      detail: localized.detail,
+    });
+  }
+
+  _publishLoading(patch) {
+    const next = { ...this._loadingView, ...patch };
+    if (Object.keys(next).every((key) => next[key] === this._loadingView[key]))
+      return;
+    this._loadingView = next;
+    this.store.publishLoading(next);
+  }
+
+  _publishTraffic(patch) {
+    const next = { ...this._trafficView, ...patch };
+    if (Object.keys(next).every((key) => next[key] === this._trafficView[key]))
+      return;
+    this._trafficView = next;
+    this.store.publishTraffic(next);
+  }
+
+  /** Drop any retained notice and hide the loading status. */
+  clearLoadingStatus() {
+    this._globalStatusNotice = null;
+    this._publishLoading({ hidden: true, state: null });
   }
 
   _showGlobalStatusNotice(message, options = {}) {
@@ -327,9 +346,9 @@ export class ShellFeedback {
         this._loadingVisibilityHandler,
       );
     this._loadingVisibilityHandler = null;
-    disposeSplitFlap(this._globalLoadingLabel);
-    disposeSplitFlap(this._trafficSyncLabel);
     this._toast?.classList.remove('visible');
-    if (this._globalLoadingStatus) this._globalLoadingStatus.hidden = true;
+    // The labels rest at once; a cascade does not outlive its owner.
+    this._publishLoading({ hidden: true, state: null, stopped: true });
+    this._publishTraffic({ stopped: true });
   }
 }

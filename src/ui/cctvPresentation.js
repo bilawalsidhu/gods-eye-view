@@ -301,10 +301,27 @@ export function _typeCctvSummary(text) {
   }, 20);
 }
 
+/** Publish a change to the camera grid chip; its label stays while hidden. */
+export function _publishCctvChip(patch) {
+  const current = this._cctvChip ?? {
+    visible: false,
+    label: t('loading frames'),
+    immediate: false,
+    progress: '0/0',
+    stopped: false,
+  };
+  const next = { ...current, ...patch };
+  if (
+    this._cctvChip &&
+    Object.keys(next).every((key) => next[key] === current[key])
+  )
+    return;
+  this._cctvChip = next;
+  this.statusStore.publishCctv(next);
+}
+
 export function _updateCctvSyncChip(loading, enabled) {
   if (this.destroyed) return;
-  if (!this._cctvSyncChip || !this._cctvSyncLabel || !this._cctvSyncProgress)
-    return;
   const total = Number(loading?.total) || 0;
   const loaded = Math.max(0, Math.min(Number(loading?.loaded) || 0, total));
   const busy = !!enabled && !!loading?.active && total > 0;
@@ -313,31 +330,35 @@ export function _updateCctvSyncChip(loading, enabled) {
     clearTimeout(this._cctvChipHideTimer);
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = true;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, t('loading frames'));
     // The counter is left plain on purpose: it ticks every few frames
     // during a grid load, and flapping it would read as a slot machine.
-    this._cctvSyncProgress.textContent = `${loaded}/${total}`;
-    this._cctvSyncChip.classList.add('visible');
+    this._publishCctvChip({
+      visible: true,
+      label: t('loading frames'),
+      progress: `${loaded}/${total}`,
+    });
     return;
   }
 
   if (this._cctvChipWasBusy && enabled && total > 0) {
     // Load just completed — flash the final count, then auto-hide.
     this._cctvChipWasBusy = false;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, t('camera grid ready'));
-    this._cctvSyncProgress.textContent = `${total}/${total}`;
-    this._cctvSyncChip.classList.add('visible');
+    this._publishCctvChip({
+      visible: true,
+      label: t('camera grid ready'),
+      progress: `${total}/${total}`,
+    });
     clearTimeout(this._cctvChipHideTimer);
     this._cctvChipHideTimer = window.setTimeout(() => {
       if (this.destroyed) return;
       this._cctvChipHideTimer = null;
-      this._cctvSyncChip.classList.remove('visible');
+      this._publishCctvChip({ visible: false });
     }, 1500);
     return;
   }
 
   if (!this._cctvChipHideTimer) {
     this._cctvChipWasBusy = false;
-    this._cctvSyncChip.classList.remove('visible');
+    this._publishCctvChip({ visible: false });
   }
 }

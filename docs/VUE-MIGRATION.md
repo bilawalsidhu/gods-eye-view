@@ -143,7 +143,11 @@ a feature supplying only its accent.
    imagery dividers (`ImagerySplitView`, in the scene chrome, teleports each
    before/after divider that `createImagerySplit` publishes to the
    `gev-imagery-split` store to the body; the split keeps the
-   drag, keyboard, CSS position and scene split), then
+   drag, keyboard, CSS position and scene split), the status chips
+   (the top-center loading status and the road network and camera grid
+   chips render what ShellFeedback and CctvControls publish to the
+   `gev-status` store; `SplitFlapText` plays the departure-board flip that
+   `splitFlap.js` plans, writing only the label's one text node), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest

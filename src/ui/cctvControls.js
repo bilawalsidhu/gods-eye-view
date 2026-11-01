@@ -14,17 +14,20 @@ import {
 import {
   _calBadgeLabel,
   _renderCctvState,
+  _publishCctvChip,
   _typeCctvSummary,
   _updateCctvSyncChip,
 } from './cctvPresentation.js';
 import { _initCctvPanel } from './cctvBindings.js';
 import { useCctvStore } from './stores/cctv.js';
+import { useStatusStore } from './stores/status.js';
 import { applicationPinia } from './vueRuntime.js';
 
 /**
  * Own camera-panel interaction and presentation; receive the camera port and
  * application actions. The panel view renders the buttons, CAL chip and meta
- * line from what this publishes (`gev-cctv` store).
+ * line from what this publishes (`gev-cctv` store), and the scene chrome the
+ * camera grid chip (`gev-status` store).
  */
 export class CctvControls {
   constructor({
@@ -32,9 +35,11 @@ export class CctvControls {
     cctv,
     actions,
     store = useCctvStore(applicationPinia()),
+    statusStore = useStatusStore(applicationPinia()),
   }) {
     Object.assign(this, elements);
     this.store = store;
+    this.statusStore = statusStore;
     this.cctv = cctv;
     this.actions = actions;
     this.destroyed = false;
@@ -46,6 +51,8 @@ export class CctvControls {
     this._lastSeenCctvActiveId = null;
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = false;
+    // The camera grid chip as last published; its label stays while hidden.
+    this._cctvChip = null;
     this._cctvFrameRequestToken = 0;
     this._cctvFramePreloader = null;
     this._frame = EMPTY_CCTV_FRAME;
@@ -117,6 +124,9 @@ export class CctvControls {
   _typeCctvSummary(...args) {
     return _typeCctvSummary.call(this, ...args);
   }
+  _publishCctvChip(...args) {
+    return _publishCctvChip.call(this, ...args);
+  }
   _updateCctvSyncChip(...args) {
     return _updateCctvSyncChip.call(this, ...args);
   }
@@ -138,6 +148,6 @@ export class CctvControls {
     clearTimeout(this._cctvChipHideTimer);
     this._cctvSummaryTypingTimer = null;
     this._cctvChipHideTimer = null;
-    this._cctvSyncChip?.classList.remove('visible');
+    this._publishCctvChip({ visible: false, stopped: true });
   }
 }

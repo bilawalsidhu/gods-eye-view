@@ -54,8 +54,6 @@ function fixture() {
       'right-context-rail',
       'pp-toggles',
       'toast',
-      'global-loading-status',
-      'global-loading-detail',
       'safe-frame-overlay',
       'safe-frame-box',
       'hud-toggle',
@@ -176,11 +174,20 @@ test('panel layout coalesces each rail and cannot rearm after destruction', () =
 test('feedback disposal clears toast and polling work and rejects retained notices', () => {
   const f = fixture();
   try {
-    const owner = new ShellFeedback({ readLayers: () => [] });
+    const loading = [];
+    const owner = new ShellFeedback({
+      readLayers: () => [],
+      store: {
+        publishLoading: (view) => loading.push(view),
+        publishTraffic() {},
+      },
+    });
     owner.observeVisibility();
     owner._startTrafficChipTicker();
     owner._showToast('Saved');
     assert.equal(f.timers.size, 2);
+    owner._showGlobalStatusNotice('Saving');
+    assert.equal(loading.at(-1).hidden, false);
     owner.destroy();
     owner._showToast('Late');
     owner._showGlobalStatusNotice('Late');
@@ -189,7 +196,8 @@ test('feedback disposal clears toast and polling work and rejects retained notic
     assert.equal(f.timers.size, 0);
     assert.equal(f.nodes.get('toast').textContent, 'Saved');
     assert.equal(f.nodes.get('toast').classList.contains('visible'), false);
-    assert.equal(f.nodes.get('global-loading-status').hidden, true);
+    assert.equal(loading.at(-1).hidden, true);
+    assert.equal(loading.at(-1).label, 'Saving', 'the hidden label stays');
   } finally {
     f.restore();
   }

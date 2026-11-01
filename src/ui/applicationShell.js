@@ -10,7 +10,6 @@ import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
 import { DisplayBindings } from './displayBindings.js';
 import { createStateChannel } from '../app/stateChannel.js';
-import { setSplitFlapText } from '../splitFlap.js';
 import { UiLifetime } from './uiLifetime.js';
 import { RecordingControls } from './recordingControls.js';
 import { readShellElements } from './shellElements.js';
@@ -1196,9 +1195,6 @@ export class StyleManager extends ShellFacade {
         _cctvSelect: this._cctvSelect,
         _cctvSourceBadge: this._cctvSourceBadge,
         _cctvSummary: this._cctvSummary,
-        _cctvSyncChip: this._cctvSyncChip,
-        _cctvSyncLabel: this._cctvSyncLabel,
-        _cctvSyncProgress: this._cctvSyncProgress,
       },
       cctv: cctvLayer,
       actions: {
@@ -1210,7 +1206,6 @@ export class StyleManager extends ShellFacade {
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
-        setSplitFlapText,
       },
     });
   }
@@ -1760,8 +1755,7 @@ export class StyleManager extends ShellFacade {
       this.services;
     if (this._disposed) return;
     this._shareRestoration.destroy();
-    this._feedback._globalStatusNotice = null;
-    if (this._globalLoadingStatus) this._globalLoadingStatus.hidden = true;
+    this._feedback.clearLoadingStatus();
     this._disposed = true;
     this._navigation.stop();
     this._shareState.destroy();
