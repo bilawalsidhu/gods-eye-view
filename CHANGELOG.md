@@ -108,6 +108,16 @@
   or `onChange`. `UiButton` joins the component kit with ui-vue's props
   (samehkhamis).
 
+- The panels' own state classes (`collapsed`, `dock-pinned`,
+  `dock-pinned-top`, `layout-auto-collapsed`, `accordion-collapsed`) render
+  from the `gev-panel-chrome` store: the shell, the rails and the accordion
+  present each panel's state there instead of writing its classes.
+  `layoutLeftPanelRail` and `layoutRightPanelRail` (`./ui/layout`) now call
+  `onCollapse(panel, {collapsed, auto})` and leave drawing it to the host. Without a
+  shell to own the panels, the voice tools' `set_panel_open` now reports
+  that there is no panel to open instead of writing its classes
+  (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

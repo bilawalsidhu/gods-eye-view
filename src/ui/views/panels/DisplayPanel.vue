@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
+import { vPanelState } from '../../rail/panelState.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import { useDisplayStore } from '../../stores/display.js';
@@ -43,7 +44,7 @@ const geoListed = computed(() => geoRows.value.length > 0);
 
 <template>
 <!-- Post-processing toggles (top-right) -->
-<div id="pp-toggles" class="panel-collapsible collapsed ui-scroll" data-panel-id="pp-toggles">
+<div id="pp-toggles" v-panel-state="'pp-toggles'" class="panel-collapsible collapsed ui-scroll" data-panel-id="pp-toggles">
   <div class="compact pp-header-row">
     <span data-i18n class="pp-header-label">DISPLAY</span>
     <span class="panel-divider" aria-hidden="true"></span>
@@ -123,7 +124,7 @@ const geoListed = computed(() => geoRows.value.length > 0);
     </div>
   </div>
   <!-- The one shared preset-parameter surface is inserted here at runtime. -->
-  <div id="param-slider-panel">
+  <div id="param-slider-panel" v-panel-state="'param-slider-panel'">
     <div class="param-panel-header">
       <span class="param-panel-title" data-i18n>PARAMETERS</span>
       <span class="param-panel-divider"></span>

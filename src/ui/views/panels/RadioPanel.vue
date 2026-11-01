@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
+import { vPanelState } from '../../rail/panelState.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { vFieldValue } from '../../rail/fieldValue.js';
@@ -29,7 +30,7 @@ const radioWords = {
 </script>
 
 <template>
-<section id="radio-panel" class="panel-collapsible collapsed" v-class-toggle="{ ...(radio && { 'radio-enabled': radio.enabled, 'lifecycle-uncertain': radio.uncertain }), ...(sdrConnected !== null && { 'sdr-connected': sdrConnected }) }" data-panel-id="radio-panel" aria-label="Internet radio and local SDR" data-i18n-aria-label>
+<section id="radio-panel" v-panel-state="'radio-panel'" class="panel-collapsible collapsed" v-class-toggle="{ ...(radio && { 'radio-enabled': radio.enabled, 'lifecycle-uncertain': radio.uncertain }), ...(sdrConnected !== null && { 'sdr-connected': sdrConnected }) }" data-panel-id="radio-panel" aria-label="Internet radio and local SDR" data-i18n-aria-label>
   <div class="radio-panel-inner ui-scroll">
     <div class="panel-header">
       <span class="panel-title" data-i18n>RADIO</span>

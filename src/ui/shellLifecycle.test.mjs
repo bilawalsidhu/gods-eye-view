@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { UiLifetime } from './uiLifetime.js';
 import { createPinia } from 'pinia';
 import { PanelChrome } from './panelChrome.js';
+import { followPanelState } from './rail/panelState.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { PanelLayoutController } from './panelLayoutController.js';
 import { ShellFeedback } from './shellFeedback.js';
@@ -150,7 +151,7 @@ test('panel layout coalesces each rail and cannot rearm after destruction', () =
     const owner = new PanelLayoutController({
       readHud: () => ({}),
       scheduleCockpitLayout() {},
-      syncPanelCollapseButton() {},
+      presentPanel() {},
       readDisplayScrollTop: () => 0,
     });
     owner._syncLeftPanelAdaptiveLayout = () => layouts++;
@@ -257,7 +258,7 @@ test('recording restores the original HUD after repeated entry and revokes retai
   }
 });
 
-test('weather rail orders between CCTV and Context, observes and syncs chrome', (t) => {
+test('weather rail orders between CCTV and Context, observes and presents chrome', (t) => {
   const f = fixture();
   const observed = new Set();
   const previousResizeObserver = globalThis.ResizeObserver;
@@ -298,16 +299,16 @@ test('weather rail orders between CCTV and Context, observes and syncs chrome', 
     }
     const weather = f.nodes.get('weather-panel');
     stack.children = [weather, f.nodes.get('global-context-panel')];
-    const synced = [];
     const store = usePanelChromeStore(createPinia());
     const chrome = { _chromeStore: store, _chromeToken: store.connect({}) };
+    const presented = [];
     const owner = new PanelLayoutController({
       readHud: () => ({}),
       scheduleCockpitLayout() {},
       readDisplayScrollTop: () => 0,
-      syncPanelCollapseButton(panel) {
-        synced.push(panel.id);
-        PanelChrome.prototype._syncPanelCollapseButton.call(chrome, panel);
+      presentPanel(panel, patch) {
+        presented.push(panel.id);
+        PanelChrome.prototype._presentPanel.call(chrome, panel, patch);
       },
     });
     owner._initRightPanelAdaptiveLayout();
@@ -315,12 +316,15 @@ test('weather rail orders between CCTV and Context, observes and syncs chrome', 
       stack.children.map((panel) => panel.id),
       ['pp-toggles', 'cctv-panel', 'weather-panel', 'global-context-panel'],
     );
-    assert.ok(synced.includes('weather-panel'));
     assert.ok(observed.has(weather));
-    assert.equal(store.panels['weather-panel'].collapsed, true);
-    weather.classList.remove('collapsed');
-    PanelChrome.prototype._syncPanelCollapseButton.call(chrome, weather);
+    // Moving a panel into the rail leaves its state as it was.
+    assert.deepEqual(presented, []);
+    followPanelState(store, 'weather-panel', weather);
+    PanelChrome.prototype._presentPanel.call(chrome, weather, {
+      collapsed: false,
+    });
     assert.equal(store.panels['weather-panel'].collapsed, false);
+    assert.equal(weather.classList.contains('collapsed'), false);
     owner.destroy();
     assert.equal(observed.size, 0);
     assert.equal(f.frames.size, 0);

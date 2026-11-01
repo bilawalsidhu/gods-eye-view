@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed, shallowRef, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
+import { vPanelState } from '../../rail/panelState.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import RailChips from '../../rail/RailChips.vue';
 import { useStreetLevelStore } from '../../stores/streetLevel.js';
@@ -101,7 +102,7 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
 </script>
 
 <template>
-<div id="street-level-panel" class="panel-collapsible collapsed" data-panel-id="street-level-panel" :data-sl-enabled="view ? String(view.enabled) : undefined">
+<div id="street-level-panel" v-panel-state="'street-level-panel'" class="panel-collapsible collapsed" data-panel-id="street-level-panel" :data-sl-enabled="view ? String(view.enabled) : undefined">
   <div class="panel-glow"></div>
   <div class="street-level-panel-inner ui-scroll" data-rail-scroller>
     <div class="panel-header">

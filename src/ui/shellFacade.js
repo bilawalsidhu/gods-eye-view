@@ -1024,13 +1024,14 @@ export class ShellFacade {
   }
 
   /**
-   * Updates collapse button glyphs based on panel state. Right-rail panels
-   * use directional arrows; left-stack panels use +/- symbols.
-   * @param {HTMLElement} panelEl - The panel DOM element.
+   * Presents a panel's state, merged over what it shows now; its root and
+   * buttons draw it from the panel chrome store.
+   * @param {HTMLElement|string} panelOrId - The panel or its id.
+   * @param {object} [patch] - The state that changes.
    * @returns {void}
    */
-  _syncPanelCollapseButton(panelEl) {
-    return this._panelChrome._syncPanelCollapseButton(...arguments);
+  _presentPanel(panelOrId, patch) {
+    return this._panelChrome._presentPanel(...arguments);
   }
 
   _buildSharePanelState() {

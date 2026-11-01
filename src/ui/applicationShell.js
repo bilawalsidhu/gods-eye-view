@@ -234,8 +234,7 @@ export class StyleManager extends ShellFacade {
         _setCockpitDisclosure: (...args) => this._setCockpitDisclosure(...args),
         _cockpitDisclosureOpen: (kind) => this._cockpitDisclosureOpen(kind),
         _setMapStack: (...args) => this._setMapStack(...args),
-        _syncPanelCollapseButton: (...args) =>
-          this._syncPanelCollapseButton(...args),
+        _presentPanel: (...args) => this._presentPanel(...args),
         _syncShareState: (...args) => this._syncShareState(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
       },

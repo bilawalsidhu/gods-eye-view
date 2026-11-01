@@ -4,9 +4,11 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApp, h, nextTick } from 'vue';
+import { createApp, h, nextTick, withDirectives } from 'vue';
 import { createPinia } from 'pinia';
+import { settleSideAccordion } from './panelAccordion.js';
 import { PanelChrome } from './panelChrome.js';
+import { followPanelState, vPanelState } from './rail/panelState.js';
 import { bindPanelDisclosure } from './panelDisclosure.js';
 import PanelCollapseButton from './rail/PanelCollapseButton.vue';
 import { usePanelChromeStore } from './stores/panelChrome.js';
@@ -30,6 +32,8 @@ test('the store republishes a panel only when its state changes', () => {
   assert.deepEqual(store.panels['data-panel'], {
     collapsed: true,
     pinned: false,
+    pinnedTop: false,
+    auto: null,
   });
   store.publish(token, 'data-panel', { collapsed: true });
   assert.ok(store.panels === first, 'an unchanged state is not republished');
@@ -175,6 +179,8 @@ test('PanelChrome takes clicks only once initialized, pins only dock trays, and 
     <div id="control-panel" class="collapsed"></div>`;
   const store = usePanelChromeStore(createPinia());
   const chrome = panelChrome(store);
+  for (const id of ['data-panel', 'cctv-panel', 'control-panel'])
+    followPanelState(store, id, document.getElementById(id));
   const calls = [];
   const setPanelCollapsed = chrome.setPanelCollapsed.bind(chrome);
   chrome.setPanelCollapsed = (id, collapsed, options) => {
@@ -196,6 +202,8 @@ test('PanelChrome takes clicks only once initialized, pins only dock trays, and 
   assert.deepEqual(store.panels['control-panel'], {
     collapsed: false,
     pinned: true,
+    pinnedTop: true,
+    auto: null,
   });
   assert.equal(
     document.getElementById('control-panel').classList.contains('dock-pinned'),
@@ -206,8 +214,12 @@ test('PanelChrome takes clicks only once initialized, pins only dock trays, and 
   const before = calls.length;
   store.act('toggle', 'data-panel');
   assert.equal(calls.length, before, 'a destroyed owner gets no clicks');
-  chrome._syncPanelCollapseButton(document.getElementById('cctv-panel'));
+  chrome._presentPanel('cctv-panel', { collapsed: true });
   assert.equal(store.panels['cctv-panel'], undefined, 'nor publishes');
+  assert.equal(
+    document.getElementById('cctv-panel').classList.contains('collapsed'),
+    false,
+  );
 });
 
 test('a remounted chrome starts from its own states, not a pin left behind', () => {
@@ -221,10 +233,12 @@ test('a remounted chrome starts from its own states, not a pin left behind', () 
   document.body.innerHTML = '<div id="location-bar" class="collapsed"></div>';
   const second = panelChrome(store);
   assert.equal(store.panels['location-bar'], undefined);
-  second._syncPanelCollapseButton(document.getElementById('location-bar'));
+  second._presentPanel('location-bar');
   assert.deepEqual(store.panels['location-bar'], {
     collapsed: true,
     pinned: false,
+    pinnedTop: false,
+    auto: null,
   });
   second.destroy();
 });
@@ -237,4 +251,81 @@ test('bindPanelDisclosure refuses the retired button wiring', () => {
       TypeError,
     );
   }
+});
+
+test('a panel root draws its state at once, keeping classes others own', async (t) => {
+  const store = mount(t, {
+    render: () =>
+      withDirectives(
+        h('div', { id: 'scene-panel', class: 'panel-collapsible collapsed' }),
+        [[vPanelState, 'scene-panel']],
+      ),
+  });
+  const panel = document.getElementById('scene-panel');
+  panel.classList.add('running');
+  assert.equal(panel.classList.contains('collapsed'), true, 'markup stands');
+  const token = store.connect({});
+  store.publish(token, 'scene-panel', { collapsed: true, auto: 'accordion' });
+  // No tick: a layout measures in the same task.
+  assert.equal(panel.classList.contains('accordion-collapsed'), true);
+  store.publish(token, 'scene-panel', { collapsed: false, auto: null });
+  assert.equal(panel.classList.contains('collapsed'), false);
+  assert.equal(panel.classList.contains('accordion-collapsed'), false);
+  assert.equal(panel.classList.contains('running'), true);
+  assert.equal(panel.classList.contains('panel-collapsible'), true);
+  store.publish(token, 'scene-panel', { pinned: true, pinnedTop: true });
+  assert.ok(panel.classList.contains('dock-pinned'));
+  assert.ok(panel.classList.contains('dock-pinned-top'));
+});
+
+test('destroying the chrome inside Cockpit puts back the panels its entry closed', () => {
+  document.body.innerHTML = `
+    <div id="data-panel"></div>
+    <div id="cctv-panel" class="collapsed"></div>`;
+  const store = usePanelChromeStore(createPinia());
+  const chrome = panelChrome(store);
+  const data = document.getElementById('data-panel');
+  followPanelState(store, 'data-panel', data);
+  chrome.enterCockpit();
+  assert.equal(data.classList.contains('collapsed'), true);
+  chrome.destroy();
+  assert.equal(data.classList.contains('collapsed'), false);
+  chrome.exitCockpit();
+  assert.equal(data.classList.contains('collapsed'), false);
+});
+
+test('the accordion closes peers through the real store, and opens them again', () => {
+  document.body.innerHTML = `
+    <div id="data-panel" data-panel-id="data-panel"></div>
+    <div id="scene-panel" data-panel-id="scene-panel"></div>`;
+  const store = usePanelChromeStore(createPinia());
+  const chrome = panelChrome(store);
+  const panels = ['data-panel', 'scene-panel'].map((id) => {
+    const panel = document.getElementById(id);
+    followPanelState(store, id, panel);
+    return panel;
+  });
+  const onCollapse = (panel, patch) => chrome._presentPanel(panel, patch);
+  settleSideAccordion({
+    panels,
+    enabled: true,
+    preferredPanelId: 'scene-panel',
+    documentRef: document,
+    onCollapse,
+  });
+  assert.deepEqual(store.panels['data-panel'], {
+    collapsed: true,
+    pinned: false,
+    pinnedTop: false,
+    auto: 'accordion',
+  });
+  assert.equal(panels[0].className, 'collapsed accordion-collapsed');
+  assert.equal(
+    store.panels['scene-panel'],
+    undefined,
+    'the owner is untouched',
+  );
+  settleSideAccordion({ panels, enabled: false, onCollapse });
+  assert.equal(panels[0].className, '');
+  chrome.destroy();
 });

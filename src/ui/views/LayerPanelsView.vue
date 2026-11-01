@@ -1,6 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
+import { vPanelState } from '../rail/panelState.js';
 import PanelCollapseButton from '../rail/PanelCollapseButton.vue';
 import { useSceneSharingStore } from '../stores/sceneSharing.js';
 import { useSceneStore } from '../stores/scenes.js';
@@ -37,7 +38,7 @@ async function importChosen(event) {
 <template>
   <div id="left-panel-stack" class="ui-scroll">
   <!-- Data Layer Toggle Panel -->
-  <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
+  <div id="data-panel" v-panel-state="'data-panel'" class="panel-collapsible collapsed active" data-panel-id="data-panel">
     <div class="panel-glow"></div>
     <div class="data-panel-inner">
       <div class="panel-header">
@@ -56,7 +57,7 @@ async function importChosen(event) {
   <StreetLevelPanel />
 
   <!-- Scene Director Panel -->
-  <div id="scene-panel" v-class-toggle="{ running: scene?.running, 'has-shots': scene?.hasShots }" class="panel-collapsible collapsed" data-panel-id="scene-panel">
+  <div id="scene-panel" v-panel-state="'scene-panel'" v-class-toggle="{ running: scene?.running, 'has-shots': scene?.hasShots }" class="panel-collapsible collapsed" data-panel-id="scene-panel">
     <div class="panel-glow"></div>
     <div class="scene-panel-inner ui-scroll">
       <div class="panel-header">

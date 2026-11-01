@@ -1799,7 +1799,7 @@ try {
     manager._setCockpitDisplayPortalActive(false);
     document.body.classList.remove('cockpit-mode');
     await waitFrames();
-    standard.classList.remove('collapsed');
+    manager._presentPanel(standard, { collapsed: false });
     standard.style.height = '120px';
     standard.style.maxHeight = '120px';
     standard.style.overflowY = 'auto';
@@ -1834,7 +1834,7 @@ try {
     cockpit.style.height = priorCockpitHeight;
     cockpit.style.maxHeight = priorCockpitMaxHeight;
     cockpit.style.overflowY = priorCockpitOverflow;
-    standard.classList.toggle('collapsed', standardWasCollapsed);
+    manager._presentPanel(standard, { collapsed: standardWasCollapsed });
     return {
       standardBefore,
       standardAfter,

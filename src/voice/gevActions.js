@@ -817,7 +817,17 @@ export function createGevActionRunner({
           ...(!applied ? { error: say } : {}),
         };
       }
-      setPanelOpen(styleManager, panelId, open);
+      if (!setPanelOpen(styleManager, panelId, open)) {
+        const say = 'There is no panel to open here.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          say,
+          error: say,
+        };
+      }
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
@@ -3143,13 +3153,14 @@ function normalizeAircraftClassFilter(value) {
   return raw.replace(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
 }
 
+/**
+ * @returns {boolean} Whether a shell took the change: its panel chrome owns
+ *   panel state, so without one there is no panel to open.
+ */
 function setPanelOpen(styleManager, panelId, open) {
-  if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
-    styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
-  } else {
-    const panel = document.getElementById(panelId);
-    if (panel) panel.classList.toggle('collapsed', !open);
-  }
+  if (typeof styleManager?.setPanelCollapsed !== 'function') return false;
+  styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
+  return true;
 }
 
 function normalizeContextMode(value) {

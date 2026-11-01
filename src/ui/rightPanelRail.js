@@ -41,7 +41,8 @@ function settledLeftRailTop(leftStack, viewportHeight, getComputedStyle) {
  * @param {Window} options.windowRef Viewport and style reader.
  * @param {{visible: boolean, variant: string}} options.hud Current HUD presentation.
  * @param {string} options.preferredPanelId Most recently opened panel.
- * @param {Function} options.onCollapse Update a panel's disclosure chrome.
+ * @param {Function} options.onCollapse Present a panel's collapse:
+ *   `(panel, {collapsed, auto})`.
  * @param {Function} options.onRetry Request another pass after automatic collapse.
  * @param {Function} [options.getComputedStyle] Optional DOM style reader override.
  * @param {HTMLElement} options.leftStack Rail supplying the shared top baseline.
@@ -83,8 +84,7 @@ export function layoutRightPanelRail({
     for (const panel of panels.filter((item) =>
       item.classList.contains('layout-auto-collapsed'),
     )) {
-      panel.classList.remove('collapsed', 'layout-auto-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: false, auto: null });
     }
   }
   // One panel is open per desktop side; this marker is distinct from
@@ -275,8 +275,7 @@ export function layoutRightPanelRail({
   if (!isCollapseRetry && autoCollapseIndices.length) {
     for (const index of autoCollapseIndices) {
       const panel = expandedPanels[index];
-      panel.classList.add('collapsed', 'layout-auto-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: true, auto: 'layout' });
     }
     pendingCollapseRetries.add(stack);
     onRetry();

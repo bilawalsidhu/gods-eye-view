@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
+import { vPanelState } from '../rail/panelState.js';
 import PanelCollapseButton from '../rail/PanelCollapseButton.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
@@ -28,7 +29,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
 <template>
   <!-- Global Context is deliberately independent from the left layer accordion. -->
   <aside id="right-context-rail" class="ui-scroll" v-class-toggle="{ 'bhote-event-active': !!bhotePanel }">
-    <div id="weather-panel" class="panel-collapsible" data-panel-id="weather-panel" hidden>
+    <div id="weather-panel" v-panel-state="'weather-panel'" class="panel-collapsible" data-panel-id="weather-panel" hidden>
       <div class="panel-glow"></div>
       <div class="weather-panel-inner" data-rail-scroller>
         <div class="panel-header">
@@ -40,7 +41,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
         <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
       </div>
     </div>
-    <div id="recent-imagery-panel" class="panel-collapsible" data-panel-id="recent-imagery-panel" hidden>
+    <div id="recent-imagery-panel" v-panel-state="'recent-imagery-panel'" class="panel-collapsible" data-panel-id="recent-imagery-panel" hidden>
       <div class="panel-glow"></div>
       <div class="recent-imagery-panel-inner" data-rail-scroller>
         <div class="panel-header">
@@ -52,7 +53,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
         <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
       </div>
     </div>
-    <div id="global-context-panel" class="panel-collapsible collapsed" v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" data-panel-id="global-context-panel">
+    <div id="global-context-panel" v-panel-state="'global-context-panel'" class="panel-collapsible collapsed" v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" data-panel-id="global-context-panel">
       <div class="panel-glow"></div>
       <div class="global-context-panel-inner ui-scroll" data-rail-scroller>
         <div class="panel-header">

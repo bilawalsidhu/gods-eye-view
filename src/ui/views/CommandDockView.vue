@@ -1,6 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { msg, t } from '../../i18n/index.js';
+import { vPanelState } from '../rail/panelState.js';
 import UiButton from '../kit/UiButton.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
@@ -67,7 +68,7 @@ function selectMapSource(chip) {
   <div id="command-dock" class="ui-scroll" aria-label="Navigation, voice, and visual preset controls" data-i18n-aria-label>
   <template v-for="slot in dockOrder" :key="slot">
   <!-- Control panel -->
-  <div v-if="slot === 'control'" id="control-panel" class="panel-collapsible collapsed">
+  <div v-if="slot === 'control'" id="control-panel" v-panel-state="'control-panel'" class="panel-collapsible collapsed">
     <div class="panel-glow"></div>
     <div class="panel-inner">
       <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
@@ -128,7 +129,7 @@ function selectMapSource(chip) {
   <VoiceControl v-else-if="slot === 'voice'" :key="voice.id" :view="voice" />
 
   <!-- Location bar -->
-  <div v-else-if="slot === 'location'" id="location-bar" class="panel-collapsible collapsed">
+  <div v-else-if="slot === 'location'" id="location-bar" v-panel-state="'location-bar'" class="panel-collapsible collapsed">
     <div class="panel-glow"></div>
     <div class="location-inner">
       <div class="location-toolbar">

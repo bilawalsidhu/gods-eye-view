@@ -57,7 +57,7 @@ try {
       persist: false,
       syncShare: false,
     });
-    manager._sliderPanel.classList.remove('collapsed');
+    manager._presentPanel(manager._sliderPanel, { collapsed: false });
     const slider = manager._sliderContainer.querySelector('input');
     window.__qaOldSlider = slider;
     const name = 'pixelation';

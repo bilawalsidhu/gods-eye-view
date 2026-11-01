@@ -8,15 +8,35 @@ import { shallowRef } from 'vue';
  */
 
 /**
- * Each panel's disclosure state as its collapse, dock and pin buttons render
- * it. PanelChrome owns the panels: it publishes here whenever a panel opens,
- * closes or is pinned, and connects the buttons' clicks; the views only render
- * and forward clicks.
+ * @typedef {object} PanelState
+ * @property {boolean} collapsed Whether the panel is closed, by the person or
+ *   by its layout.
+ * @property {boolean} pinned A dock tray kept open (`dock-pinned`).
+ * @property {boolean} pinnedTop The pinned tray drawn on top.
+ * @property {?('layout'|'accordion')} auto Why a layout closed the panel
+ *   (`layout-auto-collapsed`, `accordion-collapsed`), or null when the
+ *   person's own choice stands.
+ */
+
+/** A panel's state before its owner has said otherwise. */
+const BLANK = Object.freeze({
+  collapsed: false,
+  pinned: false,
+  pinnedTop: false,
+  auto: null,
+});
+
+/**
+ * Each panel's disclosure state, which its root (`vPanelState`) and its
+ * collapse, dock and pin buttons render. PanelChrome owns the panels: it and
+ * the layouts it runs publish here whenever a panel opens, closes or is
+ * pinned, and it connects the buttons' clicks; the views only render and
+ * forward clicks.
  */
 export const usePanelChromeStore = defineStore('gev-panel-chrome', () => {
   /**
-   * `{[panelId]: {collapsed, pinned}}`, frozen; a panel is absent until its
-   * owner first presents it, and its buttons keep their markup until then.
+   * `{[panelId]: PanelState}`, frozen; a panel is absent until its owner
+   * first presents it, and it keeps its markup's classes until then.
    */
   const panels = shallowRef(Object.freeze({}));
   /** @type {{handlers: PanelChromeHandlers}|null} */
@@ -44,17 +64,13 @@ export const usePanelChromeStore = defineStore('gev-panel-chrome', () => {
    * unchanged state is not republished.
    * @param {object} token
    * @param {string} panelId
-   * @param {{collapsed?: boolean, pinned?: boolean}} patch
+   * @param {Partial<PanelState>} patch
    */
   function publish(token, panelId, patch) {
     if (!owns(token) || !panelId) return;
     const prior = panels.value[panelId];
-    const next = { collapsed: false, pinned: false, ...prior, ...patch };
-    if (
-      prior &&
-      prior.collapsed === next.collapsed &&
-      prior.pinned === next.pinned
-    )
+    const next = { ...BLANK, ...prior, ...patch };
+    if (prior && Object.keys(BLANK).every((key) => prior[key] === next[key]))
       return;
     panels.value = Object.freeze({
       ...panels.value,

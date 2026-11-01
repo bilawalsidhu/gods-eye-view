@@ -1716,7 +1716,14 @@ async function main() {
           else panel.setAttribute('style', state.style);
           if (state.ariaHidden === null) panel.removeAttribute('aria-hidden');
           else panel.setAttribute('aria-hidden', state.ariaHidden);
-          manager._syncPanelCollapseButton(panel);
+          // The restored classes are the panel's state again.
+          const has = (name) => panel.classList.contains(name);
+          manager._presentPanel(panel, {
+            collapsed: has('collapsed'),
+            pinned: has('dock-pinned'),
+            pinnedTop: has('dock-pinned-top'),
+            auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
+          });
         }
         for (const [id, state] of Object.entries(prior.stacks)) {
           const stack = document.getElementById(id);
@@ -1974,7 +1981,7 @@ async function main() {
       manager._setCockpitDisplayPortalActive(true);
       hud.hidden = false;
       signal.hidden = false;
-      dataPanel.classList.remove('collapsed');
+      manager._presentPanel(dataPanel, { collapsed: false });
       window.__godsEyeView.styleManager._syncLeftPanelAdaptiveLayout();
       window.__godsEyeView.styleManager.cockpitView.syncSignalLayout();
       if (display.getAttribute('aria-expanded') === 'true') display.click();
@@ -2059,8 +2066,7 @@ async function main() {
       contextCard.hidden = false;
       // Expand the panel the same way this block already does at entry, so the
       // portaled Display groups measured further down keep their DOM home.
-      dataPanel.classList.remove('collapsed', 'layout-auto-collapsed');
-      manager._syncPanelCollapseButton(dataPanel);
+      manager._presentPanel(dataPanel, { collapsed: false, auto: null });
       manager._syncLeftPanelAdaptiveLayout();
       await waitForLayout();
       const panelRect = dataPanel.getBoundingClientRect();
@@ -2287,7 +2293,14 @@ async function main() {
           else panel.setAttribute('style', state.style);
           if (state.ariaHidden === null) panel.removeAttribute('aria-hidden');
           else panel.setAttribute('aria-hidden', state.ariaHidden);
-          manager._syncPanelCollapseButton(panel);
+          // The restored classes are the panel's state again.
+          const has = (name) => panel.classList.contains(name);
+          manager._presentPanel(panel, {
+            collapsed: has('collapsed'),
+            pinned: has('dock-pinned'),
+            pinnedTop: has('dock-pinned-top'),
+            auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
+          });
         }
         manager._panelLayout._leftStackPreferredPanelId = prior.preferredLeftPanelId;
         localStorage.clear();

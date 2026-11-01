@@ -17,7 +17,8 @@ import { settleSideAccordion } from './panelAccordion.js';
  * @param {Window} options.windowRef Viewport and style reader.
  * @param {{visible: boolean, variant: string}} options.hud Current HUD presentation.
  * @param {string} options.preferredPanelId Most recently opened panel.
- * @param {Function} options.onCollapse Update a panel's disclosure chrome.
+ * @param {Function} options.onCollapse Present a panel's collapse:
+ *   `(panel, {collapsed, auto})`.
  * @param {Function} options.onRetry Request another pass after automatic collapse.
  * @param {Function} [options.getComputedStyle] Optional DOM style reader override.
  * @param {Map<string, number>} options.collapsedHeights Caller-owned measurement cache.
@@ -45,8 +46,7 @@ export function layoutLeftPanelRail({
     for (const panel of panels.filter((item) =>
       item.classList.contains('layout-auto-collapsed'),
     )) {
-      panel.classList.remove('collapsed', 'layout-auto-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: false, auto: null });
     }
   }
 
@@ -262,8 +262,7 @@ export function layoutLeftPanelRail({
   if (autoCollapseIndices.length) {
     for (const index of autoCollapseIndices) {
       const panel = expandedPanels[index];
-      panel.classList.add('collapsed', 'layout-auto-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: true, auto: 'layout' });
     }
     onRetry();
     return;

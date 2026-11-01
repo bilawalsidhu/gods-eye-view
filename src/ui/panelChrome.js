@@ -1,4 +1,5 @@
 import { UiLifetime } from './uiLifetime.js';
+import { readPanelState } from './rail/panelState.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { applicationPinia } from './vueRuntime.js';
 import { displayPanelScroller } from './displayPanelScroll.js';
@@ -81,7 +82,7 @@ export class PanelChrome {
     this._cockpitPanelRestore = null;
     this._cockpitContextCollapsedForDataPanel = false;
     this._panelPosition = new PanelPositionControls({
-      syncPanelCollapseButton: (panel) => this._syncPanelCollapseButton(panel),
+      presentPanel: (panel, patch) => this._presentPanel(panel, patch),
       showToast: (message) => this._showToast(message),
     });
     this._panelLayout = new PanelLayoutController({
@@ -90,7 +91,7 @@ export class PanelChrome {
         variant: this.hud.getVariant(),
       }),
       scheduleCockpitLayout: () => this.cockpitView?.scheduleContextLayout(),
-      syncPanelCollapseButton: (panel) => this._syncPanelCollapseButton(panel),
+      presentPanel: (panel, patch) => this._presentPanel(panel, patch),
       readDisplayScrollTop: () =>
         this._displayPortalScrollRestoreOwner === 'standard'
           ? this._standardDisplayScrollTop
@@ -221,18 +222,18 @@ export class PanelChrome {
       typeof pin === 'boolean'
         ? pin
         : !panelEl.classList.contains('dock-pinned');
-    panelEl.classList.toggle('dock-pinned', shouldPin);
-    this._chromeStore.publish(this._chromeToken, panelId, {
-      collapsed: panelEl.classList.contains('collapsed'),
-      pinned: shouldPin,
-    });
-    document
-      .querySelectorAll('#command-dock .dock-pinned-top')
-      .forEach((pinnedPanel) => {
-        pinnedPanel.classList.remove('dock-pinned-top');
+    // The tray pinned last draws on top; unpinning hands the top to the
+    // other tray if it is pinned.
+    this._presentPanel(panelEl, { pinned: shouldPin, pinnedTop: shouldPin });
+    for (const otherId of PINNABLE_PANEL_IDS) {
+      if (otherId === panelId) continue;
+      const other = document.getElementById(otherId);
+      if (!other) continue;
+      this._presentPanel(other, {
+        pinnedTop: !shouldPin && other.classList.contains('dock-pinned'),
       });
+    }
     if (shouldPin) {
-      panelEl.classList.add('dock-pinned-top');
       this.setPanelCollapsed(panelId, false, {
         explicit: !restore,
         restore,
@@ -240,10 +241,6 @@ export class PanelChrome {
         syncShare: false,
       });
     } else {
-      const remainingPinnedPanel = document.querySelector(
-        '#command-dock .dock-pinned',
-      );
-      remainingPinnedPanel?.classList.add('dock-pinned-top');
       if (!restore && !panelEl.matches(':hover')) {
         this.setPanelCollapsed(panelId, true, {
           explicit: true,
@@ -323,11 +320,23 @@ export class PanelChrome {
     return this._panelLayout._scheduleLeftPanelLayout(options0);
   }
 
-  /** Present a panel's open state to its collapse and dock buttons. */
-  _syncPanelCollapseButton(panelEl) {
+  /**
+   * Present a panel's state, merged over what it shows now, to the panel
+   * chrome store; its root and buttons draw it from there.
+   * @param {Element|string} panelOrId
+   * @param {Partial<import('./stores/panelChrome.js').PanelState>} [patch]
+   */
+  _presentPanel(panelOrId, patch = {}) {
+    const panelEl =
+      typeof panelOrId === 'string'
+        ? document.getElementById(panelOrId)
+        : panelOrId;
     if (!panelEl?.id) return;
+    const shown =
+      this._chromeStore.panels[panelEl.id] ?? readPanelState(panelEl);
     this._chromeStore.publish(this._chromeToken, panelEl.id, {
-      collapsed: panelEl.classList.contains('collapsed'),
+      ...shown,
+      ...patch,
     });
   }
 
@@ -478,7 +487,6 @@ export class PanelChrome {
       panelEl.classList.contains('collapsed') === nextCollapsed &&
       !wasAutoCollapsed
     ) {
-      this._syncPanelCollapseButton(panelEl);
       if (priorLeftOwner !== this._panelLayout._leftStackPreferredPanelId) {
         this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
       }
@@ -487,7 +495,6 @@ export class PanelChrome {
       }
       return;
     }
-    panelEl.classList.remove('layout-auto-collapsed', 'accordion-collapsed');
     if (
       !nextCollapsed &&
       this.cockpitView?.active &&
@@ -518,7 +525,7 @@ export class PanelChrome {
         });
       }
     }
-    panelEl.classList.toggle('collapsed', nextCollapsed);
+    this._presentPanel(panelEl, { collapsed: nextCollapsed, auto: null });
     if (
       nextCollapsed &&
       this.cockpitView?.active &&
@@ -528,7 +535,6 @@ export class PanelChrome {
       this._cockpitContextCollapsedForDataPanel = false;
       this.cockpitView.setContextCollapsed(false);
     }
-    this._syncPanelCollapseButton(panelEl);
     if (persist !== false)
       this._savePanelCollapsedState(panelId, nextCollapsed);
     if (panelId === 'pp-toggles') {
@@ -586,6 +592,9 @@ export class PanelChrome {
   }
   destroy() {
     if (this._disposed) return;
+    // Cockpit's own teardown follows the chrome's: put back the panels its
+    // entry closed while this owner can still present them.
+    this.exitCockpit();
     this._disposed = true;
     this._lifetime.destroy();
     this._chromeStore.detach(this._chromeToken);

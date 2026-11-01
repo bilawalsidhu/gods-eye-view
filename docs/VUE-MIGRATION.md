@@ -67,7 +67,13 @@ a feature supplying only its accent.
    mirrors each side's panels and the rail renders from it. Each panel's
    collapse button (`PanelCollapseButton`), the dock tray toggles and the
    dock pins render the open and pinned state PanelChrome presents to the
-   `gev-panel-chrome` store, and their clicks call it there. Done.
+   `gev-panel-chrome` store, and their clicks call it there. Each panel's
+   root draws its own state from there too (`v-panel-state`: `collapsed`,
+   `dock-pinned`, `dock-pinned-top`, `layout-auto-collapsed`,
+   `accordion-collapsed`): PanelChrome, the rails and the accordion present
+   it rather than writing classes. The directive applies it in a synchronous
+   watcher, not on Vue's next render, because the rails measure a panel in
+   the same task that opens or closes it. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
    classes, `data-i18n` text and CSS. The page places each view with a
    `.gev-view` host (`display: contents`), and `mountApplicationViews()`

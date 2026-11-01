@@ -1088,7 +1088,7 @@ test('Cockpit Display portals shared HUD, Detection, Parameters, and 3D controls
   );
   assert.match(
     ui,
-    /_revealCockpitStyleParameters\(\{ openDisplay = false \} = \{\}\) \{[\s\S]*?openDisplay[\s\S]*?_setCockpitDisclosure\?\.\('display', true\)[\s\S]*?!this\._cockpitDisclosureOpen\?\.\('display'\)[\s\S]*?classList\.remove\('collapsed'\)/,
+    /_revealCockpitStyleParameters\(\{ openDisplay = false \} = \{\}\) \{[\s\S]*?openDisplay[\s\S]*?_setCockpitDisclosure\?\.\('display', true\)[\s\S]*?!this\._cockpitDisclosureOpen\?\.\('display'\)[\s\S]*?_presentPanel\(this\._sliderPanel, \{ collapsed: false \}\)/,
   );
   assert.match(
     radioBindings,

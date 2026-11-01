@@ -64,12 +64,12 @@ export class PanelLayoutController {
   constructor({
     readHud,
     scheduleCockpitLayout,
-    syncPanelCollapseButton,
+    presentPanel,
     readDisplayScrollTop,
   }) {
     this.readHud = readHud;
     this.scheduleCockpitLayout = scheduleCockpitLayout;
-    this._syncPanelCollapseButton = syncPanelCollapseButton;
+    this._presentPanel = presentPanel;
     this.readDisplayScrollTop = readDisplayScrollTop;
     this.destroyed = false;
     this._adaptivePanelSettleTimer = null;
@@ -198,7 +198,6 @@ export class PanelLayoutController {
     ]) {
       if (!panel) continue;
       stack.insertBefore(panel, globalContextPanel);
-      this._syncPanelCollapseButton(panel);
     }
     if (this._sliderPanel) {
       this._sliderPanel.style.removeProperty('top');
@@ -286,8 +285,7 @@ export class PanelLayoutController {
         for (const panel of this._rightPanelStack.querySelectorAll(
           '.layout-auto-collapsed',
         )) {
-          panel.classList.remove('collapsed', 'layout-auto-collapsed');
-          this._syncPanelCollapseButton(panel);
+          this._presentPanel(panel, { collapsed: false, auto: null });
         }
       }
       this._syncRightPanelAdaptiveLayout();
@@ -303,7 +301,7 @@ export class PanelLayoutController {
       windowRef: window,
       hud: this.readHud(),
       preferredPanelId: this._rightStackPreferredPanelId,
-      onCollapse: (panel) => this._syncPanelCollapseButton(panel),
+      onCollapse: (panel, patch) => this._presentPanel(panel, patch),
       onRetry: () => this._scheduleRightPanelLayout(),
       leftStack: this._leftPanelStack,
       displayPanel: this._ppToggles,
@@ -422,8 +420,7 @@ export class PanelLayoutController {
         for (const panel of this._leftPanelStack.querySelectorAll(
           '.layout-auto-collapsed',
         )) {
-          panel.classList.remove('collapsed', 'layout-auto-collapsed');
-          this._syncPanelCollapseButton(panel);
+          this._presentPanel(panel, { collapsed: false, auto: null });
         }
       }
       this._syncLeftPanelAdaptiveLayout();
@@ -438,7 +435,7 @@ export class PanelLayoutController {
       windowRef: window,
       hud: this.readHud(),
       preferredPanelId: this._leftStackPreferredPanelId,
-      onCollapse: (panel) => this._syncPanelCollapseButton(panel),
+      onCollapse: (panel, patch) => this._presentPanel(panel, patch),
       onRetry: () => this._scheduleLeftPanelLayout(),
       collapsedHeights: this._leftStackCollapsedHeights,
       onAligned: () => this._scheduleRightPanelLayout(),

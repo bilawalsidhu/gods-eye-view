@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createPinia } from 'pinia';
 import { msg, t } from './i18n/index.js';
+import { followPanelState, readPanelState } from './ui/rail/panelState.js';
 import { usePanelChromeStore } from './ui/stores/panelChrome.js';
 
 // Exercise the installed event routes and central close method, without WebGL.
@@ -108,18 +109,22 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   window.clearTimeout = (id) => timers.delete(id);
   window.performance = { now: () => now };
   document.defaultView = window;
-  const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame', 't', 'msg',
-    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_syncPanelCollapseButton').toString()}});`)(
-    createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {}, t, msg,
+  const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame', 't', 'msg', 'readPanelState',
+    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_presentPanel').toString()}});`)(
+    createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {}, t, msg, readPanelState,
   );
   const saves = [];
   const claims = [];
   let shareSyncs = 0;
   const chromeStore = usePanelChromeStore(createPinia());
+  const chromeToken = chromeStore.connect({});
+  // The trays' roots draw the store's state, as v-panel-state does.
+  followPanelState(chromeStore, 'control-panel', panel);
+  followPanelState(chromeStore, 'location-bar', location);
   const manager = {
     _lifetime: { frame() {} },
     _chromeStore: chromeStore,
-    _chromeToken: chromeStore.connect({}),
+    _chromeToken: chromeToken,
     _panelLayout: { _leftStackPreferredPanelId: null, _rightStackPreferredPanelId: null },
     ...methods,
     _savePanelCollapsedState(...args) { saves.push(args); },

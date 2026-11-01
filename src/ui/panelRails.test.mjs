@@ -7,6 +7,7 @@ import {
   layoutRightPanelRail,
   measurePanelNaturalHeight,
 } from './panelRails.js';
+import { applyPanelState, readPanelState } from './rail/panelState.js';
 
 test('Display uses an inner scroll body only in Cyber', () => {
   const body = { scrollTop: 95 };
@@ -169,7 +170,11 @@ function fixture(
       matchMedia: () => ({ matches: mobile }),
       getComputedStyle: (node) => node.computed,
     },
-    onCollapse: (panel) => collapsed.push(panel.id),
+    // The owner presents the patch; the panel's root draws it at once.
+    onCollapse: (panel, patch) => {
+      collapsed.push(panel.id);
+      applyPanelState(panel, { ...readPanelState(panel), ...patch });
+    },
     onRetry: () => {
       retries += 1;
     },

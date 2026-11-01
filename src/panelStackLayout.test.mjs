@@ -141,8 +141,8 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   const ui = readShellSource();
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   assert.doesNotMatch(ui, /_enforce(?:Left|Right)PanelAccordion/);
-  assert.match(rails, /classList\.add\('collapsed', 'layout-auto-collapsed'\)/);
-  assert.match(readFileSync(new URL('./ui/panelLayoutController.js', import.meta.url), 'utf8'), /classList\.remove\('collapsed', 'layout-auto-collapsed'\)/);
+  assert.match(rails, /onCollapse\(panel, \{ collapsed: true, auto: 'layout' \}\)/);
+  assert.match(readFileSync(new URL('./ui/panelLayoutController.js', import.meta.url), 'utf8'), /_presentPanel\(panel, \{ collapsed: false, auto: null \}\)/);
   assert.match(ui, /reconsiderAutoCollapse/);
   assert.match(
     ui,
@@ -169,7 +169,7 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   assert.match(rightRail, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\s*\(panel\) =>\s*panel\.contains\(documentRef\.activeElement\),?\s*\)/);
   // Collapse buttons render aria-expanded from the state the chrome presents
   // (panelChromeButtons.test.mjs covers the views).
-  assert.match(ui, /_chromeStore\.publish\(this\._chromeToken, panelEl\.id, \{\s*collapsed: panelEl\.classList\.contains\('collapsed'\),/);
+  assert.match(ui, /this\._presentPanel\(panelEl, \{ collapsed: nextCollapsed, auto: null \}\)/);
   assert.match(leftRail, /--left-panel-allocated-height/);
   assert.match(rightRail, /--right-panel-allocated-height/);
   assert.match(

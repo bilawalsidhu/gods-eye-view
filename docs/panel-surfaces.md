@@ -101,7 +101,11 @@ Escape, bound and disposed with `bindPanelDisclosure` /
 `collapsePanelOnEscape` from `panelDisclosure.js` (which bind Escape only). Do not rerun the whole application chrome
 initializer just to add one panel. `layoutLeftPanelRail` and
 `layoutRightPanelRail` accept arbitrary direct `data-panel-id` children; their
-host owns layout scheduling, observations and collapse callbacks. Dynamic
+host owns layout scheduling, observations and collapse callbacks. A rail
+never writes a panel's classes: it calls `onCollapse(panel, {collapsed,
+auto})`, and the host draws that state (the application presents it to the
+panel chrome store, which each root's `v-panel-state` draws at once, so the
+rail can measure the panel in the same task). Dynamic
 content that changes size may require an owner-scheduled layout pass or an
 owned `ResizeObserver`; adding CSS attributes does not register new observers.
 

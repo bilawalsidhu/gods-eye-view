@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PanelChrome } from './panelChrome.js';
+import { presentPanelLocally } from '../testSupport/panelState.mjs';
 
 function fixture(theme = 'cyber') {
   const nodes = new Map();
@@ -35,7 +36,7 @@ function fixture(theme = 'cyber') {
     _rightPanelStack: rail,
     _panelLayout: {},
     _lifetime: { frame() {} },
-    _syncPanelCollapseButton() {}, _scheduleRightPanelLayout() {},
+    _presentPanel: presentPanelLocally, _scheduleRightPanelLayout() {},
     _scheduleLeftPanelLayout() {}, _layoutRightPanels() {}, _syncCctvPanelViewport() {},
     _savePanelCollapsedState: (...args) => saved.push(args),
     shareLinkManager: { claimRestoreLane: (...args) => claimed.push(args), onPanelStateChange() {} },

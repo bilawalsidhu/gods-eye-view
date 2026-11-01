@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
+import { vPanelState } from '../../rail/panelState.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import CctvCalValue from '../../cctv/CctvCalValue.vue';
 import CctvPicker from '../../cctv/CctvPicker.vue';
@@ -27,7 +28,7 @@ const frameData = computed(() =>
 </script>
 
 <template>
-<div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
+<div id="cctv-panel" v-panel-state="'cctv-panel'" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
   <div class="panel-glow"></div>
   <div class="cctv-panel-inner ui-scroll" data-rail-scroller>
     <div class="panel-header">

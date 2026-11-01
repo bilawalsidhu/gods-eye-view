@@ -9,7 +9,8 @@
  * @param {boolean} options.enabled Whether the one-panel rule applies.
  * @param {string} [options.preferredPanelId] Most recently opened panel.
  * @param {Document} [options.documentRef] Document supplying keyboard focus.
- * @param {Function} options.onCollapse Update a panel's disclosure chrome.
+ * @param {Function} options.onCollapse Present a panel's collapse:
+ *   `(panel, {collapsed, auto})`.
  */
 export function settleSideAccordion({
   panels,
@@ -21,8 +22,7 @@ export function settleSideAccordion({
   if (!enabled) {
     for (const panel of panels) {
       if (!panel.classList.contains('accordion-collapsed')) continue;
-      panel.classList.remove('collapsed', 'accordion-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: false, auto: null });
     }
     return;
   }
@@ -35,7 +35,6 @@ export function settleSideAccordion({
     expanded[0];
   for (const panel of expanded) {
     if (panel === owner) continue;
-    panel.classList.add('collapsed', 'accordion-collapsed');
-    onCollapse(panel);
+    onCollapse(panel, { collapsed: true, auto: 'accordion' });
   }
 }
