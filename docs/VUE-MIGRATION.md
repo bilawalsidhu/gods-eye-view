@@ -225,7 +225,10 @@ a feature supplying only its accent.
    `splitFlap.js` plans, writing only the label's one text node; the toast
    renders what each owner's `createToast()` publishes there, on that
    owner's own timer, and the title bar's FPS readout what
-   `createFrameRateMonitor()` publishes), the Scene actions panel (`SceneInteractions`
+   `createFrameRateMonitor()` publishes), the globe actions (in progress:
+   `GlobeActions` renders the top-center bar; its clear and share buttons
+   call the shell through the `gev-globe-actions` store, which also carries
+   a clear under way), the Scene actions panel (`SceneInteractions`
    teleports what the scene interactions owner publishes to the
    `gev-scene-interactions` store into the viewer's container; the owner
    keeps the pick handler and focuses the picked action), the data-pack

@@ -16,6 +16,7 @@ import CelestialRing from './panels/CelestialRing.vue';
 import ScreenAnnotations from './panels/ScreenAnnotations.vue';
 import AwarenessDirection from './panels/AwarenessDirection.vue';
 import UiButton from '../kit/UiButton.vue';
+import GlobeActions from './panels/GlobeActions.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
@@ -79,24 +80,7 @@ const vToastText = {
   </div>
 
   <!-- Top-center camera and share actions -->
-  <nav id="top-center-actions" aria-label="Globe actions" data-i18n-aria-label>
-    <button id="clear-selected-layers" type="button" aria-label="Clear selected data layers" title="Turn off all selected data layers" data-i18n-aria-label data-i18n-title>
-      <span class="material-symbols-outlined" aria-hidden="true">layers_clear</span>
-    </button>
-    <button id="share-btn" type="button" aria-label="Copy share link" title="Copy share link" data-i18n-aria-label data-i18n-title>
-      <span class="share-icon" aria-hidden="true">&#x1F517;</span>
-    </button>
-    <button id="tilt-map-view" type="button" aria-label="Tilt map to oblique view" aria-pressed="false" title="Toggle straight-down and tilted map views" data-i18n-aria-label data-i18n-title>
-      <span class="material-symbols-outlined" aria-hidden="true">view_in_ar</span>
-    </button>
-    <button id="north-up-view" type="button" aria-label="Reset map to north up" title="Reset map bearing to north" data-i18n-aria-label data-i18n-title>
-      <span class="camera-compass-n" aria-hidden="true">N</span>
-      <span class="camera-compass-needle material-symbols-outlined" aria-hidden="true">navigation</span>
-    </button>
-    <button id="reset-globe-view" type="button" aria-label="Reset to full globe view" title="Reset camera and return to full globe view" data-i18n-aria-label data-i18n-title>
-      <span class="material-symbols-outlined" aria-hidden="true">public</span>
-    </button>
-  </nav>
+  <GlobeActions />
   <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" :hidden="loading ? loading.hidden : true" :data-state="loading?.state ?? undefined">
     <SplitFlapText id="global-loading-label" :text="loading ? loading.label : t('LOADING LIVE DATA')" :stopped="!!loading?.stopped" />
     <span id="global-loading-detail">{{ loading ? loading.detail : '' }}</span>

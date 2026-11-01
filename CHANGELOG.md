@@ -72,9 +72,11 @@
   are the kit's new `UiChip`. The selects are the kit's new `UiSelect`, the
   status badges its new `UiBadge` and the one-line empty states its new
   `UiEmpty`.
-  `syncScopeControls`
-  (`./ui/display`) and `shouldHideCollapsedRightPanels` (`./ui/layout`) are
-  deprecated: the Display view and the rail now own what they did. `./ui/input` imports Vue
+  The top-center clear and share buttons call the shell through the new
+  globe actions store. `syncScopeControls` (`./ui/display`),
+  `shouldHideCollapsedRightPanels` (`./ui/layout`) and
+  `bindClearLayersControl` (`./ui/layers`) are deprecated: the Display view,
+  the rail and the globe actions view now own what they did. `./ui/input` imports Vue
   (samehkhamis).
 
 - `./ui/cctv` and `./ui/radio` import Vue and Pinia: their controllers

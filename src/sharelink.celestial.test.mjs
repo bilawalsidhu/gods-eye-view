@@ -788,7 +788,8 @@ test('visual input listeners are revoked before asynchronous UI teardown', () =>
   assert.match(synchronous, /this\._displayBindings\.destroy\(\)/);
   assert.match(synchronous, /this\._visualSettings\.stop\(\)/);
   assert.match(synchronous, /this\._mapSourceControls\?\.destroy\(\)/);
-  assert.match(synchronous, /this\._clearLayersControl\?\.destroy\(\)/);
+  assert.match(synchronous, /globeActions\.detach\(this\._clearLayersToken\)/);
+  assert.match(synchronous, /globeActions\.detach\(this\._shareToken\)/);
   assert.match(synchronous, /this\._locationNavigation\.destroy\(\)/);
   assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationControls\?\.destroy\(\)/);
   assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationLookup\?\.destroy\(\)/);

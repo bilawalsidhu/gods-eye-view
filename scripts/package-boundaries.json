@@ -138,7 +138,9 @@
       "src/ui/kit/UiChip.vue",
       "src/ui/kit/UiSelect.js",
       "src/ui/kit/UiEmpty.vue",
-      "src/ui/kit/UiBadge.vue"
+      "src/ui/kit/UiBadge.vue",
+      "src/ui/stores/globeActions.js",
+      "src/ui/views/panels/GlobeActions.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -1076,7 +1078,8 @@
       "src/ui/rail/fieldValue.js",
       "src/ui/kit/UiSlider.js",
       "src/ui/kit/UiButton.vue",
-      "src/ui/kit/UiBadge.vue"
+      "src/ui/kit/UiBadge.vue",
+      "src/ui/stores/globeActions.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -3089,7 +3092,8 @@
       "src/ui/kit/UiSlider.js",
       "src/ui/kit/UiButton.vue",
       "src/ui/kit/UiEmpty.vue",
-      "src/ui/kit/UiBadge.vue"
+      "src/ui/kit/UiBadge.vue",
+      "src/ui/stores/globeActions.js"
     ],
     "external": [
       "hls.js",

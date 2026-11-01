@@ -87,11 +87,13 @@ test('Context async action buttons remain focused while busy', () => {
   assert.ok(enable, 'Radio Enable button is missing');
   assert.doesNotMatch(enable, /disabled(?!=")|:disabled/);
   assert.match(enable, /:aria-busy=/);
-  assert.doesNotMatch(clear, /_clearSelectedLayersBtn\.disabled\s*=\s*true/);
   assert.match(clear, /this\.setClearBusy\(true\)/);
-  const control = readFileSync(new URL('./ui/clearLayersControl.js', import.meta.url), 'utf8');
-  assert.match(control, /button\.setAttribute\('aria-busy', String\(busy\)\)/);
-  assert.doesNotMatch(control, /button\.disabled\s*=/);
+  // The globe actions view marks the clear button busy, never disabled.
+  const globeActions = readFileSync(new URL('./ui/views/panels/GlobeActions.vue', import.meta.url), 'utf8');
+  const clearButton = globeActions.match(/<button id="clear-selected-layers"[^>]*>/)?.[0];
+  assert.ok(clearButton, 'Clear selected layers button is missing');
+  assert.doesNotMatch(clearButton, /disabled(?!=")|:disabled=/);
+  assert.match(clearButton, /:aria-busy=/);
 });
 
 test('Context header holds only its title and collapse control', () => {

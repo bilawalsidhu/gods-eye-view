@@ -20,7 +20,6 @@ import { StreetLevelControls } from './streetLevelControls.js';
 import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
-import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
@@ -63,6 +62,7 @@ import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
 import { useCockpitStore } from './stores/cockpit.js';
+import { useGlobeActionsStore } from './stores/globeActions.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -1009,7 +1009,8 @@ export class StyleManager extends ShellFacade {
           if (!this._disposed) this._showToast(message);
         },
         setClearBusy: (busy) => {
-          if (!this._disposed) this._clearLayersControl?.setBusy(busy);
+          if (!this._disposed)
+            useGlobeActionsStore(applicationPinia()).publishClearBusy(busy);
         },
       },
     });
@@ -1619,14 +1620,19 @@ export class StyleManager extends ShellFacade {
     return this._releaseFollowCamera({ preserveVesselSelection: false });
   }
 
-  /** Wire the top-center action that clears only manager-owned data layers. */
+  /**
+   * Answer the top-center action that clears only manager-owned data layers;
+   * the caller owns its transaction, and the button stays focusable while it
+   * runs.
+   */
   _initClearSelectedLayersButton() {
-    if (!this._clearSelectedLayersBtn) return;
-    this._clearLayersControl?.destroy();
-    this._clearLayersControl = bindClearLayersControl(
-      this._clearSelectedLayersBtn,
-      () => this.clearSelectedLayers(),
-    );
+    const store = useGlobeActionsStore(applicationPinia());
+    if (this._clearLayersToken) store.detach(this._clearLayersToken);
+    this._clearLayersToken = store.connect({
+      clear: () => {
+        if (!this._disposed) void this.clearSelectedLayers();
+      },
+    });
   }
 
   /** Wire Google Maps-style tilt and north-up camera actions. */
@@ -1654,29 +1660,35 @@ export class StyleManager extends ShellFacade {
    * @returns {void}
    */
   _initShareButton() {
-    this._lifetime.listen(this._shareBtn, 'click', async () => {
-      const share = this.services.shareLink;
-      let result;
-      if (typeof share === 'function') {
-        // A host's hook may return a plain value or throw; both are answers.
-        result = await Promise.resolve()
-          .then(() => {
-            const href = this.shareLinkManager.buildLink();
-            return href ? share(href) : false;
-          })
-          .catch(() => false);
-      } else {
-        result = (await this.shareLinkManager.copyLink()) ? 'copied' : false;
-      }
-      if (this._disposed || result === 'cancelled') return;
-      this._showToast(
-        result === 'shared'
-          ? t('Link shared')
-          : result === 'copied'
-            ? t('Link copied!')
-            : t('Copy failed'),
-      );
-    });
+    const store = useGlobeActionsStore(applicationPinia());
+    if (this._shareToken) store.detach(this._shareToken);
+    this._shareToken = store.connect({ share: () => this._share() });
+  }
+
+  /** Share or copy the current link, then say how it went. */
+  async _share() {
+    if (this._disposed) return;
+    const share = this.services.shareLink;
+    let result;
+    if (typeof share === 'function') {
+      // A host's hook may return a plain value or throw; both are answers.
+      result = await Promise.resolve()
+        .then(() => {
+          const href = this.shareLinkManager.buildLink();
+          return href ? share(href) : false;
+        })
+        .catch(() => false);
+    } else {
+      result = (await this.shareLinkManager.copyLink()) ? 'copied' : false;
+    }
+    if (this._disposed || result === 'cancelled') return;
+    this._showToast(
+      result === 'shared'
+        ? t('Link shared')
+        : result === 'copied'
+          ? t('Link copied!')
+          : t('Copy failed'),
+    );
   }
 
   // ── HUD Toggle ───────────────────────────────
@@ -1778,7 +1790,12 @@ export class StyleManager extends ShellFacade {
     useDisplayStore(applicationPinia()).connectMapSource(null);
     useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
-    this._clearLayersControl?.destroy();
+    const globeActions = useGlobeActionsStore(applicationPinia());
+    if (this._clearLayersToken) globeActions.detach(this._clearLayersToken);
+    if (this._shareToken) globeActions.detach(this._shareToken);
+    this._clearLayersToken = this._shareToken = null;
+    // A clear this shell leaves running must not keep the next shell's bar busy.
+    globeActions.publishClearBusy(null);
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();

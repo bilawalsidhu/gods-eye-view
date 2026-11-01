@@ -6,6 +6,8 @@ import { StyleManager } from './applicationShell.js';
 import { ShareLinkManager } from '../sharelink.js';
 import { parseSharePath } from '../share/shareLinkPath.js';
 import { decodeShareView } from '../share/viewCodec.js';
+import { applicationPinia } from './vueRuntime.js';
+import { useGlobeActionsStore } from './stores/globeActions.js';
 
 /** The decoded view of a `/share/<code>` link. */
 const sharedState = (href) =>
@@ -36,20 +38,19 @@ function installClipboard(writeText) {
   });
 }
 
-/** Wire the real share button handler onto a minimal shell; return a click. */
+/** The real share action on a minimal shell; return a click. */
 function shell({ manager, services = {} }) {
   const toasts = [];
-  let click;
   const owner = {
     services,
     shareLinkManager: manager,
-    _shareBtn: {},
     _disposed: false,
-    _lifetime: { listen: (_el, _type, handler) => (click = handler) },
     _showToast: (message) => toasts.push(message),
   };
-  StyleManager.prototype._initShareButton.call(owner);
-  return { toasts, click: () => click() };
+  return {
+    toasts,
+    click: () => StyleManager.prototype._share.call(owner),
+  };
 }
 
 test('buildLink is a /share link stamped with its creation time, without ?lang', () => {
@@ -157,4 +158,24 @@ test('a host hook that answers without a promise, or throws, still gets a toast'
     await click();
     assert.deepEqual(toasts, [toast]);
   }
+});
+
+test('the shell answers the globe bar’s share and clear until it is disposed', async () => {
+  const calls = [];
+  const owner = {
+    _disposed: false,
+    _share: () => calls.push('share'),
+    clearSelectedLayers: async () => calls.push('clear'),
+  };
+  StyleManager.prototype._initShareButton.call(owner);
+  StyleManager.prototype._initClearSelectedLayersButton.call(owner);
+  const store = useGlobeActionsStore(applicationPinia());
+  store.act('share');
+  store.act('clear');
+  assert.deepEqual(calls, ['share', 'clear']);
+  store.detach(owner._shareToken);
+  store.detach(owner._clearLayersToken);
+  store.act('share');
+  store.act('clear');
+  assert.deepEqual(calls, ['share', 'clear']);
 });
