@@ -7,9 +7,13 @@ export {
   publicRadioHttpsUrl,
 } from './radio/stations.js';
 export function radioBrowserProxy() {
-  const middleware = createRadioProxyMiddleware();
+  let middleware;
+  const initialize = () =>
+    (middleware ||= createRadioProxyMiddleware({
+      priorityCountries: process.env.RADIO_PRIORITY_COUNTRIES || '',
+    }));
   const install = (server) => {
-    server.middlewares.use('/api/radio', middleware);
+    server.middlewares.use('/api/radio', initialize());
   };
   return {
     name: 'radio-browser-proxy',
