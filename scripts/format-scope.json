@@ -1148,5 +1148,6 @@
   "src/ui/stores/bhoteKoshiPanel.js",
   "src/data/bhoteKoshiPanelView.test.mjs",
   "src/ui/stores/celestialRing.js",
-  "src/celestialRingView.test.mjs"
+  "src/celestialRingView.test.mjs",
+  "src/ui/stores/screenAnnotations.js"
 ]

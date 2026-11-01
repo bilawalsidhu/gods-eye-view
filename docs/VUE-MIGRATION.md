@@ -177,7 +177,13 @@ a feature supplying only its accent.
    in `src/celestialRing.js` publishes to the `gev-celestial-ring` store and
    hands its two canvases back for the owner to paint; the application shell
    passes the store in, so the keyhole helpers other packages import need no
-   Vue), then
+   Vue), the screen-space map annotations (`ScreenAnnotations` teleports to
+   the body the board the screen annotation renderer publishes to the
+   `gev-screen-annotations` store after each rendered frame: each mark's SVG
+   parts as attribute records, the fading marks until they leave; the view
+   hands back the callout text and mark groups the renderer measures, and
+   the tracked-entity fade is measured once the frame is in the document;
+   the styles it injected now live in `src/ui/styles/annotations.css`), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
