@@ -1144,5 +1144,7 @@
   "src/layers/wind/inspectionMarker.test.mjs",
   "src/ui/stores/windInspection.js",
   "src/ui/stores/missionReplay.js",
-  "src/layers/launches/replayOverlay.test.mjs"
+  "src/layers/launches/replayOverlay.test.mjs",
+  "src/ui/stores/bhoteKoshiPanel.js",
+  "src/data/bhoteKoshiPanelView.test.mjs"
 ]

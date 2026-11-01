@@ -210,9 +210,9 @@ such as `provider-settings`, and their hosts are removed. Leaving out
 out `scene-chrome` the before/after imagery dividers (the imagery still splits,
 with no line or handle to move it), the status chips, the toast, the ORBIT
 indicator, the FPS readout, the Scene actions panel, the data-pack attribution
-cards, the wind inspection marker and the Space Missions replay vehicle, and
-leaving out `command-dock` the voice control and its pointer
-reticle. An unknown
+cards, the wind inspection marker and the Space Missions replay vehicle;
+leaving out `command-dock` the voice control and its pointer reticle; and
+leaving out `context` the Bhote Koshi reconstruction panel. An unknown
 view name is an error. A host that does not initialize Core's locale passes
 `localePicker: false` to `createApplicationControls` instead of editing the
 markup. Node tests that import application modules register the component

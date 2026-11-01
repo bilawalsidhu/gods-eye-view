@@ -3,8 +3,10 @@ import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
+import { useBhoteKoshiPanelStore } from '../stores/bhoteKoshiPanel.js';
 import { useContextStore } from '../stores/context.js';
 import AwarenessPanel from './panels/AwarenessPanel.vue';
+import BhoteKoshiPanel from './panels/BhoteKoshiPanel.vue';
 import MissionDetail from './panels/MissionDetail.vue';
 import MissionRoster from './panels/MissionRoster.vue';
 import RadioPanel from './panels/RadioPanel.vue';
@@ -13,11 +15,13 @@ import RadioPanel from './panels/RadioPanel.vue';
 // publishes them; until it does, the panel shows its initial markup.
 const { view: ctx } = storeToRefs(useContextStore());
 const { presence: cockpit } = storeToRefs(useCockpitStore());
+// While the Bhote Koshi event is on, its panel is the rail's only content.
+const { panel: bhotePanel } = storeToRefs(useBhoteKoshiPanelStore());
 </script>
 
 <template>
   <!-- Global Context is deliberately independent from the left layer accordion. -->
-  <aside id="right-context-rail" class="ui-scroll">
+  <aside id="right-context-rail" class="ui-scroll" v-class-toggle="{ 'bhote-event-active': !!bhotePanel }">
     <div id="weather-panel" class="panel-collapsible" data-panel-id="weather-panel" hidden>
       <div class="panel-glow"></div>
       <div class="weather-panel-inner" data-rail-scroller>
@@ -86,6 +90,7 @@ const { presence: cockpit } = storeToRefs(useCockpitStore());
         </div>
       </div>
     </div>
+    <BhoteKoshiPanel />
   </aside>
 
   <div id="scene-runtime"></div>

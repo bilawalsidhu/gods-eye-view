@@ -106,7 +106,9 @@
       "src/ui/stores/windInspection.js",
       "src/ui/views/panels/WindInspectionMarker.vue",
       "src/ui/stores/missionReplay.js",
-      "src/ui/views/panels/MissionReplayOverlay.vue"
+      "src/ui/views/panels/MissionReplayOverlay.vue",
+      "src/ui/stores/bhoteKoshiPanel.js",
+      "src/ui/views/panels/BhoteKoshiPanel.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -3023,7 +3025,8 @@
       "src/ui/stores/pointerReticle.js",
       "src/ui/stores/windInspection.js",
       "src/layers/wind/inspectionMarker.js",
-      "src/ui/stores/missionReplay.js"
+      "src/ui/stores/missionReplay.js",
+      "src/ui/stores/bhoteKoshiPanel.js"
     ],
     "external": [
       "hls.js",
@@ -3613,7 +3616,8 @@
       "src/ui/stores/imagerySplit.js",
       "src/ui/vueRuntime.js",
       "src/ui/stores/windInspection.js",
-      "src/layers/wind/inspectionMarker.js"
+      "src/layers/wind/inspectionMarker.js",
+      "src/ui/stores/bhoteKoshiPanel.js"
     ],
     "external": [
       "hls.js",

@@ -167,7 +167,12 @@ a feature supplying only its accent.
    (`MissionReplayOverlay` teleports into the globe container what the
    launches layer presents through `subscribeReplayOverlay()`, which the
    application shell publishes to the `gev-mission-replay` store, so the
-   portable `./layers/launches` entry needs no Vue), then
+   portable `./layers/launches` entry needs no Vue), the Bhote Koshi
+   reconstruction panel (`BhoteKoshiPanel`, last in the context rail,
+   renders what the event layer publishes to the `gev-bhote-koshi-panel`
+   store: each control's text, hidden, disabled, value and attributes as
+   the layer writes them, unchanged frames sending nothing; the rail takes
+   `bhote-event-active` while it shows), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
