@@ -35,7 +35,7 @@ onUpdated(followCurrent);
 <template>
   <ol
     ref="root"
-    class="data-row-list"
+    class="data-row-list ui-scroll"
     :data-block-id="blockId"
     :hidden="!list?.items?.length"
     :aria-label="list?.ariaLabel || ''"

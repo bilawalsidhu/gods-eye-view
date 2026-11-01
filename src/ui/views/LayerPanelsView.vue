@@ -6,7 +6,7 @@ import StreetLevelPanel from './panels/StreetLevelPanel.vue';
 </script>
 
 <template>
-  <div id="left-panel-stack">
+  <div id="left-panel-stack" class="ui-scroll">
   <!-- Data Layer Toggle Panel -->
   <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
     <div class="panel-glow"></div>
@@ -16,7 +16,7 @@ import StreetLevelPanel from './panels/StreetLevelPanel.vue';
         <span class="panel-divider"></span>
         <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel" data-i18n-title>+</button>
       </div>
-      <div id="data-toggles" class="data-toggle-list"></div>
+      <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
     </div>
   </div>
 
@@ -29,7 +29,7 @@ import StreetLevelPanel from './panels/StreetLevelPanel.vue';
   <!-- Scene Director Panel -->
   <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
     <div class="panel-glow"></div>
-    <div class="scene-panel-inner">
+    <div class="scene-panel-inner ui-scroll">
       <div class="panel-header">
         <span class="panel-title" title="Create and edit scenes" data-i18n data-i18n-title>AUTHORING</span>
         <span class="panel-divider"></span>

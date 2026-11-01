@@ -54,7 +54,10 @@ defineProps({
       ></div
     ><div
       id="ri-strip"
-      :class="['ri-block ri-strip', { searching: view.strip.searching }]"
+      :class="[
+        'ri-block ri-strip ui-scroll',
+        { searching: view.strip.searching },
+      ]"
       tabindex="0"
       role="listbox"
       aria-orientation="horizontal"

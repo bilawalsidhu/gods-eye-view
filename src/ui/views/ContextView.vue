@@ -14,7 +14,7 @@ const { view: ctx } = storeToRefs(useContextStore());
 
 <template>
   <!-- Global Context is deliberately independent from the left layer accordion. -->
-  <aside id="right-context-rail">
+  <aside id="right-context-rail" class="ui-scroll">
     <div id="weather-panel" class="panel-collapsible" data-panel-id="weather-panel" hidden>
       <div class="panel-glow"></div>
       <div class="weather-panel-inner" data-rail-scroller>
@@ -24,7 +24,7 @@ const { view: ctx } = storeToRefs(useContextStore());
           <span class="panel-divider"></span>
           <button class="panel-collapse-btn" data-collapse-target="weather-panel" type="button" title="Collapse panel" data-i18n-title>▼</button>
         </div>
-        <div id="weather-panel-body" data-rail-scroller></div>
+        <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
       </div>
     </div>
     <div id="recent-imagery-panel" class="panel-collapsible" data-panel-id="recent-imagery-panel" hidden>
@@ -36,18 +36,18 @@ const { view: ctx } = storeToRefs(useContextStore());
           <span class="panel-divider"></span>
           <button class="panel-collapse-btn" data-collapse-target="recent-imagery-panel" type="button" title="Collapse panel" data-i18n-title>▼</button>
         </div>
-        <div id="recent-imagery-panel-body" data-rail-scroller></div>
+        <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
       </div>
     </div>
     <div id="global-context-panel" class="panel-collapsible collapsed" v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" data-panel-id="global-context-panel">
       <div class="panel-glow"></div>
-      <div class="global-context-panel-inner" data-rail-scroller>
+      <div class="global-context-panel-inner ui-scroll" data-rail-scroller>
         <div class="panel-header">
           <span class="panel-title" data-i18n>CONTEXT</span>
           <span class="panel-divider"></span>
           <button class="panel-collapse-btn" data-collapse-target="global-context-panel" title="Expand panel" data-i18n-title>▶</button>
         </div>
-        <div class="cyber-panel-body" data-rail-scroller>
+        <div class="cyber-panel-body ui-scroll" data-rail-scroller>
         <div class="global-context-modes" role="tablist" aria-label="Context mode" data-i18n-aria-label>
           <button id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" aria-label="CONTACTS" title="Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently." data-i18n-aria-label data-i18n-title>
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>

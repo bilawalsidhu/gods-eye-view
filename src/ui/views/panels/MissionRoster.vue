@@ -68,7 +68,7 @@ onUpdated(() => {
       </div>
       <output data-mission-roster-count>{{ roster ? roster.count : '—' }}</output>
     </div>
-    <div class="space-mission-roster-list" data-mission-roster-list>
+    <div class="space-mission-roster-list ui-scroll" data-mission-roster-list>
       <div v-if="!roster" class="space-mission-roster-empty">{{ t('LOADING 30-DAY MISSION INDEX') }}</div>
       <div v-else-if="!roster.entries.length" class="space-mission-roster-empty">{{ roster.empty }}</div>
       <button v-for="entry in roster?.entries" v-else :key="entry.id" type="button" class="space-mission-roster-item" :data-mission-roster-index="entry.index" :data-mission-roster-id="entry.id" :aria-label="entry.ariaLabel" @click="layer?.selectMissionAt(entry.index)" @mouseenter="enter(entry.index)" @mousemove="move(entry.index)" @mouseleave="layer?.rosterPointerLeave()" @focus="layer?.rosterFocus(entry.index)" @blur="blur"><span class="space-mission-roster-marker" :style="{ '--mission-roster-color': entry.color }" aria-hidden="true"></span><span class="space-mission-roster-copy"><strong>{{ entry.label }}</strong><small>{{ entry.provider }} · {{ entry.date }}</small></span><span class="space-mission-roster-chevron" aria-hidden="true">›</span></button>

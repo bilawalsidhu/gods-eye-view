@@ -70,7 +70,7 @@ function onRenameKey(shot, event) {
 </script>
 
 <template>
-  <div id="scene-shot-list" class="scene-shot-list">
+  <div id="scene-shot-list" class="scene-shot-list ui-scroll">
     <template v-if="attached">
       <div v-if="!scene?.shots.length" class="scene-shot-empty">{{
         t('No shots yet. Use CAPTURE SHOT to save current look.')

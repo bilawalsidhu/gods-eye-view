@@ -40,7 +40,7 @@ watch(
     </div>
     <section class="mission-data-section">
       <h4>{{ t('PAYLOAD') }}</h4>
-      <div class="mission-table-scroll">
+      <div class="mission-table-scroll ui-scroll">
         <table class="mission-data-table">
           <thead><tr><th>{{ t('NAME') }}</th><th>{{ t('TYPE') }}</th><th>{{ t('DESTINATION') }}</th></tr></thead>
           <tbody data-mission-payloads>
@@ -51,7 +51,7 @@ watch(
     </section>
     <section class="mission-data-section" data-mission-stages-section :hidden="m && !m.stages.length">
       <h4>{{ t('STAGE / RE-ENTRY / RECOVERY') }}</h4>
-      <div class="mission-table-scroll">
+      <div class="mission-table-scroll ui-scroll">
         <table class="mission-data-table">
           <thead><tr><th>{{ t('STAGE') }}</th><th>{{ t('STATUS') }}</th><th>{{ t('FINAL POSITION') }}</th></tr></thead>
           <tbody data-mission-stages>

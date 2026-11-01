@@ -42,13 +42,13 @@ const geoListed = computed(() => geoRows.value.length > 0);
 
 <template>
 <!-- Post-processing toggles (top-right) -->
-<div id="pp-toggles" class="panel-collapsible collapsed" data-panel-id="pp-toggles">
+<div id="pp-toggles" class="panel-collapsible collapsed ui-scroll" data-panel-id="pp-toggles">
   <div class="compact pp-header-row">
     <span data-i18n class="pp-header-label">DISPLAY</span>
     <span class="panel-divider" aria-hidden="true"></span>
     <button class="panel-collapse-btn pp-collapse-btn" data-collapse-target="pp-toggles" title="Collapse panel" data-i18n-title>&#x25C0;</button>
   </div>
-  <div class="pp-panel-body" data-rail-scroller>
+  <div class="pp-panel-body ui-scroll" data-rail-scroller>
   <div class="pp-toggle-group">
     <button class="pp-toggle-btn" :class="{ active: hud?.visible }" id="hud-toggle" title="Intelligence HUD (H)" data-i18n-title>
       <span class="pp-icon">&#x25CE;</span>

@@ -84,27 +84,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.5) rgba(255, 255, 255, 0.04);
   scrollbar-gutter: stable;
-}
-
-.data-toggle-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.data-toggle-list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 999px;
-}
-
-.data-toggle-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 212, 255, 0.65),
-    rgba(0, 212, 255, 0.2)
-  );
-  border-radius: 999px;
 }
 
 .data-layer-group-heading {
@@ -311,8 +291,6 @@ body.recording-mode .gev-panel-rail {
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed) {
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.4) transparent;
 }
 #right-context-rail.layout-focus
   > #weather-panel:not(.collapsed)
@@ -445,8 +423,6 @@ body.recording-mode .gev-panel-rail {
   overflow-x: hidden;
   overflow-y: auto;
   padding-right: 3px;
-  scrollbar-color: rgba(34, 230, 230, 0.38) transparent;
-  scrollbar-width: thin;
 }
 #space-mission-panel-host .space-mission-roster-item {
   position: relative;

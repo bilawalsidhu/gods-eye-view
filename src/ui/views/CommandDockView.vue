@@ -22,7 +22,7 @@ function selectMapSource(chip) {
 
 <template>
   <!-- Unified bottom command dock: locations, voice (injected at runtime), visual presets -->
-  <div id="command-dock" aria-label="Navigation, voice, and visual preset controls" data-i18n-aria-label>
+  <div id="command-dock" class="ui-scroll" aria-label="Navigation, voice, and visual preset controls" data-i18n-aria-label>
   <!-- Control panel -->
   <div id="control-panel" class="panel-collapsible collapsed">
     <div class="panel-glow"></div>

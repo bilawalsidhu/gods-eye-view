@@ -1054,7 +1054,7 @@ export function createBhoteKoshiEmbeddedMedia({
     leader.innerHTML =
       '<path pathLength="1" fill="none" stroke="rgba(147,213,228,.72)" stroke-width="1.5"/><circle r="4" fill="#6be8ff" stroke="#ffffff" stroke-width="1.5"/>';
     const player = documentRef.createElement('div');
-    player.className = 'bhote-embedded-callout-player';
+    player.className = 'bhote-embedded-callout-player ui-scroll';
     const footer = documentRef.createElement('footer');
     const title = documentRef.createElement('strong');
     title.textContent = bhoteEventText(

@@ -22,7 +22,7 @@
     </header>
     <h2 id="key-setup-title" data-i18n>Power up the globe</h2>
     <p id="key-setup-description" data-i18n>The globe already flies keyless. Every key below switches on another real feed — paste one and it's saved into this app's local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.</p>
-    <div class="key-setup-rows" data-key-setup-rows></div>
+    <div class="key-setup-rows ui-scroll" data-key-setup-rows></div>
     <div class="key-setup-footer">
       <button type="button" class="key-setup-apply" data-key-setup-apply data-i18n>SAVE KEYS</button>
       <span class="key-setup-hint" data-i18n>ESC to close</span>

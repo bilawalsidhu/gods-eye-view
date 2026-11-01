@@ -14,7 +14,7 @@
          like something you should not have access to → the sources are all
          public → the data is real. Tile subcopy stays purely functional. -->
     <p id="first-run-description" data-i18n-runtime>It feels like a forbidden cockpit—then you realize the sources are public and the data is real.</p>
-    <div class="first-run-choices">
+    <div class="first-run-choices ui-scroll">
       <button type="button" data-first-run-choice="contacts">
         <span class="material-symbols-outlined" aria-hidden="true">radar</span>
         <span><strong data-i18n>LIVE CONTACTS</strong><small data-i18n>Aircraft, vessels and nearby intelligence</small></span>

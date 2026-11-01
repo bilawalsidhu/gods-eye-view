@@ -431,7 +431,7 @@ export function mountLocalePicker({
   heading.textContent = t('Interface language');
   popup.append(heading);
 
-  const listbox = element(documentRef, 'ul', 'locale-picker-list');
+  const listbox = element(documentRef, 'ul', 'locale-picker-list ui-scroll');
   listbox.id = ids.listbox;
   listbox.setAttribute('role', 'listbox');
   listbox.setAttribute('aria-labelledby', ids.heading);

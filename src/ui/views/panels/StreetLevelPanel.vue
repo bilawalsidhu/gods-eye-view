@@ -102,7 +102,7 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
 <template>
 <div id="street-level-panel" class="panel-collapsible collapsed" data-panel-id="street-level-panel" :data-sl-enabled="view ? String(view.enabled) : undefined">
   <div class="panel-glow"></div>
-  <div class="street-level-panel-inner" data-rail-scroller>
+  <div class="street-level-panel-inner ui-scroll" data-rail-scroller>
     <div class="panel-header">
       <span class="panel-title" data-i18n>STREET LEVEL</span>
       <span class="panel-divider"></span>
@@ -153,7 +153,7 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
         </div>
         <div id="sl-since-row" class="sl-since" :hidden="!shows.since">
           <label class="cctv-summary-label" for="sl-since" data-i18n>SINCE</label>
-          <input id="sl-since" v-thumb="view?.since" class="sl-range" type="range" min="0" max="8" step="1" value="0" :aria-valuetext="sinceLabel" aria-describedby="sl-since-label sl-since-note" @input="onSinceInput" @change="onSinceChange" />
+          <input id="sl-since" v-thumb="view?.since" class="sl-range gev-quantitative-slider" type="range" min="0" max="8" step="1" value="0" :aria-valuetext="sinceLabel" aria-describedby="sl-since-label sl-since-note" @input="onSinceInput" @change="onSinceChange" />
           <span class="sl-since-value">
             <output id="sl-since-label" class="sl-since-label" for="sl-since">{{ sinceLabel }}</output>
             <small id="sl-since-note" class="sl-since-note" :hidden="!view?.sinceNote">{{ view?.sinceNote || '' }}</small>

@@ -1,6 +1,35 @@
 /* Generic components in src/ui/kit. Names follow Halfpixel's ui-vue kit; the
    surfaces use this application's glass, accent and type tokens. */
 
+/* The thin themed scrollbar every scrolling surface wears, as ui-vue's
+   .ui-scroll. Without it a surface draws the platform's light scrollbar,
+   because the page declares no dark color-scheme. */
+/* Cesium builds its credit list and the rail card builder its lines, so
+   those two surfaces are named here instead of carrying the class. */
+.ui-scroll,
+.cesium-credit-lightbox > ul,
+.weather-card [data-line-id='status'] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+.ui-scroll::-webkit-scrollbar,
+.cesium-credit-lightbox > ul::-webkit-scrollbar,
+.weather-card [data-line-id='status']::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ui-scroll::-webkit-scrollbar-thumb,
+.cesium-credit-lightbox > ul::-webkit-scrollbar-thumb,
+.weather-card [data-line-id='status']::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--scroll-thumb);
+}
+.ui-scroll::-webkit-scrollbar-track,
+.cesium-credit-lightbox > ul::-webkit-scrollbar-track,
+.weather-card [data-line-id='status']::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+}
+
 .ui-icon {
   display: inline-block;
   line-height: 1;

@@ -22,10 +22,14 @@ test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () 
       new URL(`./views/${file}`, import.meta.url),
       'utf8',
     );
-    assert.match(markup, /class="cyber-panel-body" data-rail-scroller/);
+    // The body wears the shared scrollbar skin where Cyber makes it scroll.
+    assert.match(
+      markup,
+      /class="cyber-panel-body ui-scroll" data-rail-scroller/,
+    );
     assert.ok(
       markup.indexOf('class="panel-header"') <
-        markup.indexOf('class="cyber-panel-body"'),
+        markup.indexOf('class="cyber-panel-body ui-scroll"'),
     );
   }
   const shared = readFileSync(

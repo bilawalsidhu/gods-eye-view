@@ -41,8 +41,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
 }
 
 :root[data-ui-theme='cyber'] .cctv-panel-inner > .cyber-panel-body {
@@ -68,8 +66,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
 }
 
 :root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body > * {
@@ -82,6 +78,8 @@
 
 :root[data-ui-theme='cyber'] {
   color-scheme: dark;
+  --scroll-thumb: rgba(165, 188, 199, 0.35);
+  --scroll-track: transparent;
   --cyber-red: #c45454;
   --cyber-red-bright: #e16666;
   --cyber-slate: #26343a;
@@ -794,6 +792,12 @@
 :root[data-ui-theme='cyber']
   :where(input[type='range'], input[type='checkbox'], input[type='radio']) {
   accent-color: var(--cyber-red);
+}
+
+/* Street Level's range wears Cyber's slider accent like every other range. */
+:root[data-ui-theme='cyber'] .sl-range {
+  --accent: inherit;
+  --accent-glow: inherit;
 }
 
 :root[data-ui-theme='cyber']

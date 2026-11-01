@@ -28,13 +28,13 @@ const frameData = computed(() =>
 <template>
 <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
   <div class="panel-glow"></div>
-  <div class="cctv-panel-inner" data-rail-scroller>
+  <div class="cctv-panel-inner ui-scroll" data-rail-scroller>
     <div class="panel-header">
       <span class="panel-title" data-i18n>CCTV</span>
       <span class="panel-divider"></span>
       <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel" data-i18n-title>+</button>
     </div>
-    <div class="cyber-panel-body" data-rail-scroller>
+    <div class="cyber-panel-body ui-scroll" data-rail-scroller>
     <div id="cctv-frame-wrap" :class="['cctv-frame-wrap', { loading: frame?.wrapLoading, 'has-frame': frame?.hasFrame }]">
       <span class="cctv-frame-caption" aria-hidden="true" data-i18n>ACQUIRING FRAME</span>
       <img id="cctv-frame" alt="CCTV feed frame" :class="{ active: frame?.hasFrame }" :src="frame?.src || undefined" :hidden="live" v-bind="frameData" />

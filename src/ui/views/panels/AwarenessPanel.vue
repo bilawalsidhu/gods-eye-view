@@ -41,7 +41,7 @@ onUpdated(() => {
 </script>
 
 <template>
-  <aside id="military-awareness-panel" ref="root">
+  <aside id="military-awareness-panel" class="ui-scroll" ref="root">
     <div v-if="!view" class="military-awareness-standby">
       <strong>{{ t('CONTACTS CONTEXT OFF') }}</strong>
       <span>{{ t('SELECT CONTACTS TO LOAD OBSERVED / MAPPED PROXIMITY') }}</span>

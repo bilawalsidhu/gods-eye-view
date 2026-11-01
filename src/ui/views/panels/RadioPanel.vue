@@ -21,7 +21,7 @@ const sdrConnected = computed(() => sdr.value?.connectionActive ?? null);
 
 <template>
 <section id="radio-panel" class="panel-collapsible collapsed" v-class-toggle="{ ...(radio && { 'radio-enabled': radio.enabled, 'lifecycle-uncertain': radio.uncertain }), ...(sdrConnected !== null && { 'sdr-connected': sdrConnected }) }" data-panel-id="radio-panel" aria-label="Internet radio and local SDR" data-i18n-aria-label>
-  <div class="radio-panel-inner">
+  <div class="radio-panel-inner ui-scroll">
     <div class="panel-header">
       <span class="panel-title" data-i18n>RADIO</span>
       <span id="radio-layer-state" class="radio-layer-state" :class="{ active: radio?.layerState.active }">{{ radio ? radio.layerState.text : t('OFF') }}</span>

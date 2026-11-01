@@ -28,20 +28,20 @@ const radioLabel = computed(() =>
 
 <template>
   <aside id="cockpit-utility-controls" class="cockpit-utility-controls" aria-label="Cockpit display and Radio controls" data-i18n-aria-label>
-    <div class="cockpit-utility-control" v-class-toggle="{ 'is-expanded': open.display }">
+    <div class="cockpit-utility-control ui-scroll" v-class-toggle="{ 'is-expanded': open.display }">
       <div class="cockpit-utility-launcher" data-cockpit-launcher="display">
         <span data-i18n>DISPLAY</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>
         <button id="cockpit-display-toggle-btn" class="cockpit-utility-glyph" type="button" :aria-expanded="String(open.display)" aria-controls="cockpit-display-panel" :aria-label="displayLabel" :title="displayLabel">{{ open.display ? '▶' : '◀' }}</button>
       </div>
-      <div id="cockpit-display-panel" class="cockpit-utility-popover" role="group" aria-label="Cockpit display options" :hidden="!open.display" data-i18n-aria-label>
+      <div id="cockpit-display-panel" class="cockpit-utility-popover ui-scroll" role="group" aria-label="Cockpit display options" :hidden="!open.display" data-i18n-aria-label>
         <div class="cockpit-display-slot" data-cockpit-display-slot="hud"></div>
         <div class="cockpit-display-slot" data-cockpit-display-slot="detection"></div>
         <div class="cockpit-display-slot" data-cockpit-display-slot="parameters"></div>
         <div class="cockpit-display-slot" data-cockpit-display-slot="models3d"></div>
       </div>
     </div>
-    <div class="cockpit-utility-control" v-class-toggle="{ 'is-expanded': open.radio }">
+    <div class="cockpit-utility-control ui-scroll" v-class-toggle="{ 'is-expanded': open.radio }">
       <div class="cockpit-utility-launcher" data-cockpit-launcher="radio">
         <span data-i18n>RADIO</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>

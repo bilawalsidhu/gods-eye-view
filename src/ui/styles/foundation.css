@@ -9,6 +9,9 @@
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
   --accent: #00d4ff;
+  /* Every scrolling surface's scrollbar (the kit's .ui-scroll). */
+  --scroll-thumb: rgba(0, 212, 255, 0.46);
+  --scroll-track: rgba(255, 255, 255, 0.06);
   --accent-dim: rgba(0, 212, 255, 0.15);
   --accent-glow: rgba(0, 212, 255, 0.4);
   --text-primary: #e8eaed;

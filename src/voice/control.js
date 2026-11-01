@@ -41,7 +41,7 @@ export function createVoiceControl({ reset = false, panel = false } = {}) {
     root.innerHTML = `
       <label id="gev-voice-provider-field" class="gev-voice-provider-field" hidden>
         <span>${t('Voice provider')}</span>
-        <select id="gev-voice-provider" aria-label="${t('Voice provider')}" title="${t('Changing provider reconnects voice if it is on.')}"></select>
+        <select id="gev-voice-provider" class="gev-field" aria-label="${t('Voice provider')}" title="${t('Changing provider reconnects voice if it is on.')}"></select>
       </label>
       ${panel ? `<button id="gev-voice-settings-button" class="gev-voice-settings-button" type="button" aria-label="${t('Voice Settings')}" aria-controls="gev-voice-panel" aria-expanded="false"><span class="material-symbols-outlined gev-voice-settings-icon" aria-hidden="true">settings</span></button>` : ''}
       <div class="gev-voice-heading">
@@ -81,12 +81,12 @@ export function createVoiceControl({ reset = false, panel = false } = {}) {
           </div>
           <button id="gev-voice-settings-close" type="button" aria-label="${t('Close voice panel')}">×</button>
         </div>
-        <div class="gev-voice-panel-body">
+        <div class="gev-voice-panel-body ui-scroll">
           <section id="gev-voice-preview-panel" role="tabpanel" aria-labelledby="gev-voice-preview-tab">
             <p id="gev-voice-preview-empty">${t('Voice replies appear here.')}</p>`
           : ''
       }
-      <section id="gev-voice-card" class="gev-voice-card" hidden aria-label="${t('Voice assistant')}">
+      <section id="gev-voice-card" class="gev-voice-card ui-scroll" hidden aria-label="${t('Voice assistant')}">
         <div class="gev-voice-card-header">
           <span class="gev-voice-card-kicker">${t('VOICE')}</span>
           <span id="gev-voice-card-phase" class="gev-voice-card-phase"></span>
@@ -117,7 +117,7 @@ export function createVoiceControl({ reset = false, panel = false } = {}) {
             <div class="gev-voice-timeout-group">
             <label class="gev-voice-preference gev-voice-setting-title" for="gev-voice-timeout-select">${t('Voice inactivity timeout')}</label>
             <div class="gev-voice-timeout-controls">
-            <select id="gev-voice-timeout-select" aria-describedby="gev-voice-timeout-note gev-voice-timeout-status">
+            <select id="gev-voice-timeout-select" class="gev-field" aria-describedby="gev-voice-timeout-note gev-voice-timeout-status">
               <option value="3">3 ${t('Minutes')}</option><option value="5" selected>5 ${t('Minutes')}</option><option value="10">10 ${t('Minutes')}</option><option value="15">15 ${t('Minutes')}</option>
               <option value="custom">${t('Custom')}</option><option value="0">${t('None')}</option>
             </select>

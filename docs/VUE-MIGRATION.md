@@ -42,6 +42,16 @@ one-panel rule too. Share links continue to record which panels are open.
 this repository and styled by its existing stylesheet and custom properties.
 They contain no application state.
 
+Controls share one skin, so every panel reads the same. Every scrolling
+surface carries the kit's `.ui-scroll` (ui-vue's name), which draws the thin
+themed scrollbar from `--scroll-thumb` and `--scroll-track`; the Cyber theme
+sets those two tokens, and Cockpit's HUD windows keep their accent tint. A
+surface without it would draw the platform's light scrollbar, because the
+page declares no dark `color-scheme`. Selects and number fields are
+`.gev-field`, which draws its own chevron in place of the platform's arrow
+and keeps native spinners dark; ranges are `.gev-quantitative-slider`, with
+a feature supplying only its accent.
+
 ## Phases
 
 1. **Foundation.** Vue, Pinia and the Vite Vue plugin join the browser build
