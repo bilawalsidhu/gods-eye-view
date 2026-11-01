@@ -134,6 +134,7 @@ export class RadioControls {
     if (this.destroyed) return;
     this.destroyed = true;
     this.listeners.abort();
+    if (this._storeToken) this.store.detach(this._storeToken);
     this._radioUnsubscribe?.();
     this._radioUnsubscribe = null;
     const pointer = this._radioTunerPointerId;

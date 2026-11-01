@@ -146,10 +146,12 @@ a feature supplying only its accent.
    component compiler; the other groups follow one owner at a time),
    Context and Radio (in progress: `RadioPanel` renders the directory row,
    station card, transport, volume and playback line from the `gev-radio`
-   store that RadioControls publishes to, and `SdrCard` the local RTL-SDR
-   card that LocalSdrControls publishes beside it and answers through the
-   store's `connect`/`act` (the shared `createOwners()`); fields a person edits take
-   their value through `v-field-value`, which never writes a focused field;
+   store that RadioControls publishes to and whose controls it answers
+   through the store's `connect`/`act` (the shared `createOwners()`; a
+   refused station tag gets the kept tag back from `act`), and `SdrCard` the
+   local RTL-SDR card that LocalSdrControls publishes beside it and answers
+   the same way; fields a person edits take their value through
+   `v-field-value`, which never writes a focused field;
    `RadioTuner` renders the directory tuner, where RadioControls keeps the
    drag and its slot and publishes the band, readouts, slider and needle,
    and the component lays out the tick tape against the dial's measured
@@ -266,8 +268,9 @@ a feature supplying only its accent.
    visibility when it lays them out.
    `CockpitUtilityControls` renders the Display
    and Radio launchers, which popover is open and the compact Radio
-   controls from the `gev-radio` store that RadioControls publishes to; the
-   Display popover's slots stay static for the Cockpit display portal).
+   controls from the `gev-radio` store that RadioControls publishes to and
+   answers through; the Display popover's slots stay static for the Cockpit
+   display portal).
    Layers that write into the right rail directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion is retired: `index.html`

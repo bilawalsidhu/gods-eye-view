@@ -9,9 +9,12 @@ import { useRadioStore } from '../../stores/radio.js';
 // The Cockpit's Display and Radio launchers and their popovers. RadioControls
 // presents which popover is open and the compact Radio controls; until it
 // does, both are closed and the controls show their initial state. The
-// controls keep its listeners. The Display popover's slots are static: the
-// Cockpit display portal moves the real Display controls into them.
-const { view: radio, utility } = storeToRefs(useRadioStore());
+// controls call RadioControls through the store. The Display popover's slots
+// are static: the Cockpit display portal moves the real Display controls into
+// them.
+const store = useRadioStore();
+const { act } = store;
+const { view: radio, utility } = storeToRefs(store);
 const open = computed(() => utility.value ?? { display: false, radio: false });
 const cockpit = computed(() => radio.value?.cockpit ?? null);
 const displayLabel = computed(() =>
@@ -45,19 +48,19 @@ const radioLabel = computed(() =>
       <div class="cockpit-utility-launcher" data-cockpit-launcher="radio">
         <span data-i18n>RADIO</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>
-        <button id="cockpit-radio-toggle-btn" class="cockpit-utility-glyph" type="button" :aria-expanded="String(open.radio)" aria-controls="cockpit-radio-panel" :aria-label="radioLabel" :title="radioLabel">{{ open.radio ? '▶' : '◀' }}</button>
+        <button id="cockpit-radio-toggle-btn" @click="act('toggleCockpitRadio')" class="cockpit-utility-glyph" type="button" :aria-expanded="String(open.radio)" aria-controls="cockpit-radio-panel" :aria-label="radioLabel" :title="radioLabel">{{ open.radio ? '▶' : '◀' }}</button>
       </div>
       <div id="cockpit-radio-panel" class="cockpit-utility-popover cockpit-radio-compact" role="group" aria-label="Cockpit compact Radio controls" :hidden="!open.radio" data-i18n-aria-label>
         <strong id="cockpit-radio-station" class="cockpit-radio-station">{{ cockpit ? cockpit.station : t('READY') }}</strong>
-        <button id="cockpit-radio-enable-btn" class="panel-layer-toggle" v-class-toggle="{ active: cockpit?.enable.active }" type="button" :aria-pressed="String(cockpit?.enable.active ?? false)" :aria-label="cockpit?.enable.label" :aria-disabled="cockpit ? String(cockpit.enable.busy) : undefined" :aria-busy="cockpit ? String(cockpit.enable.busy) : undefined">{{ cockpit ? cockpit.enable.text : t('ENABLE') }}</button>
+        <button id="cockpit-radio-enable-btn" @click="act('toggleRadio', 'cockpit')" class="panel-layer-toggle" v-class-toggle="{ active: cockpit?.enable.active }" type="button" :aria-pressed="String(cockpit?.enable.active ?? false)" :aria-label="cockpit?.enable.label" :aria-disabled="cockpit ? String(cockpit.enable.busy) : undefined" :aria-busy="cockpit ? String(cockpit.enable.busy) : undefined">{{ cockpit ? cockpit.enable.text : t('ENABLE') }}</button>
         <div class="cockpit-radio-transport">
-          <button id="cockpit-radio-prev-btn" type="button" aria-label="Previous filtered radio station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label>◀◀</button>
-          <button id="cockpit-radio-play-btn" type="button" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected radio station')" :title="cockpit?.play.title" :disabled="radio ? radio.transport.play.disabled : true">{{ cockpit ? cockpit.play.glyph : '▶' }}</button>
-          <button id="cockpit-radio-next-btn" type="button" aria-label="Next filtered radio station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label>▶▶</button>
+          <button id="cockpit-radio-prev-btn" @click="act('cycleRadio', -1, { rotate: false })" type="button" aria-label="Previous filtered radio station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label>◀◀</button>
+          <button id="cockpit-radio-play-btn" @click="act('toggleRadioPlayback')" type="button" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected radio station')" :title="cockpit?.play.title" :disabled="radio ? radio.transport.play.disabled : true">{{ cockpit ? cockpit.play.glyph : '▶' }}</button>
+          <button id="cockpit-radio-next-btn" @click="act('cycleRadio', 1, { rotate: false })" type="button" aria-label="Next filtered radio station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label>▶▶</button>
         </div>
         <label class="cockpit-radio-volume" for="cockpit-radio-volume">
           <span data-i18n>VOLUME</span>
-          <input id="cockpit-radio-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Cockpit Radio volume" :disabled="cockpit ? cockpit.volume.disabled : true" v-field-value="cockpit ? cockpit.volume.value : 80" data-i18n-aria-label />
+          <input id="cockpit-radio-volume" @input="act('setRadioVolume', $event.target.value)" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Cockpit Radio volume" :disabled="cockpit ? cockpit.volume.disabled : true" v-field-value="cockpit ? cockpit.volume.value : 80" data-i18n-aria-label />
           <output id="cockpit-radio-volume-value" class="gev-slider-value" for="cockpit-radio-volume">{{ cockpit ? `${cockpit.volume.value}%` : '80%' }}</output>
         </label>
       </div>

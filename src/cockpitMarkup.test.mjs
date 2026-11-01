@@ -885,21 +885,24 @@ test('Cockpit Radio station changes preserve first-person camera ownership', () 
   );
   assert.ok(cycleHelper, 'shared Radio cycle helper is missing');
   assert.match(cycleHelper[1], /cycleStation\(direction, \{[\s\S]*?rotate,/);
+  assert.match(radioBindings, /\n    cycleRadio,\n/);
+  const panel = fs.readFileSync(
+    new URL('./ui/views/panels/RadioPanel.vue', import.meta.url),
+    'utf8',
+  );
+  const cockpit = fs.readFileSync(
+    new URL('./ui/views/panels/CockpitUtilityControls.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(panel, /id="radio-prev-btn" @click="act\('cycleRadio', -1\)"/);
+  assert.match(panel, /id="radio-next-btn" @click="act\('cycleRadio', 1\)"/);
   assert.match(
-    radioBindings,
-    /listen\(this\._radioPrevBtn, 'click', \(\) => cycleRadio\(-1\)\)/,
+    cockpit,
+    /id="cockpit-radio-prev-btn" @click="act\('cycleRadio', -1, \{ rotate: false \}\)"/,
   );
   assert.match(
-    radioBindings,
-    /listen\(this\._radioNextBtn, 'click', \(\) => cycleRadio\(1\)\)/,
-  );
-  assert.match(
-    radioBindings,
-    /listen\(this\._cockpitRadioPrevBtn, 'click', \(\) =>\s*cycleRadio\(-1, \{ rotate: false \}\),?\s*\)/,
-  );
-  assert.match(
-    radioBindings,
-    /listen\(this\._cockpitRadioNextBtn, 'click', \(\) =>\s*cycleRadio\(1, \{ rotate: false \}\),?\s*\)/,
+    cockpit,
+    /id="cockpit-radio-next-btn" @click="act\('cycleRadio', 1, \{ rotate: false \}\)"/,
   );
 });
 

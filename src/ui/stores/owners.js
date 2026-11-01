@@ -31,11 +31,12 @@ export function createOwners() {
    * name, if any.
    * @param {string} name
    * @param {...unknown} args
+   * @returns {unknown} What the action returned, if one answered.
    */
   function act(name, ...args) {
     for (let index = owners.length - 1; index >= 0; index -= 1) {
       const action = owners[index].actions[name];
-      if (action) return void action(...args);
+      if (action) return action(...args);
     }
   }
 

@@ -357,7 +357,7 @@ test('panel collapse is presentation-only and Radio exposes explicit voice playb
   const enableMethod = radioBindings;
   assert.doesNotMatch(enableMethod, /playSelectedRadio|togglePlayback\(\).*radio-enable/i);
   assert.doesNotMatch(enableMethod, /contextRadio/);
-  assert.match(enableMethod, /toggleRadio\(this\._radioEnableBtn\)/);
+  assert.match(enableMethod, /toggleRadio: \(where\) =>[\s\S]*?: this\._radioEnableBtn,/);
   // The collapse buttons render aria-expanded from the state the chrome presents.
   assert.match(ui, /this\._presentPanel\(panelEl, \{ collapsed: nextCollapsed, auto: null \}\)/);
   assert.doesNotMatch(method, /panelId === 'global-context-panel'[\s\S]*?this\._radioState\?\.enabled[\s\S]*?setPanelCollapsed\('radio-panel', false\)/);

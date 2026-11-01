@@ -313,19 +313,6 @@ export function bindRadioControls() {
     }
   };
   this.listen(
-    this._radioEnableBtn,
-    'click',
-    () => void toggleRadio(this._radioEnableBtn),
-  );
-  this.listen(
-    this._cockpitRadioEnableBtn,
-    'click',
-    () => void toggleRadio(this._cockpitRadioEnableBtn),
-  );
-  this.listen(this._cockpitRadioToggleBtn, 'click', () => {
-    setCockpitDisclosure('radio', !this._cockpitDisclosureOpen('radio'));
-  });
-  this.listen(
     document,
     'pointerdown',
     (event) => {
@@ -395,61 +382,45 @@ export function bindRadioControls() {
     },
     tunerListenerOptions,
   );
-  this.listen(this._radioFilter, 'change', () => {
-    const presentation = this.radio.getUIState();
-    if (!presentation.presentationActive) {
-      this._radioFilter.value = presentation.filter;
-      return;
-    }
-    if (this._radioTunerDragging) finishTuner(false);
-    if (
-      !this.actions.setParams(
-        {
-          filter: this._radioFilter.value,
-        },
-        { origin: 'user' },
-      )
-    ) {
-      this._radioFilter.value = this.radio.getUIState().filter;
-      return;
-    }
-    this._radioTunerBandPinnedForNavigation = false;
-    this._radioTunerPool = [];
-    refreshTunerBand({ force: true });
-  });
-  this.listen(this._radioPrevBtn, 'click', () => cycleRadio(-1));
-  this.listen(this._radioNextBtn, 'click', () => cycleRadio(1));
-  this.listen(
-    this._radioPlayBtn,
-    'click',
-    () => void this.radio.togglePlayback({ origin: 'user' }),
-  );
-  this.listen(this._radioStopBtn, 'click', () =>
-    this.radio.stopPlayback({ origin: 'user' }),
-  );
-  this.listen(this._radioVolume, 'input', () => {
-    const value = Number(this._radioVolume.value);
-    showRadioVolume.call(this, value);
-    this.actions.setParams({ volume: value / 100 }, { origin: 'user' });
-  });
+  // The Radio panel's and Cockpit's controls call these through the store.
   // Cockpit owns the Cesium camera even though it intentionally clears
-  // viewer.trackedEntity. Station changes must never start the map-view
-  // rotation/fallback flights that would compete with its preUpdate pose.
-  this.listen(this._cockpitRadioPrevBtn, 'click', () =>
-    cycleRadio(-1, { rotate: false }),
-  );
-  this.listen(this._cockpitRadioNextBtn, 'click', () =>
-    cycleRadio(1, { rotate: false }),
-  );
-  this.listen(
-    this._cockpitRadioPlayBtn,
-    'click',
-    () => void this.radio.togglePlayback({ origin: 'user' }),
-  );
-  this.listen(this._cockpitRadioVolume, 'input', () => {
-    const value = Number(this._cockpitRadioVolume.value);
-    showRadioVolume.call(this, value);
-    this.actions.setParams({ volume: value / 100 }, { origin: 'user' });
+  // viewer.trackedEntity, so its station steps pass `rotate: false`: they
+  // must never start the map-view rotation/fallback flights that would
+  // compete with its preUpdate pose.
+  this._storeToken = this.store?.connect?.({
+    /** @param {'panel'|'cockpit'} where Which Enable button was pressed. */
+    toggleRadio: (where) =>
+      void toggleRadio(
+        where === 'cockpit'
+          ? this._cockpitRadioEnableBtn
+          : this._radioEnableBtn,
+      ),
+    toggleCockpitRadio: () =>
+      setCockpitDisclosure('radio', !this._cockpitDisclosureOpen('radio')),
+    /**
+     * @param {string} filter
+     * @returns {string} The station tag the filter shows afterwards.
+     */
+    setRadioFilter: (filter) => {
+      if (!this.radio.getUIState().presentationActive)
+        return this.radio.getUIState().filter;
+      if (this._radioTunerDragging) finishTuner(false);
+      if (!this.actions.setParams({ filter }, { origin: 'user' }))
+        return this.radio.getUIState().filter;
+      this._radioTunerBandPinnedForNavigation = false;
+      this._radioTunerPool = [];
+      refreshTunerBand({ force: true });
+      return filter;
+    },
+    cycleRadio,
+    toggleRadioPlayback: () =>
+      void this.radio.togglePlayback({ origin: 'user' }),
+    stopRadio: () => this.radio.stopPlayback({ origin: 'user' }),
+    setRadioVolume: (percent) => {
+      const value = Number(percent);
+      showRadioVolume.call(this, value);
+      this.actions.setParams({ volume: value / 100 }, { origin: 'user' });
+    },
   });
   const updateTunerFromPointer = (event) => {
     const rect = this._radioTunerSlider?.getBoundingClientRect();

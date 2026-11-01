@@ -65,7 +65,7 @@ test('Context tabs draw a visible keyboard-focus outline including active tabs',
 
 test('Context async action buttons remain focused while busy', () => {
   const init = _initGlobalContextPanel.toString();
-  const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this.listen(this._cockpitRadioToggleBtn,'));
+  const radio = radioBindings.slice(radioBindings.indexOf('const toggleRadio = async (trigger) => {'), radioBindings.indexOf('this._storeToken = this.store?.connect?.('));
   const radioPanel = readFileSync(new URL('./ui/views/panels/RadioPanel.vue', import.meta.url), 'utf8');
   const clear = clearSelectedLayers.toString();
 

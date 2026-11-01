@@ -914,6 +914,7 @@
   "src/layers/localAdsb/index.test.mjs",
   "src/ui/localSdrControls.test.mjs",
   "src/ui/sdrCardActions.test.mjs",
+  "src/ui/radioPanelActions.test.mjs",
   "src/ui/localSdrMarkup.test.mjs",
   "src/ui/localSdrPresentation.test.mjs",
   "src/data/localReceiversProxy.test.mjs",

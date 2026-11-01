@@ -13,8 +13,15 @@ import SdrCard from './SdrCard.vue';
 // The Radio panel inside Context. RadioControls presents the directory row,
 // station card, transport, volume and playback line and publishes them;
 // until it does, the panel shows its initial markup. RadioTuner renders the
-// directory tuner and SdrCard the local RTL-SDR card.
-const { view: radio, sdr } = storeToRefs(useRadioStore());
+// directory tuner and SdrCard the local RTL-SDR card. Its controls call
+// RadioControls through the store.
+const store = useRadioStore();
+const { act } = store;
+const { view: radio, sdr } = storeToRefs(store);
+// A refused station tag puts the select back on the tag the filter keeps.
+const setFilter = (select) => {
+  select.value = act('setRadioFilter', select.value) ?? select.value;
+};
 // Only whether the receiver is connected reaches the panel; the card renders
 // its own frames.
 const sdrConnected = computed(() => sdr.value?.connectionActive ?? null);
@@ -31,9 +38,9 @@ const radioWords = {
 <RailPanel id="radio-panel" tag="section" start-collapsed v-class-toggle="{ ...(radio && { 'radio-enabled': radio.enabled, 'lifecycle-uncertain': radio.uncertain }), ...(sdrConnected !== null && { 'sdr-connected': sdrConnected }) }" aria-label="Internet radio and local SDR" data-i18n-aria-label :title="t('RADIO')" :toggle-words="radioWords" :glow="false" scroll>
   <template #badge><span id="radio-layer-state" class="radio-layer-state" :class="{ active: radio?.layerState.active }">{{ radio ? radio.layerState.text : t('OFF') }}</span></template>
     <div class="radio-directory-row">
-      <button id="radio-enable-btn" class="panel-layer-toggle" :class="{ active: radio?.enable.active }" type="button" :aria-pressed="String(radio?.enable.active ?? false)" :aria-label="radio?.enable.label" :aria-disabled="radio ? String(radio.enable.busy) : undefined" :aria-busy="radio ? String(radio.enable.busy) : undefined">{{ radio ? radio.enable.text : t('ENABLE') }}</button>
+      <button id="radio-enable-btn" @click="act('toggleRadio', 'panel')" class="panel-layer-toggle" :class="{ active: radio?.enable.active }" type="button" :aria-pressed="String(radio?.enable.active ?? false)" :aria-label="radio?.enable.label" :aria-disabled="radio ? String(radio.enable.busy) : undefined" :aria-busy="radio ? String(radio.enable.busy) : undefined">{{ radio ? radio.enable.text : t('ENABLE') }}</button>
       <label class="radio-filter-label" for="radio-filter" data-i18n>STATION TAG</label>
-      <select class="gev-field" id="radio-filter" aria-label="Filter stations by station tag" :disabled="radio ? radio.filter.disabled : true" v-bind="radio?.filter.color ? { style: { color: radio.filter.color } } : {}" v-range-value="radio ? radio.filter.value : 'all'" data-i18n-aria-label>
+      <select class="gev-field" id="radio-filter" @change="setFilter($event.target)" aria-label="Filter stations by station tag" :disabled="radio ? radio.filter.disabled : true" v-bind="radio?.filter.color ? { style: { color: radio.filter.color } } : {}" v-range-value="radio ? radio.filter.value : 'all'" data-i18n-aria-label>
         <option v-if="!radio?.filter.options" value="all">{{ t('All', { context: 'radio tag' }) }}</option><template v-else><option v-for="option in radio.filter.options" :key="option.id" :value="option.id" :data-radio-color="option.color" :style="{ color: option.color }" :aria-label="option.label">● {{ option.label }}</option></template>
       </select>
     </div>
@@ -44,14 +51,14 @@ const radioWords = {
     </div>
     <RadioTuner />
     <div class="radio-transport" role="group" aria-label="Radio playback" data-i18n-aria-label>
-      <button id="radio-prev-btn" type="button" aria-label="Previous filtered station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label data-i18n>PREV</button>
-      <button id="radio-play-btn" type="button" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected station')" :disabled="radio ? radio.transport.play.disabled : true">{{ radio ? radio.transport.play.text : t('PLAY') }}</button>
-      <button id="radio-next-btn" type="button" aria-label="Next filtered station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label data-i18n>NEXT</button>
-      <button id="radio-stop-btn" type="button" aria-label="Stop radio playback" :disabled="radio ? radio.transport.stopDisabled : true" data-i18n-aria-label data-i18n>STOP</button>
+      <button id="radio-prev-btn" @click="act('cycleRadio', -1)" type="button" aria-label="Previous filtered station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label data-i18n>PREV</button>
+      <button id="radio-play-btn" @click="act('toggleRadioPlayback')" type="button" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected station')" :disabled="radio ? radio.transport.play.disabled : true">{{ radio ? radio.transport.play.text : t('PLAY') }}</button>
+      <button id="radio-next-btn" @click="act('cycleRadio', 1)" type="button" aria-label="Next filtered station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label data-i18n>NEXT</button>
+      <button id="radio-stop-btn" @click="act('stopRadio')" type="button" aria-label="Stop radio playback" :disabled="radio ? radio.transport.stopDisabled : true" data-i18n-aria-label data-i18n>STOP</button>
     </div>
     <label class="radio-volume-row" for="radio-volume">
       <span data-i18n>VOLUME</span>
-      <input id="radio-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Radio volume" :disabled="radio?.volume.disabled" v-field-value="radio ? radio.volume.value : 80" data-i18n-aria-label />
+      <input id="radio-volume" @input="act('setRadioVolume', $event.target.value)" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Radio volume" :disabled="radio?.volume.disabled" v-field-value="radio ? radio.volume.value : 80" data-i18n-aria-label />
       <output id="radio-volume-value" class="gev-slider-value" for="radio-volume">{{ radio ? `${radio.volume.value}%` : '80%' }}</output>
     </label>
     <div id="radio-playback-state" class="radio-playback-state" :class="{ error: radio?.playback.error }" role="status" aria-live="polite">{{ radio ? radio.playback.text : t('Radio off') }}</div>

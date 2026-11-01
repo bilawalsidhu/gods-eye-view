@@ -25,6 +25,7 @@ function fixture(t) {
   let enabled = false;
   let toggles = 0;
   let finishToggle = null;
+  const ui = { presentationActive: true, filter: 'all' };
   const actions = {
     isRegistered: () => true,
     isEnabled: () => enabled,
@@ -38,7 +39,10 @@ function fixture(t) {
         };
       });
     },
-    setParams: (params) => calls.push(['params', params]),
+    setParams: (params) => {
+      calls.push(['params', params]);
+      return params.filter !== 'refused';
+    },
     setPanelCollapsed() {},
     setSignalCollapsed: (collapsed) => calls.push(['signal', collapsed]),
     revealStyleParameters: () => calls.push(['reveal']),
@@ -60,15 +64,15 @@ function fixture(t) {
       _cockpitDisplayToggleBtn: $('cockpit-display-toggle-btn'),
       _cockpitRadioToggleBtn: $('cockpit-radio-toggle-btn'),
       _cockpitRadioEnableBtn: $('cockpit-radio-enable-btn'),
-      _cockpitRadioPrevBtn: $('cockpit-radio-prev-btn'),
-      _cockpitRadioPlayBtn: $('cockpit-radio-play-btn'),
-      _cockpitRadioNextBtn: $('cockpit-radio-next-btn'),
-      _cockpitRadioVolume: $('cockpit-radio-volume'),
     },
     radio: {
       subscribe: () => () => {},
       endTuning() {},
       getTunerStations: () => [],
+      getUIState: () => ui,
+      cycleStation: (direction, { rotate }) =>
+        calls.push(['cycle', direction, rotate]),
+      togglePlayback: () => calls.push(['playback']),
     },
     actions,
     canvas: document.createElement('canvas'),
@@ -95,6 +99,7 @@ function fixture(t) {
     $,
     controls,
     calls,
+    ui,
     render,
     outside,
     finishToggle: () => finishToggle(),
@@ -234,6 +239,43 @@ test('dragging the volume shows the value at once and a render leaves the held s
   // A render reporting an older volume while the slider is held.
   await render({ volume: 0.8 });
   assert.equal(volume.value, '42');
+});
+
+test('the compact transport steps stations without rotating the camera', (t) => {
+  const { $, calls } = fixture(t);
+  for (const id of [
+    'cockpit-radio-prev-btn',
+    'cockpit-radio-play-btn',
+    'cockpit-radio-next-btn',
+  ]) {
+    $(id).disabled = false;
+    $(id).click();
+  }
+  assert.deepEqual(calls, [
+    ['cycle', -1, false],
+    ['playback'],
+    ['cycle', 1, false],
+  ]);
+});
+
+test('the station filter answers with the tag the directory keeps', (t) => {
+  const { controls, calls, ui } = fixture(t);
+  assert.equal(controls.store.act('setRadioFilter', 'jazz'), 'jazz');
+  assert.equal(controls.store.act('setRadioFilter', 'refused'), 'all');
+  ui.presentationActive = false;
+  assert.equal(controls.store.act('setRadioFilter', 'rock'), 'all');
+  assert.deepEqual(calls, [
+    ['params', { filter: 'jazz' }],
+    ['params', { filter: 'refused' }],
+  ]);
+});
+
+test('a destroyed RadioControls answers no controls', (t) => {
+  const { controls, calls } = fixture(t);
+  controls.destroy();
+  assert.equal(controls.store.act('setRadioFilter', 'jazz'), undefined);
+  controls.store.act('cycleRadio', 1);
+  assert.deepEqual(calls, []);
 });
 
 test('the Cockpit Enable button is marked busy while its own toggle runs', async (t) => {

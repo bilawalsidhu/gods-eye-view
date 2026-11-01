@@ -26,3 +26,10 @@ test('the newest owner with an action answers it, and detach hands it back', () 
     ['first.play', 2],
   ]);
 });
+
+test('act returns what the answering action returned', () => {
+  const { connect, act } = createOwners();
+  connect({ pick: (tag) => `kept ${tag}` });
+  assert.equal(act('pick', 'jazz'), 'kept jazz');
+  assert.equal(act('missing'), undefined);
+});
