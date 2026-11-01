@@ -72,6 +72,14 @@ options that carry their own attributes come through the slot, a caller's
 Without `hold`, a select takes its model back after its own change renders,
 so a pick its owner refuses goes back; an owner that answers later (the SDR
 gain) takes `hold`. Every select in the views is a `UiSelect`.
+`UiBadge` takes ui-vue's `tone` and carries Core's `gev-status-badge`; its
+density variants and colours stay caller classes, and it renders the CCTV
+source and calibration badges and the rail card badges. `UiEmpty` takes
+ui-vue's `title` and `hint`, but Core's empty states are one line, so the title
+is the text itself rather than a bold heading; the Scene shot list, mission
+roster and imagery strip use it. The locale picker's and the mission tables'
+empty rows stay a paragraph and table cells, and no Core block matches
+`UiSection`'s header and well, so none uses it yet.
 `UiSlider` keeps the native range input where ui-vue draws a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
 it takes ui-vue's `v-model`, `min`, `max`, `step` and `disabled`, emits a

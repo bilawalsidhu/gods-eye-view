@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { onBeforeUpdate, onUpdated, ref } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { useContextStore } from '../../stores/context.js';
+import UiEmpty from '../../kit/UiEmpty.vue';
 
 // The Space Missions roster. The launches layer presents it; until it does,
 // the list shows its loading line. Hover and keyboard focus drive the
@@ -69,8 +70,8 @@ onUpdated(() => {
       <output data-mission-roster-count>{{ roster ? roster.count : '—' }}</output>
     </div>
     <div class="space-mission-roster-list ui-scroll" data-mission-roster-list>
-      <div v-if="!roster" class="space-mission-roster-empty">{{ t('LOADING 30-DAY MISSION INDEX') }}</div>
-      <div v-else-if="!roster.entries.length" class="space-mission-roster-empty">{{ roster.empty }}</div>
+      <UiEmpty v-if="!roster" class="space-mission-roster-empty" :title="t('LOADING 30-DAY MISSION INDEX')" />
+      <UiEmpty v-else-if="!roster.entries.length" class="space-mission-roster-empty" :title="roster.empty" />
       <button v-for="entry in roster?.entries" v-else :key="entry.id" type="button" class="space-mission-roster-item" :data-mission-roster-index="entry.index" :data-mission-roster-id="entry.id" :aria-label="entry.ariaLabel" @click="layer?.selectMissionAt(entry.index)" @mouseenter="enter(entry.index)" @mousemove="move(entry.index)" @mouseleave="layer?.rosterPointerLeave()" @focus="layer?.rosterFocus(entry.index)" @blur="blur"><span class="space-mission-roster-marker" :style="{ '--mission-roster-color': entry.color }" aria-hidden="true"></span><span class="space-mission-roster-copy"><strong>{{ entry.label }}</strong><small>{{ entry.provider }} · {{ entry.date }}</small></span><span class="space-mission-roster-chevron" aria-hidden="true">›</span></button>
     </div>
     <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation data-i18n>TAB PREVIEWS · ENTER / SPACE SELECTS</p>

@@ -136,7 +136,9 @@
       "src/sdr/gain.js",
       "src/ui/kit/UiSlider.js",
       "src/ui/kit/UiChip.vue",
-      "src/ui/kit/UiSelect.js"
+      "src/ui/kit/UiSelect.js",
+      "src/ui/kit/UiEmpty.vue",
+      "src/ui/kit/UiBadge.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -670,7 +672,8 @@
       "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
-      "src/ui/kit/UiButton.vue"
+      "src/ui/kit/UiButton.vue",
+      "src/ui/kit/UiBadge.vue"
     ],
     "external": ["vue"]
   },
@@ -1070,7 +1073,8 @@
       "src/ui/rail/panelState.js",
       "src/ui/rail/fieldValue.js",
       "src/ui/kit/UiSlider.js",
-      "src/ui/kit/UiButton.vue"
+      "src/ui/kit/UiButton.vue",
+      "src/ui/kit/UiBadge.vue"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -3081,7 +3085,9 @@
       "src/ui/rail/panelState.js",
       "src/ui/rail/fieldValue.js",
       "src/ui/kit/UiSlider.js",
-      "src/ui/kit/UiButton.vue"
+      "src/ui/kit/UiButton.vue",
+      "src/ui/kit/UiEmpty.vue",
+      "src/ui/kit/UiBadge.vue"
     ],
     "external": [
       "hls.js",

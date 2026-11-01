@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount } from 'vue';
 import RailCardBlocks from './RailCardBlocks.vue';
+import UiBadge from '../kit/UiBadge.vue';
 
 // One keyed card: a disclosure header and its blocks. The owner decides
 // which card is open.
@@ -45,10 +46,10 @@ const nextBodyId = () => ++bodies;
           ><span class="rail-card-title rail-card-nowrap" :title="card.title">{{
             card.title
           }}</span></span
-        ><span
-          :class="`gev-status-badge gev-status-badge--plain rail-card-badge${badgeClassName ? ` ${badgeClassName}` : ''}`"
+        ><UiBadge
+          :class="`gev-status-badge--plain rail-card-badge${badgeClassName ? ` ${badgeClassName}` : ''}`"
           :hidden="!card.badge"
-          >{{ card.badge || '' }}</span
+          >{{ card.badge || '' }}</UiBadge
         ></span
       ><span class="rail-card-disclosure" aria-hidden="true">{{
         open ? '▾' : '▸'

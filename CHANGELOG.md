@@ -68,7 +68,9 @@
   kit's `UiButton`, which gains `pressedClass`; so are the rail card
   chips, map source chips and location pills (which now report
   `aria-pressed`), and the voice card's chips
-  are the kit's new `UiChip`. The selects are the kit's new `UiSelect`.
+  are the kit's new `UiChip`. The selects are the kit's new `UiSelect`, the
+  status badges its new `UiBadge` and the one-line empty states its new
+  `UiEmpty`.
   `syncScopeControls`
   (`./ui/display`) and `shouldHideCollapsedRightPanels` (`./ui/layout`) are
   deprecated: the Display view and the rail now own what they did. `./ui/input` imports Vue

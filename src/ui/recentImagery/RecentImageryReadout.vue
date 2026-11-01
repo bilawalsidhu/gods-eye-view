@@ -6,6 +6,7 @@ import RailCardBlocks from '../rail/RailCardBlocks.vue';
 import RailCards from '../rail/RailCards.vue';
 import { vRangeValue } from '../rail/rangeValue.js';
 import RecentImageryCard from './RecentImageryCard.vue';
+import UiEmpty from '../kit/UiEmpty.vue';
 
 // Every block exists from the start, in its final order. The owner computes
 // the view and listens on the root; a mode choice calls `onSetMode`.
@@ -78,10 +79,10 @@ const modeOptions = computed(() =>
       ><RecentImageryCard
         v-for="card in view.strip.cards"
         :key="card.key"
-        :card="card"
-      /><div class="ri-strip-empty" :hidden="view.strip.cards.length > 0">{{
-        view.strip.empty
-      }}</div></div
+        :card="card" /><UiEmpty
+        class="ri-strip-empty"
+        :hidden="view.strip.cards.length > 0"
+        :title="view.strip.empty" /></div
     ><div id="ri-hint" class="ri-block ri-line ri-hint" :title="view.hint">{{
       view.hint
     }}</div

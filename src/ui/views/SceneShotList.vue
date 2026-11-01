@@ -5,6 +5,7 @@ import { t } from '../../i18n/index.js';
 import { describeShot } from '../scenePresentation.js';
 import UiButton from '../kit/UiButton.vue';
 import { useSceneStore } from '../stores/scenes.js';
+import UiEmpty from '../kit/UiEmpty.vue';
 
 // The selected scene's shots. Rows keep their identity across selection so a
 // click followed by a double-click lands on the same label.
@@ -73,9 +74,11 @@ function onRenameKey(shot, event) {
 <template>
   <div id="scene-shot-list" class="scene-shot-list ui-scroll">
     <template v-if="attached">
-      <div v-if="!scene?.shots.length" class="scene-shot-empty">{{
-        t('No shots yet. Use CAPTURE SHOT to save current look.')
-      }}</div>
+      <UiEmpty
+        v-if="!scene?.shots.length"
+        class="scene-shot-empty"
+        :title="t('No shots yet. Use CAPTURE SHOT to save current look.')"
+      />
       <template v-else>
         <div
           v-for="shot in scene.shots"

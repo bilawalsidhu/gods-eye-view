@@ -7,6 +7,7 @@ import RailPanel from '../../rail/RailPanel.vue';
 import CctvCalValue from '../../cctv/CctvCalValue.vue';
 import CctvPicker from '../../cctv/CctvPicker.vue';
 import { useCctvStore } from '../../stores/cctv.js';
+import UiBadge from '../../kit/UiBadge.vue';
 
 // The CCTV panel, rendered from what CctvControls presents and publishes;
 // until it renders, the panel shows its initial markup. The controls draw
@@ -35,7 +36,7 @@ const frameData = computed(() =>
       <img id="cctv-frame" alt="CCTV feed frame" :class="{ active: frame?.hasFrame }" :src="frame?.src || undefined" :hidden="live" v-bind="frameData" />
       <canvas id="cctv-video" class="cctv-frame" :hidden="!live"></canvas>
     </div>
-    <div id="cctv-source-badge" class="gev-status-badge" role="status" aria-live="polite" :data-frame-state="sourceBadge?.state">{{ sourceBadge?.label ?? t('SOURCE · UNKNOWN') }}</div>
+    <UiBadge id="cctv-source-badge" role="status" aria-live="polite" :data-frame-state="sourceBadge?.state">{{ sourceBadge?.label ?? t('SOURCE · UNKNOWN') }}</UiBadge>
     <div id="cctv-meta">{{ view?.meta ?? t('Enable CCTV to load camera intersections') }}</div>
     <div class="cctv-controls">
       <UiButton class="scene-btn" :pressed="Boolean(view?.enabled)" pressed-class="active" id="cctv-enable-btn">{{ view?.enabled ? t('CCTV ON') : t('CCTV OFF') }}</UiButton>
@@ -53,7 +54,7 @@ const frameData = computed(() =>
     </div>
     <div class="cctv-controls">
       <UiButton class="scene-btn" :pressed="Boolean(view?.projection.active)" pressed-class="active" id="cctv-projection-btn" :disabled="view?.toggleDisabled">{{ view?.projection.text ?? t('PROJECTION ON') }}</UiButton>
-      <span id="cctv-quality-chip" class="gev-status-badge gev-status-badge--box" :data-cal-badge="view?.quality.calBadge">{{ view?.quality.label ?? t('CAL · {badge}', { badge: '--' }) }}</span>
+      <UiBadge id="cctv-quality-chip" class="gev-status-badge--box" :data-cal-badge="view?.quality.calBadge">{{ view?.quality.label ?? t('CAL · {badge}', { badge: '--' }) }}</UiBadge>
     </div>
     <div class="cctv-calibration-block">
       <div class="cctv-calibration-header">
