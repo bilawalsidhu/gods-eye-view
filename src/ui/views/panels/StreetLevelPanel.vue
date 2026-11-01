@@ -2,8 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed, shallowRef, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
-import { vPanelState } from '../../rail/panelState.js';
-import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
+import RailPanel from '../../rail/RailPanel.vue';
 import RailChips from '../../rail/RailChips.vue';
 import { useStreetLevelStore } from '../../stores/streetLevel.js';
 
@@ -102,15 +101,8 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
 </script>
 
 <template>
-<div id="street-level-panel" v-panel-state="'street-level-panel'" class="panel-collapsible collapsed" data-panel-id="street-level-panel" :data-sl-enabled="view ? String(view.enabled) : undefined">
-  <div class="panel-glow"></div>
-  <div class="street-level-panel-inner ui-scroll" data-rail-scroller>
-    <div class="panel-header">
-      <span class="panel-title" data-i18n>STREET LEVEL</span>
-      <span class="panel-divider"></span>
-      <button id="sl-status" :class="`sl-status${status.tone ? ` is-${status.tone}` : ''}`" type="button" :aria-pressed="String(status.pressed)" :title="status.title">{{ status.text }}</button>
-      <PanelCollapseButton target="street-level-panel" :name="t('STREET LEVEL')" sideways initial="◀" :initial-title="t('Expand panel')" />
-    </div>
+<RailPanel id="street-level-panel" start-collapsed :data-sl-enabled="view ? String(view.enabled) : undefined" :title="t('STREET LEVEL')" sideways scroll rail-scroller>
+  <template #actions><button id="sl-status" :class="`sl-status${status.tone ? ` is-${status.tone}` : ''}`" type="button" :aria-pressed="String(status.pressed)" :title="status.title">{{ status.text }}</button></template>
     <div id="sl-body" class="sl-body">
       <div id="sl-viewer-wrap" class="sl-viewer-wrap" :hidden="!viewer.open">
         <div class="sl-viewer-bar">
@@ -168,6 +160,5 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
         <button id="sl-nearest-btn" class="scene-btn sl-nearest-btn" type="button" :hidden="!view?.nearest.visible" :title="nearest.title || undefined" :disabled="nearest.disabled" data-i18n-runtime>{{ nearest.label }}</button>
       </div>
     </div>
-  </div>
-</div>
+</RailPanel>
 </template>

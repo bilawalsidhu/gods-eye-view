@@ -36,14 +36,20 @@ one-panel rule too. Share links continue to record which panels are open.
 
 ## Component kit
 
-`src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`
-and `UiButton` so far, with more (`UiPanel`, `UiSegmented`, `UiSelect` and
-so on) joining as the controls they serve are converted. Names, props,
+`src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`,
+`UiButton` and `UiPanel` so far, with more (`UiSegmented`, `UiSelect` and
+so on) joining as the controls they serve are converted. One component
+serves every use of a control, with props for the differences (`UiPanel`'s
+`sideways`, `glow`, `scroll`), rather than a copy per panel. Names, props,
 events and class names follow Halfpixel's `ui-vue` kit so the two can merge
 later, but the components are written for this repository and styled by its
 existing stylesheet and custom properties; a kit class such as
 `ui-button--icon` carries no Core style yet, and a converted control keeps
 its own classes beside it. They contain no application state.
+`UiPanel` takes ui-vue's `title`, slots and `v-model:collapsed`, but its
+`collapsed` drives only the button and `ui-panel--collapsed`: the panel's
+owner hides the body by writing the root's `collapsed` class at once, and
+there is no `closable`, since Core's panels collapse rather than close.
 
 Controls share one skin, so every panel reads the same. Every scrolling
 surface carries the kit's `.ui-scroll` (ui-vue's name), which draws the thin
@@ -64,8 +70,10 @@ a feature supplying only its accent.
    when a view needs one, mirroring state an owner already publishes, so
    there is never a second owner of the same state.
 2. **Rail.** `PanelChrome` enforces one panel per side; the panel store
-   mirrors each side's panels and the rail renders from it. Each panel's
-   collapse button (`PanelCollapseButton`), the dock tray toggles and the
+   mirrors each side's panels and the rail renders from it. The rail panels
+   are `RailPanel`s: the kit's `UiPanel` drawing Core's panel markup, bound to the `gev-panel-chrome`
+   store, with their titles rendered by `t()` rather than `data-i18n`. Each panel's
+   collapse button, the dock tray toggles and the
    dock pins render the open and pinned state PanelChrome presents to the
    `gev-panel-chrome` store, and their clicks call it there. Each panel's
    root draws its own state from there too (`v-panel-state`: `collapsed`,
@@ -75,7 +83,8 @@ a feature supplying only its accent.
    watcher, not on Vue's next render, because the rails measure a panel in
    the same task that opens or closes it. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
-   classes, `data-i18n` text and CSS. The page places each view with a
+   classes and CSS; text a template renders with `t()` drops its `data-i18n`
+   marker. The page places each view with a
    `.gev-view` host (`display: contents`), and `mountApplicationViews()`
    (`src/ui/views/index.js`) renders the view into it before the page is
    translated and wired. `createApplication()` calls it too, removing the

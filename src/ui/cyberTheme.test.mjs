@@ -28,7 +28,9 @@ test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () 
       /class="cyber-panel-body ui-scroll" data-rail-scroller/,
     );
     assert.ok(
-      markup.indexOf('class="panel-header"') <
+      // The header is RailPanel's; the body is its first content.
+      markup.indexOf('<RailPanel ') > -1 &&
+        markup.indexOf('<RailPanel ') <
         markup.indexOf('class="cyber-panel-body ui-scroll"'),
     );
   }

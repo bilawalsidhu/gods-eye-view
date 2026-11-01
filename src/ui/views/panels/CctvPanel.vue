@@ -2,8 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
-import { vPanelState } from '../../rail/panelState.js';
-import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
+import RailPanel from '../../rail/RailPanel.vue';
 import CctvCalValue from '../../cctv/CctvCalValue.vue';
 import CctvPicker from '../../cctv/CctvPicker.vue';
 import { useCctvStore } from '../../stores/cctv.js';
@@ -28,14 +27,7 @@ const frameData = computed(() =>
 </script>
 
 <template>
-<div id="cctv-panel" v-panel-state="'cctv-panel'" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
-  <div class="panel-glow"></div>
-  <div class="cctv-panel-inner ui-scroll" data-rail-scroller>
-    <div class="panel-header">
-      <span class="panel-title" data-i18n>CCTV</span>
-      <span class="panel-divider"></span>
-      <PanelCollapseButton target="cctv-panel" :name="t('CCTV')" sideways initial="+" />
-    </div>
+<RailPanel id="cctv-panel" start-collapsed :title="t('CCTV')" sideways scroll rail-scroller>
     <div class="cyber-panel-body ui-scroll" data-rail-scroller>
     <div id="cctv-frame-wrap" :class="['cctv-frame-wrap', { loading: frame?.wrapLoading, 'has-frame': frame?.hasFrame }]">
       <span class="cctv-frame-caption" aria-hidden="true" data-i18n>ACQUIRING FRAME</span>
@@ -84,6 +76,5 @@ const frameData = computed(() =>
     <div class="cctv-summary-label" data-i18n>SCENE SUMMARY</div>
     <div id="cctv-summary">{{ summary ?? t('Enable CCTV to start camera-linked intelligence summaries.') }}</div>
     </div>
-  </div>
-</div>
+</RailPanel>
 </template>

@@ -2,8 +2,7 @@
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
-import { vPanelState } from '../rail/panelState.js';
-import PanelCollapseButton from '../rail/PanelCollapseButton.vue';
+import RailPanel from '../rail/RailPanel.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
 import { useBhoteKoshiPanelStore } from '../stores/bhoteKoshiPanel.js';
@@ -29,38 +28,15 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
 <template>
   <!-- Global Context is deliberately independent from the left layer accordion. -->
   <aside id="right-context-rail" class="ui-scroll" v-class-toggle="{ 'bhote-event-active': !!bhotePanel }">
-    <div id="weather-panel" v-panel-state="'weather-panel'" class="panel-collapsible" data-panel-id="weather-panel" hidden>
-      <div class="panel-glow"></div>
-      <div class="weather-panel-inner" data-rail-scroller>
-        <div class="panel-header">
-          <span class="panel-title" data-i18n>WEATHER</span>
-          <span id="weather-panel-count" aria-label="Active weather products" data-i18n-aria-label>0</span>
-          <span class="panel-divider"></span>
-          <PanelCollapseButton target="weather-panel" :name="t('WEATHER')" sideways initial="▼" />
-        </div>
-        <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
-      </div>
-    </div>
-    <div id="recent-imagery-panel" v-panel-state="'recent-imagery-panel'" class="panel-collapsible" data-panel-id="recent-imagery-panel" hidden>
-      <div class="panel-glow"></div>
-      <div class="recent-imagery-panel-inner" data-rail-scroller>
-        <div class="panel-header">
-          <span class="panel-title" data-i18n>RECENT IMAGERY</span>
-          <span id="recent-imagery-panel-count" aria-label="Imagery days in the box" data-i18n-aria-label></span>
-          <span class="panel-divider"></span>
-          <PanelCollapseButton target="recent-imagery-panel" :name="t('RECENT IMAGERY')" sideways initial="▼" />
-        </div>
-        <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
-      </div>
-    </div>
-    <div id="global-context-panel" v-panel-state="'global-context-panel'" class="panel-collapsible collapsed" v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" data-panel-id="global-context-panel">
-      <div class="panel-glow"></div>
-      <div class="global-context-panel-inner ui-scroll" data-rail-scroller>
-        <div class="panel-header">
-          <span class="panel-title" data-i18n>CONTEXT</span>
-          <span class="panel-divider"></span>
-          <PanelCollapseButton target="global-context-panel" :name="t('CONTEXT')" sideways initial="▶" :initial-title="t('Expand panel')" />
-        </div>
+    <RailPanel id="weather-panel" hidden :title="t('WEATHER')" sideways rail-scroller>
+      <template #badge><span id="weather-panel-count" aria-label="Active weather products" data-i18n-aria-label>0</span></template>
+      <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
+    </RailPanel>
+    <RailPanel id="recent-imagery-panel" hidden :title="t('RECENT IMAGERY')" sideways rail-scroller>
+      <template #badge><span id="recent-imagery-panel-count" aria-label="Imagery days in the box" data-i18n-aria-label></span></template>
+      <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
+    </RailPanel>
+    <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :title="t('CONTEXT')" sideways scroll rail-scroller>
         <div class="cyber-panel-body ui-scroll" data-rail-scroller>
         <div class="global-context-modes" role="tablist" aria-label="Context mode" data-i18n-aria-label>
           <button id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" aria-label="CONTACTS" title="Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently." data-i18n-aria-label data-i18n-title>
@@ -95,8 +71,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
         </section>
         <RadioPanel />
         </div>
-      </div>
-    </div>
+    </RailPanel>
     <BhoteKoshiPanel />
   </aside>
 

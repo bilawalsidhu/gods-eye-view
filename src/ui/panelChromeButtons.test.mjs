@@ -11,6 +11,8 @@ import { PanelChrome } from './panelChrome.js';
 import { followPanelState, vPanelState } from './rail/panelState.js';
 import { bindPanelDisclosure } from './panelDisclosure.js';
 import PanelCollapseButton from './rail/PanelCollapseButton.vue';
+import RailPanel from './rail/RailPanel.vue';
+import UiPanel from './kit/UiPanel.vue';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import CommandDockView from './views/CommandDockView.vue';
 
@@ -57,38 +59,33 @@ test('the store republishes a panel only when its state changes', () => {
   );
 });
 
-test('a collapse button keeps its markup until presented, then follows the panel', async (t) => {
+test('a collapse button follows its markup until presented, then the panel', async (t) => {
   const store = mount(t, {
     render: () => [
       h(PanelCollapseButton, {
         target: 'data-panel',
         name: 'DATA LAYERS',
-        initial: '+',
+        startCollapsed: true,
       }),
       h(PanelCollapseButton, {
         target: 'cctv-panel',
         name: 'CCTV',
         sideways: true,
-        initial: '+',
+        startCollapsed: true,
       }),
     ],
   });
   const [data, cctv] = document.querySelectorAll('.panel-collapse-btn');
   assert.equal(data.textContent, '+');
-  assert.equal(data.title, 'Collapse panel');
-  assert.equal(data.hasAttribute('aria-expanded'), false);
-  assert.equal(data.hasAttribute('aria-label'), false);
+  assert.equal(data.getAttribute('aria-expanded'), 'false');
+  assert.equal(data.getAttribute('aria-label'), 'Expand DATA LAYERS');
   assert.equal(data.dataset.collapseTarget, 'data-panel');
+  assert.equal(cctv.textContent, '◀');
 
   const toggled = [];
   const token = store.connect({ toggle: (id) => toggled.push(id) });
-  store.publish(token, 'data-panel', { collapsed: true });
   store.publish(token, 'cctv-panel', { collapsed: false });
   await nextTick();
-  assert.equal(data.textContent, '+');
-  assert.equal(data.getAttribute('aria-expanded'), 'false');
-  assert.equal(data.getAttribute('aria-label'), 'Expand DATA LAYERS');
-  assert.equal(data.title, 'Expand DATA LAYERS');
   assert.equal(cctv.textContent, '▶');
   assert.equal(cctv.getAttribute('aria-expanded'), 'true');
   assert.equal(cctv.title, 'Collapse CCTV');
@@ -101,9 +98,144 @@ test('a collapse button keeps its markup until presented, then follows the panel
   assert.deepEqual(toggled, ['data-panel']);
 });
 
+test("UiPanel draws Core's panel markup and asks for the other state", async (t) => {
+  const asked = [];
+  let collapsed = true;
+  mount(t, {
+    render: () =>
+      h(
+        UiPanel,
+        {
+          id: 'demo-panel',
+          title: 'DEMO',
+          hint: 'A demo',
+          collapsible: true,
+          collapsed,
+          scroll: true,
+          railScroller: true,
+          'onUpdate:collapsed': (next) => asked.push(next),
+        },
+        {
+          badge: () => h('span', { id: 'demo-badge' }),
+          actions: () => h('button', { id: 'demo-action' }),
+          default: () => h('div', { id: 'demo-body' }),
+        },
+      ),
+  });
+  const panel = document.getElementById('demo-panel');
+  assert.equal(
+    panel.className,
+    'ui-panel panel-collapsible ui-panel--collapsed',
+  );
+  assert.equal(panel.children[0].className, 'panel-glow');
+  const inner = panel.children[1];
+  assert.equal(inner.className, 'demo-panel-inner ui-scroll');
+  assert.equal(inner.hasAttribute('data-rail-scroller'), true);
+  const [head, body] = inner.children;
+  assert.deepEqual(
+    [...head.children].map(
+      (el) => el.id || el.classList[el.classList.length - 1],
+    ),
+    [
+      'panel-title',
+      'demo-badge',
+      'panel-divider',
+      'demo-action',
+      'panel-collapse-btn',
+    ],
+  );
+  assert.equal(head.querySelector('.panel-title').title, 'A demo');
+  assert.equal(body.id, 'demo-body');
+  const toggle = head.querySelector('.panel-collapse-btn');
+  assert.equal(toggle.getAttribute('aria-label'), 'Expand DEMO');
+  assert.equal(toggle.dataset.collapseTarget, 'demo-panel');
+  toggle.click();
+  assert.deepEqual(asked, [false]);
+});
+
+test('UiPanel without collapsible has no button, and glow is optional', (t) => {
+  mount(t, {
+    render: () =>
+      h(UiPanel, {
+        id: 'plain-panel',
+        title: 'PLAIN',
+        tag: 'section',
+        glow: false,
+      }),
+  });
+  const panel = document.getElementById('plain-panel');
+  assert.equal(panel.tagName, 'SECTION');
+  assert.equal(panel.querySelector('.panel-glow'), null);
+  assert.equal(panel.querySelector('.panel-collapse-btn'), null);
+});
+
+test('RailPanel follows the store, forwards clicks, and never restores a class its owner removed', async (t) => {
+  const store = mount(t, {
+    render: () =>
+      h(
+        RailPanel,
+        {
+          id: 'radio-panel',
+          startCollapsed: true,
+          title: 'RADIO',
+          class: 'extra',
+          hidden: '',
+        },
+        { default: () => h('p', { id: 'radio-body' }) },
+      ),
+  });
+  const panel = document.getElementById('radio-panel');
+  assert.equal(
+    panel.className,
+    'ui-panel panel-collapsible extra collapsed ui-panel--collapsed',
+  );
+  assert.equal(panel.dataset.panelId, 'radio-panel');
+  assert.equal(panel.hidden, true);
+  assert.ok(document.getElementById('radio-body'));
+  const toggle = panel.querySelector('.panel-collapse-btn');
+  assert.equal(toggle.textContent, '+');
+
+  const toggled = [];
+  const token = store.connect({ toggle: (id) => toggled.push(id) });
+  store.publish(token, 'radio-panel', { collapsed: false });
+  assert.equal(panel.classList.contains('collapsed'), false, 'written at once');
+  await nextTick();
+  assert.equal(toggle.textContent, '−');
+  // The re-render above left the class as written; pinning keeps it too.
+  store.publish(token, 'radio-panel', { pinned: true });
+  await nextTick();
+  assert.equal(panel.classList.contains('collapsed'), false);
+  assert.equal(panel.classList.contains('dock-pinned'), true);
+  toggle.click();
+  assert.deepEqual(toggled, ['radio-panel']);
+});
+
+test('a panel whose class binding changes keeps the presented state', async (t) => {
+  const { ref } = await import('vue');
+  const extra = ref('one');
+  const store = mount(t, {
+    render: () =>
+      h(RailPanel, {
+        id: 'cctv-panel',
+        startCollapsed: true,
+        title: 'CCTV',
+        class: extra.value,
+      }),
+  });
+  const panel = document.getElementById('cctv-panel');
+  store.publish(store.connect({}), 'cctv-panel', {
+    collapsed: false,
+    pinned: true,
+  });
+  extra.value = 'two';
+  await nextTick();
+  assert.equal(panel.classList.contains('two'), true);
+  assert.equal(panel.classList.contains('collapsed'), false);
+  assert.equal(panel.classList.contains('dock-pinned'), true);
+});
+
 test("Radio's collapse button keeps its own wording", async (t) => {
   const words = {
-    initialLabel: 'Expand Radio section',
     expandLabel: 'Expand Radio section',
     collapseLabel: 'Collapse Radio section',
     expandTitle: 'Expand Radio',
@@ -111,11 +243,11 @@ test("Radio's collapse button keeps its own wording", async (t) => {
   };
   const store = mount(t, {
     render: () =>
-      h(PanelCollapseButton, {
-        target: 'radio-panel',
-        initial: '+',
-        initialTitle: 'Expand Radio',
-        words,
+      h(RailPanel, {
+        id: 'radio-panel',
+        startCollapsed: true,
+        title: 'RADIO',
+        toggleWords: words,
       }),
   });
   const button = document.querySelector('.panel-collapse-btn');

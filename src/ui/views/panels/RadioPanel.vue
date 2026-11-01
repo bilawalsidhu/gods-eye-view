@@ -2,8 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
-import { vPanelState } from '../../rail/panelState.js';
-import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
+import RailPanel from '../../rail/RailPanel.vue';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { vFieldValue } from '../../rail/fieldValue.js';
 import { vRangeValue } from '../../rail/rangeValue.js';
@@ -21,7 +20,6 @@ const { view: radio, sdr } = storeToRefs(useRadioStore());
 const sdrConnected = computed(() => sdr.value?.connectionActive ?? null);
 // The collapse button keeps Radio's own wording, not "Expand RADIO".
 const radioWords = {
-  initialLabel: t('Expand Radio section'),
   expandLabel: t('Expand Radio section'),
   collapseLabel: t('Collapse Radio section'),
   expandTitle: t('Expand Radio'),
@@ -30,14 +28,8 @@ const radioWords = {
 </script>
 
 <template>
-<section id="radio-panel" v-panel-state="'radio-panel'" class="panel-collapsible collapsed" v-class-toggle="{ ...(radio && { 'radio-enabled': radio.enabled, 'lifecycle-uncertain': radio.uncertain }), ...(sdrConnected !== null && { 'sdr-connected': sdrConnected }) }" data-panel-id="radio-panel" aria-label="Internet radio and local SDR" data-i18n-aria-label>
-  <div class="radio-panel-inner ui-scroll">
-    <div class="panel-header">
-      <span class="panel-title" data-i18n>RADIO</span>
-      <span id="radio-layer-state" class="radio-layer-state" :class="{ active: radio?.layerState.active }">{{ radio ? radio.layerState.text : t('OFF') }}</span>
-      <span class="panel-divider"></span>
-      <PanelCollapseButton target="radio-panel" initial="+" :initial-title="t('Expand Radio')" :words="radioWords" />
-    </div>
+<RailPanel id="radio-panel" tag="section" start-collapsed v-class-toggle="{ ...(radio && { 'radio-enabled': radio.enabled, 'lifecycle-uncertain': radio.uncertain }), ...(sdrConnected !== null && { 'sdr-connected': sdrConnected }) }" aria-label="Internet radio and local SDR" data-i18n-aria-label :title="t('RADIO')" :toggle-words="radioWords" :glow="false" scroll>
+  <template #badge><span id="radio-layer-state" class="radio-layer-state" :class="{ active: radio?.layerState.active }">{{ radio ? radio.layerState.text : t('OFF') }}</span></template>
     <div class="radio-directory-row">
       <button id="radio-enable-btn" class="panel-layer-toggle" :class="{ active: radio?.enable.active }" type="button" :aria-pressed="String(radio?.enable.active ?? false)" :aria-label="radio?.enable.label" :aria-disabled="radio ? String(radio.enable.busy) : undefined" :aria-busy="radio ? String(radio.enable.busy) : undefined">{{ radio ? radio.enable.text : t('ENABLE') }}</button>
       <label class="radio-filter-label" for="radio-filter" data-i18n>STATION TAG</label>
@@ -69,6 +61,5 @@ const radioWords = {
     </div>
     <p class="radio-privacy" data-i18n>Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.</p>
     <SdrCard />
-  </div>
-</section>
+</RailPanel>
 </template>

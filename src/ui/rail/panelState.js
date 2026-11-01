@@ -42,7 +42,14 @@ export function followPanelState(store, panelId, el) {
 export const vPanelState = {
   mounted(el, binding) {
     const store = usePanelChromeStore(binding.instance.$pinia);
+    el._panelStateStore = store;
     el._stopPanelState = followPanelState(store, binding.value, el);
+  },
+  // A re-render that rewrites the root's class (its class binding changed)
+  // would restore the markup's state; draw the presented state again.
+  updated(el, binding) {
+    const state = el._panelStateStore?.panels[binding.value];
+    if (state) applyPanelState(el, state);
   },
   beforeUnmount(el) {
     el._stopPanelState?.();

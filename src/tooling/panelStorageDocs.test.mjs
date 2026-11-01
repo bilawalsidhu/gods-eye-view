@@ -84,7 +84,7 @@ test('the documented outcomes hold: default, stored open, stored shut, and a sha
   );
   assert.match(
     html,
-    /<div id="cctv-panel"[^>]*class="panel-collapsible collapsed"/,
+    /<RailPanel id="cctv-panel"[^>]*\bstart-collapsed\b/,
     'the CCTV panel starts collapsed in the markup',
   );
 

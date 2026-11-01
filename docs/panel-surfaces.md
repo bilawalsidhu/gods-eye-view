@@ -25,7 +25,6 @@ surface. Keep the header and any outward popup outside the scrolling body:
         class="panel-surface-control"
         target="example-panel"
         :name="t('Example')"
-        initial="−"
       />
     </header>
     <div data-panel-body data-rail-scroller>
@@ -90,10 +89,15 @@ Do not copy the rail example's `.panel-collapse-btn` class into the dock:
 existing dock rules intentionally hide that class. The generic surface skin
 does not replace the dock's disclosure policy.
 
-`PanelCollapseButton` (`src/ui/rail/`) renders a panel's collapse button
-(`.panel-collapse-btn`) from the open state `PanelChrome` presents to the
-`gev-panel-chrome` store, and its click asks `PanelChrome` to toggle the
-panel through `setPanelCollapsed`. `PanelChrome` collects the buttons'
+A panel with Core's standard header (glow, title, badges, divider, actions
+and collapse button) is a `RailPanel` (`src/ui/rail/`): the kit's `UiPanel`
+bound to the `gev-panel-chrome` store, with its state classes drawn by
+`v-panel-state` and its button's click asking `PanelChrome` to toggle it.
+A panel with its own header uses `PanelCollapseButton`, which renders the
+collapse button (`.panel-collapse-btn`) from the open state `PanelChrome`
+presents to that store; until then, both show their `startCollapsed` state,
+which should match the markup's `collapsed` class.
+Either way, the click reaches `PanelChrome`'s `setPanelCollapsed`. `PanelChrome` collects the buttons'
 targets at initialization and binds each panel's Escape. For additions
 present at startup, keep those hooks and the existing chrome lifecycle. A
 dynamically mounted panel must own its disclosure: its own state, button and

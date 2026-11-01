@@ -53,7 +53,10 @@ function fixture(t) {
 test('before ContextControls renders, the switch shows its initial markup', (t) => {
   const { $ } = fixture(t);
   const panel = $('global-context-panel');
-  assert.equal(panel.className, 'panel-collapsible collapsed');
+  assert.equal(
+    panel.className,
+    'ui-panel panel-collapsible collapsed ui-panel--collapsed',
+  );
   assert.equal(panel.hasAttribute('data-context-mode'), false);
   for (const id of [
     'global-context-flights-btn',
@@ -118,14 +121,21 @@ test('the panel carries the mode beside the classes its chrome writes', async (t
   panel.classList.remove('collapsed');
   controls._contextMode = 'flights';
   await sync();
-  assert.equal(panel.className, 'panel-collapsible context-enabled');
+  // Without an owner the button, and the kit class, keep the start state.
+  assert.equal(
+    panel.className,
+    'ui-panel panel-collapsible ui-panel--collapsed context-enabled',
+  );
   assert.equal(panel.getAttribute('data-context-mode'), 'flights');
   assert.equal($('context-flights-view').hidden, false);
 
   panel.classList.add('collapsed');
   controls._contextMode = null;
   await sync();
-  assert.equal(panel.className, 'panel-collapsible collapsed');
+  assert.equal(
+    panel.className,
+    'ui-panel panel-collapsible ui-panel--collapsed collapsed',
+  );
   assert.equal(panel.getAttribute('data-context-mode'), 'none');
   assert.equal($('context-mode-standby').hidden, false);
   assert.equal($('context-flights-view').hidden, true);

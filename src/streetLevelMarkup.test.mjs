@@ -18,7 +18,7 @@ const layoutController = read('src/ui/panelLayoutController.js');
 test('Street Level is a collapsible right-rail panel that starts collapsed', () => {
   assert.match(
     html,
-    /<div id="street-level-panel" class="panel-collapsible collapsed" data-panel-id="street-level-panel">/,
+    /<div id="street-level-panel" class="ui-panel panel-collapsible collapsed" data-panel-id="street-level-panel">/,
   );
   assert.match(
     html,
@@ -26,7 +26,7 @@ test('Street Level is a collapsible right-rail panel that starts collapsed', () 
   );
   assert.match(
     html,
-    /<span class="panel-title" data-i18n>STREET LEVEL<\/span>/,
+    /<span class="ui-panel__title panel-title">STREET LEVEL<\/span>/,
   );
   // Provider-neutral header: no vendor mark; the inner restores its scroll.
   assert.doesNotMatch(html, /sl-mark|mly-mark/);
@@ -49,7 +49,7 @@ test('the panel is registered with panel chrome, cockpit entry and the right rai
   // A right-rail panel's collapse button opens sideways (◀ / ▶).
   assert.match(
     read('src/ui/views/panels/StreetLevelPanel.vue'),
-    /<PanelCollapseButton[^>]*target="street-level-panel"[^>]*\bsideways\b/,
+    /<RailPanel id="street-level-panel"[^>]*\bsideways\b/,
   );
   assert.match(
     layoutController,

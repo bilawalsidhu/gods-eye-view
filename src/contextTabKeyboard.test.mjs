@@ -97,11 +97,11 @@ test('Context async action buttons remain focused while busy', () => {
 test('Context header holds only its title and collapse control', () => {
   const panel = html.match(/<div id="global-context-panel"[\s\S]*?<div class="cyber-panel-body[ "]/);
   assert.ok(panel, 'Global Context panel is missing');
-  const header = panel[0].match(/<div class="panel-header">([\s\S]*?)<\/div>\s*<div class="cyber-panel-body[ "]/);
+  const header = panel[0].match(/<div class="ui-panel__head panel-header">([\s\S]*?)<\/div>\s*<div class="cyber-panel-body[ "]/);
   assert.ok(header, 'Global Context header is missing');
-  // The kit button's own ui-button and ui-focus classes carry no Core styles.
+  // The kit's own ui-* classes carry no Core styles.
   const tags = [...header[1].matchAll(/<(\w+)\s+(?:type="button"\s+)?class="([^"]+)"/g)].map(([, tag, cls]) =>
-    `${tag}.${cls.split(' ').filter((name) => !/^ui-(button|focus)/.test(name)).join(' ')}`);
+    `${tag}.${cls.split(' ').filter((name) => !/^ui-/.test(name)).join(' ')}`);
   assert.deepEqual(tags, ['span.panel-title', 'span.panel-divider', 'button.panel-collapse-btn']);
 });
 

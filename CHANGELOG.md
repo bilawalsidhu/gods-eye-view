@@ -8,6 +8,14 @@
   the bottom tab bar. The rail is the first view built with Vue and Pinia,
   which now ship with the app; see docs/VUE-MIGRATION.md (samehkhamis).
 
+- The Data, Authoring, Weather, Recent Imagery, Context, CCTV, Street Level
+  and Radio panels are one component, `UiPanel` (`src/ui/kit/`), with the
+  same markup plus the kit's `ui-panel` classes, their titles translated by
+  `t()` rather than `data-i18n`; `RailPanel` binds it to the panel chrome
+  store. `PanelCollapseButton` drops its `initial` and `initialTitle` props
+  and takes `startCollapsed`, so before startup presents a panel its button
+  already shows that state's glyph, words and `aria-expanded` (samehkhamis).
+
 - The page's panels, dock, cockpit and dialogs are Vue views with the same
   markup as before. Hosts that do not initialize Core's locale pass
   `localePicker: false` to `createApplicationControls` to drop the language

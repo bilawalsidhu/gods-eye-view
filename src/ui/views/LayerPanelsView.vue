@@ -1,8 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
-import { vPanelState } from '../rail/panelState.js';
-import PanelCollapseButton from '../rail/PanelCollapseButton.vue';
+import RailPanel from '../rail/RailPanel.vue';
 import { useSceneSharingStore } from '../stores/sceneSharing.js';
 import { useSceneStore } from '../stores/scenes.js';
 import { vClassToggle } from '../rail/classToggle.js';
@@ -38,17 +37,9 @@ async function importChosen(event) {
 <template>
   <div id="left-panel-stack" class="ui-scroll">
   <!-- Data Layer Toggle Panel -->
-  <div id="data-panel" v-panel-state="'data-panel'" class="panel-collapsible collapsed active" data-panel-id="data-panel">
-    <div class="panel-glow"></div>
-    <div class="data-panel-inner">
-      <div class="panel-header">
-        <span class="panel-title" data-i18n>DATA LAYERS</span>
-        <span class="panel-divider"></span>
-        <PanelCollapseButton target="data-panel" :name="t('DATA LAYERS')" initial="+" />
-      </div>
-      <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
-    </div>
-  </div>
+  <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
+    <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
+  </RailPanel>
 
   <!-- CCTV Coverage Panel -->
   <CctvPanel />
@@ -57,14 +48,7 @@ async function importChosen(event) {
   <StreetLevelPanel />
 
   <!-- Scene Director Panel -->
-  <div id="scene-panel" v-panel-state="'scene-panel'" v-class-toggle="{ running: scene?.running, 'has-shots': scene?.hasShots }" class="panel-collapsible collapsed" data-panel-id="scene-panel">
-    <div class="panel-glow"></div>
-    <div class="scene-panel-inner ui-scroll">
-      <div class="panel-header">
-        <span class="panel-title" title="Create and edit scenes" data-i18n data-i18n-title>AUTHORING</span>
-        <span class="panel-divider"></span>
-        <PanelCollapseButton target="scene-panel" :name="t('AUTHORING')" initial="+" />
-      </div>
+  <RailPanel id="scene-panel" start-collapsed v-class-toggle="{ running: scene?.running, 'has-shots': scene?.hasShots }" :title="t('AUTHORING')" :hint="t('Create and edit scenes')" scroll>
       <p class="scene-step-heading" data-i18n>SCENE</p>
       <div class="scene-controls">
         <select class="gev-field" id="scene-select" aria-label="Scene" data-i18n-aria-label :disabled="off('select')" @change="scenes.act('selectScene', $event.currentTarget.value)"><SceneOptions /></select>
@@ -99,8 +83,7 @@ async function importChosen(event) {
         <div id="scene-progress-fill" :style="scene ? { width: `${scene.progress}%` } : undefined">{{ scene?.progress ?? 0 }}%</div>
       </div>
       <div id="scene-status" role="status" aria-live="polite">{{ scene?.status ?? t('Ready') }}</div>
-    </div>
-  </div>
+  </RailPanel>
 
   </div>
   <Teleport to="body">

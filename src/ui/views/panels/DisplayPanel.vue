@@ -48,7 +48,7 @@ const geoListed = computed(() => geoRows.value.length > 0);
   <div class="compact pp-header-row">
     <span data-i18n class="pp-header-label">DISPLAY</span>
     <span class="panel-divider" aria-hidden="true"></span>
-    <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('DISPLAY')" sideways initial="◀" />
+    <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('DISPLAY')" sideways start-collapsed />
   </div>
   <div class="pp-panel-body ui-scroll" data-rail-scroller>
   <div class="pp-toggle-group">
@@ -128,7 +128,7 @@ const geoListed = computed(() => geoRows.value.length > 0);
     <div class="param-panel-header">
       <span class="param-panel-title" data-i18n>PARAMETERS</span>
       <span class="param-panel-divider"></span>
-      <PanelCollapseButton id="param-panel-collapse-btn" target="param-slider-panel" initial="−" />
+      <PanelCollapseButton id="param-panel-collapse-btn" target="param-slider-panel" />
     </div>
     <div id="param-sliders"></div>
   </div>
