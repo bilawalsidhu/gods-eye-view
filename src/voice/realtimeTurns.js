@@ -1,5 +1,5 @@
 import { realtimeSessionEvent } from './realtimeEvents.js';
-import { t } from '../i18n/index.js';
+import { getLocale, t } from '../i18n/index.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
 import {
   CALL_DEDUPE_MS,
@@ -12,6 +12,7 @@ import {
   parseArguments,
 } from './realtimeProtocol.js';
 import { narrationLabel } from './speech.js';
+import { voiceLanguageInstruction } from './voiceLanguage.js';
 
 /** Out-of-band progress responses carry this metadata tag. */
 const PROGRESS_RESPONSE_TAG = 'progress';
@@ -1236,14 +1237,26 @@ export class RealtimeTurns {
       this.dc.readyState !== 'open'
     )
       return;
-    const instructions = this.pendingResponseInstructions;
+    const pending = this.pendingResponseInstructions;
+    const response =
+      typeof pending === 'string' ? { instructions: pending } : pending;
     this.pendingResponseInstructions = null;
     this.responseCreatePending = true;
     const sent = this.sendRealtimeEvent(
       {
         type: 'response.create',
-        response:
-          typeof instructions === 'string' ? { instructions } : instructions,
+        // A response's instructions replace the session's, so the language
+        // line travels with every tool follow-up too. Only the text is
+        // extended; fields such as tool_choice pass through unchanged.
+        response: {
+          ...response,
+          instructions: [
+            response.instructions,
+            voiceLanguageInstruction(getLocale()),
+          ]
+            .filter(Boolean)
+            .join(' '),
+        },
       },
       'client.response_create.tool_followup',
     );
