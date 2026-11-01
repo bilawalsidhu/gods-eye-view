@@ -2945,5 +2945,8 @@
   "Load scenes from an exported JSON file": "Szenen aus einer exportierten JSON-Datei laden",
   "Download the timing log of the last play": "Zeitprotokoll der letzten Wiedergabe herunterladen",
   "Edit anchors, data packs and shot details": "Anker, Datenpakete und Aufnahmedetails bearbeiten",
-  "Download this scene as JSON or an asset bundle": "Diese Szene als JSON oder Asset-Bundle herunterladen"
+  "Download this scene as JSON or an asset bundle": "Diese Szene als JSON oder Asset-Bundle herunterladen",
+  "CABA inventory unavailable": "CABA-Inventar nicht verfügbar",
+  "CABA Traffic Enforcement": "Verkehrsüberwachung in CABA",
+  "Buenos Aires Data · location inventory": "Buenos Aires Data · Standortverzeichnis"
 }

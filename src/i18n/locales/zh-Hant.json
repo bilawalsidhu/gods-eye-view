@@ -2875,5 +2875,8 @@
   "Play from this scene through the rest of the project": "從此場景開始播放項目中的其餘場景",
   "Play the shot after the selected one, moving on to the next scene when needed": "播放所選鏡頭的下一個鏡頭，必要時進入下一個場景",
   "Edit anchors, data packs and shot details": "編輯錨點、數據包和鏡頭詳情",
-  "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包"
+  "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包",
+  "CABA inventory unavailable": "CABA 清單無法使用",
+  "CABA Traffic Enforcement": "CABA 交通執法",
+  "Buenos Aires Data · location inventory": "Buenos Aires Data · 位置清單"
 }

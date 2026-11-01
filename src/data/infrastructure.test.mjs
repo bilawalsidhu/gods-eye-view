@@ -213,3 +213,84 @@ test('consumer build includes only infrastructure code and resolves assets under
     );
   }
 });
+
+test('injected acquisition coalesces, caches and aborts', async (t) => {
+  for (const destroyWhileLoading of [false, true]) {
+    let resolve;
+    const pending = new Promise((done) => {
+      resolve = done;
+    });
+    let signal;
+    let calls = 0;
+    const host = services();
+    const sources = new Cesium.DataSourceCollection();
+    const viewer = {
+      dataSources: sources,
+      scene: {
+        canvas: {},
+        preRender: new Cesium.Event(),
+        requestRender() {},
+      },
+      camera: { moveEnd: new Cesium.Event() },
+    };
+    const layer = createLocalGeoJsonLayer(
+      {
+        id: 'test-inventory',
+        name: 'Inventory',
+        color: '#ffb347',
+        loadFeatures(options) {
+          calls++;
+          signal = options.signal;
+          return pending;
+        },
+        screenSpaceEventHandlerFactory: () => ({
+          setInputAction() {},
+          destroy() {},
+        }),
+      },
+      host,
+    );
+    t.after(() => layer.destroy(viewer));
+    const first = layer.enable(viewer);
+    const second = layer.enable(viewer);
+    assert.equal(calls, 1);
+    if (destroyWhileLoading) layer.destroy(viewer);
+    resolve([
+      {
+        type: 'Feature',
+        id: 'inventory-point',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [-58.4, -34.6],
+              [-58.41, -34.6],
+              [-58.4, -34.61],
+              [-58.4, -34.6],
+            ],
+          ],
+        },
+        properties: { name: 'Published location' },
+      },
+    ]);
+    await Promise.all([first, second]);
+    if (destroyWhileLoading) {
+      assert.equal(signal.aborted, true);
+      assert.equal(sources.length, 0);
+      assert.equal(host.records.size, 0);
+    } else {
+      assert.equal(sources.length, 1);
+      assert.equal(host.records.size, 1);
+      layer.disable(viewer);
+      assert.equal(sources.length, 0);
+      assert.equal(host.records.size, 0);
+      await layer.enable(viewer);
+      assert.equal(calls, 1);
+      assert.equal(sources.length, 1);
+      assert.deepEqual(host.credited, []);
+      layer.destroy(viewer);
+      assert.equal(sources.length, 0);
+      assert.equal(host.records.size, 0);
+    }
+  }
+});

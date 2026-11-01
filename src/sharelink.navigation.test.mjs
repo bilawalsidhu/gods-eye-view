@@ -8,8 +8,11 @@ import {
   REGISTERED_LAYER_IDS,
   createDefaultLayerState,
   decodeLayerStateParams,
+  encodeLayerStateParams,
 } from './data/layerState.js';
 import { LayerStateCoordinator } from './data/layerStateCoordinator.js';
+
+import { encodeShareView, decodeShareView } from './share/viewCodec.js';
 
 const SHARE_A = 'v=2&lat=10.0000&lon=20.0000&alt=800&style=nvg&l=e';
 const SHARE_B = 'v=2&lat=48.8584&lon=2.2945&alt=500&style=normal&l=f';
@@ -423,3 +426,97 @@ test('the layer coordinator replaces in-flight share layers with the navigated s
   );
   coordinator.destroy();
 });
+
+// The unpublished CABA token must never reinterpret published GhostMaps links,
+// including the compact format's permanent token-indexed bitmap.
+for (const format of ['legacy', 'short']) {
+  test(`${format} links restore CABA and S2 GhostMaps independently and together`, async (t) => {
+    installTab(t);
+    const dataManager = new DataLayerManager({});
+    for (const id of REGISTERED_LAYER_IDS) {
+      dataManager.register({
+        id,
+        name: id,
+        icon: '',
+        source: 'fixture',
+        async init() {
+          return true;
+        },
+        async enable() {
+          return true;
+        },
+        async disable() {
+          return true;
+        },
+        async update() {
+          return true;
+        },
+      });
+    }
+    dataManager.finalizeRegistrations(LAYER_STATE_REGISTRY);
+    const coordinator = new LayerStateCoordinator(
+      dataManager,
+      {
+        setLayerStateProvider() {},
+        onLayerStateChange() {},
+      },
+      { storage: null },
+    );
+    t.after(() => coordinator.destroy());
+    const caba = 'caba-traffic-enforcement';
+    const ghost = 's2-ghostmaps';
+    assert.equal(LAYER_STATE_REGISTRY.find(({ id }) => id === caba).token, '6');
+    assert.equal(
+      LAYER_STATE_REGISTRY.find(({ id }) => id === ghost).token,
+      '5',
+    );
+    // Start with both enabled, then restore each alone to prove the other is disabled.
+    for (const enabledLayerIds of [[caba, ghost], [caba], [ghost], []]) {
+      const layerState = { ...createDefaultLayerState(), enabledLayerIds };
+      const params = new URLSearchParams({
+        v: '2',
+        lat: '-34.6',
+        lon: '-58.4',
+        alt: '800',
+      });
+      encodeLayerStateParams(params, layerState);
+      assert.equal(
+        params.get('l'),
+        enabledLayerIds.map((id) => (id === caba ? '6' : '5')).join('.'),
+      );
+      const code = encodeShareView({
+        lat: -34.6,
+        lon: -58.4,
+        alt: 800,
+        layerState,
+      });
+      if (enabledLayerIds.length === 1 && enabledLayerIds[0] === ghost) {
+        // Generated with the published codec/ledger at upstream main 15de9d73.
+        assert.equal(code, 'ARCfnioY_6RHUgEgRw');
+      }
+      assert.deepEqual(
+        decodeShareView(code).state.layerState.enabledLayerIds,
+        enabledLayerIds,
+      );
+      window.location.pathname = format === 'short' ? `/share/${code}` : '/';
+      window.location.hash = format === 'legacy' ? `#${params}` : '';
+      const manager = new ShareLinkManager(fakeViewer());
+      try {
+        const parsed = manager.parseInitialHash();
+        assert.deepEqual(parsed.layerState.enabledLayerIds, enabledLayerIds);
+        await coordinator.applyShareLayerState({
+          shareLayerState: parsed.layerState,
+        });
+        for (const id of [caba, ghost]) {
+          assert.equal(
+            dataManager.getLayerLifecycleState(id).enabled,
+            enabledLayerIds.includes(id),
+            `${format}: ${id}`,
+          );
+        }
+      } finally {
+        manager.destroy();
+      }
+    }
+  });
+}
