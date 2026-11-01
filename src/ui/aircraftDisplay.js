@@ -23,10 +23,6 @@ export class AircraftDisplay {
     this._models3dPressedShown = null;
     this._models3dRowShown = null;
     this._models3dModeShown = null;
-    this._models3dModeBtns = [
-      document.getElementById('models3d-mode-proximity'),
-      document.getElementById('models3d-mode-all'),
-    ];
   }
   get _dataManager() {
     return this.readDataManager();

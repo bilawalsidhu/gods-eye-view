@@ -121,6 +121,10 @@
       "src/ui/stores/firstRun.js",
       "src/firstRunCopy.js",
       "src/ui/kit/UiButton.vue",
+      "src/ui/kit/UiSegmented.vue",
+      "src/ui/rail/RailPanel.vue",
+      "src/ui/kit/UiPanel.vue",
+      "src/ui/kit/UiPanelToggle.vue",
       "src/ui/stores/panelChrome.js",
       "src/ui/rail/PanelCollapseButton.vue",
       "src/ui/rail/panelState.js"
@@ -564,7 +568,7 @@
   },
   "display-controls": {
     "exports": ["./ui/display"],
-    "modules": ["src/ui/displayControls.js", "src/ui/segmentedControl.js"],
+    "modules": ["src/ui/displayControls.js"],
     "external": []
   },
   "visual-effects": {

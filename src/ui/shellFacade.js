@@ -9,14 +9,6 @@ export class ShellFacade {
     return this._navigation.subscribeCameraHandoff(listener);
   }
 
-  get _models3dModeBtns() {
-    return this._aircraftDisplay._models3dModeBtns;
-  }
-
-  set _models3dModeBtns(value) {
-    this._aircraftDisplay._models3dModeBtns = value;
-  }
-
   get _models3dEnabled() {
     return this._aircraftDisplay._models3dEnabled;
   }
@@ -135,14 +127,6 @@ export class ShellFacade {
 
   set _frameRateMonitor(value) {
     this._displayBindings._frameRateMonitor = value;
-  }
-
-  get _displayControls() {
-    return this._displayBindings?._displayControls;
-  }
-
-  set _displayControls(value) {
-    this._displayBindings._displayControls = value;
   }
 
   get _activeLocationId() {

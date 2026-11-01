@@ -9,7 +9,8 @@ import {
   detectOn,
 } from '../../scripts/qa-transit-controls.mjs';
 import { createStyleParameters } from '../ui/styleParameters.js';
-import { bindDisplayControls } from '../ui/displayControls.js';
+import { createPinia } from 'pinia';
+import { useDisplayStore } from '../ui/stores/display.js';
 import { thermalShader } from '../styles/thermal.js';
 import {
   cycleMode,
@@ -189,20 +190,26 @@ test('DETECT uses the real OFF/restore button and density input to reach DENSE',
   setMode('BALANCED');
   setMode('OFF');
   const modes = [];
-  const controls = bindDisplayControls({
-    elements: { detectionButton: button, densitySlider: slider },
-    actions: {
-      cycleDetection() {
-        cycleMode();
-        modes.push(getMode());
-      },
-      setDensity(value) {
-        setDetectionTuning({ densityPct: Number(value) });
-      },
+  // As DisplayPanel does: the toggle and the slider call the Display
+  // controls' actions through the display store.
+  const store = useDisplayStore(createPinia());
+  const token = store.connect({
+    cycleDetection() {
+      cycleMode();
+      modes.push(getMode());
+    },
+    setDensity(value) {
+      setDetectionTuning({ densityPct: Number(value) });
     },
   });
+  const onClick = () => store.act('cycleDetection');
+  const onInput = () => store.act('setDensity', slider.value);
+  button.addEventListener('click', onClick);
+  slider.addEventListener('input', onInput);
   t.after(() => {
-    controls.destroy();
+    button.removeEventListener('click', onClick);
+    slider.removeEventListener('input', onInput);
+    store.detach(token);
     setMode('OFF');
   });
   assert.equal(await detectOn(page, pause), 'DENSE');

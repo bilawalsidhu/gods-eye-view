@@ -753,7 +753,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   );
   assert.match(
     panel,
-    /id="models3d-toggle" :aria-pressed="String\(models3dOn\)"/,
+    /id="models3d-toggle" @click="act\('toggleModels'\)" :aria-pressed="String\(models3dOn\)"/,
     'DisplayPanel.vue: the view renders aria-pressed with the lit state',
   );
   assert.match(

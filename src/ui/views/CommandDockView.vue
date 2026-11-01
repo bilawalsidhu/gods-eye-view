@@ -14,9 +14,10 @@ import PhoneTabBar from './panels/PhoneTabBar.vue';
 import VoiceControl from './panels/VoiceControl.vue';
 
 // VisualSettings publishes the active style and the map source controls
-// their chip row; until they do, the dock shows its initial markup. The
-// style buttons keep their owner's listeners; a chip calls the controls.
-const { style, mapSource, mapSourceControls } = storeToRefs(useDisplayStore());
+// their chip row; until they do, the dock shows its initial markup. A style
+// button calls the Display controls' owner, a chip the map source controls.
+const display = useDisplayStore();
+const { style, mapSource, mapSourceControls } = storeToRefs(display);
 // LocationControls publishes the location tray; pills call the controls,
 // and the search field keeps their listeners.
 const { view: loc, controls: locationControls } = storeToRefs(useLocationStore());
@@ -80,32 +81,32 @@ function selectMapSource(chip) {
       <div id="control-panel-popover" class="dock-popover-content">
       <UiButton variant="icon" class="dock-pin-btn" data-pin-target="control-panel" :label="t('Pin visual presets')" :title="t('Keep visual presets open')" :pressed="!!panels['control-panel']?.pinned" @click="pin($event, 'control-panel')"><img src="/pin.svg" alt="" /></UiButton>
       <div id="style-buttons" class="button-grid">
-        <button class="style-btn active" data-style="normal" v-class-toggle="{ ...(style && { active: style.name === 'normal' }) }" title="Show the globe without a visual filter." data-i18n-title>
+        <button class="style-btn active" data-style="normal" @click="display.act('setStyle', 'normal')" v-class-toggle="{ ...(style && { active: style.name === 'normal' }) }" title="Show the globe without a visual filter." data-i18n-title>
           <span class="btn-icon">◯</span>
           <span class="btn-label" data-i18n>Normal</span>
           <span class="btn-key">1</span>
         </button>
-        <button class="style-btn" data-style="retro" v-class-toggle="{ ...(style && { active: style.name === 'retro' }) }" title="Emulate a green phosphor CRT with scanlines and screen curvature." data-i18n-title>
+        <button class="style-btn" data-style="retro" @click="display.act('setStyle', 'retro')" v-class-toggle="{ ...(style && { active: style.name === 'retro' }) }" title="Emulate a green phosphor CRT with scanlines and screen curvature." data-i18n-title>
           <span class="btn-icon">▦</span>
           <span class="btn-label" data-i18n>CRT</span>
           <span class="btn-key">2</span>
         </button>
-        <button class="style-btn" data-style="surveillance" v-class-toggle="{ ...(style && { active: style.name === 'surveillance' }) }" title="Simulate night-vision goggles with green intensification and a tube vignette." data-i18n-title>
+        <button class="style-btn" data-style="surveillance" @click="display.act('setStyle', 'surveillance')" v-class-toggle="{ ...(style && { active: style.name === 'surveillance' }) }" title="Simulate night-vision goggles with green intensification and a tube vignette." data-i18n-title>
           <span class="btn-icon">🌙</span>
           <span class="btn-label" data-i18n>NVG</span>
           <span class="btn-key">3</span>
         </button>
-        <button class="style-btn" data-style="thermal" v-class-toggle="{ ...(style && { active: style.name === 'thermal' }) }" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color." data-i18n-title>
+        <button class="style-btn" data-style="thermal" @click="display.act('setStyle', 'thermal')" v-class-toggle="{ ...(style && { active: style.name === 'thermal' }) }" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color." data-i18n-title>
           <span class="btn-icon">🌡️</span>
           <span class="btn-label" data-i18n>FLIR</span>
           <span class="btn-key">4</span>
         </button>
-        <button class="style-btn" data-style="anime" v-class-toggle="{ ...(style && { active: style.name === 'anime' }) }" title="Apply bright cel-shaded color and illustrated outlines." data-i18n-title>
+        <button class="style-btn" data-style="anime" @click="display.act('setStyle', 'anime')" v-class-toggle="{ ...(style && { active: style.name === 'anime' }) }" title="Apply bright cel-shaded color and illustrated outlines." data-i18n-title>
           <span class="btn-icon">✦</span>
           <span class="btn-label" data-i18n>Anime</span>
           <span class="btn-key">5</span>
         </button>
-        <button class="style-btn" data-style="noir" v-class-toggle="{ ...(style && { active: style.name === 'noir' }) }" title="Apply high-contrast monochrome film-noir grading." data-i18n-title>
+        <button class="style-btn" data-style="noir" @click="display.act('setStyle', 'noir')" v-class-toggle="{ ...(style && { active: style.name === 'noir' }) }" title="Apply high-contrast monochrome film-noir grading." data-i18n-title>
           <span class="btn-icon">◐</span>
           <span class="btn-label" data-i18n>Noir</span>
           <span class="btn-key">6</span>

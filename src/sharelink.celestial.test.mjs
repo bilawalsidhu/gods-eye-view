@@ -535,7 +535,7 @@ test('every explicit visual UI gesture claims restore authority before it mutate
     assertClaimsBefore(initUi.slice(startIndex, endIndex), mutation, label);
   }
 
-  const displayActions = initUi.slice(initUi.indexOf('this._displayControls ='));
+  const displayActions = initUi.slice(initUi.indexOf('const token = store.connect('));
   assertClaimsBefore(displayActions.slice(displayActions.indexOf('toggleHud:'), displayActions.indexOf('cycleDetection:')), 'this.hud.toggle()', 'HUD button');
   assertClaimsBefore(displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:')), 'cycleDetectionMode()', 'detection button');
 
@@ -792,7 +792,7 @@ test('visual input listeners are revoked before asynchronous UI teardown', () =>
   assert.match(synchronous, /this\._locationNavigation\.destroy\(\)/);
   assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationControls\?\.destroy\(\)/);
   assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationLookup\?\.destroy\(\)/);
-  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._displayControls\?\.destroy\(\)/);
+  assert.match(DisplayBindings.prototype.destroy.toString(), /this\._detachDisplayControls\?\.\(\)/);
   assert.match(DisplayBindings.prototype.destroy.toString(), /this\._applicationShortcuts\?\.destroy\(\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._styleParameters\?\.destroy\(\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._visualEffects\.stop\(\)/);

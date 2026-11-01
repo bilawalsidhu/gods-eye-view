@@ -46,12 +46,13 @@
   SCENE bar through a store that the scene panels view renders, so a page
   that omits `layer-panels` shows neither (samehkhamis).
 
-- `./ui/display`'s `bindDisplayControls` takes the keyhole fade and outside
-  opacity sliders as `fadeSlider` and `outsideOpacitySlider`, and their
-  actions receive whole percentages; `fadeSliders` still works.
-  `syncScopeControls` (`./ui/display`) and `shouldHideCollapsedRightPanels`
-  (`./ui/layout`) are deprecated: the Display view and the rail now own what
-  they did. `./ui/input` imports Vue (samehkhamis).
+- `./ui/display`'s `bindDisplayControls` is gone: the Display panel's
+  controls and the dock's style buttons call their owner through the display
+  store's `connect`/`act`, and its allocation and 3D model choices are the
+  kit's `UiSegmented`. `syncScopeControls` (`./ui/display`) and
+  `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the Display
+  view and the rail now own what they did. `./ui/input` imports Vue
+  (samehkhamis).
 
 - `./ui/cctv` and `./ui/radio` import Vue and Pinia: their controllers
   publish the panel's state to a store that the CCTV and Radio views render,

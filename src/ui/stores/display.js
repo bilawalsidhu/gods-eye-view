@@ -5,7 +5,9 @@ import { markRaw, shallowRef } from 'vue';
  * The Display panel as its view renders it. VisualSettings presents its
  * groups (`_presentDisplay()`), AircraftDisplay the 3D aircraft group, the
  * draw tool its controls and the file import its list, and each publishes
- * here; each keeps its listeners on the controls. VisualSettings also
+ * here. The Display controls' changes reach their owner (DisplayBindings)
+ * through act(); the draw tool and the file import keep their listeners on
+ * their controls. VisualSettings also
  * publishes the active style, which the dock and the scene chrome show, and
  * the map source controls publish their chip row beside it.
  */
@@ -66,6 +68,34 @@ export const useDisplayStore = defineStore('gev-display', () => {
     mapSourceControls.value = controls && markRaw(controls);
   }
 
+  /** @type {{actions: object}|null} The Display controls' owner. */
+  let owner = null;
+
+  /**
+   * Answer the Display controls (and the dock's style buttons) with
+   * `actions`, replacing any earlier owner.
+   * @param {Record<string, Function>} actions
+   * @returns {object} Token for detach().
+   */
+  function connect(actions) {
+    owner = { actions };
+    return owner;
+  }
+
+  /** Stop answering for the owner holding `token`; a later owner stays. */
+  function detach(token) {
+    if (token === owner) owner = null;
+  }
+
+  /**
+   * A control's change: call the owner's action, if one is connected.
+   * @param {string} name
+   * @param {...unknown} args
+   */
+  function act(name, ...args) {
+    owner?.actions[name]?.(...args);
+  }
+
   /** The phone shell's tab bar; null until the shell first presents it. */
   const phoneShell = shallowRef(null);
 
@@ -91,5 +121,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishMapSource,
     mapSourceControls,
     connectMapSource,
+    connect,
+    detach,
+    act,
   };
 });

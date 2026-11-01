@@ -265,7 +265,7 @@ try {
     'destroyed Display controls cannot change settings',
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
-      manager._displayControls.destroy();
+      manager._displayBindings._detachDisplayControls();
       const before = manager.bloomEnabled;
       const contrast = manager._bloomStage.uniforms.contrast;
       manager._bloomBtn.click();

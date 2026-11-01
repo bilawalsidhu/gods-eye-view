@@ -37,8 +37,8 @@ one-panel rule too. Share links continue to record which panels are open.
 ## Component kit
 
 `src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`,
-`UiButton` and `UiPanel` so far, with more (`UiSegmented`, `UiSelect` and
-so on) joining as the controls they serve are converted. One component
+`UiButton`, `UiPanel` and `UiSegmented` so far, with more (`UiSlider`,
+`UiSelect` and so on) joining as the controls they serve are converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. Names, props,
 events and class names follow Halfpixel's `ui-vue` kit so the two can merge
@@ -50,6 +50,8 @@ its own classes beside it. They contain no application state.
 `collapsed` drives only the button and `ui-panel--collapsed`: the panel's
 owner hides the body by writing the root's `collapsed` class at once, and
 there is no `closable`, since Core's panels collapse rather than close.
+`UiSegmented` adds `keyboard` (`none`, `arrows` as in ui-vue, or `radio` with
+Home and End), since each of Core's groups keeps its own keyboard policy.
 
 Controls share one skin, so every panel reads the same. Every scrolling
 surface carries the kit's `.ui-scroll` (ui-vue's name), which draws the thin

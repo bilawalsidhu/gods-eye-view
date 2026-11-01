@@ -263,7 +263,7 @@ test('detection-on-by-default is a default, not an operator override', () => {
   // preset consults the flag, and the detection button sets it.
   assert.match(uiSource, /if \(preset\.detection && !this\._detectionUserOverridden\) \{/,
     'a style preset still yields to an operator who changed detection by hand');
-  const displayActions = uiSource.slice(uiSource.indexOf('this._displayControls ='));
+  const displayActions = uiSource.slice(uiSource.indexOf('const token = store.connect('));
   const detectionButton = displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:'));
   assert.match(detectionButton, /cycleDetectionMode\(\)/, 'the button still invokes the detection action');
   assert.match(detectionButton, /this\.claimDetection\(\);/,

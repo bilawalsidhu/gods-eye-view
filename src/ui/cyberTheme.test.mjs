@@ -12,7 +12,8 @@ import {
 import { GEV_ACTION_SCHEMAS } from '../voice/actionSchemas.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { StyleManager } from './applicationShell.js';
-import { bindDisplayControls } from './displayControls.js';
+import { createPinia } from 'pinia';
+import { useDisplayStore } from './stores/display.js';
 import { VisualSettings } from './visualSettings.js';
 import { STYLES } from './visualPresets.js';
 
@@ -231,28 +232,22 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
   };
 
   const display = makeOwner();
-  const hudLayout = new EventTarget();
-  hudLayout.value = 'cyber';
-  const animeButton = new EventTarget();
-  animeButton.dataset = { style: 'anime' };
-  const controls = bindDisplayControls({
-    elements: { hudLayout, styleButtons: [animeButton] },
-    actions: {
-      setHudLayout: (value) => display.owner.setHudLayout(value),
-      setStyle: (value) =>
-        display.owner.setStyle(value, { userInitiated: true }),
-    },
+  // The Display panel's layout select and the dock's style buttons call
+  // these actions through the display store.
+  const store = useDisplayStore(createPinia());
+  const token = store.connect({
+    setHudLayout: (value) => display.owner.setHudLayout(value),
+    setStyle: (value) => display.owner.setStyle(value, { userInitiated: true }),
   });
-  hudLayout.dispatchEvent(new Event('change'));
+  store.act('setHudLayout', 'cyber');
   assert.equal(display.hud.getVariant(), 'cyber');
   assert.equal(display.owner.activeStyle, 'thermal');
-  animeButton.dispatchEvent(new Event('click'));
+  store.act('setStyle', 'anime');
   assert.equal(display.owner.activeStyle, 'anime');
-  hudLayout.value = 'minimal';
-  hudLayout.dispatchEvent(new Event('change'));
+  store.act('setHudLayout', 'minimal');
   assert.equal(display.hud.getVariant(), 'minimal');
   assert.equal(display.owner.activeStyle, 'anime');
-  controls.destroy();
+  store.detach(token);
 
   const voice = makeOwner();
   const eventSource = { addEventListener() {}, removeEventListener() {} };
