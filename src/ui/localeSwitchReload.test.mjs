@@ -4,6 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { StyleManager } from './applicationShell.js';
+import { useLocaleStore } from './stores/locale.js';
+import { applicationPinia } from './vueRuntime.js';
 import {
   describeUnsavedWork,
   msg,
@@ -12,7 +14,8 @@ import {
 } from '../i18n/index.js';
 
 /** Wire the shell's language choice with the given shell state. No picker
- * markup here: the picker's own behaviour is covered by localePicker.test. */
+ * markup here: the picker's own behaviour is covered by localePicker.test
+ * and localePickerView.test. */
 function renderSwitch({ calDirty = false, cockpit = false } = {}) {
   const previous = {
     document: globalThis.document,
@@ -137,20 +140,25 @@ test('the language already active neither asks nor reloads', () => {
   }
 });
 
-test('a host without Core locales removes the picker instead of mounting it', () => {
-  const previous = globalThis.document;
-  let removed = 0;
-  const root = { remove: () => removed++ };
-  globalThis.document = {
-    getElementById: (id) => (id === 'locale-picker' ? root : null),
+test('a host without Core locales shows no picker; otherwise the shell publishes one', () => {
+  const store = useLocaleStore(applicationPinia());
+  store.publishPicker(null);
+  const disabled = { services: {}, _localePickerEnabled: false };
+  const enabled = {
+    services: {},
+    _chooseLocale: (locale) => chosen.push(locale),
   };
-  const shell = { services: {}, _localePickerEnabled: false };
+  const chosen = [];
   try {
-    StyleManager.prototype._initLocaleSelector.call(shell);
-    assert.equal(removed, 1);
-    assert.equal(shell._localePicker, undefined);
+    StyleManager.prototype._initLocaleSelector.call(disabled);
+    assert.equal(store.picker, null);
+    StyleManager.prototype._initLocaleSelector.call(enabled);
+    assert.equal(store.picker.current, 'en');
+    store.picker.onSelect('fr');
+    assert.deepEqual(chosen, ['fr']);
   } finally {
-    for (const unregister of shell._unsavedWorkChecks) unregister();
-    globalThis.document = previous;
+    store.publishPicker(null);
+    for (const shell of [disabled, enabled])
+      for (const unregister of shell._unsavedWorkChecks ?? []) unregister();
   }
 });

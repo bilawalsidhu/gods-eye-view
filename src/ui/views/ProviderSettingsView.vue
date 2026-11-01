@@ -1,16 +1,24 @@
+<script setup>
+import { storeToRefs } from 'pinia';
+import { useLocaleStore } from '../stores/locale.js';
+import LocalePicker from './panels/LocalePicker.vue';
+
+const { picker } = storeToRefs(useLocaleStore());
+</script>
+
 <template>
   <!-- POWER UP — in-app key setup. Dev-server only: src/keySetup.js removes
        both the chip and this dialog outright when /api/setup/status is not
        there to answer (prod builds, LAN visitors). Rows are rendered from
        that payload, so the key registry lives in src/keySetupCore.mjs alone. -->
   <!-- Bottom-right HUD row: the POWER UP chip (while keys are missing) and
-       the language picker that src/ui/localePicker.js renders into #locale-picker. -->
+       the language picker, once the shell publishes it. -->
   <div id="corner-actions">
     <button id="key-setup-chip" type="button" hidden aria-haspopup="dialog" aria-controls="key-setup">
       <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
       <span data-key-setup-chip-label data-i18n>POWER UP</span>
     </button>
-    <div id="locale-picker"></div>
+    <LocalePicker v-if="picker" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" />
   </div>
   <aside id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" hidden>
     <div class="key-setup-scanline" aria-hidden="true"></div>

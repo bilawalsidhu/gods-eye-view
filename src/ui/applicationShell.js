@@ -51,11 +51,12 @@ import {
   registerUnsavedWork,
   t,
 } from '../i18n/index.js';
-import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
+import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
 import { useDisplayStore } from './stores/display.js';
+import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
 import { useCockpitStore } from './stores/cockpit.js';
 
@@ -722,8 +723,9 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Mounts the language picker (src/ui/localePicker.js). A choice reloads the
-   * page; _confirmLocaleReload asks first when that would lose work.
+   * Publishes the language picker, which ProviderSettingsView renders. A
+   * choice reloads the page; _confirmLocaleReload asks first when that would
+   * lose work.
    * @returns {void}
    */
   _initLocaleSelector() {
@@ -741,14 +743,9 @@ export class StyleManager extends ShellFacade {
         this.cockpitView?.active ? msg('the open cockpit') : null,
       ),
     ];
-    const root = globalThis.document?.getElementById?.('locale-picker');
-    if (!root) return;
-    if (this._localePickerEnabled === false) {
-      root.remove();
-      return;
-    }
-    this._localePicker = mountLocalePicker({
-      root,
+    // A host that does not initialize Core's locale shows no picker.
+    if (this._localePickerEnabled === false) return;
+    useLocaleStore(applicationPinia()).publishPicker({
       current: getLocale(),
       onSelect: (locale) => this._chooseLocale(locale),
     });
@@ -1772,8 +1769,7 @@ export class StyleManager extends ShellFacade {
     this._lifetime.destroy();
     for (const unregister of this._unsavedWorkChecks?.splice(0) ?? [])
       unregister();
-    this._localePicker?.destroy();
-    this._localePicker = null;
+    useLocaleStore(applicationPinia()).publishPicker(null);
     this._recording.destroy();
     this._mobileShell?.destroy();
     this._panelNavigation?.destroy();
