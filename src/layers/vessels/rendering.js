@@ -75,7 +75,13 @@ export function createRendering({
     focusPassIsNeeded,
     advanceSpriteFocus,
     focusAlphaNeedsWrite,
+    spriteFocusAtRest,
   } = services.focus;
+  const {
+    holdContinuousRender,
+    releaseContinuousRender,
+    governorRequestRender,
+  } = services.render;
 
   function renderRowLimit() {
     const configured = Number(options.maxRows);
@@ -196,6 +202,14 @@ export function createRendering({
     return icon;
   }
 
+  // Vessels move only when a poll lands, so the layer does not hold the
+  // continuous render loop. Its passes run in preRender, which idle mode fires
+  // only for rendered frames: a forced pass (new data, selection) requests its
+  // frame, a frame that moved the camera but fell inside the 800 ms cadence
+  // leaves a trailing frame so the view the camera stopped on is always
+  // evaluated, and the continuous hold is kept only while focus emphasis is
+  // animating. The trailing frame is keyed to camera motion alone: the pass's
+  // own label publication requests a frame, and scheduling on that would loop.
   function installRuntime(viewer) {
     if (state.preRenderRemover || !viewer) return;
     state.preRenderRemover = viewer.scene.preRender.addEventListener(() =>
@@ -203,8 +217,27 @@ export function createRendering({
     );
   }
 
+  function scheduleTrailingVisibilityPass(now) {
+    if (state.trailingVisibilityTimer) return;
+    const waitMs = Math.max(
+      0,
+      VISIBILITY_UPDATE_MS - (now - state.lastVisibilityUpdate),
+    );
+    state.trailingVisibilityTimer = vesselState._aisRuntime.setTimeout(() => {
+      state.trailingVisibilityTimer = null;
+      if (state.feed.enabled) governorRequestRender('ais-vessels-visibility');
+    }, waitMs);
+  }
+
+  function cancelTrailingVisibilityPass() {
+    if (!state.trailingVisibilityTimer) return;
+    vesselState._aisRuntime.clearTimeout(state.trailingVisibilityTimer);
+    state.trailingVisibilityTimer = null;
+  }
+
   function updateVisibility(force = false) {
     if (!state.feed.enabled) return;
+    if (force) governorRequestRender('ais-vessels-update');
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
     const regularPass =
@@ -212,13 +245,30 @@ export function createRendering({
     const focusPass =
       focusPassIsNeeded(focusTarget, state.activeFocusCount) &&
       (force || now - state.lastFocusUpdate >= FOCUS_UPDATE_MS);
+    if (
+      !regularPass &&
+      state.viewer?.camera &&
+      cameraPoseSignature(state.viewer.camera) !== vesselState._lastCamPoseSig
+    )
+      scheduleTrailingVisibilityPass(now);
     if (!regularPass && !focusPass) return;
     if (regularPass) state.lastVisibilityUpdate = now;
     if (focusPass) state.lastFocusUpdate = now;
     if (!state.records.all.length) {
       // No records — flush any lingering card entries (vanished-feed case).
-      if (regularPass) updateClusteredLabels([]);
-      if (focusPass) state.activeFocusCount = 0;
+      // Still record the pose this pass evaluated, or every later frame that
+      // falls inside the cadence would schedule another trailing frame.
+      if (regularPass) {
+        if (state.viewer?.camera)
+          vesselState._lastCamPoseSig = cameraPoseSignature(
+            state.viewer.camera,
+          );
+        updateClusteredLabels([]);
+      }
+      if (focusPass) {
+        state.activeFocusCount = 0;
+        releaseContinuousRender('ais-vessels');
+      }
       return;
     }
 
@@ -272,6 +322,9 @@ export function createRendering({
           Cesium.Cartesian3.distance(camera.positionWC, position),
       });
       state.activeFocusCount = result.activeCount;
+      if (result.activeCount > 0 || result.transitioning)
+        holdContinuousRender('ais-vessels');
+      else releaseContinuousRender('ais-vessels');
     }
   }
 
@@ -302,6 +355,16 @@ export function createRendering({
       const bb = visual?.billboard;
       const position = bb?.position || visual?.position;
       if (!bb || !position) continue;
+      // Most of a worldwide feed sits behind the horizon. A hidden sprite with
+      // no pending focus state and full alpha would advance to exactly what it
+      // already is, so skip it instead of paying its distance and state work
+      // every 80 ms while anything is tracked.
+      if (
+        bb.show === false &&
+        spriteFocusAtRest(bb) &&
+        !focusAlphaNeedsWrite(bb.color?.alpha, 1, params)
+      )
+        continue;
       const focus = advanceSpriteFocus(bb, {
         // Hidden/far-side sprites still finish any pending release so the active
         // count remains truthful and they cannot reappear with stale dim alpha.
@@ -510,6 +573,7 @@ export function createRendering({
     shipIcon,
     installRuntime,
     updateVisibility,
+    cancelTrailingVisibilityPass,
     applyVesselFocusDeemphasis,
     makeOccluder,
     isVisible,

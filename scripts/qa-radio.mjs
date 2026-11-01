@@ -81,6 +81,32 @@ function check(name, ok, detail = '') {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Radio lives only inside Context; a user reaches its controls by expanding
+// Context and then Radio. Returns the prior collapse state so a step can put
+// the panels back for the scenarios that follow.
+async function revealRadioControls(page, targetId) {
+  const prior = await page.evaluate(async (id) => {
+    const manager = window.__godsEyeView.styleManager;
+    const collapsed = (panelId) => document.getElementById(panelId).classList.contains('collapsed');
+    const state = { context: collapsed('global-context-panel'), radio: collapsed('radio-panel') };
+    manager.setPanelCollapsed('global-context-panel', false, { explicit: true });
+    manager.setPanelCollapsed('radio-panel', false, { explicit: true });
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    document.getElementById(id).scrollIntoView({ block: 'nearest' });
+    return state;
+  }, targetId);
+  await page.waitForSelector(`#${targetId}`, { visible: true });
+  return prior;
+}
+
+async function restoreRadioPanels(page, prior) {
+  await page.evaluate(({ context, radio }) => {
+    const manager = window.__godsEyeView.styleManager;
+    manager.setPanelCollapsed('radio-panel', radio);
+    manager.setPanelCollapsed('global-context-panel', context);
+  }, prior);
+}
+
 // Native pick buffers and clustered overlay entries settle on rendered frames,
 // not on wall-clock sleeps, particularly with software rendering.
 async function settleRadioFrames(page) {
@@ -285,31 +311,16 @@ async function main() {
       window.__godsEyeView.styleManager.setPanelCollapsed('global-context-panel', true);
     });
 
+    const enablePanels = await revealRadioControls(page, 'radio-enable-btn');
     const enableStartedAt = Date.now();
-    const initialDisclosure = await page.evaluate(() => {
-      const button = document.getElementById('context-radio-toggle-btn');
-      const mini = document.getElementById('context-radio-mini');
-      const enabledBefore = window.__godsEyeView.dataManager.isEnabled('radio');
-      button.click();
-      return {
-        enabledBefore,
-        enabledAfterDisclosure: window.__godsEyeView.dataManager.isEnabled('radio'),
-        expanded: button.getAttribute('aria-expanded'),
-        miniHidden: mini.hidden,
-      };
-    });
-    check(
-      'Radio launcher discloses compact controls without changing power',
-      !initialDisclosure.enabledBefore && !initialDisclosure.enabledAfterDisclosure
-        && initialDisclosure.expanded === 'true' && !initialDisclosure.miniHidden,
-      JSON.stringify(initialDisclosure),
-    );
-    await page.$eval('#context-radio-mini-enable-btn', (button) => button.click());
+    await page.click('#radio-enable-btn');
     await page.waitForFunction(() => {
       const state = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState();
       return state.enabled && !state.loading && state.stationCount === 750;
     });
     const enableElapsedMs = Date.now() - enableStartedAt;
+    // Later scenarios start from the collapsed rail this step began with.
+    await restoreRadioPanels(page, enablePanels);
     const initial = await page.evaluate(() => {
       const module = window.__godsEyeView.dataManager.layers.get('radio').module;
       const state = module.getUIState();
@@ -328,9 +339,6 @@ async function main() {
           color: entry.dataset.radioColor,
         })),
         enablePressed: document.getElementById('radio-enable-btn').getAttribute('aria-pressed'),
-        launcherExpanded: document.getElementById('context-radio-toggle-btn').getAttribute('aria-expanded'),
-        launcherActive: document.getElementById('context-radio-toggle-btn').classList.contains('active'),
-        compactEnablePressed: document.getElementById('context-radio-mini-enable-btn').getAttribute('aria-pressed'),
         fullPlayEnabled: !document.getElementById('radio-play-btn').disabled,
         fullPlayLabel: document.getElementById('radio-play-btn').getAttribute('aria-label'),
         tunerVisible: !document.getElementById('radio-tuner').hidden,
@@ -341,9 +349,8 @@ async function main() {
     check('750-station catalog renders within the browser budget', initial.state.stationCount === 750 && enableElapsedMs < 5000, `${enableElapsedMs}ms`);
     check('enable does not autoplay', initial.plays === 0 && initial.state.audioState === 'stopped');
     check(
-      'compact and detailed Radio power controls reflect the layer manager independently of disclosure',
-      initial.enablePressed === 'true' && initial.compactEnablePressed === 'true'
-        && initial.launcherExpanded === 'true' && initial.launcherActive,
+      'Radio power control reflects the layer manager after the panels collapse again',
+      initial.enablePressed === 'true',
     );
     check('dynamic canonical and genre categories reach the UI', initial.filterOptions >= 10, `${initial.filterOptions} options`);
     const musicOption = initial.filterPalette.find((entry) => entry.id === 'music');
@@ -419,14 +426,10 @@ async function main() {
         prevDisabled: document.getElementById('radio-prev-btn').disabled,
         playDisabled: document.getElementById('radio-play-btn').disabled,
         volumeDisabled: document.getElementById('radio-volume').disabled,
-        disclosureLabel: document.getElementById('context-radio-toggle-btn').getAttribute('aria-label'),
-        compactPowerLabel: document.getElementById('context-radio-mini-enable-btn').getAttribute('aria-label'),
-        compactPowerText: document.getElementById('context-radio-mini-enable-btn').textContent,
         fullLabel: document.getElementById('radio-enable-btn').getAttribute('aria-label'),
         fullText: document.getElementById('radio-enable-btn').textContent,
         layerState: document.getElementById('radio-layer-state').textContent,
         playbackMessage: document.getElementById('radio-playback-state').textContent,
-        miniStation: document.getElementById('context-radio-mini-station').textContent,
         dataRailText: document.querySelector('[data-layer-id="radio"] .data-toggle-btn')?.textContent,
         dataRailState: document.querySelector('[data-layer-id="radio"] .data-toggle-btn')?.dataset.feedState,
         dataRailLabel: document.querySelector('[data-layer-id="radio"] .data-toggle-btn')?.getAttribute('aria-label'),
@@ -468,14 +471,10 @@ async function main() {
         && uncertainPresentation.prevDisabled
         && uncertainPresentation.playDisabled
         && uncertainPresentation.volumeDisabled
-        && /compact Radio controls/i.test(uncertainPresentation.disclosureLabel)
-        && /uncertain/i.test(uncertainPresentation.compactPowerLabel)
-        && uncertainPresentation.compactPowerText === 'RECONCILE'
         && /uncertain/i.test(uncertainPresentation.fullLabel)
         && uncertainPresentation.fullText === 'RECONCILE'
         && uncertainPresentation.layerState === 'UNCERTAIN'
         && /uncertain/i.test(uncertainPresentation.playbackMessage)
-        && uncertainPresentation.miniStation === 'RADIO STATE UNCERTAIN'
         && uncertainPresentation.dataRailText === 'UNCERTAIN'
         && uncertainPresentation.dataRailState === 'uncertain'
         && /uncertain/i.test(uncertainPresentation.dataRailLabel)
@@ -517,10 +516,6 @@ async function main() {
       presentationActive: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().presentationActive,
       markerSourceVisible: window.__godsEyeView.viewer.dataSources.getByName('Radio stations')[0]?.show,
       full: document.getElementById('radio-enable-btn').textContent,
-      disclosure: document.getElementById('context-radio-toggle-btn').getAttribute('aria-label'),
-      disclosureControls: document.getElementById('context-radio-toggle-btn').getAttribute('aria-controls'),
-      disclosureExpanded: document.getElementById('context-radio-toggle-btn').getAttribute('aria-expanded'),
-      compactPower: document.getElementById('context-radio-mini-enable-btn').textContent,
       layerState: document.getElementById('radio-layer-state').textContent,
       message: document.getElementById('radio-playback-state').textContent,
       stopDisabled: document.getElementById('radio-stop-btn').disabled,
@@ -534,8 +529,6 @@ async function main() {
         && disablingPresentation.presentationActive === false
         && disablingPresentation.markerSourceVisible === false
         && disablingPresentation.full === 'DISABLING'
-        && /compact Radio controls/i.test(disablingPresentation.disclosure)
-        && disablingPresentation.compactPower === 'DISABLING'
         && disablingPresentation.layerState === 'DISABLING'
         && /disabling/i.test(disablingPresentation.message)
         && disablingPresentation.stopDisabled
@@ -592,10 +585,6 @@ async function main() {
       presentationActive: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().presentationActive,
       markerSourceVisible: window.__godsEyeView.viewer.dataSources.getByName('Radio stations')[0]?.show,
       full: document.getElementById('radio-enable-btn').textContent,
-      disclosure: document.getElementById('context-radio-toggle-btn').getAttribute('aria-label'),
-      disclosureControls: document.getElementById('context-radio-toggle-btn').getAttribute('aria-controls'),
-      disclosureExpanded: document.getElementById('context-radio-toggle-btn').getAttribute('aria-expanded'),
-      compactPower: document.getElementById('context-radio-mini-enable-btn').textContent,
       layerState: document.getElementById('radio-layer-state').textContent,
       message: document.getElementById('radio-playback-state').textContent,
       tunerHidden: document.getElementById('radio-tuner').hidden,
@@ -610,10 +599,6 @@ async function main() {
         && enablingPresentation.presentationActive === false
         && enablingPresentation.markerSourceVisible === false
         && enablingPresentation.full === 'ENABLING'
-        && enablingPresentation.disclosure === 'Go to expanded Radio section'
-        && enablingPresentation.disclosureControls === 'radio-panel'
-        && enablingPresentation.disclosureExpanded === 'true'
-        && enablingPresentation.compactPower === 'ENABLING'
         && enablingPresentation.layerState === 'ENABLING'
         && /enabling/i.test(enablingPresentation.message)
         && enablingPresentation.tunerHidden
@@ -1581,112 +1566,9 @@ async function main() {
       JSON.stringify(directoryRefreshContinuity),
     );
     await page.select('#radio-filter', 'news');
-    check('launcher enables Radio without forcing Context open', !initial.panelExpanded && !initial.contextExpanded && initial.nestedInContext);
+    check('enabled Radio stays nested in Context and leaves both panels collapsed', !initial.panelExpanded && !initial.contextExpanded && initial.nestedInContext);
     check('full Play is available before a station is selected', !initial.state.selected && initial.fullPlayEnabled && initial.fullPlayLabel === 'Play nearest radio station');
 
-    const hoverOnlyDisclosure = await page.evaluate(() => {
-      const button = document.getElementById('context-radio-toggle-btn');
-      if (button.getAttribute('aria-expanded') === 'true') button.click();
-      return {
-        expanded: button.getAttribute('aria-expanded'),
-        hidden: document.getElementById('context-radio-mini').hidden,
-      };
-    });
-    await page.hover('#context-radio-toggle-btn');
-    await sleep(100);
-    const hoverOnlyVisible = await page.$eval('#context-radio-mini', (mini) => (
-      !mini.hidden && getComputedStyle(mini).display !== 'none'
-    ));
-    check(
-      'hover alone does not disclose compact Radio controls',
-      hoverOnlyDisclosure.expanded === 'false' && hoverOnlyDisclosure.hidden && !hoverOnlyVisible,
-      JSON.stringify({ hoverOnlyDisclosure, hoverOnlyVisible }),
-    );
-    await page.click('#context-radio-toggle-btn');
-    await page.waitForFunction(() => {
-      const button = document.getElementById('context-radio-toggle-btn');
-      const mini = document.getElementById('context-radio-mini');
-      return button.getAttribute('aria-expanded') === 'true'
-        && !mini.hidden && getComputedStyle(mini).display !== 'none';
-    });
-    const compact = await page.evaluate(() => {
-      const mini = document.getElementById('context-radio-mini');
-      const toggle = document.getElementById('context-radio-toggle-btn');
-      const dock = document.getElementById('context-radio-dock');
-      const miniRect = mini.getBoundingClientRect();
-      const toggleRect = toggle.getBoundingClientRect();
-      const miniStyle = getComputedStyle(mini);
-      return {
-        visible: miniStyle.display !== 'none' && miniRect.width > 0 && miniRect.height > 0,
-        display: miniStyle.display,
-        visibility: miniStyle.visibility,
-        opacity: miniStyle.opacity,
-        miniRect: { top: miniRect.top, left: miniRect.left, width: miniRect.width, height: miniRect.height },
-        toggleRect: { top: toggleRect.top, left: toggleRect.left, width: toggleRect.width, height: toggleRect.height },
-        dockRect: (() => {
-          const rect = dock.getBoundingClientRect();
-          return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
-        })(),
-        offsetParent: mini.offsetParent?.id || mini.offsetParent?.className || null,
-        prevEnabled: !document.getElementById('context-radio-mini-prev-btn').disabled,
-        playEnabled: !document.getElementById('context-radio-mini-play-btn').disabled,
-        playLabel: document.getElementById('context-radio-mini-play-btn').getAttribute('aria-label'),
-        nextEnabled: !document.getElementById('context-radio-mini-next-btn').disabled,
-        volumeEnabled: !document.getElementById('context-radio-mini-volume').disabled,
-        offsetBelowToggle: Math.round(miniRect.top - toggleRect.bottom),
-      };
-    });
-    check(
-      'explicit launcher disclosure reveals enabled compact Radio controls',
-      compact.visible && compact.prevEnabled && compact.playEnabled && compact.nextEnabled && compact.volumeEnabled,
-      JSON.stringify(compact),
-    );
-    check('compact Play is available before a station is selected', compact.playLabel === 'Play nearest radio station');
-    check('compact Radio controls sit 20px below the launcher', compact.offsetBelowToggle === 20, `${compact.offsetBelowToggle}px`);
-    const compactCloseDisclosure = await page.evaluate(() => {
-      const launcher = document.getElementById('context-radio-toggle-btn');
-      const close = document.getElementById('context-radio-mini-close-btn');
-      close.focus();
-      close.click();
-      const result = {
-        launcherExpanded: launcher.getAttribute('aria-expanded'),
-        compactHidden: document.getElementById('context-radio-mini').hidden,
-        focusRestored: document.activeElement === launcher,
-        radioCollapsed: document.getElementById('radio-panel').classList.contains('collapsed'),
-      };
-      launcher.click();
-      return result;
-    });
-    check(
-      'dedicated compact close hides only the compact Radio disclosure and restores launcher focus',
-      compactCloseDisclosure.launcherExpanded === 'false'
-        && compactCloseDisclosure.compactHidden
-        && compactCloseDisclosure.focusRestored
-        && compactCloseDisclosure.radioCollapsed,
-      JSON.stringify(compactCloseDisclosure),
-    );
-    const compactTouchDisclosure = await page.evaluate(() => {
-      const button = document.getElementById('context-radio-toggle-btn');
-      button.click();
-      const closed = button.getAttribute('aria-expanded') === 'false'
-        && document.getElementById('context-radio-mini').hidden;
-      button.dispatchEvent(new PointerEvent('pointerdown', {
-        bubbles: true,
-        pointerType: 'touch',
-        isPrimary: true,
-      }));
-      button.click();
-      return {
-        closed,
-        reopened: button.getAttribute('aria-expanded') === 'true'
-          && !document.getElementById('context-radio-mini').hidden,
-      };
-    });
-    check(
-      'touch/coarse-pointer activation can close and reopen compact Radio controls',
-      compactTouchDisclosure.closed && compactTouchDisclosure.reopened,
-      JSON.stringify(compactTouchDisclosure),
-    );
     const multiExpandedPanelLayout = await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
       const ids = ['data-panel', 'scene-panel', 'pp-toggles', 'cctv-panel', 'global-context-panel'];
@@ -2062,7 +1944,6 @@ async function main() {
         hudVariant: manager.hud.getVariant(),
         displayExpanded: display.getAttribute('aria-expanded') === 'true',
         radioExpanded: radio.getAttribute('aria-expanded') === 'true',
-        contextRadioExpanded: document.getElementById('context-radio-toggle-btn')?.getAttribute('aria-expanded') === 'true',
         focusId: document.activeElement?.id || null,
         detectionMode: manager.getDetectionState().detectionMode,
         models3dEnabled: manager._models3dEnabled,
@@ -2158,11 +2039,13 @@ async function main() {
       for (let index = 0; index < 5; index += 1) {
         recordLayoutStep();
         if (index < 4) {
-          if (index < 2) {
-            hudLayout.value = index === 0 ? 'operator' : 'minimal';
-            hudLayout.dispatchEvent(new Event('change', { bubbles: true }));
-          } else {
+          // Off and back on in Minimal, so the toggle must restore a
+          // non-default layout before the cycle returns to Tactical.
+          if (index === 1 || index === 2) {
             hudToggle.click();
+          } else {
+            hudLayout.value = index === 0 ? 'minimal' : 'tactical';
+            hudLayout.dispatchEvent(new Event('change', { bubbles: true }));
           }
           await waitForHudSettle();
         }
@@ -2287,8 +2170,7 @@ async function main() {
         document.getElementById('cockpit-radio-next-btn'),
       ].every((button) => button?.isConnected && !button.disabled);
       const detailsExcluded = !document.querySelector(
-        '#cockpit-radio-panel #context-radio-details-btn, '
-        + '#cockpit-radio-panel #radio-filter, #cockpit-radio-panel #radio-tuner',
+        '#cockpit-radio-panel #radio-filter, #cockpit-radio-panel #radio-tuner',
       );
       const scenesHidden = getComputedStyle(scene).display === 'none';
       radio.click();
@@ -2331,7 +2213,7 @@ async function main() {
         scenesHidden,
         mapProviderUtilityStable,
         hudInteractionsExact: layoutSteps.map((step) => step.hud).join('>')
-          === 'TACTICAL>OPERATOR>MINIMAL>OFF>MINIMAL',
+          === 'TACTICAL>MINIMAL>OFF>MINIMAL>TACTICAL',
         // The accordion clears the topline, Cockpit cards, and Cesium credits
         // across every HUD layout. Its list owns any overflow internally.
         leftLaneClearAcrossHudCycle: layoutSteps.every((step) => (
@@ -2381,7 +2263,6 @@ async function main() {
         manager.setPanelCollapsed('global-context-panel', prior.contextCollapsed);
         if (display.getAttribute('aria-expanded') !== String(prior.displayExpanded)) display.click();
         if (radio.getAttribute('aria-expanded') !== String(prior.radioExpanded)) radio.click();
-        manager._setRadioDisclosure(prior.contextRadioExpanded);
         hud.hidden = prior.hudHidden;
         signal.hidden = prior.signalHidden;
         if (prior.utilityTop) hud.style.setProperty('--cockpit-utility-top', prior.utilityTop);
@@ -2416,7 +2297,6 @@ async function main() {
           && document.getElementById('global-context-panel').classList.contains('collapsed') === prior.contextCollapsed
           && display.getAttribute('aria-expanded') === String(prior.displayExpanded)
           && radio.getAttribute('aria-expanded') === String(prior.radioExpanded)
-          && document.getElementById('context-radio-toggle-btn')?.getAttribute('aria-expanded') === String(prior.contextRadioExpanded)
           && hud.hidden === prior.hudHidden
           && signal.hidden === prior.signalHidden
           && intelHud.style.getPropertyValue('transition') === priorHudTransition
@@ -2472,21 +2352,20 @@ async function main() {
     check('first Play scenario starts without a leaked Radio selection', firstPlayPrecondition === null,
       `selected=${firstPlayPrecondition}`);
     await page.select('#radio-filter', 'all');
-    await page.$eval('#context-radio-toggle-btn', (button) => {
-      if (button.getAttribute('aria-expanded') !== 'true') button.click();
-    });
     await page.evaluate(() => {
       const camera = window.__godsEyeView.viewer.camera;
       window.__qaFirstPlayFlyToCalls = [];
       window.__qaFirstPlayOriginalFlyTo = camera.flyTo;
       camera.flyTo = (options) => window.__qaFirstPlayFlyToCalls.push(options);
-      document.getElementById('context-radio-toggle-btn').focus();
     });
-    await page.$eval('#context-radio-mini-play-btn', (button) => button.click());
+    const firstPlayPanels = await revealRadioControls(page, 'radio-play-btn');
+    await page.focus('#radio-play-btn');
+    await page.click('#radio-play-btn');
     await page.waitForFunction(() => {
       const state = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState();
       return state.audioState === 'playing' || state.audioState === 'error';
     });
+    await restoreRadioPanels(page, firstPlayPanels);
     const postMicroDragPlayback = await page.evaluate(async () => {
       const mod = window.__godsEyeView.dataManager.layers.get('radio').module;
       let state = mod.getUIState();
@@ -2593,59 +2472,19 @@ async function main() {
     );
     await page.select('#radio-filter', 'news');
 
-    await page.$eval('#context-radio-mini-volume', (input) => {
+    await page.$eval('#radio-volume', (input) => {
       input.value = '35';
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    const compactVolume = await page.evaluate(() => ({
+    const radioVolume = await page.evaluate(() => ({
       volume: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().volume,
       full: document.getElementById('radio-volume').value,
-      mini: document.getElementById('context-radio-mini-volume').value,
+      label: document.getElementById('radio-volume-value').textContent,
     }));
-    check('compact volume shares the full Radio player state', Math.abs(compactVolume.volume - 0.35) < 0.001 && compactVolume.full === '35' && compactVolume.mini === '35');
-
-    const compactDisclosureContinuity = await page.evaluate(async () => {
-      const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const manager = window.__godsEyeView.styleManager;
-      manager.setPanelCollapsed('global-context-panel', true);
-      manager._setRadioDisclosure(true);
-      await radio.play({ origin: 'user' });
-      const before = radio.getUIState();
-      const disclosure = document.getElementById('context-radio-toggle-btn');
-      if (disclosure.getAttribute('aria-expanded') !== 'true') disclosure.click();
-      disclosure.click();
-      const closed = {
-        expanded: disclosure.getAttribute('aria-expanded'),
-        hidden: document.getElementById('context-radio-mini').hidden,
-        state: radio.getUIState(),
-      };
-      disclosure.click();
-      return {
-        before,
-        closed,
-        reopened: disclosure.getAttribute('aria-expanded'),
-        miniHidden: document.getElementById('context-radio-mini').hidden,
-        after: radio.getUIState(),
-      };
-    });
     check(
-      'compact disclosure preserves playback, station, filter, and volume continuity',
-      compactDisclosureContinuity.closed.expanded === 'false'
-        && compactDisclosureContinuity.closed.hidden
-        && compactDisclosureContinuity.reopened === 'true'
-        && !compactDisclosureContinuity.miniHidden
-        && compactDisclosureContinuity.before.audioState === 'playing'
-        && compactDisclosureContinuity.closed.state.audioState === 'playing'
-        && compactDisclosureContinuity.after.audioState === 'playing'
-        && compactDisclosureContinuity.after.selected?.id === compactDisclosureContinuity.before.selected?.id
-        && compactDisclosureContinuity.after.filter === compactDisclosureContinuity.before.filter
-        && compactDisclosureContinuity.after.volume === compactDisclosureContinuity.before.volume,
-      JSON.stringify({
-        before: compactDisclosureContinuity.before,
-        closed: compactDisclosureContinuity.closed,
-        reopened: compactDisclosureContinuity.reopened,
-        after: compactDisclosureContinuity.after,
-      }),
+      'full Radio volume drives the Radio player state',
+      Math.abs(radioVolume.volume - 0.35) < 0.001 && radioVolume.full === '35' && radioVolume.label === '35%',
+      JSON.stringify(radioVolume),
     );
 
     const voicePause = await page.evaluate(async () => {
@@ -2709,11 +2548,13 @@ async function main() {
       idleVoice.audioState === 'paused',
       idleVoice.audioState,
     );
-    const manualPlayTarget = await page.evaluate(() => {
+    const manualPlayTarget = await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
-      manager.setPanelCollapsed('global-context-panel', true);
-      manager._setRadioDisclosure(true);
-      const button = document.getElementById('context-radio-mini-play-btn');
+      manager.setPanelCollapsed('global-context-panel', false);
+      manager.setPanelCollapsed('radio-panel', false);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const button = document.getElementById('radio-play-btn');
+      button.scrollIntoView({ block: 'nearest' });
       const rect = button.getBoundingClientRect();
       const style = getComputedStyle(button);
       return {
@@ -2728,12 +2569,12 @@ async function main() {
       };
     });
     check(
-      'manual voice takeover targets the visible compact Radio Play control',
+      'manual voice takeover targets the visible full Radio Play control',
       manualPlayTarget.visible && manualPlayTarget.enabled,
       JSON.stringify(manualPlayTarget),
     );
     if (manualPlayTarget.visible && manualPlayTarget.enabled) {
-      await page.click('#context-radio-mini-play-btn');
+      await page.click('#radio-play-btn');
       await page.waitForFunction(() => (
         window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing'
         && window.__godsEyeView.voiceCommands.status === 'idle'
@@ -2781,7 +2622,6 @@ async function main() {
     await page.evaluate(() => window.__godsEyeView.voiceCommands.setStatus('idle', 'QA complete'));
     await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
-      manager._setRadioDisclosure(false);
       manager.setPanelCollapsed('global-context-panel', false);
       manager.setPanelCollapsed('radio-panel', false);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -3835,22 +3675,22 @@ async function main() {
       gev.dataManager.layers.get('flights').enabled = true;
     });
     await sleep(500);
-    await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('global-context-panel', true));
     await page.evaluate(() => {
-      const button = document.getElementById('context-radio-toggle-btn');
-      if (button.getAttribute('aria-expanded') !== 'true') button.click();
+      const manager = window.__godsEyeView.styleManager;
+      manager.setPanelCollapsed('global-context-panel', false);
+      manager.setPanelCollapsed('radio-panel', false);
     });
-    await page.waitForSelector('#context-radio-mini', { visible: true });
+    await page.waitForSelector('#radio-next-btn', { visible: true });
     await page.evaluate(() => {
       window.__qaRadioCameraHeight = window.__godsEyeView.viewer.camera.positionCartographic.height;
     });
     const radioOnlyNextDispatched = await page.evaluate(() => {
-      const button = document.getElementById('context-radio-mini-next-btn');
+      const button = document.getElementById('radio-next-btn');
       if (!button) return false;
       button.click();
       return true;
     });
-    if (!radioOnlyNextDispatched) throw new Error('Radio compact next button unavailable');
+    if (!radioOnlyNextDispatched) throw new Error('Radio next button unavailable');
     await page.waitForFunction(() => typeof window.__qaRejectRadioPlay === 'function');
     await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;
@@ -3885,7 +3725,7 @@ async function main() {
       flyToCalls: window.__qaRadioFlyToCalls.length,
       flightTargets,
       cameraHeight: window.__qaRadioCameraHeight,
-      compactPlayLabel: document.getElementById('context-radio-mini-play-btn').getAttribute('aria-label'),
+      playLabel: document.getElementById('radio-play-btn').getAttribute('aria-label'),
       regularMarkerSize: Array.from({ length: window.__godsEyeView.viewer.dataSources.length }, (_, index) => window.__godsEyeView.viewer.dataSources.get(index))
         .find((item) => item.name === 'Radio stations')?.entities.values[0]?.point?.pixelSize?.getValue(),
       selectedMarkerSize: selectedEntity?.point?.pixelSize?.getValue(),
@@ -3898,7 +3738,7 @@ async function main() {
     };
     });
     check(
-      'compact Next follows stable directory order and retries its next available station',
+      'Radio Next follows stable directory order and retries its next available station',
       playing.state.selected?.id === playing.expectedFallback?.id
         && playing.calls[0] === playing.expectedPrimary?.streamUrl
         && playing.calls[1] === playing.expectedFallback?.streamUrl,
@@ -3909,9 +3749,9 @@ async function main() {
         fallback: playing.expectedFallback?.id,
       }),
     );
-    check('compact next is explicit playback and updates play/pause state', playing.calls.length === 2 && playing.compactPlayLabel.startsWith('Pause'));
+    check('Radio next is explicit playback and updates play/pause state', playing.calls.length === 2 && playing.playLabel.startsWith('Pause'));
     check(
-      'compact next rotates toward its station without changing zoom, including fallback',
+      'Radio next rotates toward its station without changing zoom, including fallback',
       playing.flyToCalls === 2
         && Math.abs(playing.flightTargets[0]?.lat - playing.expectedPrimary?.lat) < 0.001
         && Math.abs(playing.flightTargets[0]?.lon - playing.expectedPrimary?.lon) < 0.001
@@ -3950,11 +3790,11 @@ async function main() {
       };
       return [
         await run('flights', 'radio-next-btn'),
-        await run('military', 'context-radio-mini-prev-btn'),
+        await run('military', 'radio-prev-btn'),
       ];
     });
     check(
-      'full and compact Radio navigation preserve Flights/Military camera ownership',
+      'full Radio Next and Prev navigation preserve Flights/Military camera ownership',
       trackedRadioControls.every((sample) => sample.afterStationId
         && sample.afterStationId !== sample.beforeStationId
         && sample.flyToDelta === 0
@@ -3968,7 +3808,7 @@ async function main() {
       viewer.trackedEntity = undefined;
       window.__qaRadioDelayNextFailure = true;
       const beforeFlyToCalls = window.__qaRadioFlyToCalls.length;
-      document.getElementById('context-radio-mini-next-btn')?.click();
+      document.getElementById('radio-next-btn')?.click();
       return { beforeFlyToCalls };
     });
     await page.waitForFunction(() => typeof window.__qaRejectRadioPlay === 'function');
@@ -4244,7 +4084,7 @@ async function main() {
       window.__godsEyeView.dataManager.layers.get('flights').enabled = false;
     });
     const radioOnlyNextClicked = await page.evaluate(() => {
-      const button = document.getElementById('context-radio-mini-next-btn');
+      const button = document.getElementById('radio-next-btn');
       if (!(button instanceof HTMLButtonElement)) return false;
       button.click();
       return true;
@@ -4508,106 +4348,12 @@ async function main() {
         && companion.radioCollapsed && !companion.contextCollapsed && companion.nested,
     );
 
-    const expandedContextRadioBefore = await page.evaluate(() => {
-      const gev = window.__godsEyeView;
-      const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
-      scroller.scrollTop = 0;
-      const camera = gev.viewer.camera.positionWC;
-      return {
-        scrollTop: scroller.scrollTop,
-        pageY: window.scrollY,
-        camera: { x: camera.x, y: camera.y, z: camera.z },
-        plays: window.__qaRadioPlayCalls.length,
-      };
-    });
-    await page.click('#context-radio-toggle-btn');
-    await page.waitForFunction(() => !document.getElementById('radio-panel').classList.contains('collapsed'));
-    await page.waitForFunction((priorScroll) => (
-      document.activeElement?.getAttribute('data-collapse-target') === 'radio-panel'
-      && document.querySelector('#global-context-panel .global-context-panel-inner').scrollTop > priorScroll
-    ), { timeout: 10_000 }, expandedContextRadioBefore.scrollTop);
-    const expandedContextRadioAfter = await page.evaluate(() => {
-      const gev = window.__godsEyeView;
-      gev.styleManager._renderRadioState(gev.dataManager.layers.get('radio').module.getUIState());
-      const launcher = document.getElementById('context-radio-toggle-btn');
-      const radio = document.getElementById('radio-panel');
-      const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
-      const camera = gev.viewer.camera.positionWC;
-      return {
-        ariaControls: launcher.getAttribute('aria-controls'),
-        expanded: launcher.getAttribute('aria-expanded'),
-        label: launcher.getAttribute('aria-label'),
-        radioCollapsed: radio.classList.contains('collapsed'),
-        compactHidden: document.getElementById('context-radio-mini').hidden,
-        scrollTop: scroller.scrollTop,
-        focusTarget: document.activeElement?.getAttribute('data-collapse-target'),
-        pageY: window.scrollY,
-        camera: { x: camera.x, y: camera.y, z: camera.z },
-        plays: window.__qaRadioPlayCalls.length,
-        state: gev.dataManager.layers.get('radio').module.getUIState().audioState,
-      };
-    });
-    const expandedContextRadioCameraDelta = Math.hypot(
-      expandedContextRadioAfter.camera.x - expandedContextRadioBefore.camera.x,
-      expandedContextRadioAfter.camera.y - expandedContextRadioBefore.camera.y,
-      expandedContextRadioAfter.camera.z - expandedContextRadioBefore.camera.z,
-    );
-    check(
-      'expanded Context Radio icon reveals and scrolls to embedded Radio without an overlay or playback/camera theft',
-      expandedContextRadioAfter.ariaControls === 'radio-panel'
-        && expandedContextRadioAfter.expanded === 'true'
-        && expandedContextRadioAfter.label === 'Go to expanded Radio section'
-        && !expandedContextRadioAfter.radioCollapsed
-        && expandedContextRadioAfter.compactHidden
-        && expandedContextRadioAfter.scrollTop > expandedContextRadioBefore.scrollTop
-        && expandedContextRadioAfter.focusTarget === 'radio-panel'
-        && expandedContextRadioAfter.pageY === expandedContextRadioBefore.pageY
-        && expandedContextRadioCameraDelta < 0.01
-        && expandedContextRadioAfter.plays === expandedContextRadioBefore.plays
-        && expandedContextRadioAfter.state === 'playing',
-      JSON.stringify({
-        before: expandedContextRadioBefore,
-        after: expandedContextRadioAfter,
-        cameraDelta: expandedContextRadioCameraDelta,
-      }),
-    );
-
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
-      manager.setPanelCollapsed('global-context-panel', true);
-      manager._setRadioDisclosure(true);
+      manager.setPanelCollapsed('global-context-panel', false);
+      manager.setPanelCollapsed('radio-panel', false);
     });
-    await page.waitForFunction(() => {
-      const close = document.getElementById('context-radio-mini-close-btn');
-      const rect = close.getBoundingClientRect();
-      return !document.getElementById('context-radio-mini').hidden && rect.width > 0 && rect.height > 0;
-    });
-    await page.click('#context-radio-mini-close-btn');
-    const closedCompact = await page.evaluate(() => {
-      const launcher = document.getElementById('context-radio-toggle-btn');
-      return {
-        radioCollapsed: document.getElementById('radio-panel').classList.contains('collapsed'),
-        compactHidden: document.getElementById('context-radio-mini').hidden,
-        focusRestored: document.activeElement === launcher,
-      };
-    });
-    await page.click('#context-radio-toggle-btn');
-    await page.waitForFunction(() => !document.getElementById('context-radio-mini').hidden);
-    await page.click('#context-radio-details-btn');
-    const repeatedOpen = await page.evaluate(() => ({
-      radioCollapsed: document.getElementById('radio-panel').classList.contains('collapsed'),
-      compactHidden: document.getElementById('context-radio-mini').hidden,
-    }));
-    const splitDetailActions = { closedCompact, repeatedOpen };
-    check(
-      'collapsed Context keeps compact close and full-panel open as separate stable actions',
-      !splitDetailActions.closedCompact.radioCollapsed
-        && splitDetailActions.closedCompact.compactHidden
-        && splitDetailActions.closedCompact.focusRestored
-        && !splitDetailActions.repeatedOpen.radioCollapsed
-        && splitDetailActions.repeatedOpen.compactHidden,
-      JSON.stringify(splitDetailActions),
-    );
+    await page.waitForFunction(() => !document.getElementById('radio-panel').classList.contains('collapsed'));
 
     await page.click('#global-context-flights-btn');
     await page.waitForFunction(() => !document.getElementById('context-flights-view').hidden);

@@ -137,9 +137,11 @@ export function layerKeyRequirementTooltip(layer = {}) {
 
 const ROW_TEXT_SEPARATOR = ' · ';
 
-// A short Latin code joined by hyphens. Longer runs (a URL, a token in an
-// error) keep their break opportunities so they cannot overflow the rail.
-const HYPHENATED_CODE = /[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g;
+// A short Latin code joined by hyphens: every part after a hyphen is capitals
+// or digits (ADS-B, RTL-SDR, GTFS-RT). A compound such as "ALPR-Kameras" is a
+// word, not a code, and may break at its hyphen. Longer runs (a URL, a token
+// in an error) keep their break opportunities so they cannot overflow the rail.
+const HYPHENATED_CODE = /\b[A-Za-z0-9]+(?:-[A-Z0-9]+)+(?![A-Za-z0-9])/g;
 const HYPHENATED_CODE_MAX = 16;
 
 /** A span for one run of row text; `keep` stops the browser breaking inside it. */
@@ -634,7 +636,11 @@ export class LayerPanel {
     const stats = layer.stats || {};
     const feedState = layerFeedState(stats);
     const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);
-    const source = sourceLabel(stats.source || layer.source);
+    // A layer marks source text that is data rather than a catalog name.
+    const source =
+      stats.sourceVerbatim === true && stats.source
+        ? stats.source
+        : sourceLabel(stats.source || layer.source);
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {
@@ -715,18 +721,24 @@ export class LayerPanel {
       });
     }
     if (feedState === 'stale') {
+      // A layer drawing cached upstream data (Traffic's proxy tiles) dates the
+      // row by the oldest of it, not by the load that re-served it.
+      const dataAgo =
+        Number(stats.oldestTileAt) > 0
+          ? this._timeAgo(stats.oldestTileAt)
+          : ago;
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
         return t('{state} · {source} · {ago} · retrying in {seconds}s', {
           state: stateLabel,
           source,
-          ago,
+          ago: dataAgo,
           seconds: stats.retryInSec,
         });
       }
       return t('{state} · {source} · {ago}', {
         state: stateLabel,
         source,
-        ago,
+        ago: dataAgo,
       });
     }
     if (typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()) {

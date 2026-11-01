@@ -155,3 +155,36 @@ Validation on Node 24.22.1:
   environment. Neither gate reached a page or produced visual evidence.
   Browser-rendered restoration, live-source UI, screenshots and recording
   therefore remain unverified; no browser assertion was relaxed.
+
+### Integration with upstream main, 2026-11-01
+
+Merged upstream main `0d1a68160e532ba65dc34b48ea205de6de4028fc` into
+this existing contribution branch. The actual conflicts were appended entries
+in es/ru/zh-CN and the complete Realtime tool payload digest. Both sides of the
+catalog additions are preserved; the digest reflects CABA plus main's removal
+of Snow and Operator. Application/source catalogs, Infrastructure membership,
+credits and attribution retain both main's changes and CABA's inventory.
+
+CABA still uses `6`; GhostMaps retains `5`. The official token checker passes
+with **32 published, 1 new**. No published reservation was changed. The three
+CABA messages are now present in all ten translated catalogs (2,740 messages
+each), including the seven languages added since the previous synchronization.
+
+Node 24.22.1 verification: 152 focused provider/parser, catalog/composition,
+layer-state/ledger, share-navigation, layer-name and voice tests passed. All 15
+isolated allocation probes passed. Internationalization, formatting, package
+boundaries, setup doctor, changelog checks and production build passed (the
+build retains its large-chunk advisory).
+
+Browser gates were attempted again: the CABA fixture gate and tracking gate
+cannot start because the required Chrome 156.0.8078.47 is absent. Installing
+it failed with a proxy tunnel timeout. No browser assertions were relaxed.
+Actual globe/card screenshots, the 15–30 second recording and browser-rendered
+integration remain pending. Fixture and unit checks do not establish live CSV
+availability; no fresh live-source availability claim is made here.
+
+The final ordinary unit plan passed **9,150 tests, 0 failures, 2 platform
+skips** (Docker Compose CLI unavailable and native Windows DACL validation).
+The separate isolated allocation run passed all 15 probes. Files deleted by
+main were excluded from the final tree and discovery; obsolete local copies
+are not part of the published merge.
