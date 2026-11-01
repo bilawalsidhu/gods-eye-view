@@ -58,12 +58,13 @@
   list renders. Street Level's fit and panorama filters and Recent Imagery's
   mode are `UiSegmented` too: the Street Level store's owner answers
   `setPano` and `setRenderMode`, and `RecentImageryReadout` takes
-  `onSetMode`. The Radio panel's and Cockpit's internet radio controls call
-  `RadioControls`, and the local RTL-SDR card's controls `LocalSdrControls`,
-  through the radio store's new `connect`/`act`; the card labels its gain
-  options itself. `act` returns what the answering action returned. `syncScopeControls` (`./ui/display`) and
-  `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the Display
-  view and the rail now own what they did. `./ui/input` imports Vue
+  `onSetMode`. The Radio panel's and Cockpit's internet radio controls and
+  the tuner slider's events call `RadioControls`, and the local RTL-SDR
+  card's controls `LocalSdrControls`, through the radio store's new
+  `connect`/`act`; the card labels its gain options itself. `act` returns
+  what the answering action returned. `syncScopeControls` (`./ui/display`)
+  and `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the
+  Display view and the rail now own what they did. `./ui/input` imports Vue
   (samehkhamis).
 
 - `./ui/cctv` and `./ui/radio` import Vue and Pinia: their controllers

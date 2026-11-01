@@ -15,11 +15,15 @@ import { useRadioStore } from '../../stores/radio.js';
 
 // The Radio panel's directory tuner. RadioControls owns the drag and
 // publishes the band, the readouts, the slider and where the needle sits;
-// until it does, the tuner shows its initial markup. The tick tape is laid
-// out here against the dial's width. A hidden dial measures 0 wide, so the
-// last real width is kept and no ticks are drawn before there is one: ticks
-// laid out for no width would slide into place when the tuner appears.
-const { tuner } = storeToRefs(useRadioStore());
+// until it does, the tuner shows its initial markup. The slider hands its
+// pointer, key and value events to RadioControls through the store. The
+// tick tape is laid out here against the dial's width. A hidden dial
+// measures 0 wide, so the last real width is kept and no ticks are drawn
+// before there is one: ticks laid out for no width would slide into place
+// when the tuner appears.
+const store = useRadioStore();
+const { act } = store;
+const { tuner } = storeToRefs(store);
 const dial = useTemplateRef('dial');
 const dialWidth = shallowRef(0);
 let resizeObserver = null;
@@ -68,6 +72,8 @@ const vTunerDragging = {
     <div class="radio-tuner-scale" aria-hidden="true" :style="tape && { '--radio-tuner-tick-pitch': `${tape.pitchPx}px` }"><span v-for="(tick, index) in tape?.ticks ?? []" :key="index" class="radio-tuner-tick" :class="{ 'is-current': tick.current }" :style="{ left: `${tick.xPx}px` }" :data-station-index="tick.stationIndex">{{ tick.label }}</span></div>
     <div id="radio-tuner-needle" class="radio-tuner-needle" aria-hidden="true"></div>
     <input id="radio-tuner-slider" type="range" min="0" :max="tuner ? tuner.max : 0" step="1" value="0" v-range-value="tuner ? tuner.slot : 0"
+      @pointerdown="act('tunerPointerDown', $event)" @pointermove="act('tunerPointerMove', $event)" @pointerup="act('tunerPointerUp', $event)" @pointercancel="act('tunerPointerCancel', $event)" @lostpointercapture="act('tunerLostPointerCapture', $event)"
+      @keydown="act('tunerKeyDown', $event)" @keyup="act('tunerKeyUp', $event)" @input="act('tunerInput')" @change="act('tunerChange')" @blur="act('tunerBlur')"
       aria-label="Tune available internet radio stations" :aria-valuetext="tuner?.valuetext ?? t('No station available')" :disabled="tuner ? !tuner.available : true" data-i18n-aria-label />
   </div>
   <div class="radio-tuner-readout">

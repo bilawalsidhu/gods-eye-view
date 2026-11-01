@@ -382,7 +382,47 @@ export function bindRadioControls() {
     },
     tunerListenerOptions,
   );
-  // The Radio panel's and Cockpit's controls call these through the store.
+  const updateTunerFromPointer = (event) => {
+    const rect = this._radioTunerSlider?.getBoundingClientRect();
+    if (!rect || !this._radioTunerStations.length) return false;
+    const position = radioTunerPointerPosition(
+      event.clientX,
+      rect.left,
+      rect.width,
+      this._radioTunerStations.length,
+    );
+    if (position.stationIndex > this._radioTunerLastSlot)
+      this._radioTunerDragDirection = 1;
+    else if (position.stationIndex < this._radioTunerLastSlot)
+      this._radioTunerDragDirection = -1;
+    this._radioTunerLastSlot = position.stationIndex;
+    this._radioTunerCoordinate = position.coordinate;
+    showRadioTuner.call(this, { slot: position.stationIndex });
+    tunerPreview({ coordinate: position.coordinate });
+    return true;
+  };
+  const releaseNavigationBand = () => {
+    this._radioTunerBandPinnedForNavigation = false;
+  };
+  this.listen(
+    this.canvas,
+    'pointerdown',
+    releaseNavigationBand,
+    tunerListenerOptions,
+  );
+  this.listen(
+    this.canvas,
+    'wheel',
+    releaseNavigationBand,
+    tunerListenerOptions,
+  );
+  // The directory order is catalog/filter authority, not camera authority.
+  // Globe motion therefore never rebuilds or re-ranks the frequency band.
+  this._radioSelectedHandler = () =>
+    this.actions.setPanelCollapsed('radio-panel', false);
+  this.listen(document, 'gev:radio-selected', this._radioSelectedHandler);
+  // The Radio panel's and Cockpit's controls, and the tuner slider's events,
+  // call these through the store.
   // Cockpit owns the Cesium camera even though it intentionally clears
   // viewer.trackedEntity, so its station steps pass `rotate: false`: they
   // must never start the map-view rotation/fallback flights that would
@@ -421,30 +461,7 @@ export function bindRadioControls() {
       showRadioVolume.call(this, value);
       this.actions.setParams({ volume: value / 100 }, { origin: 'user' });
     },
-  });
-  const updateTunerFromPointer = (event) => {
-    const rect = this._radioTunerSlider?.getBoundingClientRect();
-    if (!rect || !this._radioTunerStations.length) return false;
-    const position = radioTunerPointerPosition(
-      event.clientX,
-      rect.left,
-      rect.width,
-      this._radioTunerStations.length,
-    );
-    if (position.stationIndex > this._radioTunerLastSlot)
-      this._radioTunerDragDirection = 1;
-    else if (position.stationIndex < this._radioTunerLastSlot)
-      this._radioTunerDragDirection = -1;
-    this._radioTunerLastSlot = position.stationIndex;
-    this._radioTunerCoordinate = position.coordinate;
-    showRadioTuner.call(this, { slot: position.stationIndex });
-    tunerPreview({ coordinate: position.coordinate });
-    return true;
-  };
-  this.listen(
-    this._radioTunerSlider,
-    'pointerdown',
-    (event) => {
+    tunerPointerDown: (event) => {
       if (!beginTuner()) return;
       this._radioTunerPointerId = event.pointerId;
       this._radioTunerSlider.focus({ preventScroll: true });
@@ -456,12 +473,7 @@ export function bindRadioControls() {
       updateTunerFromPointer(event);
       event.preventDefault();
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'pointermove',
-    (event) => {
+    tunerPointerMove: (event) => {
       if (
         !this._radioTunerDragging ||
         this._radioTunerPointerId !== event.pointerId
@@ -470,12 +482,7 @@ export function bindRadioControls() {
       updateTunerFromPointer(event);
       event.preventDefault();
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'input',
-    () => {
+    tunerInput: () => {
       if (this._radioTunerPointerId !== null || this._radioTunerKeyboardKey)
         return;
       // A drag the input starts begins from the selected station's slot.
@@ -496,21 +503,11 @@ export function bindRadioControls() {
       this._radioTunerCoordinate = inputSlot.stationIndex;
       tunerPreview({ coordinate: this._radioTunerCoordinate });
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'change',
-    () => {
+    tunerChange: () => {
       if (this._radioTunerPointerId === null && !this._radioTunerKeyboardKey)
         finishTuner(true);
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'pointerup',
-    (event) => {
+    tunerPointerUp: (event) => {
       if (this._radioTunerPointerId !== event.pointerId) return;
       updateTunerFromPointer(event);
       finishTuner(true);
@@ -521,12 +518,7 @@ export function bindRadioControls() {
       }
       event.preventDefault();
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'pointercancel',
-    (event) => {
+    tunerPointerCancel: (event) => {
       if (
         this._radioTunerPointerId !== null &&
         this._radioTunerPointerId !== event.pointerId
@@ -539,24 +531,14 @@ export function bindRadioControls() {
       }
       finishTuner(false);
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'lostpointercapture',
-    (event) => {
+    tunerLostPointerCapture: (event) => {
       if (
         this._radioTunerDragging &&
         this._radioTunerPointerId === event.pointerId
       )
         finishTuner(false);
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'keydown',
-    (event) => {
+    tunerKeyDown: (event) => {
       if (event.key === 'Escape' && this._radioTunerDragging) {
         event.preventDefault();
         finishTuner(false);
@@ -602,12 +584,7 @@ export function bindRadioControls() {
       showRadioTuner.call(this, { slot: slot.slot });
       tunerPreview({ coordinate: this._radioTunerCoordinate });
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'keyup',
-    (event) => {
+    tunerKeyUp: (event) => {
       if (
         !this._radioTunerKeyboardKey ||
         event.key !== this._radioTunerKeyboardKey
@@ -616,32 +593,6 @@ export function bindRadioControls() {
       event.preventDefault();
       finishTuner(true);
     },
-    tunerListenerOptions,
-  );
-  this.listen(
-    this._radioTunerSlider,
-    'blur',
-    () => finishTuner(true),
-    tunerListenerOptions,
-  );
-  const releaseNavigationBand = () => {
-    this._radioTunerBandPinnedForNavigation = false;
-  };
-  this.listen(
-    this.canvas,
-    'pointerdown',
-    releaseNavigationBand,
-    tunerListenerOptions,
-  );
-  this.listen(
-    this.canvas,
-    'wheel',
-    releaseNavigationBand,
-    tunerListenerOptions,
-  );
-  // The directory order is catalog/filter authority, not camera authority.
-  // Globe motion therefore never rebuilds or re-ranks the frequency band.
-  this._radioSelectedHandler = () =>
-    this.actions.setPanelCollapsed('radio-panel', false);
-  this.listen(document, 'gev:radio-selected', this._radioSelectedHandler);
+    tunerBlur: () => finishTuner(true),
+  });
 }

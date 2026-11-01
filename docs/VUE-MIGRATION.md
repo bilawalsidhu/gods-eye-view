@@ -153,7 +153,8 @@ a feature supplying only its accent.
    the same way; fields a person edits take their value through
    `v-field-value`, which never writes a focused field;
    `RadioTuner` renders the directory tuner, where RadioControls keeps the
-   drag and its slot and publishes the band, readouts, slider and needle,
+   drag and its slot, takes the slider's pointer, key and value events
+   through the store and publishes the band, readouts, slider and needle,
    and the component lays out the tick tape against the dial's measured
    width and lays out the snapped needle before it drops the drag class;
    `ContextView` renders the mode switch and the nearby sites
