@@ -1,5 +1,6 @@
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { coalesceProxyRequest } from '../common/http.js';
+import { allowedMethods } from '../common/methods.js';
 import { fetchRegionalJson } from './http.js';
 import { naturalRegionAtPoint } from '../../../src/data/naturalEarthRegions.js';
 import {
@@ -190,7 +191,10 @@ export function geocodeProxy({ search = fetchNominatimSearch } = {}) {
   function install(middlewares) {
     middlewares.use('/api/geocode', async (req, res) => {
       if (req.method !== 'GET') {
-        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.writeHead(405, {
+          Allow: allowedMethods('GET'),
+          'Content-Type': 'application/json',
+        });
         res.end(JSON.stringify({ error: 'Method Not Allowed' }));
         return;
       }

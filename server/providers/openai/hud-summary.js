@@ -5,6 +5,7 @@ import {
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+import { allowedMethods } from '../common/methods.js';
 
 function extractOpenAiResponseText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
@@ -44,6 +45,7 @@ async function handleHudSummary(req, res) {
   }
   if (req.method !== 'POST') {
     res.statusCode = 405;
+    res.setHeader('Allow', allowedMethods('POST'));
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Method not allowed' }));
     return;

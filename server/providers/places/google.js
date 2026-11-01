@@ -10,6 +10,7 @@ import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
 } from '../../../src/data/placeProviderPayloads.js';
+import { allowedMethods } from '../common/methods.js';
 
 // Construct lazily after the standalone environment has loaded.
 // undefined = not built yet; null = the explicit 0 opt-out; fn = active limiter
@@ -116,6 +117,7 @@ export function googlePlacesContextProxy({
       if (admitSameSite(req, res)) return;
       if (req.method !== 'GET') {
         res.statusCode = 405;
+        res.setHeader('Allow', allowedMethods('GET'));
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
         return;
@@ -229,6 +231,7 @@ export function googlePlacesContextProxy({
       if (admitSameSite(req, res)) return;
       if (req.method !== 'GET') {
         res.statusCode = 405;
+        res.setHeader('Allow', allowedMethods('GET'));
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
         return;
@@ -357,6 +360,7 @@ export function googlePlacesContextProxy({
       middlewares.use(path, async (req, res) => {
         const refuse = (statusCode, error) => {
           res.statusCode = statusCode;
+          if (statusCode === 405) res.setHeader('Allow', allowedMethods('GET'));
           res.setHeader('Content-Type', 'application/json');
           res.end(
             JSON.stringify({ status: 'REQUEST_DENIED', results: [], error }),

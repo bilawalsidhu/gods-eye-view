@@ -2,6 +2,7 @@ import { fetchGfsWind } from './wind/gfs.js';
 import { fetchIfsWind } from './wind/ifs.js';
 import { decodeWindGribMessage } from './wind/decode.js';
 import { weatherScalarMetadata, weatherScalarError } from './wind/grid.js';
+import { allowedMethods } from './common/methods.js';
 
 // Data, not UI copy: the client (src/layers/wind/index.js) marks this exact
 // English with msg() and translates it when shown, so keep the two in sync.
@@ -36,6 +37,7 @@ export function windProxy({
     res.writeHead(status, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
+      ...(status === 405 ? { Allow: allowedMethods('GET') } : {}),
     });
     res.end(JSON.stringify(value));
   };
