@@ -1065,9 +1065,14 @@ card limits, fire identities, altitude placement and analyst records are retaine
 
 Earthquake rendering is exposed through `./layers/earthquakes`. The layer owns
 its entities and request lifecycle; the application supplies the overlay host
-and snapshot source. The standalone adapter keeps the existing USGS daily feed,
-M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
-destroying the layer cancels pending work and ignores late results.
+and snapshot source. The standalone adapter reads the USGS daily feed and adds
+the EMSC SeismicPortal events USGS does not report (an EMSC event within 90 s
+and 150 km, or 5 minutes and 25 km, of a USGS event and within 1.0 of its
+magnitude is the same event). EMSC is paged past 2,000 events and given up on
+after 15 s, so a stalled EMSC never holds back USGS; either catalog alone still
+yields a snapshot. It keeps M2.5+ filtering, static discs, magnitude labels and
+analyst records. Disabling or destroying the layer cancels pending work and
+ignores late results.
 
 ## Vessel components and sources
 
@@ -2220,7 +2225,7 @@ which embeds the MAP_KEY.
 > (`pp-toggles`) now starts **collapsed** on a first run rather than expanded —
 > a stored collapse state still wins, as before.
 >
-> **The ENVIRONMENTAL tile is quakes AND fires** — live USGS earthquakes plus
+> **The ENVIRONMENTAL tile is quakes AND fires** — live USGS and EMSC earthquakes plus
 > NASA FIRMS active fires (`layerIds: ['earthquakes', 'local-firms']`), with the
 > tile subcopy naming both. **The launcher optimizes for the fully configured
 > experience:** it does not trim what it offers down
@@ -3920,7 +3925,7 @@ its criteria cannot be silently ignored.
 | Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                | `src/data/militaryFlights.js`                         | `/api/military`                                       | 15s                                                                               |
 | Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
-| Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
+| Earthquakes            | USGS + EMSC                                                                                                                                                                                          | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Air quality            | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
