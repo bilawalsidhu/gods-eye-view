@@ -208,8 +208,9 @@ anything reads the page; `omitViews` names views the application leaves out,
 such as `provider-settings`, and their hosts are removed. Leaving out
 `layer-panels` also leaves out the scene sharing dialogs it draws, and leaving
 out `scene-chrome` the before/after imagery dividers (the imagery still splits,
-with no line or handle to move it), the status chips, the toast and the ORBIT
-indicator, and leaving out `command-dock` the voice control and its pointer
+with no line or handle to move it), the status chips, the toast, the ORBIT
+indicator, the FPS readout, the Scene actions panel, the data-pack attribution
+cards and the wind inspection marker, and leaving out `command-dock` the voice control and its pointer
 reticle. An unknown
 view name is an error. A host that does not initialize Core's locale passes
 `localePicker: false` to `createApplicationControls` instead of editing the

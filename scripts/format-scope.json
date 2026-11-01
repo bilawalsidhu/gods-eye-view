@@ -1139,5 +1139,8 @@
   "src/ui/stores/sceneInteractions.js",
   "src/scenes/dataPacks/presentationView.test.mjs",
   "src/ui/stores/dataPacks.js",
-  "src/scenes/interactionsView.test.mjs"
+  "src/scenes/interactionsView.test.mjs",
+  "src/layers/wind/inspectionMarker.js",
+  "src/layers/wind/inspectionMarker.test.mjs",
+  "src/ui/stores/windInspection.js"
 ]

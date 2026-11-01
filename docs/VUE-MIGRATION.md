@@ -158,7 +158,12 @@ a feature supplying only its accent.
    keeps the pick handler and focuses the picked action), the data-pack
    attribution cards (`DataPacks` teleports what the data-pack presentations
    publish to the `gev-data-packs` store into the viewer's container and
-   stops a removed card's player), then
+   stops a removed card's player), the wind inspection marker
+   (`WindInspectionMarker` teleports the marker into the wind layer's
+   container where `createWindInspectionMarker()`, now in
+   `src/layers/wind/inspectionMarker.js` so the portable `./tools` entry
+   needs no Vue, places it after each rendered frame; an unchanged frame
+   publishes nothing), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest

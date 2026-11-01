@@ -102,7 +102,9 @@
       "src/ui/views/panels/SceneInteractions.vue",
       "src/ui/stores/dataPacks.js",
       "src/ui/views/panels/DataPacks.vue",
-      "src/ui/stores/pointerReticle.js"
+      "src/ui/stores/pointerReticle.js",
+      "src/ui/stores/windInspection.js",
+      "src/ui/views/panels/WindInspectionMarker.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -3015,7 +3017,9 @@
       "src/ui/toast.js",
       "src/ui/stores/sceneInteractions.js",
       "src/ui/stores/dataPacks.js",
-      "src/ui/stores/pointerReticle.js"
+      "src/ui/stores/pointerReticle.js",
+      "src/ui/stores/windInspection.js",
+      "src/layers/wind/inspectionMarker.js"
     ],
     "external": [
       "hls.js",
@@ -3603,7 +3607,9 @@
       "src/data/geoImportPins.js",
       "src/data/geoFileImport.js",
       "src/ui/stores/imagerySplit.js",
-      "src/ui/vueRuntime.js"
+      "src/ui/vueRuntime.js",
+      "src/ui/stores/windInspection.js",
+      "src/layers/wind/inspectionMarker.js"
     ],
     "external": [
       "hls.js",
