@@ -10,6 +10,8 @@ Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic,
 
 _No place left behind._
 
+🌐 **Official site: [godseyeview.ai](https://godseyeview.ai)** · Official source: this repository · Hosted version coming soon at godseyeview.ai
+
 ![Orbital HUD, a tracked live globe, FLIR terrain — then OPEN SOURCED](docs/media/hero-open-source-reveal.gif)
 
 <a href="https://www.youtube.com/@bilawalsidhu">
@@ -681,7 +683,7 @@ One heads-up from the inside: build in this space for a week and you learn that 
 
 <div align="center">
 
-▶️ [Watch the God's Eye View series](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q) · 📬 [Map the World](https://maptheworld.ai/) — the newsletter behind the project
+🌐 [godseyeview.ai](https://godseyeview.ai), the official site · ▶️ [Watch the God's Eye View series](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q) · 📬 [Map the World](https://maptheworld.ai/) — the newsletter behind the project
 
 **🌐 God's Eye View. No place left behind.**
 
