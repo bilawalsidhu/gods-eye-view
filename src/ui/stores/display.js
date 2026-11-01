@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
+import { createOwners } from './owners.js';
 
 /**
  * The Display panel as its view renders it. VisualSettings presents its
@@ -67,44 +68,9 @@ export const useDisplayStore = defineStore('gev-display', () => {
     mapSourceControls.value = controls && markRaw(controls);
   }
 
-  /**
-   * The owners answering the panel's controls, oldest first: DisplayBindings
-   * the Display controls and the dock's style buttons, the draw tool and the
-   * file import their own.
-   * @type {Array<{actions: object}>}
-   */
-  const owners = [];
-
-  /**
-   * Answer the actions named in `actions`; for those names this owner
-   * replaces any earlier one.
-   * @param {Record<string, Function>} actions
-   * @returns {object} Token for detach().
-   */
-  function connect(actions) {
-    const token = { actions };
-    owners.push(token);
-    return token;
-  }
-
-  /** Stop answering for the owner holding `token`; the others stay. */
-  function detach(token) {
-    const index = owners.indexOf(token);
-    if (index >= 0) owners.splice(index, 1);
-  }
-
-  /**
-   * A control's change: call the newest connected owner's action of that
-   * name, if any.
-   * @param {string} name
-   * @param {...unknown} args
-   */
-  function act(name, ...args) {
-    for (let index = owners.length - 1; index >= 0; index -= 1) {
-      const action = owners[index].actions[name];
-      if (action) return void action(...args);
-    }
-  }
+  // DisplayBindings answers the Display controls and the dock's style
+  // buttons, the draw tool and the file import their own.
+  const { connect, detach, act } = createOwners();
 
   /** The phone shell's tab bar; null until the shell first presents it. */
   const phoneShell = shallowRef(null);

@@ -58,7 +58,9 @@
   list renders. Street Level's fit and panorama filters and Recent Imagery's
   mode are `UiSegmented` too: the Street Level store's owner answers
   `setPano` and `setRenderMode`, and `RecentImageryReadout` takes
-  `onSetMode`. `syncScopeControls` (`./ui/display`) and
+  `onSetMode`. The local RTL-SDR card's controls call `LocalSdrControls`
+  through the radio store's new `connect`/`act`, and the card labels its gain
+  options itself. `syncScopeControls` (`./ui/display`) and
   `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the Display
   view and the rail now own what they did. `./ui/input` imports Vue
   (samehkhamis).

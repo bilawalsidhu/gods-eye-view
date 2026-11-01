@@ -147,7 +147,8 @@ a feature supplying only its accent.
    Context and Radio (in progress: `RadioPanel` renders the directory row,
    station card, transport, volume and playback line from the `gev-radio`
    store that RadioControls publishes to, and `SdrCard` the local RTL-SDR
-   card that LocalSdrControls publishes beside it; fields a person edits take
+   card that LocalSdrControls publishes beside it and answers through the
+   store's `connect`/`act` (the shared `createOwners()`); fields a person edits take
    their value through `v-field-value`, which never writes a focused field;
    `RadioTuner` renders the directory tuner, where RadioControls keeps the
    drag and its slot and publishes the band, readouts, slider and needle,

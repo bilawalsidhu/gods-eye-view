@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
+import { createOwners } from './owners.js';
 
 /**
  * The Radio panel as its view renders it. RadioControls presents the
@@ -7,7 +8,7 @@ import { markRaw, shallowRef } from 'vue';
  * Cockpit's compact radio controls (`renderRadioState()`), which Cockpit
  * utility popover is open, and the directory tuner, and publishes them here;
  * it keeps its listeners. LocalSdrControls publishes the local RTL-SDR card
- * beside it.
+ * beside it, and the card's controls reach it through act().
  */
 export const useRadioStore = defineStore('gev-radio', () => {
   /** The presented panel; null until the controls first render. */
@@ -42,6 +43,9 @@ export const useRadioStore = defineStore('gev-radio', () => {
     tuner.value = markRaw(next);
   }
 
+  // LocalSdrControls answers the RTL-SDR card's controls.
+  const { connect, detach, act } = createOwners();
+
   return {
     view,
     publish,
@@ -51,5 +55,8 @@ export const useRadioStore = defineStore('gev-radio', () => {
     publishUtility,
     tuner,
     publishTuner,
+    connect,
+    detach,
+    act,
   };
 });

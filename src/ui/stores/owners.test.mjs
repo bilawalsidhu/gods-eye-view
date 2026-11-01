@@ -1,0 +1,28 @@
+// src/ui/stores/owners.test.mjs — the newest connected owner with an action
+// answers it; detaching hands the action back to the one before.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createOwners } from './owners.js';
+
+test('the newest owner with an action answers it, and detach hands it back', () => {
+  const { connect, detach, act } = createOwners();
+  const calls = [];
+  const first = connect({
+    play: (n) => calls.push(['first.play', n]),
+    stop: () => calls.push(['first.stop']),
+  });
+  const second = connect({ play: (n) => calls.push(['second.play', n]) });
+  act('play', 1);
+  act('stop');
+  act('missing');
+  detach(second);
+  act('play', 2);
+  detach(second);
+  detach(first);
+  act('play', 3);
+  assert.deepEqual(calls, [
+    ['second.play', 1],
+    ['first.stop'],
+    ['first.play', 2],
+  ]);
+});
