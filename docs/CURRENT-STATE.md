@@ -4577,8 +4577,9 @@ silent for five minutes are removed. Credits appear when the feed is used.
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry
 point is the right-side `CONTEXT` chooser's `CONTACTS` mode.
 
-Contacts distance labels select metres or kilometres after rounding to the
-nearest metre, so a 999.5-metre contact displays as `1.0 km`, not `1000 m`.
+Contacts distance labels, in the panel and on the globe's contact markers,
+select metres or kilometres after rounding to the nearest metre, so a
+999.5-metre contact displays as `1.0 km`, not `1000 m`.
 
 At global scale, ambient Radio cluster badges are hard-opacity shared-host
 entries: count/category updates and identity replacement do not run keyhole or
