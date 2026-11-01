@@ -395,8 +395,8 @@ export class SceneDirector {
   }
 
   /**
-   * Wire up all scene-panel DOM event listeners and render the initial UI state.
-   * Exits silently if the scene-select element is missing (headless/test mode).
+   * Present the Scene panel through SceneControls, which publishes it to the
+   * store the panel views render; a page without them simply draws nothing.
    */
   _initUI() {
     this._sharing?.mount();

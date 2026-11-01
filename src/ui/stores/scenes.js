@@ -7,6 +7,10 @@ import { markRaw, shallowRef } from 'vue';
  * @property {(sceneId: string, shotId: string, title: string) => void} rename
  * @property {(sceneId: string, shotId: string) => void} load
  * @property {(sceneId: string, shotId: string) => void} remove
+ * @property {(sceneId: string) => void} selectScene The select's choice.
+ * @property {(file: File) => Promise<void>|void} importFile A chosen file.
+ * @property {() => void} create, deleteScene, capture, update, start, stop,
+ *   next, export, download The panel's buttons.
  */
 
 /**
@@ -24,6 +28,18 @@ export const useSceneStore = defineStore('gev-scenes', () => {
   // Counts option renders: each one re-applies the select's choice, which
   // the person may have changed since.
   const listedRevision = shallowRef(0);
+  /**
+   * The panel's buttons, status line, progress and runtime chip:
+   * `{running, hasShots, disabled: {[button]: boolean}, status, progress,
+   * runtime, playLabel}`, or null until an owner presents them.
+   */
+  const panel = shallowRef(null);
+
+  /** @param {?object} next A fresh presentation; every publish re-renders. */
+  function publishPanel(next) {
+    panel.value = next && markRaw(next);
+  }
+
   /** Whether an owner presents the project; until then the list is empty. */
   const attached = shallowRef(false);
   /** @type {{handlers: SceneRowHandlers}|null} */
@@ -70,12 +86,18 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     publishOptions({});
   }
 
+  /** @returns {boolean} Whether `token` is the owner presenting now. */
+  function owns(token) {
+    return !!token && token === owner;
+  }
+
   /**
    * Forward a row action to the owner, if one is attached.
    * @param {keyof SceneRowHandlers} name
+   * @returns {*} What the owner's handler returned (an import's promise).
    */
   function act(name, ...args) {
-    owner?.handlers[name]?.(...args);
+    return owner?.handlers[name]?.(...args);
   }
 
   return {
@@ -85,11 +107,14 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     listedSceneId,
     listedRevision,
     attached,
+    panel,
+    publishPanel,
     attach,
     publish,
     publishOptions,
     selectShot,
     detach,
+    owns,
     act,
   };
 });

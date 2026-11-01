@@ -91,6 +91,15 @@
   them to the welcome view's `gev-first-run` store (its new `store` option)
   and connects the controls the view's buttons call (samehkhamis).
 
+- `SceneControls` (`./ui/scenes`) no longer takes `elements` or writes the
+  Scene panel's buttons, status, progress or runtime chip: it presents them
+  to the `gev-scenes` store and the panel's buttons call its actions there.
+  `sceneElements`, `presentSceneButtons`, `presentSceneProgress` and
+  `presentSceneRuntime` give way to `sceneButtonsDisabled` and
+  `scenePercent`. It no longer stands down when the page has no Scene
+  panel: ESC still stops a playing scene and the runtime chip still shows
+  (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

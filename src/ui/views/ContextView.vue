@@ -1,10 +1,12 @@
 <script setup>
+import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
 import { useBhoteKoshiPanelStore } from '../stores/bhoteKoshiPanel.js';
 import { useContextStore } from '../stores/context.js';
+import { useSceneStore } from '../stores/scenes.js';
 import AwarenessPanel from './panels/AwarenessPanel.vue';
 import BhoteKoshiPanel from './panels/BhoteKoshiPanel.vue';
 import MissionDetail from './panels/MissionDetail.vue';
@@ -17,6 +19,9 @@ const { view: ctx } = storeToRefs(useContextStore());
 const { presence: cockpit } = storeToRefs(useCockpitStore());
 // While the Bhote Koshi event is on, its panel is the rail's only content.
 const { panel: bhotePanel } = storeToRefs(useBhoteKoshiPanelStore());
+// The Scene runtime chip SceneControls presents while a scene plays.
+const { panel: scenePanel } = storeToRefs(useSceneStore());
+const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
 </script>
 
 <template>
@@ -93,5 +98,5 @@ const { panel: bhotePanel } = storeToRefs(useBhoteKoshiPanelStore());
     <BhoteKoshiPanel />
   </aside>
 
-  <div id="scene-runtime"></div>
+  <div id="scene-runtime" :class="{ active: !!sceneRuntime }">{{ sceneRuntime }}</div>
 </template>

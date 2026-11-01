@@ -446,8 +446,7 @@ try {
     const retainedLabel = document.querySelector('.scene-shot-label');
     const stopping = director.destroy();
     const notificationsAtStop = window.__qaSceneState.length;
-    const stoppedSynchronously =
-      controls.destroyed && controls.removers.length === 0;
+    const stoppedSynchronously = controls.destroyed;
     retainedLabel?.click();
     document.getElementById('scene-new-btn').click();
     controls.run('capture');

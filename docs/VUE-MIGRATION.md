@@ -91,7 +91,9 @@ a feature supplying only its accent.
    the rail cards, card blocks and timeline (`src/ui/rail/`) render through
    Vue's synchronous `render()` behind `createRailCards()`,
    `createRailCardBlocks()` and `createRailTimeline()`. Order: Scenes (done: `SceneOptions` and
-   `SceneShotList` over the `gev-scenes` store), Weather (done: the owner
+   `SceneShotList` over the `gev-scenes` store; the panel's buttons, status
+   line, progress bar and the runtime chip render the panel SceneControls
+   presents there, and the buttons and file chooser call its actions), Weather (done: the owner
    renders `WeatherReadout` from the view it computes), Recent imagery
    (done: `RecentImageryReadout` and its day cards, the same way),
    Street level (done: `StreetLevelPanel` renders the `gev-street-level`

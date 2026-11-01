@@ -1,11 +1,6 @@
 /** Own Scene panel listeners and presentation through project reads and actions. */
 import { t, msg } from '../i18n/index.js';
-import {
-  sceneElements,
-  presentSceneButtons,
-  presentSceneProgress,
-  presentSceneRuntime,
-} from './scenePresentation.js';
+import { sceneButtonsDisabled, scenePercent } from './scenePresentation.js';
 import { useSceneStore } from './stores/scenes.js';
 import { applicationPinia } from './vueRuntime.js';
 
@@ -18,19 +13,27 @@ export class SceneControls {
     read,
     actions,
     subscribe,
-    elements = sceneElements(),
     store = useSceneStore(applicationPinia()),
   }) {
     this.read = read;
     this.actions = actions;
-    this.elements = elements;
     this.store = store;
     this.destroyed = false;
     this.actionGeneration = 0;
-    this.removers = [];
     this.playbackKeyRemover = null;
-    if (!elements.select) return;
-    // The SceneShotList view renders the rows; their actions come back here.
+    // The panel views render the buttons, status, progress and runtime chip.
+    this.panel = {
+      running: false,
+      hasShots: false,
+      disabled: sceneButtonsDisabled(false, false),
+      status: '',
+      progress: 0,
+      runtime: '',
+      // The radio's PLAY means "listen"; this one plays the scene.
+      playLabel: t('PLAY', { context: 'scene' }),
+    };
+    // The SceneShotList view renders the rows and the panel its buttons;
+    // their actions come back here.
     this.storeToken = store.attach({
       select: (id) => {
         this.run('selectShot', id);
@@ -42,10 +45,20 @@ export class SceneControls {
         this.run('renameShot', sceneId, shotId, title),
       load: (sceneId, shotId) => this.run('load', sceneId, shotId),
       remove: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
+      selectScene: (sceneId) => this.run('selectScene', sceneId),
+      create: () => this.createScene(),
+      deleteScene: () => this.deleteSelectedScene(),
+      capture: () => this.run('capture'),
+      update: () => this.run('update'),
+      next: () => this.run('next'),
+      export: () => this.run('export'),
+      download: () => this.run('download'),
+      start: () => this.run('start', this.read().selectedSceneId),
+      stop: () => this.run('stop', msg('Stopped')),
+      importFile: (file) =>
+        this.run(this.actions.reviewImport ? 'reviewImport' : 'import', file),
     });
-    // The radio's PLAY means "listen"; this one plays the scene.
-    const playLabel = t('PLAY', { context: 'scene' });
-    if (elements.start) elements.start.textContent = playLabel;
+    this.presentPanel({});
     if (subscribe)
       this.unsubscribe = subscribe((notification) =>
         this.present(notification),
@@ -54,34 +67,6 @@ export class SceneControls {
       this.renderSceneSelect();
       this.renderShotList();
     }
-    this.listen(elements.select, 'change', () =>
-      this.run('selectScene', elements.select.value),
-    );
-    for (const [element, action] of Object.entries({
-      capture: 'capture',
-      update: 'update',
-      next: 'next',
-      export: 'export',
-      download: 'download',
-    })) {
-      this.listen(elements[element], 'click', () => this.run(action));
-    }
-    this.listen(elements.new, 'click', () => this.createScene());
-    this.listen(elements.delete, 'click', () => this.deleteSelectedScene());
-    this.listen(elements.start, 'click', () =>
-      this.run('start', this.read().selectedSceneId),
-    );
-    this.listen(elements.stop, 'click', () => this.run('stop', msg('Stopped')));
-    this.listen(elements.import, 'click', () => elements.file?.click());
-    this.listen(elements.file, 'change', async () => {
-      const file = elements.file?.files?.[0];
-      if (!file) return;
-      await this.run(
-        this.actions.reviewImport ? 'reviewImport' : 'import',
-        file,
-      );
-      if (!this.destroyed) elements.file.value = '';
-    });
     if (!subscribe) {
       this.updateStatus(t('Ready'));
       this.setProgress(0);
@@ -149,13 +134,13 @@ export class SceneControls {
       this.setButtons(state.running);
   }
 
-  listen(target, type, callback) {
-    if (!target) return;
-    const listener = (event) => {
-      if (!this.destroyed) return callback(event);
-    };
-    target.addEventListener(type, listener);
-    this.removers.push(() => target.removeEventListener(type, listener));
+  /** Merge `patch` into the panel and publish it. */
+  presentPanel(patch) {
+    if (this.destroyed) return;
+    Object.assign(this.panel, patch);
+    // A newer owner's panel is left alone.
+    if (this.store.owns(this.storeToken))
+      this.store.publishPanel({ ...this.panel });
   }
 
   run(action, ...args) {
@@ -226,29 +211,31 @@ export class SceneControls {
       (item) => item.id === state.selectedSceneId,
     );
     const shots = scene?.shots ?? [];
-    presentSceneButtons(this.elements, running, state.hasRun, {
-      hasScene: !!scene,
-      // PLAY and NEXT run on into the following scenes.
-      playableShots: (state.scenes ?? []).reduce(
-        (total, item) => total + (item.shots?.length ?? 0),
-        0,
-      ),
-      hasSelectedShot: shots.some((shot) => shot.id === state.selectedShotId),
+    this.presentPanel({
+      running: !!running,
+      hasShots: shots.length > 0,
+      disabled: sceneButtonsDisabled(running, state.hasRun, {
+        hasScene: !!scene,
+        // PLAY and NEXT run on into the following scenes.
+        playableShots: (state.scenes ?? []).reduce(
+          (total, item) => total + (item.shots?.length ?? 0),
+          0,
+        ),
+        hasSelectedShot: shots.some((shot) => shot.id === state.selectedShotId),
+      }),
     });
-    this.elements.panel?.classList.toggle('has-shots', shots.length > 0);
   }
 
   setProgress(progress) {
-    if (!this.destroyed) presentSceneProgress(this.elements.progress, progress);
+    this.presentPanel({ progress: scenePercent(progress) });
   }
 
   updateStatus(text) {
-    if (!this.destroyed && this.elements.status)
-      this.elements.status.textContent = text;
+    this.presentPanel({ status: text });
   }
 
   updateRuntime(text) {
-    if (!this.destroyed) presentSceneRuntime(this.elements.runtime, text);
+    this.presentPanel({ runtime: text || '' });
   }
 
   setPlaybackActive(active) {
@@ -278,10 +265,11 @@ export class SceneControls {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.setPlaybackKeyboardEnabled(false);
-    for (const remove of this.removers.splice(0)) remove();
-    if (this.storeToken) this.store.detach(this.storeToken);
-    this.elements.panel?.classList.toggle('has-shots', false);
-    presentSceneRuntime(this.elements.runtime, '');
+    // The panel keeps its last status and buttons, without shots or the
+    // runtime chip.
+    if (this.store.owns(this.storeToken))
+      this.store.publishPanel({ ...this.panel, hasShots: false, runtime: '' });
+    this.store.detach(this.storeToken);
     this.setPlaybackActive(false);
   }
 }

@@ -1,5 +1,5 @@
-/** Scene panel elements and text-only project presentation; the shot list
- * and scene options are the SceneShotList and SceneOptions views. */
+/** The Scene panel's text and button presentation; the panel views render
+ * it. */
 import { formatNumber, msg, t } from '../i18n/index.js';
 
 // Labels for what a shot stores; anything else shows as stored. Style names
@@ -20,30 +20,6 @@ const DETECTION_MODE_LABELS = Object.freeze({
   BALANCED: msg('BALANCED'),
   DENSE: msg('DENSE'),
 });
-
-export function sceneElements(root = document) {
-  const ids = {
-    panel: 'scene-panel',
-    select: 'scene-select',
-    new: 'scene-new-btn',
-    delete: 'scene-delete-btn',
-    capture: 'scene-capture-btn',
-    update: 'scene-update-shot-btn',
-    start: 'scene-start-btn',
-    stop: 'scene-stop-btn',
-    next: 'scene-next-btn',
-    export: 'scene-export-btn',
-    import: 'scene-import-btn',
-    file: 'scene-import-file',
-    download: 'scene-download-btn',
-    status: 'scene-status',
-    progress: 'scene-progress-fill',
-    runtime: 'scene-runtime',
-  };
-  return Object.fromEntries(
-    Object.entries(ids).map(([name, id]) => [name, root.getElementById(id)]),
-  );
-}
 
 /**
  * A shot's summary line: its style, detection mode and timing.
@@ -79,8 +55,7 @@ export function describeShot(shot) {
  * NEXT when no scene in the project has a shot (both continue into the
  * following scenes).
  */
-export function presentSceneButtons(
-  elements,
+export function sceneButtonsDisabled(
   running,
   hasRun,
   { hasScene = true, playableShots = 1, hasSelectedShot = true } = {},
@@ -92,6 +67,7 @@ export function presentSceneButtons(
     start: playableShots === 0,
     next: playableShots === 0,
   };
+  const disabled = {};
   for (const name of [
     'start',
     'next',
@@ -102,23 +78,14 @@ export function presentSceneButtons(
     'update',
     'export',
     'import',
-  ]) {
-    if (elements[name]) elements[name].disabled = running || !!idleOff[name];
-  }
-  if (elements.stop) elements.stop.disabled = !running;
-  if (elements.download) elements.download.disabled = !hasRun;
-  elements.panel?.classList.toggle('running', running);
+  ])
+    disabled[name] = running || !!idleOff[name];
+  disabled.stop = !running;
+  disabled.download = !hasRun;
+  return disabled;
 }
 
-export function presentSceneProgress(element, progress) {
-  if (!element) return;
-  const percentage = Math.round(Math.max(0, Math.min(1, progress)) * 100);
-  element.style.width = `${percentage}%`;
-  element.textContent = `${percentage}%`;
-}
-
-export function presentSceneRuntime(element, text) {
-  if (!element) return;
-  element.textContent = text;
-  element.classList.toggle('active', !!text);
+/** @returns {number} Whole percent, 0–100. */
+export function scenePercent(progress) {
+  return Math.round(Math.max(0, Math.min(1, progress)) * 100);
 }
