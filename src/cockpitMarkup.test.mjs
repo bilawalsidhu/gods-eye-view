@@ -696,7 +696,7 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
   );
   assert.match(
     callback[1],
-    /_cockpitPanelRestore\.set\(\s*panelId,\s*panel\.classList\.contains\('collapsed'\),?\s*\)/,
+    /_cockpitPanelRestore\.set\(\s*panelId,\s*this\._shownPanel\(panel\)\.collapsed,?\s*\)/,
     "entry must remember each panel's exact collapsed state before hiding it",
   );
   assert.match(
@@ -757,7 +757,7 @@ test('real disclosure changes reconsider only their own temporary panel lane', (
   );
   assert.match(
     collapse,
-    /classList\.contains\('collapsed'\) === nextCollapsed\s*&&\s*!wasAutoCollapsed[\s\S]*?return;/,
+    /this\._shownPanel\(panelEl\)\.collapsed === nextCollapsed\s*&&\s*!wasAutoCollapsed[\s\S]*?return;/,
   );
   assert.match(
     collapse,

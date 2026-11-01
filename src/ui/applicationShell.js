@@ -858,6 +858,7 @@ export class StyleManager extends ShellFacade {
     this._mobileShell = initMobileShell({
       setPanelCollapsed: (panelId, collapsed, options) =>
         this._panelChrome.setPanelCollapsed(panelId, collapsed, options),
+      readPanel: (panel) => this._panelChrome._shownPanel(panel),
       onSheetsClosed: () => this._syncShareState(),
       onTabOpened: (sheet) => {
         void this._onMobileTabOpened(sheet);

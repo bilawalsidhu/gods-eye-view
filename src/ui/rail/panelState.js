@@ -57,6 +57,15 @@ export const vPanelState = {
 };
 
 /**
+ * Whether the person keeps a panel closed, as share links record it: a
+ * collapse a layout applied only for space still counts as open.
+ * @param {import('../stores/panelChrome.js').PanelState} state
+ */
+export function prefersCollapsed(state) {
+  return state.collapsed && !state.auto;
+}
+
+/**
  * A panel's state as its classes draw it: the markup's state, before its
  * owner first presents the panel.
  * @param {Element} el

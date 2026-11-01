@@ -110,7 +110,7 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   window.performance = { now: () => now };
   document.defaultView = window;
   const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame', 't', 'msg', 'readPanelState',
-    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_presentPanel').toString()}});`)(
+    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_presentPanel').toString()},\n${shellMethod('_shownPanel').toString()}});`)(
     createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {}, t, msg, readPanelState,
   );
   const saves = [];
@@ -248,7 +248,7 @@ test('opening the unpinned Location sibling cancels the Map Source request', () 
   assert.equal(h.timers.size, 0); h.drain(); assert.equal(h.calls(), 0);
 });
 test('a pinned Map Source tray retains its own request when the sibling opens', () => {
-  const h = harness(); h.panel.classes.add('dock-pinned'); h.key();
+  const h = harness(); h.manager._presentPanel(h.panel, { pinned: true }); h.key();
   h.manager.setPanelCollapsed('location-bar', false); h.tick();
   assert.equal(h.panel.classList.contains('collapsed'), false);
   assert.equal(h.document.activeElement, h.active);
@@ -357,12 +357,13 @@ test('Location keyboard opening cancels the unpinned sibling and cannot revive i
 });
 
 test('Location keyboard opening preserves a pinned sibling and a pinned Location survives sibling opening', () => {
-  const h = harness(); h.panel.classes.add('dock-pinned'); h.key(); h.tick();
+  // Pins go through the store, as the dock's pin button does.
+  const h = harness(); h.manager._presentPanel(h.panel, { pinned: true }); h.key(); h.tick();
   h.focus(h.locationDisclosure); h.locationKey(); h.drain();
   assert.equal(h.panel.classList.contains('collapsed'), false);
   assert.equal(h.location.classList.contains('collapsed'), false);
   assert.equal(h.document.activeElement, h.locationDisclosure);
-  h.location.classes.add('dock-pinned');
+  h.manager._presentPanel(h.location, { pinned: true });
   h.manager.setPanelCollapsed('control-panel', true);
   h.focus(h.disclosure); h.key(); h.tick();
   assert.equal(h.location.classList.contains('collapsed'), false);

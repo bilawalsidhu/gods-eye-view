@@ -301,7 +301,11 @@ test('weather rail orders between CCTV and Context, observes and presents chrome
     const weather = f.nodes.get('weather-panel');
     stack.children = [weather, f.nodes.get('global-context-panel')];
     const store = usePanelChromeStore(createPinia());
-    const chrome = { _chromeStore: store, _chromeToken: store.connect({}) };
+    const chrome = {
+      _chromeStore: store,
+      _chromeToken: store.connect({}),
+      _shownPanel: PanelChrome.prototype._shownPanel,
+    };
     const presented = [];
     const owner = new PanelLayoutController({
       readHud: () => ({}),

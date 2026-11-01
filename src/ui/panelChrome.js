@@ -1,5 +1,5 @@
 import { UiLifetime } from './uiLifetime.js';
-import { readPanelState } from './rail/panelState.js';
+import { prefersCollapsed, readPanelState } from './rail/panelState.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { applicationPinia } from './vueRuntime.js';
 import { displayPanelScroller } from './displayPanelScroll.js';
@@ -83,6 +83,7 @@ export class PanelChrome {
     this._cockpitContextCollapsedForDataPanel = false;
     this._panelPosition = new PanelPositionControls({
       presentPanel: (panel, patch) => this._presentPanel(panel, patch),
+      shownPanel: (panel) => this._shownPanel(panel),
       showToast: (message) => this._showToast(message),
     });
     this._panelLayout = new PanelLayoutController({
@@ -202,7 +203,7 @@ export class PanelChrome {
     if (this._disposed || !this._disclosurePanelIds?.has(panelId)) return;
     const panel = document.getElementById(panelId);
     if (!panel) return;
-    this.setPanelCollapsed(panelId, !panel.classList.contains('collapsed'), {
+    this.setPanelCollapsed(panelId, !this._shownPanel(panel).collapsed, {
       explicit: true,
     });
   }
@@ -216,9 +217,7 @@ export class PanelChrome {
     const panelEl = document.getElementById(panelId);
     if (!panelEl) return undefined;
     const shouldPin =
-      typeof pin === 'boolean'
-        ? pin
-        : !panelEl.classList.contains('dock-pinned');
+      typeof pin === 'boolean' ? pin : !this._shownPanel(panelEl).pinned;
     // The tray pinned last draws on top; unpinning hands the top to the
     // other tray if it is pinned.
     this._presentPanel(panelEl, { pinned: shouldPin, pinnedTop: shouldPin });
@@ -227,7 +226,7 @@ export class PanelChrome {
       const other = document.getElementById(otherId);
       if (!other) continue;
       this._presentPanel(other, {
-        pinnedTop: !shouldPin && other.classList.contains('dock-pinned'),
+        pinnedTop: !shouldPin && this._shownPanel(other).pinned,
       });
     }
     if (shouldPin) {
@@ -329,12 +328,20 @@ export class PanelChrome {
         ? document.getElementById(panelOrId)
         : panelOrId;
     if (!panelEl?.id) return;
-    const shown =
-      this._chromeStore.panels[panelEl.id] ?? readPanelState(panelEl);
     this._chromeStore.publish(this._chromeToken, panelEl.id, {
-      ...shown,
+      ...this._shownPanel(panelEl),
       ...patch,
     });
+  }
+
+  /**
+   * A panel's state as PanelChrome presented it, or its markup's before the
+   * first presentation.
+   * @param {Element} panelEl
+   * @returns {import('./stores/panelChrome.js').PanelState}
+   */
+  _shownPanel(panelEl) {
+    return this._chromeStore.panels[panelEl.id] ?? readPanelState(panelEl);
   }
 
   _buildSharePanelState() {
@@ -344,18 +351,14 @@ export class PanelChrome {
       if (!panelEl) continue;
       // Responsive auto-collapse is presentation only; the recipient should
       // restore the user's explicit expanded preference at its own viewport.
-      const collapsed =
-        panelEl.classList.contains('layout-auto-collapsed') ||
-        panelEl.classList.contains('accordion-collapsed')
-          ? false
-          : panelEl.classList.contains('collapsed');
+      const shown = this._shownPanel(panelEl);
+      const collapsed = prefersCollapsed(shown);
       // A panel the phone shell only borrowed for a sheet shares its own state.
       const entry = {
         id: spec.id,
         collapsed: this.readSharedCollapsed(spec.id) ?? collapsed,
       };
-      if (spec.pinnable)
-        entry.pinned = panelEl.classList.contains('dock-pinned');
+      if (spec.pinnable) entry.pinned = shown.pinned;
       specs.push(entry);
     }
     return specs.length ? { specs } : null;
@@ -402,9 +405,7 @@ export class PanelChrome {
     if (explicit && !restore)
       this.shareLinkManager?.claimRestoreLane?.('panel', panelId);
     const nextCollapsed = Boolean(collapsed);
-    const wasAutoCollapsed =
-      panelEl.classList.contains('layout-auto-collapsed') ||
-      panelEl.classList.contains('accordion-collapsed');
+    const wasAutoCollapsed = Boolean(this._shownPanel(panelEl).auto);
     // One panel is open per desktop side: opening a side panel, whether the
     // user asked or a feature revealed it (Street Level's viewer, a selected
     // radio station), owns the whole accordion, including peers that were
@@ -466,12 +467,12 @@ export class PanelChrome {
     }
     // Reveal Radio's owner before the no-op check: the nested section may
     // already be expanded while its Context parent is closed.
+    const contextPanel = document.getElementById('global-context-panel');
     if (
       !nextCollapsed &&
       panelId === 'radio-panel' &&
-      document
-        .getElementById('global-context-panel')
-        ?.classList.contains('collapsed')
+      contextPanel &&
+      this._shownPanel(contextPanel).collapsed
     ) {
       this.setPanelCollapsed('global-context-panel', false, {
         explicit,
@@ -481,7 +482,7 @@ export class PanelChrome {
       });
     }
     if (
-      panelEl.classList.contains('collapsed') === nextCollapsed &&
+      this._shownPanel(panelEl).collapsed === nextCollapsed &&
       !wasAutoCollapsed
     ) {
       if (priorLeftOwner !== this._panelLayout._leftStackPreferredPanelId) {
@@ -505,7 +506,7 @@ export class PanelChrome {
     }
     if (!nextCollapsed && !restore && panelId === 'location-bar') {
       const otherPanel = document.getElementById('control-panel');
-      if (otherPanel && !otherPanel.classList.contains('dock-pinned')) {
+      if (otherPanel && !this._shownPanel(otherPanel).pinned) {
         this.setPanelCollapsed('control-panel', true, {
           restore,
           persist,
@@ -514,7 +515,7 @@ export class PanelChrome {
       }
     } else if (!nextCollapsed && !restore && panelId === 'control-panel') {
       const otherPanel = document.getElementById('location-bar');
-      if (otherPanel && !otherPanel.classList.contains('dock-pinned')) {
+      if (otherPanel && !this._shownPanel(otherPanel).pinned) {
         this.setPanelCollapsed('location-bar', true, {
           restore,
           persist,
@@ -564,7 +565,7 @@ export class PanelChrome {
       if (panel) {
         this._cockpitPanelRestore.set(
           panelId,
-          panel.classList.contains('collapsed'),
+          this._shownPanel(panel).collapsed,
         );
       }
       this.setPanelCollapsed(panelId, true, {

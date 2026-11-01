@@ -1,5 +1,6 @@
 /** Own panel collapsed-state preferences and the one-time layout-reset notice. */
 import { t } from '../i18n/index.js';
+import { readPanelState } from './rail/panelState.js';
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 /**
@@ -14,8 +15,9 @@ const RETIRED_PANEL_KEY_PREFIXES = [
   `godsEyeView.${PANEL_POSITION_STORAGE_VERSION}.panelFloatHintShown`,
 ];
 export class PanelPositionControls {
-  constructor({ presentPanel, showToast }) {
+  constructor({ presentPanel, shownPanel = readPanelState, showToast }) {
     this._presentPanel = presentPanel;
+    this._shownPanel = shownPanel;
     this._showToast = showToast;
   }
 
@@ -55,7 +57,7 @@ export class PanelPositionControls {
   _restorePanelCollapsedState(panelId, { allowStored = true } = {}) {
     const panelEl = document.getElementById(panelId);
     if (!panelEl) return;
-    let collapsed = panelEl.classList.contains('collapsed');
+    let collapsed = this._shownPanel(panelEl).collapsed;
     let stored = null;
     if (allowStored) {
       try {

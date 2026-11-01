@@ -78,6 +78,7 @@ test('the documented outcomes hold: default, stored open, stored shut, and a sha
   const { PanelPositionControls } =
     await import('../ui/panelPositionControls.js');
   const { presentPanelLocally } = await import('../testSupport/panelState.mjs');
+  const { readPanelState } = await import('../ui/rail/panelState.js');
   const html = await readFile(
     path.join(root, 'src/ui/views/panels/CctvPanel.vue'),
     'utf8',
@@ -112,6 +113,7 @@ test('the documented outcomes hold: default, stored open, stored shut, and a sha
   try {
     const controls = new PanelPositionControls({
       presentPanel: presentPanelLocally,
+      shownPanel: readPanelState,
       layoutRightPanels: () => {},
       syncCctvPanelViewport: () => {},
       showToast: () => {},

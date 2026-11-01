@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PanelChrome } from './panelChrome.js';
 import { presentPanelLocally } from '../testSupport/panelState.mjs';
+import { readPanelState } from './rail/panelState.js';
 
 function fixture(theme = 'cyber') {
   const nodes = new Map();
@@ -36,7 +37,7 @@ function fixture(theme = 'cyber') {
     _rightPanelStack: rail,
     _panelLayout: {},
     _lifetime: { frame() {} },
-    _presentPanel: presentPanelLocally, _scheduleRightPanelLayout() {},
+    _presentPanel: presentPanelLocally, _shownPanel: readPanelState, _scheduleRightPanelLayout() {},
     _scheduleLeftPanelLayout() {}, _layoutRightPanels() {}, _syncCctvPanelViewport() {},
     _savePanelCollapsedState: (...args) => saved.push(args),
     shareLinkManager: { claimRestoreLane: (...args) => claimed.push(args), onPanelStateChange() {} },
@@ -114,4 +115,42 @@ test('a feature revealing a side panel makes it the side owner', () => {
     // Only a user's choice claims restoration lanes.
     assert.deepEqual(f.claimed, []);
   } finally { globalThis.document = prior; }
+});
+
+test('PanelChrome reads a panel’s state from its store, not classes written outside it', async () => {
+  const { createPinia } = await import('pinia');
+  const { usePanelChromeStore } = await import('./stores/panelChrome.js');
+  const store = usePanelChromeStore(createPinia());
+  const owner = {
+    _chromeStore: store,
+    _chromeToken: store.connect({}),
+    readSharedCollapsed: () => undefined,
+  };
+  const classes = new Set(['collapsed']);
+  const panel = {
+    id: 'data-panel',
+    classList: { contains: (name) => classes.has(name) },
+  };
+  // Before the first presentation the markup's classes stand.
+  assert.deepEqual(PanelChrome.prototype._shownPanel.call(owner, panel), {
+    collapsed: true, pinned: false, pinnedTop: false, auto: null,
+  });
+  // The accordion closed it; a class written outside the store doesn't count.
+  store.publish(owner._chromeToken, 'data-panel', {
+    collapsed: true, pinned: false, pinnedTop: false, auto: 'accordion',
+  });
+  classes.add('dock-pinned');
+  const shown = PanelChrome.prototype._shownPanel.call(owner, panel);
+  assert.equal(shown.auto, 'accordion');
+  assert.equal(shown.pinned, false);
+  // A share link records the accordion's collapse as the person's open panel.
+  const prior = globalThis.document;
+  globalThis.document = { getElementById: (id) => (id === 'data-panel' ? panel : null) };
+  try {
+    owner._shownPanel = PanelChrome.prototype._shownPanel;
+    const state = PanelChrome.prototype._buildSharePanelState.call(owner);
+    assert.deepEqual(state.specs, [{ id: 'data-panel', collapsed: false }]);
+  } finally {
+    globalThis.document = prior;
+  }
 });

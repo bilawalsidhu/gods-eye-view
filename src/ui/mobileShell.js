@@ -13,6 +13,10 @@
 
 import { EXCLUSIVE_SURFACE_CLASSES } from '../exclusiveSurfaces.js';
 import { msg } from '../i18n/index.js';
+import {
+  prefersCollapsed as prefersStateCollapsed,
+  readPanelState,
+} from './rail/panelState.js';
 
 export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
 export const MOBILE_SHELL_CLASS = 'mobile-shell';
@@ -97,6 +101,8 @@ function currentSheetOf(body) {
  * @param {(query: string) => MediaQueryList} [input.matchMedia]
  * @param {typeof MutationObserver} [input.MutationObserverImpl]
  * @param {typeof ResizeObserver} [input.ResizeObserverImpl]
+ * @param {(panel: Element) => object} [input.readPanel] A panel's state as its
+ *   owner presented it; its classes by default.
  * @param {(callback: () => void) => number} [input.requestFrame]
  * @param {() => void} [input.onSheetsClosed] Runs after the last sheet closes
  *   and its panels are put back (e.g. to refresh the share link).
@@ -112,6 +118,7 @@ function currentSheetOf(body) {
  */
 export function initMobileShell({
   setPanelCollapsed,
+  readPanel = readPanelState,
   documentRef = globalThis.document,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   MutationObserverImpl = globalThis.MutationObserver,
@@ -182,18 +189,14 @@ export function initMobileShell({
       : null;
   removers.push(() => resize?.disconnect());
 
-  const isCollapsed = (panelId) =>
-    element(panelId)?.classList.contains('collapsed') ?? true;
-  // The user's preference, as share links record it: a collapse that layout
-  // applies only for space (Tactical, Cyber) still counts as expanded.
+  const isCollapsed = (panelId) => {
+    const panel = element(panelId);
+    return panel ? readPanel(panel).collapsed : true;
+  };
+  // The user's preference, as share links record it.
   const prefersCollapsed = (panelId) => {
-    const classes = element(panelId)?.classList;
-    if (!classes) return true;
-    return (
-      classes.contains('collapsed') &&
-      !classes.contains('layout-auto-collapsed') &&
-      !classes.contains('accordion-collapsed')
-    );
+    const panel = element(panelId);
+    return panel ? prefersStateCollapsed(readPanel(panel)) : true;
   };
 
   const panelStates = () =>

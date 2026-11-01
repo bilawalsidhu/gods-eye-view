@@ -124,7 +124,13 @@ a feature supplying only its accent.
    `accordion-collapsed`): PanelChrome, the rails and the accordion present
    it rather than writing classes. The directive applies it in a synchronous
    watcher, not on Vue's next render, because the rails measure a panel in
-   the same task that opens or closes it. Done.
+   the same task that opens or closes it. PanelChrome and its preference
+   restore, and the phone shell, read a panel's state back from the store
+   (`_shownPanel`; the markup's classes before its first presentation), so
+   once a panel is presented a class written outside the store no longer
+   counts. The rails, the accordion and the hover disclosure
+   (`panelDisclosure.js`), which act within the same task as a layout, read
+   the classes the directive has just drawn. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
    classes and CSS; text a template renders with `t()` drops its `data-i18n`
    marker. The page places each view with a
