@@ -4897,7 +4897,9 @@ silently demoting every later lookup for the session.
   wireframe dashed; colours, widths and active/idle emphasis are unchanged. A manual calibration
   (`calSource: 'manual'`) or curated pose (`poseSource: 'curated'`) is never presented as
   estimated, matching the CAL badge. Public camera state carries `headingConfidence` and
-  `headingEstimated` (`src/layers/cctv/headingConfidence.js`, #639).
+  `headingEstimated` (`src/layers/cctv/headingConfidence.js`, #639). The HUD token and the
+  camera panel's meta line wrap the bearing after rounding to whole degrees, so a camera
+  facing 359.5° or more reads `HDG 0°` rather than `HDG 360°`.
 - **CCTV identified hardware:** a camera whose source or seed names a hardware `model` that
   resolves in `src/layers/cctv/modelSpecs.js` (vendored CC0 records from the CCTV Camera
   Database) gets the model's specs appended to the HUD meta line. Only fixed single-lens
