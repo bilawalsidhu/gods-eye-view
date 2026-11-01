@@ -2875,5 +2875,20 @@
   "Play from this scene through the rest of the project": "從此場景開始播放項目中的其餘場景",
   "Play the shot after the selected one, moving on to the next scene when needed": "播放所選鏡頭的下一個鏡頭，必要時進入下一個場景",
   "Edit anchors, data packs and shot details": "編輯錨點、數據包和鏡頭詳情",
-  "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包"
+  "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包",
+  "Tilt up toward the horizon": "向地平線方向抬高視角",
+  "Tilt down toward top-down view": "向俯視視角壓低",
+  "Top-down view": "俯視視角",
+  "Look left": "向左看",
+  "Look right": "向右看",
+  "Look up": "向上看",
+  "Look down": "向下看",
+  "Map navigation": "地圖導覽",
+  "Tilt": "傾斜",
+  "Tilt: top-down (bottom) to near horizon (top)": "傾斜：俯視（底部）至接近地平線（頂部）",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "地圖朝向。拖曳以旋轉，方向鍵轉向，Home 鍵朝北",
+  "North, 0 degrees": "北，0 度",
+  "Look around": "環顧四周",
+  "{heading} degrees from north": "從北方起算 {heading} 度",
+  "{tilt} degrees from top-down": "偏離俯視 {tilt} 度"
 }
