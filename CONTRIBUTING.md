@@ -31,8 +31,16 @@ Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test
 
 Run `npm run build` followed by `npm run preview`. Preview serves the built
 frontend and local data-provider APIs. Keep optional server credentials in the
-ignored `.env`; browser keys are embedded during the build, so rebuild after
-changing them. Provider Settings and `/api/setup/*` are development-only: edit
+ignored `.env`. The standalone app can read the three intentional browser
+credentials from `GET /api/runtime-config` at startup; nonempty runtime values
+override embedded build values. Restart the server after changing its environment;
+no frontend rebuild is needed. Empty runtime values retain the build value, so
+removing an embedded key still requires a rebuild. Missing/invalid configuration
+falls back to build values within one second (16 KiB response cap), including on
+static hosts without this endpoint. MCP panel builds keep their separately
+configured build-time keys. These browser values are public and still require
+provider restrictions; server secrets never belong in this response. Provider
+Settings and `/api/setup/*` are development-only: edit
 configuration through the development app or environment file. Unknown API
 paths return JSON 404 responses. Vite preview is for checking a local build;
 it is not a production server.

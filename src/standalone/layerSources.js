@@ -25,7 +25,10 @@ import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
-export function createStandaloneLayerSources(overrides = {}) {
+export function createStandaloneLayerSources(
+  overrides = {},
+  { mapillaryToken = import.meta.env?.MAPILLARY_CLIENT_TOKEN || '' } = {},
+) {
   if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))
     throw new TypeError('Source overrides must be an object');
   const mapTiles = createOpenFreeMapSource();
@@ -56,7 +59,7 @@ export function createStandaloneLayerSources(overrides = {}) {
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),
     mapillary: createMapillarySource({
-      token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',
+      token: mapillaryToken,
     }),
   };
   for (const name of Object.keys(overrides)) {

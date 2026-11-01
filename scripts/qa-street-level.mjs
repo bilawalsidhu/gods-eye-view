@@ -9,6 +9,8 @@
  * bundle carries it. `--strict` fails on any
  * skip other than "fixtures only". A failed run saves evidence under
  * qa-artifacts/street-level/.
+ * Add `--runtime-config` with `--fixtures` to supply the synthetic browser
+ * token through the runtime endpoint, testing a bundle built without keys.
  */
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
@@ -131,6 +133,9 @@ async function serveFixtures(page, fixture) {
     patterns: [
       { urlPattern: '*://*.mapillary.com/*' },
       { urlPattern: '*/api/mapillary/*' },
+      ...(fixture.runtimeConfig
+        ? [{ urlPattern: '*/api/runtime-config' }]
+        : []),
       { urlPattern: '*://api.kartaview.org/*' },
       { urlPattern: '*://cdn.kartaview.org/*' },
       { urlPattern: '*://*.openstreetcam.org/*' },
@@ -144,6 +149,8 @@ async function serveFixtures(page, fixture) {
     body: JSON.stringify(payload),
   });
   const answerFor = (method, address) => {
+    if (address.pathname === '/api/runtime-config' && fixture.runtimeConfig)
+      return json(200, fixture.runtimeConfig);
     if (/(^|\.)mapillary\.com$/.test(address.hostname)) {
       const call = describeCall(method, address);
       const answer = answerMapillaryRequest({
@@ -396,6 +403,9 @@ async function main() {
   const urlIndex = args.indexOf('--url');
   const url = urlIndex >= 0 ? args[urlIndex + 1] : 'http://localhost:4173';
   const fixtures = args.includes('--fixtures');
+  const runtimeConfigFixtures = args.includes('--runtime-config');
+  if (runtimeConfigFixtures && !fixtures)
+    throw new Error('--runtime-config requires --fixtures');
   const strict = args.includes('--strict');
   const browser = await puppeteer.launch({
     headless: true,
@@ -515,7 +525,18 @@ async function main() {
   let page = null;
 
   try {
-    const fixture = newFixture();
+    const fixture = newFixture(
+      runtimeConfigFixtures
+        ? {
+            configured: true,
+            runtimeConfig: {
+              googleMapsApiKey: '',
+              cesiumIonToken: '',
+              mapillaryClientToken: 'public-mapillary-example',
+            },
+          }
+        : {},
+    );
     page = await open('main', fixtures && fixture);
     const { configured } = await page.evaluate(() =>
       fetch('/api/mapillary/status').then((res) => res.json()),
@@ -524,7 +545,7 @@ async function main() {
       assert.equal(
         configured,
         true,
-        'fixture runs need a server started with MAPILLARY_CLIENT_TOKEN (CI uses a dummy one)',
+        'fixture runs need configured Mapillary status (server token or --runtime-config)',
       );
 
     await expandPanel(page);
