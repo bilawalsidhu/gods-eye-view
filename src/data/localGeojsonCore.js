@@ -5,6 +5,10 @@ import {
   parseGeojsonLines,
 } from '../sources/infrastructureData.js';
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
+import {
+  isUsgsWaterLayer,
+  usgsWaterCardDetails,
+} from '../layers/usgsWater/copy.js';
 import { isPointerFree } from './inputOwnership.js';
 import {
   selectInfraLod,
@@ -85,6 +89,11 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     ]);
     if (river && river.toLocaleLowerCase() !== title.toLocaleLowerCase()) {
       details.push(clampCardLine(river));
+    }
+  } else if (isUsgsWaterLayer(layerId)) {
+    // Gauge readings + observation time (src/layers/usgsWater/copy.js).
+    for (const line of usgsWaterCardDetails(props)) {
+      details.push(clampCardLine(line));
     }
   }
 
@@ -310,6 +319,12 @@ export function createLocalGeoJsonLayer(
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
+    /**
+     * Optional loader `(signal, viewer) => Promise<object[]>` used
+     * instead of fetching `url`. Its result is NOT cached across enables, so
+     * viewport-driven layers can call `reload()` to rebuild from new data.
+     */
+    loadFeatures = null,
     screenSpaceEventHandlerFactory = (canvas) =>
       new Cesium.ScreenSpaceEventHandler(canvas),
     projectToWindow = (scene, position) =>
@@ -342,6 +357,8 @@ export function createLocalGeoJsonLayer(
   let _destroyed = false;
   let _loadPromise = null;
   let _loadController = null;
+  /** A reload() requested while a load was in flight. */
+  let _reloadQueued = false;
   /**
    * The parsed bundled dataset, kept across disable/enable so a re-enable
    * rebuilds entities without refetching. The Cesium entities themselves are
@@ -477,7 +494,7 @@ export function createLocalGeoJsonLayer(
     }
   };
 
-  return {
+  const api = {
     id,
     name,
     icon,
@@ -584,8 +601,11 @@ export function createLocalGeoJsonLayer(
             // windows (before vs after the add settles) need different cleanup.
             let addedToScene = false;
             try {
-              let features = _cachedFeatures;
-              if (!features) {
+              let features = loadFeatures ? null : _cachedFeatures;
+              if (!features && loadFeatures) {
+                features = await loadFeatures(_loadController.signal, viewer);
+                if (_destroyed) return;
+              } else if (!features) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
                 });
@@ -1064,6 +1084,29 @@ export function createLocalGeoJsonLayer(
 
     disable: disableLayer,
 
+    /**
+     * Rebuild entities from a fresh `loadFeatures()` call while the
+     * layer stays enabled (viewport layers call this on camera settle). A
+     * reload while a load is in flight is coalesced into one follow-up.
+     * @param {object} viewer
+     * @returns {Promise<void>}
+     */
+    reload: async (viewer) => {
+      if (_destroyed || !_enabled) return;
+      if (_loadPromise) {
+        _reloadQueued = true;
+        return;
+      }
+      releaseDataSource(viewer);
+      _cachedFeatures = null;
+      await api.enable(viewer);
+      if (_reloadQueued && _enabled && !_destroyed) {
+        _reloadQueued = false;
+        releaseDataSource(viewer);
+        await api.enable(viewer);
+      }
+    },
+
     destroy: (viewer) => {
       if (_destroyed) return;
       _destroyed = true;
@@ -1088,6 +1131,7 @@ export function createLocalGeoJsonLayer(
       _error = null;
     },
   };
+  return api;
 }
 
 function compareLocalOverlayRecords(a, b) {
