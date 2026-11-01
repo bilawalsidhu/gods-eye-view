@@ -6117,7 +6117,9 @@ The lockfile uses DOMPurify 3.4.17, protobufjs 8.8.0, PostCSS 8.5.28,
 source-map-js 1.2.2 and nanoid 3.3.19. Cesium remains on 1.138.0. Browser QA
 uses Puppeteer 25.10.0; image-processing tools use Sharp 0.35.5. QA scripts await Puppeteer's asynchronous
 executable-path lookup before testing or passing the path to Chrome. Supported Node versions remain
-24.14.x and 26.x. Use `npm ci` to reproduce the checked-in dependency tree.
+24.14.x and 26.x; the Docker image and CI pin 24.22.1, the first 24.x release with
+the October 21, 2026 Node.js security fixes (including CVE-2026-111497). Use
+`npm ci` to reproduce the checked-in dependency tree.
 
 ### Traffic city navigation
 

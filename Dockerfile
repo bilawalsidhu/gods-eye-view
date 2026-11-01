@@ -4,7 +4,7 @@
 # proxies (ADS-B, AIS, Overpass, OpenAI Realtime, ...) as middleware, so there
 # is nothing else to containerise. See compose.yaml for the usual entry point.
 # Same Node as CI (package.json engines, .github/workflows), pinned by digest.
-FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8
+FROM node:24.22.1-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c
 
 # Puppeteer is only used by the QA scripts; skip its ~150MB Chromium download.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
