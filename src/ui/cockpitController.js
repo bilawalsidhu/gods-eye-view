@@ -150,6 +150,7 @@ export class CockpitViewController {
     this.publishRoute = publish.route ?? (() => {});
     this.publishVision = publish.vision ?? (() => {});
     this.publishSignals = publish.signals ?? (() => {});
+    this.publishUtilityLayout = publish.utilityLayout ?? (() => {});
     this.presence = {
       active: false,
       entryAvailable: false,

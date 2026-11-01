@@ -177,6 +177,12 @@
   `signalCollapsed` in its presence, and each card's `data-collapsed` and
   its toggle's state, words and icon follow it (samehkhamis).
 
+- The Cockpit utility strip's measured layout renders from the
+  `gev-cockpit` store: the layout pass publishes `utilityLayout` (the HUD's
+  `--cockpit-utility-*` lengths, `primaryOnly` and `hideCollapsed`), and a
+  host constructing `CockpitController` passes `publish.utilityLayout`
+  beside its other publishers (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

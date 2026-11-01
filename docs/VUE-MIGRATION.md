@@ -314,7 +314,12 @@ a feature supplying only its accent.
    that presence too: each card's `data-collapsed` and its toggle's words
    and icon render from it. The controls keep the controller's listeners,
    and the cards' layout stays with the controller, which reads their
-   visibility when it lays them out.
+   visibility when it lays them out. Its layout pass publishes the utility
+   strip's measured fit (the HUD's anchor and height limits, whether only the
+   expanded control fits and which control is hidden from assistive
+   technology), which `CockpitView` and `CockpitUtilityControls` render; the
+   briefing and Contact cards' positions stay imperative, because the same
+   pass measures them straight after writing them.
    `CockpitUtilityControls` renders the Display
    and Radio launchers, which popover is open and the compact Radio
    controls from the `gev-radio` store that RadioControls publishes to and

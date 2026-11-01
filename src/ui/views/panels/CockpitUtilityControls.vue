@@ -5,6 +5,7 @@ import { t } from '../../../i18n/index.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import UiSlider from '../../kit/UiSlider.js';
 import { useRadioStore } from '../../stores/radio.js';
+import { useCockpitStore } from '../../stores/cockpit.js';
 import UiButton from '../../kit/UiButton.vue';
 
 // The Cockpit's Display and Radio launchers and their popovers. RadioControls
@@ -18,6 +19,17 @@ const { act } = store;
 const { view: radio, utility } = storeToRefs(store);
 const open = computed(() => utility.value ?? { display: false, radio: false });
 const cockpit = computed(() => radio.value?.cockpit ?? null);
+// The Cockpit's layout pass measures which controls fit; until it runs, the
+// controls carry no aria-hidden.
+const { utilityLayout: layout } = storeToRefs(useCockpitStore());
+const ariaHidden = (expanded) =>
+  layout.value
+    ? String(
+        layout.value.hideCollapsed &&
+          !expanded &&
+          (open.value.display || open.value.radio),
+      )
+    : undefined;
 const displayLabel = computed(() =>
   open.value.display
     ? t('Collapse Cockpit display options')
@@ -31,8 +43,8 @@ const radioLabel = computed(() =>
 </script>
 
 <template>
-  <aside id="cockpit-utility-controls" class="cockpit-utility-controls" aria-label="Cockpit display and Radio controls" data-i18n-aria-label>
-    <div class="cockpit-utility-control ui-scroll" v-class-toggle="{ 'is-expanded': open.display }">
+  <aside id="cockpit-utility-controls" class="cockpit-utility-controls" v-class-toggle="{ 'layout-primary-only': !!layout?.primaryOnly }" aria-label="Cockpit display and Radio controls" data-i18n-aria-label>
+    <div class="cockpit-utility-control ui-scroll" v-class-toggle="{ 'is-expanded': open.display }" :aria-hidden="ariaHidden(open.display)">
       <div class="cockpit-utility-launcher" data-cockpit-launcher="display">
         <span data-i18n>DISPLAY</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>
@@ -45,7 +57,7 @@ const radioLabel = computed(() =>
         <div class="cockpit-display-slot" data-cockpit-display-slot="models3d"></div>
       </div>
     </div>
-    <div class="cockpit-utility-control ui-scroll" v-class-toggle="{ 'is-expanded': open.radio }">
+    <div class="cockpit-utility-control ui-scroll" v-class-toggle="{ 'is-expanded': open.radio }" :aria-hidden="ariaHidden(open.radio)">
       <div class="cockpit-utility-launcher" data-cockpit-launcher="radio">
         <span data-i18n>RADIO</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>

@@ -527,7 +527,7 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   );
   assert.match(
     syncSignalLayout.toString(),
-    /setAttribute\('aria-hidden', String\(hiddenSibling\)\)/,
+    /primaryOnly: utilityLayout\.primaryOnly,\s*hideCollapsed: utilityLayout\.primaryOnly,/,
   );
 });
 
@@ -934,7 +934,7 @@ test('Cockpit panel corridors reserve the owned topline readouts', () => {
   assert.ok(signalLayout, 'Cockpit signal layout method is missing');
   assert.match(
     signalLayout,
-    /setProperty\(\s*'--cockpit-utility-top',\s*`\$\{utilityAnchor\.top\.toFixed\(1\)\}px`,?\s*\)/,
+    /publishUtilityLayout\([\s\S]*?top: `\$\{utilityAnchor\.top\.toFixed\(1\)\}px`,/,
     'Cockpit owns the utility strip anchor and republishes it every layout tick',
   );
   assert.match(
@@ -970,7 +970,7 @@ test('Cockpit panel corridors reserve the owned topline readouts', () => {
   );
   assert.match(
     signalLayout,
-    /cockpit-utility-controls[\s\S]*?--cockpit-utility-max-height/,
+    /maxHeight: `\$\{availableHeight\.toFixed\(2\)\}px`,/,
   );
   assert.match(
     css,

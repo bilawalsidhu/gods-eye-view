@@ -232,8 +232,7 @@ export function exit({ restoreTracking = true } = {}) {
   this.regionalBriefSubjectId = null;
   document.body.classList.remove('cockpit-mode');
   this.onExited?.();
-  this.hud?.style.removeProperty('--cockpit-utility-top');
-  this.hud?.style.removeProperty('--cockpit-utility-max-height');
+  this.publishUtilityLayout(null);
   this.presence.active = false;
   this.publishPresenceView();
   this.routeView.visible = false;

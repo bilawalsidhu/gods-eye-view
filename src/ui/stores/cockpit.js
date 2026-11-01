@@ -66,6 +66,26 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
     signals.value = next && markRaw(next);
   }
 
+  /**
+   * The utility strip's measured layout: its top and height limits as CSS
+   * lengths (null leaves the stylesheet's), whether only the expanded control
+   * fits, and whether a collapsed control beside an expanded one is hidden
+   * from assistive technology. Null until the first layout pass.
+   */
+  const utilityLayout = shallowRef(null);
+
+  /** @param {?object} next A fresh layout; one equal to the current is dropped. */
+  function publishUtilityLayout(next) {
+    const current = utilityLayout.value;
+    if (
+      next &&
+      current &&
+      Object.keys(next).every((key) => next[key] === current[key])
+    )
+      return;
+    utilityLayout.value = next && markRaw(next);
+  }
+
   return {
     presence,
     publishPresence,
@@ -81,5 +101,7 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
     publishVision,
     signals,
     publishSignals,
+    utilityLayout,
+    publishUtilityLayout,
   };
 });

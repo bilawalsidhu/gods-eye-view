@@ -133,20 +133,8 @@ export function syncSignalLayout() {
   const utilityControls = document.getElementById('cockpit-utility-controls');
   if (window.matchMedia('(max-width: 760px)').matches) {
     this.signalStream.dataset.layoutMode = 'compact-top';
-    utilityControls?.classList.remove('layout-primary-only');
-    utilityControls
-      ?.querySelectorAll('.cockpit-utility-control')
-      .forEach((control) => {
-        const hiddenSibling = Boolean(
-          utilityControls.querySelector(
-            '.cockpit-utility-control.is-expanded',
-          ) && !control.classList.contains('is-expanded'),
-        );
-        control.setAttribute('aria-hidden', String(hiddenSibling));
-      });
-    this.hud?.style.removeProperty('--cockpit-utility-top');
-    this.hud?.style.removeProperty('--cockpit-utility-max-height');
-    this.hud?.style.removeProperty('--cockpit-utility-expanded-max-height');
+    // The compact strip shows only an expanded control.
+    this.publishUtilityLayout(utilityLayoutView({ hideCollapsed: true }));
     this.signalStream.style.removeProperty('--cockpit-signal-right');
     this.signalStream.style.removeProperty('--cockpit-signal-top');
     this.signalStream.style.removeProperty('--cockpit-signal-max-height');
@@ -231,22 +219,13 @@ export function syncSignalLayout() {
         '--cyber-cockpit-panel-height',
         `${lane.panelHeight.toFixed(2)}px`,
       );
-      this.hud?.style.setProperty(
-        '--cockpit-utility-top',
-        `${alignedTop.toFixed(2)}px`,
+      this.publishUtilityLayout(
+        utilityLayoutView({
+          top: `${alignedTop.toFixed(2)}px`,
+          maxHeight: `${lane.utilityHeight.toFixed(2)}px`,
+          expandedMaxHeight: `${lane.panelHeight.toFixed(2)}px`,
+        }),
       );
-      this.hud?.style.setProperty(
-        '--cockpit-utility-max-height',
-        `${lane.utilityHeight.toFixed(2)}px`,
-      );
-      this.hud?.style.setProperty(
-        '--cockpit-utility-expanded-max-height',
-        `${lane.panelHeight.toFixed(2)}px`,
-      );
-      utilityControls.classList.remove('layout-primary-only');
-      utilityControls
-        .querySelectorAll('.cockpit-utility-control')
-        .forEach((control) => control.setAttribute('aria-hidden', 'false'));
       if (expandedControl) {
         this.signalStream.style.setProperty(
           '--cockpit-signal-top',
@@ -289,14 +268,6 @@ export function syncSignalLayout() {
           : 0,
     });
     const availableHeight = utilityAnchor.maxHeight;
-    this.hud?.style.setProperty(
-      '--cockpit-utility-top',
-      `${utilityAnchor.top.toFixed(1)}px`,
-    );
-    this.hud?.style.setProperty(
-      '--cockpit-utility-max-height',
-      `${availableHeight.toFixed(2)}px`,
-    );
     const utilityLayout =
       expandedControl && collapsedControl
         ? resolveCockpitUtilityLayout({
@@ -305,25 +276,37 @@ export function syncSignalLayout() {
             collapsedHeight,
           })
         : { primaryOnly: false, expandedMaxHeight: availableHeight };
-    utilityControls?.classList.toggle(
-      'layout-primary-only',
-      utilityLayout.primaryOnly,
+    this.publishUtilityLayout(
+      utilityLayoutView({
+        top: `${utilityAnchor.top.toFixed(1)}px`,
+        maxHeight: `${availableHeight.toFixed(2)}px`,
+        expandedMaxHeight: `${utilityLayout.expandedMaxHeight.toFixed(2)}px`,
+        primaryOnly: utilityLayout.primaryOnly,
+        hideCollapsed: utilityLayout.primaryOnly,
+      }),
     );
-    this.hud?.style.setProperty(
-      '--cockpit-utility-expanded-max-height',
-      `${utilityLayout.expandedMaxHeight.toFixed(2)}px`,
-    );
-    utilityControls
-      ?.querySelectorAll('.cockpit-utility-control')
-      .forEach((control) => {
-        const hiddenSibling =
-          utilityLayout.primaryOnly && control === collapsedControl;
-        control.setAttribute('aria-hidden', String(hiddenSibling));
-        if (hiddenSibling && control.contains(document.activeElement)) {
-          expandedControl
-            ?.querySelector('.cockpit-utility-glyph')
-            ?.focus({ preventScroll: true });
-        }
-      });
+    // Focus leaves a control the strip is about to hide.
+    if (
+      utilityLayout.primaryOnly &&
+      collapsedControl?.contains(document.activeElement)
+    ) {
+      expandedControl
+        ?.querySelector('.cockpit-utility-glyph')
+        ?.focus({ preventScroll: true });
+    }
   }
+}
+
+/**
+ * The utility strip's layout as CockpitView and CockpitUtilityControls
+ * render it: its anchor and height limits on the HUD, and which controls fit.
+ */
+function utilityLayoutView({
+  top = null,
+  maxHeight = null,
+  expandedMaxHeight = null,
+  primaryOnly = false,
+  hideCollapsed = false,
+} = {}) {
+  return { top, maxHeight, expandedMaxHeight, primaryOnly, hideCollapsed };
 }

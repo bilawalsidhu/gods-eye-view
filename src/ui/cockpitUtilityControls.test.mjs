@@ -10,6 +10,8 @@ import { setLocale } from '../i18n/index.js';
 import { onKeyDown as cockpitKeyDown } from './cockpitInput.js';
 import { RadioControls } from './radioControls.js';
 import { renderRadioState } from './radioPresentation.js';
+import { syncSignalLayout } from './cockpitLayout.js';
+import { useCockpitStore } from './stores/cockpit.js';
 import { useRadioStore } from './stores/radio.js';
 import CockpitUtilityControls from './views/panels/CockpitUtilityControls.vue';
 
@@ -335,4 +337,116 @@ test('Cockpit Escape defers to a popover the moment its disclosure opens', async
   escape();
   assert.equal(exits, 1);
   await nextTick();
+});
+
+test('the layout pass’s measured fit hides the collapsed control and marks the strip', async () => {
+  document.body.replaceChildren();
+  const host = document.body.appendChild(document.createElement('div'));
+  const pinia = createPinia();
+  const app = createApp(CockpitUtilityControls).use(pinia);
+  app.mount(host);
+  const radio = useRadioStore(pinia);
+  const cockpit = useCockpitStore(pinia);
+  const strip = document.getElementById('cockpit-utility-controls');
+  const [display, radioControl] = strip.querySelectorAll(
+    '.cockpit-utility-control',
+  );
+  const layout = (fit) => ({
+    top: '96.0px',
+    maxHeight: '300.00px',
+    expandedMaxHeight: '300.00px',
+    primaryOnly: false,
+    hideCollapsed: false,
+    ...fit,
+  });
+  // Until the layout pass runs, neither control carries aria-hidden.
+  assert.equal(display.hasAttribute('aria-hidden'), false);
+  radio.publishUtility({ display: false, radio: true });
+  cockpit.publishUtilityLayout(
+    layout({ primaryOnly: true, hideCollapsed: true }),
+  );
+  await nextTick();
+  assert.equal(strip.classList.contains('layout-primary-only'), true);
+  assert.equal(display.getAttribute('aria-hidden'), 'true');
+  assert.equal(radioControl.getAttribute('aria-hidden'), 'false');
+  // With nothing expanded there is no collapsed sibling to hide.
+  radio.publishUtility({ display: false, radio: false });
+  await nextTick();
+  assert.equal(display.getAttribute('aria-hidden'), 'false');
+  cockpit.publishUtilityLayout(layout());
+  await nextTick();
+  assert.equal(strip.classList.contains('layout-primary-only'), false);
+  app.unmount();
+});
+
+test('the real layout pass drives the mounted controls: compact hides the collapsed sibling, Cyber shows both', async (t) => {
+  document.body.replaceChildren();
+  const host = document.body.appendChild(document.createElement('div'));
+  const pinia = createPinia();
+  const app = createApp(CockpitUtilityControls).use(pinia);
+  app.mount(host);
+  const radio = useRadioStore(pinia);
+  const cockpit = useCockpitStore(pinia);
+  const signalStream = document.body.appendChild(
+    document.createElement('aside'),
+  );
+  const owner = {
+    signalStream,
+    signalCollapsed: false,
+    contextCollapsed: false,
+    context: null,
+    publishUtilityLayout: (layout) => cockpit.publishUtilityLayout(layout),
+    syncContextLayout() {},
+  };
+  const originalMatchMedia = window.matchMedia;
+  let compact = true;
+  window.matchMedia = (query) => ({ matches: compact, media: query });
+  t.after(() => {
+    window.matchMedia = originalMatchMedia;
+    delete document.documentElement.dataset.uiTheme;
+    document.body.style.removeProperty('opacity');
+    document.documentElement.style.removeProperty('opacity');
+    app.unmount();
+  });
+  const strip = document.getElementById('cockpit-utility-controls');
+  const [display, radioControl] = strip.querySelectorAll(
+    '.cockpit-utility-control',
+  );
+  radio.publishUtility({ display: false, radio: true });
+  await nextTick();
+  syncSignalLayout.call(owner);
+  await nextTick();
+  assert.equal(display.getAttribute('aria-hidden'), 'true');
+  assert.equal(radioControl.getAttribute('aria-hidden'), 'false');
+  assert.equal(cockpit.utilityLayout.top, null);
+  // Compact hides the sibling without marking the strip primary-only.
+  assert.equal(strip.classList.contains('layout-primary-only'), false);
+  // Cyber aligns the strip with the Data panel and keeps both controls.
+  compact = false;
+  document.documentElement.dataset.uiTheme = 'cyber';
+  const stack = document.body.appendChild(document.createElement('div'));
+  stack.id = 'left-panel-stack';
+  const dataPanel = stack.appendChild(document.createElement('section'));
+  dataPanel.id = 'data-panel';
+  for (const node of [
+    dataPanel,
+    stack,
+    document.body,
+    document.documentElement,
+  ])
+    node.style.opacity = '1';
+  dataPanel.getBoundingClientRect = () => ({
+    top: 120,
+    bottom: 400,
+    left: 0,
+    right: 200,
+    width: 200,
+    height: 280,
+  });
+  syncSignalLayout.call(owner);
+  await nextTick();
+  assert.equal(display.getAttribute('aria-hidden'), 'false');
+  assert.equal(radioControl.getAttribute('aria-hidden'), 'false');
+  assert.equal(cockpit.utilityLayout.top, '120.00px');
+  assert.equal(strip.classList.contains('layout-primary-only'), false);
 });

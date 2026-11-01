@@ -18,9 +18,10 @@ import CockpitUtilityControls from './panels/CockpitUtilityControls.vue';
 // The Cockpit HUD. The Cockpit controller presents the instruments, the
 // destination arrow and the vision selector on every HUD update; until it
 // does, they show the state they start in. The controller also publishes
-// which surfaces are shown; the HUD's layout stays with it, and the controls
-// keep its listeners.
-const { presence, instruments, route, vision } = storeToRefs(useCockpitStore());
+// which surfaces are shown and the utility strip's measured layout; the
+// layout pass stays with it, and the controls keep its listeners.
+const { presence, instruments, route, vision, utilityLayout } =
+  storeToRefs(useCockpitStore());
 const active = computed(() => Boolean(presence.value?.active));
 const globe = useGlobeActionsStore();
 const { resetBusy } = storeToRefs(globe);
@@ -38,6 +39,14 @@ const visionLabel = computed(() =>
 const visionTitle = computed(() =>
   t('Current style: {style} — click for next', { style: v.value.name }),
 );
+// The utility strip's measured anchor and height limits; a null value leaves
+// the stylesheet's fallback.
+const utilityStyle = computed(() => ({
+  '--cockpit-utility-top': utilityLayout.value?.top ?? null,
+  '--cockpit-utility-max-height': utilityLayout.value?.maxHeight ?? null,
+  '--cockpit-utility-expanded-max-height':
+    utilityLayout.value?.expandedMaxHeight ?? null,
+}));
 const tickStyle = (tick) =>
   tick.slot === null
     ? undefined
@@ -46,7 +55,7 @@ const tickStyle = (tick) =>
 
 <template>
   <!-- Aircraft first-person view. It can be entered from the visible view switcher. -->
-  <section id="cockpit-hud" aria-label="Aircraft cockpit view" :hidden="!active" v-class-toggle="{ 'signals-active': active, 'context-active': Boolean(presence?.context) }" data-i18n-aria-label :data-layer="hud.layer ?? undefined">
+  <section id="cockpit-hud" aria-label="Aircraft cockpit view" :hidden="!active" :style="utilityStyle" v-class-toggle="{ 'signals-active': active, 'context-active': Boolean(presence?.context) }" data-i18n-aria-label :data-layer="hud.layer ?? undefined">
     <!-- One optical coordinate system: every targeting mark shares this center.
          Decorative only; telemetry and interactive panels remain separate. -->
     <svg class="cockpit-frame-lines" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-hidden="true" focusable="false">

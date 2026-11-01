@@ -301,7 +301,14 @@ test('re-renders keep the visibility and classes the controller publishes on the
   const hud = $('#cockpit-hud');
   store.publishPresence({ active: true, context: false });
   hud.classList.add('voice-highlight');
-  hud.style.setProperty('--cockpit-utility-top', '120px');
+  hud.style.setProperty('--voice-glow', '1');
+  store.publishUtilityLayout({
+    top: '120px',
+    maxHeight: null,
+    expandedMaxHeight: null,
+    primaryOnly: false,
+    hideCollapsed: false,
+  });
   $('#cockpit-speed-rim').classList.add('external');
   updateHud.call(owner, INFO, 1000, true);
   await nextTick();
@@ -310,7 +317,13 @@ test('re-renders keep the visibility and classes the controller publishes on the
   assert.equal(hud.hidden, false);
   assert.equal(hud.classList.contains('signals-active'), true);
   assert.equal(hud.classList.contains('voice-highlight'), true);
+  assert.equal(hud.style.getPropertyValue('--voice-glow'), '1');
+  // The utility strip's measured anchor renders from the store.
   assert.equal(hud.style.getPropertyValue('--cockpit-utility-top'), '120px');
+  store.publishUtilityLayout(null);
+  await nextTick();
+  assert.equal(hud.style.getPropertyValue('--cockpit-utility-top'), '');
+  assert.equal(hud.style.getPropertyValue('--voice-glow'), '1');
   assert.equal($('#cockpit-speed-rim').classList.contains('external'), true);
 });
 
