@@ -2875,5 +2875,25 @@
   "Play from this scene through the rest of the project": "从此场景开始播放项目中的其余场景",
   "Play the shot after the selected one, moving on to the next scene when needed": "播放所选镜头的下一个镜头，必要时进入下一个场景",
   "Edit anchors, data packs and shot details": "编辑锚点、数据包和镜头详情",
-  "Download this scene as JSON or an asset bundle": "将此场景下载为 JSON 或资源包"
+  "Download this scene as JSON or an asset bundle": "将此场景下载为 JSON 或资源包",
+  "<1 km": "<1 km",
+  "All cameras": "所有摄像头",
+  "CCTV search area": "CCTV 搜索区域",
+  "Enable CCTV to load cameras": "启用 CCTV 以加载摄像头",
+  "Filters panel controls only; voice navigation uses the full catalog.": "仅筛选面板控件；语音导航使用完整目录。",
+  "In map view": "地图视野内",
+  "No camera selected in this area": "未选择此区域的摄像头",
+  "No cameras in map view. Move the map or choose All cameras.": "地图视野内没有摄像头。请移动地图或选择所有摄像头。",
+  "No cameras loaded.": "尚未加载摄像头。",
+  "No matching cameras. Try another search or All cameras.": "没有匹配的摄像头。请尝试其他搜索或选择所有摄像头。",
+  "Search CCTV cameras": "搜索 CCTV 摄像头",
+  "Search city, camera or provider": "搜索城市、摄像头或提供商",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "所选摄像头位于地图视野之外。请选择此处的摄像头，或切换至所有摄像头。",
+  "{count} cameras in map view · nearest first": {
+    "other": "地图视野内 {count} 个摄像头 · 距离由近到远"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "other": "全球 {count} 个摄像头 · 距离由近到远"
+  },
+  "{distance} km": "{distance} km"
 }

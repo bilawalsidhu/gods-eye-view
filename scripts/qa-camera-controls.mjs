@@ -115,6 +115,8 @@ try {
   await page.$eval('[data-collapse-target="cctv-panel"]', (button) =>
     button.click(),
   );
+  // This gate exercises explicit catalog targets across camera flights.
+  await page.select('#cctv-camera-scope', 'all');
   await page.click('#cctv-enable-btn');
   await page.waitForFunction(
     () =>

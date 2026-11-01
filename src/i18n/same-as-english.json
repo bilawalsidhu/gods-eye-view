@@ -164,7 +164,9 @@
     "{value} KM/S",
     "ΔN",
     "Ⅱ PAUSE",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "<1 km",
+    "{distance} km"
   ],
   "es": [
     "1090 MHz",
@@ -291,7 +293,9 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "<1 km",
+    "{distance} km"
   ],
   "fr": [
     "1090 MHz",
@@ -471,7 +475,9 @@
     "ΔE",
     "ΔN",
     "Ⅱ PAUSE",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "<1 km",
+    "{distance} km"
   ],
   "it": [
     "1090 MHz",
@@ -641,7 +647,9 @@
     "{value} conf",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "<1 km",
+    "{distance} km"
   ],
   "ja": [
     "1090 MHz",
@@ -690,7 +698,9 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "<1 km",
+    "{distance} km"
   ],
   "pt": [
     "1090 MHz",
@@ -819,7 +829,9 @@
     "{value} KM/H",
     "{value} KM/S",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "<1 km",
+    "{distance} km"
   ],
   "ru": [
     "AIS: --",
@@ -850,7 +862,9 @@
     "NVG",
     "REC",
     "S2 GhostMaps",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "<1 km",
+    "{distance} km"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -907,7 +921,9 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "<1 km",
+    "{distance} km"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -964,6 +980,8 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "<1 km",
+    "{distance} km"
   ]
 }

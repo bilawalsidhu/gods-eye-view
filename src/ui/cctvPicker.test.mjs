@@ -30,6 +30,11 @@ function pickerDocument() {
       this.options = [...fragment.children];
       this.selectedIndex = this.options.length ? 0 : -1;
     },
+    insertBefore(child, before) {
+      this.options = this.options.filter((entry) => entry !== child);
+      const index = before ? this.options.indexOf(before) : this.options.length;
+      this.options.splice(index, 0, child);
+    },
     prepend(child) {
       this.options.unshift(child);
     },
@@ -52,9 +57,13 @@ function fixture(t) {
   const previous = globalThis.document;
   globalThis.document = document;
   const controls = new CctvControls({
-    elements: { _cctvSelect: select },
+    elements: { _cctvSelect: select, _cctvPanel: new EventTarget() },
     cctv: {},
-    actions: { isEnabled: () => true, setPanelCollapsed() {} },
+    actions: {
+      isEnabled: () => true,
+      setPanelCollapsed() {},
+      syncViewport() {},
+    },
   });
   t.after(() => {
     controls.destroy();
@@ -157,4 +166,31 @@ test('a focused picker does not pick a stale camera when the view empties', (t) 
   globalThis.document.activeElement = select;
   controls._renderCctvState({ enabled: true, count: 3, cameraIndex: [] });
   assert.equal(select.selectedIndex, -1);
+});
+
+test('a focused picker defers map changes and reuses surviving options on blur', (t) => {
+  const { controls, select } = fixture(t);
+  controls._renderCctvState({
+    enabled: true,
+    count: 3,
+    cameraIndex: [camera('a'), camera('b')],
+  });
+  const a = select.options[0];
+  globalThis.document.activeElement = select;
+  controls._renderCctvState({
+    enabled: true,
+    count: 3,
+    cameraIndex: [camera('a'), camera('c')],
+  });
+  assert.deepEqual(
+    select.options.map((o) => o.value),
+    ['a', 'b', ''],
+  );
+  globalThis.document.activeElement = null;
+  select.dispatchEvent(new Event('blur'));
+  assert.deepEqual(
+    select.options.map((o) => o.value),
+    ['a', 'c', ''],
+  );
+  assert.equal(select.options[0], a);
 });
