@@ -172,10 +172,10 @@ test('Context reads as one segmented control with legible type and no halo', () 
   assert.ok(px(standby, 'font') >= 10, 'standby guidance must stay at least 10px');
   assert.doesNotMatch(standby, /dashed/);
   assert.ok(px(rule('.global-context-actions .panel-layer-toggle'), 'font-size') >= 10);
-  // Default theme only, expanded only: Cyber keeps its red titles and the
-  // collapsed launcher matches its sibling launchers.
-  assert.match(
+  // The shared rail title colour (brighter than --text-secondary) keeps the
+  // open Context title legible; no Context-only rule dims it again.
+  assert.equal(
     rule(":root:not([data-ui-theme='cyber']) #global-context-panel:not(.collapsed) .panel-title"),
-    /color:\s*var\(--text-secondary\)/,
+    '',
   );
 });

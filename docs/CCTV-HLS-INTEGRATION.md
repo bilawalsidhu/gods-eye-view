@@ -12,7 +12,13 @@ The unmerged socket-owned leases and per-peer quotas from #1267 are removed.
 Sessions retain main's capability model: active session and consumer lease
 are required for media/init reads, eight leases per session, two global sessions,
 15-second idle expiry and last-consumer cancellation. Forwarding headers are
-not identities. This does not claim user authentication or session fairness.
+not identities. A lease identifies a decoder's demand and lifetime, not a person
+or an IP owner. A party that learns the active tokens can use them; the same-site
+gate does not authenticate non-browser clients. One consumer can fill both global
+sessions or all eight leases, so these bounds provide no session fairness or
+per-user quota. Binding leases to direct socket IPs would group reverse-proxy/NAT
+users and break requests whose proxy connection changes without solving that
+starvation scenario. IP ownership and per-peer quotas are outside this relay PR.
 Original #1267 commits remain in history for authorship; their independent
 branch is unchanged and its release fragment is not shipped by #1165.
 
@@ -79,3 +85,36 @@ This rehearsal is not an additional full-suite or browser pass on the combined
 tree. Chromium startup is blocked by the environment's process-singleton socket
 restriction (Operation not permitted); no browser assertion or socket policy
 was weakened. Live operator playback and hosted CI remain unverified.
+
+## Reverification against current main — 2026-10-31
+
+Reconciled with upstream main `b4c75749e880a45ffb76056e818cb3f53de64933`.
+The previously published independent relay commit `d11e3693` already removed
+strict media admission and peer ownership; the PR description was stale.
+The incremental route regression now also checks catalog file probes/reads and
+spoofed forwarding-host or chained-protocol headers, including OPTIONS requests.
+The same-site gate implementation remains identical to main.
+
+On Linux / Node 24.22.1 with locked dependencies (`npm ci --ignore-scripts`):
+
+- The complete required `GEV_REQUIRE_ALLOCATION_GATE=1 npm test` plan passed:
+  9,133 ordinary tests plus all 15 serialized allocation probes, zero failures;
+  two platform skips (Docker Compose unavailable and Windows-only DACL checks).
+- The focused HLS/fMP4/admission/media selection passed 50 tests.
+- Production build, formatting (1,525 files), package boundaries, all ten locale
+  catalogs, changelog check and token ledger against upstream/main passed.
+- Runtime relay recovery and memory limits are unchanged by this reconciliation.
+  Original asturksever commits remain ancestors; #1267 itself is untouched.
+
+Regional reconciliation retains Misiones opt-in/provenance, Paraguay's separate
+1 MiB DVR playlist limit and RTSP.me support, and Argentina's snapshot aliases,
+external/no-public-feed handling and visible-camera integration from #1485.
+The regional branches must inherit this independent relay, not restore the old
+strict gate, socket-owner arguments, per-peer quota or #1267 release fragment.
+#1162 remains the independent public-player prerequisite for Paraguay/Argentina.
+No duplicate pull request is needed. Browser playback, live operator availability
+and hosted CI were not verified in this run.
+
+After the full run, upstream added #1493 (only the deterministic localhost
+FIRMS test fixture). It was merged through main `3824a47d`; all 16 FIRMS tests
+passed on that final tree. No CCTV runtime or memory-budget code changed.
