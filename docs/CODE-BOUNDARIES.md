@@ -372,12 +372,10 @@ facade's asynchronous teardown can yield.
 
 ## Ordinary action buttons
 
-`src/ui/actionButton.js` is a native, listener-free view helper used by Scene
-presentation and sharing-toolbar owners. It receives translated text and explicit
-presentation/accessibility properties. Feature controllers own action dispatch,
-state, persistence and cleanup. Static Scenes/CCTV templates use the same CSS
-surface and preserve IDs and layout hooks. The helper imports no application,
-renderer, storage or services; it belongs to the consuming package closures.
+The scene panels view and the CCTV panel draw their action buttons with the shared
+`gev-action-button` classes in `src/ui/styles/action-button.css`. Feature
+controllers own action dispatch, state, persistence and cleanup, and the views
+preserve IDs and layout hooks.
 
 ## Display controls
 
@@ -759,11 +757,9 @@ field rules separate, so Radio's palette remains an intentional exception.
 
 ### Read-only status badges
 
-`src/ui/statusBadge.js` constructs/updates ordinary badges without listeners,
-status inference or live-region policy. It consumes translated text and controlled
-visibility; appearance variants share CSS rather than mapping machine states to
-universal severity. CCTV owns frame/source and calibration rules and their data
-attributes, while Weather owns coverage labels. The keyed rail-card owner keeps
-node identity, header focus, disclosure and teardown. The shared adapter never
-creates another state store or announces all card updates. A Vue view can replace
-this adapter and retain these presentation inputs and styles.
+Views draw read-only badges with the `gev-status-badge` classes, without
+listeners, status inference or live-region policy. Appearance variants share
+CSS rather than mapping machine states to universal severity. CCTV owns
+frame/source and calibration rules and their data attributes, while Weather
+owns coverage labels. The rail card keeps node identity, header focus,
+disclosure and teardown, and does not announce every card update.

@@ -1093,7 +1093,6 @@
   "server/providers/overpass/requestAdmission.test.mjs",
   "src/tooling/trackArrivalObservation.test.mjs",
   "src/ui/styles/status-badge.css",
-  "src/ui/statusBadge.test.mjs",
   "src/ui/cctvBadges.test.mjs",
   "scripts/qa-status-badges.mjs",
   "src/dockerTrustedPeers.test.mjs",

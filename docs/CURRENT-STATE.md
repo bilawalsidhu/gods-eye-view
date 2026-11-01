@@ -1460,11 +1460,9 @@ boundaries preserve the current Tactical/Cyber appearance and native behavior.
 ## Ordinary status badges
 
 CCTV source/frame labels, calibration provenance and Weather coverage labels use
-`ui/statusBadge.js` and the `gev-status-badge` CSS surface. The listener-free
-adapter accepts already-translated `label` and `hidden` values; pill, box and plain
-appearances describe shape/density only. Static CCTV markup uses the same classes
-as generated rail-card badges. Repeated identical updates do not rewrite text or
-replace nodes. Empty coverage remains hidden.
+the `gev-status-badge` CSS surface, drawn by the CCTV view and the rail card from
+already-translated labels; pill, box and plain appearances describe
+shape/density only. Empty coverage remains hidden.
 
 Feature owners retain the status rules, machine-state attributes, translations
 and announcement policy. CCTV frame acquisition (`idle/loading/error/ready`)
@@ -1474,18 +1472,16 @@ prior poses; unsaved edits override the label until save/reset. Coverage labels
 remain geographic scope, not health claims. Existing colors and the source
 badge's polite live region are preserved; coverage and calibration do not gain
 live regions. Interactive layer toggles, progress indicators and world overlays
-retain their specialized ownership. Vue can reuse the view contract and CSS while
-replacing DOM construction. Browser acceptance:
+retain their specialized ownership. Browser acceptance:
 `QA_BASE_URL=http://127.0.0.1:4189 node scripts/qa-status-badges.mjs`.
 
 ## Ordinary action buttons
 
 Scene panel actions, shot LOAD/DEL actions, the EDIT DETAILS / SHARE SCENE
-bar and one-shot CCTV actions use `ui/actionButton.js` and the shared
-`gev-action-button` surface in `ui/styles/action-button.css`. Static templates
-apply the same classes as generated buttons. The native builder accepts translated
-text, default/danger variants, default/compact sizes and disabled/accessibility
-properties; it installs no listeners and owns no application state. Feature
+bar and one-shot CCTV actions use the shared `gev-action-button` surface in
+`ui/styles/action-button.css`, with default/danger variants and
+default/compact sizes, drawn by the scene panels view (`LayerPanelsView.vue`,
+`SceneShotList.vue`) and the CCTV panel. Feature
 controllers retain callbacks, enable/disable rules, confirmation prompts,
 persistence and teardown. The smaller shot actions retain their existing sizing
 and hover treatment. Feature CSS still owns panel layout and translated wrapping.
@@ -1493,8 +1489,7 @@ and hover treatment. Feature CSS still owns panel layout and translated wrapping
 CCTV enable, coverage, auto-hop, projection and adjustment toggles, editable
 calibration-value chips and the scene authoring dialogs retain their specialized
 controls. Existing `scene-btn` hooks remain compatible with Street Level and
-legacy toggles. The shared CSS, explicit input/action boundary and behavior tests
-can carry to a Vue view while Vue replaces native DOM construction.
+legacy toggles.
 Browser acceptance: `QA_BASE_URL=http://127.0.0.1:4179 node scripts/qa-action-buttons.mjs`;
 `qa-scene-controls.mjs` also covers real Scene authoring/playback with native Space capture.
 
