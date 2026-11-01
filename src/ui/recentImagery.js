@@ -705,7 +705,6 @@ export function createRecentImageryPanel({
     if (!live || split || destroyed) return;
     split = createSplit({
       scene: viewer?.scene,
-      parent: document.body,
       initialValue: snapshot.split,
       id: 'recent-imagery-split-line',
       handleClass: 'recent-imagery-split-handle',

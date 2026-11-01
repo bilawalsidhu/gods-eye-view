@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { useDisplayStore } from '../stores/display.js';
+import ImagerySplitView from './panels/ImagerySplitView.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
@@ -69,4 +70,6 @@ const { style } = storeToRefs(useDisplayStore());
   <div id="safe-frame-overlay">
     <div id="safe-frame-box"></div>
   </div>
+
+  <ImagerySplitView />
 </template>

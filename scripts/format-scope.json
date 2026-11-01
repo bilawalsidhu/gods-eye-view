@@ -180,6 +180,8 @@
   "src/ui/panelDisclosure.js",
   "src/ui/imagerySplit.js",
   "src/ui/imagerySplit.test.mjs",
+  "src/ui/imagerySplitView.test.mjs",
+  "src/ui/stores/imagerySplit.js",
   "src/ui/surfaceKeyboard.js",
   "src/ui/surfaceKeyboard.test.mjs",
   "src/ui/panelRails.js",

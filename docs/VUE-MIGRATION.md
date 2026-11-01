@@ -139,7 +139,11 @@ a feature supplying only its accent.
    phone shell (`PhoneTabBar` renders the tabs and open sheet the shell
    publishes to the `gev-display` store, teleporting the tab bar and sheet
    backdrop to the end of the page from the first publish until the shell
-   is destroyed; the shell takes their clicks from the document), then
+   is destroyed; the shell takes their clicks from the document), the
+   imagery dividers (`ImagerySplitView`, in the scene chrome, teleports each
+   before/after divider that `createImagerySplit` publishes to the
+   `gev-imagery-split` store to the body; the split keeps the
+   drag, keyboard, CSS position and scene split), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest

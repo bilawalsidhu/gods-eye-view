@@ -92,7 +92,9 @@
       "src/ui/rail/focusSafeChildren.js",
       "src/ui/rail/fieldValue.js",
       "src/ui/rail/statusText.js",
-      "src/voice/control.js"
+      "src/voice/control.js",
+      "src/ui/views/panels/ImagerySplitView.vue",
+      "src/ui/stores/imagerySplit.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -2992,7 +2994,8 @@
       "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
       "src/ui/stores/location.js",
-      "src/ui/stores/display.js"
+      "src/ui/stores/display.js",
+      "src/ui/stores/imagerySplit.js"
     ],
     "external": [
       "hls.js",
@@ -3578,7 +3581,9 @@
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/data/geoImportImages.js",
       "src/data/geoImportPins.js",
-      "src/data/geoFileImport.js"
+      "src/data/geoFileImport.js",
+      "src/ui/stores/imagerySplit.js",
+      "src/ui/vueRuntime.js"
     ],
     "external": [
       "hls.js",
@@ -3589,7 +3594,9 @@
       "pbf",
       "mgrs",
       "mapillary-js",
-      "@jtarrio/webrtlsdr"
+      "@jtarrio/webrtlsdr",
+      "vue",
+      "pinia"
     ]
   },
   "application-operations": {

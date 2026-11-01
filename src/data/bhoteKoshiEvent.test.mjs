@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { claimPointer, releasePointer } from './inputOwnership.js';
 import * as Cesium from 'cesium';
+import { useImagerySplitStore } from '../ui/stores/imagerySplit.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { SOURCE_PATH_BEAT_IDS } from './bhoteKoshiShotPaths.js';
 import {
   BHOTE_KOSHI_LAYER_ID,
@@ -35,6 +37,12 @@ import { SceneDirector } from '../scenes/director.js';
 
 const eventUrl = new URL('../../public/events/bhote-koshi-2026/event.json', import.meta.url);
 const eventModuleUrl = new URL('./bhoteKoshiEvent.js', import.meta.url);
+
+/** The event's divider as the imagery split store holds it, or undefined. */
+const eventSplit = () =>
+  useImagerySplitStore(applicationPinia()).splits.findLast(
+    (split) => split.view.id === 'bhote-koshi-split-line',
+  );
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -840,6 +848,7 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const { body, removedProperties } = installEventDom();
+  assert.equal(eventSplit(), undefined, 'no divider is left from an earlier test');
   const clearedTimeouts = [];
   globalThis.window = {
     setTimeout: () => 71,
@@ -879,7 +888,8 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
     assert.equal(await layer.enable(viewer, { origin: 'scene' }), true);
     assert.equal(viewer._test.imagery.length, 2);
     assert.equal(viewer._test.dataSources.length, 1);
-    assert.equal(body.children.length, 2);
+    assert.equal(body.children.length, 1);
+    assert.ok(eventSplit());
 
     activeMap = 'operator-choice';
     generation += 1;
@@ -889,6 +899,7 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
     assert.equal(viewer._test.removedImagery.length, 2);
     assert.equal(viewer._test.removedDataSources.length, 1);
     assert.ok(body.children.every((element) => element.removed));
+    assert.equal(eventSplit(), undefined);
     assert.equal(viewer.scene.splitPosition, 0.37);
     assert.deepEqual(clearedTimeouts, [71]);
     assert.ok(overlayCalls.some(([kind]) => kind === 'clear'));
@@ -1075,6 +1086,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
   const { body } = installEventDom();
+  assert.equal(eventSplit(), undefined, 'no divider is left from an earlier test');
   const timers = [];
   const openedUrls = [];
   const cancelledFrames = [];
@@ -1183,9 +1195,8 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === false));
     const panel = body.children.find((element) => element.tagName === 'aside');
     assert.ok(panel);
-    const splitLine = body.children.find((element) => element.id === 'bhote-koshi-split-line');
-    assert.ok(splitLine);
-    assert.equal(splitLine.hidden, true);
+    assert.ok(eventSplit());
+    assert.equal(eventSplit().view.hidden, true);
     assert.equal(panel.querySelector('[data-role="imagery-comparison"]').hidden, true);
     assert.match(panel.querySelector('[data-role="caveat"]').textContent, /SCHEMATIC CORRIDOR/i);
     assert.doesNotMatch(panel.querySelector('[data-role="caveat"]').textContent, /historical/i);
@@ -1240,30 +1251,27 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
       beatId: 'timure-cluster',
       sceneControls: { imageryComparison: true },
     }, { origin: 'scene' });
-    assert.equal(splitLine.hidden, false);
+    assert.equal(eventSplit().view.hidden, false);
     assert.equal(panel.querySelector('[data-role="imagery-comparison"]').hidden, false);
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === true));
-    const splitHandle = splitLine.children.find(
-      (element) => element.className === 'bhote-koshi-split-handle',
-    );
-    assert.ok(splitHandle);
-    assert.equal(splitHandle.textContent, '↔');
-    assert.equal(splitHandle.getAttribute('aria-valuenow'), '62');
-    splitHandle.dispatch('pointerdown', {
+    assert.equal(eventSplit().view.handleClass, 'bhote-koshi-split-handle');
+    assert.equal(eventSplit().view.valueNow, 62);
+    const splitHandle = eventSplit().controls;
+    splitHandle.pointerdown({
       button: 0,
       clientX: 250,
       pointerId: 4,
       preventDefault() {},
     });
-    splitHandle.dispatch('pointermove', {
+    splitHandle.pointermove({
       clientX: 750,
       pointerId: 4,
       preventDefault() {},
     });
-    splitHandle.dispatch('pointerup', { pointerId: 4 });
+    splitHandle.pointerup({ pointerId: 4 });
     assert.equal(viewer.scene.splitPosition, 0.75);
-    assert.equal(splitHandle.getAttribute('aria-valuenow'), '75');
-    splitHandle.dispatch('keydown', {
+    assert.equal(eventSplit().view.valueNow, 75);
+    splitHandle.keydown({
       key: 'ArrowLeft',
       shiftKey: true,
       preventDefault() {},
@@ -1276,7 +1284,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
       split: 0.62,
       sceneControls: {},
     }, { origin: 'scene' });
-    assert.equal(splitLine.hidden, true);
+    assert.equal(eventSplit().view.hidden, true);
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === false));
     assert.equal(viewer.scene.splitPosition, 0.62);
     assert.equal(overlayVisibility.at(-1).visible, false);
