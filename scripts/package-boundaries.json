@@ -104,7 +104,9 @@
       "src/ui/views/panels/DataPacks.vue",
       "src/ui/stores/pointerReticle.js",
       "src/ui/stores/windInspection.js",
-      "src/ui/views/panels/WindInspectionMarker.vue"
+      "src/ui/views/panels/WindInspectionMarker.vue",
+      "src/ui/stores/missionReplay.js",
+      "src/ui/views/panels/MissionReplayOverlay.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -1024,7 +1026,8 @@
       "src/ui/stores/location.js",
       "src/ui/stores/display.js",
       "src/ui/stores/status.js",
-      "src/ui/toast.js"
+      "src/ui/toast.js",
+      "src/ui/stores/missionReplay.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -3019,7 +3022,8 @@
       "src/ui/stores/dataPacks.js",
       "src/ui/stores/pointerReticle.js",
       "src/ui/stores/windInspection.js",
-      "src/layers/wind/inspectionMarker.js"
+      "src/layers/wind/inspectionMarker.js",
+      "src/ui/stores/missionReplay.js"
     ],
     "external": [
       "hls.js",

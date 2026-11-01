@@ -45,6 +45,7 @@ export function createRocketLaunchesLayer({ services, source }) {
     parts.panel.commands,
     {
       subscribePanel: parts.panel.subscribePanel,
+      subscribeReplayOverlay: parts.overlays.subscribeReplayOverlay,
       satelliteParamsForSpaceMissions:
         parts.policyHelpers.satelliteParamsForSpaceMissions,
       satelliteParamsAfterSpaceMissions:

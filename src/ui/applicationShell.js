@@ -54,6 +54,7 @@ import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
@@ -1036,6 +1037,14 @@ export class StyleManager extends ShellFacade {
     this._missionsPanelUnsubscribe = rocketLaunchesLayer?.subscribePanel?.(
       (view) => contextStore.publishMissions(view),
     );
+    // And its replay vehicle overlay, which the scene chrome renders.
+    const missionReplayStore = useMissionReplayStore(applicationPinia());
+    this._missionReplayUnsubscribe?.();
+    missionReplayStore.publish(null);
+    this._missionReplayUnsubscribe =
+      rocketLaunchesLayer?.subscribeReplayOverlay?.((view) =>
+        missionReplayStore.publish(view),
+      );
   }
 
   /** Wire the independent Radio companion controls. */
@@ -1786,6 +1795,9 @@ export class StyleManager extends ShellFacade {
     this._awarenessPanelUnsubscribe = null;
     this._missionsPanelUnsubscribe?.();
     this._missionsPanelUnsubscribe = null;
+    this._missionReplayUnsubscribe?.();
+    this._missionReplayUnsubscribe = null;
+    useMissionReplayStore(applicationPinia()).publish(null);
     const contextStore = useContextStore(applicationPinia());
     contextStore.connectAwareness(null);
     contextStore.publishAwareness(null);

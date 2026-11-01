@@ -210,7 +210,8 @@ such as `provider-settings`, and their hosts are removed. Leaving out
 out `scene-chrome` the before/after imagery dividers (the imagery still splits,
 with no line or handle to move it), the status chips, the toast, the ORBIT
 indicator, the FPS readout, the Scene actions panel, the data-pack attribution
-cards and the wind inspection marker, and leaving out `command-dock` the voice control and its pointer
+cards, the wind inspection marker and the Space Missions replay vehicle, and
+leaving out `command-dock` the voice control and its pointer
 reticle. An unknown
 view name is an error. A host that does not initialize Core's locale passes
 `localePicker: false` to `createApplicationControls` instead of editing the

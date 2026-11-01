@@ -1142,5 +1142,7 @@
   "src/scenes/interactionsView.test.mjs",
   "src/layers/wind/inspectionMarker.js",
   "src/layers/wind/inspectionMarker.test.mjs",
-  "src/ui/stores/windInspection.js"
+  "src/ui/stores/windInspection.js",
+  "src/ui/stores/missionReplay.js",
+  "src/layers/launches/replayOverlay.test.mjs"
 ]

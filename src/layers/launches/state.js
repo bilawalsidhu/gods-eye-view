@@ -77,9 +77,10 @@ export function createState({ services }) {
 
   state._missionHoverReticleImage = null;
 
+  // The replay vehicle overlay as its view renders it; null without one.
   state._replayVehicleOverlay = null;
 
-  state._replayVehicleOverlayText = '';
+  state._replayVehicleOverlayListeners = new Set();
 
   state._animationStarts = new Map();
 

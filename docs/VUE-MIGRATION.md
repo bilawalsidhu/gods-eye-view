@@ -163,7 +163,11 @@ a feature supplying only its accent.
    container where `createWindInspectionMarker()`, now in
    `src/layers/wind/inspectionMarker.js` so the portable `./tools` entry
    needs no Vue, places it after each rendered frame; an unchanged frame
-   publishes nothing), then
+   publishes nothing), the Space Missions replay vehicle
+   (`MissionReplayOverlay` teleports into the globe container what the
+   launches layer presents through `subscribeReplayOverlay()`, which the
+   application shell publishes to the `gev-mission-replay` store, so the
+   portable `./layers/launches` entry needs no Vue), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
