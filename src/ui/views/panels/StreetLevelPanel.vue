@@ -7,6 +7,7 @@ import UiSegmented from '../../kit/UiSegmented.vue';
 import RailPanel from '../../rail/RailPanel.vue';
 import RailChips from '../../rail/RailChips.vue';
 import { useStreetLevelStore } from '../../stores/streetLevel.js';
+import UiSlider from '../../kit/UiSlider.js';
 
 // The Street Level panel, rendered from what StreetLevelControls presents.
 // Until it renders, the panel shows its initial markup. The viewer element
@@ -116,7 +117,15 @@ const placeThumb = (el, { value: since, oldValue }) => {
     el.value = index;
   if (el.value === index) sinceLabel.value = since.label;
 };
-const vThumb = { mounted: placeThumb, updated: placeThumb };
+// The thumb starts at the first stop: a value attribute on the slider would
+// be written again on each of its renders.
+const vThumb = {
+  mounted(el, binding) {
+    el.value = '0';
+    placeThumb(el, binding);
+  },
+  updated: placeThumb,
+};
 </script>
 
 <template>
@@ -159,7 +168,7 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
         </div>
         <div id="sl-since-row" class="sl-since" :hidden="!shows.since">
           <label class="cctv-summary-label" for="sl-since" data-i18n>SINCE</label>
-          <input id="sl-since" v-thumb="view?.since" class="sl-range gev-quantitative-slider" type="range" min="0" max="8" step="1" value="0" :aria-valuetext="sinceLabel" aria-describedby="sl-since-label sl-since-note" @input="onSinceInput" @change="onSinceChange" />
+          <UiSlider id="sl-since" v-thumb="view?.since" class="sl-range" min="0" max="8" step="1" :aria-valuetext="sinceLabel" aria-describedby="sl-since-label sl-since-note" @input="onSinceInput" @change="onSinceChange" />
           <span class="sl-since-value">
             <output id="sl-since-label" class="sl-since-label" for="sl-since">{{ sinceLabel }}</output>
             <small id="sl-since-note" class="sl-since-note" :hidden="!view?.sinceNote">{{ view?.sinceNote || '' }}</small>

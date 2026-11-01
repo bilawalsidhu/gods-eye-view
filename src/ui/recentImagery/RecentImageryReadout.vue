@@ -4,9 +4,9 @@ import { t } from '../../i18n/index.js';
 import UiSegmented from '../kit/UiSegmented.vue';
 import RailCardBlocks from '../rail/RailCardBlocks.vue';
 import RailCards from '../rail/RailCards.vue';
-import { vRangeValue } from '../rail/rangeValue.js';
 import RecentImageryCard from './RecentImageryCard.vue';
 import UiEmpty from '../kit/UiEmpty.vue';
+import UiSlider from '../kit/UiSlider.js';
 
 // Every block exists from the start, in its final order. The owner computes
 // the view and listens on the root; a mode choice calls `onSetMode`.
@@ -127,11 +127,10 @@ const modeOptions = computed(() =>
       ><label class="ri-opacity-label" for="ri-opacity"
         ><span>{{ t('OPACITY') }}</span
         ><span class="ri-opacity-value">{{ view.alpha }}%</span></label
-      ><input
+      ><UiSlider
         id="ri-opacity"
-        v-range-value="view.alpha"
-        type="range"
-        class="gev-quantitative-slider ri-opacity"
+        :model-value="view.alpha"
+        class="ri-opacity"
         min="0"
         max="100"
         step="1"

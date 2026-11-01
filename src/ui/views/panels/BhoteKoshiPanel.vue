@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useBhoteKoshiPanelStore } from '../../stores/bhoteKoshiPanel.js';
+import UiSlider from '../../kit/UiSlider.js';
 
 // The Bhote Koshi reconstruction controls, at the end of the context rail,
 // as the event layer (src/data/bhoteKoshiEvent.js) presents them. Clicks and
@@ -29,7 +30,7 @@ const sliderValue = (event, scale) => Number(event.target.value) / scale;
         <span>{{ t('2021 HISTORICAL REFERENCE / 2026 POST-EVENT') }}</span>
         <span data-role="split-readout">{{ panel.refs.splitReadout.textContent }}</span>
       </div>
-      <input class="bhote-event-range" data-role="split" type="range" min="0" max="100" :value="panel.refs.splitInput.value" :aria-label="t('Historical reference and post-event image split')" @input="call('setSplit', sliderValue($event, 100))" />
+      <UiSlider class="bhote-event-range" unstyled data-role="split" min="0" max="100" :model-value="panel.refs.splitInput.value" :aria-label="t('Historical reference and post-event image split')" @update:model-value="call('setSplit', $event / 100)" />
       <div class="bhote-event-dates">
         <span data-role="before-date">{{ panel.beforeDate.date ? `${panel.beforeDate.name} · ` : panel.beforeDate.name }}<span v-if="panel.beforeDate.date" class="bhote-event-date">{{ panel.beforeDate.date }}</span></span>
         <span data-role="after-date">{{ panel.afterDate.date ? `${panel.afterDate.name} · ` : panel.afterDate.name }}<span v-if="panel.afterDate.date" class="bhote-event-date">{{ panel.afterDate.date }}</span></span>
@@ -40,7 +41,7 @@ const sliderValue = (event, scale) => Number(event.target.value) / scale;
         <span data-role="timeline-label">{{ panel.refs.timelineLabel.textContent }}</span>
         <span data-role="time">{{ panel.refs.time.textContent }}</span>
       </div>
-      <input class="bhote-event-range flood" data-role="progress" type="range" min="0" max="1000" :value="panel.refs.progressInput.value" :hidden="panel.refs.progressInput.hidden" :disabled="panel.refs.progressInput.disabled" :aria-label="panel.refs.progressInput.attributes['aria-label']" @input="call('previewProgress', sliderValue($event, 1000))" @change="call('commitProgress', sliderValue($event, 1000), { final: true })" />
+      <UiSlider class="bhote-event-range flood" unstyled data-role="progress" min="0" max="1000" :model-value="panel.refs.progressInput.value" :hidden="panel.refs.progressInput.hidden" :disabled="panel.refs.progressInput.disabled" :aria-label="panel.refs.progressInput.attributes['aria-label']" @update:model-value="call('previewProgress', $event / 1000)" @change="call('commitProgress', sliderValue($event, 1000), { final: true })" />
       <div class="bhote-event-story-nav" :aria-label="t('Story beat navigation')">
         <button type="button" data-action="previous-beat" :title="t('Previous story beat')" :aria-label="panel.refs.previousButton.attributes['aria-label']" :disabled="panel.refs.previousButton.disabled" @click="call('previousBeat')">‹</button>
         <div class="bhote-event-story-current">

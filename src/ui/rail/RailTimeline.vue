@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
-import { vRangeValue } from './rangeValue.js';
 import { formatUtcDayMonth, t } from '../../i18n/index.js';
 import { utcClock } from './utcClock.js';
+import UiSlider from '../kit/UiSlider.js';
 
 // Stable native transport with local preview and a coalesced 150 ms drag
 // commit. While the handle is dragged the slider keeps the ticks it was
@@ -88,6 +88,13 @@ function preview(event) {
   if (typeof readout === 'string') shown.value = { ...shown.value, readout };
   if (timer === null) timer = setTimeout(commit, 150);
 }
+// The handle shows the shown index again. A drag that ends where it began
+// (an input and a cancel, or a refused commit, before the next render)
+// leaves the slider's model unchanged, so it would not render.
+const place = (input) => {
+  const index = String(shown.value.index);
+  if (input && input.value !== index) input.value = index;
+};
 function change(event) {
   if (props.state.disabled) return;
   const index = Number(event.target.value);
@@ -95,12 +102,14 @@ function change(event) {
   dragging = false;
   commit();
   sync();
+  place(event.target);
 }
-function reset() {
+function reset(event) {
   cancel();
   pending = null;
   dragging = false;
   sync();
+  place(event?.target);
 }
 function blur(event) {
   if (dragging) change(event);
@@ -122,13 +131,12 @@ const act = (fn) => {
         :disabled="disabled || state.index <= 0"
         @click="act(() => onStep(-1))"
         >‹</button
-      ><input
-        type="range"
-        :class="`gev-quantitative-slider${sliderClassName ? ` ${sliderClassName}` : ''}`"
+      ><UiSlider
+        :class="sliderClassName || undefined"
         min="0"
         :max="String(Math.max(0, shown.ticks.length - 1))"
         step="1"
-        v-range-value="String(shown.index)"
+        :model-value="String(shown.index)"
         :disabled="disabled"
         :aria-label="t('Observed history')"
         :aria-valuetext="utc(shown.ticks[shown.index])"

@@ -123,6 +123,46 @@ test('footer buttons retain focus and current callbacks; links use safe new tabs
   button.click();
   assert.deepEqual(calls, [2]);
 });
+test('a live setting range whose owner clamps shows the clamped value', async () => {
+  const f = railFixture();
+  const model = (value) => ({
+    ...card,
+    blocks: [
+      {
+        id: 'settings',
+        type: 'settings',
+        settings: [
+          {
+            id: 'image',
+            label: 'IMAGE',
+            range: {
+              id: 'gain',
+              param: 'gain',
+              min: 0,
+              max: 100,
+              step: 1,
+              value,
+              ariaLabel: 'Gain',
+            },
+          },
+        ],
+      },
+    ],
+  });
+  // The owner takes at most 80 and answers at once.
+  const view = createRailCards({
+    ...f,
+    onParams: (_id, params) => view.update([model(Math.min(80, params.gain))]),
+  });
+  view.update([model(80)]);
+  await nextTick();
+  const slider = f.find((node) => node.dataset.rangeId === 'gain');
+  slider.value = '95';
+  slider.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(slider.value, '80');
+  view.destroy();
+});
 test('setting ranges stay below presets and commit expensive filters on release', async () => {
   const f = railFixture();
   const calls = [];

@@ -63,9 +63,10 @@
   card's controls `LocalSdrControls`, through the radio store's new
   `connect`/`act`; the card labels its gain options itself. `act` returns
   what the answering action returned. The Display, Radio, RTL-SDR, Cockpit,
-  mission replay and style parameter sliders are the kit's `UiSlider`, a
-  native range input that emits numbers, and the pressed toggles are the
-  kit's `UiButton`, which gains `pressedClass`; so are the rail card
+  mission replay, style parameter, rail card, observation timeline, imagery
+  opacity, Street Level date and Bhote Koshi sliders are the kit's
+  `UiSlider`, a native range input that emits numbers, and the pressed
+  toggles are the kit's `UiButton`, which gains `pressedClass`; so are the rail card
   chips, map source chips and location pills (which now report
   `aria-pressed`), and the voice card's chips
   are the kit's new `UiChip`. The selects are the kit's new `UiSelect`, the

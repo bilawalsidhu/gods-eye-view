@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { vRangeValue } from './rangeValue.js';
 import RailChips from './RailChips.vue';
+import UiSlider from '../kit/UiSlider.js';
 
 // One setting: a chip group and an optional range. The handle's value is held
 // until the owner's next update; a range that commits on change keeps it
@@ -57,12 +57,23 @@ function rangeParams(input) {
   return { params: { [current.param]: next } };
 }
 
+// The handle shows the value again once the owner has answered: an owner
+// that clamps or refuses may leave the slider's model where it last
+// rendered, and then it would not render.
+function place(input) {
+  if (!range.value) return;
+  const next = String(value.value);
+  if (input.value !== next) input.value = next;
+}
+
 function onInput(event) {
   const params = rangeParams(event.target);
   if (!params) return;
   // The readout follows the handle at once, whether or not the owner redraws.
   draft.value = { range: range.value, value: Number(event.target.value) };
-  if (!range.value.commitOnChange) props.dispatch(params);
+  if (range.value.commitOnChange) return;
+  props.dispatch(params);
+  place(event.target);
 }
 
 function onChange(event) {
@@ -71,6 +82,7 @@ function onChange(event) {
   // Committed: the next update shows the owner's value, as before.
   if (draft.value) draft.value = { ...draft.value, committed: true };
   if (params) props.dispatch(params);
+  place(event.target);
 }
 </script>
 
@@ -83,14 +95,13 @@ function onChange(event) {
       ><span class="rail-card-setting-range-label" :hidden="!range.label">{{
         range.label || ''
       }}</span
-      ><input
-        type="range"
-        class="gev-quantitative-slider rail-card-setting-range"
+      ><UiSlider
+        class="rail-card-setting-range"
         :data-range-id="range.id || setting.id"
         :min="String(Number(range.min))"
         :max="String(Number(range.max))"
         :step="String(Number(range.step))"
-        v-range-value="String(value)"
+        :model-value="String(value)"
         :disabled="Boolean(range.disabled)"
         :aria-label="range.ariaLabel || setting.label"
         :aria-valuetext="valueText"

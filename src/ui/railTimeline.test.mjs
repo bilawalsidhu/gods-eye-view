@@ -150,3 +150,29 @@ test('an update from inside the preview neither moves the handle back nor surviv
   assert.equal(slider.getAttribute('aria-valuetext'), '09-22 01:10 UTC');
   view.destroy();
 });
+test('a drag that ends where it began puts the handle back on the shown index', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = railFixture();
+  const commits = [];
+  const view = createRailTimeline({
+    ...f,
+    onCommit: (tick) => commits.push(tick),
+  });
+  view.update(props);
+  await nextTick();
+  const slider = f.find((n) => n.tagName === 'INPUT');
+  slider.value = '0';
+  slider.dispatchEvent(new Event('input'));
+  slider.dispatchEvent(new Event('pointercancel'));
+  await nextTick();
+  assert.equal(slider.value, '2', 'a cancelled drag');
+  assert.deepEqual(commits, []);
+  // A refused commit: the owner keeps its index.
+  slider.value = '1';
+  slider.dispatchEvent(new Event('input'));
+  slider.dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.deepEqual(commits, [ticks[1]]);
+  assert.equal(slider.value, '2', 'a refused commit');
+  view.destroy();
+});

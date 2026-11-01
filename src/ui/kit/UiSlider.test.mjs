@@ -105,3 +105,35 @@ test('an input stays until the owner answers, however late', async () => {
     wrapper.unmount();
   }
 });
+
+test('a caller’s own input, change and blur handlers still run', async () => {
+  const seen = [];
+  const wrapper = mountSlider(
+    {},
+    {
+      onInput: (event) => seen.push(['input', event.target.value]),
+      onChange: () => seen.push(['change']),
+      onBlur: () => seen.push(['blur']),
+    },
+  );
+  const input = wrapper.get('input');
+  input.element.value = '55';
+  await input.trigger('input');
+  await input.trigger('change');
+  await input.trigger('blur');
+  assert.deepEqual(seen, [['input', '55'], ['change'], ['blur']]);
+  assert.deepEqual(wrapper.emitted('update:modelValue'), [[55]]);
+  wrapper.unmount();
+});
+
+test('a null model leaves the input, and unstyled leaves Core’s class off', async () => {
+  const wrapper = mountSlider({ modelValue: null, unstyled: true });
+  const input = wrapper.get('input');
+  assert.equal(input.attributes('class'), undefined);
+  input.element.value = '12';
+  await wrapper.setProps({ disabled: true });
+  assert.equal(input.element.value, '12');
+  await wrapper.setProps({ unstyled: false });
+  assert.equal(input.attributes('class'), 'gev-quantitative-slider');
+  wrapper.unmount();
+});

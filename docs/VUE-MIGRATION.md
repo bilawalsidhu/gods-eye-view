@@ -37,9 +37,9 @@ one-panel rule too. Share links continue to record which panels are open.
 ## Component kit
 
 `src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`,
-`UiButton`, `UiPanel`, `UiSegmented` and `UiSlider` so far, with more
-(`UiSelect`, `UiChip` and so on) joining as the controls they serve are
-converted. One component
+`UiButton`, `UiPanel`, `UiSegmented`, `UiSlider`, `UiChip`, `UiSelect`,
+`UiBadge` and `UiEmpty` so far, with more joining as the controls they serve
+are converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. Names, props,
 events and class names follow Halfpixel's `ui-vue` kit so the two can merge
@@ -84,13 +84,15 @@ empty rows stay a paragraph and table cells, and no Core block matches
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
 it takes ui-vue's `v-model`, `min`, `max`, `step` and `disabled`, emits a
 number, and adds `hold` (never rewrite a focused handle, and take the model
-back on blur). It is a functional render-function component, so the
-portable `./ui/input` rows use it without a component compiler. The
-Display, Radio, RTL-SDR, Cockpit, mission replay and style parameter
-sliders are `UiSlider`s; Street Level's date slider, Bhote Koshi's split
-and progress ranges and the rail card settings' ranges keep their own
-inputs for now. Merging the kits means settling native input against the
-drawn track.
+back on blur) and `unstyled` (the browser's own range, as Bhote Koshi's
+are, without Core's slider surface). A caller's own input, change and blur
+handlers still reach the input, and a null model leaves it as it is. It is
+a functional render-function component, so the portable `./ui/input` rows
+use it without a component compiler. Every range in the views is a
+`UiSlider` except the radio tuner's: its owner moves the handle back to the
+selected station on a drag's first input without changing the slot, which
+a functional component would not render again. Merging the kits means
+settling native input against the drawn track.
 
 Controls share one skin, so every panel reads the same. Every scrolling
 surface carries the kit's `.ui-scroll` (ui-vue's name), which draws the thin

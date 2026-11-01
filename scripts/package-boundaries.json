@@ -673,7 +673,9 @@
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/kit/UiButton.vue",
-      "src/ui/kit/UiBadge.vue"
+      "src/ui/kit/UiBadge.vue",
+      "src/ui/rail/fieldValue.js",
+      "src/ui/kit/UiSlider.js"
     ],
     "external": ["vue"]
   },
