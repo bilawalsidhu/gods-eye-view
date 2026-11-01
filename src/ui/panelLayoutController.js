@@ -97,8 +97,6 @@ export class PanelLayoutController {
     this._weatherPanel = document.getElementById('weather-panel');
     this._recentImageryPanel = document.getElementById('recent-imagery-panel');
     this._streetLevelPanel = document.getElementById('street-level-panel');
-    this._sliderPanel = document.getElementById('param-slider-panel');
-    this._detectionBtn = document.getElementById('detection-toggle');
   }
   _scheduleAdaptivePanelLayout({ settle = false } = {}) {
     if (this.destroyed) return;
@@ -198,16 +196,6 @@ export class PanelLayoutController {
     ]) {
       if (!panel) continue;
       stack.insertBefore(panel, globalContextPanel);
-    }
-    if (this._sliderPanel) {
-      this._sliderPanel.style.removeProperty('top');
-      this._sliderPanel.style.removeProperty('right');
-      this._sliderPanel.style.removeProperty('bottom');
-      this._sliderPanel.style.removeProperty('left');
-      this._sliderPanel.style.removeProperty('max-height');
-      const detectionGroup = this._detectionBtn?.closest('.pp-toggle-group');
-      if (detectionGroup) detectionGroup.after(this._sliderPanel);
-      else this._ppToggles.append(this._sliderPanel);
     }
     if (typeof ResizeObserver !== 'undefined') {
       this._rightStackResizeObserver = new ResizeObserver(() => {

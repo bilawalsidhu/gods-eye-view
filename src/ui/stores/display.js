@@ -83,6 +83,18 @@ export const useDisplayStore = defineStore('gev-display', () => {
     parameters.value = next && markRaw(next);
   }
 
+  /**
+   * The Cockpit's Display popover slots while Cockpit shows the Display
+   * controls, `{hud, detection, parameters, models3d}` (elements); null while
+   * they stay in the Display panel. The panel teleports its groups there.
+   */
+  const cockpitPortal = shallowRef(null);
+
+  /** @param {?object} next The slots, or null to bring the groups home. */
+  function publishCockpitPortal(next) {
+    cockpitPortal.value = next && markRaw(next);
+  }
+
   /** The phone shell's tab bar; null until the shell first presents it. */
   const phoneShell = shallowRef(null);
 
@@ -104,6 +116,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishStyle,
     parameters,
     publishParameters,
+    cockpitPortal,
+    publishCockpitPortal,
     phoneShell,
     publishPhoneShell,
     mapSource,

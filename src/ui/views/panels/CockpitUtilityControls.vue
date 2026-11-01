@@ -6,14 +6,15 @@ import { vClassToggle } from '../../rail/classToggle.js';
 import UiSlider from '../../kit/UiSlider.js';
 import { useRadioStore } from '../../stores/radio.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
 
 // The Cockpit's Display and Radio launchers and their popovers. RadioControls
 // presents which popover is open and the compact Radio controls; until it
 // does, both are closed and the controls show their initial state. The
 // controls call RadioControls through the store. The Display popover's slots
-// are static: the Cockpit display portal moves the real Display controls into
-// them.
+// are static: the Display panel teleports its real controls into them while
+// the Cockpit display portal publishes them.
 const store = useRadioStore();
 const { act } = store;
 const { view: radio, utility } = storeToRefs(store);
@@ -22,6 +23,9 @@ const cockpit = computed(() => radio.value?.cockpit ?? null);
 // The Cockpit's layout pass measures which controls fit; until it runs, the
 // controls carry no aria-hidden.
 const { utilityLayout: layout } = storeToRefs(useCockpitStore());
+// The Display panel's groups sit in the popover's slots while the Cockpit
+// display portal publishes them.
+const { cockpitPortal } = storeToRefs(useDisplayStore());
 const ariaHidden = (expanded) =>
   layout.value
     ? String(
@@ -50,7 +54,7 @@ const radioLabel = computed(() =>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>
         <button id="cockpit-display-toggle-btn" class="cockpit-utility-glyph" type="button" :aria-expanded="String(open.display)" aria-controls="cockpit-display-panel" :aria-label="displayLabel" :title="displayLabel">{{ open.display ? '▶' : '◀' }}</button>
       </div>
-      <div id="cockpit-display-panel" class="cockpit-utility-popover ui-scroll" role="group" aria-label="Cockpit display options" :hidden="!open.display" data-i18n-aria-label>
+      <div id="cockpit-display-panel" class="cockpit-utility-popover ui-scroll" v-class-toggle="{ 'uses-shared-display-controls': !!cockpitPortal }" role="group" aria-label="Cockpit display options" :hidden="!open.display" data-i18n-aria-label>
         <div class="cockpit-display-slot" data-cockpit-display-slot="hud"></div>
         <div class="cockpit-display-slot" data-cockpit-display-slot="detection"></div>
         <div class="cockpit-display-slot" data-cockpit-display-slot="parameters"></div>

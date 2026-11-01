@@ -329,8 +329,11 @@ a feature supplying only its accent.
    `CockpitUtilityControls` renders the Display
    and Radio launchers, which popover is open and the compact Radio
    controls from the `gev-radio` store that RadioControls publishes to and
-   answers through; the Display popover's slots stay static for the Cockpit
-   display portal).
+   answers through. The Cockpit display portal publishes the Display
+   popover's slots to the `gev-display` store while Cockpit is on, and
+   `DisplayPanel` teleports its HUD, Detection, Parameters and 3D groups into
+   them and back; the portal keeps each surface's scroll position and puts
+   back focus the move dropped).
    Layers that write into the right rail directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion is retired: `index.html`

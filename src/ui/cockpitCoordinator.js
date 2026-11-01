@@ -1,3 +1,4 @@
+import { nextTick } from 'vue';
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
 import { cockpitEntryAllowed } from '../contextModePolicy.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
@@ -379,6 +380,10 @@ export class CockpitCoordinator {
       layout: () => {
         this._layoutRightPanels();
         this.cockpitView?.scheduleContextLayout();
+      },
+      publish: (slots) => this.publishCockpitPortal?.(slots),
+      afterRender: (callback) => {
+        void nextTick(callback);
       },
     });
   }

@@ -19,7 +19,7 @@ import { StyleParameterRows } from '../../styleParameters.js';
 // the draw tool its controls, and each publishes them; until they do, the
 // panel shows its initial markup. GeoImport renders the file import.
 const display = useDisplayStore();
-const { view, models3d, draw, parameters } = storeToRefs(display);
+const { view, models3d, draw, parameters, cockpitPortal } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings or the draw tool).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
@@ -64,6 +64,8 @@ const allocationOptions = [
     <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('DISPLAY')" sideways start-collapsed />
   </div>
   <div class="pp-panel-body ui-scroll" data-rail-scroller>
+  <!-- Cockpit shows these four groups in its Display popover: each teleports to the slot the Cockpit display portal publishes. While disabled a Teleport stays in place; its 'body' target only keeps server rendering from dropping it. -->
+  <Teleport :to="cockpitPortal?.hud ?? 'body'" :disabled="!cockpitPortal?.hud">
   <div class="pp-toggle-group">
     <button class="pp-toggle-btn" :class="{ active: hud?.visible }" id="hud-toggle" @click="act('toggleHud')" title="Intelligence HUD (H)" data-i18n-title>
       <span class="pp-icon">&#x25CE;</span>
@@ -108,6 +110,8 @@ const allocationOptions = [
       <span class="pp-slider-value" id="cyber-sonar-sector-value">{{ `${sonar?.sector ?? 24}°` }}</span>
     </div>
   </div>
+  </Teleport>
+  <Teleport :to="cockpitPortal?.detection ?? 'body'" :disabled="!cockpitPortal?.detection">
   <div class="pp-toggle-group">
     <UiButton class="pp-toggle-btn" :class="{ active: detectButton?.active, panoptic: detectButton?.panoptic }" :pressed="detectButton?.pressed ?? false" id="detection-toggle" @click="act('cycleDetection')" title="Detection Overlay (D)" :aria-label="detectButton?.ariaLabel ?? t('Detection overlay')" data-i18n-title>
       <span class="pp-icon">&#x25A3;</span>
@@ -133,7 +137,9 @@ const allocationOptions = [
       <span class="pp-slider-value" id="detection-opacity-value">{{ pct(detection?.outsideOpacityPct ?? 1) }}</span>
     </div>
   </div>
+  </Teleport>
   <!-- The one shared preset-parameter surface: the active style's parameters, as VisualSettings publishes them. -->
+  <Teleport :to="cockpitPortal?.parameters ?? 'body'" :disabled="!cockpitPortal?.parameters">
   <div id="param-slider-panel" v-panel-state="'param-slider-panel'" v-class-toggle="{ active: !!parameters }">
     <div class="param-panel-header">
       <span class="param-panel-title" data-i18n>PARAMETERS</span>
@@ -142,6 +148,8 @@ const allocationOptions = [
     </div>
     <div id="param-sliders"><StyleParameterRows v-if="parameters" :key="parameters.style" :rows="parameters.rows" :on-input="(name, value) => act('setStyleParameter', name, value)" /></div>
   </div>
+  </Teleport>
+  <Teleport :to="cockpitPortal?.models3d ?? 'body'" :disabled="!cockpitPortal?.models3d">
   <div class="pp-toggle-group">
     <!-- 3D aircraft is DEFAULT-ON in Proximity (owner directive 2026-08-22), so the
          button ships lit and the mode row ships open — the same markup-carries-the-default
@@ -156,6 +164,7 @@ const allocationOptions = [
       <UiSegmented class="pp-mode-seg" item-class="pp-mode-btn" keyboard="none" :label="t('3D model coverage')" :options="modelsOptions" :model-value="modelsMode" @update:model-value="act('setModelsMode', $event)" />
     </div>
   </div>
+  </Teleport>
   <div class="pp-toggle-group">
     <label class="pp-toggle-btn pp-scope-toggle" title="Scope — the circular viewport mask" data-i18n-title>
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>

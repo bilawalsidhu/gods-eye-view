@@ -183,6 +183,11 @@
   host constructing `CockpitController` passes `publish.utilityLayout`
   beside its other publishers (samehkhamis).
 
+- Cockpit's Display popover shows the Display panel's own HUD, Detection,
+  Parameters and 3D groups through Vue teleports: `CockpitDisplayPortal`
+  publishes the popover's slots (`publish`, with `afterRender` to lay out
+  once they have moved) instead of moving the groups itself (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

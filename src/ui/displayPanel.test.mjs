@@ -10,6 +10,7 @@ import DisplayPanel from './views/panels/DisplayPanel.vue';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { VisualSettings } from './visualSettings.js';
 import { initGeoFileImport } from './geoFileImport.js';
+import { CockpitDisplayPortal } from './cockpitDisplayPortal.js';
 // Core's classes on an element, without the kit's `ui-` classes.
 const coreClasses = (el) =>
   [...el.classList].filter((name) => !name.startsWith('ui-')).join(' ');
@@ -20,9 +21,14 @@ function fixture(t) {
   const pinia = createPinia();
   const app = createApp(DisplayPanel).use(pinia);
   app.mount(host);
-  t.after(() => app.unmount());
+  let mounted = true;
+  const unmount = () => {
+    if (mounted) app.unmount();
+    mounted = false;
+  };
+  t.after(unmount);
   const $ = (id) => document.getElementById(id);
-  return { store: useDisplayStore(pinia), $ };
+  return { store: useDisplayStore(pinia), $, unmount };
 }
 
 /** A VisualSettings over stand-in effects, publishing to `store`. */
@@ -574,4 +580,110 @@ test('VisualSettings publishes a styleâ€™s parameters and writes a moved sliderâ
   store.publishParameters(newer);
   owner.stop();
   assert.equal(store.parameters, newer);
+});
+
+test('the four Cockpit groups teleport to the published slots and back to their places', async (t) => {
+  const { store, $ } = fixture(t);
+  const groupOf = (id) => $(id).closest('.pp-toggle-group') ?? $(id);
+  const ids = ['hud-toggle', 'detection-toggle', 'param-slider-panel', 'models3d-toggle'];
+  const body = $('pp-toggles').querySelector('.pp-panel-body');
+  const order = () =>
+    [...body.children].filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
+      .map((el) => el.id || el.querySelector('[id]')?.id);
+  const home = order();
+  const popover = document.body.appendChild(document.createElement('div'));
+  const slots = {};
+  for (const name of ['hud', 'detection', 'parameters', 'models3d']) {
+    slots[name] = popover.appendChild(document.createElement('div'));
+  }
+  store.publishCockpitPortal(slots);
+  await nextTick();
+  assert.equal(slots.hud.contains($('hud-toggle')), true);
+  assert.equal(slots.detection.contains($('detection-toggle')), true);
+  assert.equal(slots.parameters.firstElementChild, $('param-slider-panel'));
+  assert.equal(slots.models3d.contains($('models3d-toggle')), true);
+  // The teleported controls still render from the store.
+  store.publishParameters({ style: 'noir', rows: [] });
+  await nextTick();
+  assert.equal($('param-slider-panel').classList.contains('active'), true);
+  store.publishCockpitPortal(null);
+  await nextTick();
+  for (const id of ids) assert.equal(body.contains(groupOf(id)), true, id);
+  assert.deepEqual(order(), home);
+  // A second trip uses the same slots.
+  store.publishCockpitPortal(slots);
+  await nextTick();
+  assert.equal(slots.hud.contains($('hud-toggle')), true);
+  store.publishCockpitPortal(null);
+  await nextTick();
+  assert.deepEqual(order(), home);
+});
+
+test('a group without a published slot stays home; a replaced slot and an unmount leave nothing behind', async (t) => {
+  const { store, $, unmount } = fixture(t);
+  const body = $('pp-toggles').querySelector('.pp-panel-body');
+  const popover = document.body.appendChild(document.createElement('div'));
+  const slot = () => popover.appendChild(document.createElement('div'));
+  const first = { hud: slot(), detection: slot(), parameters: slot() };
+  store.publishCockpitPortal(first);
+  await nextTick();
+  // No models3d slot: 3D stays in the Display panel, not in body.
+  assert.equal(body.contains($('models3d-toggle')), true);
+  assert.equal(first.hud.contains($('hud-toggle')), true);
+  // A new popover replaces the slots while the groups are out.
+  const second = { ...first, hud: slot() };
+  store.publishCockpitPortal(second);
+  await nextTick();
+  assert.equal(second.hud.contains($('hud-toggle')), true);
+  assert.equal(first.hud.childElementCount, 0);
+  // Unmounting while teleported removes the groups from the slots too.
+  unmount();
+  for (const target of Object.values(second))
+    assert.equal(target.childElementCount, 0);
+});
+
+test('the real portal lays out once the groups have moved and puts back the focus the move dropped', async (t) => {
+  const { store, $ } = fixture(t);
+  const popover = document.body.appendChild(document.createElement('div'));
+  for (const name of ['hud', 'detection', 'parameters', 'models3d']) {
+    const slot = popover.appendChild(document.createElement('div'));
+    slot.dataset.cockpitDisplaySlot = name;
+  }
+  const frames = [];
+  const priorFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => frames.push(callback);
+  t.after(() => {
+    globalThis.requestAnimationFrame = priorFrame;
+  });
+  const layouts = [];
+  const portal = new CockpitDisplayPortal({
+    standardPanel: $('pp-toggles'),
+    cockpitPanel: popover,
+    groups: [
+      ['hud', $('hud-toggle').closest('.pp-toggle-group')],
+      ['detection', $('detection-toggle').closest('.pp-toggle-group')],
+      ['parameters', $('param-slider-panel')],
+      ['models3d', $('models3d-toggle').closest('.pp-toggle-group')],
+    ],
+    layout: () => layouts.push(popover.contains($('hud-toggle'))),
+    publish: (slots) => store.publishCockpitPortal(slots),
+    afterRender: (callback) => {
+      void nextTick(callback);
+    },
+  });
+  t.after(() => portal.destroy());
+  $('hud-toggle').focus();
+  portal.setActive(true);
+  // Superseded before the flush: one layout, for the last state.
+  portal.setActive(false);
+  portal.setActive(true);
+  await nextTick();
+  assert.deepEqual(layouts, [true]);
+  while (frames.length) frames.shift()();
+  assert.equal(document.activeElement, $('hud-toggle'));
+  // A stopped portal lays out nothing.
+  portal.stop();
+  portal.setActive(false);
+  await nextTick();
+  assert.deepEqual(layouts, [true]);
 });

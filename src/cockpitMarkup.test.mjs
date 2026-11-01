@@ -543,9 +543,14 @@ test('Display orders 3D above Celestial, Clean UI below it, and Parameters below
     1,
     'Parameters must have one DOM owner',
   );
+  // The markup places Parameters below Detection; nothing re-homes it.
   assert.match(
+    html,
+    /id="detection-toggle"[\s\S]*?id="param-slider-panel"[\s\S]*?id="models3d-toggle"/,
+  );
+  assert.doesNotMatch(
     PanelLayoutController.prototype._initRightPanelAdaptiveLayout.toString(),
-    /const detectionGroup = this\._detectionBtn\?\.closest\('\.pp-toggle-group'\);[\s\S]*?detectionGroup\.after\(this\._sliderPanel\)/,
+    /_sliderPanel/,
   );
   assert.match(
     ui,
@@ -1055,15 +1060,16 @@ test('Cockpit Display portals shared HUD, Detection, Parameters, and 3D controls
   assert.doesNotMatch(ui, /\['presets',/);
   assert.match(
     CockpitDisplayPortal.toString(),
-    /group\.before\(anchor\)[\s\S]*?window\.addEventListener\(\s*'gev:cockpit-mode-changed'/,
+    /window\.addEventListener\(\s*'gev:cockpit-mode-changed'/,
   );
+  // The portal publishes the slots; the Display panel teleports its groups.
   assert.match(
     CockpitDisplayPortal.prototype.setActive.toString(),
-    /record\.slot\.append\(record\.group\)[\s\S]*?record\.anchor\.after\(record\.group\)/,
+    /this\.publish\(nextActive \? this\.slots : null\)/,
   );
   assert.match(
     CockpitDisplayPortal.prototype.destroy.toString(),
-    /this\.stop\(\)[\s\S]*?record\.anchor\.after\(record\.group\)[\s\S]*?record\.anchor\.remove\(\)/,
+    /this\.stop\(\)[\s\S]*?this\.publish\(null\)/,
   );
   assert.doesNotMatch(
     ui,
