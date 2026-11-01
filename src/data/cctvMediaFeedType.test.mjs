@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
+import fs from 'node:fs';
 import { cctvProxy } from '../../server/providers/cctv.js';
 
 const STILL = {
@@ -299,15 +300,29 @@ test('cross-site media creation, segment reads and release fail before any catal
       },
     },
   });
+  const catalogProbe = t.mock.method(fs, 'existsSync');
+  const catalogRead = t.mock.method(fs, 'readFileSync');
   for (const headers of [
     { origin: 'https://foreign.example' },
     { origin: 'null' },
+    { origin: 'https://foreign.example', 'sec-fetch-site': 'same-origin' },
+    {
+      origin: 'https://foreign.example',
+      'x-forwarded-host': 'foreign.example',
+      'x-forwarded-proto': 'https',
+    },
+    { origin: 'https://localhost:4173', 'x-forwarded-proto': 'https,http' },
     { 'sec-fetch-site': 'cross-site' },
     { 'sec-fetch-site': 'same-site' },
     { 'sec-fetch-site': 'cross-site', 'x-forwarded-for': '192.0.2.1' },
     { origin: 'https://foreign.example', forwarded: 'for=192.0.2.1' },
   ]) {
     for (const [method, url] of [
+      ['GET', '/sources'],
+      ['GET', '/health'],
+      ['GET', '/stream/camera'],
+      ['GET', '/frame/camera'],
+      ['OPTIONS', '/media/camera?lease=test'],
       ['GET', '/media/camera?lease=test'],
       ['DELETE', '/media/camera?lease=test'],
       ['GET', '/media/camera/seg_0.ts?lease=test'],
@@ -326,6 +341,8 @@ test('cross-site media creation, segment reads and release fail before any catal
     }
   }
   assert.equal(calls, 0);
+  assert.equal(catalogProbe.mock.callCount(), 0, 'no catalog file probe');
+  assert.equal(catalogRead.mock.callCount(), 0, 'no catalog file read');
 });
 
 /** An upstream Response whose body records whether it was cancelled. */

@@ -203,3 +203,15 @@ requires a configured 3D tile source. No CCTV ground/rendering code changed.
 The shared relay now follows main's proxy-compatible same-site and session/lease
 contract. #1267 is not a prerequisite; direct-socket ownership and per-peer quotas
 are not part of this integration. See CCTV-HLS-INTEGRATION.md for landing order.
+
+## Independent relay reconciliation — 2026-10-31
+
+Reconciled this existing branch with #1165's independent recovery relay and
+upstream main `3824a47d`. No #1267 merge is required. The eight-camera opt-in,
+bundled coordinates, override behavior and provenance remain intact. The shared
+12 MiB media / 256 KiB init / 24 MiB retained-session limits are unchanged.
+
+On Node 24.22.1, 491 CCTV/source/UI tests and 51 layer tests passed (542 total),
+zero failures. Production build, formatting, boundaries, ten locale catalogs and
+changelog checks passed. #1165 has the full unit/allocation run; this regional
+update uses focused tests, not a new complete-suite or live-camera run.

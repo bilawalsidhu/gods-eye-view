@@ -141,6 +141,11 @@ export function createSelection({
     void parts.ground.resolveFootprintGround(record);
     record.activationDone = true;
     parts.rendering.refreshCoverageStyles();
+    // The active camera's icon always shows; the previously active one
+    // competes for its cell again. Its coverage neighbours join the working
+    // set and are queued for grounding.
+    parts.rendering.refreshHorizonCulling();
+    parts.geometryQueue.enqueueViewGeometry();
     // The newly active camera leaves the ambient ring (its monitor plane takes
     // over); the freed slot re-fills on this same pass.
     parts.cards.refreshAmbientCards();
@@ -171,7 +176,9 @@ export function createSelection({
         parts.ground.groundAltFor(previous),
       );
     });
+    parts.rendering.refreshHorizonCulling();
     parts.rendering.refreshCoverageStyles();
+    parts.geometryQueue.enqueueViewGeometry();
     parts.cards.refreshAmbientCards();
     layerState._gizmo?.refresh();
     parts.presentation.notifyListeners();
