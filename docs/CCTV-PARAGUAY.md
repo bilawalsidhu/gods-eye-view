@@ -84,3 +84,23 @@ The regression tests cover catalog registration and independent opt-in switches,
 attribution and unverified poses, bounded DVR-tail ingestion, HD segment sizes,
 and the panel's uncertainty label. Availability can change; this catalog is not
 an exhaustive census or a guarantee of future operator access.
+
+## Independent relay reconciliation — 2026-10-31
+
+Merged #1165's independent relay and the current independent #1162 player branch,
+with main `3824a47d`. Removed strict media admission, socket-owner arguments and
+per-peer quotas; all routes retain main's proxy-compatible keyless same-site gate.
+No #1267 merge is required. Session/consumer leases manage demand and cleanup;
+they do not authenticate users or guarantee fairness. Keep the separate 1 MiB
+Ibarra DVR playlist limit, RTSP.me support and opt-in source packs. Media, init
+and retained-session bounds remain 12 MiB / 256 KiB / 24 MiB respectively.
+
+Resolved current-main conflicts without losing visible-camera picker counts or
+coverage-neighbor caching; external players remain excluded from coverage.
+Panel test fixtures now supply the document required by the player visibility
+lifecycle, without weakening runtime visibility checks.
+
+On Node 24.22.1, 511 CCTV/source/player/UI tests and 51 layer tests passed (562
+total), zero failures. Production build, formatting, boundaries, ten locale
+catalogs and changelog checks passed. #1165 has the full unit/allocation run;
+this branch has focused validation, not a new full-suite or live-operator run.

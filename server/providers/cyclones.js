@@ -43,6 +43,11 @@ function number(value, min, max) {
   const n = Number(value);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 }
+// CurrentStorms.json reports movementSpeed in miles per hour (intensity is in
+// knots); convert so `speedKt` means what it says.
+function knotsFromMph(mph) {
+  return mph === null ? null : Math.round(mph * 0.868976);
+}
 // NHC stamps an advisory with its nominal time (e.g. 03:00Z) and publishes it
 // up to about half an hour before; allow that, but not a clock far ahead.
 const EARLY_ADVISORY_MS = 90 * 60_000;
@@ -120,7 +125,7 @@ export function parseCycloneStatus(payload, now = Date.now()) {
       pressureHpa: number(raw.pressure, 800, 1100),
       movement: {
         directionDegrees: number(raw.movementDir, 0, 360),
-        speedKt: number(raw.movementSpeed, 0, 200),
+        speedKt: knotsFromMph(number(raw.movementSpeed, 0, 200)),
       },
       advisoryUrl: officialLink(forecast.url),
       outlookUrl: raw.id.startsWith('al')

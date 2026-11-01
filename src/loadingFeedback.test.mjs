@@ -93,22 +93,28 @@ test('deferred terminal notices lose ownership to newer acquisition epochs and d
 });
 
 test('share-follow failures use the universal top-center status instead of the bottom toast', () => {
-  const ui = readShellSource();
   const handler = shellMethod('_handleShareTrackingRestoreStatus').toString();
-  assert.match(handler, /this\.showStatus\(message\)/);
-  assert.match(handler, /this\.initialRestorePromise\.then\(showAfterStartupCover\)/);
-  assert.match(handler, /this\._lifetime\.frame\(\(\) => \{/);
-  assert.match(handler, /this\._lifetime\.listen\(\s*startupCover,\s*'transitionend',\s*showOnce,\s*\{ once: true \},?\s*\)/);
-  assert.match(handler, /fallbackTimer = this\._lifetime\.timeout\(showOnce, 1000\)/);
-  assert.doesNotMatch(handler, /this\._showToast\(message\)/);
-  assert.doesNotMatch(handler, /pushCockpitSignal/);
+  const present = shellMethod('_presentAfterStartupCover').toString();
+  assert.match(
+    handler,
+    /this\.initialRestorePromise\.then\(\(\) =>\s*this\._presentAfterStartupCover\(message, noticeGeneration\),?\s*\)/,
+  );
+  assert.match(present, /this\.showStatus\(message\)/);
+  assert.match(present, /this\._lifetime\.frame\(\(\) => \{/);
+  assert.match(present, /this\._lifetime\.listen\(\s*startupCover,\s*'transitionend',\s*showOnce,\s*\{ once: true \},?\s*\)/);
+  assert.match(present, /fallbackTimer = this\._lifetime\.timeout\(showOnce, 1000\)/);
+  assert.match(present, /canPresentDeferredStatusNotice\(/);
+  for (const source of [handler, present]) {
+    assert.doesNotMatch(source, /this\._showToast\(message\)/);
+    assert.doesNotMatch(source, /pushCockpitSignal/);
+  }
   assert.match(handler, /result\.classification === 'pending'/);
   assert.match(handler, /state: 'acquiring'/);
   assert.match(handler, /persistent: true/);
   assert.match(handler, /this\._shareTrackingNoticeGeneration \+= 1/);
-  assert.match(handler, /canPresentDeferredStatusNotice\(/);
   assert.match(handler, /if \(this\._shareTrackingAcquiringKey\) return/);
-  assert.match(handler, /result\.classification === 'followed'\s*\|\|\s*result\.classification === 'cancelled'/);
+  assert.match(handler, /result\.classification === 'followed'/);
+  assert.match(handler, /result\.classification === 'cancelled'\) return/);
 });
 
 test('universal notice masks active loading only for its own fixed dwell', () => {
@@ -629,7 +635,7 @@ test('the loading ticker never runs hidden and stops after loading and notices s
   // safety-net poll, so its `if (document.hidden) return;` is correct there
   // and must not be confused with this self-stopping ticker's leak.
   const armBody = ui.slice(ui.indexOf('_armLoadingFeedbackTicker() {'));
-  assert.ok(armBody.startsWith('_armLoadingFeedbackTicker() {'), 'ticker function not found in ui.js');
+  assert.ok(armBody.startsWith('_armLoadingFeedbackTicker() {'), 'ticker function not found in the UI shell source');
   const arm = armBody.slice(0, armBody.indexOf('\n  }\n') + 5);
 
   // 1. The ARM guard itself refuses while hidden. Previously the only hidden

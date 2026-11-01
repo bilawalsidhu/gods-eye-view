@@ -61,7 +61,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🎯 Click-to-track anything:** Camera locks on, draws a fading trail, surfaces full metadata — and a tracked fire or vessel hands you off to the nearest live camera in one click.
 - **🖊️ Voice whiteboard:** Speak annotations onto the world — real boundary polygons, marks, and routes.
 - **🛫 3D hangar:** Real per-class aircraft models — 787, ATR-72, Citation, Bell 206, MQ-9 — and a tracked contact swaps from glyph to 3D model as you close in.
-- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir, Snow.
+- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir.
 - **🟩 Detection overlay:** Screen-space bounding boxes and IDs on everything in view.
 - **🎖️ Military HUD:** Tactical heads-up display with intelligence-style telemetry.
 - **🌐 Global Context:** Stage the full situational picture with one switch — and get your exact view back when you leave.
@@ -111,13 +111,15 @@ app's **POWER UP** panel; [Keys & Costs](#-api-keys) explains the options.
 
 Available on **Windows, macOS, and Linux**. The Pinokio maintainer reports
 cross-platform testing of the fixed installer. The launcher installs the
-locked dependencies, finds a free local port, and opens the app.
+locked dependencies, finds a free local port, and opens the app in your system
+browser. The Server menu item keeps the launcher console available.
 
 **Tried before and installation failed?** Update Pinokio and try again.
 Version 8.2 fixes the launcher installation issue;
 [details from the Pinokio maintainer](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g).
 
-**Pinokio opens but the globe is very choppy?** Before treating that as a GPU
+**Using an older launcher or opening the embedded view manually?** If the globe
+is very choppy, before treating that as a GPU
 compatibility or minimum-hardware problem, copy the local server URL shown by
 Pinokio and open the same URL in your normal hardware-accelerated browser. One
 Pinokio 8.2.0 user reported severe stutter in Pinokio's embedded view that went
@@ -177,6 +179,16 @@ Publishing it wider is the [Sharing an instance](#-sharing-an-instance) opt-in, 
 
 When you widen the publish, also set `GEV_KEY_SETUP_TRUSTED_PEERS=none` so the launcher trusts no gateway address.
 
+```bash
+GEV_KEY_SETUP_TRUSTED_PEERS=none docker compose up
+```
+
+Compose forwards `GEV_KEY_SETUP_TRUSTED_PEERS` and `GEV_ALLOWED_HOSTS` from your
+shell or the project's `.env`; an exported shell value takes precedence. You can
+also put `GEV_KEY_SETUP_TRUSTED_PEERS=none` in `.env` for a persistent setting.
+Unset or blank trusted peers retain automatic gateway discovery; `none` explicitly
+disables it. The startup log confirms that no additional peers are trusted.
+
 <details>
 <summary>Running on Linux, a NAS, or behind a reverse proxy</summary>
 
@@ -196,6 +208,8 @@ env UID=1026 GID=100 docker compose up -d
 ```
 
 Keep the `env`: bash treats `UID` as read-only, so a plain `UID=1026` in front of a command is silently ignored. If the container can't write the checkout, it says so at start. Docker Desktop on macOS and Windows maps ownership for you.
+
+On SELinux hosts (Fedora, RHEL), compose mounts the checkout with `:z` so the container may read it; Docker may relabel the checkout for container access, which can take a moment on a large checkout. Without that, the start fails with `Cannot find module '/app/scripts/docker-start.mjs'`.
 
 Behind a reverse proxy, put your keys in `.env` or pass them as environment variables - Provider Settings refuses proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)).
 
@@ -280,14 +294,14 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Tracking the ISS along its orbital path as it crosses over Ukraine](docs/media/14-iss-over-ukraine.gif)
 
-6. **Switch the optics.** Tap `1`–`7` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
+6. **Switch the optics.** Tap `1`–`6` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
 7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
 
-**Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
+**Keyboard:** `1`–`6` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
 
 ---
 
@@ -332,6 +346,10 @@ Click **GEV MIC**, grant the microphone, and just talk. This is more than a voic
 Thirty tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
 
 **🎥 Direct it** — drone-operator camera verbs:
+
+“Rotate the globe” spins Earth to the right continuously; ask for left, a speed,
+or stop. If it refuses, follow its reset-and-rotate or further-zoom guidance;
+camera input stops rotation.
 
 > 🗣️ _"Take me to Tokyo."_ · _"Orbit around this area slowly."_ · _"Draw the walking route from the Capitol to Zilker Park."_ → _"Fly the route we just drew."_ · _"Zoom out to a globe view."_
 
@@ -381,7 +399,7 @@ Twenty layers and map sources. **Eighteen have a keyless path.** Some offer addi
 | 🌍 **Earthquakes**          | Global seismic activity, last 24h                                                                                                                                                                                                                                                                                                                                                   | USGS                                    | 🟢                                                                                                  |
 | ◍ **Air quality**           | Live AQHI on the published 1–10+ health-risk scale, with a Weather-panel card showing the band legend and the highest readings in view. **Canada only** — ECCC is the first registered provider | ECCC MSC GeoMet                          | 🟢                                                                                                  |
 | 🚗 **Traffic**              | Simulated vehicles on OSM roads. With TomTom, live flow speeds drive the simulation and congestion colors below ~8 km; individual vehicle positions are not live observations                                                                                                                                                                                                       | TomTom + OSM                            | 🟢 simulation · 🟡 live flow speeds                                                                 |
-| 📹 **CCTV Mesh**            | ~4,000 public cameras (shared cap) projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511, free developer key) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · Delaware (DelDOT live video) · New South Wales (Live Traffic NSW) · Calgary · Norway (Statens vegvesen) · Toronto · King County (WA) · Washington (WSDOT) · Catalonia (Servei Català de Trànsit) · Hong Kong (Transport Department) · Taiwan (Freeway Bureau, MOTC), plus opt-in New York City (NYC DOT TMC, needs your own NYC DOT agreement), opt-in Lithuania (Via Lietuva / Eismoinfo, photo licence unconfirmed) and opt-in Florida (FL511, individual personal use only; other use needs FDOT's written consent). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
+| 📹 **CCTV Mesh**            | ~4,000 public cameras (shared cap) projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511, free developer key) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · Delaware (DelDOT live video) · New South Wales (Live Traffic NSW) · Calgary · Norway (Statens vegvesen) · Toronto · King County (WA) · Washington (WSDOT) · Catalonia (Servei Català de Trànsit) · Hong Kong (Transport Department) · Taiwan (Freeway Bureau, MOTC) · Italy (A22 Brennero motorway), plus opt-in New York City (NYC DOT TMC, needs your own NYC DOT agreement), opt-in Lithuania (Via Lietuva / Eismoinfo, photo licence unconfirmed) and opt-in Florida (FL511, individual personal use only; other use needs FDOT's written consent). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
 | 📷 **Mapped ALPR Cameras**  | License-plate-reader camera locations tagged by OpenStreetMap contributors, loaded one city-sized view at a time, with **SHOW NEAREST**. Locations and tags only: no plate data, no video                                                                                                                                                                                           | OpenStreetMap (incl. DeFlock mapping)   | 🟢                                                                                                  |
 | 📷 **Street Level**         | Street-level photos behind one panel, one chip per provider: coverage on the streets, image cones, an embedded viewer with full-screen **EXPAND**. Mapillary, Google Street View, KartaView and Panoramax | Mapillary · Google · KartaView · Panoramax | 🟢 KartaView, Panoramax · 🟡 Mapillary token · 🔴 Google Maps key |
 | 📻 **Radio**                | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster                                                                                                                                                                                                                                                 | Radio Browser / broadcasters            | 🟢                                                                                                  |
@@ -425,7 +443,7 @@ _The Space Missions layer replaying a Falcon 9 ascent — labeled `RECONSTRUCTED
 
 **Setup.** At [mapillary.com/dashboard/developers](https://www.mapillary.com/dashboard/developers), register an application with **Read** access and copy its **Client Token** (`MLY|…`). Paste it into **POWER UP → Mapillary**, or set `MAPILLARY_CLIENT_TOKEN` in `.env` and restart. Without it the panel reads **KEY REQUIRED**. **Google Street View** uses `GOOGLE_MAPS_API_KEY` with the **Maps JavaScript API** enabled for it in Google Cloud; its chip starts off, since every panorama is billed to the key. **KartaView** and **Panoramax** need nothing: their public APIs are keyless.
 
-**Use.** Turn on **Street Level** under DATA LAYERS → Cameras, or with the pill in the STREET LEVEL panel header. Each provider has a chip in its own colour (Mapillary green), and one is lit at a time: lighting one switches the others off. Mapillary, which is free, is lit by default. Zoom in to street level (below 60 km) for the coverage lines; from orbit the panel says to zoom in. The **IMAGERY** (ALL / 360° / FLAT) and **SINCE** filters apply to Mapillary, KartaView and Panoramax; Street View panoramas are all 360°, so with Street View lit the filters are hidden. Click a coverage line for its image cones and a cone to open the photo. Light **KARTAVIEW** (purple) and zoom in below about 6 km: its lines are the streets KartaView has photos of, and a click on one opens the photo nearest the click, flat or 360° (drag to look around), with cones along its drive; **‹ ›** or ← → step through the drive (Shift+← →, ↑ ↓ and + − look around a 360° photo; pinch zooms on a phone). Photos KartaView has archived are skipped, and where all are archived the panel says so. For KartaView, **SINCE** goes by upload date, as KartaView's own map does (it can filter by nothing else), and the panel notes it under the slider; KartaView filters its lines on its own server, and a filtered area KartaView has not drawn before can take several seconds. Light **PANORAMAX** (orange) for the open, federated commons (strongest in France and Belgium): below about 60 km its lines are sequences. A click on a line opens that sequence's picture nearest the click without moving the camera, flat or 360°, with cones along the sequence around it; **‹ ›** or ← → step through it, and both filters apply. Its caption names the picture's authors (or the instance holding it) and licence (mostly CC BY-SA 4.0; pictures on the IGN instance are Licence Ouverte 2.0). On the **Google 3D** map (Google's terms keep Street View off other maps, where it does not appear), light **GOOGLE STREET VIEW** and click a street from below 3 km, or press **OPEN STREET VIEW** for the view centre, to open Google's panorama there; step along its arrows. Above the photo: **EXPAND** (full screen; Esc leaves) and **FIT / FILL** (Mapillary, and flat KartaView and Panoramax photos). The caption links to the image on the provider's site, and the globe credits each provider that is on ("© Mapillary contributors, CC BY-SA 4.0", "Street View imagery © Google", "© KartaView contributors, CC BY-SA 4.0", "© Panoramax contributors, licence per picture"). KartaView's own photo pages fail for signed-out visitors, so its link opens the full-size photo.
+**Use.** Turn on **Street Level** under DATA LAYERS → Cameras, or with the pill in the STREET LEVEL panel header. Each provider has a chip in its own colour (Mapillary green), and one is lit at a time: lighting one switches the others off. Mapillary, which is free, is lit by default. Zoom in to street level (below 60 km) for the coverage lines; from orbit the panel says to zoom in. The **IMAGERY** (ALL / 360° / FLAT) and **SINCE** filters apply to Mapillary, KartaView and Panoramax; Street View panoramas are all 360°, so with Street View lit the filters are hidden. Click a coverage line for its image cones and a cone to open the photo. Light **KARTAVIEW** (purple) and zoom in below about 6 km: its lines are the streets KartaView has photos of, and a click on one opens the photo nearest the click, flat or 360° (drag to look around), with cones along its drive; **‹ ›** or ← → step through the drive (Shift+← →, ↑ ↓ and + − look around a 360° photo; pinch zooms on a phone). Photos KartaView has archived are skipped, and where all are archived the panel says so. For KartaView, **SINCE** goes by upload date, as KartaView's own map does (it can filter by nothing else), and the panel notes it beside the SINCE value (ANY DATE (by upload date)); KartaView filters its lines on its own server, and a filtered area KartaView has not drawn before can take several seconds. Light **PANORAMAX** (orange) for the open, federated commons (strongest in France and Belgium): below about 60 km its lines are sequences. A click on a line opens that sequence's picture nearest the click without moving the camera, flat or 360°, with cones along the sequence around it; **‹ ›** or ← → step through it, and both filters apply. Its caption names the picture's authors (or the instance holding it) and licence (mostly CC BY-SA 4.0; pictures on the IGN instance are Licence Ouverte 2.0). On the **Google 3D** map (Google's terms keep Street View off other maps, where it does not appear), light **GOOGLE STREET VIEW** and click a street from below 3 km, or press **OPEN STREET VIEW** for the view centre, to open Google's panorama there; step along its arrows. Above the photo: **EXPAND** (full screen; Esc leaves) and **FIT / FILL** (Mapillary, and flat KartaView and Panoramax photos). The caption links to the image on the provider's site, and the globe credits each provider that is on ("© Mapillary contributors, CC BY-SA 4.0", "Street View imagery © Google", "© KartaView contributors, CC BY-SA 4.0", "© Panoramax contributors, licence per picture"). KartaView's own photo pages fail for signed-out visitors, so its link opens the full-size photo.
 
 Share links carry the provider switches and filters (`0.m.0` Mapillary off, `0.m.0_0.r.google-1` Street View on, `0.m.0_0.r.google-0*kartaview-1*panoramax-0` KartaView on and `0.m.0_0.r.google-0*kartaview-0*panoramax-1` Panoramax on, as the app writes them (`0.m.0_0.r.kartaview-1` and `0.m.0_0.r.panoramax-1` work too; a link that leaves out `m` keeps Mapillary, the default, lit), `0.p.p` panoramas only, `0.s.365` the last year). To add a provider, implement the contract in `src/layers/streetLevel/registry.js` and register it in `src/app/layers/streetLevel.js`.
 
@@ -478,7 +496,7 @@ How the globe handles live data:
 ```
 src/
 ├── main.js                 # Bootstrap: Google 3D tiles, layer registration
-├── ui.js                   # Runtime UI — panels, HUD, styles, control facade
+├── ui/                     # Runtime UI — panels, HUD, styles, controls
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
@@ -586,13 +604,11 @@ files are supported; HEVC playback depends on the browser and device. Init
 files are capped independently at 256 KiB and share the 24 MiB session budget.
 Two maximum-size 12 MiB media files plus an init cannot fit that budget; such
 fMP4 streams cannot reach the two-segment readiness threshold.
-Each decoder has its own lease, including native HLS: at most eight per session
-and eight per direct socket peer across both sessions. Media requests pass the
-same-site gate before catalog or session work; refreshes, TS/fMP4 media reads,
-init reads and release require the owning peer. IPv4-mapped IPv6 addresses are
-normalized; clients sharing a NAT share the peer budget. Forwarding headers are
-refused by this gate, not used as peer identity. This is resource admission, not
-user authentication. Closing a decoder releases only its lease; abandoned leases expire after
+Each decoder has its own lease, including native HLS, at most eight per session.
+All CCTV requests pass main's keyless same-site gate before catalog or upstream
+work, including behind a reverse proxy. TS/fMP4 media and initialization reads
+require active session and lease tokens; these are resource capabilities, not
+user authentication. No socket-IP ownership or per-peer quota is imposed. Closing a decoder releases only its lease; abandoned leases expire after
 15 seconds without access. The last release stops upstream work. Failed live video
 uses the existing still/Street View/synthetic fallback, which is not live video.
 Cold or restarted sessions begin with the newest two segments; later polls fetch

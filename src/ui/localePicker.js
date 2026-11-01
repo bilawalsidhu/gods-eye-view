@@ -20,6 +20,11 @@ export const LOCALE_SEARCH_THRESHOLD = 8;
 /** Type-ahead keystrokes closer together than this extend one prefix. */
 export const TYPEAHEAD_RESET_MS = 500;
 
+const CHINESE_LABELS = {
+  'zh-CN': 'Chinese (Simplified)',
+  'zh-Hant': 'Chinese (Traditional)',
+};
+
 /**
  * Text folded for search: no diacritics, lower case. 'Español' → 'espanol',
  * 'Ёжик' → 'ежик'.
@@ -464,12 +469,13 @@ export function mountLocalePicker({
     item.dataset.locale = option.code;
     const name = element(documentRef, 'span', 'locale-picker-native');
     name.textContent = option.nativeName;
-    // Every row reads the same: the language named in itself, then its code.
-    // The interface-language name only helps the search find it.
+    // Chinese variants are distinguished by script rather than region.
     const meta = element(documentRef, 'span', 'locale-picker-meta');
     const codeLabel = element(documentRef, 'span', 'locale-picker-option-code');
     codeLabel.setAttribute('translate', 'no');
-    codeLabel.textContent = option.code.toUpperCase();
+    codeLabel.textContent =
+      CHINESE_LABELS[option.code] || option.code.toUpperCase();
+    if (CHINESE_LABELS[option.code]) codeLabel.lang = 'en';
     meta.append(codeLabel);
     const text = element(documentRef, 'span', 'locale-picker-text');
     text.append(name, meta);

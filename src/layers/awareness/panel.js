@@ -25,9 +25,10 @@ function presentAwarenessCount(summary = {}) {
 }
 
 /** A distance as the panel shows it: 850 m, 4.6 km, 120 km, in the UI language. */
-function presentAwarenessDistance(meters) {
+export function presentAwarenessDistance(meters) {
   if (!Number.isFinite(meters) || meters < 0) return '—';
-  if (meters < 1000) return formatQuantity(Math.round(meters), 'm');
+  const wholeMeters = Math.round(meters);
+  if (wholeMeters < 1000) return formatQuantity(wholeMeters, 'm');
   const digits = meters < 10000 ? 1 : 0;
   return formatQuantity(meters / 1000, 'km', {
     minimumFractionDigits: digits,

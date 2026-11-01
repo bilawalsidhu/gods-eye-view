@@ -2,6 +2,7 @@ import { t } from '../i18n/index.js';
 import { syncChipGroup } from './chipGroup.js';
 import { syncRowList } from './rowList.js';
 import { formatScaleLabel, unitLabel } from './unitLabels.js';
+import { createSlider } from './slider.js';
 
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
@@ -90,12 +91,11 @@ export function createRailCardBlocks({ container, cardId, onParams }) {
               'rail-card-setting-range-label',
               block.rangeRow,
             );
-            block.rangeInput = make(
-              'input',
-              'rail-card-setting-range',
-              block.rangeRow,
-            );
-            block.rangeInput.type = 'range';
+            block.rangeInput = createSlider({
+              documentRef: document,
+              className: 'rail-card-setting-range',
+            });
+            block.rangeRow.appendChild(block.rangeInput);
             block.rangeValue = make(
               'span',
               'rail-card-setting-range-value',

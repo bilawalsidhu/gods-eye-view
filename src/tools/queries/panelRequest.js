@@ -55,7 +55,7 @@ const COMPRESS_MIN_BYTES = 1024;
  * rather than fail; past `PANEL_QUEUED_REQUESTS` waiting, they are refused.
  */
 export const PANEL_CONCURRENT_REQUESTS = 6;
-export const PANEL_QUEUED_REQUESTS = 256;
+const PANEL_QUEUED_REQUESTS = 256;
 
 /**
  * Each server's panel state: bodies too large for one call, kept for the

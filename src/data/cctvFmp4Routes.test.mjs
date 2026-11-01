@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { cctvProxy } from '../../server/providers/cctv.js';
 
-test('MP4 and TS routes enforce same-site admission and socket-owned leases', async (t) => {
+test('MP4 and TS routes enforce proxy-compatible same-site admission and session/lease checks', async (t) => {
   const keys = ['CCTV_SOURCES_FILE', 'CCTV_SOURCES_JSON', 'CCTV_FORCE_AUSTIN'];
   const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-hls-routes-'));
@@ -109,31 +109,47 @@ test('MP4 and TS routes enforce same-site admission and socket-owned leases', as
     assert.equal(asset.headers['Content-Type'], 'video/mp4');
   }
   const reads = requests.length;
-  // Copied URLs, including initialization files, do not carry peer identity.
-  for (const url of [initUrl, segmentUrl]) {
-    assert.equal((await request(local(url), 'GET', '192.0.2.2')).status, 404);
+  // Reverse proxies may change the direct socket address between requests.
+  // Session and lease tokens remain the capability; forwarded values are not identities.
+  for (const headers of [
+    { 'x-forwarded-for': '192.0.2.1' },
+    { forwarded: 'for=192.0.2.1;proto=https' },
+    { 'x-forwarded-proto': 'https', origin: 'https://localhost:4173' },
+  ]) {
+    const proxyHeaders = { 'sec-fetch-site': 'same-origin', ...headers };
     assert.equal(
       (
-        await request(local(url), 'GET', '192.0.2.2', {
-          'x-forwarded-for': '192.0.2.1',
-        })
+        await request(
+          '/media/mp4?lease=' + lease,
+          'GET',
+          '192.0.2.2',
+          proxyHeaders,
+        )
       ).status,
-      403,
+      200,
     );
+    for (const url of [initUrl, segmentUrl]) {
+      assert.equal(
+        (await request(local(url), 'GET', '192.0.2.2', proxyHeaders)).status,
+        200,
+      );
+      assert.equal(
+        (
+          await request(
+            local(url).replace(lease, '33333333-3333-4333-8333-333333333333'),
+            'GET',
+            '192.0.2.2',
+            proxyHeaders,
+          )
+        ).status,
+        404,
+      );
+    }
   }
-  assert.equal(
-    (await request('/media/mp4?lease=' + lease, 'GET', '192.0.2.2')).status,
-    503,
-  );
-  assert.equal(
-    (await request('/media/mp4?lease=' + lease, 'DELETE', '192.0.2.2')).status,
-    204,
-  );
-  assert.equal((await request(local(initUrl))).status, 200);
   assert.equal(
     requests.length,
     reads,
-    'foreign requests create no upstream work',
+    'proxy reads and renewals share the existing pull',
   );
 
   for (const headers of [
@@ -141,6 +157,8 @@ test('MP4 and TS routes enforce same-site admission and socket-owned leases', as
     { origin: 'null' },
     { 'sec-fetch-site': 'cross-site' },
     { 'sec-fetch-site': 'same-site' },
+    { 'sec-fetch-site': 'cross-site', 'x-forwarded-for': '192.0.2.1' },
+    { origin: 'https://foreign.example', 'x-forwarded-proto': 'https' },
   ]) {
     for (const [method, url] of [
       ['GET', '/media/mp4?lease=' + lease],
@@ -166,11 +184,7 @@ test('MP4 and TS routes enforce same-site admission and socket-owned leases', as
     other.headers['X-CCTV-Session'],
     result.headers['X-CCTV-Session'],
   );
-  assert.equal(
-    requests.length,
-    reads,
-    'another admitted peer reuses the same pull',
-  );
+  assert.equal(requests.length, reads, 'another consumer reuses the same pull');
   const invalid = [
     local(segmentUrl).replace('.mp4', '.ts'),
     local(initUrl).replace('init_0.mp4', 'init_999.mp4'),
@@ -186,7 +200,10 @@ test('MP4 and TS routes enforce same-site admission and socket-owned leases', as
   assert.equal((await request(local(initUrl))).status, 404);
   const otherInit = local(initUrl).replace(lease, otherLease);
   assert.equal((await request(otherInit, 'GET', '192.0.2.2')).status, 200);
-  await request('/media/mp4?lease=' + otherLease, 'DELETE', '192.0.2.2');
+  await request('/media/mp4?lease=' + otherLease, 'DELETE', '192.0.2.2', {
+    'x-forwarded-for': '192.0.2.9',
+    'sec-fetch-site': 'same-origin',
+  });
   assert.equal((await request(otherInit, 'GET', '192.0.2.2')).status, 404);
   assert.equal(requests.length, reads);
   const ts = await request('/media/ts?lease=' + lease);
@@ -197,8 +214,19 @@ test('MP4 and TS routes enforce same-site admission and socket-owned leases', as
   const tsAsset = await request(local(tsUrl));
   assert.equal(tsAsset.status, 200);
   assert.equal(tsAsset.headers['Content-Type'], 'video/mp2t');
-  assert.equal((await request(local(tsUrl), 'GET', '192.0.2.2')).status, 404);
-  await request('/media/ts?lease=' + lease, 'DELETE', '192.0.2.2');
+  assert.equal(
+    (
+      await request(local(tsUrl), 'GET', '192.0.2.2', {
+        'x-forwarded-for': '192.0.2.9',
+      })
+    ).status,
+    200,
+  );
+  await request(
+    '/media/ts?lease=33333333-3333-4333-8333-333333333333',
+    'DELETE',
+    '192.0.2.2',
+  );
   assert.equal((await request(local(tsUrl))).status, 200);
 
   pendingInit = {
@@ -220,7 +248,7 @@ test('MP4 and TS routes enforce same-site admission and socket-owned leases', as
   assert.equal(
     signal.aborted,
     true,
-    'disconnect releases the socket-owned pending lease',
+    'disconnect releases the pending consumer lease',
   );
   pendingInit.response.resolve(new Response('late init'));
   await opening;

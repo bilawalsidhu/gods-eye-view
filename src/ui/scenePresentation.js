@@ -1,5 +1,6 @@
 /** Scene panel elements and text-only project presentation. */
 import { formatNumber, msg, t } from '../i18n/index.js';
+import { createActionButton } from './actionButton.js';
 
 // Labels for what a shot stores; anything else shows as stored. Style names
 // match STYLE_STATUS_LABELS in visualPresets.js, which this package cannot
@@ -11,7 +12,6 @@ const STYLE_LABELS = Object.freeze({
   thermal: msg('FLIR'),
   anime: msg('ANIME'),
   noir: msg('NOIR'),
-  snow: msg('SNOW'),
 });
 
 const DETECTION_MODE_LABELS = Object.freeze({
@@ -121,13 +121,18 @@ export function renderSceneShots(
     });
     const actions = document.createElement('div');
     actions.className = 'scene-shot-actions';
-    const loadButton = document.createElement('button');
-    loadButton.className = 'scene-shot-btn';
-    loadButton.textContent = t('LOAD');
+    const loadButton = createActionButton({
+      label: t('LOAD'),
+      className: 'scene-shot-btn',
+      size: 'compact',
+    });
     listen(loadButton, 'click', () => load(scene.id, shot.id));
-    const deleteButton = document.createElement('button');
-    deleteButton.className = 'scene-shot-btn scene-shot-danger';
-    deleteButton.textContent = t('DEL');
+    const deleteButton = createActionButton({
+      label: t('DEL'),
+      className: 'scene-shot-btn scene-shot-danger',
+      size: 'compact',
+      variant: 'danger',
+    });
     listen(deleteButton, 'click', () => remove(scene.id, shot.id));
     actions.appendChild(loadButton);
     actions.appendChild(deleteButton);
@@ -166,7 +171,26 @@ export function presentSceneSelection(element, selectedShotId) {
   }
 }
 
-export function presentSceneButtons(elements, running, hasRun) {
+/**
+ * While a scene plays, the authoring and file actions here are off and STOP
+ * is on. Otherwise a button is off when it would do nothing: DELETE and
+ * CAPTURE SHOT without a scene, UPDATE SHOT without a selected shot, PLAY and
+ * NEXT when no scene in the project has a shot (both continue into the
+ * following scenes).
+ */
+export function presentSceneButtons(
+  elements,
+  running,
+  hasRun,
+  { hasScene = true, playableShots = 1, hasSelectedShot = true } = {},
+) {
+  const idleOff = {
+    delete: !hasScene,
+    capture: !hasScene,
+    update: !hasSelectedShot,
+    start: playableShots === 0,
+    next: playableShots === 0,
+  };
   for (const name of [
     'start',
     'next',
@@ -178,7 +202,7 @@ export function presentSceneButtons(elements, running, hasRun) {
     'export',
     'import',
   ]) {
-    if (elements[name]) elements[name].disabled = running;
+    if (elements[name]) elements[name].disabled = running || !!idleOff[name];
   }
   if (elements.stop) elements.stop.disabled = !running;
   if (elements.download) elements.download.disabled = !hasRun;

@@ -50,6 +50,13 @@ export class CctvControls {
           attributes: true,
           attributeFilter: ['class', 'hidden'],
         });
+      // Phone sheets hide the rail without collapsing its panels. Observe the
+      // shell as well so media stops even when the panel's own class is intact.
+      if (document.body)
+        this._videoVisibilityObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class', 'data-mobile-sheet'],
+        });
       this.listen(document, 'visibilitychange', () =>
         this._renderCctvState(this._cctvState),
       );
