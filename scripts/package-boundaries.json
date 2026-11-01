@@ -75,6 +75,7 @@
       "src/ui/stores/context.js",
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
+      "src/ui/stores/providerSettings.js",
       "src/ui/stores/location.js",
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue",
@@ -1002,6 +1003,7 @@
       "src/ui/stores/context.js",
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
+      "src/ui/stores/providerSettings.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js"
     ],
@@ -2980,6 +2982,7 @@
       "src/ui/stores/context.js",
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
+      "src/ui/stores/providerSettings.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js"
     ],

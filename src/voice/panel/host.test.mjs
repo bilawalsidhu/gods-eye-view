@@ -681,19 +681,12 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
     f.run('set_panel_open', { panelId: 'provider-settings', open }, options);
   assert.equal((await request(true)).unavailable, true);
   const doc = globalThis.document;
-  const chip = doc.createElement('button');
-  chip.id = 'key-setup-chip';
+  // The setup owner needs only its dialog element; the view is not mounted,
+  // so the published dialog state stands in for it.
   const panel = doc.createElement('aside');
   panel.id = 'key-setup';
-  panel.hidden = true;
-  const close = doc.createElement('button');
-  panel.appendChild(close);
-  doc.body.append(chip, panel);
-  const query = panel.querySelector.bind(panel);
-  panel.querySelector = (selector) =>
-    selector === '[data-key-setup-close]' ? close : query(selector);
-  chip.click = () => chip.fire('click');
-  close.click = () => close.fire('click');
+  doc.body.append(panel);
+  const dialog = () => settings.view?.dialog;
   let frames = 0;
   const previousFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (callback) => {
@@ -705,6 +698,10 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
     else globalThis.requestAnimationFrame = previousFrame;
   });
   const { initKeySetup } = await import('../../keySetup.js');
+  const { useProviderSettingsStore } =
+    await import('../../ui/stores/providerSettings.js');
+  const { applicationPinia } = await import('../../ui/vueRuntime.js');
+  const settings = useProviderSettingsStore(applicationPinia());
   let finishStatus;
   const pending = initKeySetup({
     documentRef: doc,
@@ -727,7 +724,7 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
   doc.body.classList.add('cockpit-mode');
   assert.equal((await request(true)).unavailable, true);
   assert.equal(
-    panel.hidden,
+    dialog().hidden,
     true,
     'a concealed view cannot schedule a later surprise reveal',
   );
@@ -737,16 +734,16 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
   await assert.rejects(() => request(true, { signal: abort.signal }), {
     name: 'AbortError',
   });
-  assert.equal(panel.hidden, true);
+  assert.equal(dialog().hidden, true);
   assert.equal((await request(true)).ok, true);
-  assert.equal(panel.hidden, false);
-  assert.equal(panel.classList.contains('visible'), true);
+  assert.equal(dialog().hidden, false);
+  assert.equal(dialog().visible, true);
   assert.equal((await request(true)).ok, true);
   assert.equal(frames, 1, 'repeated open reuses the dialog');
   assert.equal((await request(false)).ok, true);
-  assert.equal(panel.classList.contains('visible'), false);
+  assert.equal(dialog().visible, false);
   t.mock.timers.tick(400);
-  assert.equal(panel.hidden, true);
+  assert.equal(dialog().hidden, true);
   assert.equal((await request(false)).ok, true);
   assert.equal(
     f.state.visual.length,
