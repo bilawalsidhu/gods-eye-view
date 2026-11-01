@@ -16,9 +16,10 @@ const LOCATION_MINI_SEARCHED_PLACEHOLDER = Object.freeze(
 /**
  * The location tray's presentation, keyboard handling and pending row
  * animation over supplied actions. The city pills, the landmark row, the
- * mini status and the search error are presented as a plain view and handed
- * to `publish`; Core's dock renders them and calls `chooseCity()` and
- * `choosePoi()`. The search field and reset buttons keep their listeners.
+ * mini status, the search error and the ORBIT indicator are presented as a
+ * plain view and handed to `publish`; Core's dock renders them and calls
+ * `chooseCity()` and `choosePoi()`, and the scene chrome shows the indicator.
+ * The search field and reset buttons keep their listeners.
  */
 export class LocationControls {
   constructor({
@@ -61,6 +62,9 @@ export class LocationControls {
       poi: t('Landmark: --'),
     };
     this.searchError = null;
+    // The ORBIT indicator: null until the shell offers it, then whether the
+    // camera orbits.
+    this.orbit = null;
     this.bind(doc, 'keydown', (event) => {
       const cityId = getExpandedCity();
       if (
@@ -100,9 +104,12 @@ export class LocationControls {
   }
   /** Publish the tray as it stands. */
   present() {
-    if (this.destroyed) return;
+    if (!this.destroyed) this.publish(this.presentation());
+  }
+  /** The tray as it stands. */
+  presentation() {
     const pois = this.cities[this.poiCity]?.pois || [];
-    this.publish({
+    return {
       cities: Object.entries(this.cities).map(([id, city]) => ({
         id,
         label: localizePlaceName(city.name),
@@ -118,7 +125,8 @@ export class LocationControls {
       poisExpanded: this.poisExpanded,
       status: { ...this.status },
       searchError: this.searchError,
-    });
+      orbit: this.orbit && { ...this.orbit },
+    };
   }
   /** A city pill was clicked. */
   chooseCity(id) {
@@ -197,24 +205,21 @@ export class LocationControls {
     this.searchError = message || null;
     this.present();
   }
-  createOrbitIndicator() {
-    if (this.destroyed) return null;
-    if (!this.orbitIndicator) {
-      this.orbitIndicator = this.doc.createElement('div');
-      this.orbitIndicator.id = 'orbit-indicator';
-      const icon = this.doc.createElement('span');
-      icon.className = 'orbit-icon';
-      icon.textContent = '↻';
-      this.orbitIndicator.append(icon, ` ${t('ORBIT')}`);
-      this.doc.body.appendChild(this.orbitIndicator);
-    }
-    return this.orbitIndicator;
+  /** Offer the ORBIT indicator, lit while the camera orbits. */
+  showOrbit(active = false) {
+    if (this.destroyed) return;
+    this.orbit = { active: Boolean(active) };
+    this.present();
   }
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
     this.cancelExpansion();
     for (const remove of this.removers.splice(0)) remove();
-    this.orbitIndicator?.remove();
+    // The ORBIT indicator leaves with its owner.
+    if (this.orbit) {
+      this.orbit = null;
+      this.publish(this.presentation());
+    }
   }
 }

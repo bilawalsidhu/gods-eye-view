@@ -3,8 +3,9 @@ import { markRaw, shallowRef } from 'vue';
 
 /**
  * The dock's location tray as its view renders it. LocationControls
- * presents the city pills, the landmark row, the mini status and the search
- * error and publishes them here; it keeps the search field's listeners.
+ * presents the city pills, the landmark row, the mini status, the search
+ * error and the ORBIT indicator and publishes them here; it keeps the search
+ * field's listeners.
  */
 export const useLocationStore = defineStore('gev-location', () => {
   /** The presented tray; null until the controls first render. */

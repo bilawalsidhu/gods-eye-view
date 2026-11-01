@@ -249,14 +249,6 @@ export class ShellFacade {
     this._locationNavigation.orbitController = value;
   }
 
-  get _orbitIndicator() {
-    return this._locationNavigation._orbitIndicator;
-  }
-
-  set _orbitIndicator(value) {
-    this._locationNavigation._orbitIndicator = value;
-  }
-
   get cockpitView() {
     return this._cockpitCoordinator?.cockpitView;
   }

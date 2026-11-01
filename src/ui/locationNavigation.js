@@ -32,7 +32,6 @@ export class LocationNavigation {
     this._cancelGlobeReset = null;
     this._worldJumpActive = false;
     this.orbitController = new services.OrbitController(viewer);
-    this._orbitIndicator = null;
     this._locationState = createStateChannel(
       () => this._locationLookup?.getState() || null,
     );
@@ -285,7 +284,7 @@ export class LocationNavigation {
   }
 
   _initOrbit() {
-    this._orbitIndicator = this._locationControls.createOrbitIndicator();
+    this._locationControls?.showOrbit(false);
   }
 
   _toggleOrbit() {
@@ -300,13 +299,13 @@ export class LocationNavigation {
       pitch: this._currentPoi?.pitch || -30,
     });
 
-    this._orbitIndicator.classList.toggle('active', isActive);
+    this._locationControls?.showOrbit(isActive);
   }
 
   _stopOrbit() {
     if (this.orbitController.active) {
       this.orbitController.stop();
-      this._orbitIndicator.classList.remove('active');
+      this._locationControls?.showOrbit(false);
     }
   }
 

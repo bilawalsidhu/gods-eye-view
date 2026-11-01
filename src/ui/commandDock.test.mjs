@@ -161,6 +161,45 @@ test('the map source row renders the published chips and selects through the con
   assert.equal(document.querySelectorAll('.map-stack-chip').length, 0);
 });
 
+test('the ORBIT indicator sits on the body while offered and lights while orbiting', async (t) => {
+  const { $, pinia } = fixture(t);
+  assert.equal($('#orbit-indicator'), null);
+  const store = useLocationStore(pinia);
+  const controls = new LocationControls({
+    elements: {
+      search: $('#location-search'),
+      searchToggle: $('#search-toggle'),
+      resetButtons: [],
+    },
+    cities: {},
+    getExpandedCity: () => null,
+    onCity() {},
+    onPoi() {},
+    onSearch() {},
+    onReset() {},
+    publish: (view) => store.publish(view),
+    requestFrame() {},
+    cancelFrame() {},
+  });
+  controls.showOrbit(false);
+  await nextTick();
+  const indicator = $('#orbit-indicator');
+  assert.equal(indicator.parentElement, document.body);
+  assert.equal(indicator.textContent, '↻ ORBIT');
+  assert.equal(indicator.querySelector('.orbit-icon').textContent, '↻');
+  assert.equal(indicator.classList.contains('active'), false);
+  controls.showOrbit(true);
+  await nextTick();
+  assert.equal(indicator.classList.contains('active'), true);
+  controls.showOrbit(false);
+  await nextTick();
+  assert.equal(indicator.classList.contains('active'), false);
+  assert.ok($('#orbit-indicator') === indicator, 'stopping keeps it in place');
+  controls.destroy();
+  await nextTick();
+  assert.equal($('#orbit-indicator'), null);
+});
+
 test('the location tray renders what LocationControls publishes', async (t) => {
   const { $, pinia } = fixture(t);
   assert.equal($('#location-mini-city').textContent, '📍 Location: --');

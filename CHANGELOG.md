@@ -73,7 +73,9 @@
   the search error (`setSearchError()`), and hands it to its `publish`
   option, and Core's dock renders it and calls `chooseCity()` and
   `choosePoi()`. Its `elements` are now only `search`, `searchToggle` and
-  `resetButtons` (samehkhamis).
+  `resetButtons`. `createOrbitIndicator()` is replaced by
+  `showOrbit(active)`, which adds the ORBIT indicator to the presented tray
+  as `orbit: { active }` (null until offered) (samehkhamis).
 
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 

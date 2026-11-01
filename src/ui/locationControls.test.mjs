@@ -65,7 +65,6 @@ function fixture() {
   };
   const doc = node();
   doc.createElement = node;
-  doc.body = node();
   const cities = {
     a: { name: 'City A', pois: [{ name: 'First' }, { name: 'Second' }] },
     b: { name: 'City B', pois: [{ name: 'Elsewhere' }] },
@@ -108,6 +107,7 @@ test('the tray presents its cities, empty status and no landmarks at first', () 
     poisExpanded: false,
     status: { city: '📍 Location: --', poi: 'Landmark: --' },
     searchError: null,
+    orbit: null,
   });
   f.controls.highlightCity('b');
   assert.deepEqual(
@@ -155,11 +155,13 @@ test('replacing POIs routes clicks to the final row and expands it a frame later
 test('destruction revokes document, search, reset, city and POI actions and removes orbit UI', () => {
   const f = fixture();
   f.controls.showPois('a');
-  f.controls.createOrbitIndicator();
-  assert.equal(f.doc.body.children.length, 1);
+  f.controls.showOrbit(true);
+  assert.deepEqual(f.view().orbit, { active: true });
   f.controls.destroy();
+  assert.equal(f.view().orbit, null);
   f.controls.destroy();
   const published = f.views.length;
+  f.controls.showOrbit(true);
   f.controls.chooseCity('a');
   f.controls.choosePoi(0);
   f.controls.highlightCity('a');
@@ -170,7 +172,6 @@ test('destruction revokes document, search, reset, city and POI actions and remo
   f.frames.get(0)();
   assert.deepEqual(f.calls, []);
   assert.equal(f.views.length, published);
-  assert.equal(f.doc.body.children.length, 0);
 });
 test('the mini status shows the city, a landmark or a searched place', () => {
   const f = fixture();

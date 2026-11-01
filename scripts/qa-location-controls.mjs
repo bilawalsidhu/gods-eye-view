@@ -62,13 +62,17 @@ try {
   );
   check(
     'orbit controls and indicator agree',
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
       const ui = window.__godsEyeView.styleManager;
+      // Vue renders on a microtask; a task later the indicator shows it.
+      const rendered = () => new Promise((resolve) => setTimeout(resolve));
       ui.setOrbit(true);
+      await rendered();
       const active =
         ui.orbitController.active &&
         document.getElementById('orbit-indicator').classList.contains('active');
       ui.setOrbit(false);
+      await rendered();
       return (
         active &&
         !ui.orbitController.active &&

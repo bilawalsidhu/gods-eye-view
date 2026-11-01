@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { useDisplayStore } from '../stores/display.js';
+import { useLocationStore } from '../stores/location.js';
 import { useStatusStore } from '../stores/status.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import ImagerySplitView from './panels/ImagerySplitView.vue';
@@ -12,6 +13,8 @@ const { style } = storeToRefs(useDisplayStore());
 // The status chips and toast show what ShellFeedback, CctvControls and
 // createToast() publish.
 const { loading, traffic, cctv, toast } = storeToRefs(useStatusStore());
+// The ORBIT indicator LocationControls offers with the location tray.
+const { view: location } = storeToRefs(useLocationStore());
 // Every show rewrites the toast's text, so the live region announces a
 // repeated message again; hiding leaves it as it fades.
 const vToastText = {
@@ -86,6 +89,10 @@ const vToastText = {
   <div id="safe-frame-overlay">
     <div id="safe-frame-box"></div>
   </div>
+
+  <Teleport to="body">
+    <div v-if="location?.orbit" id="orbit-indicator" v-class-toggle="{ active: location.orbit.active }"><span class="orbit-icon">↻</span> {{ t('ORBIT') }}</div>
+  </Teleport>
 
   <ImagerySplitView />
 </template>
