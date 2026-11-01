@@ -1,6 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { computed, useTemplateRef } from 'vue';
+import { t } from '../../../i18n/index.js';
 import { createBriefState } from '../../cockpitBriefPages.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import CockpitRoute from './CockpitRoute.vue';
@@ -13,10 +14,13 @@ import CockpitSignalList from './CockpitSignalList.vue';
 const { presence, brief } = storeToRefs(useCockpitStore());
 const initial = createBriefState();
 const b = computed(() => brief.value ?? initial);
+// The card's collapse, which its toggle and data-collapsed show.
+const collapsed = computed(() => !!presence.value?.signalCollapsed);
 // The card's page and the region's answer, as state hooks on the card.
 const streamState = computed(() => ({
   'data-brief-page': brief.value?.pageId,
   'data-regional-status': brief.value?.regionalStatus || undefined,
+  'data-collapsed': presence.value ? String(collapsed.value) : undefined,
 }));
 // A departed contact cannot stay selectable. Its row hands focus to the
 // shown page's tab, which stays, so keyboard traversal carries on from the
@@ -48,8 +52,8 @@ function leaveSignals() {
           <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
         </button>
         <button id="cockpit-brief-auto" type="button" :aria-label="b.autoLabel" :aria-pressed="String(b.autoRotate)" :title="b.autoHelp">{{ b.autoLabel }}</button>
-        <button id="cockpit-signal-toggle" type="button" aria-label="Collapse cockpit briefing panel" aria-expanded="true" title="Collapse briefing panel" data-i18n-aria-label data-i18n-title>
-          <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
+        <button id="cockpit-signal-toggle" type="button" :aria-label="collapsed ? t('Expand cockpit briefing panel') : t('Collapse cockpit briefing panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand briefing panel') : t('Collapse briefing panel')">
+          <span class="material-symbols-outlined" aria-hidden="true">{{ collapsed ? 'right_panel_open' : 'right_panel_close' }}</span>
         </button>
       </nav>
     </header>

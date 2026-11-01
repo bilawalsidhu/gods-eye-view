@@ -1197,9 +1197,13 @@ test('cockpit summary presents the focused item as Contact', () => {
   );
   assert.match(match[0], /aria-label="Collapse Contact panel"/);
   assert.doesNotMatch(match[0], />GLOBAL CONTEXT</);
+  // The toggle renders the collapse the controller presents.
   assert.match(
-    setContextCollapsed.toString(),
-    /expanded \? t\('Collapse Contact panel'\) : t\('Expand Contact panel'\)/,
+    fs.readFileSync(
+      new URL('./ui/views/panels/CockpitContext.vue', import.meta.url),
+      'utf8',
+    ),
+    /collapsed \? t\('Expand Contact panel'\) : t\('Collapse Contact panel'\)/,
   );
 });
 

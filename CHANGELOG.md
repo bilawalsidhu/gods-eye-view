@@ -118,6 +118,11 @@
   that there is no panel to open instead of writing its classes
   (samehkhamis).
 
+- The Cockpit Contact and briefing cards' collapse renders from the
+  `gev-cockpit` store: the controller publishes `contextCollapsed` and
+  `signalCollapsed` in its presence, and each card's `data-collapsed` and
+  its toggle's state, words and icon follow it (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

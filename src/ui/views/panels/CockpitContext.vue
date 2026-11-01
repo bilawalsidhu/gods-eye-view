@@ -8,8 +8,9 @@ import { useCockpitStore } from '../../stores/cockpit.js';
 
 // The Cockpit Contact card. The Cockpit controller presents its scope,
 // navigation, cohort counts, nearest contact and weather toggle; until it
-// does, the card shows the state it starts in. Its visibility, collapse and
-// layout stay with the controller, and the controls keep its listeners.
+// does, the card shows the state it starts in. Its visibility and collapse
+// render from the presence; its layout stays with the controller, and the
+// controls keep its listeners.
 const { presence, context } = storeToRefs(useCockpitStore());
 const initial = createContextState();
 const c = computed(() => context.value ?? initial);
@@ -18,6 +19,7 @@ const directionStyle = computed(() =>
     ? undefined
     : { transform: `rotate(${c.value.direction.angle}deg)` },
 );
+const collapsed = computed(() => !!presence.value?.contextCollapsed);
 const weatherLabel = computed(() =>
   c.value.weather
     ? t('Disable cockpit weather effects')
@@ -26,7 +28,7 @@ const weatherLabel = computed(() =>
 </script>
 
 <template>
-  <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" :hidden="!presence?.context" data-i18n-aria-label :data-state="c.state ?? undefined">
+  <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" :hidden="!presence?.context" data-i18n-aria-label :data-state="c.state ?? undefined" :data-collapsed="presence ? String(collapsed) : undefined">
     <header class="cockpit-context-header">
       <div>
         <span data-i18n class="cockpit-context-kicker">CONTACT</span>
@@ -39,8 +41,8 @@ const weatherLabel = computed(() =>
         <button id="cockpit-context-next" type="button" :disabled="!c.canNext" aria-label="Next — nearest unvisited contact in the 250 km window" title="Next — nearest unvisited contact in the 250 km window" data-i18n-aria-label data-i18n-title>
           <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
         </button>
-        <button id="cockpit-context-toggle" type="button" aria-label="Collapse Contact panel" aria-expanded="true" title="Collapse contact panel" data-i18n-aria-label data-i18n-title>
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+        <button id="cockpit-context-toggle" type="button" :aria-label="collapsed ? t('Expand Contact panel') : t('Collapse Contact panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand contact panel') : t('Collapse contact panel')">
+          <span class="material-symbols-outlined" aria-hidden="true">{{ collapsed ? 'chevron_right' : 'chevron_left' }}</span>
         </button>
       </nav>
       <span class="cockpit-context-qualifier" data-i18n>CONTEXT ONLY</span>

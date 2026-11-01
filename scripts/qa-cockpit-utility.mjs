@@ -2087,7 +2087,7 @@ try {
   }
   await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('tactical'));
 
-  const signalTransition = await page.evaluate(() => {
+  const signalTransition = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
     const signalToggle = document.getElementById('cockpit-signal-toggle');
@@ -2114,6 +2114,8 @@ try {
       manager._setCockpitDisclosure('radio', true);
       manager._setCockpitDisclosure('radio', false);
       const manualCollapseRetained = cockpit.signalCollapsed && cockpit.signalUserCollapsed;
+      // The toggle renders the published collapse on Vue's next flush.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       return {
         afterExpansion,
         afterRepeatedExpansion,
@@ -2140,7 +2142,7 @@ try {
       && signalTransition.signalAriaExpanded === 'false',
     JSON.stringify(signalTransition),
   );
-  const contextTransition = await page.evaluate(() => {
+  const contextTransition = await page.evaluate(async () => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
     const priorCollapsed = cockpit.contextCollapsed;
     const contextToggle = document.getElementById('cockpit-context-toggle');
@@ -2152,6 +2154,8 @@ try {
       cockpit.setContextCollapsed(false);
       const afterExpansion = expandedEvents;
       cockpit.setContextCollapsed(false);
+      // The toggle renders the published collapse on Vue's next flush.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       return {
         afterExpansion,
         afterRepeatedExpansion: expandedEvents,

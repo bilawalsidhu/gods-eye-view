@@ -15,6 +15,7 @@ import {
   showBriefPage,
   updateLocalPosition,
 } from './cockpitBriefing.js';
+import { setSignalCollapsed } from './cockpitLayout.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitBriefing from './views/panels/CockpitBriefing.vue';
 
@@ -258,4 +259,31 @@ test('the card is labelled in the UI language', async (t) => {
   showBriefPage.call(owner, 1);
   await nextTick();
   assert.equal(text('#cockpit-brief-kicker'), 'НОВОСТИ РЕГИОНА');
+});
+
+test('the card and its toggle render the collapse the controller presents', async (t) => {
+  const { $, owner } = fixture(t);
+  const store = useCockpitStore();
+  Object.assign(owner, {
+    active: true,
+    signalCollapsed: false,
+    presence: { active: true, signalCollapsed: false },
+    publishPresenceView: () => store.publishPresence({ ...owner.presence }),
+  });
+  const card = $('#cockpit-signal-stream');
+  const toggle = $('#cockpit-signal-toggle');
+  assert.equal(card.hasAttribute('data-collapsed'), false);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  setSignalCollapsed.call(owner, true, { user: true });
+  await nextTick();
+  assert.equal(card.dataset.collapsed, 'true');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(toggle.getAttribute('aria-label'), 'Expand cockpit briefing panel');
+  assert.equal(toggle.title, 'Expand briefing panel');
+  assert.equal(toggle.textContent.trim(), 'right_panel_open');
+  assert.equal(owner.signalUserCollapsed, true);
+  setSignalCollapsed.call(owner, false);
+  await nextTick();
+  assert.equal(card.dataset.collapsed, 'false');
+  assert.equal(toggle.textContent.trim(), 'right_panel_close');
 });

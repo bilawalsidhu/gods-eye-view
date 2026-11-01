@@ -240,9 +240,11 @@ a feature supplying only its accent.
    publishes which surfaces are shown: the entry button and TR-3B chip in
    the Context panel, the HUD with its exit and reset buttons and briefing
    card, and the Contact card. Focus moves to the exit button, and back to
-   the entry, only after Vue renders them. The controls keep the
-   controller's listeners, and the cards' collapse and layout stay with the
-   controller, which reads their visibility when it lays them out.
+   the entry, only after Vue renders them. The cards' collapse is part of
+   that presence too: each card's `data-collapsed` and its toggle's words
+   and icon render from it. The controls keep the controller's listeners,
+   and the cards' layout stays with the controller, which reads their
+   visibility when it lays them out.
    `CockpitUtilityControls` renders the Display
    and Radio launchers, which popover is open and the compact Radio
    controls from the `gev-radio` store that RadioControls publishes to; the

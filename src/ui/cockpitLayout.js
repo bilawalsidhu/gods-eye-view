@@ -1,5 +1,4 @@
 /** Measure Cockpit panels against visible HUD and viewport obstacles. */
-import { t, msg } from '../i18n/index.js';
 import {
   resolveCockpitUtilityAnchor,
   resolveCockpitUtilityLayout,
@@ -35,20 +34,10 @@ export function scheduleContextLayout() {
 export function setContextCollapsed(collapsed) {
   const wasCollapsed = this.contextCollapsed;
   this.contextCollapsed = Boolean(collapsed);
-  if (this.context)
-    this.context.dataset.collapsed = String(this.contextCollapsed);
-  if (this.contextToggle) {
-    const expanded = !this.contextCollapsed;
-    this.contextToggle.setAttribute('aria-expanded', String(expanded));
-    this.contextToggle.setAttribute(
-      'aria-label',
-      expanded ? t('Collapse Contact panel') : t('Expand Contact panel'),
-    );
-    this.contextToggle.title = t(
-      expanded ? msg('Collapse contact panel') : msg('Expand contact panel'),
-    );
-    const icon = this.contextToggle.querySelector('.material-symbols-outlined');
-    if (icon) icon.textContent = expanded ? 'chevron_left' : 'chevron_right';
+  // The Contact card and its toggle render the collapse from the presence.
+  if (this.presence.contextCollapsed !== this.contextCollapsed) {
+    this.presence.contextCollapsed = this.contextCollapsed;
+    this.publishPresenceView();
   }
   if (this.active && wasCollapsed && !this.contextCollapsed) {
     window.dispatchEvent(new CustomEvent('gev:cockpit-context-expanded'));
@@ -60,25 +49,10 @@ export function setSignalCollapsed(collapsed, { user = false } = {}) {
   const wasCollapsed = this.signalCollapsed;
   this.signalCollapsed = Boolean(collapsed);
   if (user) this.signalUserCollapsed = this.signalCollapsed;
-  if (this.signalStream)
-    this.signalStream.dataset.collapsed = String(this.signalCollapsed);
-  if (this.signalToggle) {
-    const expanded = !this.signalCollapsed;
-    this.signalToggle.setAttribute('aria-expanded', String(expanded));
-    this.signalToggle.setAttribute(
-      'aria-label',
-      t(
-        expanded
-          ? msg('Collapse cockpit briefing panel')
-          : msg('Expand cockpit briefing panel'),
-      ),
-    );
-    this.signalToggle.title = t(
-      expanded ? msg('Collapse briefing panel') : msg('Expand briefing panel'),
-    );
-    const icon = this.signalToggle.querySelector('.material-symbols-outlined');
-    if (icon)
-      icon.textContent = expanded ? 'right_panel_close' : 'right_panel_open';
+  // The briefing card and its toggle render the collapse from the presence.
+  if (this.presence.signalCollapsed !== this.signalCollapsed) {
+    this.presence.signalCollapsed = this.signalCollapsed;
+    this.publishPresenceView();
   }
   if (this.signalCollapsed) this.stopBriefRotation();
   else this.startBriefRotation({ reset: true });

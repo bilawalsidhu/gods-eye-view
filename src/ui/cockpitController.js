@@ -156,6 +156,9 @@ export class CockpitViewController {
       entryAvailable: false,
       tr3b: null,
       context: false,
+      // The Contact and briefing cards' collapse, which their toggles show.
+      contextCollapsed: false,
+      signalCollapsed: false,
     };
     this.instruments = createInstrumentState();
     this.routeView = createRouteState();

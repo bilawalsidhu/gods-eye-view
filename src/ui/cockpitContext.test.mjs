@@ -13,6 +13,7 @@ import {
 } from './cockpitContext.js';
 import { createContextState } from './cockpitContextState.js';
 import { syncWeatherToggle } from './cockpitInstruments.js';
+import { setContextCollapsed } from './cockpitLayout.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitContext from './views/panels/CockpitContext.vue';
 
@@ -218,11 +219,12 @@ test('the weather toggle renders its state and the action it offers', async (t) 
   assert.equal(owner.contextView.weather, true);
 });
 
-test('re-renders leave the card visibility and layout to the controller', async (t) => {
+test('re-renders keep the collapse the controller presents and leave it the layout', async (t) => {
   const { $, owner } = fixture(t, snapshot());
   updateContext.call(owner, INFO, 0);
   const card = $('#cockpit-context');
-  card.dataset.collapsed = 'true';
+  owner.presence.contextCollapsed = true;
+  owner.publishPresenceView();
   card.dataset.layoutMode = 'compact-bottom';
   owner.snapshot = snapshot({ evaluatedAt: Date.UTC(2026, 9, 31, 12, 35) });
   updateContext.call(owner, INFO, 0);
@@ -230,6 +232,11 @@ test('re-renders leave the card visibility and layout to the controller', async 
   assert.equal(card.hidden, false);
   assert.equal(card.dataset.collapsed, 'true');
   assert.equal(card.dataset.layoutMode, 'compact-bottom');
+  const toggle = $('#cockpit-context-toggle');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(toggle.getAttribute('aria-label'), 'Expand Contact panel');
+  assert.equal(toggle.title, 'Expand contact panel');
+  assert.equal(toggle.textContent.trim(), 'chevron_right');
 });
 
 test('the card is labelled in the UI language', async (t) => {
@@ -246,5 +253,28 @@ test('the card is labelled in the UI language', async (t) => {
   assert.equal(
     $('#cockpit-weather-toggle').getAttribute('aria-label'),
     translate('Disable cockpit weather effects'),
+  );
+});
+
+test('collapsing the card publishes once per change', async (t) => {
+  const { $, owner } = fixture(t);
+  let published = 0;
+  const publish = owner.publishPresenceView;
+  Object.assign(owner, {
+    contextCollapsed: false,
+    presence: { context: true, contextCollapsed: false },
+    publishPresenceView: () => {
+      published += 1;
+      publish();
+    },
+  });
+  setContextCollapsed.call(owner, true);
+  setContextCollapsed.call(owner, true);
+  assert.equal(published, 1);
+  await nextTick();
+  assert.equal($('#cockpit-context').dataset.collapsed, 'true');
+  assert.equal(
+    $('#cockpit-context-toggle').getAttribute('aria-expanded'),
+    'false',
   );
 });
