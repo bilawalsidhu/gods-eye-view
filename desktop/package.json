@@ -20,7 +20,7 @@
     "dist:dir": "npm run icons && npm run stage && electron-builder --config electron-builder.yml --win --x64 --dir"
   },
   "devDependencies": {
-    "electron": "^44.5.1",
+    "electron": "^44.10.1",
     "electron-builder": "^26.15.3",
     "resedit": "^2.0.3",
     "sharp": "^0.35.4"
