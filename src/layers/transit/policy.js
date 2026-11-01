@@ -405,9 +405,12 @@ export function buildTransitSelectionCopy(
     reportedMotion.push(
       t('reported {speed} km/h', { speed: Math.round(record.speedMps * 3.6) }),
     );
+  // 359.5° and above rounds to north; modulo keeps it from printing 360°.
   if (Number.isFinite(record.bearing))
     reportedMotion.push(
-      t('reported hdg {heading}°', { heading: Math.round(record.bearing) }),
+      t('reported hdg {heading}°', {
+        heading: Math.round(record.bearing) % 360,
+      }),
     );
   // The operator's own claim, kept as a REPORT rather than as the live state.
   // It describes the moment of the report, which the display may not have
