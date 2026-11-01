@@ -50,3 +50,48 @@ Node 24.22.1 / Linux.
 ## Reproduction
 
 Run `node --test src/agent/feedProvenanceIntegration.test.mjs` on COMMAND alone. Independently integrate the recorded #1488 topic changes in a temporary tree, retain COMMAND's fallback behavior, then rerun it to enable the 24 combined cases. Run the focused agent/conversation/HUD/World Packet/layer snapshot suites, `npm run build`, `npm run check:boundaries`, `npm run i18n` and `npm run format:check`. Run ordinary tests with four workers and the allocation probes separately on Node 24.
+
+## Follow-up against current #1488
+
+Rechecked COMMAND head `bf05ba9f` with upstream #1488 head
+`dbfbfcceb90123b49823c9a9dcb42a9402f70e45` in an isolated topic-integration
+worktree. The latest HUD commit applies on the previously reconciled integration
+without textual conflicts. Its locale registrations and six added base catalogs
+were included from that upstream head so Japanese/CJK checks run with the actual
+shipped locale vocabulary. These integration-only changes are not part of the
+published COMMAND branch and are not an approval or merge of #1488.
+
+The newer HUD deliberately avoids inference without a named place. The minimal
+COMMAND HUD fixture previously supplied only layers, so its eight acceptance
+cases no longer reached the summary service. Supply a named Austin label while
+retaining the production layer/provenance context, as the upstream HUD harness
+does. Canonical-state mismatch rejection assertions are unchanged. This is a
+fixture contract correction; no production bypass of the named-place gate is
+introduced. The upstream no-place tests still verify that inference is skipped.
+
+Node 24.22.1 / Linux:
+
+- Combined focused agent/HUD/caption/layer-snapshot selection: 122 passed,
+  five skipped, zero failed. All 24 en/es combined provenance cases execute;
+  the skips concern separate integrations. Locale/CJK checks now pass too.
+- COMMAND alone: provenance file 13 passed, 24 deliberately skipped until
+  #1488 independently lands; zero failed.
+- Production builds passed for COMMAND and the temporary combination.
+- Real browser fixture gate passed all 12 combinations on both trees:
+  en/es/ru/zh-CN/zh-Hant/zh-TW at 1280x800 and 800x800. Includes tool round trip,
+  account isolation, STOP, logout, sign-in copy and layout.
+- Browser: Chrome Headless Shell 156.0.8078.47. The previous missing-executable
+  blocker is resolved in this environment.
+
+These are fixture-backed controls and integration contracts. Live OAuth,
+ChatGPT model interpretation, real feeds, native Windows and hosted CI remain
+separate acceptance gates. The upstream topic revision remains pinned above;
+future changes need another compatibility check.
+
+The fresh standalone ordinary suite passed 9,247 tests, skipped 36, failed 0
+(four workers); 24 skips are the explicit independent-#1488 gates. Build,
+formatting, i18n and package/import boundary checks passed. The built-app
+offline console gate also passed: actual app mount, account/provider controls,
+drag, resize, persisted placement, Escape teardown and no console/render errors.
+Offline mode skips live inference.
+All 15 serialized allocation probes passed with the original Node 24 budgets.

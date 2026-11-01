@@ -337,6 +337,11 @@ for (const locale of ['en', 'es'])
       const fixture = viewRunner(state);
       hud._dataManager = { getAll: () => fixture.rows };
       tcase.after(() => fixture.runner.dispose());
+      // The real summary gate requires a named place; the minimal viewer
+      // cannot resolve basemap labels itself. Keep the production layer context.
+      const buildContext = hud._summaryContext.bind(hud);
+      hud._summaryContext = async () =>
+        Object.assign(await buildContext(), { placeLabels: ['Austin'] });
       hud._latestMetrics = { altM: 600 };
       await hud._updateSummary(false, true);
       assert.ok(element.textContent.includes(words), element.textContent);
