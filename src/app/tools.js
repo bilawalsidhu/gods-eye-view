@@ -64,6 +64,10 @@ export function createApplicationTools({
     viewer,
     annotations,
     publish: (view) => displayStore.publishDraw(view),
+    connect: (actions) => {
+      const token = displayStore.connect(actions);
+      return () => displayStore.detach(token);
+    },
   });
   defer(() => drawTool?.destroy());
   // DISPLAY ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its

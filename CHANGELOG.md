@@ -49,7 +49,9 @@
 - `./ui/display`'s `bindDisplayControls` is gone: the Display panel's
   controls and the dock's style buttons call their owner through the display
   store's `connect`/`act`, and its allocation and 3D model choices are the
-  kit's `UiSegmented`. `syncScopeControls` (`./ui/display`) and
+  kit's `UiSegmented`. `initDrawTool` takes `connect(actions)`, which returns
+  their disconnect, and no longer listens on the Draw controls; its view
+  publishes `color` and `label` too, and the shape choice is a `UiSegmented`. `syncScopeControls` (`./ui/display`) and
   `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the Display
   view and the rail now own what they did. `./ui/input` imports Vue
   (samehkhamis).

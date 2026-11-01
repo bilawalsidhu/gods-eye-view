@@ -30,7 +30,6 @@
  * at finish, deliberately and in one place — see `finishSpec` in drawMode.js.
  */
 import * as Cesium from 'cesium';
-import { createSegmentedControl } from '../ui/segmentedControl.js';
 import { pickWorldFromScreen } from './annotationResolver.js';
 import {
   claimPointer,
@@ -65,26 +64,31 @@ const PREVIEW = {
 };
 
 /**
- * Wire the Draw control. Returns a handle with a `destroy()` the application
+ * Run the Draw control. Returns a handle with a `destroy()` the application
  * lifetime owns, plus the console/test seam (`window.__gevDrawTool`).
- * The tool keeps its listeners on the controls and hands what they show
- * (`{ active, shape, hint }`) to `publish`, which the view renders.
- * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, publish?: Function}} deps
+ * The tool hands what the controls show (`{ active, shape, color, label,
+ * hint }`) to `publish`, which the view renders, and answers the controls
+ * through the actions it gives `connect`, which returns their disconnect.
+ * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, publish?: Function, connect?: Function}} deps
  * @returns {{destroy: Function}|null}
  */
-export function initDrawTool({ viewer, annotations, publish = () => {} }) {
-  const toggle = document.getElementById('draw-toggle');
-  const modeRow = document.getElementById('draw-mode-row');
-  const labelInput = document.getElementById('draw-label-input');
-  const colorSelect = document.getElementById('draw-color-select');
-  const clearButton = document.getElementById('draw-clear');
-  if (!viewer || !annotations || !toggle) return null;
+export function initDrawTool({
+  viewer,
+  annotations,
+  publish = () => {},
+  connect = () => () => {},
+}) {
+  // A page without the Draw controls (the Display controls view omitted) has
+  // no draw tool.
+  if (!viewer || !annotations || !document.getElementById('draw-toggle'))
+    return null;
 
   let active = false;
   let destroyed = false;
   let session = null;
   let shape = 'area';
   let color = 'primary';
+  let label = '';
   let hint = '';
   let handler = null;
   let lease = null;
@@ -96,11 +100,10 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
   // one of those must not write its outcome over the newer state.
   let generation = 0;
   const previewEntities = [];
-  // Every DOM listener this tool adds, so teardown is one loop rather than a
-  // list that can fall out of step with the bindings below.
+  // Every DOM listener this tool adds (the session's keydown), so teardown is
+  // one loop rather than a list that can fall out of step with the bindings.
   const domListeners = [];
   const listen = (target, type, listener, options) => {
-    if (!target) return;
     target.addEventListener(type, listener, options);
     domListeners.push([target, type, listener, options]);
   };
@@ -125,7 +128,7 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
     () => null,
   );
 
-  const present = () => publish({ active, shape, hint });
+  const present = () => publish({ active, shape, color, label, hint });
   const setHint = (text) => {
     hint = text;
     present();
@@ -241,14 +244,15 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
       if (reason !== 'too-few') setHint(drawHint(session));
       return null;
     }
-    const spec = finishSpec(session, { label: labelInput?.value || '', color });
+    const spec = finishSpec(session, { label, color });
     if (!spec) return null;
     // Start a fresh session BEFORE awaiting, so a second Enter or the second
     // half of a double-click cannot submit the same shape twice.
     session = createDrawSession(shape);
     cursor = null;
     syncPreview();
-    if (labelInput) labelInput.value = '';
+    label = '';
+    present();
     const attempt = generation;
     try {
       const result = await annotations.annotate([spec], {
@@ -286,9 +290,11 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
   };
 
   // ---- keys: only while drawing, never while typing in another field ----
+  // The label field is this tool's own: typing there still drives drawing.
+  const isLabelField = (target) => target?.id === 'draw-label-input';
   const typingElsewhere = (event) => {
     const t = event.target;
-    if (!t || t === labelInput) return false;
+    if (!t || isLabelField(t)) return false;
     return (
       t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable
     );
@@ -301,7 +307,7 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
    */
   const enterBelongsToDrawing = (event) => {
     const t = event.target;
-    if (!t || t === labelInput) return true;
+    if (!t || isLabelField(t)) return true;
     if (
       typeof t.closest === 'function' &&
       t.closest('button, a, select, [role="button"], [role="radio"]')
@@ -331,7 +337,7 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
       else setActive(false);
       return;
     }
-    if (event.key === 'Backspace' && event.target !== labelInput) {
+    if (event.key === 'Backspace' && !isLabelField(event.target)) {
       if (removeLastVertex(session)) {
         event.preventDefault();
         syncPreview();
@@ -419,8 +425,7 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
       );
       savedDoubleClick = null;
     }
-    // Drop just the keydown listener bound alongside this handler; the control
-    // listeners below outlive a session and come off in destroy().
+    // Drop the keydown listener bound alongside this handler.
     for (let i = domListeners.length - 1; i >= 0; i -= 1) {
       const [target, type, listener, options] = domListeners[i];
       if (listener !== onKey) continue;
@@ -429,35 +434,30 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
     }
   }
 
-  listen(toggle, 'click', () => setActive(!active));
-  const shapeButtons = [
-    ...(modeRow?.querySelectorAll('.pp-mode-btn[data-shape]') || []),
-  ];
-  createSegmentedControl({
-    buttons: shapeButtons,
-    valueOf: (button) => button.dataset.shape,
-    listen,
-    onChange: (value) => {
-      shape = normalizeShape(value);
-      present();
-      if (active) {
-        generation += 1;
-        session = createDrawSession(shape);
-        cursor = null;
-        syncPreview();
-      }
-    },
-  });
-  listen(colorSelect, 'change', () => {
-    color = COLORS.includes(colorSelect.value) ? colorSelect.value : 'primary';
-    syncPreview();
-  });
-  listen(clearButton, 'click', clearAll);
-  listen(labelInput, 'keydown', (event) => {
-    if (event.key === 'Enter' && session?.vertices?.length) {
-      event.preventDefault();
-      void finish();
+  /** Draw `next` from now on; an open shape starts over in it. */
+  function chooseShape(next) {
+    shape = normalizeShape(next);
+    present();
+    if (active) {
+      generation += 1;
+      session = createDrawSession(shape);
+      cursor = null;
+      syncPreview();
     }
+  }
+  const disconnect = connect({
+    toggleDraw: () => setActive(!active),
+    setDrawShape: chooseShape,
+    setDrawColor: (value) => {
+      color = COLORS.includes(value) ? value : 'primary';
+      present();
+      syncPreview();
+    },
+    setDrawLabel: (text) => {
+      label = String(text ?? '');
+      present();
+    },
+    clearDraw: clearAll,
   });
   setHint(drawHint(null));
 
@@ -472,12 +472,7 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
       return session;
     },
     setActive,
-    setShape(next) {
-      const btn = modeRow?.querySelector(
-        `.pp-mode-btn[data-shape="${normalizeShape(next)}"]`,
-      );
-      btn?.click();
-    },
+    setShape: chooseShape,
     /** Test seam: add a vertex from lon/lat as if it had been clicked. */
     addVertex(lon, lat, height = 0) {
       if (!session) return false;
@@ -527,6 +522,7 @@ export function initDrawTool({ viewer, annotations, publish = () => {} }) {
       if (active) setActive(false);
       destroyed = true;
       unregisterUnsavedWork();
+      disconnect();
       releaseSceneHandler();
       releasePointer(lease);
       lease = null;

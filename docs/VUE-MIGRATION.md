@@ -132,7 +132,9 @@ a feature supplying only its accent.
    the HUD, Sonar, Scope, Celestial, detection, bloom and sharpen from the
    `gev-display` store, which VisualSettings publishes to, and the 3D
    aircraft group, the Draw controls and the imported file list, which
-   AircraftDisplay, the draw tool and the file import publish beside it; the
+   AircraftDisplay, the draw tool and the file import publish beside it;
+   the controls call DisplayBindings and the draw tool through the store's
+   `connect`/`act`, the newest owner of an action answering it; the
    file import restores keyboard focus once the list has rendered; the
    style parameter rows render through Vue behind `createStyleParameters()`,
    as a render function so the portable `./ui/input` entry needs no

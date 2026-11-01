@@ -97,6 +97,38 @@ test('buttons, sliders, the layout select and the Scope checkbox call their acti
   ]);
 });
 
+test('the Draw controls call the draw tool and show what it publishes', async (t) => {
+  const store = mount(t);
+  const { calls } = recorder(store);
+  $('draw-toggle').click();
+  document.querySelector('[data-shape="pin"]').click();
+  input($('draw-label-input'), 'Camp');
+  input($('draw-color-select'), 'red', 'change');
+  $('draw-clear').click();
+  assert.deepEqual(calls, [
+    ['toggleDraw'],
+    ['setDrawShape', 'pin'],
+    ['setDrawLabel', 'Camp'],
+    ['setDrawColor', 'red'],
+    ['clearDraw'],
+  ]);
+  store.publishDraw({
+    active: true,
+    shape: 'line',
+    color: 'green',
+    label: '',
+    hint: 'Click to add points.',
+  });
+  await nextTick();
+  const line = document.querySelector('[data-shape="line"]');
+  assert.equal(line.getAttribute('aria-checked'), 'true');
+  assert.ok(line.classList.contains('active'));
+  assert.equal($('draw-color-select').value, 'green');
+  assert.equal($('draw-label-input').value, '', 'a finished shape empties it');
+  assert.equal($('draw-hint').textContent, 'Click to add points.');
+  assert.equal($('draw-toggle').getAttribute('aria-pressed'), 'true');
+});
+
 test('style, allocation and model choices keep their ids and data attributes', async (t) => {
   const store = mount(t);
   const { calls } = recorder(store);
@@ -170,4 +202,31 @@ test('DisplayBindings answers the controls from init until destroy', (t) => {
   bindings.destroy();
   $('bloom-toggle').click();
   assert.deepEqual(calls, [['bloom', true]]);
+});
+
+test('several owners answer their own actions, the newest first', (t) => {
+  const store = mount(t);
+  const calls = [];
+  const owner = (tag, names) =>
+    store.connect(
+      Object.fromEntries(
+        names.map((name) => [name, () => calls.push([tag, name])]),
+      ),
+    );
+  const display = owner('display', ['toggleBloom', 'setStyle']);
+  const draw = owner('draw', ['toggleDraw']);
+  const newer = owner('newer', ['toggleBloom']);
+  $('bloom-toggle').click();
+  $('draw-toggle').click();
+  store.detach(newer);
+  $('bloom-toggle').click();
+  store.detach(draw);
+  $('draw-toggle').click();
+  store.detach(display);
+  $('bloom-toggle').click();
+  assert.deepEqual(calls, [
+    ['newer', 'toggleBloom'],
+    ['draw', 'toggleDraw'],
+    ['display', 'toggleBloom'],
+  ]);
 });

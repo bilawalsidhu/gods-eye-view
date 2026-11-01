@@ -5,9 +5,9 @@ import { markRaw, shallowRef } from 'vue';
  * The Display panel as its view renders it. VisualSettings presents its
  * groups (`_presentDisplay()`), AircraftDisplay the 3D aircraft group, the
  * draw tool its controls and the file import its list, and each publishes
- * here. The Display controls' changes reach their owner (DisplayBindings)
- * through act(); the draw tool and the file import keep their listeners on
- * their controls. VisualSettings also
+ * here. The controls' changes reach their owners (DisplayBindings and the
+ * draw tool) through act(); the file import keeps its listeners on its
+ * controls. VisualSettings also
  * publishes the active style, which the dock and the scene chrome show, and
  * the map source controls publish their chip row beside it.
  */
@@ -68,32 +68,42 @@ export const useDisplayStore = defineStore('gev-display', () => {
     mapSourceControls.value = controls && markRaw(controls);
   }
 
-  /** @type {{actions: object}|null} The Display controls' owner. */
-  let owner = null;
+  /**
+   * The owners answering the panel's controls, oldest first: DisplayBindings
+   * the Display controls and the dock's style buttons, the draw tool its own.
+   * @type {Array<{actions: object}>}
+   */
+  const owners = [];
 
   /**
-   * Answer the Display controls (and the dock's style buttons) with
-   * `actions`, replacing any earlier owner.
+   * Answer the actions named in `actions`; for those names this owner
+   * replaces any earlier one.
    * @param {Record<string, Function>} actions
    * @returns {object} Token for detach().
    */
   function connect(actions) {
-    owner = { actions };
-    return owner;
+    const token = { actions };
+    owners.push(token);
+    return token;
   }
 
-  /** Stop answering for the owner holding `token`; a later owner stays. */
+  /** Stop answering for the owner holding `token`; the others stay. */
   function detach(token) {
-    if (token === owner) owner = null;
+    const index = owners.indexOf(token);
+    if (index >= 0) owners.splice(index, 1);
   }
 
   /**
-   * A control's change: call the owner's action, if one is connected.
+   * A control's change: call the newest connected owner's action of that
+   * name, if any.
    * @param {string} name
    * @param {...unknown} args
    */
   function act(name, ...args) {
-    owner?.actions[name]?.(...args);
+    for (let index = owners.length - 1; index >= 0; index -= 1) {
+      const action = owners[index].actions[name];
+      if (action) return void action(...args);
+    }
   }
 
   /** The phone shell's tab bar; null until the shell first presents it. */

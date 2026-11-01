@@ -14,7 +14,7 @@ import { useDisplayStore } from '../../stores/display.js';
 // them; until they do, the panel shows its initial markup.
 const display = useDisplayStore();
 const { view, models3d, draw, geoImport } = storeToRefs(display);
-// A control's change goes to the Display controls' owner (DisplayBindings).
+// A control's change goes to its owner (DisplayBindings or the draw tool).
 const act = (name, ...args) => display.act(name, ...args);
 const integer = (event) => parseInt(event.target.value, 10);
 const pct = (value) => `${value}%`;
@@ -34,17 +34,16 @@ const celestialTitle = computed(() =>
 );
 const models3dOn = computed(() => models3d.value?.pressed ?? true);
 const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
-// A segmented control's segment, selected when `current` holds its value.
-const segment = (current) => (value) => ({
-  class: { active: current.value === value },
-  'aria-checked': String(current.value === value),
-});
 const modelsOptions = [
   { value: 'proximity', label: t('Proximity'), attrs: { id: 'models3d-mode-proximity', 'data-mode': 'proximity' } },
   { value: 'all', label: t('All'), attrs: { id: 'models3d-mode-all', 'data-mode': 'all' } },
 ];
 const drawShape = computed(() => draw.value?.shape ?? 'area');
-const drawSegment = segment(drawShape);
+const drawShapeOptions = [
+  { value: 'area', label: t('Area'), attrs: { 'data-shape': 'area' } },
+  { value: 'line', label: t('Line'), attrs: { 'data-shape': 'line' } },
+  { value: 'pin', label: t('Pin'), attrs: { 'data-shape': 'pin' } },
+];
 const allocationOptions = [
   { value: 'ELASTIC', label: t('Elastic'), attrs: { id: 'detection-allocation-elastic', 'data-allocation': 'ELASTIC' } },
   { value: 'WEIGHTED', label: t('Weighted'), attrs: { id: 'detection-allocation-weighted', 'data-allocation': 'WEIGHTED' } },
@@ -167,28 +166,24 @@ const geoListed = computed(() => geoRows.value.length > 0);
     </div>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: draw?.active }" id="draw-toggle" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" :aria-pressed="String(draw?.active ?? false)" data-i18n-title>
+    <button class="pp-toggle-btn" :class="{ active: draw?.active }" id="draw-toggle" @click="act('toggleDraw')" title="Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel" :aria-pressed="String(draw?.active ?? false)" data-i18n-title>
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">draw</span>
       <span class="pp-label" data-i18n>Draw</span>
     </button>
     <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-mode-row">
       <span class="pp-slider-mini-label" data-i18n>Shape</span>
-      <div class="gev-segmented pp-mode-seg" role="radiogroup" aria-label="Shape to draw" data-i18n-aria-label>
-        <button class="gev-segment pp-mode-btn" data-shape="area" role="radio" v-bind="drawSegment('area')" data-i18n>Area</button>
-        <button class="gev-segment pp-mode-btn" data-shape="line" role="radio" v-bind="drawSegment('line')" data-i18n>Line</button>
-        <button class="gev-segment pp-mode-btn" data-shape="pin" role="radio" v-bind="drawSegment('pin')" data-i18n>Pin</button>
-      </div>
+      <UiSegmented class="pp-mode-seg" item-class="pp-mode-btn" keyboard="none" :label="t('Shape to draw')" :options="drawShapeOptions" :model-value="drawShape" @update:model-value="act('setDrawShape', $event)" />
     </div>
     <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-label-row">
-      <input type="text" class="pp-text-input" id="draw-label-input" maxlength="120" placeholder="Label (optional)" aria-label="Label for the drawn shape" data-i18n-placeholder data-i18n-aria-label autocomplete="off" spellcheck="false">
-      <select class="pp-select draw-color-select gev-field gev-field--compact" id="draw-color-select" aria-label="Colour of the drawn shape" data-i18n-aria-label>
+      <input type="text" class="pp-text-input" id="draw-label-input" v-range-value="draw?.label ?? ''" @input="act('setDrawLabel', $event.target.value)" maxlength="120" placeholder="Label (optional)" aria-label="Label for the drawn shape" data-i18n-placeholder data-i18n-aria-label autocomplete="off" spellcheck="false">
+      <select class="pp-select draw-color-select gev-field gev-field--compact" id="draw-color-select" v-range-value="draw?.color ?? 'primary'" @change="act('setDrawColor', $event.target.value)" aria-label="Colour of the drawn shape" data-i18n-aria-label>
         <option value="primary" data-i18n>Primary</option>
         <option value="amber" data-i18n>Amber</option>
         <option value="cyan" data-i18n>Cyan</option>
         <option value="green" data-i18n>Green</option>
         <option value="red" data-i18n>Red</option>
       </select>
-      <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" title="Remove every mark from the board" data-i18n-title data-i18n>Clear</button>
+      <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" @click="act('clearDraw')" title="Remove every mark from the board" data-i18n-title data-i18n>Clear</button>
       <span class="draw-hint" id="draw-hint" aria-live="polite">{{ draw?.hint ?? '' }}</span>
     </div>
   </div>

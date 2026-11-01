@@ -84,19 +84,25 @@ test('the Draw control markup carries the ids the tool binds to', () => {
   for (const shape of ['area', 'line', 'pin']) {
     assert.match(
       html,
-      new RegExp(`data-shape="${shape}"`),
+      new RegExp(`'data-shape': '${shape}'`),
       `shape button ${shape} missing`,
     );
   }
-  // The rows and the hint render what the tool publishes; it binds the rest.
-  const bound = ids.filter(
-    (id) => id !== 'draw-label-row' && id !== 'draw-hint',
-  );
-  for (const id of bound) {
+  // The rows and the hint render what the tool publishes; the controls
+  // call the actions the tool connects to the display store.
+  for (const action of [
+    "act('toggleDraw')",
+    "act('setDrawShape', $event)",
+    "act('setDrawLabel', $event.target.value)",
+    "act('setDrawColor', $event.target.value)",
+    "act('clearDraw')",
+  ]) {
+    assert.ok(html.includes(action), `DisplayPanel must call ${action}`);
+    const name = /act\('([a-zA-Z]+)'/.exec(action)[1];
     assert.match(
       tool(),
-      new RegExp(`getElementById\\('${id}'\\)`),
-      `drawTool must bind #${id}`,
+      new RegExp(`\\b${name}: `),
+      `drawTool must answer ${name}`,
     );
   }
 });
