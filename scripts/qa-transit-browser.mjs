@@ -47,6 +47,7 @@ export async function reportTransitVisibility(page, label) {
     const layer = app.dataManager.layers.get('transit').module;
     const state = layer._transitStateForTest();
     return {
+      pageVisibility: document.visibilityState,
       total: state._vehicles.size,
       visible: state._visible.size,
       moving: state._moving.size,
@@ -59,6 +60,10 @@ export async function reportTransitVisibility(page, label) {
     };
   });
   console.log(`  ${label}: ${JSON.stringify(result)}`);
+  if (result.pageVisibility !== 'visible')
+    throw new Error(
+      `${label}: Transit QA requires a visible page; hidden pages deliberately pause polling`,
+    );
   if (result.renderLoop === false || result.renderErrors.length)
     throw new Error(
       `${label}: Cesium render loop stopped or raised an error: ${JSON.stringify(result.renderErrors)}`,

@@ -5,9 +5,9 @@ import { createImportedPins } from './geoImportPins.js';
 import { msg } from '../i18n/marker.js';
 
 /** Largest file accepted, in bytes. */
-export const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
+const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 /** Largest total a KMZ may inflate to — a zip bomb stops here. */
-export const MAX_KMZ_INFLATED_BYTES = 120 * 1024 * 1024;
+const MAX_KMZ_INFLATED_BYTES = 120 * 1024 * 1024;
 /** Most files on the globe at once. */
 export const MAX_IMPORTED_FILES = 12;
 /** Most entities one file may create before it is refused. */
@@ -15,9 +15,9 @@ export const MAX_IMPORT_ENTITIES = 20_000;
 /** Most vertices (points of every line, ring and marker) in one file. */
 export const MAX_IMPORT_POSITIONS = 250_000;
 /** Most normalized style definitions and local image links in one KML/KMZ. */
-export const MAX_KML_LINKS = 2_000;
+const MAX_KML_LINKS = 2_000;
 /** Longest plain-text name kept from a file's features. */
-export const MAX_IMPORT_NAME_LENGTH = 120;
+const MAX_IMPORT_NAME_LENGTH = 120;
 /** What the file picker offers. */
 export const GEO_FILE_ACCEPT = '.geojson,.json,.kml,.kmz,.gpx';
 
@@ -1040,26 +1040,104 @@ export function detachImportedTime(dataSource) {
   return dataSource;
 }
 
-function parseXml(text, what) {
+/** Repair only the first KML opening tag, scanning its delimiter once. */
+export function repairKmlRootNamespaces(value, what = 'KML') {
+  const text = String(value);
+  // Skip XML comments and processing instructions without treating their
+  // literal '<kml' text as an opening root tag.
+  let start = 0;
+  for (;;) {
+    start = text.indexOf('<', start);
+    if (start < 0) return text;
+    if (text.slice(start, start + 9).toUpperCase() === '<!DOCTYPE') {
+      let quote = null;
+      let subsetDepth = 0;
+      let end = start + 9;
+      for (; end < text.length; end++) {
+        const char = text[end];
+        if (quote) {
+          if (char === quote) quote = null;
+        } else if (char === '"' || char === "'") quote = char;
+        else if (char === '<' && text.startsWith('<!--', end)) {
+          // Comments and processing instructions inside the internal subset
+          // carry no declaration syntax; jump past them as a whole.
+          const skip = text.indexOf('-->', end + 4);
+          if (skip < 0) return text;
+          end = skip + 2;
+        } else if (char === '<' && text.startsWith('<?', end)) {
+          const skip = text.indexOf('?>', end + 2);
+          if (skip < 0) return text;
+          end = skip + 1;
+        } else if (char === '[') subsetDepth++;
+        else if (char === ']') subsetDepth--;
+        else if (char === '>' && subsetDepth === 0) break;
+      }
+      if (end === text.length) return text;
+      start = end + 1;
+      continue;
+    }
+    const close = text.startsWith('<!--', start)
+      ? '-->'
+      : text.startsWith('<?', start)
+        ? '?>'
+        : null;
+    if (!close) break;
+    const end = text.indexOf(close, start + 2);
+    if (end < 0) return text; // The XML parser reports an unterminated preamble.
+    start = end + close.length;
+  }
+  const match = /^<kml\b/i.exec(text.slice(start, start + 5));
+  if (!match) return text;
+  let quote = null;
+  let end = -1;
+  for (let index = start + match[0].length; index < text.length; index++) {
+    const char = text[index];
+    if (char === '<') break; // Raw '<' is invalid even inside an XML attribute.
+    if (quote) {
+      if (char === quote) quote = null;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === '>') {
+      end = index + 1;
+      break;
+    }
+  }
+  if (end < 0)
+    throw new GeoImportError(
+      `That ${what} file is not valid XML.`,
+      msg('That {format} file is not valid XML.'),
+      { format: what },
+    );
+  // Walk the root's attributes in order so quoted values are never read as
+  // declarations. Anything the walk cannot tokenize is kept verbatim for the
+  // XML parser to judge.
+  const seen = new Set();
+  const attribute = /(\s+)([^\s=/>"']+)\s*=\s*("[^"]*"|'[^']*')/y;
+  let position = start + match[0].length;
+  let root = text.slice(start, position);
+  for (;;) {
+    attribute.lastIndex = position;
+    const found = attribute.exec(text);
+    if (!found || attribute.lastIndex > end) break;
+    position = attribute.lastIndex;
+    const prefix = /^xmlns:([\w.-]+)$/.exec(found[2])?.[1];
+    if (prefix && seen.has(prefix)) continue;
+    if (prefix) seen.add(prefix);
+    root += found[0];
+  }
+  root += text.slice(position, end);
+  if (!seen.has('xsi') && /[<\s]xsi:/.test(text))
+    root = root.replace(
+      /(\/?)>$/,
+      ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"$1>',
+    );
+  return text.slice(0, start) + root + text.slice(end);
+}
+
+/** Parse KML or GPX with the shared namespace repairs and XML validation. */
+export function parseXml(text, what) {
   // Match the namespace repairs Cesium applies to ordinary exported KML.
-  if (what !== 'GPX')
-    text = String(text).replace(/<kml\b[^>]*>/i, (root) => {
-      const seen = new Set();
-      root = root.replace(
-        /\s+xmlns:([\w.-]+)\s*=\s*(["'])[^"']*\2/g,
-        (declaration, prefix) => {
-          if (seen.has(prefix)) return '';
-          seen.add(prefix);
-          return declaration;
-        },
-      );
-      if (!seen.has('xsi') && /[<\s]xsi:/.test(text))
-        root = root.replace(
-          />$/,
-          ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
-        );
-      return root;
-    });
+  if (what !== 'GPX') text = repairKmlRootNamespaces(text, what);
   const doc = new DOMParser().parseFromString(
     String(text).replace(/^﻿/, ''),
     'application/xml',
@@ -1073,7 +1151,8 @@ function parseXml(text, what) {
   return doc;
 }
 
-function decodeXml(bytes) {
+/** Decode XML bytes, honouring a UTF-16 byte-order mark. */
+export function decodeXml(bytes) {
   const encoding =
     bytes[0] === 0xff && bytes[1] === 0xfe
       ? 'utf-16le'

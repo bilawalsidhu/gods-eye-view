@@ -247,6 +247,10 @@ test('no storage is touched from a default parameter position', () => {
 
 test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
   const module = fs.readFileSync(
+    new URL('./exclusiveSurfaces.js', import.meta.url),
+    'utf8',
+  );
+  const firstRun = fs.readFileSync(
     new URL('./firstRunExperience.js', import.meta.url),
     'utf8',
   );
@@ -279,6 +283,8 @@ test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
     module,
     /export const EXCLUSIVE_SURFACE_CLASSES = Object\.freeze\(\[/,
   );
+  // First run keeps exporting the one shared list (the phone shell reads it too).
+  assert.match(firstRun, /export \{ EXCLUSIVE_SURFACE_CLASSES \};/);
 });
 
 test('exclusiveSurfaceActive reads the live body classes', () => {
@@ -368,28 +374,26 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
   assert.match(covered, /\} catch \{\s*\n\s*return false;\s*\n\s*\}/);
 });
 
-test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
+test('one ESC does one thing — a Cockpit utility disclosure stops later document listeners', () => {
   const ui = fs.readFileSync(
     new URL('./ui/radioBindings.js', import.meta.url),
     'utf8',
   );
-  const module = fs.readFileSync(
-    new URL('./firstRunExperience.js', import.meta.url),
-    'utf8',
-  );
 
-  // stopPropagation() does NOT stop later listeners on the SAME document, so the
-  // disclosure's earlier capture handler closed the disclosure and the launcher
-  // dismissed itself off the same key. The earlier listener is the only one that
-  // can stop the later one — and only the immediate form does it.
-  const radioEsc = ui.slice(ui.indexOf("event.key !== 'Escape' ||"));
-  const claim = radioEsc.slice(0, radioEsc.indexOf('setRadioDisclosure(false'));
+  // stopPropagation() does NOT stop later listeners on the SAME document. The
+  // Context Radio disclosure that once raced the launcher this way is gone, and
+  // Cockpit's utility disclosures never share the screen with the launcher, but
+  // they own the same contract: their capture handler is the only one that can
+  // keep a later document listener (Cockpit exit, the launcher) off the key, and
+  // only the immediate form does it.
+  const utilityEsc = ui.slice(ui.indexOf('if (!displayOpen && !radioOpen) return;'));
+  const claim = utilityEsc.slice(0, utilityEsc.indexOf('setCockpitDisclosure(kind, false'));
   assert.match(claim, /event\.preventDefault\(\);/);
   assert.match(claim, /event\.stopImmediatePropagation\(\);/);
   assert.doesNotMatch(
     claim,
     /event\.stopPropagation\(\);/,
-    'the plain form leaves the launcher listening and is the defect itself',
+    'the plain form leaves later document listeners acting on the same key',
   );
 
   // Belt on the launcher side: a key another surface already marked is not ours,
@@ -911,6 +915,48 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   assert.match(choicesBlock, /overflow-y: auto;/);
 });
 
+test('the card closes without a keyboard: the ESC hint is a button, kept on phones', () => {
+  const html = expandApplicationHtml(
+    fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
+  );
+  const module = fs.readFileSync(
+    new URL('./firstRunExperience.js', import.meta.url),
+    'utf8',
+  );
+  // The whole stylesheet, so a hide rule added in any other file is caught too.
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
+  const footer = html.slice(
+    html.indexOf('class="first-run-footer"'),
+    html.indexOf('data-first-run-status'),
+  );
+  assert.match(
+    footer,
+    /<button type="button" class="first-run-dismiss" data-first-run-dismiss>/,
+  );
+  assert.match(footer, /data-i18n>ESC to dismiss</);
+  assert.match(footer, /data-i18n>DISMISS</);
+  // It closes the way ESC does, through the one dismiss path, so the session
+  // flag and focus handling are the same.
+  assert.match(
+    module,
+    /querySelector\('\[data-first-run-dismiss\]'\)\s*\?\.addEventListener\('click', \(\) => dismiss\(\)\)/,
+  );
+  // Phones used to hide the hint, leaving no way out but picking a mission.
+  assert.doesNotMatch(css, /first-run-footer > span:last-child/);
+  assert.doesNotMatch(css, /\.first-run-dismiss\s*\{[^}]*display:\s*none/);
+  // A 44px touch target that does not add to the footer row's height.
+  assert.match(
+    css,
+    /\.first-run-dismiss::before \{[^}]*position: absolute;[^}]*height: 44px;/,
+  );
+  assert.doesNotMatch(css, /\.first-run-dismiss \{[^}]*min-height/);
+  // Touch screens read DISMISS rather than a key they do not have.
+  assert.match(
+    css,
+    /@media \(hover: none\) and \(pointer: coarse\) \{\s*\.first-run-dismiss-key \{\s*display: none;/,
+  );
+});
+
 test('the launcher keeps focus, restores it, and never disables the focused button', () => {
   const module = fs.readFileSync(
     new URL('./firstRunExperience.js', import.meta.url),
@@ -978,14 +1024,33 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;
-  assert.deepEqual(hudLayout.enum, [
-    'tactical',
-    'operator',
-    'minimal',
-    'cyber',
+  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal', 'cyber']);
+  // Cyber deliberately adds one layout and Operator was retired; first-run
+  // missions still change no tools.
+  hudLayout.enum = ['tactical', 'operator', 'minimal'];
+  const cameraMotion = legacyTools.find((tool) => tool.name === 'move_camera')
+    .parameters.properties.motion;
+  assert.deepEqual(cameraMotion.enum, [
+    'orbit',
+    'pan',
+    'tilt',
+    'rotate',
+    'rotate_globe',
+    'stop',
   ]);
-  // Cyber deliberately adds one layout; first-run missions still change no tools.
-  hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  // Snow is retired from set_visual_style; restore it to keep the legacy pin.
+  const visualStyle = legacyTools.find(
+    (tool) => tool.name === 'set_visual_style',
+  ).parameters.properties.style;
+  assert.deepEqual(visualStyle.enum, [
+    'normal',
+    'retro',
+    'surveillance',
+    'thermal',
+    'anime',
+    'noir',
+  ]);
+  visualStyle.enum = [...visualStyle.enum, 'snow'];
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt
@@ -995,10 +1060,16 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // list descriptions; the missions still ride existing tools.
   // Street Level and GNSS extend the manifest; broadcast caveats describe tracked and analyst aircraft.
   // Air quality (ECCC AQHI) extends the manifest.
-  assert.equal(block.length, 30655, 'serialized tool schema length drifted');
+  // Globe rotation adds one camera motion and its descriptions; Globe View
+  // framing/default guidance updates only move_camera and mode descriptions.
+  // Radio markup and the complete production-request comparison pin locality.
+  // Panel adds timeout and named voice/provider targets; consolidated guidance
+  // preserves the mission mapping and globe-rotation arguments.
+  // S2 GhostMaps extends the generated layer enums; both feature contracts remain.
+  assert.equal(block.length, 31206, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '3b1d5e77c10a92f6543a4f9d1ff1870101a0306b65e5b8a6113111c81eda371e',
+    'f772df95404494bf492e02fde1beabffdfe61986940bffd0cf9ad5a38d768746',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

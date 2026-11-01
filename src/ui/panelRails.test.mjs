@@ -21,7 +21,7 @@ test('Display uses an inner scroll body only in Cyber', () => {
 });
 
 test('Cyber restores one expanded owner, keeps launchers, and restores other theme preferences', () => {
-  for (const mobile of [false, true]) {
+  for (const mobile of [false]) {
     const f = fixture('right', {
       mobile,
       hud: { visible: true, variant: 'cyber' },
@@ -39,7 +39,7 @@ test('Cyber restores one expanded owner, keeps launchers, and restores other the
       true,
       'layout does not reopen a peer',
     );
-    f.options.hud.variant = 'operator';
+    f.options.hud.variant = 'minimal';
     f.run();
     assert.equal(f.first.classList.contains('collapsed'), false);
     assert.equal(
@@ -48,6 +48,22 @@ test('Cyber restores one expanded owner, keeps launchers, and restores other the
     );
     assert.equal(f.second.classList.contains('collapsed'), false);
   }
+});
+
+test('Cyber keeps no accordion on phones, where the rail is presented as tab sheets', () => {
+  // A sheet (for example Cameras: CCTV with Street Level) shows several of the
+  // rail's panels at once; the accordion would collapse all but one.
+  const f = fixture('right', {
+    mobile: true,
+    hud: { visible: true, variant: 'cyber' },
+  });
+  f.expand(f.first, 250);
+  f.expand(f.second, 250);
+  f.options.preferredPanelId = f.second.id;
+  f.run();
+  assert.equal(f.first.classList.contains('collapsed'), false);
+  assert.equal(f.first.classList.contains('cyber-accordion-collapsed'), false);
+  assert.equal(f.second.classList.contains('collapsed'), false);
 });
 
 test('Cyber restored accordion prefers keyboard focus when no explicit owner exists', () => {
@@ -638,12 +654,7 @@ function flatRules(block) {
 
 test('narrow-screen rails pin every hosted panel glow inside its panel box', () => {
   const css = readStylesheet(new URL('../../style.css', import.meta.url));
-  for (const panel of [
-    'data-panel',
-    'scene-panel',
-    'cctv-panel',
-    'global-context-panel',
-  ]) {
+  for (const panel of ['data-panel', 'scene-panel', 'cctv-panel']) {
     assert.match(
       css,
       new RegExp(`#${panel} \\.panel-glow \\{[^}]*\\binset: -\\d+px;`),

@@ -1,3 +1,5 @@
+import { createSegmentedControl } from './segmentedControl.js';
+
 /**
  * Bind Display controls to application actions. Inputs remain native DOM controls;
  * the caller owns settings and effect state. Destroy before replacing the view.
@@ -16,7 +18,6 @@ export function bindDisplayControls({ elements, actions }) {
   for (const [name, action] of [
     ['bloomButton', 'toggleBloom'],
     ['sharpenButton', 'toggleSharpen'],
-    ['scopeButton', 'toggleScope'],
     ['cleanViewButton', 'toggleCleanView'],
     ['cleanViewExitButton', 'exitCleanView'],
     ['celestialButton', 'toggleCelestial'],
@@ -32,6 +33,7 @@ export function bindDisplayControls({ elements, actions }) {
     ['scopeFeatherSlider', 'setScopeFeather'],
   ])
     listen(elements[name], 'input', action, integer);
+  listen(elements.scopeToggle, 'change', 'setScopeEnabled', (el) => el.checked);
   listen(elements.densitySlider, 'input', 'setDensity', (el) => el.value);
   listen(elements.hudLayout, 'change', 'setHudLayout', (el) => el.value);
   for (const [name, action] of [
@@ -44,16 +46,35 @@ export function bindDisplayControls({ elements, actions }) {
     listen(elements[name], 'input', action, integer);
   for (const el of elements.styleButtons || [])
     listen(el, 'click', 'setStyle', (el) => el.dataset.style);
-  for (const el of elements.allocationButtons || [])
-    listen(el, 'click', 'setAllocation', (el) => el.dataset.allocation);
-  for (const el of elements.modelModeButtons || [])
-    listen(el, 'click', 'setModelsMode', (el) =>
-      el.dataset.mode === 'all' ? 'all' : 'proximity',
-    );
+  for (const [buttons, valueOf, action] of [
+    [
+      elements.allocationButtons || [],
+      (el) => el.dataset.allocation,
+      'setAllocation',
+    ],
+    [
+      elements.modelModeButtons || [],
+      (el) => (el.dataset.mode === 'all' ? 'all' : 'proximity'),
+      'setModelsMode',
+    ],
+  ]) {
+    const control = createSegmentedControl({
+      buttons,
+      valueOf,
+      onChange: (value) => actions[action](value),
+    });
+    removers.push(() => control.destroy());
+  }
   for (const el of elements.fadeSliders || []) listen(el, 'input', 'setFade');
   return {
     destroy() {
       for (const remove of removers.splice(0)) remove();
     },
   };
+}
+
+/** Keep the native Scope checkbox and feather availability in step with the mask. */
+export function syncScopeControls(toggle, featherSlider, enabled) {
+  if (toggle) toggle.checked = enabled;
+  if (featherSlider) featherSlider.disabled = !enabled;
 }

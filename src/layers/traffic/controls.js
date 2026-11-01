@@ -310,6 +310,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         liveMode: layerState._liveMode,
         fetching: loading,
         flowError: layerState._flowError,
+        stale: layerState._flowStale,
         coveragePct: flowCoveragePct,
         statusUnavailable: layerState._flowStatusUnavailable,
         roadSource: layerState._roadSource,
@@ -321,6 +322,20 @@ export function createControls({ state: layerState, services, parts, source }) {
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
+        // Cached proxy tiles (TomTom budget spent or upstream failing): the
+        // manager reads this as STALE. Any error (flow, roads, detail) reads
+        // DEGRADED instead.
+        stale: Boolean(
+          layerState._liveMode &&
+          layerState._flowStale &&
+          !(
+            layerState._roadError ||
+            layerState._roadWarning ||
+            layerState._detailError ||
+            feed.error
+          ),
+        ),
+        oldestTileAt: layerState._flowOldestTileAt ?? null,
         error:
           layerState._roadError ||
           layerState._roadWarning ||

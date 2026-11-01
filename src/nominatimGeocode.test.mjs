@@ -173,3 +173,12 @@ test('a viewport hint is sent only when every edge is a real coordinate', () => 
       `${JSON.stringify(bounds)} must not become a viewbox`,
     );
 });
+
+test('wrapped viewports omit the Nominatim bias without rejecting the search', () => {
+  assert.equal(nominatimViewboxFromBounds('-20,170|-10,-171'), null);
+  assert.equal(nominatimViewboxFromBounds('50,175|60,-165'), null);
+  assert.equal(
+    nominatimViewboxFromBounds('-20,170|-10,180'),
+    '170,-10,180,-20',
+  );
+});

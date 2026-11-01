@@ -12,14 +12,14 @@ export const TAIWAN_FREEWAY_CCTV_URL =
   'https://tisvcloud.freeway.gov.tw/history/motc20/CCTV.xml';
 /** The whole network is ~1.2 MB. */
 export const TAIWAN_MAX_CATALOG_BYTES = 6 * 1024 * 1024;
-export const DEFAULT_TAIWAN_MAX_SOURCES = 600;
+const DEFAULT_TAIWAN_MAX_SOURCES = 600;
 /** After a failed download, wait this long before asking again. The catalog
  * host does not answer from some networks outside Taiwan, and every attempt
  * there holds the shared catalog refresh until the connect timeout. */
 export const TAIWAN_RETRY_AFTER_FAILURE_MS = 60 * 60 * 1000;
 /** The table is republished daily; a good copy stands in for a failed
  * download for up to this long. */
-export const TAIWAN_LAST_GOOD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const TAIWAN_LAST_GOOD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 // The table publishes each camera's MJPEG stream. The same camera servers
 // answer a single JPEG for the same camera ID on a sibling path, which is what
@@ -50,7 +50,7 @@ const ANCHORS = [
 
 /** Taiwan main island with slack for the coast; the freeway network has no
  * offshore-island cameras. */
-export function isLikelyTaiwanCoordinate(lat, lon) {
+function isLikelyTaiwanCoordinate(lat, lon) {
   return (
     Number.isFinite(lat) &&
     Number.isFinite(lon) &&

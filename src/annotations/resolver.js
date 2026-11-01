@@ -29,7 +29,7 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 
 /** Ms the analyst region lookup waits on geocode + admin boundary. */
-export const REGION_FALLBACK_BUDGET_MS = 3_000;
+const REGION_FALLBACK_BUDGET_MS = 3_000;
 
 /** Entity facts that rule out a state/county reading of the ask. */
 const NON_ADMIN_ENTITY_KINDS = new Set([
@@ -101,18 +101,6 @@ export function createAnnotationResolver({
     if (signal?.aborted) return; // superseded — never cache
     if (!definitive) return; // transient upstream failure — allow a retry
     cacheWrite(cache, key, null);
-  }
-
-  /** Wire an external AbortSignal to a local controller; returns a detach fn. */
-  function linkAbort(controller, externalSignal) {
-    if (!externalSignal) return () => {};
-    if (externalSignal.aborted) {
-      controller.abort();
-      return () => {};
-    }
-    const onAbort = () => controller.abort();
-    externalSignal.addEventListener('abort', onAbort, { once: true });
-    return () => externalSignal.removeEventListener('abort', onAbort);
   }
 
   /**
@@ -444,6 +432,7 @@ export function createAnnotationResolver({
      * AFTER the anchor mark is drawn and upgrade the mark in place.
      */
     const resolveOutline = async () => {
+      signal?.throwIfAborted();
       let scope = baseScope;
       const isAdmin =
         scope === 'country' ||
@@ -469,6 +458,7 @@ export function createAnnotationResolver({
         const ne = await lookupNaturalRegionOutline(target, lat, lon).catch(
           () => null,
         );
+        signal?.throwIfAborted();
         if (ne) {
           registerDynamicCredit(viewer, NATURAL_EARTH_CREDIT);
           const neCentroid = ringCentroid(ne.ring);
@@ -2004,8 +1994,8 @@ export function createAnnotationResolver({
   /**
    * Region ring for ANALYST queries ("how many flights over Texas / the Alps") —
    * a name-only entry point that reuses this module's boundary machinery
-   * without the annotation pipeline. Natural Earth pack first (offline,
-   * instant; largest-area match is correct for a global name-only ask), then
+   * without the annotation pipeline. Unique Natural Earth names resolve first
+   * (offline); duplicate names require a geocoded containment anchor, then
    * geocode + admin boundary for states/countries/counties (Tier A disk-cached
    * Overpass, so repeat asks are instant). Returns null when the name doesn't
    * resolve to a region-like boundary — the analyst engine reports that
@@ -2020,7 +2010,7 @@ export function createAnnotationResolver({
    * @param {AbortSignal} [signal]
    * @param {object} [placeSearch]
    * @param {{budgetMs?: number}} [options]  `Infinity` waits for the lookup.
-   * @returns {Promise<{name:string, ring:Array<[number,number]>}|{name:string, ring:null, error:'region-timeout'}|null>}
+   * @returns {Promise<{name:string, ring:Array<[number,number]>, source:string}|{name:string, ring:null, error:'region-timeout'}|null>}
    */
   async function resolveRegionRingForQuery(
     name,
@@ -2037,16 +2027,24 @@ export function createAnnotationResolver({
     const q = String(name || '').trim();
     if (!q) return null;
     const ne = await findNaturalRegion(q).catch(() => null);
-    if (ne?.polygons?.length) {
+    signal?.throwIfAborted();
+    if (ne?.candidates === 1 && ne.polygons?.length) {
       // Largest ring carries the query scope; multi-ring regions (Andes) keep
       // their main cordillera — good enough for containment counting.
       const ring = [...ne.polygons].sort((a, b) => b.length - a.length)[0];
-      if (ring?.length >= 3) return { name: ne.name, ring };
+      if (ring?.length >= 3)
+        return { name: ne.name, ring, source: 'natural-earth' };
     }
     // Bundled states/provinces/counties by name (offline); the main part only,
     // like the Natural Earth rung above.
     const admin = await findAdminArea(q).catch(() => null);
-    if (admin) return { name: admin.name, ring: [...admin.ring] };
+    signal?.throwIfAborted();
+    if (admin)
+      return {
+        name: admin.name,
+        ring: [...admin.ring],
+        source: 'bundled-admin',
+      };
     const lookup = resolveAdminRegionRing(q, signal, placeSearch);
     if (!Number.isFinite(budgetMs)) return lookup;
     let timer;
@@ -2067,8 +2065,26 @@ export function createAnnotationResolver({
     const geo = await geocodePlace(q, null, signal, placeSearch).catch(
       () => null,
     );
+    signal?.throwIfAborted();
     if (!geo) return null;
     const scope = scopeFromTypes(geo.types);
+    if (
+      scope === 'auto' ||
+      (scope === 'compound' && geo.types?.includes('natural_feature'))
+    ) {
+      const natural = await lookupNaturalRegionOutline(
+        q,
+        geo.lat,
+        geo.lon,
+      ).catch(() => null);
+      signal?.throwIfAborted();
+      if (natural)
+        return {
+          name: natural.name,
+          ring: natural.ring,
+          source: 'natural-earth',
+        };
+    }
     if (!['country', 'state', 'county', 'city'].includes(scope)) return null;
     if (scope === 'state' || scope === 'county' || scope === 'country') {
       const admin = await findAdminAreaAt(
@@ -2077,12 +2093,16 @@ export function createAnnotationResolver({
         geo.lon,
         scope,
       ).catch(() => null);
-      if (admin) return { name: q, ring: [...admin.ring] };
+      signal?.throwIfAborted();
+      if (admin)
+        return { name: q, ring: [...admin.ring], source: 'bundled-admin' };
     }
     const fp = await fetchAdminArea(geo.lat, geo.lon, q, scope, signal).catch(
       () => null,
     );
-    if (fp?.ring?.length >= 3) return { name: q, ring: fp.ring };
+    signal?.throwIfAborted();
+    if (fp?.ring?.length >= 3)
+      return { name: q, ring: fp.ring, source: 'remote-boundary' };
     return null;
   }
 
