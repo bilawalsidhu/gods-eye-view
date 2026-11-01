@@ -641,8 +641,8 @@ test('every explicit visual control facade claims restore authority before mutat
 
   const style = sourceBlock('  setStyle(styleName, {', '  _startTransition(styleName, fromValue, toValue) {');
   assertClaimsBefore(style, 'this.activeStyle = styleName', 'setStyle');
-  const sliders = sourceBlock('  _updateSliderPanel(styleName, { reveal = false } = {}) {', '  _revealStyleParameters() {');
-  assertClaimsBefore(sliders, 'this.stages[styleName].uniforms[uName] = val', 'style parameter slider');
+  const sliders = sourceBlock('  setStyleParameter(name, value) {', '  _revealStyleParameters() {');
+  assertClaimsBefore(sliders, 'this.stages[parameters.style].uniforms[name] = value', 'style parameter slider');
 });
 
 test('public visual facades reject the complete invalid request before authority or mutation', () => {
@@ -794,7 +794,7 @@ test('visual input listeners are revoked before asynchronous UI teardown', () =>
   assert.match(LocationNavigation.prototype.destroy.toString(), /this\._locationLookup\?\.destroy\(\)/);
   assert.match(DisplayBindings.prototype.destroy.toString(), /this\._detachDisplayControls\?\.\(\)/);
   assert.match(DisplayBindings.prototype.destroy.toString(), /this\._applicationShortcuts\?\.destroy\(\)/);
-  assert.match(VisualSettings.prototype.stop.toString(), /this\._styleParameters\?\.destroy\(\)/);
+  assert.match(VisualSettings.prototype.stop.toString(), /this\.store\.detach\(this\._parametersToken\)/);
   assert.match(VisualSettings.prototype.stop.toString(), /this\._visualEffects\.stop\(\)/);
 });
 

@@ -460,3 +460,118 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(list.className, 'geo-import-list');
   assert.equal(document.activeElement === $('geo-import-button'), true);
 });
+
+test('the parameters panel shows the active style’s rows and hands each change to its owner', async (t) => {
+  const { store, $ } = fixture(t);
+  const panel = $('param-slider-panel');
+  assert.equal(panel.classList.contains('active'), false);
+  assert.equal($('param-sliders').children.length, 0);
+  const changes = [];
+  store.connect({
+    setStyleParameter: (name, value) => changes.push([name, value]),
+  });
+  store.publishParameters({
+    style: 'noir',
+    rows: [
+      {
+        name: 'amount',
+        label: 'Amount',
+        min: 0,
+        max: 1,
+        step: '0.01',
+        digits: 2,
+        value: 0.25,
+        text: '0.25',
+      },
+    ],
+  });
+  await nextTick();
+  assert.equal(panel.classList.contains('active'), true);
+  const row = $('param-sliders').querySelector('.param-slider-row');
+  assert.equal(row.querySelector('.param-label').textContent, 'Amount');
+  assert.equal(row.querySelector('.param-value').textContent, '0.25');
+  const slider = row.querySelector('input.param-slider');
+  assert.equal(slider.getAttribute('aria-label'), 'Amount');
+  assert.equal(slider.step, '0.01');
+  slider.value = '0.5';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.deepEqual(changes, [['amount', 0.5]]);
+  store.publishParameters(null);
+  await nextTick();
+  assert.equal(panel.classList.contains('active'), false);
+  assert.equal($('param-sliders').children.length, 0);
+});
+
+test('VisualSettings publishes a style’s parameters and writes a moved slider’s uniform', async (t) => {
+  const { store, $ } = fixture(t);
+  const owner = Object.create(VisualSettings.prototype);
+  const renders = [];
+  let shared = 0;
+  Object.assign(owner, {
+    store,
+    _visualEffects: {
+      stages: {
+        noir: {
+          uniforms: { contrastAmt: 1.2, grainAmt: 0.5, vignetteAmt: 0.5 },
+        },
+      },
+      stop() {},
+    },
+    services: { governorRequestRender: (reason) => renders.push(reason) },
+    _parameters: null,
+    readShareLinks: () => null,
+    _scheduleRightPanelLayout() {},
+    _syncShareState: () => (shared += 1),
+  });
+  owner._parametersToken = store.connect({
+    setStyleParameter: (name, value) => owner.setStyleParameter(name, value),
+  });
+  owner._updateSliderPanel('noir');
+  await nextTick();
+  const labels = () =>
+    [...$('param-sliders').querySelectorAll('.param-label')].map(
+      (label) => label.textContent,
+    );
+  assert.deepEqual(labels(), ['Contrast', 'Grain', 'Vignette']);
+  const grain = $('param-sliders').querySelectorAll('input.param-slider')[1];
+  grain.value = '0.8';
+  grain.dispatchEvent(new Event('input', { bubbles: true }));
+  await nextTick();
+  assert.equal(owner.stages.noir.uniforms.grainAmt, 0.8);
+  assert.equal(
+    $('param-sliders').querySelectorAll('.param-value')[1].textContent,
+    '0.80',
+  );
+  assert.deepEqual(renders, ['style-param-slider']);
+  assert.equal(shared, 1);
+  // A name that isn't one of the shown style's parameters writes nothing.
+  owner.setStyleParameter('pixelation', 4);
+  assert.equal(owner.stages.noir.uniforms.pixelation, undefined);
+  assert.equal(shared, 1);
+  owner._updateSliderPanel('normal');
+  await nextTick();
+  assert.deepEqual(labels(), []);
+  assert.equal($('param-slider-panel').classList.contains('active'), false);
+  // A preset that resets the shown style's uniforms republishes its rows.
+  owner._updateSliderPanel('noir');
+  owner.stages.noir.uniforms.grainAmt = 0.3;
+  owner._refreshParameters();
+  await nextTick();
+  assert.equal(
+    $('param-sliders').querySelectorAll('.param-value')[1].textContent,
+    '0.30',
+  );
+  owner._lifetime = { destroy() {} };
+  owner.stop();
+  await nextTick();
+  assert.equal(store.parameters, null, 'the sliders go with their owner');
+  assert.equal($('param-slider-panel').classList.contains('active'), false);
+  assert.equal(store.act('setStyleParameter', 'grainAmt', 0.2), undefined);
+  assert.equal(owner.stages.noir.uniforms.grainAmt, 0.3, 'a stopped owner no longer answers');
+  // An older owner's stop leaves a newer owner's rows.
+  const newer = { style: 'noir', rows: [] };
+  owner._parameters = { style: 'noir', rows: [] };
+  store.publishParameters(newer);
+  owner.stop();
+  assert.equal(store.parameters, newer);
+});

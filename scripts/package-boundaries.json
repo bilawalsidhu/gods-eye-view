@@ -142,7 +142,8 @@
       "src/ui/stores/globeActions.js",
       "src/ui/views/panels/GlobeActions.vue",
       "src/ui/views/panels/GlobeCompass.vue",
-      "src/ui/stores/recording.js"
+      "src/ui/stores/recording.js",
+      "src/ui/styleParameters.js"
     ],
     "external": ["vue", "pinia"]
   },

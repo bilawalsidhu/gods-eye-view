@@ -77,8 +77,11 @@
   which also carries the camera's tilt and compass heading. The recording
   safe frame renders what `RecordingControls` publishes to the new
   recording store. `syncScopeControls` (`./ui/display`),
-  `shouldHideCollapsedRightPanels` (`./ui/layout`) and
-  `bindClearLayersControl` (`./ui/layers`) are deprecated: the Display view,
+  `shouldHideCollapsedRightPanels` (`./ui/layout`),
+  `bindClearLayersControl` (`./ui/layers`) and `createStyleParameters`
+  (`./ui/input`; the Display panel renders the style parameters
+  VisualSettings publishes to the display store) are deprecated: the Display
+  view,
   the rail and the globe actions view now own what they did. `./ui/input` imports Vue
   (samehkhamis).
 

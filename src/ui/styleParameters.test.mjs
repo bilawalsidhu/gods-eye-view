@@ -3,7 +3,12 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStyleParameters } from './styleParameters.js';
+import {
+  createStyleParameters,
+  snapToStep,
+  styleParameterRows,
+  withParameterValue,
+} from './styleParameters.js';
 
 function parameters(t, values = { amount: 0.25, scale: 2 }) {
   document.body.replaceChildren();
@@ -119,4 +124,45 @@ test('destroy is final and cannot clear a subsequent owner’s DOM', (t) => {
   assert.equal(f.container.children.length, 1);
   assert.equal(f.container.firstElementChild === nextOwner, true);
   assert.deepEqual(f.order, []);
+});
+
+test('a value snaps to its step from the minimum and stays in bounds', () => {
+  const row = { min: 0, max: 1, step: '0.01' };
+  assert.equal(snapToStep(0.256, row), 0.26);
+  assert.equal(snapToStep(1.4, row), 1);
+  assert.equal(snapToStep(-2, row), 0);
+  assert.equal(snapToStep(2.04, { min: 0.5, max: 4, step: '0.1' }), 2);
+  // Halfway between two steps rounds up, as the browser snaps it.
+  assert.equal(snapToStep(1.15, { min: 1, max: 2, step: '0.1' }), 1.2);
+  assert.equal(snapToStep(0.125, { min: 0, max: 1, step: '0.01' }), 0.13);
+  // A maximum off the grid snaps down to the last step within it.
+  assert.equal(snapToStep(1.06, { min: 0, max: 1.06, step: '0.1' }), 1);
+  assert.equal(snapToStep(9, { min: 0, max: 1.06, step: '0.1' }), 1);
+});
+
+test('rows carry each uniform, its step and its snapped value text', () => {
+  const rows = styleParameterRows(
+    {
+      amount: { label: 'Amount', min: 0, max: 1 },
+      scale: { label: 'Scale', min: 0.5, max: 4 },
+    },
+    (name) => ({ amount: 0.256, scale: 2.04 })[name],
+  );
+  assert.deepEqual(
+    rows.map(({ name, step, digits, value, text }) => [
+      name,
+      step,
+      digits,
+      value,
+      text,
+    ]),
+    [
+      ['amount', '0.01', 2, 0.256, '0.26'],
+      ['scale', '0.1', 1, 2.04, '2.0'],
+    ],
+  );
+  const next = withParameterValue(rows, 'scale', 3.33);
+  assert.equal(next[1].value, 3.33);
+  assert.equal(next[1].text, '3.3');
+  assert.equal(next[0], rows[0], 'the other rows are kept');
 });

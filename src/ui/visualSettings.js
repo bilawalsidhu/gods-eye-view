@@ -12,7 +12,7 @@ import {
   STYLE_PRESET_DEFAULTS,
   MILITARY_DETECTION_PRESET,
 } from './effects.js';
-import { createStyleParameters } from './visualInput.js';
+import { styleParameterRows, withParameterValue } from './styleParameters.js';
 import {
   BLOOM_SCALE_VERSION,
   clampBloomIntensity,
@@ -180,6 +180,11 @@ export class VisualSettings {
       readDisplayPortalActive,
     });
     this._lifetime = new UiLifetime();
+    // The active style's published parameter rows; null while it has none.
+    this._parameters = null;
+    this._parametersToken = store.connect({
+      setStyleParameter: (name, value) => this.setStyleParameter(name, value),
+    });
     this._visualEffects = new VisualEffects({
       viewer,
       requestRender: services.governorRequestRender,
@@ -435,11 +440,7 @@ export class VisualSettings {
   }
 
   _revealCockpitStyleParameters({ openDisplay = false } = {}) {
-    if (
-      !this.cockpitView?.active ||
-      !this._sliderPanel?.classList.contains('active')
-    )
-      return;
+    if (!this.cockpitView?.active || !this._parameters) return;
     if (openDisplay && !this._cockpitDisclosureOpen?.('display')) {
       this._setCockpitDisclosure?.('display', true);
       return;
@@ -763,6 +764,7 @@ export class VisualSettings {
           governorRequestRender('style-param');
         }
       }
+      this._refreshParameters();
     }
 
     const bloomInput = preset.bloom || {};
@@ -1397,41 +1399,54 @@ export class VisualSettings {
     this._syncShareState();
   }
 
+  /** Publish the style's parameter rows, or none for a style without any. */
   _updateSliderPanel(styleName, { reveal = false } = {}) {
-    const { governorRequestRender } = this.services;
-    this._styleParameters ||= createStyleParameters({
-      container: this._sliderContainer,
-    });
-    this._styleParameters.clear();
     const shader = STYLES[styleName];
-
     if (!shader || !shader.uniforms || styleName === 'normal') {
-      this._sliderPanel.classList.remove('active');
+      this._publishParameters(null);
       this._scheduleRightPanelLayout();
       return;
     }
-
-    this._styleParameters.render({
-      uniforms: shader.uniforms,
-      readValue: (uName) => this.stages[styleName].uniforms[uName],
-      writeValue: (uName, val) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this.stages[styleName].uniforms[uName] = val;
-      },
-      onChange: () => {
-        // Uniform writes need an explicit render under the idle governor.
-        governorRequestRender('style-param-slider');
-        this._syncShareState();
-      },
+    this._publishParameters({
+      style: styleName,
+      rows: styleParameterRows(
+        shader.uniforms,
+        (name) => this.stages[styleName].uniforms[name],
+      ),
     });
-
-    this._sliderPanel.classList.add('active');
     this._scheduleRightPanelLayout();
     if (reveal) this._revealStyleParameters();
   }
 
+  /** Publish the shown style's rows again from its uniforms as they stand. */
+  _refreshParameters() {
+    const style = this._parameters?.style;
+    if (style) this._updateSliderPanel(style);
+  }
+
+  _publishParameters(next) {
+    this._parameters = next;
+    this.store.publishParameters(next);
+  }
+
+  /** A parameter slider moved: write the active style's uniform. */
+  setStyleParameter(name, value) {
+    const parameters = this._parameters;
+    // Only the shown style's own parameters.
+    if (!parameters?.rows.some((row) => row.name === name)) return;
+    this.shareLinkManager?.claimRestoreLane?.('visual');
+    this.stages[parameters.style].uniforms[name] = value;
+    this._publishParameters({
+      ...parameters,
+      rows: withParameterValue(parameters.rows, name, value),
+    });
+    // Uniform writes need an explicit render under the idle governor.
+    this.services.governorRequestRender('style-param-slider');
+    this._syncShareState();
+  }
+
   _revealStyleParameters() {
-    if (!this._sliderPanel?.classList.contains('active')) return;
+    if (!this._parameters) return;
     if (this._cockpitDisplayPortalActive) return;
     this._presentPanel(this._sliderPanel, { collapsed: false });
     this.setPanelCollapsed('pp-toggles', false, { explicit: true });
@@ -1574,7 +1589,12 @@ export class VisualSettings {
   }
   stop() {
     this._lifetime.destroy();
-    this._styleParameters?.destroy();
+    if (this._parametersToken) this.store.detach(this._parametersToken);
+    this._parametersToken = null;
+    // The sliders go with their owner, unless a newer owner has published
+    // its own since.
+    if (this._parameters && this.store.parameters === this._parameters)
+      this._publishParameters(null);
     this._visualEffects.stop();
   }
   releaseIrBoost() {

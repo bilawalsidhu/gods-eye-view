@@ -72,6 +72,17 @@ export const useDisplayStore = defineStore('gev-display', () => {
   // buttons, the draw tool and the file import their own.
   const { connect, detach, act } = createOwners();
 
+  /**
+   * The active style's parameter rows, `{style, rows}`; null while the style
+   * has none. Each row's change calls act('setStyleParameter', name, value).
+   */
+  const parameters = shallowRef(null);
+
+  /** @param {?{style: string, rows: object[]}} next */
+  function publishParameters(next) {
+    parameters.value = next && markRaw(next);
+  }
+
   /** The phone shell's tab bar; null until the shell first presents it. */
   const phoneShell = shallowRef(null);
 
@@ -91,6 +102,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishGeoImport,
     style,
     publishStyle,
+    parameters,
+    publishParameters,
     phoneShell,
     publishPhoneShell,
     mapSource,

@@ -224,13 +224,14 @@ test('parameterized Display presets keep one stable scroll owner', () => {
   assert.match(css, /#pp-toggles:not\(\.collapsed\) > \.pp-panel-body > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
   assert.match(ui, /readDisplayScrollTop: \(\) =>\s*this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?displayPanelScroller\(this\._ppToggles\)\?\.scrollTop \|\| 0/);
   assert.match(rightRail, /scroller\.scrollTop = Math\.min\(displayScrollTop, maxScrollTop\);/);
+  // The panel's parameters change, and the rail lays out again.
   assert.match(
     ui,
-    /this\._sliderPanel\.classList\.remove\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
+    /this\._publishParameters\(null\);\s*this\._scheduleRightPanelLayout\(\);/,
   );
   assert.match(
     ui,
-    /this\._sliderPanel\.classList\.add\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
+    /this\._publishParameters\(\{[\s\S]*?\}\);\s*this\._scheduleRightPanelLayout\(\);/,
   );
   assert.match(
     css,

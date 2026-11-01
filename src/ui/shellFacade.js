@@ -413,14 +413,6 @@ export class ShellFacade {
     this._visualSettings._detectionAllocationPreference = value;
   }
 
-  get _styleParameters() {
-    return this._visualSettings._styleParameters;
-  }
-
-  set _styleParameters(value) {
-    this._visualSettings._styleParameters = value;
-  }
-
   get _irBoostActive() {
     return this._visualSettings._irBoostActive;
   }

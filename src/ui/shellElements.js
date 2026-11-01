@@ -3,7 +3,6 @@ export function readShellElements(document = globalThis.document) {
   return {
     _rightPanelStack: document.getElementById('right-context-rail'),
     _sliderPanel: document.getElementById('param-slider-panel'),
-    _sliderContainer: document.getElementById('param-sliders'),
     _ppToggles: document.getElementById('pp-toggles'),
     _bloomBtn: document.getElementById('bloom-toggle'),
     _bloomSlider: document.getElementById('bloom-intensity-slider'),

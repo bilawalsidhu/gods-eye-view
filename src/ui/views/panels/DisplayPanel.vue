@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { vPanelState } from '../../rail/panelState.js';
+import { vClassToggle } from '../../rail/classToggle.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import UiSegmented from '../../kit/UiSegmented.vue';
@@ -11,13 +12,14 @@ import GeoImport from './GeoImport.vue';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
+import { StyleParameterRows } from '../../styleParameters.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
 // Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group and
 // the draw tool its controls, and each publishes them; until they do, the
 // panel shows its initial markup. GeoImport renders the file import.
 const display = useDisplayStore();
-const { view, models3d, draw } = storeToRefs(display);
+const { view, models3d, draw, parameters } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings or the draw tool).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
@@ -131,14 +133,14 @@ const allocationOptions = [
       <span class="pp-slider-value" id="detection-opacity-value">{{ pct(detection?.outsideOpacityPct ?? 1) }}</span>
     </div>
   </div>
-  <!-- The one shared preset-parameter surface is inserted here at runtime. -->
-  <div id="param-slider-panel" v-panel-state="'param-slider-panel'">
+  <!-- The one shared preset-parameter surface: the active style's parameters, as VisualSettings publishes them. -->
+  <div id="param-slider-panel" v-panel-state="'param-slider-panel'" v-class-toggle="{ active: !!parameters }">
     <div class="param-panel-header">
       <span class="param-panel-title" data-i18n>PARAMETERS</span>
       <span class="param-panel-divider"></span>
       <PanelCollapseButton id="param-panel-collapse-btn" target="param-slider-panel" />
     </div>
-    <div id="param-sliders"></div>
+    <div id="param-sliders"><StyleParameterRows v-if="parameters" :key="parameters.style" :rows="parameters.rows" :on-input="(name, value) => act('setStyleParameter', name, value)" /></div>
   </div>
   <div class="pp-toggle-group">
     <!-- 3D aircraft is DEFAULT-ON in Proximity (owner directive 2026-08-22), so the

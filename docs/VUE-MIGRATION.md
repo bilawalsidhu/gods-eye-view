@@ -170,8 +170,9 @@ a feature supplying only its accent.
    renders `LayerRows` synchronously; keyed chips and list items keep focus
    through the refresh their own click triggers, and clicks re-read the live
    descriptor before acting), Display (in progress: `DisplayPanel` renders
-   the HUD, Sonar, Scope, Celestial, detection, bloom and sharpen from the
-   `gev-display` store, which VisualSettings publishes to, and the 3D
+   the HUD, Sonar, Scope, Celestial, detection, bloom, sharpen and the
+   active style's parameter sliders from the `gev-display` store, which
+   VisualSettings publishes to and answers the sliders through, and the 3D
    aircraft group, the Draw controls and the imported file list, which
    AircraftDisplay, the draw tool and the file import publish beside it;
    the controls call DisplayBindings, the draw tool and the file import

@@ -225,7 +225,6 @@ export class StyleManager extends ShellFacade {
       },
       elements: {
         _ppToggles: this._ppToggles,
-        _sliderContainer: this._sliderContainer,
         _sliderPanel: this._sliderPanel,
       },
       operations: {
