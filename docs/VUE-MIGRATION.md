@@ -155,9 +155,14 @@ a feature supplying only its accent.
    before the focused row is removed, so a keyed list reorders several times
    a second without dropping keyboard focus. The instruments publish on
    every HUD update (about 10 Hz); in a dev build their Vue patch costs
-   about 0.5 ms, close to the DOM writes it replaced. The controls keep the
-   controller's listeners, and the cards' visibility, collapse and layout
-   stay with the controller. `CockpitUtilityControls` renders the Display
+   about 0.5 ms, close to the DOM writes it replaced. The controller also
+   publishes which surfaces are shown: the entry button and TR-3B chip in
+   the Context panel, the HUD with its exit and reset buttons and briefing
+   card, and the Contact card. Focus moves to the exit button, and back to
+   the entry, only after Vue renders them. The controls keep the
+   controller's listeners, and the cards' collapse and layout stay with the
+   controller, which reads their visibility when it lays them out.
+   `CockpitUtilityControls` renders the Display
    and Radio launchers, which popover is open and the compact Radio
    controls from the `gev-radio` store that RadioControls publishes to; the
    Display popover's slots stay static for the Cockpit display portal).

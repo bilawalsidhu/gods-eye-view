@@ -10,7 +10,7 @@ import CockpitSignalList from './CockpitSignalList.vue';
 // cycle toggle, regional news and local conditions; until it does, the card
 // shows the state it starts in. The controls keep the controller's
 // listeners. The route card and the signal rows render themselves.
-const { brief } = storeToRefs(useCockpitStore());
+const { presence, brief } = storeToRefs(useCockpitStore());
 const initial = createBriefState();
 const b = computed(() => brief.value ?? initial);
 // The card's page and the region's answer, as state hooks on the card.
@@ -32,7 +32,7 @@ function leaveSignals() {
 </script>
 
 <template>
-  <aside id="cockpit-signal-stream" class="cockpit-signal-window" aria-label="Cockpit briefing carousel" hidden data-i18n-aria-label v-bind="streamState" ref="stream">
+  <aside id="cockpit-signal-stream" class="cockpit-signal-window" aria-label="Cockpit briefing carousel" :hidden="!presence?.active" data-i18n-aria-label v-bind="streamState" ref="stream">
     <CockpitRoute />
     <header class="cockpit-signal-header">
       <div class="cockpit-brief-heading">

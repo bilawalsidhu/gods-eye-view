@@ -16,8 +16,12 @@ import {
 
 export function scheduleContextLayout() {
   if (this.destroyed) return false;
-  const contextVisible = this.context && !this.context.hidden;
-  const signalVisible = this.signalStream && !this.signalStream.hidden;
+  // The published presence shows the cards on Vue's next flush, before this
+  // frame runs, so it counts as visible already.
+  const contextVisible =
+    this.context && (this.presence?.context || !this.context.hidden);
+  const signalVisible =
+    this.signalStream && (this.presence?.active || !this.signalStream.hidden);
   if ((!contextVisible && !signalVisible) || this.contextLayoutFrame !== null)
     return;
   this.contextLayoutFrame = requestAnimationFrame(() => {

@@ -251,10 +251,10 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
   assert.match(body, /resolveCockpitContextReadout\(\{ snapshot, info \}\)/);
   assert.match(
     body,
-    /if \(!readout\.visible\) \{[\s\S]*?this\.context\.hidden = true;/,
+    /if \(!readout\.visible\) \{[\s\S]*?this\.showContextCard\(false\);/,
   );
   assert.equal(
-    (body.match(/this\.context\.hidden = true/g) || []).length,
+    (body.match(/this\.showContextCard\(false\)/g) || []).length,
     1,
     'the panel has exactly one hide path, and it is the no-snapshot standby case',
   );
@@ -815,14 +815,14 @@ test('Reset releases Contact camera ownership through its selection-preserving r
   );
   assert.match(
     cockpitEnter.toString(),
-    /if \(this\.resetGlobeButton\) this\.resetGlobeButton\.hidden = false;/,
+    /Object\.assign\(this\.presence, \{\s*active: true,/,
   );
   assert.match(
     readRadioSource(
-      new URL('./ui/cockpitTrackingController.js', import.meta.url),
+      new URL('./ui/views/CockpitView.vue', import.meta.url),
       'utf8',
     ),
-    /if \(this\.resetGlobeButton\) this\.resetGlobeButton\.hidden = true;/,
+    /id="cockpit-reset-globe"[^>]*:hidden="!active"/,
   );
 });
 

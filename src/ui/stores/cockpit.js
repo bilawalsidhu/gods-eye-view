@@ -3,13 +3,21 @@ import { markRaw, shallowRef } from 'vue';
 
 /**
  * Cockpit content as its views render it. The Cockpit controller presents
- * the briefing card's pages, cycle toggle, regional news and local
+ * which Cockpit surfaces are shown, the briefing card's pages, cycle toggle, regional news and local
  * conditions, the Contact card's readouts and weather toggle, the
  * instruments, the flight plan, the vision selector and the signal rows,
  * and publishes them
  * here; it keeps the controls' listeners.
  */
 export const useCockpitStore = defineStore('gev-cockpit', () => {
+  /** Which Cockpit surfaces are shown; null until the controller first syncs. */
+  const presence = shallowRef(null);
+
+  /** @param {?object} next A fresh presentation of the shown surfaces. */
+  function publishPresence(next) {
+    presence.value = next && markRaw(next);
+  }
+
   /** The presented briefing; null until the controller first presents it. */
   const brief = shallowRef(null);
 
@@ -59,6 +67,8 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
   }
 
   return {
+    presence,
+    publishPresence,
     brief,
     publishBrief,
     context,

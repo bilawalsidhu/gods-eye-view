@@ -10,7 +10,7 @@ import { useCockpitStore } from '../../stores/cockpit.js';
 // navigation, cohort counts, nearest contact and weather toggle; until it
 // does, the card shows the state it starts in. Its visibility, collapse and
 // layout stay with the controller, and the controls keep its listeners.
-const { context } = storeToRefs(useCockpitStore());
+const { presence, context } = storeToRefs(useCockpitStore());
 const initial = createContextState();
 const c = computed(() => context.value ?? initial);
 const directionStyle = computed(() =>
@@ -26,7 +26,7 @@ const weatherLabel = computed(() =>
 </script>
 
 <template>
-  <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" hidden data-i18n-aria-label :data-state="c.state ?? undefined">
+  <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" :hidden="!presence?.context" data-i18n-aria-label :data-state="c.state ?? undefined">
     <header class="cockpit-context-header">
       <div>
         <span data-i18n class="cockpit-context-kicker">CONTACT</span>

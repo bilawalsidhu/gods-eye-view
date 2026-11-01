@@ -6,7 +6,11 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, nextTick } from 'vue';
 import { setLocale, t as translate } from '../i18n/index.js';
-import { publishContextView, updateContext } from './cockpitContext.js';
+import {
+  publishContextView,
+  showContextCard,
+  updateContext,
+} from './cockpitContext.js';
 import { createContextState } from './cockpitContextState.js';
 import { syncWeatherToggle } from './cockpitInstruments.js';
 import { useCockpitStore } from './stores/cockpit.js';
@@ -26,11 +30,13 @@ function fixture(t, snapshot = null) {
   // The Contact presenter needs only this much of the controller.
   const owner = {
     context: $('#cockpit-context'),
-    hud: document.createElement('section'),
+    presence: { context: false },
     contextView: createContextState(),
     contextLayoutStamp: null,
     publishContext: (view) => store.publishContext(view),
     publishContextView,
+    publishPresenceView: () => store.publishPresence({ ...owner.presence }),
+    showContextCard,
     pushCockpitSignal: (...args) => signals.push(args),
     updateCockpitSignals() {},
     scheduleContextLayout: () => layouts.push(true),
@@ -119,7 +125,7 @@ test('a snapshot fills the card and keeps classes other code sets', async (t) =>
   const card = $('#cockpit-context');
   assert.equal(card.hidden, false);
   assert.equal(card.dataset.state, 'uncertain');
-  assert.equal(owner.hud.classList.contains('context-active'), true);
+  assert.equal(owner.presence.context, true);
   assert.match(
     text('#cockpit-context-subject'),
     /^RCH123 · 250\u00a0KM AIR\/SEA WINDOW$/,
@@ -193,7 +199,7 @@ test('without a snapshot the card stands by, hidden', async (t) => {
   updateContext.call(owner, INFO, 0);
   await nextTick();
   assert.equal($('#cockpit-context').hidden, true);
-  assert.equal(owner.hud.classList.contains('context-active'), false);
+  assert.equal(owner.presence.context, false);
   assert.equal(signals.at(-1)[2], 'CONTEXT STANDBY');
 });
 

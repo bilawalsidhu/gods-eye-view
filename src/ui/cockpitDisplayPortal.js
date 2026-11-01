@@ -100,7 +100,15 @@ export class CockpitDisplayPortal {
     }
     this._frame(generation, () => {
       restoreScroll();
-      focusedElement?.focus?.({ preventScroll: true });
+      // Restore only the focus the move dropped: Cockpit entry hands focus to
+      // its exit button in the meantime, and that wins.
+      const current = document.activeElement;
+      if (
+        !current ||
+        current === document.body ||
+        focusedRecord?.group.contains(current)
+      )
+        focusedElement?.focus?.({ preventScroll: true });
       this._frame(generation, () => {
         restoreScroll();
         this.restoreOwner = null;

@@ -38,6 +38,13 @@ export function publishContextView() {
   });
 }
 
+/** Show or hide the Contact card; the HUD marks it with `context-active`. */
+export function showContextCard(visible) {
+  if (this.presence.context === visible) return;
+  this.presence.context = visible;
+  this.publishPresenceView();
+}
+
 export function updateContext(info, heading) {
   if (!this.context) return;
   const view = this.contextView;
@@ -46,8 +53,7 @@ export function updateContext(info, heading) {
   const trackedId = info.icao24 || info.id;
   const readout = resolveCockpitContextReadout({ snapshot, info });
   if (!readout.visible) {
-    this.context.hidden = true;
-    this.hud?.classList.remove('context-active');
+    this.showContextCard(false);
     this.contextLayoutStamp = null;
     this.pushCockpitSignal(
       'context-status',
@@ -58,8 +64,7 @@ export function updateContext(info, heading) {
     return;
   }
 
-  this.context.hidden = false;
-  this.hud?.classList.add('context-active');
+  this.showContextCard(true);
   const installationCoverage = snapshot.cohorts.find(
     (cohort) => cohort.id === 'military-installations',
   )?.coverage;

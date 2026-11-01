@@ -376,6 +376,8 @@ export class StyleManager extends ShellFacade {
       },
       operations: {
         publishCockpit: {
+          presence: (view) =>
+            useCockpitStore(applicationPinia()).publishPresence(view),
           brief: (view) =>
             useCockpitStore(applicationPinia()).publishBrief(view),
           context: (view) =>

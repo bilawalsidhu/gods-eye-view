@@ -16,9 +16,11 @@ import CockpitUtilityControls from './panels/CockpitUtilityControls.vue';
 
 // The Cockpit HUD. The Cockpit controller presents the instruments, the
 // destination arrow and the vision selector on every HUD update; until it
-// does, they show the state they start in. The HUD's visibility, classes
-// and layout stay with the controller, and the controls keep its listeners.
-const { instruments, route, vision } = storeToRefs(useCockpitStore());
+// does, they show the state they start in. The controller also publishes
+// which surfaces are shown; the HUD's layout stays with it, and the controls
+// keep its listeners.
+const { presence, instruments, route, vision } = storeToRefs(useCockpitStore());
+const active = computed(() => Boolean(presence.value?.active));
 const initialInstruments = createInstrumentState();
 const initialRoute = createRouteState();
 const initialVision = createVisionState();
@@ -41,7 +43,7 @@ const tickStyle = (tick) =>
 
 <template>
   <!-- Aircraft first-person view. It can be entered from the visible view switcher. -->
-  <section id="cockpit-hud" aria-label="Aircraft cockpit view" hidden data-i18n-aria-label :data-layer="hud.layer ?? undefined">
+  <section id="cockpit-hud" aria-label="Aircraft cockpit view" :hidden="!active" v-class-toggle="{ 'signals-active': active, 'context-active': Boolean(presence?.context) }" data-i18n-aria-label :data-layer="hud.layer ?? undefined">
     <!-- One optical coordinate system: every targeting mark shares this center.
          Decorative only; telemetry and interactive panels remain separate. -->
     <svg class="cockpit-frame-lines" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-hidden="true" focusable="false">
@@ -186,11 +188,11 @@ const tickStyle = (tick) =>
   </section>
 
   <nav id="view-switcher" aria-label="View switcher" data-i18n-aria-label>
-    <button id="cockpit-reset-globe" type="button" aria-label="Reset cockpit to full globe view" title="Exit cockpit and return to full globe view" hidden data-i18n-aria-label data-i18n-title>
+    <button id="cockpit-reset-globe" type="button" aria-label="Reset cockpit to full globe view" title="Exit cockpit and return to full globe view" :hidden="!active" data-i18n-aria-label data-i18n-title>
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
       <span data-i18n>RESET</span>
     </button>
-    <button id="map-view-switch" type="button" aria-label="Exit cockpit view" aria-keyshortcuts="Escape C" title="Exit cockpit view" hidden data-i18n-aria-label data-i18n-title>
+    <button id="map-view-switch" type="button" aria-label="Exit cockpit view" aria-keyshortcuts="Escape C" title="Exit cockpit view" :hidden="!active" data-i18n-aria-label data-i18n-title>
       <span class="material-symbols-outlined" aria-hidden="true">close_fullscreen</span>
       <span data-i18n>EXIT COCKPIT</span>
     </button>

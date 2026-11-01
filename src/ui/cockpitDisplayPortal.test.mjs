@@ -137,6 +137,22 @@ test('Display groups return to their exact home with independent scroll position
   }
 });
 
+test('focus moved elsewhere before the frame is not taken back', () => {
+  const f = fixture();
+  try {
+    const owner = f.create();
+    owner.setActive(true);
+    // Cockpit entry focuses its exit button before the portal's frame runs.
+    document.activeElement = f.sibling;
+    f.flush();
+    assert.equal(f.focusCalls, 0);
+    assert.equal(document.activeElement === f.sibling, true);
+    owner.destroy();
+  } finally {
+    f.restore();
+  }
+});
+
 test('superseded portal frames cannot restore obsolete focus or scroll', () => {
   const f = fixture();
   try {

@@ -63,7 +63,7 @@ function fixture(t) {
   const ticks = (kind) => [
     ...document.querySelectorAll(`[data-${kind}-rim-tick]`),
   ];
-  return { $, text, ticks, owner, published };
+  return { $, text, ticks, owner, published, store };
 }
 
 const INFO = Object.freeze({
@@ -296,11 +296,11 @@ test('an emergency and a military track restyle the HUD', async (t) => {
   assert.equal(text('#cockpit-aircraft-meta').startsWith('COMMERCIAL'), true);
 });
 
-test('re-renders keep the visibility and classes the controller sets on the HUD', async (t) => {
-  const { $, owner } = fixture(t);
+test('re-renders keep the visibility and classes the controller publishes on the HUD', async (t) => {
+  const { $, owner, store } = fixture(t);
   const hud = $('#cockpit-hud');
-  hud.hidden = false;
-  hud.classList.add('signals-active');
+  store.publishPresence({ active: true, context: false });
+  hud.classList.add('voice-highlight');
   hud.style.setProperty('--cockpit-utility-top', '120px');
   $('#cockpit-speed-rim').classList.add('external');
   updateHud.call(owner, INFO, 1000, true);
@@ -309,6 +309,7 @@ test('re-renders keep the visibility and classes the controller sets on the HUD'
   await nextTick();
   assert.equal(hud.hidden, false);
   assert.equal(hud.classList.contains('signals-active'), true);
+  assert.equal(hud.classList.contains('voice-highlight'), true);
   assert.equal(hud.style.getPropertyValue('--cockpit-utility-top'), '120px');
   assert.equal($('#cockpit-speed-rim').classList.contains('external'), true);
 });

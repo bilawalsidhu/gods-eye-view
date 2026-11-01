@@ -5,6 +5,7 @@ import {
   toggleTrackedTr3b,
   syncTr3bToggle,
   syncEntry,
+  publishPresenceView,
   navigateContext,
   _adoptTrackedEntity,
   enter,
@@ -21,7 +22,11 @@ import {
   cycleVisionMode,
   clearPredictiveRoute,
 } from './cockpitInstruments.js';
-import { publishContextView, updateContext } from './cockpitContext.js';
+import {
+  publishContextView,
+  showContextCard,
+  updateContext,
+} from './cockpitContext.js';
 import { createContextState } from './cockpitContextState.js';
 import { createBriefState } from './cockpitBriefPages.js';
 import {
@@ -139,12 +144,19 @@ export class CockpitViewController {
     this.briefPageIndex = 0;
     this.briefAutoRotateEnabled = false;
     // Cockpit's views render what these receive.
+    this.publishPresence = publish.presence ?? (() => {});
     this.publishBrief = publish.brief ?? (() => {});
     this.publishContext = publish.context ?? (() => {});
     this.publishInstruments = publish.instruments ?? (() => {});
     this.publishRoute = publish.route ?? (() => {});
     this.publishVision = publish.vision ?? (() => {});
     this.publishSignals = publish.signals ?? (() => {});
+    this.presence = {
+      active: false,
+      entryAvailable: false,
+      tr3b: null,
+      context: false,
+    };
     this.instruments = createInstrumentState();
     this.routeView = createRouteState();
     this.routeSignature = null;
@@ -260,6 +272,9 @@ export class CockpitViewController {
   toggleTrackedTr3b() {
     return toggleTrackedTr3b.call(this);
   }
+  publishPresenceView() {
+    return publishPresenceView.call(this);
+  }
   syncTr3bToggle(info) {
     return syncTr3bToggle.call(this, info);
   }
@@ -307,6 +322,9 @@ export class CockpitViewController {
   }
   publishContextView() {
     return publishContextView.call(this);
+  }
+  showContextCard(visible) {
+    return showContextCard.call(this, visible);
   }
   updateContext(info, heading) {
     return updateContext.call(this, info, heading);

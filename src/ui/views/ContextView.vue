@@ -1,6 +1,8 @@
 <script setup>
 import { storeToRefs } from 'pinia';
+import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
+import { useCockpitStore } from '../stores/cockpit.js';
 import { useContextStore } from '../stores/context.js';
 import AwarenessPanel from './panels/AwarenessPanel.vue';
 import MissionDetail from './panels/MissionDetail.vue';
@@ -10,6 +12,7 @@ import RadioPanel from './panels/RadioPanel.vue';
 // ContextControls presents the mode switch and the nearby sites search and
 // publishes them; until it does, the panel shows its initial markup.
 const { view: ctx } = storeToRefs(useContextStore());
+const { presence: cockpit } = storeToRefs(useCockpitStore());
 </script>
 
 <template>
@@ -64,12 +67,12 @@ const { view: ctx } = storeToRefs(useContextStore());
         </div>
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" :hidden="!ctx?.flightsActive">
           <div class="global-context-actions" aria-label="Contact Context actions" data-i18n-aria-label>
-            <button id="cockpit-entry" type="button" hidden>
+            <button id="cockpit-entry" type="button" :hidden="!cockpit?.entryAvailable">
               <span class="material-symbols-outlined" aria-hidden="true">flight</span>
               <span data-i18n>COCKPIT</span>
             </button>
             <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)" data-i18n>SEARCH NEARBY SITES</button>
-            <button id="tr3b-toggle" class="tr3b-toggle" type="button" aria-pressed="false" hidden aria-label="Reclassify tracked contact as TR-3B" title="Reclassify as TR-3B" data-i18n-aria-label data-i18n-title>🛸</button>
+            <button id="tr3b-toggle" class="tr3b-toggle" type="button" :aria-pressed="String(!!cockpit?.tr3b?.converted)" :hidden="!cockpit?.tr3b" aria-label="Reclassify tracked contact as TR-3B" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')" data-i18n-aria-label>🛸</button>
           </div>
           <AwarenessPanel />
         </section>
