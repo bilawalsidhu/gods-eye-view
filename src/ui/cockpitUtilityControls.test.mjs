@@ -52,8 +52,7 @@ function fixture(t) {
   const controls = new RadioControls({
     elements: {
       _radioPanel: document.createElement('section'),
-      // A bare tuner: the panel's tuner has its own tests.
-      _radioTuner: document.createElement('div'),
+      // A bare tuner slider: the panel's tuner has its own tests.
       _radioTunerSlider: Object.assign(document.createElement('input'), {
         type: 'range',
       }),

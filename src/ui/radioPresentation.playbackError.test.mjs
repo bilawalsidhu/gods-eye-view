@@ -22,7 +22,7 @@ function render(audioError) {
   const host = {
     destroyed: false,
     _radioPanel: el(),
-    store: { publish: (view) => (shown = view) },
+    store: { publish: (view) => (shown = view), publishTuner() {} },
     actions: {
       getLifecycle: () => null,
       preservePanelStateDuringClear: () => false,

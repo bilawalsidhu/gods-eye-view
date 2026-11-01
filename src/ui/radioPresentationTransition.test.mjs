@@ -26,7 +26,7 @@ for (const lifecycleState of ['enabling', 'disabling']) {
       const ctx = {
         destroyed: false,
         _radioPanel: el(),
-        store: { publish: (view) => (shown = view) },
+        store: { publish: (view) => (shown = view), publishTuner() {} },
         actions: {
           getLifecycle: () => ({
             lifecycleState,

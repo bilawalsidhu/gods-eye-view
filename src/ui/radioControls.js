@@ -1,5 +1,9 @@
 import { bindRadioControls } from './radioBindings.js';
-import { renderRadioState } from './radioPresentation.js';
+import {
+  createRadioTunerState,
+  renderRadioState,
+  showRadioTuner,
+} from './radioPresentation.js';
 import { useRadioStore } from './stores/radio.js';
 import { applicationPinia } from './vueRuntime.js';
 
@@ -30,6 +34,7 @@ export class RadioControls {
     this._radioFilterOptions = null;
     this._radioVolumeShown = null;
     this._cockpitDisclosure = { display: false, radio: false };
+    this._radioTunerView = createRadioTunerState();
     this._radioTunerStations = [];
     this._radioTunerPool = [];
     this._radioTunerDragging = false;
@@ -145,7 +150,7 @@ export class RadioControls {
     } catch {
       /* capture already released */
     }
-    this._radioTuner?.classList.remove('is-dragging', 'is-static');
+    showRadioTuner.call(this, { dragging: false, static: false });
     document
       .getElementById('title-bar')
       ?.classList.remove('radio-broadcasting');

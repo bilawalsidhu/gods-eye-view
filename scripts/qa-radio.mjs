@@ -2704,14 +2704,20 @@ async function main() {
       };
       const playsBefore = window.__qaRadioPlayCalls.length;
       const frozenSignature = style._radioControls._radioTunerBandSignature;
+      // The tuner renders from the Radio store; let Vue patch before reading.
+      const rendered = () => Promise.resolve();
       pointer('pointerdown', xFor(0));
+      await rendered();
       const left = snapshot();
       const centerCoordinate = (count - 1) / 2;
       pointer('pointermove', xFor(centerCoordinate));
+      await rendered();
       const center = snapshot();
       pointer('pointermove', xFor(centerCoordinate + 2));
+      await rendered();
       const shifted = snapshot();
       pointer('pointermove', xFor(count - 1));
+      await rendered();
       const right = snapshot();
       const shiftedByIndex = new Map(shifted.ticks.map((tick) => [tick.index, tick.x]));
       const sharedTick = center.ticks.find((tick) => shiftedByIndex.has(tick.index));
@@ -2768,7 +2774,7 @@ async function main() {
         tapeDelta: absoluteTuner.tapeDelta,
       }),
     );
-    const tunerCancelRestore = await page.evaluate(() => {
+    const tunerCancelRestore = await page.evaluate(async () => {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
       const radio = gev.dataManager.layers.get('radio').module;
@@ -2801,11 +2807,14 @@ async function main() {
       const targetIndex = before.slot < beforeStations.length - 2 ? before.slot + 2 : before.slot - 2;
       pointer('pointerdown', before.slot);
       pointer('pointermove', targetIndex);
+      // The tuner renders from the Radio store; let Vue patch before reading.
+      await Promise.resolve();
       const shiftedSlot = Number(slider.value);
       const previewBeforeCancel = gev.viewer.entities.values
         .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
       const flyToCallsBeforeCancel = flyToCalls.length;
       pointer('pointercancel', targetIndex);
+      await Promise.resolve();
       const afterStations = style._radioControls._radioTunerStations;
       const afterState = radio.getUIState();
       const after = {
@@ -3033,6 +3042,8 @@ async function main() {
       pointer('pointermove', targetIndex);
       const previewPlays = window.__qaRadioPlayCalls.length;
       pointer('pointerup', targetIndex);
+      // The tuner renders from the Radio store; sample once Vue has patched.
+      await Promise.resolve();
       const samples = [needle.getBoundingClientRect().left];
       await new Promise((resolve) => requestAnimationFrame(resolve));
       samples.push(needle.getBoundingClientRect().left);

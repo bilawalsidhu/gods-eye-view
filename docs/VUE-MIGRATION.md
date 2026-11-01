@@ -107,8 +107,11 @@ They contain no application state.
    store that RadioControls publishes to, and `SdrCard` the local RTL-SDR
    card that LocalSdrControls publishes beside it; fields a person edits take
    their value through `v-field-value`, which never writes a focused field;
-   the tuner and the Cockpit radio controls keep their owners' element
-   bindings; `ContextView` renders the mode switch and the nearby sites
+   `RadioTuner` renders the directory tuner, where RadioControls keeps the
+   drag and its slot and publishes the band, readouts, slider and needle,
+   and the component lays out the tick tape against the dial's measured
+   width and lays out the snapped needle before it drops the drag class;
+   `ContextView` renders the mode switch and the nearby sites
    search from the `gev-context` store, which ContextControls reaches only
    through its `publish` option, so `./ui/context` needs no Vue;
    `AwarenessPanel` renders the Contacts panel that the awareness layer
@@ -147,8 +150,7 @@ They contain no application state.
    stay with the controller. `CockpitUtilityControls` renders the Display
    and Radio launchers, which popover is open and the compact Radio
    controls from the `gev-radio` store that RadioControls publishes to; the
-   Display popover's slots stay static for the Cockpit display portal. The
-   Radio tuner follows).
+   Display popover's slots stay static for the Cockpit display portal).
    Layers that write into the right rail directly gain a slot instead.
 
 4. **Cleanup.** The build-time template expansion and the attribute

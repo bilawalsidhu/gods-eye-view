@@ -6,12 +6,13 @@ import { vClassToggle } from '../../rail/classToggle.js';
 import { vFieldValue } from '../../rail/fieldValue.js';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import { useRadioStore } from '../../stores/radio.js';
+import RadioTuner from './RadioTuner.vue';
 import SdrCard from './SdrCard.vue';
 
 // The Radio panel inside Context. RadioControls presents the directory row,
 // station card, transport, volume and playback line and publishes them;
-// until it does, the panel shows its initial markup. The tuner keeps its
-// owner's element bindings; SdrCard renders the local RTL-SDR card.
+// until it does, the panel shows its initial markup. RadioTuner renders the
+// directory tuner and SdrCard the local RTL-SDR card.
 const { view: radio, sdr } = storeToRefs(useRadioStore());
 // Only whether the receiver is connected reaches the panel; the card renders
 // its own frames.
@@ -39,22 +40,7 @@ const sdrConnected = computed(() => sdr.value?.connectionActive ?? null);
       <span id="radio-station-meta">{{ radio ? radio.station.meta : t('Enable Radio, then choose a globe marker or use next.') }}</span>
       <span id="radio-station-tags">{{ radio?.station.tags ?? '' }}</span>
     </div>
-    <div id="radio-tuner" class="radio-tuner" hidden>
-      <div class="radio-tuner-header">
-        <span data-i18n id="radio-tuner-band-label">DIRECTORY BAND</span>
-        <output id="radio-tuner-value" for="radio-tuner-slider" data-i18n>DRAG TO TUNE</output>
-      </div>
-      <div class="radio-tuner-dial">
-        <div class="radio-tuner-scale" aria-hidden="true"></div>
-        <div id="radio-tuner-needle" class="radio-tuner-needle" aria-hidden="true"></div>
-        <input id="radio-tuner-slider" type="range" min="0" max="0" step="1" value="0"
-          aria-label="Tune available internet radio stations" aria-valuetext="No station available" disabled data-i18n-aria-label />
-      </div>
-      <div class="radio-tuner-readout">
-        <span id="radio-tuner-station" data-i18n>ALL · DRAG THE NEEDLE</span>
-        <span data-i18n>SNAPS TO AVAILABLE STATIONS</span>
-      </div>
-    </div>
+    <RadioTuner />
     <div class="radio-transport" role="group" aria-label="Radio playback" data-i18n-aria-label>
       <button id="radio-prev-btn" type="button" aria-label="Previous filtered station" :disabled="radio ? radio.transport.stepDisabled : true" data-i18n-aria-label data-i18n>PREV</button>
       <button id="radio-play-btn" type="button" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected station')" :disabled="radio ? radio.transport.play.disabled : true">{{ radio ? radio.transport.play.text : t('PLAY') }}</button>

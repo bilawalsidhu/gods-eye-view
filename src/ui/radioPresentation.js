@@ -1,8 +1,8 @@
 /**
  * Present Radio state without making playback or Context decisions: the
  * panel view renders the directory row, station card, transport, volume and
- * playback line, and the Cockpit's compact radio controls, from what this
- * publishes (`gev-radio` store); the tuner is still written here.
+ * playback line, the Cockpit's compact radio controls and the directory
+ * tuner from what this publishes (`gev-radio` store).
  */
 import { t } from '../i18n/index.js';
 
@@ -73,28 +73,27 @@ export function renderRadioState(state) {
     categories.find((category) => category.id === filter)?.color || '';
 
   const tunerAvailable = interactive && state.filteredCount > 0;
-  if (this._radioTuner) this._radioTuner.hidden = !tunerAvailable;
-  if (this._radioTunerSlider) this._radioTunerSlider.disabled = !tunerAvailable;
-  if (this._radioTunerBandLabel) {
-    const activeCategory = state.categories.find(
-      (category) => category.id === state.filter,
-    );
-    this._radioTunerBandLabel.textContent =
+  const activeCategory = categories.find(
+    (category) => category.id === state.filter,
+  );
+  showRadioTuner.call(this, {
+    available: tunerAvailable,
+    band:
       state.filter === 'all'
         ? t('DIRECTORY BAND')
         : t('{category} BAND', {
             category: String(
               activeCategory?.label || state.filter,
             ).toUpperCase(),
-          });
-  }
-  this._radioTuner?.classList.toggle('is-static', Boolean(state.tuningStatic));
+          }),
+    static: Boolean(state.tuningStatic),
+  });
   if (tunerAvailable) this._refreshRadioTunerBand?.();
   if (!tunerAvailable && this._radioTunerDragging) {
     this._radioTunerDragging = false;
     this._radioTunerDragSnapshot = null;
     this._radioTunerStations = [];
-    this._radioTuner?.classList.remove('is-static', 'is-dragging');
+    showRadioTuner.call(this, { static: false, dragging: false });
   }
   if (!tunerAvailable) {
     this._radioTunerStations = [];
@@ -276,6 +275,36 @@ export function showRadioVolume(value) {
     cockpit: { ...cockpit, volume: { ...cockpit.volume, value } },
   };
   this.store?.publish(this._radioView);
+}
+
+/** The tuner before RadioControls presents it; null texts keep the markup's. */
+export function createRadioTunerState() {
+  return {
+    available: false,
+    band: null,
+    value: null,
+    station: null,
+    valuetext: null,
+    // The slider's range and value.
+    max: 0,
+    slot: 0,
+    // The needle's place across the dial, 0–1; null before the first preview.
+    ratio: null,
+    // The tick tape: the fractional station under the needle, and how many.
+    coordinate: 0,
+    count: 0,
+    static: false,
+    dragging: false,
+  };
+}
+
+/**
+ * Change what the tuner shows and publish it.
+ * @param {Partial<ReturnType<typeof createRadioTunerState>>} changes
+ */
+export function showRadioTuner(changes) {
+  this._radioTunerView = { ...this._radioTunerView, ...changes };
+  this.store?.publishTuner({ ...this._radioTunerView });
 }
 
 /**
