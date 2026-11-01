@@ -395,9 +395,10 @@ test('the imported files render what the file import publishes and keep focus', 
       revoke() {},
     }),
     flyToSource() {},
-    publish: (view) => {
-      store.publishGeoImport(view);
-      return nextTick();
+    publish: (view) => store.publishGeoImport(view),
+    connect: (actions) => {
+      const token = store.connect(actions);
+      return () => store.detach(token);
     },
   });
   t.after(() => tool.destroy());

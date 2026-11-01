@@ -32,46 +32,12 @@ class FakeClassList {
   }
 }
 
-// The one focused element across every fake document (tests run one at a time).
-const focus = { active: null };
-
 class FakeElement {
   constructor(tagName = 'div', id = '') {
     this.tagName = tagName.toUpperCase();
     this.id = id;
     this.classList = new FakeClassList();
-    this.dataset = {};
-    this.style = {};
-    this.attributes = new Map();
-    this.children = [];
-    this.parent = null;
     this.listeners = [];
-    this.textContent = '';
-    this.value = '';
-    this.clicks = 0;
-  }
-  set className(v) {
-    this.classList = new FakeClassList();
-    String(v)
-      .split(/\s+/)
-      .filter(Boolean)
-      .forEach((n) => this.classList.add(n));
-  }
-  setAttribute(n, v) {
-    this.attributes.set(n, String(v));
-  }
-  getAttribute(n) {
-    return this.attributes.get(n) ?? null;
-  }
-  append(...kids) {
-    for (const k of kids) {
-      k.parent = this;
-      this.children.push(k);
-    }
-  }
-  replaceChildren(...kids) {
-    this.children = [];
-    this.append(...kids);
   }
   addEventListener(type, listener, options) {
     this.listeners.push({ type, listener, options });
@@ -92,71 +58,15 @@ class FakeElement {
         ...event,
       });
   }
-  click() {
-    this.clicks += 1;
-    this.emit('click');
-  }
-  focus() {
-    focus.active = this;
-  }
-  contains(el) {
-    for (let at = el; at; at = at.parent) if (at === this) return true;
-    return false;
-  }
-  *walk() {
-    for (const kid of this.children) {
-      yield kid;
-      yield* kid.walk();
-    }
-  }
-  querySelectorAll(selector) {
-    if (selector !== '[data-import-id]') throw new Error(`fake: ${selector}`);
-    return [...this.walk()].filter((el) => el.dataset.importId);
-  }
-  querySelector(selector) {
-    const exact = /^button\[data-action="([a-z]+)"\]$/.exec(selector);
-    for (const el of this.walk()) {
-      if (el.tagName !== 'BUTTON') continue;
-      if (selector === 'button' || (exact && el.dataset.action === exact[1]))
-        return el;
-    }
-    return null;
-  }
-  closest(selector) {
-    for (let el = this; el; el = el.parent) {
-      if (
-        selector === 'button[data-action]' &&
-        el.tagName === 'BUTTON' &&
-        el.dataset.action
-      )
-        return el;
-      if (selector === '[data-import-id]' && el.dataset.importId) return el;
-    }
-    return null;
-  }
 }
 
-function setup({
-  load,
-  navigation,
-  flyToSource,
-  subscribeMapSource,
-  rendered,
-} = {}) {
-  focus.active = null;
+function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
   const els = {
     'geo-import-button': new FakeElement('button', 'geo-import-button'),
-    'geo-import-input': new FakeElement('input', 'geo-import-input'),
-    'geo-import-list': new FakeElement('ul', 'geo-import-list'),
-    'geo-import-hint': new FakeElement('span', 'geo-import-hint'),
   };
   const document = {
     body: new FakeElement('body'),
     getElementById: (id) => els[id] ?? null,
-    createElement: (tag) => new FakeElement(tag),
-    get activeElement() {
-      return focus.active;
-    },
   };
   Object.setPrototypeOf(document, new FakeElement('document'));
   const added = [];
@@ -164,6 +74,8 @@ function setup({
   const flights = [];
   let renders = 0;
   let shown = null;
+  // The view's pick and row buttons, as the display store holds them.
+  let actions = null;
   const viewer = {
     container: new FakeElement('div', 'cesiumContainer'),
     scene: { requestRender: () => (renders += 1) },
@@ -203,7 +115,10 @@ function setup({
     flyToSource: flyToSource || ((_viewer, ds) => flights.push(ds)),
     publish: (view) => {
       shown = view;
-      return rendered?.();
+    },
+    connect: (next) => {
+      actions = next;
+      return () => (actions = null);
     },
   });
   return {
@@ -218,24 +133,21 @@ function setup({
     loads,
     renders: () => renders,
     shown: () => shown,
+    actions: () => actions,
+    /** A control's change, as the view sends it. */
+    act: (name, ...args) => actions?.[name]?.(...args),
   };
 }
 const file = (name, extra = {}) => ({ name, size: 10, ...extra });
 const rows = (t) => t.shown().rows;
 const action = (row, name) => row.actions.find((a) => a.action === name);
-// A click on a row button, as the list's delegated listener receives it.
-const press = (t, row, name) =>
-  t.els['geo-import-list'].emit('click', {
-    target: {
-      closest: (selector) =>
-        selector === 'button[data-action]'
-          ? {
-              dataset: { action: name },
-              closest: () => ({ dataset: { importId: row.id } }),
-            }
-          : null,
-    },
-  });
+// A row button's click, as the view sends it.
+const ROW_ACTIONS = {
+  toggle: 'toggleGeoImport',
+  fly: 'flyToGeoImport',
+  remove: 'removeGeoImport',
+};
+const press = (t, row, name) => t.act(ROW_ACTIONS[name], row.id);
 
 // Runs first: tools left by later tests would answer the same registry.
 test('imported files make the language switch ask first', async () => {
@@ -262,19 +174,11 @@ test('returns null without its markup or viewer', () => {
   );
 });
 
-test('the Import button opens the picker and a pick imports each file', async () => {
+test('a pick imports each file', async () => {
   const t = setup();
-  t.els['geo-import-button'].click();
-  assert.equal(t.els['geo-import-input'].clicks, 1);
-  assert.equal(
-    t.els['geo-import-input'].accept,
-    '.geojson,.json,.kml,.kmz,.gpx',
-  );
-  const out = await t.tool.importFiles([file('a.geojson'), file('b.kml')]);
-  assert.deepEqual(
-    out.map((o) => o.ok),
-    [true, true],
-  );
+  t.act('importGeoFiles', [file('a.geojson'), file('b.kml')]);
+  for (let turn = 0; turn < 20 && t.added.length < 2; turn += 1)
+    await new Promise((r) => setImmediate(r));
   assert.equal(t.added.length, 2);
   assert.notEqual(
     t.loads[0].opts.color,
@@ -395,13 +299,9 @@ test('destroy removes every file and listener and the window handle', async () =
     t.tool.destroy();
     assert.equal(t.removed.length, 2);
     assert.deepEqual(t.revoked.sort(), ['a.geojson', 'b.geojson']);
-    for (const el of [
-      t.viewer.container,
-      t.els['geo-import-button'],
-      t.els['geo-import-input'],
-      t.els['geo-import-list'],
-    ])
-      assert.equal(el.listeners.length, 0);
+    assert.equal(t.viewer.container.listeners.length, 0);
+    assert.equal(t.document.listeners.length, 0);
+    assert.equal(t.actions(), null, 'the view is disconnected');
     assert.deepEqual(t.shown(), { rows: [], hint: '' });
     assert.equal(globalThis.window.__gevGeoImport, undefined);
     assert.equal(t.tool.diagnostics().destroyed, true);
@@ -451,13 +351,13 @@ test('the application composition wires the import and owns its teardown', () =>
     /navigation: styleManager/,
   );
   assert.ok(tools.indexOf('defer(() => geoFileImport?.destroy());') > importAt);
-  // The list renders from the store once Vue has flushed.
+  // The list renders from the store and its controls answer through it.
   assert.match(
     tools.slice(importAt, importAt + 400),
-    /displayStore\.publishGeoImport\(view\);\s*return nextTick\(\);/,
+    /publish: \(view\) => displayStore\.publishGeoImport\(view\),\s*connect: connectDisplay,/,
   );
   const markup = fs.readFileSync(
-    new URL('./views/panels/DisplayPanel.vue', import.meta.url),
+    new URL('./views/panels/GeoImport.vue', import.meta.url),
     'utf8',
   );
   for (const id of [
@@ -468,7 +368,7 @@ test('the application composition wires the import and owns its teardown', () =>
   ])
     assert.ok(
       markup.includes(`id="${id}"`),
-      `${id} missing from the DISPLAY template`,
+      `${id} missing from the Import template`,
     );
 });
 
@@ -683,83 +583,6 @@ test('a refused deferred stamp (Cockpit) imports without flying', async () => {
   const [out] = await t.tool.importFiles([file('a.geojson')]);
   assert.equal(out.ok, true);
   assert.equal(flown.length, 0);
-});
-
-// The rendered view as the owner reads it back: a row per published file,
-// each with its buttons. `settle()` finishes the held render.
-async function heldRender(names) {
-  let settle = () => {};
-  const t = setup({ rendered: () => new Promise((r) => (settle = r)) });
-  await t.tool.importFiles(names.map((name) => file(name)));
-  const list = t.els['geo-import-list'];
-  const renderRow = ({ id }) => {
-    const row = new FakeElement('li');
-    row.dataset.importId = id;
-    for (const name of ['toggle', 'fly', 'remove']) {
-      const btn = new FakeElement('button');
-      btn.dataset.action = name;
-      row.append(btn);
-    }
-    return row;
-  };
-  const render = async () => {
-    list.replaceChildren(...rows(t).map(renderRow));
-    settle();
-    await new Promise((r) => setImmediate(r));
-  };
-  await render();
-  const removeButton = (at) => list.children[at].children[2];
-  return { t, list, render, removeButton };
-}
-
-test('keyboard focus moves on only once the list without the removed row renders', async () => {
-  const { t, list, render, removeButton } = await heldRender([
-    'a.geojson',
-    'b.geojson',
-  ]);
-  const first = removeButton(0);
-  first.focus();
-  press(t, rows(t)[0], 'remove');
-  await new Promise((r) => setImmediate(r));
-  assert.equal(t.document.activeElement, first, 'not before the view renders');
-  await render();
-  assert.equal(list.children.length, 1);
-  assert.equal(
-    t.document.activeElement,
-    removeButton(0),
-    'the same control on the next row',
-  );
-  press(t, rows(t)[0], 'remove');
-  await render();
-  assert.equal(t.document.activeElement, t.els['geo-import-button']);
-});
-
-test('focus moved elsewhere while the list renders stays where it went', async () => {
-  const { t, render, removeButton } = await heldRender([
-    'a.geojson',
-    'b.geojson',
-  ]);
-  removeButton(0).focus();
-  press(t, rows(t)[0], 'remove');
-  t.els['geo-import-input'].focus();
-  await render();
-  assert.equal(t.document.activeElement, t.els['geo-import-input']);
-});
-
-test('two removes before one render give focus to the first one’s next row', async () => {
-  const names = ['a', 'b', 'c', 'd', 'e'].map((n) => `${n}.geojson`);
-  const { t, list, render, removeButton } = await heldRender(names);
-  removeButton(1).focus();
-  press(t, rows(t)[1], 'remove');
-  // The view has not rendered: b's button still holds focus.
-  press(t, rows(t)[2], 'remove');
-  await render();
-  assert.deepEqual(
-    t.tool.list().map((f) => f.name),
-    ['a.geojson', 'c.geojson', 'e.geojson'],
-  );
-  assert.equal(t.document.activeElement, removeButton(1));
-  assert.equal(list.children[1].dataset.importId, rows(t)[1].id);
 });
 
 test('KML and KMZ rows say they keep their own styles instead of showing a color', async () => {

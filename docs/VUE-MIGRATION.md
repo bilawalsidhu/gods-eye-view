@@ -133,9 +133,10 @@ a feature supplying only its accent.
    `gev-display` store, which VisualSettings publishes to, and the 3D
    aircraft group, the Draw controls and the imported file list, which
    AircraftDisplay, the draw tool and the file import publish beside it;
-   the controls call DisplayBindings and the draw tool through the store's
-   `connect`/`act`, the newest owner of an action answering it; the
-   file import restores keyboard focus once the list has rendered; the
+   the controls call DisplayBindings, the draw tool and the file import
+   through the store's `connect`/`act`, the newest owner of an action
+   answering it; `GeoImport` hands keyboard focus on before a focused row
+   goes, with `v-focus-safe-children`; the
    style parameter rows render through Vue behind `createStyleParameters()`,
    as a render function so the portable `./ui/input` entry needs no
    component compiler; the other groups follow one owner at a time),

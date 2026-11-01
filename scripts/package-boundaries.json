@@ -86,6 +86,7 @@
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue",
       "src/ui/views/panels/DisplayPanel.vue",
+      "src/ui/views/panels/GeoImport.vue",
       "src/ui/stores/display.js",
       "src/ui/rail/rangeValue.js",
       "src/ui/rail/classToggle.js",

@@ -6,14 +6,15 @@ import { vPanelState } from '../../rail/panelState.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import UiSegmented from '../../kit/UiSegmented.vue';
+import GeoImport from './GeoImport.vue';
 import { useDisplayStore } from '../../stores/display.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
-// Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group, the
-// draw tool its controls and the file import its list, and each publishes
-// them; until they do, the panel shows its initial markup.
+// Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group and
+// the draw tool its controls, and each publishes them; until they do, the
+// panel shows its initial markup. GeoImport renders the file import.
 const display = useDisplayStore();
-const { view, models3d, draw, geoImport } = storeToRefs(display);
+const { view, models3d, draw } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings or the draw tool).
 const act = (name, ...args) => display.act(name, ...args);
 const integer = (event) => parseInt(event.target.value, 10);
@@ -48,8 +49,6 @@ const allocationOptions = [
   { value: 'ELASTIC', label: t('Elastic'), attrs: { id: 'detection-allocation-elastic', 'data-allocation': 'ELASTIC' } },
   { value: 'WEIGHTED', label: t('Weighted'), attrs: { id: 'detection-allocation-weighted', 'data-allocation': 'WEIGHTED' } },
 ];
-const geoRows = computed(() => geoImport.value?.rows ?? []);
-const geoListed = computed(() => geoRows.value.length > 0);
 </script>
 
 <template>
@@ -187,15 +186,7 @@ const geoListed = computed(() => geoRows.value.length > 0);
       <span class="draw-hint" id="draw-hint" aria-live="polite">{{ draw?.hint ?? '' }}</span>
     </div>
   </div>
-  <div class="pp-toggle-group" id="geo-import-group">
-    <button class="pp-toggle-btn" id="geo-import-button" type="button" title="Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). File bytes stay on this device; overlays can appear in map screenshots shared with voice." data-i18n-title>
-      <span class="pp-icon material-symbols-outlined" aria-hidden="true">upload_file</span>
-      <span class="pp-label" data-i18n>Import</span>
-    </button>
-    <input type="file" id="geo-import-input" accept=".geojson,.json,.kml,.kmz,.gpx" multiple hidden aria-label="Choose GeoJSON, KML, KMZ or GPX files" data-i18n-aria-label>
-    <ul class="geo-import-list" :class="{ visible: geoListed }" id="geo-import-list" aria-label="Imported files" data-i18n-aria-label><li v-for="row in geoRows" :key="row.id" class="geo-import-row" :data-import-id="row.id"><span :class="['geo-import-swatch', { 'own-styles': row.ownStyles }]" :style="row.ownStyles ? null : { background: row.color }"></span><span class="geo-import-name" :title="row.title">{{ row.name }}</span><button v-for="item in row.actions" :key="item.action" type="button" class="geo-import-action" :data-action="item.action" :title="item.label" :aria-label="item.label" :aria-pressed="item.pressed"><span class="material-symbols-outlined" aria-hidden="true">{{ item.icon }}</span></button></li></ul>
-    <span class="draw-hint geo-import-hint" id="geo-import-hint" aria-live="polite">{{ geoImport?.hint ?? '' }}</span>
-  </div>
+  <GeoImport />
   <div class="pp-toggle-group">
     <button class="pp-toggle-btn" :class="{ active: celestial?.active }" id="celestial-toggle" @click="act('toggleCelestial')" :title="celestialTitle" :aria-pressed="String(celestial?.active ?? false)" :disabled="celestial ? !celestial.supported : undefined" :aria-disabled="celestial ? String(!celestial.supported) : undefined">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>

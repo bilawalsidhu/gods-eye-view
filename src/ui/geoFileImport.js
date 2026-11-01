@@ -1,6 +1,5 @@
 /** Session-local file controls, serial loading and application-owned navigation. */
 import {
-  GEO_FILE_ACCEPT,
   GeoImportError,
   MAX_IMPORTED_FILES,
   loadGeoFile,
@@ -19,12 +18,13 @@ import { flyToDataSource } from './flyToDataSource.js';
 const COLORS = ['#39d0ff', '#ffb547', '#5dff9f', '#ff6b6b', '#8be9ff'];
 
 /**
- * Wire the Import control.
+ * Run the Import control.
  * @param {{viewer: object, load?: Function, document?: Document,
- *   publish?: Function}} deps
+ *   publish?: Function, connect?: Function}} deps
  *   `load(file, {viewer, color})` defaults to `loadGeoFile`; tests pass a double.
  *   `publish({rows, hint})` hands the file list and hint to the view that
- *   renders them; it may return a promise that settles once they render.
+ *   renders them. `connect(actions)` answers the view's pick and row buttons
+ *   and returns their disconnect.
  * @returns {{destroy: Function, importFiles: Function, list: Function,
  *   setVisible: Function, flyTo: Function, remove: Function,
  *   diagnostics: Function}|null}
@@ -38,11 +38,11 @@ export function initGeoFileImport({
   ground = null,
   subscribeMapSource = null,
   publish = () => {},
+  connect = () => () => {},
 }) {
-  const button = doc?.getElementById('geo-import-button');
-  const input = doc?.getElementById('geo-import-input');
-  const listEl = doc?.getElementById('geo-import-list');
-  if (!viewer || !button || !input || !listEl) return null;
+  // A page without the Import control (the Display controls view omitted)
+  // has no file import.
+  if (!viewer || !doc?.getElementById('geo-import-button')) return null;
 
   const imports = [];
   const listeners = [];
@@ -120,36 +120,6 @@ export function initGeoFileImport({
     if (!pending) scheduleGround();
   });
 
-  /** Which row button has focus, so a re-render can give it back. */
-  function focusedAction() {
-    const active = doc.activeElement;
-    if (!active || !listEl.contains?.(active)) return null;
-    const row = active.closest?.('[data-import-id]');
-    return row
-      ? {
-          id: row.dataset.importId,
-          action: active.dataset?.action,
-          element: active,
-          next: [],
-        }
-      : null;
-  }
-
-  function restoreFocus(was) {
-    // Focus moved on while the list rendered: leave it where it went.
-    const active = doc.activeElement;
-    if (active && active !== was.element && active !== doc.body) return;
-    const rows = [...listEl.querySelectorAll('[data-import-id]')];
-    const rowOf = (id) => rows.find((r) => r.dataset.importId === id);
-    // The row is gone (removed): the next row's same control, else the
-    // previous row's, else the Import button.
-    const row = [was.id, ...was.next].map(rowOf).find(Boolean);
-    const target =
-      row?.querySelector?.(`button[data-action="${was.action}"]`) ||
-      (row ? row.querySelector?.('button') : button);
-    target?.focus?.();
-  }
-
   /** Publish the file list and hint; the view renders them. */
   function present() {
     return publish({
@@ -191,23 +161,6 @@ export function initGeoFileImport({
     });
   }
 
-  // The focus to give back once the view renders; a second change before
-  // then keeps the first, whose control the page still shows.
-  let pendingFocus = null;
-
-  function renderList(keep = focusedAction()) {
-    pendingFocus ||= keep;
-    const rendered = present();
-    const was = pendingFocus;
-    // A removed row leaves the page only once the view renders.
-    if (was)
-      Promise.resolve(rendered).then(() => {
-        if (destroyed || pendingFocus !== was) return;
-        pendingFocus = null;
-        restoreFocus(was);
-      });
-  }
-
   const find = (id) => imports.find((item) => item.id === id) || null;
 
   /** Show or hide one imported file. */
@@ -217,7 +170,7 @@ export function initGeoFileImport({
     item.visible = Boolean(visible);
     item.dataSource.show = item.visible;
     if (item.visible) scheduleGround();
-    renderList();
+    present();
     render();
     return true;
   }
@@ -262,16 +215,10 @@ export function initGeoFileImport({
   function remove(id) {
     const at = imports.findIndex((item) => item.id === id);
     if (at < 0) return false;
-    const keep = focusedAction();
-    if (keep)
-      keep.next = [
-        ...imports.slice(at + 1),
-        ...imports.slice(0, at).reverse(),
-      ].map((other) => other.id);
     const [item] = imports.splice(at, 1);
     viewer.dataSources?.remove?.(item.dataSource, true);
     item.revoke?.();
-    renderList(keep);
+    present();
     render();
     return true;
   }
@@ -353,7 +300,7 @@ export function initGeoFileImport({
       }
       loaded.mount?.();
       imports.push(item);
-      renderList();
+      present();
       render();
       outcomes.push({
         name: fileName,
@@ -375,22 +322,12 @@ export function initGeoFileImport({
   }
 
   // ---- controls ----------------------------------------------------------
-  input.accept = GEO_FILE_ACCEPT;
-  listen(button, 'click', () => input.click());
-  listen(input, 'change', () => {
-    const files = [...(input.files || [])];
-    // Clear the selection so choosing the same file again fires `change`.
-    input.value = '';
-    if (files.length) void importFiles(files);
-  });
-  listen(listEl, 'click', (event) => {
-    const btn = event.target?.closest?.('button[data-action]');
-    const id = btn?.closest?.('[data-import-id]')?.dataset.importId;
-    if (!btn || !id) return;
-    const action = btn.dataset.action;
-    if (action === 'toggle') setVisible(id, !find(id)?.visible);
-    else if (action === 'fly') flyTo(id);
-    else if (action === 'remove') remove(id);
+  // The view opens the picker; its pick and the row buttons call these.
+  const disconnect = connect({
+    importGeoFiles: (files) => void importFiles(files),
+    toggleGeoImport: (id) => setVisible(id, !find(id)?.visible),
+    flyToGeoImport: flyTo,
+    removeGeoImport: remove,
   });
 
   // ---- drop onto the globe ----------------------------------------------
@@ -433,7 +370,7 @@ export function initGeoFileImport({
     if (files.length) void importFiles(files);
   });
 
-  renderList();
+  present();
 
   const handle = {
     importFiles,
@@ -459,6 +396,7 @@ export function initGeoFileImport({
       if (destroyed) return;
       destroyed = true;
       unregisterUnsavedWork();
+      disconnect();
       lifetime.abort();
       removeMapSource?.();
       clearTimeout(groundTimer);

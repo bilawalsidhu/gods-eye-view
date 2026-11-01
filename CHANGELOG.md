@@ -51,7 +51,11 @@
   store's `connect`/`act`, and its allocation and 3D model choices are the
   kit's `UiSegmented`. `initDrawTool` takes `connect(actions)`, which returns
   their disconnect, and no longer listens on the Draw controls; its view
-  publishes `color` and `label` too, and the shape choice is a `UiSegmented`. `syncScopeControls` (`./ui/display`) and
+  publishes `color` and `label` too, and the shape choice is a `UiSegmented`.
+  `initGeoFileImport` takes `connect(actions)` the same way and no longer
+  listens on the Import button, picker or list, nor restores focus itself:
+  the `GeoImport` view does both, and its `publish` need not settle once the
+  list renders. `syncScopeControls` (`./ui/display`) and
   `shouldHideCollapsedRightPanels` (`./ui/layout`) are deprecated: the Display
   view and the rail now own what they did. `./ui/input` imports Vue
   (samehkhamis).

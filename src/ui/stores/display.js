@@ -5,9 +5,8 @@ import { markRaw, shallowRef } from 'vue';
  * The Display panel as its view renders it. VisualSettings presents its
  * groups (`_presentDisplay()`), AircraftDisplay the 3D aircraft group, the
  * draw tool its controls and the file import its list, and each publishes
- * here. The controls' changes reach their owners (DisplayBindings and the
- * draw tool) through act(); the file import keeps its listeners on its
- * controls. VisualSettings also
+ * here. The controls' changes reach their owners (DisplayBindings, the draw
+ * tool and the file import) through act(). VisualSettings also
  * publishes the active style, which the dock and the scene chrome show, and
  * the map source controls publish their chip row beside it.
  */
@@ -70,7 +69,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
 
   /**
    * The owners answering the panel's controls, oldest first: DisplayBindings
-   * the Display controls and the dock's style buttons, the draw tool its own.
+   * the Display controls and the dock's style buttons, the draw tool and the
+   * file import their own.
    * @type {Array<{actions: object}>}
    */
   const owners = [];
