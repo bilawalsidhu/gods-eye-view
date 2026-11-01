@@ -135,8 +135,10 @@ a feature supplying only its accent.
    what `createMapSourceControls()` publishes beside it, so `./ui/maps`
    needs no Vue; the location tray's city and landmark pills, mini status
    and search error render what `LocationControls` publishes to the
-   `gev-location` store, and the search field keeps its listeners), the
-   phone shell (`PhoneTabBar` renders the tabs and open sheet the shell
+   `gev-location` store, and the search field keeps its listeners; beside
+   the voice control, the dock teleports each voice pointer reticle to the
+   body where its `PointerReticle` presents it in the `gev-pointer-reticle`
+   store), the phone shell (`PhoneTabBar` renders the tabs and open sheet the shell
    publishes to the `gev-display` store, teleporting the tab bar and sheet
    backdrop to the end of the page from the first publish until the shell
    is destroyed; the shell takes their clicks from the document), the

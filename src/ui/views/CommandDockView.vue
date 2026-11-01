@@ -5,6 +5,7 @@ import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
 import { computed } from 'vue';
 import { useLocationStore } from '../stores/location.js';
+import { usePointerReticleStore } from '../stores/pointerReticle.js';
 import { useVoiceStore } from '../stores/voice.js';
 import PhoneTabBar from './panels/PhoneTabBar.vue';
 import VoiceControl from './panels/VoiceControl.vue';
@@ -31,6 +32,9 @@ const dockOrder = computed(() => {
       ? ['location', 'control']
       : ['control', 'location'];
 });
+
+// Where the user pointed while a voice turn is live (PointerReticle).
+const { reticles } = storeToRefs(usePointerReticleStore());
 
 function selectMapSource(chip) {
   if (!chip.available) return;
@@ -136,5 +140,8 @@ function selectMapSource(chip) {
   </div>
   </template>
   <PhoneTabBar />
+  <Teleport to="body">
+    <div v-for="reticle in reticles" :key="reticle.owner.key" class="gev-pointer-reticle" aria-hidden="true" :hidden="!reticle.visible" :data-target="reticle.target" :style="{ left: `${reticle.left}px`, top: `${reticle.top}px` }"></div>
+  </Teleport>
   </div>
 </template>

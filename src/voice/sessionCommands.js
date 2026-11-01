@@ -7,10 +7,8 @@ import { msg, registerUnsavedWork, t } from '../i18n/index.js';
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
-  const doc = element?.ownerDocument;
-  if (!doc) return null;
+  if (!element?.ownerDocument) return null;
   return new PointerReticle({
-    doc,
     rectOf: () => element.getBoundingClientRect?.() || null,
   });
 }

@@ -101,7 +101,8 @@
       "src/ui/stores/sceneInteractions.js",
       "src/ui/views/panels/SceneInteractions.vue",
       "src/ui/stores/dataPacks.js",
-      "src/ui/views/panels/DataPacks.vue"
+      "src/ui/views/panels/DataPacks.vue",
+      "src/ui/stores/pointerReticle.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -2065,7 +2066,8 @@
       "src/sources/requestDeadline.js",
       "src/i18n/marker.js",
       "src/ui/stores/voice.js",
-      "src/ui/vueRuntime.js"
+      "src/ui/vueRuntime.js",
+      "src/ui/stores/pointerReticle.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -3012,7 +3014,8 @@
       "src/ui/stores/status.js",
       "src/ui/toast.js",
       "src/ui/stores/sceneInteractions.js",
-      "src/ui/stores/dataPacks.js"
+      "src/ui/stores/dataPacks.js",
+      "src/ui/stores/pointerReticle.js"
     ],
     "external": [
       "hls.js",
@@ -3979,7 +3982,8 @@
       "src/ui/statusText.js",
       "src/voice/providerCapabilities.js",
       "src/ui/vueRuntime.js",
-      "src/ui/stores/voice.js"
+      "src/ui/stores/voice.js",
+      "src/ui/stores/pointerReticle.js"
     ],
     "external": ["vue", "pinia"]
   },
