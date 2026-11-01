@@ -30,12 +30,12 @@ const weatherLabel = computed(() =>
 
 <template>
   <aside id="cockpit-context" class="cockpit-context-window" aria-label="Contact cockpit summary" :hidden="!presence?.context" data-i18n-aria-label :data-state="c.state ?? undefined" :data-collapsed="presence ? String(collapsed) : undefined">
-    <header class="cockpit-context-header">
+    <header class="cockpit-card-header cockpit-context-header">
       <div>
-        <span data-i18n class="cockpit-context-kicker">CONTACT</span>
+        <span data-i18n class="cockpit-card-kicker cockpit-context-kicker">CONTACT</span>
         <strong id="cockpit-context-subject">{{ c.subject }}</strong>
       </div>
-      <nav class="cockpit-context-actions" aria-label="Contact navigation" data-i18n-aria-label>
+      <nav class="cockpit-card-actions cockpit-context-actions" aria-label="Contact navigation" data-i18n-aria-label>
         <button id="cockpit-context-previous" type="button" :disabled="!c.canPrevious" aria-label="Previous — prior visited contact in the 250 km window" title="Previous — prior visited contact in the 250 km window" data-i18n-aria-label data-i18n-title>
           <span class="material-symbols-outlined" aria-hidden="true">skip_previous</span>
         </button>

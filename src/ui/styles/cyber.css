@@ -2510,15 +2510,13 @@
   );
 }
 
-:root[data-ui-theme='cyber']
-  body.cockpit-mode
-  :is(.cockpit-context-header, .cockpit-signal-header) {
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-card-header {
   border-bottom-color: rgba(105, 203, 209, 0.25);
 }
 
 :root[data-ui-theme='cyber']
   body.cockpit-mode
-  :is(.cockpit-context-kicker, .cockpit-signal-kicker, .cockpit-route-kicker) {
+  :is(.cockpit-card-kicker, .cockpit-route-kicker) {
   color: var(--cockpit-caution);
 }
 

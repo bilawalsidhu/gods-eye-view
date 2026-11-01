@@ -39,12 +39,12 @@ function leaveSignals() {
 <template>
   <aside id="cockpit-signal-stream" class="cockpit-signal-window" aria-label="Cockpit briefing carousel" :hidden="!presence?.active" data-i18n-aria-label v-bind="streamState" ref="stream">
     <CockpitRoute />
-    <header class="cockpit-signal-header">
+    <header class="cockpit-card-header cockpit-signal-header">
       <div class="cockpit-brief-heading">
-        <span id="cockpit-brief-kicker" class="cockpit-signal-kicker"><i aria-hidden="true"></i> {{ b.kicker }}</span>
+        <span id="cockpit-brief-kicker" class="cockpit-card-kicker cockpit-signal-kicker"><i aria-hidden="true"></i> {{ b.kicker }}</span>
         <strong id="cockpit-brief-subtitle">{{ b.subtitle }}</strong>
       </div>
-      <nav class="cockpit-brief-actions" aria-label="Cockpit briefing controls" data-i18n-aria-label>
+      <nav class="cockpit-card-actions cockpit-brief-actions" aria-label="Cockpit briefing controls" data-i18n-aria-label>
         <button id="cockpit-brief-previous" type="button" aria-label="Previous briefing page" title="Previous briefing page" data-i18n-aria-label data-i18n-title>
           <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
         </button>

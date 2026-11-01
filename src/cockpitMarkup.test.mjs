@@ -1188,7 +1188,7 @@ test('cockpit summary presents the focused item as Contact', () => {
   const match = html.match(/<aside id="cockpit-context"[\s\S]*?<\/aside>/);
   assert.ok(match, 'cockpit Contact summary is missing');
   assert.match(match[0], /aria-label="Contact cockpit summary"/);
-  assert.match(match[0], /class="cockpit-context-kicker">CONTACT</);
+  assert.match(match[0], /class="cockpit-card-kicker cockpit-context-kicker">CONTACT</);
   assert.match(match[0], /aria-label="Contact navigation"/);
   assert.match(
     match[0],
