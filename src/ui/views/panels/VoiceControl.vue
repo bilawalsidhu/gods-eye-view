@@ -6,6 +6,7 @@ import { useVoiceStore } from '../../stores/voice.js';
 import VoiceCard from './VoiceCard.vue';
 import VoiceVisualizer from './VoiceVisualizer.vue';
 import UiButton from '../../kit/UiButton.vue';
+import UiSelect from '../../kit/UiSelect.js';
 
 // The voice control in the command dock, as its presenter
 // (src/voice/control.js) holds it. The session owners write the presenter;
@@ -52,7 +53,7 @@ const rootData = (root) => ({
   <div id="gev-voice-control" v-bind="rootData(view.root)" v-class-toggle="{ 'error-dismissed': view.root.errorDismissed }" @pointerleave="emit('pointerleave', $event)" @pointerenter="emit('pointerenter', $event)">
       <label id="gev-voice-provider-field" class="gev-voice-provider-field" :hidden="view.provider.hidden">
         <span>{{ t('Voice provider') }}</span>
-        <select id="gev-voice-provider" class="gev-field" :aria-label="t('Voice provider')" :title="view.provider.title" :value="view.provider.value" @change="emit('provider-change', $event.target.value)"><option v-for="option in view.provider.options" :key="option.value" :value="option.value">{{ option.label }}</option></select>
+        <UiSelect id="gev-voice-provider" class="gev-field" :aria-label="t('Voice provider')" :title="view.provider.title" :model-value="view.provider.value" @update:model-value="emit('provider-change', $event)"><option v-for="option in view.provider.options" :key="option.value" :value="option.value">{{ option.label }}</option></UiSelect>
       </label>
       <button v-if="view.panel" id="gev-voice-settings-button" class="gev-voice-settings-button" type="button" :aria-label="t('Voice Settings')" aria-controls="gev-voice-panel" :aria-expanded="String(view.voicePanel.settingsExpanded)" @click="emit('settings-button')"><span class="material-symbols-outlined gev-voice-settings-icon" aria-hidden="true">settings</span></button>
       <div class="gev-voice-heading">
@@ -96,10 +97,10 @@ const rootData = (root) => ({
             <div class="gev-voice-timeout-group">
             <label class="gev-voice-preference gev-voice-setting-title" for="gev-voice-timeout-select">{{ t('Voice inactivity timeout') }}</label>
             <div class="gev-voice-timeout-controls">
-            <select id="gev-voice-timeout-select" class="gev-field" aria-describedby="gev-voice-timeout-note gev-voice-timeout-status" :value="view.preferences.timeoutChoice" @change="emit('timeout-select', $event.target.value)">
+            <UiSelect id="gev-voice-timeout-select" class="gev-field" aria-describedby="gev-voice-timeout-note gev-voice-timeout-status" :model-value="view.preferences.timeoutChoice" @update:model-value="emit('timeout-select', $event)">
               <option value="3">3 {{ t('Minutes') }}</option><option value="5">5 {{ t('Minutes') }}</option><option value="10">10 {{ t('Minutes') }}</option><option value="15">15 {{ t('Minutes') }}</option>
               <option value="custom">{{ t('Custom') }}</option><option value="0">{{ t('None') }}</option>
-            </select>
+            </UiSelect>
             <label class="gev-voice-timeout-unit" for="gev-voice-timeout-input">{{ t('Minutes') }}</label>
             <input id="gev-voice-timeout-input" type="number" min="1" max="60" step="1" aria-describedby="gev-voice-timeout-note" v-owned-value="{ text: view.preferences.timeoutMinutes, revision: view.preferences.revision }" :hidden="view.preferences.timeoutInputHidden" @change="emit('timeout-input', $event.target.value)" />
             </div>

@@ -1,5 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
+import UiSelect from '../kit/UiSelect.js';
 import { useCctvStore } from '../stores/cctv.js';
 
 // The camera picker: the cameras in view and a closing note for those the
@@ -19,7 +20,7 @@ const vPick = { mounted: pick, updated: pick };
 </script>
 
 <template>
-  <select v-pick="picker?.selection" :disabled="picker?.disabled"
+  <UiSelect v-pick="picker?.selection" :disabled="picker?.disabled"
     ><option
       v-for="option in picker?.options"
       :key="option.value"
@@ -27,6 +28,6 @@ const vPick = { mounted: pick, updated: pick };
       >{{ option.label }}</option
     ><option v-if="picker?.note" value="" disabled data-cctv-outside>{{
       picker.note
-    }}</option></select
+    }}</option></UiSelect
   >
 </template>

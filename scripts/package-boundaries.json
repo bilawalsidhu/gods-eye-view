@@ -135,7 +135,8 @@
       "src/ui/rail/panelState.js",
       "src/sdr/gain.js",
       "src/ui/kit/UiSlider.js",
-      "src/ui/kit/UiChip.vue"
+      "src/ui/kit/UiChip.vue",
+      "src/ui/kit/UiSelect.js"
     ],
     "external": ["vue", "pinia"]
   },

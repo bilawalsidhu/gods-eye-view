@@ -9,6 +9,7 @@ import { vFieldValue } from '../../rail/fieldValue.js';
 import UiSlider from '../../kit/UiSlider.js';
 import { useRadioStore } from '../../stores/radio.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiSelect from '../../kit/UiSelect.js';
 
 // The local RTL-SDR card in the Radio panel. LocalSdrControls presents it and
 // publishes it; until it does, the card shows its initial markup. Its
@@ -40,10 +41,10 @@ const tune = () => act('tuneSdr', frequency.value.value);
   </div>
   <div class="sdr-gain-row">
     <label for="sdr-gain-select" data-i18n>GAIN</label>
-    <select class="gev-field" id="sdr-gain-select" @change="act('setSdrGain', $event.target.value)" aria-label="RTL-SDR tuner gain for the current mode" :disabled="sdr?.gainDisabled" v-field-value="sdr ? sdr.gain : 'auto'" data-i18n-aria-label>
+    <UiSelect class="gev-field" id="sdr-gain-select" hold :model-value="sdr ? sdr.gain : 'auto'" @update:model-value="act('setSdrGain', $event)" aria-label="RTL-SDR tuner gain for the current mode" :disabled="sdr?.gainDisabled" data-i18n-aria-label>
       <option value="auto" data-i18n>AUTO</option>
       <option v-for="gain in GAINS" :key="gain" :value="gain" translate="no">{{ localSdrGainOptionLabel(gain) }}</option>
-    </select>
+    </UiSelect>
   </div>
   <div id="sdr-adsb-stats" class="sdr-adsb-stats" role="status" aria-live="off" :hidden="sdr ? sdr.statsHidden : true">
     <span><output id="sdr-stat-rate">{{ sdr ? sdr.stats.rate : '--' }}</output> <span data-i18n>MSG/S</span></span>

@@ -11,6 +11,7 @@ import SceneOptions from './SceneOptions.vue';
 import SceneShotList from './SceneShotList.vue';
 import CctvPanel from './panels/CctvPanel.vue';
 import StreetLevelPanel from './panels/StreetLevelPanel.vue';
+import UiSelect from '../kit/UiSelect.js';
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
 // its dialog through this store; without this view, neither is drawn.
@@ -52,7 +53,7 @@ async function importChosen(event) {
   <RailPanel id="scene-panel" start-collapsed v-class-toggle="{ running: scene?.running, 'has-shots': scene?.hasShots }" :title="t('AUTHORING')" :hint="t('Create and edit scenes')" scroll>
       <p class="scene-step-heading" data-i18n>SCENE</p>
       <div class="scene-controls">
-        <select class="gev-field" id="scene-select" aria-label="Scene" data-i18n-aria-label :disabled="off('select')" @change="scenes.act('selectScene', $event.currentTarget.value)"><SceneOptions /></select>
+        <UiSelect class="gev-field" id="scene-select" aria-label="Scene" data-i18n-aria-label :disabled="off('select')" @update:model-value="scenes.act('selectScene', $event)"><SceneOptions /></UiSelect>
         <UiButton id="scene-new-btn" type="button" :disabled="off('new')" @click="scenes.act('create')" class="gev-action-button scene-btn" title="Start a new, empty scene" data-i18n data-i18n-title>NEW SCENE</UiButton>
         <UiButton tone="alert" id="scene-delete-btn" type="button" :disabled="off('delete')" @click="scenes.act('deleteScene')" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" title="Delete this scene and all of its shots" data-i18n data-i18n-title>DELETE</UiButton>
       </div>

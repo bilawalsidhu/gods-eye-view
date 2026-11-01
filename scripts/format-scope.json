@@ -1134,6 +1134,8 @@
   "src/ui/kit/UiButton.test.mjs",
   "src/ui/kit/UiChip.vue",
   "src/ui/kit/UiChip.test.mjs",
+  "src/ui/kit/UiSelect.js",
+  "src/ui/kit/UiSelect.test.mjs",
   "src/ui/rail/RailChips.vue",
   "src/ui/displayPanelActions.test.mjs",
   "src/testSupport/vueDom.mjs",

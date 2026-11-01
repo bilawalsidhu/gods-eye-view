@@ -10,6 +10,7 @@ import UiSlider from '../../kit/UiSlider.js';
 import GeoImport from './GeoImport.vue';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiSelect from '../../kit/UiSelect.js';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
 // Celestial, detection, bloom and sharpen, AircraftDisplay the 3D group and
@@ -68,11 +69,11 @@ const allocationOptions = [
     </button>
     <div class="pp-slider-row" :class="{ visible: hud?.visible }" id="hud-layout-row">
       <span class="pp-slider-mini-label" data-i18n>Layout</span>
-      <select id="hud-layout-select" @change="act('setHudLayout', $event.target.value)" class="pp-select gev-field gev-field--compact" v-range-value="hud?.variant ?? 'tactical'" aria-label="HUD layout" data-i18n-aria-label>
+      <UiSelect id="hud-layout-select" class="pp-select gev-field gev-field--compact" :model-value="hud?.variant ?? 'tactical'" @update:model-value="act('setHudLayout', $event)" aria-label="HUD layout" data-i18n-aria-label>
         <option value="tactical" data-i18n>Tactical</option>
         <option value="minimal" data-i18n>Minimal</option>
         <option value="cyber" data-i18n>Cyber</option>
-      </select>
+      </UiSelect>
     </div>
     <div class="pp-slider-row cyber-sonar-control cyber-sonar-toggle-row" id="cyber-sonar-row">
       <span class="pp-slider-mini-label" data-i18n>Sonar</span>
@@ -176,13 +177,13 @@ const allocationOptions = [
     </div>
     <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-label-row">
       <input type="text" class="pp-text-input" id="draw-label-input" v-range-value="draw?.label ?? ''" @input="act('setDrawLabel', $event.target.value)" maxlength="120" placeholder="Label (optional)" aria-label="Label for the drawn shape" data-i18n-placeholder data-i18n-aria-label autocomplete="off" spellcheck="false">
-      <select class="pp-select draw-color-select gev-field gev-field--compact" id="draw-color-select" v-range-value="draw?.color ?? 'primary'" @change="act('setDrawColor', $event.target.value)" aria-label="Colour of the drawn shape" data-i18n-aria-label>
+      <UiSelect class="pp-select draw-color-select gev-field gev-field--compact" id="draw-color-select" :model-value="draw?.color ?? 'primary'" @update:model-value="act('setDrawColor', $event)" aria-label="Colour of the drawn shape" data-i18n-aria-label>
         <option value="primary" data-i18n>Primary</option>
         <option value="amber" data-i18n>Amber</option>
         <option value="cyan" data-i18n>Cyan</option>
         <option value="green" data-i18n>Green</option>
         <option value="red" data-i18n>Red</option>
-      </select>
+      </UiSelect>
       <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" @click="act('clearDraw')" title="Remove every mark from the board" data-i18n-title data-i18n>Clear</button>
       <span class="draw-hint" id="draw-hint" aria-live="polite">{{ draw?.hint ?? '' }}</span>
     </div>

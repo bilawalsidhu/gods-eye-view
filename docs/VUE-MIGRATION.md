@@ -65,6 +65,13 @@ tilt-map button, whose owners still write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
 are `UiButton`s too; `UiChip` is ui-vue's non-interactive label chip, used by
 the voice card.
+`UiSelect` renders the bare native select (Core's labels sit outside it or
+come as an `aria-label`) with ui-vue's `v-model`, `options` and `disabled`;
+options that carry their own attributes come through the slot, a caller's
+`@change` still reaches the select, and `hold` works as in `UiSlider`.
+Without `hold`, a select takes its model back after its own change renders,
+so a pick its owner refuses goes back; an owner that answers later (the SDR
+gain) takes `hold`. Every select in the views is a `UiSelect`.
 `UiSlider` keeps the native range input where ui-vue draws a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
 it takes ui-vue's `v-model`, `min`, `max`, `step` and `disabled`, emits a

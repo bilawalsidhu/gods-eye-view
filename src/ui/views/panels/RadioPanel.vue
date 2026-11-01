@@ -5,11 +5,11 @@ import { t } from '../../../i18n/index.js';
 import RailPanel from '../../rail/RailPanel.vue';
 import { vClassToggle } from '../../rail/classToggle.js';
 import UiSlider from '../../kit/UiSlider.js';
-import { vRangeValue } from '../../rail/rangeValue.js';
 import { useRadioStore } from '../../stores/radio.js';
 import RadioTuner from './RadioTuner.vue';
 import SdrCard from './SdrCard.vue';
 import UiButton from '../../kit/UiButton.vue';
+import UiSelect from '../../kit/UiSelect.js';
 
 // The Radio panel inside Context. RadioControls presents the directory row,
 // station card, transport, volume and playback line and publishes them;
@@ -41,9 +41,9 @@ const radioWords = {
     <div class="radio-directory-row">
       <UiButton id="radio-enable-btn" @click="act('toggleRadio', 'panel')" class="panel-layer-toggle" :pressed="radio?.enable.active ?? false" pressed-class="active" :aria-label="radio?.enable.label" :aria-disabled="radio ? String(radio.enable.busy) : undefined" :aria-busy="radio ? String(radio.enable.busy) : undefined">{{ radio ? radio.enable.text : t('ENABLE') }}</UiButton>
       <label class="radio-filter-label" for="radio-filter" data-i18n>STATION TAG</label>
-      <select class="gev-field" id="radio-filter" @change="setFilter($event.target)" aria-label="Filter stations by station tag" :disabled="radio ? radio.filter.disabled : true" v-bind="radio?.filter.color ? { style: { color: radio.filter.color } } : {}" v-range-value="radio ? radio.filter.value : 'all'" data-i18n-aria-label>
+      <UiSelect class="gev-field" id="radio-filter" @change="setFilter($event.target)" aria-label="Filter stations by station tag" :disabled="radio ? radio.filter.disabled : true" v-bind="radio?.filter.color ? { style: { color: radio.filter.color } } : {}" :model-value="radio ? radio.filter.value : 'all'" data-i18n-aria-label>
         <option v-if="!radio?.filter.options" value="all">{{ t('All', { context: 'radio tag' }) }}</option><template v-else><option v-for="option in radio.filter.options" :key="option.id" :value="option.id" :data-radio-color="option.color" :style="{ color: option.color }" :aria-label="option.label">● {{ option.label }}</option></template>
-      </select>
+      </UiSelect>
     </div>
     <div id="radio-station-card" class="radio-station-card" aria-live="polite">
       <strong id="radio-station-name">{{ radio ? radio.station.name : t('NO STATION SELECTED') }}</strong>

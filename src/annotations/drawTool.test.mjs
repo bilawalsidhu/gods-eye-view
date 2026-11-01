@@ -94,7 +94,7 @@ test('the Draw control markup carries the ids the tool binds to', () => {
     "act('toggleDraw')",
     "act('setDrawShape', $event)",
     "act('setDrawLabel', $event.target.value)",
-    "act('setDrawColor', $event.target.value)",
+    "act('setDrawColor', $event)",
     "act('clearDraw')",
   ]) {
     assert.ok(html.includes(action), `DisplayPanel must call ${action}`);
