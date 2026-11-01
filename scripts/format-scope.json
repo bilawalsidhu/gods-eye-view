@@ -1132,5 +1132,7 @@
   "src/ui/statusChipsView.test.mjs",
   "src/ui/statusChipOwners.test.mjs",
   "src/ui/toast.js",
-  "src/ui/toastView.test.mjs"
+  "src/ui/toastView.test.mjs",
+  "src/ui/stores/sceneInteractions.js",
+  "src/scenes/interactionsView.test.mjs"
 ]

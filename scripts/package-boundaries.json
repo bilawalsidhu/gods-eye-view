@@ -97,7 +97,9 @@
       "src/ui/stores/imagerySplit.js",
       "src/ui/stores/status.js",
       "src/ui/views/panels/SplitFlapText.vue",
-      "src/splitFlap.js"
+      "src/splitFlap.js",
+      "src/ui/stores/sceneInteractions.js",
+      "src/ui/views/panels/SceneInteractions.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -1147,7 +1149,8 @@
       "src/visualStylePolicy.js",
       "src/ui/vueRuntime.js",
       "src/ui/stores/status.js",
-      "src/ui/toast.js"
+      "src/ui/toast.js",
+      "src/ui/stores/sceneInteractions.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -3004,7 +3007,8 @@
       "src/ui/stores/display.js",
       "src/ui/stores/imagerySplit.js",
       "src/ui/stores/status.js",
-      "src/ui/toast.js"
+      "src/ui/toast.js",
+      "src/ui/stores/sceneInteractions.js"
     ],
     "external": [
       "hls.js",

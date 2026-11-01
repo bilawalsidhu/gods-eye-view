@@ -6,6 +6,7 @@ import { useLocationStore } from '../stores/location.js';
 import { useStatusStore } from '../stores/status.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import ImagerySplitView from './panels/ImagerySplitView.vue';
+import SceneInteractions from './panels/SceneInteractions.vue';
 import SplitFlapText from './panels/SplitFlapText.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
@@ -95,4 +96,5 @@ const vToastText = {
   </Teleport>
 
   <ImagerySplitView />
+  <SceneInteractions />
 </template>

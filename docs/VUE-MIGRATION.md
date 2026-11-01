@@ -149,7 +149,10 @@ a feature supplying only its accent.
    `gev-status` store; `SplitFlapText` plays the departure-board flip that
    `splitFlap.js` plans, writing only the label's one text node; the toast
    renders what each owner's `createToast()` publishes there, on that
-   owner's own timer), then
+   owner's own timer), the Scene actions panel (`SceneInteractions`
+   teleports what the scene interactions owner publishes to the
+   `gev-scene-interactions` store into the viewer's container; the owner
+   keeps the pick handler and focuses the picked action), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
