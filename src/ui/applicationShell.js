@@ -114,19 +114,14 @@ export class StyleManager extends ShellFacade {
     Object.assign(this, readShellElements());
     this._panelChrome = new PanelChrome({
       elements: {
-        _contextRadioDetailsBtn: this._contextRadioDetailsBtn,
-        _contextRadioDock: this._contextRadioDock,
         _leftPanelStack: this._leftPanelStack,
         _locationSearch: this._locationSearch,
         _ppToggles: this._ppToggles,
         _rightPanelStack: this._rightPanelStack,
       },
       operations: {
-        _setRadioDisclosure: (...args) => this._setRadioDisclosure(...args),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
-        _syncContextRadioLauncherState: (...args) =>
-          this._syncContextRadioLauncherState(...args),
         _showToast: (...args) => this._showToast(...args),
       },
       readHud: () => this.hud,
@@ -414,8 +409,6 @@ export class StyleManager extends ShellFacade {
           this.getAircraftTrackingTarget(...args),
         _scheduleRightPanelLayout: (...args) =>
           this._scheduleRightPanelLayout(...args),
-        _syncContextRadioLauncherState: (...args) =>
-          this._syncContextRadioLauncherState(...args),
       },
       readDataManager: () => this._dataManager,
       readContext: () => this.getContextModeState(),
@@ -1052,18 +1045,6 @@ export class StyleManager extends ShellFacade {
         _cockpitRadioVolume: this._cockpitRadioVolume,
         _cockpitRadioVolumeValue: this._cockpitRadioVolumeValue,
         _cockpitUtilityControls: this._cockpitUtilityControls,
-        _contextRadioDetailsBtn: this._contextRadioDetailsBtn,
-        _contextRadioDock: this._contextRadioDock,
-        _contextRadioMini: this._contextRadioMini,
-        _contextRadioMiniCloseBtn: this._contextRadioMiniCloseBtn,
-        _contextRadioMiniEnableBtn: this._contextRadioMiniEnableBtn,
-        _contextRadioMiniNextBtn: this._contextRadioMiniNextBtn,
-        _contextRadioMiniPlayBtn: this._contextRadioMiniPlayBtn,
-        _contextRadioMiniPrevBtn: this._contextRadioMiniPrevBtn,
-        _contextRadioMiniStation: this._contextRadioMiniStation,
-        _contextRadioMiniVolume: this._contextRadioMiniVolume,
-        _contextRadioMiniVolumeValue: this._contextRadioMiniVolumeValue,
-        _contextRadioToggleBtn: this._contextRadioToggleBtn,
         _radioEnableBtn: this._radioEnableBtn,
         _radioFilter: this._radioFilter,
         _radioLayerState: this._radioLayerState,

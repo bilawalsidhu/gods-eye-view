@@ -768,6 +768,16 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /\.panel-collapsible\.collapsed::after/);
   assert.match(cyberStyles, /\.panel-collapsible:not\(\.collapsed\)::after/);
   assert.match(cyberStyles, /\.context-mode-standby:not\(\[hidden\]\)/);
+  // The base standby is borderless plain text, so the focus card must name its
+  // own frame width and centring rather than inherit them.
+  assert.match(
+    cyberStyles,
+    /\.context-mode-standby:not\(\[hidden\]\) \{[^}]*place-content: center;[^}]*border: 1px solid[^}]*text-align: center;/,
+  );
+  assert.match(
+    cyberStyles,
+    /:root\[data-ui-theme='cyber'\] \.global-context-modes \{[^}]*border: 0;/,
+  );
   assert.match(cyberStyles, /mask-image: linear-gradient\(/);
   assert.match(cyberStyles, /flex: 1 1 auto;/);
   assert.match(cyberStyles, /#left-panel-stack:has/);

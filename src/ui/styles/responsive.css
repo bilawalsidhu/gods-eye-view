@@ -192,7 +192,7 @@
      under the expanded panel plus a vertical scrollbar that scrolls nothing
      but glow. Pin the glow to the panel box here — its blur is ink overflow,
      which never scrolls — instead of clipping the rail, which would also clip
-     legitimate content such as the Context radio popover. */
+     legitimate content that extends past a panel's edge. */
   #left-panel-stack .panel-glow,
   #right-context-rail .panel-glow {
     inset: 0;
@@ -214,10 +214,6 @@
   #right-context-rail #global-context-panel,
   #right-context-rail #global-context-panel.collapsed {
     width: 100%;
-  }
-  .context-radio-mini {
-    right: -38px;
-    width: min(244px, calc(100vw - 32px));
   }
 
   #left-panel-stack > #data-panel,

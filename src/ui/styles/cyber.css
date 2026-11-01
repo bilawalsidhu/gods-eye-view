@@ -1446,6 +1446,15 @@
   text-shadow: 0 0 6px var(--cyber-red);
 }
 
+/* Cyber frames each mode button itself; the shared segmented track would
+   draw a third, blue frame around them. */
+:root[data-ui-theme='cyber'] .global-context-modes {
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
 :root[data-ui-theme='cyber'] .dock-tray-toggle,
 :root[data-ui-theme='cyber'] .context-mode-button {
   background-color: rgba(38, 52, 58, 0.95);
@@ -1793,8 +1802,11 @@
     isolation: isolate;
     min-height: 132px;
     flex: 1 1 auto;
-    border-style: solid;
-    border-color: rgba(206, 222, 226, 0.14);
+    place-content: center;
+    padding: 12px;
+    border: 1px solid rgba(206, 222, 226, 0.14);
+    border-radius: 7px;
+    text-align: center;
     overflow: hidden;
     background:
       linear-gradient(

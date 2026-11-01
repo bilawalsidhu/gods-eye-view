@@ -636,7 +636,11 @@ export class LayerPanel {
     const stats = layer.stats || {};
     const feedState = layerFeedState(stats);
     const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);
-    const source = sourceLabel(stats.source || layer.source);
+    // A layer marks source text that is data rather than a catalog name.
+    const source =
+      stats.sourceVerbatim === true && stats.source
+        ? stats.source
+        : sourceLabel(stats.source || layer.source);
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {

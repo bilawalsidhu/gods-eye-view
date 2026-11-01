@@ -91,7 +91,6 @@ test('radio option text and accessible name use the same localized parentheses',
       setLocale(locale);
       const host = {
         _radioPanel: element(), _radioFilter: element(),
-        _syncContextRadioLauncherState() {},
         actions: { getLifecycle: () => null, scheduleLayout() {} },
       };
       renderRadioState.call(host, {

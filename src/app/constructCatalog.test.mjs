@@ -193,3 +193,42 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     /Mapillary source/,
   );
 });
+
+test('a GNSS integrity source can set the layer evidence window', (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const gnssLayer = (descriptor) => {
+    const sources = fixtureSources([], []);
+    sources['gnss-integrity'] = {
+      getSnapshot: async () => ({}),
+      ...descriptor,
+    };
+    return createApplicationCatalog({
+      sources,
+      signal: lifetime.signal,
+      surface: fixtureSurface(lifetime.signal),
+    }).get('gnss-integrity');
+  };
+  const shows = (layer, minutes) => {
+    assert.equal(layer.provenance.window.minutes, minutes);
+    const { info, legend } = layer.getRowControls();
+    assert.match(info, new RegExp(`visited views over ${minutes} min`));
+    assert.match(legend[0].blurb, new RegExp(`over ${minutes} minutes`));
+  };
+  shows(gnssLayer({ windowMs: 65 * 60_000 }), 65);
+  shows(gnssLayer({}), 30);
+  for (const windowMs of [
+    undefined,
+    null,
+    NaN,
+    Infinity,
+    0,
+    -60_000,
+    '3600000',
+  ])
+    assert.equal(
+      gnssLayer({ windowMs }).provenance.window.minutes,
+      30,
+      `${String(windowMs)} falls back to the default`,
+    );
+});

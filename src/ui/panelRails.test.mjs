@@ -654,12 +654,7 @@ function flatRules(block) {
 
 test('narrow-screen rails pin every hosted panel glow inside its panel box', () => {
   const css = readStylesheet(new URL('../../style.css', import.meta.url));
-  for (const panel of [
-    'data-panel',
-    'scene-panel',
-    'cctv-panel',
-    'global-context-panel',
-  ]) {
+  for (const panel of ['data-panel', 'scene-panel', 'cctv-panel']) {
     assert.match(
       css,
       new RegExp(`#${panel} \\.panel-glow \\{[^}]*\\binset: -\\d+px;`),
