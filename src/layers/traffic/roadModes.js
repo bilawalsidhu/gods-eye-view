@@ -35,6 +35,14 @@ const MIN_FILL_M = 40;
  * Same-class overlap keeps the full 35 m matcher radius.
  */
 const CLASS_MISMATCH_RADIUS_M = 15;
+/**
+ * Opposite-direction TomTom lines this close share one street: TomTom draws
+ * both directions of a two-way street a metre or two apart, and a divided
+ * carriageway's sides further apart.
+ */
+const PAIRED_SIDE_RADIUS_M = 5;
+/** Arc-length positions sampled along a `one_side` line for its partner. */
+const PAIRED_SIDE_SAMPLES = [0.25, 0.5, 0.75];
 const CONTROLLED_ACCESS_FLOW = new Set(['Motorway', 'International road']);
 const CONTROLLED_ACCESS_OSM = new Set(['motorway', 'trunk']);
 
@@ -86,19 +94,65 @@ export function isDrivableFlowSegment(segment) {
 }
 
 /**
+ * Share of a `one_side` line's sample points (PAIRED_SIDE_SAMPLES) with an
+ * opposite-direction TomTom line beside them: TomTom draws a two-way street
+ * whose directions differ as two `one_side` lines on one centreline, while a
+ * divided carriageway's other side is further away than PAIRED_SIDE_RADIUS_M.
+ * @returns {number} Paired share in [0, 1].
+ */
+function pairedSampleShare(segment, index) {
+  const xs = [];
+  const ys = [];
+  const cum = [0];
+  for (const [lon, lat] of segment.coords) {
+    const [x, y] = index.project(lon, lat);
+    const i = xs.push(x) - 1;
+    ys.push(y);
+    if (i) cum.push(cum[i - 1] + Math.hypot(x - xs[i - 1], y - ys[i - 1]));
+  }
+  const length = cum[cum.length - 1];
+  if (!(length > 0)) return 0;
+  let paired = 0;
+  let i = 1;
+  for (const share of PAIRED_SIDE_SAMPLES) {
+    const target = share * length;
+    while (i < cum.length - 1 && cum[i] < target) i++;
+    const dx = xs[i] - xs[i - 1];
+    const dy = ys[i] - ys[i - 1];
+    const t = (target - cum[i - 1]) / (cum[i] - cum[i - 1] || 1);
+    const reverse = (Math.atan2(-dx, -dy) * 180) / Math.PI;
+    if (
+      index.nearest(
+        xs[i - 1] + dx * t,
+        ys[i - 1] + dy * t,
+        reverse,
+        // A line that doubles back beside itself is not its own pair.
+        (piece) => (piece.flow === segment ? 0 : PAIRED_SIDE_RADIUS_M),
+      ).best
+    )
+      paired++;
+  }
+  return paired / PAIRED_SIDE_SAMPLES.length;
+}
+
+/**
  * Convert decoded TomTom flow lines into road records that carry their own
  * flow. A line with `coverage: 'full'` describes both travel directions;
- * `one_side` lines describe the direction they are drawn in.
+ * `one_side` lines describe the direction they are drawn in. A `one_side`
+ * line paired with the opposite direction on the same street gets that
+ * direction's half share of dots, as a two-way road's direction does.
  * @param {Array<{coords:number[][], trafficLevel:number, roadType:string, closure:boolean, coverage?:string}>} segments
  * @returns {Array<object>} Road records (`directFlow: true`).
  */
 export function flowSegmentsToRoads(segments) {
-  return (segments || [])
-    .filter(
-      (segment) =>
-        segment?.coords?.length >= 2 && isDrivableFlowSegment(segment),
-    )
-    .map((segment) => ({
+  const drivable = (segments || []).filter(
+    (segment) => segment?.coords?.length >= 2 && isDrivableFlowSegment(segment),
+  );
+  const sides = createFlowSegmentIndex(
+    drivable.filter((segment) => segment.coverage !== 'full'),
+  );
+  return drivable.map((segment) => {
+    const road = {
       coordinates: segment.coords,
       type: FLOW_ROAD_TYPES[segment.roadType],
       drivable: true,
@@ -110,7 +164,15 @@ export function flowSegmentsToRoads(segments) {
       oneway: segment.coverage === 'full' ? 0 : 1,
       flow: { level: segment.trafficLevel, closure: segment.closure === true },
       directFlow: true,
-    }));
+    };
+    if (
+      segment.coverage !== 'full' &&
+      sides &&
+      pairedSampleShare(segment, sides) >= 0.5
+    )
+      road.densityWeight = 0.5;
+    return road;
+  });
 }
 
 /** Cut a projected polyline to the arc-length interval [from, to]. */

@@ -139,6 +139,7 @@ export function createFlowSegmentIndex(flowSegments) {
           roadType,
           level,
           closure,
+          flow,
         };
         const key = cellKey(
           Math.floor((seg.ax + seg.bx) / 2 / CELL_SIZE_M),
@@ -158,7 +159,8 @@ export function createFlowSegmentIndex(flowSegments) {
   const radius2 = MATCH_RADIUS_M * MATCH_RADIUS_M;
   /**
    * Nearest direction-compatible segment within 35 m of a projected point.
-   * `radiusFor(segment)` may tighten the radius per segment (never widen it).
+   * `radiusFor(segment)` may tighten the radius per segment (never widen it);
+   * 0 leaves the segment out.
    */
   function nearest(px, py, bearing, radiusFor = null) {
     const cx = Math.floor(px / CELL_SIZE_M);
@@ -177,7 +179,7 @@ export function createFlowSegmentIndex(flowSegments) {
           candidate = true; // within radius, bearing not yet checked
           if (radiusFor) {
             const radius = Math.min(MATCH_RADIUS_M, radiusFor(seg));
-            if (d2 > radius * radius) continue;
+            if (!(radius > 0) || d2 > radius * radius) continue;
           }
           const diff = bearingDiffDeg(seg.bearing, bearing);
           if (
