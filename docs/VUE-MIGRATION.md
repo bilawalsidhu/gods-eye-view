@@ -194,7 +194,13 @@ a feature supplying only its accent.
    the globe container what the awareness layer presents through
    `subscribeDirectionOverlay()`, which the application shell publishes to
    the `gev-awareness-direction` store, so the portable `./layers/awareness`
-   entry needs no Vue), then
+   entry needs no Vue), the Intel HUD (the `intel-hud` view renders
+   `#intel-hud`, its corners, edges and bottom bar from the `gev-hud`
+   store, which IntelHUD publishes to through its `publish` option: the
+   readouts, the typing summary, the REC blink, visibility, layout variant
+   and style colors; the vessel layer presents the selected vessel's
+   readout through `src/hudReadouts.js` instead of writing into the HUD),
+   then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest

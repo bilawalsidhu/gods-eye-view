@@ -58,6 +58,7 @@ import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
 import { useAwarenessDirectionStore } from './stores/awarenessDirection.js';
+import { useHudStore } from './stores/hud.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
@@ -347,9 +348,11 @@ export class StyleManager extends ShellFacade {
     this._lastTrafficChipUpdateAt = 0;
 
     // Intel HUD
+    const hudStore = useHudStore(applicationPinia());
     this.hud = new IntelHUD(viewer, {
       placeSearch,
       summaryService: requestServices?.summary,
+      publish: (view) => hudStore.publish(view),
     });
     this._recording.hud = this.hud;
     this._cockpitCoordinator = new CockpitCoordinator({
@@ -1489,7 +1492,9 @@ export class StyleManager extends ShellFacade {
       hud: {
         visible: !!this.hud?.visible,
         layout: this.hud?.getVariant?.() || null,
-        sonar: getCyberSonarControlState(),
+        sonar: getCyberSonarControlState(globalThis.document, {
+          hudActive: this.hud ? !!this.hud.visible : undefined,
+        }),
       },
       detection: this.getDetectionState(),
       bloom: {

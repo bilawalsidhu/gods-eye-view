@@ -161,3 +161,19 @@ test('reports inactive map effects in Cockpit, hidden HUD, unsupported and unini
     assert.equal(getCyberSonarControlState(f.doc).contactSweepActive, false);
   }
 });
+
+test('the HUD visibility its owner reports answers before the view re-renders', () => {
+  const f = fixture();
+  f.root.dataset.cyberSonar = 'on';
+  // The HUD was just hidden: IntelHUD knows, the rendered class does not yet.
+  assert.equal(getCyberSonarControlState(f.doc).mapSweepActive, true);
+  assert.equal(
+    getCyberSonarControlState(f.doc, { hudActive: false }).mapSweepActive,
+    false,
+  );
+  f.owner.hud.visible = false;
+  const result = setCyberSonarControls(f.owner, { rings: 6 }, f.doc);
+  assert.equal(result.ok, true);
+  assert.equal(result.sonar.mapSweepActive, false);
+  assert.equal(result.sonar.contactSweepActive, false);
+});

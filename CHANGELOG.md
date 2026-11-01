@@ -77,6 +77,15 @@
   `showOrbit(active)`, which adds the ORBIT indicator to the presented tray
   as `orbit: { active }` (null until offered) (samehkhamis).
 
+- `IntelHUD` (`./ui/hud`) no longer builds or writes `#intel-hud`: it hands
+  its readouts, visibility, layout variant and style colors to its `publish`
+  option, and Core's `intel-hud` view renders them. A page places that view
+  with `<div class="gev-view" data-gev-view="intel-hud">` instead of a bare
+  `#intel-hud` element. `./layers/vessels` shows the selected vessel's HUD
+  readout through `services.readouts.presentSelectedVessel()` instead of
+  writing `#hud-ais-vessel`; the application passes `src/hudReadouts.js`,
+  which IntelHUD follows (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

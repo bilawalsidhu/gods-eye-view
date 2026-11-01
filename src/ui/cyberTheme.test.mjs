@@ -651,6 +651,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   const stylesheet = read('../../style.css');
   const rightRail = read('./rightPanelRail.js');
   const hud = read('../hud.js');
+  const hudView = read('./views/IntelHudView.vue');
   const detection = read('../data/detection.js');
   const civilRendering = read('../layers/flights/rendering.js');
   const militaryRendering = read('../layers/military/rendering.js');
@@ -680,7 +681,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
     /\.panel-collapsible:not\(#location-bar\):not\(#control-panel\)::after/,
   );
   assert.match(cyberStyles, /clip-path: var\(--cyber-panel-frame\);/);
-  assert.match(hud, /class="hud-sonar" aria-hidden="true"/);
+  assert.match(hudView, /class="hud-sonar" aria-hidden="true"/);
   assert.match(cyberStyles, /\.hud-sonar::before/);
   assert.match(cyberStyles, /\.hud-sonar::after/);
   assert.match(cyberStyles, /@keyframes cyber-sonar-sweep/);

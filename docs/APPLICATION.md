@@ -213,8 +213,10 @@ indicator, the FPS readout, the Scene actions panel, the data-pack attribution
 cards, the wind inspection marker, the Space Missions replay vehicle, the
 full-globe celestial ring, the screen-space map annotations, the visible
 map target list and the Global Context compass;
-leaving out `command-dock` the voice control and its pointer reticle; and
-leaving out `context` the Bhote Koshi reconstruction panel. An unknown
+leaving out `command-dock` the voice control and its pointer reticle;
+leaving out `context` the Bhote Koshi reconstruction panel; and leaving out
+`intel-hud` the Intel HUD overlay (`#intel-hud`), whose readouts the HUD
+implementation publishes to the `gev-hud` store. An unknown
 view name is an error. A host that does not initialize Core's locale passes
 `localePicker: false` to `createApplicationControls` instead of editing the
 markup. Node tests that import application modules register the component
