@@ -1,5 +1,6 @@
 import { UiLifetime } from './uiLifetime.js';
-import { t, msg } from '../i18n/index.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
+import { applicationPinia } from './vueRuntime.js';
 import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
@@ -8,6 +9,7 @@ import {
   collapsePanelOnEscape,
   createHoverDisclosure,
 } from './panelDisclosure.js';
+
 const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'control-panel', pinnable: true },
   { id: 'location-bar', pinnable: true },
@@ -22,6 +24,12 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
 ]);
+/** The command dock trays with a pin button. */
+const PINNABLE_PANEL_IDS = new Set(
+  SHARE_PANEL_STATE_SPECS.filter((spec) => spec.pinnable).map(
+    (spec) => spec.id,
+  ),
+);
 /** Standard map-view panels cleared out of the way on a fresh Cockpit entry. */
 const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'data-panel',
@@ -47,6 +55,7 @@ export class PanelChrome {
     readScrollRestoreOwner,
     readDisplayScrollTop,
     readSharedCollapsed = () => undefined,
+    store = usePanelChromeStore(applicationPinia()),
   }) {
     Object.assign(this, elements, operations, {
       readHud,
@@ -59,6 +68,16 @@ export class PanelChrome {
     });
     this._disposed = false;
     this._lifetime = new UiLifetime();
+    // The collapse, dock and pin buttons render each panel's state from the
+    // store; their clicks take effect only once the chrome is initialized.
+    this._chromeStore = store;
+    this._chromeToken = store.connect({
+      toggle: (panelId) => this._togglePanel(panelId),
+      pin: (panelId) => {
+        if (this._disclosurePanelIds)
+          this._setCommandDockPanelPinState(panelId);
+      },
+    });
     this._cockpitPanelRestore = null;
     this._cockpitContextCollapsedForDataPanel = false;
     this._panelPosition = new PanelPositionControls({
@@ -101,24 +120,23 @@ export class PanelChrome {
     for (const control of this._panelDisclosureControls || [])
       control.destroy();
     this._panelDisclosureControls = [];
-    const targets = new Map();
-    document
-      .querySelectorAll('.panel-collapse-btn[data-collapse-target]')
-      .forEach((button) => {
-        const targetId = button.dataset.collapseTarget;
-        if (!targetId) return;
-        if (!targets.has(targetId)) targets.set(targetId, []);
-        targets.get(targetId).push(button);
-      });
-    for (const [targetId, buttons] of targets) {
+    this._disclosurePanelIds = new Set();
+    const targets = new Set(
+      [
+        ...document.querySelectorAll(
+          '.panel-collapse-btn[data-collapse-target]',
+        ),
+      ]
+        .map((button) => button.dataset.collapseTarget)
+        .filter(Boolean),
+    );
+    for (const targetId of targets) {
       const panel = document.getElementById(targetId);
       if (!panel) continue;
+      this._disclosurePanelIds.add(targetId);
       this._panelDisclosureControls.push(
         bindPanelDisclosure({
           panel,
-          buttons,
-          onChange: (collapsed, options) =>
-            this.setPanelCollapsed(targetId, collapsed, options),
           onEscape: (event) => this._collapsePanelOnEscape(event, targetId),
         }),
       );
@@ -144,7 +162,6 @@ export class PanelChrome {
       openDelayMs: 140,
       closeDelayMs: 420,
     });
-    this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
   }
@@ -182,16 +199,14 @@ export class PanelChrome {
     });
   }
 
-  _initCommandDockPins() {
-    document
-      .querySelectorAll('.dock-pin-btn[data-pin-target]')
-      .forEach((button) => {
-        this._lifetime.listen(button, 'click', (event) => {
-          event.stopPropagation();
-          const panelId = button.dataset.pinTarget;
-          this._setCommandDockPanelPinState(panelId);
-        });
-      });
+  /** A collapse button's click: flip its panel. */
+  _togglePanel(panelId) {
+    if (this._disposed || !this._disclosurePanelIds?.has(panelId)) return;
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    this.setPanelCollapsed(panelId, !panel.classList.contains('collapsed'), {
+      explicit: true,
+    });
   }
 
   _setCommandDockPanelPinState(
@@ -199,17 +214,18 @@ export class PanelChrome {
     pin,
     { restore = false, persist = true, syncShare = true } = {},
   ) {
+    if (this._disposed || !PINNABLE_PANEL_IDS.has(panelId)) return undefined;
     const panelEl = document.getElementById(panelId);
-    const button = document.querySelector(
-      `.dock-pin-btn[data-pin-target="${panelId}"]`,
-    );
-    if (!panelEl || !button) return undefined;
+    if (!panelEl) return undefined;
     const shouldPin =
       typeof pin === 'boolean'
         ? pin
         : !panelEl.classList.contains('dock-pinned');
     panelEl.classList.toggle('dock-pinned', shouldPin);
-    button.setAttribute('aria-pressed', String(shouldPin));
+    this._chromeStore.publish(this._chromeToken, panelId, {
+      collapsed: panelEl.classList.contains('collapsed'),
+      pinned: shouldPin,
+    });
     document
       .querySelectorAll('#command-dock .dock-pinned-top')
       .forEach((pinnedPanel) => {
@@ -307,66 +323,12 @@ export class PanelChrome {
     return this._panelLayout._scheduleLeftPanelLayout(options0);
   }
 
+  /** Present a panel's open state to its collapse and dock buttons. */
   _syncPanelCollapseButton(panelEl) {
-    const isRightRail = [
-      'pp-toggles',
-      'cctv-panel',
-      'weather-panel',
-      'recent-imagery-panel',
-      'street-level-panel',
-      'global-context-panel',
-    ].includes(panelEl?.id);
-    const collapsed = panelEl.classList.contains('collapsed');
-    panelEl
-      .querySelectorAll('.panel-collapse-btn[data-collapse-target]')
-      .forEach((btn) => {
-        const owner = btn.closest('[data-panel-id], #param-slider-panel');
-        if (owner !== panelEl) return;
-        if (isRightRail) {
-          btn.textContent = collapsed ? '◀' : '▶';
-        } else {
-          btn.textContent = collapsed ? '+' : '−';
-        }
-        btn.setAttribute('aria-expanded', String(!collapsed));
-        const panelName =
-          panelEl
-            .querySelector('.panel-title, .pp-header-label')
-            ?.textContent?.trim() || t('panel');
-        const titleKey = collapsed
-          ? msg('Expand {name}')
-          : msg('Collapse {name}');
-        btn.title = t(titleKey, { name: panelName });
-        btn.setAttribute('aria-label', t(titleKey, { name: panelName }));
-        if (panelEl.id === 'radio-panel') {
-          // Radio keeps the wording of its static button (context.html).
-          btn.title = t(
-            collapsed ? msg('Expand Radio') : msg('Collapse Radio'),
-          );
-          btn.setAttribute(
-            'aria-label',
-            t(
-              collapsed
-                ? msg('Expand Radio section')
-                : msg('Collapse Radio section'),
-            ),
-          );
-        }
-      });
-    const dockToggle = panelEl.querySelector(
-      `[data-dock-toggle-target="${panelEl.id}"]`,
-    );
-    if (dockToggle) {
-      const panelName =
-        panelEl
-          .querySelector('.panel-title, .location-toolbar-label')
-          ?.textContent?.trim() || t('panel');
-      const titleKey = collapsed
-        ? msg('Expand {name}')
-        : msg('Collapse {name}');
-      dockToggle.setAttribute('aria-expanded', String(!collapsed));
-      dockToggle.setAttribute('aria-label', t(titleKey, { name: panelName }));
-      dockToggle.title = t(titleKey, { name: panelName });
-    }
+    if (!panelEl?.id) return;
+    this._chromeStore.publish(this._chromeToken, panelEl.id, {
+      collapsed: panelEl.classList.contains('collapsed'),
+    });
   }
 
   _buildSharePanelState() {
@@ -626,6 +588,7 @@ export class PanelChrome {
     if (this._disposed) return;
     this._disposed = true;
     this._lifetime.destroy();
+    this._chromeStore.detach(this._chromeToken);
     this._panelLayout.destroy();
     for (const control of this._panelDisclosureControls || [])
       control.destroy();

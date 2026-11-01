@@ -167,7 +167,9 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   );
   assert.match(ui, /panelId === 'radio-panel'[\s\S]*?document\.getElementById\('global-context-panel'\)/);
   assert.match(rightRail, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\s*\(panel\) =>\s*panel\.contains\(documentRef\.activeElement\),?\s*\)/);
-  assert.match(ui, /setAttribute\('aria-expanded', String\(!collapsed\)\)/);
+  // Collapse buttons render aria-expanded from the state the chrome presents
+  // (panelChromeButtons.test.mjs covers the views).
+  assert.match(ui, /_chromeStore\.publish\(this\._chromeToken, panelEl\.id, \{\s*collapsed: panelEl\.classList\.contains\('collapsed'\),/);
   assert.match(leftRail, /--left-panel-allocated-height/);
   assert.match(rightRail, /--right-panel-allocated-height/);
   assert.match(

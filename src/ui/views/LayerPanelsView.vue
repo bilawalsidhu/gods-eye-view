@@ -1,6 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
+import PanelCollapseButton from '../rail/PanelCollapseButton.vue';
 import { useSceneSharingStore } from '../stores/sceneSharing.js';
 import { useSceneStore } from '../stores/scenes.js';
 import { vClassToggle } from '../rail/classToggle.js';
@@ -42,7 +43,7 @@ async function importChosen(event) {
       <div class="panel-header">
         <span class="panel-title" data-i18n>DATA LAYERS</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel" data-i18n-title>+</button>
+        <PanelCollapseButton target="data-panel" :name="t('DATA LAYERS')" initial="+" />
       </div>
       <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
     </div>
@@ -61,7 +62,7 @@ async function importChosen(event) {
       <div class="panel-header">
         <span class="panel-title" title="Create and edit scenes" data-i18n data-i18n-title>AUTHORING</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="scene-panel" title="Collapse panel" data-i18n-title>+</button>
+        <PanelCollapseButton target="scene-panel" :name="t('AUTHORING')" initial="+" />
       </div>
       <p class="scene-step-heading" data-i18n>SCENE</p>
       <div class="scene-controls">

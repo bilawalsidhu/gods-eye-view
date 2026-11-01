@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
+import PanelCollapseButton from '../rail/PanelCollapseButton.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
 import { useBhoteKoshiPanelStore } from '../stores/bhoteKoshiPanel.js';
@@ -34,7 +35,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
           <span class="panel-title" data-i18n>WEATHER</span>
           <span id="weather-panel-count" aria-label="Active weather products" data-i18n-aria-label>0</span>
           <span class="panel-divider"></span>
-          <button class="panel-collapse-btn" data-collapse-target="weather-panel" type="button" title="Collapse panel" data-i18n-title>▼</button>
+          <PanelCollapseButton target="weather-panel" :name="t('WEATHER')" sideways initial="▼" />
         </div>
         <div id="weather-panel-body" class="ui-scroll" data-rail-scroller></div>
       </div>
@@ -46,7 +47,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
           <span class="panel-title" data-i18n>RECENT IMAGERY</span>
           <span id="recent-imagery-panel-count" aria-label="Imagery days in the box" data-i18n-aria-label></span>
           <span class="panel-divider"></span>
-          <button class="panel-collapse-btn" data-collapse-target="recent-imagery-panel" type="button" title="Collapse panel" data-i18n-title>▼</button>
+          <PanelCollapseButton target="recent-imagery-panel" :name="t('RECENT IMAGERY')" sideways initial="▼" />
         </div>
         <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
       </div>
@@ -57,7 +58,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
         <div class="panel-header">
           <span class="panel-title" data-i18n>CONTEXT</span>
           <span class="panel-divider"></span>
-          <button class="panel-collapse-btn" data-collapse-target="global-context-panel" title="Expand panel" data-i18n-title>▶</button>
+          <PanelCollapseButton target="global-context-panel" :name="t('CONTEXT')" sideways initial="▶" :initial-title="t('Expand panel')" />
         </div>
         <div class="cyber-panel-body ui-scroll" data-rail-scroller>
         <div class="global-context-modes" role="tablist" aria-label="Context mode" data-i18n-aria-label>

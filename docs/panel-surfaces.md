@@ -12,7 +12,7 @@ A rail panel uses an outer owner with its existing stable `id`, matching
 `data-panel-id`, and `panel-collapsible` class. Its first non-glow child is the
 surface. Keep the header and any outward popup outside the scrolling body:
 
-```html
+```vue
 <section
   id="example-panel"
   data-panel-id="example-panel"
@@ -21,14 +21,12 @@ surface. Keep the header and any outward popup outside the scrolling body:
   <div data-panel-surface>
     <header data-panel-header>
       <h2 class="panel-title panel-surface-title">Example</h2>
-      <button
-        class="panel-collapse-btn panel-surface-control"
-        data-collapse-target="example-panel"
-        aria-expanded="true"
-        aria-label="Collapse Example"
-      >
-        −
-      </button>
+      <PanelCollapseButton
+        class="panel-surface-control"
+        target="example-panel"
+        :name="t('Example')"
+        initial="−"
+      />
     </header>
     <div data-panel-body data-rail-scroller>
       <label>Filter <input class="panel-surface-control" type="text" /></label>
@@ -92,12 +90,15 @@ Do not copy the rail example's `.panel-collapse-btn` class into the dock:
 existing dock rules intentionally hide that class. The generic surface skin
 does not replace the dock's disclosure policy.
 
-The existing `PanelChrome` binds `.panel-collapse-btn[data-collapse-target]`
-at initialization and routes state through `setPanelCollapsed`. For additions
+`PanelCollapseButton` (`src/ui/rail/`) renders a panel's collapse button
+(`.panel-collapse-btn`) from the open state `PanelChrome` presents to the
+`gev-panel-chrome` store, and its click asks `PanelChrome` to toggle the
+panel through `setPanelCollapsed`. `PanelChrome` collects the buttons'
+targets at initialization and binds each panel's Escape. For additions
 present at startup, keep those hooks and the existing chrome lifecycle. A
-dynamically mounted panel must bind and dispose its own disclosure using
-`bindPanelDisclosure` / `collapsePanelOnEscape` from `panelDisclosure.js`, with
-the application owning state changes. Do not rerun the whole application chrome
+dynamically mounted panel must own its disclosure: its own state, button and
+Escape, bound and disposed with `bindPanelDisclosure` /
+`collapsePanelOnEscape` from `panelDisclosure.js` (which bind Escape only). Do not rerun the whole application chrome
 initializer just to add one panel. `layoutLeftPanelRail` and
 `layoutRightPanelRail` accept arbitrary direct `data-panel-id` children; their
 host owns layout scheduling, observations and collapse callbacks. Dynamic

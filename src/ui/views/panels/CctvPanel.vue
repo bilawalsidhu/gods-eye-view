@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
+import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import CctvCalValue from '../../cctv/CctvCalValue.vue';
 import CctvPicker from '../../cctv/CctvPicker.vue';
 import { useCctvStore } from '../../stores/cctv.js';
@@ -32,7 +33,7 @@ const frameData = computed(() =>
     <div class="panel-header">
       <span class="panel-title" data-i18n>CCTV</span>
       <span class="panel-divider"></span>
-      <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel" data-i18n-title>+</button>
+      <PanelCollapseButton target="cctv-panel" :name="t('CCTV')" sideways initial="+" />
     </div>
     <div class="cyber-panel-body ui-scroll" data-rail-scroller>
     <div id="cctv-frame-wrap" :class="['cctv-frame-wrap', { loading: frame?.wrapLoading, 'has-frame': frame?.hasFrame }]">

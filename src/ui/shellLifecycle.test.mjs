@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UiLifetime } from './uiLifetime.js';
+import { createPinia } from 'pinia';
 import { PanelChrome } from './panelChrome.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
 import { PanelLayoutController } from './panelLayoutController.js';
 import { ShellFeedback } from './shellFeedback.js';
 import { RecordingControls } from './recordingControls.js';
@@ -292,23 +294,13 @@ test('weather rail orders between CCTV and Context, observes and syncs chrome', 
       panel.id = id;
       panel.style = {};
       panel.classList.add('collapsed');
-      const button = f.element();
-      button.closest = () => panel;
-      const attributes = new Map();
-      button.setAttribute = (name, value) => attributes.set(name, value);
-      button.getAttribute = (name) => attributes.get(name);
-      panel.button = button;
-      panel.querySelectorAll = () => [button];
-      panel.querySelector = (selector) =>
-        selector.startsWith('.panel-title')
-          ? { textContent: id === 'weather-panel' ? 'WEATHER' : id }
-          : null;
       f.nodes.set(id, panel);
     }
     const weather = f.nodes.get('weather-panel');
     stack.children = [weather, f.nodes.get('global-context-panel')];
     const synced = [];
-    const chrome = {};
+    const store = usePanelChromeStore(createPinia());
+    const chrome = { _chromeStore: store, _chromeToken: store.connect({}) };
     const owner = new PanelLayoutController({
       readHud: () => ({}),
       scheduleCockpitLayout() {},
@@ -325,14 +317,10 @@ test('weather rail orders between CCTV and Context, observes and syncs chrome', 
     );
     assert.ok(synced.includes('weather-panel'));
     assert.ok(observed.has(weather));
-    assert.equal(weather.button.textContent, '◀');
-    assert.equal(weather.button.getAttribute('aria-expanded'), 'false');
-    assert.equal(weather.button.title, 'Expand WEATHER');
+    assert.equal(store.panels['weather-panel'].collapsed, true);
     weather.classList.remove('collapsed');
     PanelChrome.prototype._syncPanelCollapseButton.call(chrome, weather);
-    assert.equal(weather.button.textContent, '▶');
-    assert.equal(weather.button.getAttribute('aria-expanded'), 'true');
-    assert.equal(weather.button.getAttribute('aria-label'), 'Collapse WEATHER');
+    assert.equal(store.panels['weather-panel'].collapsed, false);
     owner.destroy();
     assert.equal(observed.size, 0);
     assert.equal(f.frames.size, 0);

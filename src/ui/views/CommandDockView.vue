@@ -1,10 +1,12 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { t } from '../../i18n/index.js';
+import { msg, t } from '../../i18n/index.js';
+import UiButton from '../kit/UiButton.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
 import { computed } from 'vue';
 import { useLocationStore } from '../stores/location.js';
+import { usePanelChromeStore } from '../stores/panelChrome.js';
 import { usePointerReticleStore } from '../stores/pointerReticle.js';
 import { useVoiceStore } from '../stores/voice.js';
 import PhoneTabBar from './panels/PhoneTabBar.vue';
@@ -17,6 +19,24 @@ const { style, mapSource, mapSourceControls } = storeToRefs(useDisplayStore());
 // LocationControls publishes the location tray; pills call the controls,
 // and the search field keeps their listeners.
 const { view: loc, controls: locationControls } = storeToRefs(useLocationStore());
+
+// PanelChrome presents each tray's open and pinned state; the tray toggles
+// keep its hover and focus listeners, and the pins call it.
+const chrome = usePanelChromeStore();
+const { panels } = storeToRefs(chrome);
+/** A tray toggle's words, or `fallback` until the tray is presented. */
+function trayWords(panelId, name, fallback) {
+  const state = panels.value[panelId];
+  if (!state) return fallback;
+  return t(state.collapsed ? msg('Expand {name}') : msg('Collapse {name}'), {
+    name,
+  });
+}
+/** A pin's click: a pin never opens the tray behind it. */
+function pin(event, panelId) {
+  event.stopPropagation();
+  chrome.act('pin', panelId);
+}
 
 // The voice control, while a voice session presents one. It sits between the
 // location bar and the visual presets; the trays keep their elements when the
@@ -51,13 +71,13 @@ function selectMapSource(chip) {
     <div class="panel-glow"></div>
     <div class="panel-inner">
       <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
-        data-dock-toggle-target="control-panel" aria-expanded="false"
-        aria-controls="control-panel-popover" aria-label="Expand Visual Presets" data-i18n-aria-label>
+        data-dock-toggle-target="control-panel" :aria-expanded="String(panels['control-panel']?.collapsed === false)"
+        aria-controls="control-panel-popover" :aria-label="trayWords('control-panel', t('VISUAL PRESETS'), t('Expand Visual Presets'))" :title="trayWords('control-panel', t('VISUAL PRESETS'), undefined)">
         <span class="panel-title" data-i18n-runtime><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>VISUAL PRESETS</span>
         <span class="panel-divider"></span>
       </button>
       <div id="control-panel-popover" class="dock-popover-content">
-      <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open" data-i18n-aria-label data-i18n-title><img src="/pin.svg" alt="" /></button>
+      <UiButton variant="icon" class="dock-pin-btn" data-pin-target="control-panel" :label="t('Pin visual presets')" :title="t('Keep visual presets open')" :pressed="!!panels['control-panel']?.pinned" @click="pin($event, 'control-panel')"><img src="/pin.svg" alt="" /></UiButton>
       <div id="style-buttons" class="button-grid">
         <button class="style-btn active" data-style="normal" v-class-toggle="{ ...(style && { active: style.name === 'normal' }) }" title="Show the globe without a visual filter." data-i18n-title>
           <span class="btn-icon">◯</span>
@@ -112,17 +132,17 @@ function selectMapSource(chip) {
     <div class="panel-glow"></div>
     <div class="location-inner">
       <div class="location-toolbar">
-        <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" aria-expanded="false" aria-label="Expand LOCATION" title="Expand LOCATION" data-i18n-aria-label data-i18n-title>
+        <button id="location-bar-toggle" class="dock-tray-toggle" type="button" data-dock-toggle-target="location-bar" aria-controls="location-bar-popover" :aria-expanded="String(panels['location-bar']?.collapsed === false)" :aria-label="trayWords('location-bar', t('LOCATION'), t('Expand LOCATION'))" :title="trayWords('location-bar', t('LOCATION'), t('Expand LOCATION'))">
           <span class="location-toolbar-label" data-i18n-runtime><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>LOCATION</span>
         </button>
-        <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel" data-i18n-title>+</button>
+        <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel" data-i18n-title @click="chrome.act('toggle', 'location-bar')">+</button>
       </div>
       <div id="location-mini-status" class="location-mini-status" aria-live="polite">
         <div id="location-mini-city" class="location-mini-city">{{ loc ? loc.status.city : t('📍 Location: --') }}</div>
         <div id="location-mini-poi" class="location-mini-poi">{{ loc ? loc.status.poi : t('Landmark: --') }}</div>
       </div>
       <div id="location-bar-popover" class="dock-popover-content">
-        <button class="dock-pin-btn" data-pin-target="location-bar" type="button" aria-label="Pin location tray" aria-pressed="false" title="Keep location tray open" data-i18n-aria-label data-i18n-title><img src="/pin.svg" alt="" /></button>
+        <UiButton variant="icon" class="dock-pin-btn" data-pin-target="location-bar" :label="t('Pin location tray')" :title="t('Keep location tray open')" :pressed="!!panels['location-bar']?.pinned" @click="pin($event, 'location-bar')"><img src="/pin.svg" alt="" /></UiButton>
         <div id="poi-row" class="poi-row-container" v-class-toggle="{ expanded: !!loc?.poisExpanded }"><button v-for="poi in loc?.pois" :key="`${loc.poiCity}:${poi.index}`" type="button" class="poi-pill" v-class-toggle="{ active: poi.active }" :data-poi-index="poi.index" @click="locationControls?.choosePoi(poi.index)"><span class="poi-pill-key">{{ poi.key }}</span><span class="poi-pill-name">{{ poi.name }}</span></button></div>
         <div class="location-bar-divider" id="location-bar-divider" v-class-toggle="{ visible: !!loc?.poisExpanded }"></div>
         <div class="location-city-row">

@@ -42,7 +42,7 @@ function panelFixture({ id = 'data-panel', nested = false, nestedCollapsed = fal
     disclosure.closest = () => panel;
   }
   const document = { getElementById: (candidate) => candidate === id ? panel : null };
-  const manager = new Function('document', 'getComputedStyle', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_initCommandDockPins')}};`)(document, (el) => ({ visibility: el.visibility ?? 'visible' }), collapsePanelOnEscape);
+  const manager = new Function('document', 'getComputedStyle', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_togglePanel')}};`)(document, (el) => ({ visibility: el.visibility ?? 'visible' }), collapsePanelOnEscape);
   manager.setPanelCollapsed = (candidate, value, options) => {
     assert.equal(candidate, id);
     assert.equal(value, true);
@@ -167,7 +167,7 @@ test('Location Escape clears a hidden draft search before restoring disclosure f
 
 test('panel chrome wires Escape for every declared collapse target', () => {
   const init = method('_initPanelChrome', '_collapsePanelOnEscape');
-  assert.match(init, /for \(const \[targetId, buttons\] of targets\)/);
+  assert.match(init, /for \(const targetId of targets\)/);
   assert.match(init, /bindPanelDisclosure\(\{[\s\S]*?onEscape: \(event\) => this\._collapsePanelOnEscape\(event, targetId\)/);
   assert.match(source, /createHoverDisclosure\(\{[\s\S]*?onEscape: \(event\) => this\._collapsePanelOnEscape\(event, panelId\)/);
 });
@@ -206,31 +206,17 @@ test('Cockpit utility Escape leaves an expanded nested Parameters panel to the s
 
 test('panel bindings have a single owner and are inert after destruction', () => {
   const panel = new EventTarget();
-  const button = new EventTarget();
-  let collapsed = true;
-  let changes = 0;
   let keys = 0;
-  panel.classList = { contains: () => collapsed };
-  const bind = () => bindPanelDisclosure({
-    panel, buttons: [button, button],
-    onChange(value, options) { collapsed = value; changes += 1; assert.equal(options.explicit, true); },
-    onEscape() { keys += 1; },
-  });
+  const bind = () => bindPanelDisclosure({ panel, onEscape() { keys += 1; } });
   const first = bind();
-  button.dispatchEvent(new Event('click'));
   panel.dispatchEvent(new Event('keydown'));
-  assert.equal(collapsed, false);
-  assert.equal(changes, 1);
   assert.equal(keys, 1);
   first.destroy();
   first.destroy();
-  button.dispatchEvent(new Event('click'));
   panel.dispatchEvent(new Event('keydown'));
-  assert.equal(changes, 1);
   assert.equal(keys, 1);
   const second = bind();
-  button.dispatchEvent(new Event('click'));
-  assert.equal(changes, 2);
-  assert.equal(collapsed, true);
+  panel.dispatchEvent(new Event('keydown'));
+  assert.equal(keys, 2);
   second.destroy();
 });

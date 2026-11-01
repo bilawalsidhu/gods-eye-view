@@ -36,11 +36,14 @@ one-panel rule too. Share links continue to record which panels are open.
 
 ## Component kit
 
-`src/ui/kit/` holds the generic components (`UiRail`, `UiPanel`, `UiButton`,
-`UiChip`, `UiTooltip` and so on). Names, props and events follow Halfpixel's
-`ui-vue` kit so the two can converge later, but the components are written for
-this repository and styled by its existing stylesheet and custom properties.
-They contain no application state.
+`src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`
+and `UiButton` so far, with more (`UiPanel`, `UiSegmented`, `UiSelect` and
+so on) joining as the controls they serve are converted. Names, props,
+events and class names follow Halfpixel's `ui-vue` kit so the two can merge
+later, but the components are written for this repository and styled by its
+existing stylesheet and custom properties; a kit class such as
+`ui-button--icon` carries no Core style yet, and a converted control keeps
+its own classes beside it. They contain no application state.
 
 Controls share one skin, so every panel reads the same. Every scrolling
 surface carries the kit's `.ui-scroll` (ui-vue's name), which draws the thin
@@ -61,7 +64,10 @@ a feature supplying only its accent.
    when a view needs one, mirroring state an owner already publishes, so
    there is never a second owner of the same state.
 2. **Rail.** `PanelChrome` enforces one panel per side; the panel store
-   mirrors each side's panels and the rail renders from it. Done.
+   mirrors each side's panels and the rail renders from it. Each panel's
+   collapse button (`PanelCollapseButton`), the dock tray toggles and the
+   dock pins render the open and pinned state PanelChrome presents to the
+   `gev-panel-chrome` store, and their clicks call it there. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
    classes, `data-i18n` text and CSS. The page places each view with a
    `.gev-view` host (`display: contents`), and `mountApplicationViews()`

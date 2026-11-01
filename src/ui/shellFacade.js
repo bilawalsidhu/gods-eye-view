@@ -857,15 +857,6 @@ export class ShellFacade {
   }
 
   /**
-   * Allows either command-dock tray to remain open until explicitly unpinned.
-   * Both trays may be pinned; transient and error trays stack above them.
-   * @returns {void}
-   */
-  _initCommandDockPins() {
-    return this._panelChrome._initCommandDockPins(...arguments);
-  }
-
-  /**
    * Tracks the live pinned-tray height so a hovered sibling can stack above it
    * without hardcoded content dimensions.
    * @returns {void}

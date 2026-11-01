@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
+import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import { vRangeValue } from '../../rail/rangeValue.js';
 import { useDisplayStore } from '../../stores/display.js';
 
@@ -46,7 +47,7 @@ const geoListed = computed(() => geoRows.value.length > 0);
   <div class="compact pp-header-row">
     <span data-i18n class="pp-header-label">DISPLAY</span>
     <span class="panel-divider" aria-hidden="true"></span>
-    <button class="panel-collapse-btn pp-collapse-btn" data-collapse-target="pp-toggles" title="Collapse panel" data-i18n-title>&#x25C0;</button>
+    <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('DISPLAY')" sideways initial="◀" />
   </div>
   <div class="pp-panel-body ui-scroll" data-rail-scroller>
   <div class="pp-toggle-group">
@@ -126,7 +127,7 @@ const geoListed = computed(() => geoRows.value.length > 0);
     <div class="param-panel-header">
       <span class="param-panel-title" data-i18n>PARAMETERS</span>
       <span class="param-panel-divider"></span>
-      <button class="panel-collapse-btn" id="param-panel-collapse-btn" data-collapse-target="param-slider-panel" title="Collapse panel" data-i18n-title>−</button>
+      <PanelCollapseButton id="param-panel-collapse-btn" target="param-slider-panel" initial="−" />
     </div>
     <div id="param-sliders"></div>
   </div>

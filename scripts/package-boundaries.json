@@ -119,7 +119,10 @@
       "src/ui/stores/hud.js",
       "src/ui/views/IntelHudView.vue",
       "src/ui/stores/firstRun.js",
-      "src/firstRunCopy.js"
+      "src/firstRunCopy.js",
+      "src/ui/kit/UiButton.vue",
+      "src/ui/stores/panelChrome.js",
+      "src/ui/rail/PanelCollapseButton.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -1044,7 +1047,8 @@
       "src/ui/stores/celestialRing.js",
       "src/ui/stores/worldOverlayActions.js",
       "src/ui/stores/awarenessDirection.js",
-      "src/ui/stores/hud.js"
+      "src/ui/stores/hud.js",
+      "src/ui/stores/panelChrome.js"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -3049,7 +3053,8 @@
       "src/hudReadouts.js",
       "src/ui/stores/hud.js",
       "src/ui/stores/firstRun.js",
-      "src/firstRunCopy.js"
+      "src/firstRunCopy.js",
+      "src/ui/stores/panelChrome.js"
     ],
     "external": [
       "hls.js",
@@ -3856,9 +3861,11 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/panelRailCatalog.js",
-      "src/ui/panelAccordion.js"
+      "src/ui/panelAccordion.js",
+      "src/ui/vueRuntime.js",
+      "src/ui/stores/panelChrome.js"
     ],
-    "external": []
+    "external": ["vue", "pinia"]
   },
   "civil-flight-records": {
     "exports": ["./layers/flights/records"],

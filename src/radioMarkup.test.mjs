@@ -358,7 +358,8 @@ test('panel collapse is presentation-only and Radio exposes explicit voice playb
   assert.doesNotMatch(enableMethod, /playSelectedRadio|togglePlayback\(\).*radio-enable/i);
   assert.doesNotMatch(enableMethod, /contextRadio/);
   assert.match(enableMethod, /toggleRadio\(this\._radioEnableBtn\)/);
-  assert.match(ui, /setAttribute\('aria-expanded', String\(/);
+  // The collapse buttons render aria-expanded from the state the chrome presents.
+  assert.match(ui, /_chromeStore\.publish\(this\._chromeToken, panelEl\.id, \{/);
   assert.doesNotMatch(method, /panelId === 'global-context-panel'[\s\S]*?this\._radioState\?\.enabled[\s\S]*?setPanelCollapsed\('radio-panel', false\)/);
 });
 

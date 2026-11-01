@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
+import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { vFieldValue } from '../../rail/fieldValue.js';
 import { vRangeValue } from '../../rail/rangeValue.js';
@@ -17,6 +18,14 @@ const { view: radio, sdr } = storeToRefs(useRadioStore());
 // Only whether the receiver is connected reaches the panel; the card renders
 // its own frames.
 const sdrConnected = computed(() => sdr.value?.connectionActive ?? null);
+// The collapse button keeps Radio's own wording, not "Expand RADIO".
+const radioWords = {
+  initialLabel: t('Expand Radio section'),
+  expandLabel: t('Expand Radio section'),
+  collapseLabel: t('Collapse Radio section'),
+  expandTitle: t('Expand Radio'),
+  collapseTitle: t('Collapse Radio'),
+};
 </script>
 
 <template>
@@ -26,7 +35,7 @@ const sdrConnected = computed(() => sdr.value?.connectionActive ?? null);
       <span class="panel-title" data-i18n>RADIO</span>
       <span id="radio-layer-state" class="radio-layer-state" :class="{ active: radio?.layerState.active }">{{ radio ? radio.layerState.text : t('OFF') }}</span>
       <span class="panel-divider"></span>
-      <button class="panel-collapse-btn" data-collapse-target="radio-panel" title="Expand Radio" aria-label="Expand Radio section" data-i18n-title data-i18n-aria-label>+</button>
+      <PanelCollapseButton target="radio-panel" initial="+" :initial-title="t('Expand Radio')" :words="radioWords" />
     </div>
     <div class="radio-directory-row">
       <button id="radio-enable-btn" class="panel-layer-toggle" :class="{ active: radio?.enable.active }" type="button" :aria-pressed="String(radio?.enable.active ?? false)" :aria-label="radio?.enable.label" :aria-disabled="radio ? String(radio.enable.busy) : undefined" :aria-busy="radio ? String(radio.enable.busy) : undefined">{{ radio ? radio.enable.text : t('ENABLE') }}</button>

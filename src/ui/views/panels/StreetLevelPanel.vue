@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed, shallowRef, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
+import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import RailChips from '../../rail/RailChips.vue';
 import { useStreetLevelStore } from '../../stores/streetLevel.js';
 
@@ -107,7 +108,7 @@ const vThumb = { mounted: placeThumb, updated: placeThumb };
       <span class="panel-title" data-i18n>STREET LEVEL</span>
       <span class="panel-divider"></span>
       <button id="sl-status" :class="`sl-status${status.tone ? ` is-${status.tone}` : ''}`" type="button" :aria-pressed="String(status.pressed)" :title="status.title">{{ status.text }}</button>
-      <button class="panel-collapse-btn" data-collapse-target="street-level-panel" title="Expand panel" data-i18n-title>◀</button>
+      <PanelCollapseButton target="street-level-panel" :name="t('STREET LEVEL')" sideways initial="◀" :initial-title="t('Expand panel')" />
     </div>
     <div id="sl-body" class="sl-body">
       <div id="sl-viewer-wrap" class="sl-viewer-wrap" :hidden="!viewer.open">

@@ -99,7 +99,9 @@ test('Context header holds only its title and collapse control', () => {
   assert.ok(panel, 'Global Context panel is missing');
   const header = panel[0].match(/<div class="panel-header">([\s\S]*?)<\/div>\s*<div class="cyber-panel-body[ "]/);
   assert.ok(header, 'Global Context header is missing');
-  const tags = [...header[1].matchAll(/<(\w+)\s+class="([^"]+)"/g)].map(([, tag, cls]) => `${tag}.${cls}`);
+  // The kit button's own ui-button and ui-focus classes carry no Core styles.
+  const tags = [...header[1].matchAll(/<(\w+)\s+(?:type="button"\s+)?class="([^"]+)"/g)].map(([, tag, cls]) =>
+    `${tag}.${cls.split(' ').filter((name) => !/^ui-(button|focus)/.test(name)).join(' ')}`);
   assert.deepEqual(tags, ['span.panel-title', 'span.panel-divider', 'button.panel-collapse-btn']);
 });
 

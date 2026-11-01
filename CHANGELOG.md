@@ -100,6 +100,14 @@
   panel: ESC still stops a playing scene and the runtime chip still shows
   (samehkhamis).
 
+- The shell's panel chrome no longer writes the panels' collapse buttons,
+  the dock tray toggles' names or the dock pins' pressed state: it presents
+  each panel's open and pinned state to the `gev-panel-chrome` store, and
+  the buttons, now views, call it there. `bindPanelDisclosure`
+  (`./ui/panels`) binds only a panel's Escape; it no longer takes `buttons`
+  or `onChange`. `UiButton` joins the component kit with ui-vue's props
+  (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

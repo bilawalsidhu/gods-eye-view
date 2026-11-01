@@ -22,7 +22,7 @@ test('Street Level is a collapsible right-rail panel that starts collapsed', () 
   );
   assert.match(
     html,
-    /<button class="panel-collapse-btn" data-collapse-target="street-level-panel"/,
+    /<button type="button" class="[^"]*\bpanel-collapse-btn\b[^"]*"[^>]*data-collapse-target="street-level-panel"/,
   );
   assert.match(
     html,
@@ -46,9 +46,10 @@ test('the panel is registered with panel chrome, cockpit entry and the right rai
     panelChrome,
     /COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object\.freeze\(\[[\s\S]*'street-level-panel'/,
   );
+  // A right-rail panel's collapse button opens sideways (◀ / ▶).
   assert.match(
-    panelChrome,
-    /const isRightRail = \[[\s\S]*'street-level-panel'/,
+    read('src/ui/views/panels/StreetLevelPanel.vue'),
+    /<PanelCollapseButton[^>]*target="street-level-panel"[^>]*\bsideways\b/,
   );
   assert.match(
     layoutController,
