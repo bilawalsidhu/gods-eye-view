@@ -73,7 +73,7 @@ function fixture(t, fetchImpl) {
   const feedType = async () =>
     JSON.parse((await get('/sources')).body).sources[0].feedType;
   const frame = () => get(`/frame/${CAM.id}`);
-  return { get, feedType, frame, root, server, restart: start };
+  return { get, feedType, frame };
 }
 
 const jpeg = () =>
