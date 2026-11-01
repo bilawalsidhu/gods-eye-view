@@ -495,19 +495,40 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   #command-dock .gev-voice-error-tray {
     width: min(24rem, calc(100vw - 1.5rem));
   }
+
+  /* The wings shrink to --dock-side-compact at this width, open or closed (an
+     open tray pops out above the dock), which is too narrow for the text
+     labels; they would spill over the voice control and take its taps. The
+     wings show only their icon; the toggles keep their aria-label. Cyber sets
+     a wider --dock-side-compact that fits its labels, so it keeps them. */
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    .panel-title,
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    .location-toolbar-label {
+    font-size: 0;
+    letter-spacing: 0;
+  }
+
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    .panel-title::after,
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    .location-toolbar-label::after {
+    content: none;
+  }
 }
 
 @media (max-width: 620px) {
   #command-dock {
     --dock-side-compact: 3.25rem;
     --dock-voice-width: 8.75rem;
-  }
-
-  #command-dock .panel-title,
-  #command-dock .location-toolbar-label {
-    max-width: 2.3rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   #left-panel-stack {
