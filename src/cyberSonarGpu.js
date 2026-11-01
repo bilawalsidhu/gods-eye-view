@@ -4,7 +4,7 @@ import * as Cesium from 'cesium';
 // option for native point/billboard collections. Do not patch its prototypes or
 // access EntityCluster's private collections. An engine upgrade must revalidate
 // this adapter; unsupported versions keep the original commands unchanged.
-export const CYBER_SONAR_CESIUM_VERSION = '1.138.0';
+export const CYBER_SONAR_CESIUM_VERSION = '1.146.0';
 
 // Follow every public DrawCommand setter, including pick/shadow/culling flags.
 // Copying native.dirty would keep derived pipelines dirty forever: the scene

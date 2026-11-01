@@ -10,7 +10,7 @@ import { buildStarVertices, STAR_VERTEX_FLOATS } from './stars.js';
  * the command from `update()` first in the environment pass, so the sky
  * stays behind everything without depth. Revalidate on engine upgrades.
  */
-export const STARRY_SKY_CESIUM_VERSION = '1.138.0';
+export const STARRY_SKY_CESIUM_VERSION = '1.146.0';
 
 /** Brightness of the Milky Way glow; the stars carry the sky. */
 export const MILKY_WAY_INTENSITY = 0.4;
