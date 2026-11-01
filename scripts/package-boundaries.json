@@ -143,9 +143,10 @@
       "src/ui/views/panels/GlobeActions.vue",
       "src/ui/views/panels/GlobeCompass.vue",
       "src/ui/stores/recording.js",
-      "src/ui/styleParameters.js"
+      "src/ui/styleParameters.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["vue", "pinia"]
+    "external": ["vue", "pinia", "vue-i18n"]
   },
   "viewer": {
     "exports": ["./application/viewer"],
@@ -730,9 +731,10 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/ui/i18n.js"
     ],
-    "external": ["vue", "pinia"]
+    "external": ["vue", "pinia", "vue-i18n"]
   },
   "cctv-controls": {
     "exports": ["./ui/cctv"],
@@ -759,9 +761,10 @@
       "src/ui/unitLabels.js",
       "src/ui/vueRuntime.js",
       "src/ui/stores/cctv.js",
-      "src/ui/stores/status.js"
+      "src/ui/stores/status.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["vue", "pinia"]
+    "external": ["vue", "pinia", "vue-i18n"]
   },
   "context-controls": {
     "exports": ["./ui/context", "./ui/context/policy"],
@@ -862,9 +865,10 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
-      "src/ui/vueRuntime.js"
+      "src/ui/vueRuntime.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["vue", "pinia"]
+    "external": ["vue", "pinia", "vue-i18n"]
   },
   "ui-shell": {
     "exports": ["./ui/shell"],
@@ -1083,9 +1087,10 @@
       "src/ui/kit/UiButton.vue",
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
-      "src/ui/stores/recording.js"
+      "src/ui/stores/recording.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["cesium", "vue", "pinia"]
+    "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
   "ui-styles": {
     "exports": ["./ui/styles"],
@@ -1215,9 +1220,10 @@
       "src/ui/stores/status.js",
       "src/ui/toast.js",
       "src/ui/stores/sceneInteractions.js",
-      "src/ui/stores/dataPacks.js"
+      "src/ui/stores/dataPacks.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["cesium", "vue", "pinia"]
+    "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
   "live-observations": {
     "exports": ["./sources/live"],
@@ -2128,9 +2134,10 @@
       "src/i18n/marker.js",
       "src/ui/stores/voice.js",
       "src/ui/vueRuntime.js",
-      "src/ui/stores/pointerReticle.js"
+      "src/ui/stores/pointerReticle.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["vue", "pinia"]
+    "external": ["vue", "pinia", "vue-i18n"]
   },
   "application-components": {
     "exports": [
@@ -3098,7 +3105,8 @@
       "src/ui/kit/UiEmpty.vue",
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
-      "src/ui/stores/recording.js"
+      "src/ui/stores/recording.js",
+      "src/ui/i18n.js"
     ],
     "external": [
       "hls.js",
@@ -3111,7 +3119,8 @@
       "mapillary-js",
       "@jtarrio/webrtlsdr",
       "vue",
-      "pinia"
+      "pinia",
+      "vue-i18n"
     ]
   },
   "application-catalog": {
@@ -3690,7 +3699,8 @@
       "src/ui/stores/windInspection.js",
       "src/layers/wind/inspectionMarker.js",
       "src/ui/stores/bhoteKoshiPanel.js",
-      "src/hudReadouts.js"
+      "src/hudReadouts.js",
+      "src/ui/i18n.js"
     ],
     "external": [
       "hls.js",
@@ -3703,7 +3713,8 @@
       "mapillary-js",
       "@jtarrio/webrtlsdr",
       "vue",
-      "pinia"
+      "pinia",
+      "vue-i18n"
     ]
   },
   "application-operations": {
@@ -3874,9 +3885,10 @@
       "src/ui/displayControls.js",
       "src/visualStylePolicy.js",
       "src/ui/rail/fieldValue.js",
-      "src/ui/kit/UiSlider.js"
+      "src/ui/kit/UiSlider.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["cesium", "vue", "pinia"]
+    "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
   "ui-panel-chrome": {
     "exports": ["./ui/panel-chrome"],
@@ -3910,9 +3922,10 @@
       "src/ui/panelAccordion.js",
       "src/ui/vueRuntime.js",
       "src/ui/stores/panelChrome.js",
-      "src/ui/rail/panelState.js"
+      "src/ui/rail/panelState.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["vue", "pinia"]
+    "external": ["vue", "pinia", "vue-i18n"]
   },
   "civil-flight-records": {
     "exports": ["./layers/flights/records"],
@@ -4075,9 +4088,10 @@
       "src/voice/providerCapabilities.js",
       "src/ui/vueRuntime.js",
       "src/ui/stores/voice.js",
-      "src/ui/stores/pointerReticle.js"
+      "src/ui/stores/pointerReticle.js",
+      "src/ui/i18n.js"
     ],
-    "external": ["vue", "pinia"]
+    "external": ["vue", "pinia", "vue-i18n"]
   },
   "alpr-source": {
     "exports": ["./layers/alpr/source"],

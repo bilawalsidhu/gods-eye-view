@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { applicationPinia } from '../vueRuntime.js';
+import { applicationI18n } from '../i18n.js';
 import WelcomeView from './WelcomeView.vue';
 import ContextView from './ContextView.vue';
 import LayerPanelsView from './LayerPanelsView.vue';
@@ -57,7 +58,9 @@ export function mountApplicationViews(
     if (mounted.has(host)) continue;
     if (!Object.hasOwn(APPLICATION_VIEWS, name))
       throw new Error(`Unknown application view: ${name}`);
-    const app = createApp(APPLICATION_VIEWS[name]).use(applicationPinia());
+    const app = createApp(APPLICATION_VIEWS[name])
+      .use(applicationPinia())
+      .use(applicationI18n());
     app.mount(host);
     mounted.set(host, app);
   }

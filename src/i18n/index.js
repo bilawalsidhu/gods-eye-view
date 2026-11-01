@@ -40,16 +40,37 @@ const CATALOGS = Object.freeze({
   'zh-Hant': zhHant,
 });
 
-let currentLocale = DEFAULT_LOCALE;
+// The page's locale. The UI binds it to its vue-i18n instance's
+// (src/ui/i18n.js), so a Vue render that translates re-renders when it
+// changes; until then, and in portable code, it is plain state.
+let pageLocale = { value: DEFAULT_LOCALE };
+
+/**
+ * Keep the active locale in `locale`, a ref such as a vue-i18n composer's
+ * `locale`. It takes the current locale; switch with setLocale afterwards.
+ * @param {{value: string}} locale
+ */
+export function bindLocale(locale) {
+  locale.value = pageLocale.value;
+  pageLocale = locale;
+}
 
 /** The catalog for a locale; null for English and unknown codes. */
 export function getCatalog(locale) {
   return CATALOGS[normalizeLocale(locale)] ?? null;
 }
 
-/** Active locale. */
+let boundValue = DEFAULT_LOCALE;
+let activeLocale = DEFAULT_LOCALE;
+
+/** Active locale, normalized: a bound ref may be set to any language tag. */
 export function getLocale() {
-  return currentLocale;
+  const value = pageLocale.value;
+  if (value !== boundValue) {
+    boundValue = value;
+    activeLocale = normalizeLocale(value) || DEFAULT_LOCALE;
+  }
+  return activeLocale;
 }
 
 /**
@@ -59,18 +80,18 @@ export function getLocale() {
  */
 export function setLocale(locale) {
   const normalized = normalizeLocale(locale) || DEFAULT_LOCALE;
-  if (normalized !== currentLocale) {
-    currentLocale = normalized;
+  if (normalized !== pageLocale.value) {
+    pageLocale.value = normalized;
     formatterCache.clear();
   }
-  return currentLocale;
+  return normalized;
 }
 
 /** Development-only warning; silent under node:test and in production. */
 function warnMissing(text) {
   if (import.meta.env?.DEV !== true) return;
   console.warn(
-    `[i18n] no ${currentLocale} translation for ${JSON.stringify(text)}`,
+    `[i18n] no ${getLocale()} translation for ${JSON.stringify(text)}`,
   );
 }
 
@@ -89,7 +110,7 @@ function interpolate(pattern, values) {
 const filled = (value) => typeof value === 'string' && value.trim() !== '';
 
 function lookup(text) {
-  const catalog = CATALOGS[currentLocale];
+  const catalog = CATALOGS[getLocale()];
   if (!catalog) return undefined;
   const entry = Object.hasOwn(catalog, text) ? catalog[text] : undefined;
   if (filled(entry) || (entry && typeof entry === 'object')) return entry;
@@ -124,7 +145,7 @@ export function t(text, values) {
  */
 export function tn(count, one, other, values) {
   const entry = lookup(other);
-  const category = pluralRules(currentLocale).select(count);
+  const category = pluralRules(getLocale()).select(count);
   let pattern;
   const forms = entry && typeof entry === 'object' ? entry : null;
   if (forms && (filled(forms[category]) || filled(forms.other))) {
@@ -141,7 +162,7 @@ export function tn(count, one, other, values) {
  * missing-translation warning.
  */
 export function translateKnown(text) {
-  const catalog = CATALOGS[currentLocale];
+  const catalog = CATALOGS[getLocale()];
   if (!catalog || typeof text !== 'string') return text;
   const entry = Object.hasOwn(catalog, text) ? catalog[text] : undefined;
   return filled(entry) ? entry : text;
@@ -171,10 +192,10 @@ function pluralRules(locale) {
 const formatterCache = new Map();
 
 function cachedFormatter(kind, Constructor, options) {
-  const cacheKey = `${kind}|${currentLocale}|${options ? JSON.stringify(options) : ''}`;
+  const cacheKey = `${kind}|${getLocale()}|${options ? JSON.stringify(options) : ''}`;
   let formatter = formatterCache.get(cacheKey);
   if (!formatter) {
-    formatter = new Constructor(currentLocale, options);
+    formatter = new Constructor(getLocale(), options);
     formatterCache.set(cacheKey, formatter);
   }
   return formatter;
@@ -210,7 +231,7 @@ export function formatUtcDayMonth(value) {
     ? Date.UTC(Number(written[1]), Number(written[2]) - 1, Number(written[3]))
     : new Date(value).getTime();
   if (!Number.isFinite(time)) return '';
-  if (currentLocale === 'en') return new Date(time).toISOString().slice(5, 10);
+  if (getLocale() === 'en') return new Date(time).toISOString().slice(5, 10);
   return cachedFormatter('date', Intl.DateTimeFormat, UTC_DAY_MONTH).format(
     time,
   );
@@ -228,7 +249,7 @@ export function formatRelativeTime(value, unit = 'second', options) {
   }).format(value, unit);
   // CLDR spaces Japanese (5 分前); the ja catalog writes the number and its
   // unit together (5分前), so the two must not differ on one screen.
-  return currentLocale === 'ja'
+  return getLocale() === 'ja'
     ? text.replace(/(?<=\d) (?=\p{Script=Han})/gu, '')
     : text;
 }
@@ -263,7 +284,7 @@ const DOCUMENT_TRANSLATION_TARGETS = Object.freeze([
  */
 export function applyDocumentTranslations(doc) {
   if (typeof doc?.querySelectorAll !== 'function') return 0;
-  if (!CATALOGS[currentLocale]) return 0;
+  if (!CATALOGS[getLocale()]) return 0;
   let applied = 0;
   for (const [marker, attribute] of DOCUMENT_TRANSLATION_TARGETS) {
     for (const element of doc.querySelectorAll(`[${marker}]`)) {

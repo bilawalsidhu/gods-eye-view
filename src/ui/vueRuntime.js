@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
+import { applicationI18n } from './i18n.js';
 
 let pagePinia = null;
 
@@ -15,7 +16,7 @@ export function applicationPinia() {
 
 /**
  * Create a Vue runtime: one Pinia instance shared by every view it mounts,
- * and the mounts themselves for teardown.
+ * the page's vue-i18n instance, and the mounts themselves for teardown.
  * @param {{pinia?: import('pinia').Pinia}} [options]
  * @returns {{pinia: import('pinia').Pinia, mount: Function, destroy: Function}}
  */
@@ -32,7 +33,7 @@ export function createUiRuntime({ pinia = createPinia() } = {}) {
      */
     mount(component, host, props = {}) {
       const app = createApp(component, props);
-      app.use(pinia);
+      app.use(pinia).use(applicationI18n());
       app.mount(host);
       apps.add(app);
       return () => {

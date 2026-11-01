@@ -211,6 +211,12 @@ export function createBrowserViteConfig({
     // framing + CSP hardening (one constant, no drift).
     preview: { headers: BROWSER_HEADERS },
     define: {
+      // vue-i18n holds the locale and catalogs; Core formats the messages
+      // (src/ui/i18n.js), so the build drops vue-i18n's message compiler.
+      __VUE_I18N_FULL_INSTALL__: 'false',
+      __VUE_I18N_LEGACY_API__: 'false',
+      __INTLIFY_PROD_DEVTOOLS__: 'false',
+      __INTLIFY_DROP_MESSAGE_COMPILER__: 'true',
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
       // Mapillary client tokens are public by design (see SECURITY.md).

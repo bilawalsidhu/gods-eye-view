@@ -68,7 +68,8 @@
     "pbf": "^5.1.2",
     "pinia": "^2.3.1",
     "satellite.js": "^6.0.2",
-    "vue": "^3.5.44"
+    "vue": "^3.5.44",
+    "vue-i18n": "^11.4.15"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.14.6",

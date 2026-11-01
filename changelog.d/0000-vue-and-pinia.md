@@ -1,3 +1,11 @@
+- The page's locale lives in a vue-i18n instance installed in every
+  application view, and `t()`, `tn()` and the Intl formatters read it from
+  there, so a view that translates while rendering renders again when the
+  locale changes. `bindLocale` (`src/i18n/index.js`) keeps the locale in a
+  given ref; Core's Vite config builds vue-i18n without its message
+  compiler. Catalogs, messages and call sites are unchanged
+  (samehkhamis, #0000).
+
 - Cockpit's Display popover shows the Display panel's own HUD, Detection,
   Parameters and 3D groups through Vue teleports: `CockpitDisplayPortal`
   publishes the popover's slots (`publish`, with `afterRender` to lay out once
