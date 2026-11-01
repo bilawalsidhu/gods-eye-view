@@ -233,7 +233,9 @@ a feature supplying only its accent.
    that `bindCameraOrientationControls` publishes each drawn frame it
    changes, which only `GlobeCompass` renders; an owner publishes only
    while it answers the button, so a shell replaced by a newer one leaves
-   its state alone), the Scene actions panel (`SceneInteractions`
+   its state alone), the recording safe frame (the scene chrome renders
+   the frame `RecordingControls` publishes to the `gev-recording` store),
+   the Scene actions panel (`SceneInteractions`
    teleports what the scene interactions owner publishes to the
    `gev-scene-interactions` store into the viewer's container; the owner
    keeps the pick handler and focuses the picked action), the data-pack

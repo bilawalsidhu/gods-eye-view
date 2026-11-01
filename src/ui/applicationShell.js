@@ -63,6 +63,7 @@ import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
+import { useRecordingStore } from './stores/recording.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -129,6 +130,8 @@ export class StyleManager extends ShellFacade {
     this._recording = new RecordingControls({
       syncShareState: () => this._syncShareState(),
       syncHudControls: () => this._visualSettings._syncHudControls(),
+      publishSafeFrame: (frame) =>
+        useRecordingStore(applicationPinia()).publishSafeFrame(frame),
     });
     Object.assign(this, readShellElements());
     this._panelChrome = new PanelChrome({

@@ -74,7 +74,9 @@
   `UiEmpty`.
   The top-center clear, share, tilt, north-up and reset buttons, and the
   cockpit's reset, call the shell through the new globe actions store,
-  which also carries the camera's tilt and compass heading. `syncScopeControls` (`./ui/display`),
+  which also carries the camera's tilt and compass heading. The recording
+  safe frame renders what `RecordingControls` publishes to the new
+  recording store. `syncScopeControls` (`./ui/display`),
   `shouldHideCollapsedRightPanels` (`./ui/layout`) and
   `bindClearLayersControl` (`./ui/layers`) are deprecated: the Display view,
   the rail and the globe actions view now own what they did. `./ui/input` imports Vue

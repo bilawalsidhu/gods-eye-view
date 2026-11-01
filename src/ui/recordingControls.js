@@ -1,7 +1,16 @@
-/** Own recording chrome, safe frames and the pre-recording HUD snapshot. */
+/**
+ * Own recording chrome, safe frames and the pre-recording HUD snapshot. The
+ * safe frame a recording composes in goes to `publishSafeFrame` ('16:9',
+ * '9:16', or null while none records); the scene chrome renders it.
+ */
 export class RecordingControls {
-  constructor({ syncShareState, syncHudControls }) {
+  constructor({
+    syncShareState,
+    syncHudControls,
+    publishSafeFrame = () => {},
+  }) {
     this._syncShareState = syncShareState;
+    this._publishSafeFrame = publishSafeFrame;
     // Shows the HUD's visibility and layout on the Display controls.
     this._syncHudControls = syncHudControls;
     this.destroyed = false;
@@ -12,18 +21,10 @@ export class RecordingControls {
       safeFrame: '16:9',
     };
     this._preRecordingHudState = null;
-    this._safeFrameOverlay = document.getElementById('safe-frame-overlay');
-    this._safeFrameBox = document.getElementById('safe-frame-box');
     this.hud = null;
   }
   _initRecordingOverlay() {
-    if (this.destroyed) return;
-    if (!this._safeFrameOverlay || !this._safeFrameBox) return;
-    this._safeFrameOverlay.classList.remove(
-      'active',
-      'ratio-9-16',
-      'ratio-16-9',
-    );
+    if (!this.destroyed) this._publishSafeFrame(null);
   }
 
   setRecordingMode(enabled, options = {}) {
@@ -41,13 +42,7 @@ export class RecordingControls {
       this._recordingMode && hidePanels,
     );
 
-    if (this._safeFrameOverlay) {
-      this._safeFrameOverlay.classList.remove('ratio-9-16', 'ratio-16-9');
-      this._safeFrameOverlay.classList.toggle('active', this._recordingMode);
-      this._safeFrameOverlay.classList.add(
-        safeFrame === '9:16' ? 'ratio-9-16' : 'ratio-16-9',
-      );
-    }
+    this._publishSafeFrame(this._recordingMode ? (safeFrame ?? '16:9') : null);
 
     if (this._recordingMode) {
       // Snapshot the user's HUD state once per recording session so exit can
@@ -73,13 +68,6 @@ export class RecordingControls {
         this.hud.setVariant(saved.variant);
       }
       this.hud.setMode(saved ? saved.mode : 'auto');
-      if (this._safeFrameOverlay) {
-        this._safeFrameOverlay.classList.remove(
-          'active',
-          'ratio-9-16',
-          'ratio-16-9',
-        );
-      }
     }
     this._syncHudControls();
     this._syncShareState();

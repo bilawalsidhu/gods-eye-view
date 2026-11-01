@@ -1135,6 +1135,7 @@
   "src/ui/kit/UiChip.vue",
   "src/ui/kit/UiChip.test.mjs",
   "src/ui/globeActions.test.mjs",
+  "src/ui/safeFrameView.test.mjs",
   "src/ui/kit/UiSelect.js",
   "src/ui/kit/UiSelect.test.mjs",
   "src/ui/kit/UiBadge.vue",

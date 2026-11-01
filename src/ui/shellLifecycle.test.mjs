@@ -56,8 +56,6 @@ function fixture() {
       'left-panel-stack',
       'right-context-rail',
       'pp-toggles',
-      'safe-frame-overlay',
-      'safe-frame-box',
       'hud-toggle',
       'hud-layout-select',
     ].map((id) => [id, element()]),
@@ -222,9 +220,11 @@ test('recording restores the original HUD after repeated entry and revokes retai
     let mode = 'auto',
       variant = 'tactical';
     const hudSyncs = [];
+    const frames = [];
     const owner = new RecordingControls({
       syncShareState() {},
       syncHudControls: () => hudSyncs.push(variant),
+      publishSafeFrame: (frame) => frames.push(frame),
     });
     owner.hud = {
       getMode: () => mode,
@@ -249,9 +249,10 @@ test('recording restores the original HUD after repeated entry and revokes retai
       'each change shows the HUD layout it leaves',
     );
     assert.equal(document.body.classList.contains('recording-mode'), false);
-    assert.equal(
-      f.nodes.get('safe-frame-overlay').classList.contains('active'),
-      false,
+    assert.deepEqual(
+      frames,
+      ['9:16', '16:9', null],
+      'the safe frame follows each change and leaves with the recording',
     );
   } finally {
     f.restore();

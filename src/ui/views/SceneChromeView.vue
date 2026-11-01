@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { useDisplayStore } from '../stores/display.js';
 import { useLocationStore } from '../stores/location.js';
+import { useRecordingStore } from '../stores/recording.js';
 import { useStatusStore } from '../stores/status.js';
 import { useWorldOverlayActionsStore } from '../stores/worldOverlayActions.js';
 import { vClassToggle } from '../rail/classToggle.js';
@@ -23,6 +24,8 @@ const { style } = storeToRefs(useDisplayStore());
 // The status chips, toast and FPS readout show what ShellFeedback,
 // CctvControls, createToast() and createFrameRateMonitor() publish.
 const { loading, traffic, cctv, toast, fps } = storeToRefs(useStatusStore());
+// The safe frame a recording composes in, as RecordingControls publishes it.
+const { safeFrame } = storeToRefs(useRecordingStore());
 // The ORBIT indicator LocationControls offers with the location tray.
 const { view: location } = storeToRefs(useLocationStore());
 // The focusable mirror of the overlay cards the world overlay painted.
@@ -98,7 +101,7 @@ const vToastText = {
   <div id="toast" v-toast-text="toast" role="status" aria-live="polite" aria-atomic="true" v-class-toggle="{ visible: !!toast?.visible }"></div>
 
   <!-- Safe frame guides for recording composition -->
-  <div id="safe-frame-overlay">
+  <div id="safe-frame-overlay" v-class-toggle="{ active: !!safeFrame, 'ratio-16-9': safeFrame === '16:9', 'ratio-9-16': safeFrame === '9:16' }">
     <div id="safe-frame-box"></div>
   </div>
 
