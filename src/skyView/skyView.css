@@ -1,0 +1,1115 @@
+/* Sky view (src/skyView/skyView.js): a "Sky" button above the map
+   navigation control, the observer panel, the in-sky toolbar and the overlay
+   canvas that sits over the Cesium canvas while Sky view is active. */
+.gev-sky-btn {
+  position: fixed;
+  right: 36px;
+  bottom: 124px;
+  z-index: 96;
+  min-width: 52px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: var(--text-secondary);
+  font: 600 12px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.gev-sky-btn:hover,
+.gev-sky-btn[aria-expanded='true'] {
+  color: var(--text-primary, #e8f4ff);
+  border-color: rgba(120, 200, 255, 0.55);
+}
+
+.gev-sky-btn[hidden],
+.gev-sky-panel[hidden],
+.gev-sky-bar[hidden],
+.gev-sky-canvas[hidden] {
+  display: none !important;
+}
+
+.gev-sky-panel {
+  position: fixed;
+  right: 36px;
+  bottom: 166px;
+  z-index: 97;
+  width: min(330px, calc(100vw - 24px));
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: var(--text-secondary);
+  font: 12px/1.4 var(--font-mono);
+}
+
+.gev-sky-title {
+  margin: 0 24px 8px 0;
+  color: var(--text-primary, #e8f4ff);
+  font-weight: 600;
+}
+
+.gev-sky-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.gev-sky-row,
+.gev-sky-form {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.gev-sky-panel button,
+.gev-sky-bar button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: 600 11px/1 var(--font-mono);
+  cursor: pointer;
+}
+
+.gev-sky-panel button:hover,
+.gev-sky-bar button:hover,
+.gev-sky-bar button[aria-pressed='true'] {
+  color: var(--text-primary, #e8f4ff);
+  border-color: rgba(120, 200, 255, 0.55);
+  background: rgba(120, 200, 255, 0.12);
+}
+
+.gev-sky-form input,
+.gev-sky-bar input {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-primary, #e8f4ff);
+  font: 12px var(--font-mono);
+}
+
+.gev-sky-form input {
+  flex: 1;
+}
+
+.gev-sky-status {
+  min-height: 1.4em;
+}
+
+.gev-sky-bar {
+  position: fixed;
+  top: 92px;
+  left: 50%;
+  z-index: 97;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: calc(100vw - 24px);
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: var(--text-secondary);
+  font: 12px/1.3 var(--font-mono);
+  transform: translateX(-50%);
+}
+
+.gev-sky-eye input {
+  width: 72px;
+}
+
+.gev-sky-info {
+  flex-basis: 100%;
+  text-align: center;
+}
+
+.gev-sky-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.gev-sky-canvas:active {
+  cursor: grabbing;
+}
+
+body.gev-sky-picking .cesium-widget canvas {
+  cursor: crosshair !important;
+}
+
+/* The map navigation control would fly the camera off the observer. */
+body.gev-sky-active .gev-nav {
+  display: none !important;
+}
+
+/* The map's layer/scene stack sits where the satellite panel goes; it is a
+   map tool, so Sky mode hides it like the nav control (back on exit). */
+body.gev-sky-active #left-panel-stack {
+  display: none !important;
+}
+
+/* The map's right context rail (CCTV, street level, global context) is a map
+   tool too; on narrow screens it stacks over the satellite panel and at
+   desktop widths under the toolbar, so Sky mode hides it (back on exit). */
+body.gev-sky-active #right-context-rail {
+  display: none !important;
+}
+
+/* Desktop: the toolbar centres in the room right of the satellite panel
+   (12 + 300 + 12 px), so the two never overlap at any width. */
+@media (min-width: 901px) {
+  .gev-sky-bar {
+    left: 324px;
+    right: 12px;
+    width: fit-content;
+    max-width: min(760px, calc(100vw - 336px));
+    margin-inline: auto;
+    transform: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .gev-sky-btn {
+    right: 12px;
+    bottom: calc(2vh + 7.5rem + 110px);
+  }
+  .gev-sky-panel {
+    right: 12px;
+    bottom: calc(2vh + 7.5rem + 152px);
+  }
+  /* Full width: a centred toolbar only gets half the screen and wraps tall. */
+  .gev-sky-bar {
+    top: 72px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+    transform: none;
+  }
+}
+
+/* Satellites panel: "Overhead now", class chips, data sets, card. */
+.gev-sky-sats {
+  position: fixed;
+  top: 92px;
+  left: 12px;
+  z-index: 97;
+  display: flex;
+  flex-direction: column;
+  width: min(300px, calc(100vw - 24px));
+  max-height: calc(100vh - 180px);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: var(--text-secondary);
+  font: 11px/1.35 var(--font-mono);
+}
+
+.gev-sky-sats[hidden],
+.gev-sky-sats-body[hidden],
+.gev-sky-sats-card[hidden] {
+  display: none !important;
+}
+
+.gev-sky-sats-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 4px 12px;
+}
+
+.gev-sky-sats-head h2 {
+  margin: 0;
+  color: var(--text-primary, #e8f4ff);
+  font: 600 12px/1.2 var(--font-mono);
+}
+
+/* The body is the panel's one scroll box: when the list, the card and the
+   controls do not all fit, it scrolls (the card is scrolled into view on
+   select) instead of squeezing the list to nothing. */
+.gev-sky-sats-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 0 10px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.gev-sky-sats-body > * {
+  flex: none;
+}
+
+.gev-sky-sats button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: 600 10px/1 var(--font-mono);
+  cursor: pointer;
+}
+
+.gev-sky-sats button[aria-pressed='true'] {
+  color: var(--text-primary, #e8f4ff);
+  background: rgba(120, 200, 255, 0.12);
+}
+
+.gev-sky-sats button[aria-pressed='false'] {
+  opacity: 0.55;
+}
+
+.gev-sky-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.gev-sky-sats-banner[data-level='warn'] {
+  color: #ffd27a;
+}
+
+.gev-sky-sats-banner[data-level='error'] {
+  color: #ff9a8a;
+}
+
+.gev-sky-sats-legend {
+  opacity: 0.75;
+}
+
+/* Takes the room that is left, but never less than three rows. */
+.gev-sky-sats-list {
+  flex: 1 1 auto;
+  min-height: 76px;
+  max-height: 34vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.gev-sky-sats-list button {
+  width: 100%;
+  min-height: 24px;
+  border: 0;
+  background: none;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gev-sky-sats-list button[aria-current='true'] {
+  outline: 1px solid rgba(255, 210, 120, 0.8);
+}
+
+.gev-sky-sats-card h3 {
+  margin: 4px 0;
+  color: var(--text-primary, #e8f4ff);
+  font: 600 12px/1.2 var(--font-mono);
+}
+
+.gev-sky-sats-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0 0 6px;
+}
+
+.gev-sky-sats-card dt {
+  opacity: 0.7;
+}
+
+.gev-sky-sats-card dd {
+  margin: 0;
+}
+
+.gev-sky-sats-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* naked-eye filter and "Next passes". */
+.gev-sky-naked {
+  align-items: center;
+}
+
+.gev-sky-naked input[type='range'] {
+  width: 84px;
+  accent-color: #ffd278;
+}
+
+.gev-sky-naked input[type='range']:disabled {
+  opacity: 0.45;
+}
+
+.gev-sky-passes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.gev-sky-passes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.gev-sky-passes-head h3 {
+  margin: 0;
+  color: var(--text-primary, #e8f4ff);
+  font: 600 12px/1.2 var(--font-mono);
+}
+
+.gev-sky-passes-status {
+  opacity: 0.75;
+}
+
+.gev-sky-passes-list {
+  min-height: 0;
+  max-height: 28vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.gev-sky-passes-list button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 6px;
+  width: 100%;
+  min-height: 34px;
+  padding: 3px 6px;
+  border: 0;
+  background: none;
+  font-weight: 500;
+  text-align: left;
+}
+
+.gev-sky-passes-list button[aria-current='true'] {
+  outline: 1px solid rgba(255, 210, 120, 0.8);
+}
+
+/* With a pass selected, "Go to peak time" sticks to the bottom edge of the
+   panel body while the passes block runs past it, so the action stays in
+   view next to the selected row however short the panel is (otherwise it
+   sits below the whole nested list). Opaque, as it may cover list rows below
+   the selection; skyView.js (revealPassGo) keeps it off the selected row. */
+.gev-sky-passes > [data-sky='pass-go']:not(:disabled) {
+  position: sticky;
+  /* sticky offsets are measured from the body CONTENT edge, which stops
+     short of the body bottom padding (10px): without the negative offset the
+     action rides 10px above the body bottom, and on a 67px body (844x390) row
+     + action no longer fit. Keep equal to the body padding-bottom. */
+  bottom: -10px;
+  z-index: 1;
+  background: rgb(22, 24, 34);
+  box-shadow: 0 -6px 8px rgba(8, 9, 14, 0.85);
+}
+
+.gev-sky-pass-name {
+  overflow: hidden;
+  color: var(--text-primary, #e8f4ff);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gev-sky-pass-chip {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(255, 210, 120, 0.18);
+  color: #ffd278;
+  font-size: 9px;
+}
+
+.gev-sky-pass-chip[hidden] {
+  display: none;
+}
+
+.gev-sky-pass-times {
+  opacity: 0.85;
+}
+
+.gev-sky-pass-mag {
+  opacity: 0.75;
+  text-align: right;
+}
+
+.gev-sky-sats button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Narrow screens: above the command dock, clear of the Sky button on the
+   right (12 + 52 + 8 px) and below the toolbar, whose real bottom edge
+   skyView.js writes to --gev-sky-bar-bottom (it wraps differently at every
+   width). */
+@media (max-width: 900px) {
+  .gev-sky-sats {
+    top: auto;
+    bottom: calc(2vh + 7.5rem);
+    width: min(300px, calc(100vw - 96px));
+    max-height: calc(
+      100vh - 2vh - 7.5rem - var(--gev-sky-bar-bottom, 200px) - 8px
+    );
+  }
+  .gev-sky-sats-list {
+    max-height: none;
+  }
+}
+
+/* Short landscape phones: there is no room above the dock, so the panel
+   hangs from the toolbar down the left edge, narrow enough to clear the
+   centred command dock. */
+@media (max-width: 900px) and (max-height: 520px) {
+  .gev-sky-sats {
+    top: calc(var(--gev-sky-bar-bottom, 170px) + 8px);
+    bottom: auto;
+    width: min(260px, calc(100vw - 96px));
+    max-height: calc(100vh - var(--gev-sky-bar-bottom, 170px) - 20px);
+  }
+}
+
+/* The cockpit, scene playback and recording own the screen. Clean view hides
+   these with visibility instead (the app clear-view styles). */
+body:is(.cockpit-mode, .scene-playback-mode, .recording-mode)
+  :is(.gev-sky-btn, .gev-sky-panel) {
+  display: none !important;
+}
+
+/* Layers + search tools (skyContent.js) */
+.gev-sky-tools {
+  position: fixed;
+  /* below the toolbar (skyView.js writes its real bottom edge) */
+  top: calc(var(--gev-sky-bar-bottom, 182px) + 8px);
+  right: 16px;
+  z-index: 97;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(280px, calc(100vw - 24px));
+  color: var(--text-secondary);
+  font: 12px/1.35 var(--font-mono);
+}
+
+.gev-sky-tools[hidden],
+.gev-sky-tools [hidden] {
+  display: none !important;
+}
+
+.gev-sky-search {
+  display: flex;
+  gap: 6px;
+}
+
+.gev-sky-tools input[type='search'] {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-bg);
+  color: var(--text-primary, #e8f4ff);
+  font: 12px var(--font-mono);
+}
+
+.gev-sky-tools button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-bg);
+  color: inherit;
+  font: 600 11px/1 var(--font-mono);
+  cursor: pointer;
+}
+
+.gev-sky-tools button:hover,
+.gev-sky-layers-btn[aria-expanded='true'] {
+  color: var(--text-primary, #e8f4ff);
+  border-color: rgba(120, 200, 255, 0.55);
+  background: rgba(120, 200, 255, 0.12);
+}
+
+.gev-sky-layers-btn {
+  align-self: flex-end;
+}
+
+.gev-sky-results,
+.gev-sky-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.gev-sky-results button {
+  text-align: left;
+  font-weight: 500;
+}
+
+.gev-sky-search-status,
+.gev-sky-data-status {
+  color: var(--text-primary, #e8f4ff);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.gev-sky-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.gev-sky-mag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.gev-sky-mag input[type='range'] {
+  flex: 1;
+  min-width: 90px;
+}
+
+@media (max-width: 900px) {
+  .gev-sky-tools {
+    /* below the toolbar's real bottom edge (skyView.js syncSkyLayout) */
+    top: calc(var(--gev-sky-bar-bottom, 162px) + 8px);
+    right: 12px;
+    width: min(240px, calc(100vw - 24px));
+  }
+}
+
+/* ── point at the sky (phones) ───────────────────────────────────────── */
+.gev-sky-orient {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font: 11px/1.35 var(--font-mono);
+  text-align: center;
+}
+.gev-sky-orient[hidden],
+.gev-sky-align[hidden],
+.gev-sky-figure8[hidden],
+.gev-sky-crosshair[hidden],
+.gev-sky-bar button[hidden] {
+  display: none !important;
+}
+.gev-sky-orient-status {
+  flex-basis: 100%;
+}
+.gev-sky-align {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.gev-sky-bar .gev-sky-align button {
+  min-height: 44px;
+}
+.gev-sky-bar button[data-sky='point'] {
+  min-height: 44px;
+}
+/* figure-8 calibration hint: a slowly traced lemniscate glyph */
+.gev-sky-figure8 {
+  font:
+    700 28px/1 system-ui,
+    sans-serif;
+  color: rgba(255, 210, 120, 0.95);
+  animation: gev-sky-figure8 2.4s ease-in-out infinite;
+}
+@keyframes gev-sky-figure8 {
+  0%,
+  100% {
+    transform: translateX(-10px) rotate(-12deg);
+  }
+  50% {
+    transform: translateX(10px) rotate(12deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gev-sky-figure8 {
+    animation: none;
+  }
+}
+/* centre circle used by Align: the view centre is where the phone points */
+.gev-sky-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+/* Landscape phones have ~400 px of height: while pointing, keep only Back,
+   Stop pointing and the pointing row (Align buttons + a one-line status) in
+   a slim toolbar under the app's top icons, and fold the satellite list and
+   the search/Layers tools away, so the sky and the centre circle stay
+   visible. Everything returns when pointing stops. */
+@media (max-height: 520px) {
+  body.gev-sky-pointing
+    .gev-sky-bar
+    > :not([data-sky='back'], [data-sky='point'], .gev-sky-orient) {
+    display: none !important;
+  }
+  body.gev-sky-pointing .gev-sky-bar {
+    padding: 4px 8px;
+    gap: 4px;
+  }
+  body.gev-sky-pointing .gev-sky-orient {
+    display: contents;
+  }
+  body.gev-sky-pointing .gev-sky-orient-status {
+    order: 10;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  body.gev-sky-pointing .gev-sky-figure8 {
+    font-size: 20px;
+  }
+  body.gev-sky-pointing :is(.gev-sky-tools, .gev-sky-sats) {
+    display: none !important;
+  }
+  /* wider-than-900 px landscape phones: tools still hang below the toolbar */
+  .gev-sky-tools {
+    top: calc(var(--gev-sky-bar-bottom, 162px) + 8px);
+  }
+}
+
+/* ── Sky time (skyTimeControl.js): its own row(s) inside the toolbar ── */
+.gev-sky-time {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.gev-sky-time-body,
+.gev-sky-time-scrub,
+.gev-sky-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.gev-sky-time-scrub[hidden],
+.gev-sky-banners[hidden] {
+  display: none !important;
+}
+
+.gev-sky-bar select {
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-primary, #e8f4ff);
+  font: 12px var(--font-mono);
+}
+
+.gev-sky-bar button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gev-sky-zone {
+  opacity: 0.8;
+  font-size: 11px;
+}
+
+.gev-sky-time-status {
+  color: var(--text-primary, #e8f4ff);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gev-sky-time-status:empty {
+  display: none;
+}
+
+.gev-sky-banners {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gev-sky-banner {
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.gev-sky-banner-info {
+  background: rgba(120, 200, 255, 0.12);
+}
+
+.gev-sky-banner-warn {
+  background: rgba(255, 196, 92, 0.16);
+  color: #ffd28a;
+}
+
+.gev-sky-banner-error {
+  background: rgba(255, 99, 99, 0.18);
+  color: #ffb3b3;
+}
+
+/* Keyboard focus is always visible on every Sky control and the sky itself. */
+.gev-sky-bar :focus-visible,
+.gev-sky-panel :focus-visible,
+.gev-sky-sats :focus-visible,
+.gev-sky-canvas:focus-visible {
+  outline: 2px solid #78c8ff;
+  outline-offset: 2px;
+}
+
+/* Touch: every Sky control is at least 44 x 44 px (WCAG 2.5.5 target size). */
+@media (pointer: coarse) {
+  .gev-sky-btn,
+  .gev-sky-panel button,
+  .gev-sky-bar button,
+  .gev-sky-bar select,
+  .gev-sky-bar input,
+  .gev-sky-sats button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Reduced motion: no animated transitions (look-at jumps are instant in JS). */
+@media (prefers-reduced-motion: reduce) {
+  .gev-sky-btn,
+  .gev-sky-panel *,
+  .gev-sky-bar *,
+  .gev-sky-sats * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* The one-line time summary only exists on narrow screens. */
+.gev-sky-time-fold {
+  display: none;
+}
+
+/* Narrow screens: the time rows fold behind the summary button (open with
+   it), and the satellite panel leaves room for the Layers/search tools that
+   hang below the toolbar on the right. */
+@media (max-width: 900px) {
+  .gev-sky-time-fold {
+    display: inline-flex;
+    align-items: center;
+  }
+  .gev-sky-time:not([data-open='true']) .gev-sky-time-body {
+    display: none;
+  }
+  .gev-sky-time-body {
+    flex-basis: 100%;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 900px) and (min-height: 521px) {
+  .gev-sky-sats {
+    max-height: calc(
+      100vh - 2vh - 7.5rem - var(--gev-sky-bar-bottom, 200px) - 108px
+    );
+  }
+}
+
+/* ── Clear view (clearView.js): only the sky ─────────────────────────────── */
+/* The eye button: bottom-right corner, clear of the notch and the gesture
+   bar (env() insets apply where the page uses viewport-fit=cover). It is the
+   only control left in Clear view and fades after 3 s without input. */
+.gev-sky-clear-btn {
+  position: fixed;
+  right: max(12px, calc(env(safe-area-inset-right, 0px) + 8px));
+  bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 8px));
+  z-index: 99;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  background: rgba(8, 10, 14, 0.45);
+  color: #e8f4ff;
+  opacity: 0.75;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: opacity 0.4s ease;
+}
+
+.gev-sky-clear-btn:hover,
+.gev-sky-clear-btn:focus-visible {
+  opacity: 1;
+}
+
+.gev-sky-clear-btn:focus-visible {
+  outline: 2px solid #78c8ff;
+  outline-offset: 2px;
+}
+
+.gev-sky-clear-btn[aria-pressed='true'] {
+  border-color: rgba(120, 200, 255, 0.55);
+}
+
+.gev-sky-clear-btn[data-dim='true'] {
+  opacity: 0.2;
+}
+
+.gev-sky-clear-icon {
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 5C6.5 5 2.7 9.1 1.5 12c1.2 2.9 5 7 10.5 7s9.3-4.1 10.5-7C21.3 9.1 17.5 5 12 5zm0 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 5C6.5 5 2.7 9.1 1.5 12c1.2 2.9 5 7 10.5 7s9.3-4.1 10.5-7C21.3 9.1 17.5 5 12 5zm0 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* The one message line kept over the sky in Clear view (permission, denied,
+   insecure address, calibration figure 8, pointing notes, the hint). */
+.gev-sky-clear-note {
+  position: fixed;
+  top: max(12px, calc(env(safe-area-inset-top, 0px) + 8px));
+  left: 50%;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(
+    520px,
+    calc(
+      100vw - 24px - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    )
+  );
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(8, 10, 14, 0.6);
+  color: #e8f4ff;
+  font: 12px/1.4 var(--font-mono);
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.gev-sky-clear-btn[hidden],
+.gev-sky-clear-note[hidden],
+.gev-sky-clear-note [hidden],
+body:not(.gev-sky-clear) .gev-sky-clear-note {
+  display: none !important;
+}
+
+.gev-sky-clear-note .gev-sky-figure8 {
+  font-size: 20px;
+}
+
+/* Everything is hidden (visibility keeps every box: no reflow, no resize
+   event, no camera change), then the sky is shown again: the Cesium canvas,
+   the Sky overlay, the centre circle while pointing, the eye and the note. */
+body.gev-sky-active.gev-sky-clear,
+body.gev-sky-active.gev-sky-clear * {
+  visibility: hidden !important;
+  /* app panels that fade (visibility transitions) must go at once */
+  transition-property: none !important;
+}
+
+body.gev-sky-active.gev-sky-clear .gev-sky-clear-btn {
+  transition-property: opacity !important;
+}
+
+body.gev-sky-active.gev-sky-clear
+  :is(
+    .cesium-widget > canvas,
+    .gev-sky-canvas,
+    .gev-sky-crosshair,
+    .gev-sky-clear-btn,
+    .gev-sky-clear-btn *,
+    .gev-sky-clear-note,
+    .gev-sky-clear-note *
+  ) {
+  visibility: visible !important;
+}
+
+/* Attribution: third-party imagery and tiles (Google 3D Tiles,
+   Cesium, NAIP/TxGIO, Sentinel/GIBS, OSM...) need their credits on screen.
+   While map tiles are drawn (body.gev-sky-tiles, set by skyView.js: real
+   horizon; the flat horizon hides the globe and every tileset) Clear view
+   keeps the app's own credit line (#cesium-credits: the same Cesium credits,
+   dim colours and bottom offset as normal mode; no new text) as a
+   tap-through block in the bottom-left corner, above the compass strip and
+   clear of the eye (bottom-right) and of the centre circle.
+   The vertical position is left to the app's credit rules on purpose: the
+   attribution pin (src/creditAttribution.test.mjs) models every
+   position/top/bottom rule on #cesium-credits and fails closed on new ones.
+   #cesium-credits is a 0x0 fixed box; Cesium's .cesium-widget-credits inside
+   it is absolutely placed at its bottom-left. */
+body.gev-sky-active.gev-sky-clear.gev-sky-tiles
+  :is(#cesium-credits, #cesium-credits *) {
+  visibility: visible !important;
+}
+
+body.gev-sky-active.gev-sky-clear #cesium-credits {
+  left: max(0.75rem, calc(env(safe-area-inset-left, 0px) + 8px)) !important;
+  z-index: 98 !important;
+  pointer-events: none !important;
+}
+
+/* Complete attribution (review R1): no credit is cut off. The
+   line wraps inside the corner (the width is capped to clear the eye and
+   the safe areas) and grows upwards from the app's credit placement, so
+   every provider credit Cesium puts on screen stays readable in full.
+   #cesium-credits is a 0x0 box, so the line needs an explicit max-content
+   width (otherwise it would shrink to one word per row). */
+body.gev-sky-active.gev-sky-clear #cesium-credits .cesium-widget-credits {
+  width: max-content !important;
+  max-width: calc(
+    100vw - 80px - env(safe-area-inset-left, 0px) -
+      env(safe-area-inset-right, 0px)
+  ) !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  line-height: 1.35;
+}
+
+body.gev-sky-active.gev-sky-clear #cesium-credits .cesium-widget-credits * {
+  max-width: 100%;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+/* The credit text is tap-through: a tap on it reaches the sky. */
+body.gev-sky-active.gev-sky-clear #cesium-credits * {
+  pointer-events: none !important;
+}
+
+/* Credits that Cesium lists only behind its "Data attribution" link stay
+   reachable in Clear view: the link keeps working and its list (Cesium's
+   credit lightbox, the same one as in normal mode) is shown over the clear
+   sky. The rest of the line stays tap-through. */
+body.gev-sky-active.gev-sky-clear.gev-sky-tiles
+  #cesium-credits
+  .cesium-credit-expand-link {
+  pointer-events: auto !important;
+  cursor: pointer;
+}
+
+body.gev-sky-active.gev-sky-clear
+  :is(.cesium-credit-lightbox-overlay, .cesium-credit-lightbox-overlay *) {
+  visibility: visible !important;
+}
+
+/* Map-only controls are not part of the sky: the NAIP year slider and its
+   compare divider (basemap/naipSlider.js). */
+body.gev-sky-active :is(#gev-naip-slider, #gev-naip-split-line) {
+  display: none !important;
+}
+
+/* Wider screens: the app's key-setup chip sits in the bottom-right corner
+   (provider-settings.css: 0.9rem from the edges, 32 px tall), so the eye
+   goes just above it. */
+@media (min-width: 621px) {
+  .gev-sky-clear-btn {
+    bottom: max(58px, calc(env(safe-area-inset-bottom, 0px) + 58px));
+  }
+}
+
+/* Short landscape phones: the Find/Layers tools hang down to the bottom
+   right, so the eye takes the top-right corner (only decoration there). */
+@media (max-height: 520px) {
+  .gev-sky-clear-btn {
+    top: max(12px, calc(env(safe-area-inset-top, 0px) + 8px));
+    bottom: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gev-sky-clear-btn {
+    transition: none;
+  }
+}
+
+/* Phone shell (upstream mobileShell.js, body.mobile-shell, <= 720 px): the
+   tab bar (#mobile-tab-bar, --mobile-tab-space tall) covers the bottom edge
+   while the Sky controls show, and its last tab (More) sat under the eye, so a
+   tap on the eye opened the More sheet instead. The eye rides just above the
+   bar, at the same height in Clear view (bar hidden) so it never jumps. */
+@media (max-width: 720px) and (min-height: 521px) {
+  body.mobile-shell .gev-sky-clear-btn {
+    bottom: calc(var(--mobile-tab-space) + 12px);
+  }
+}

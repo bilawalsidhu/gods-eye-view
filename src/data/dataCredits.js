@@ -512,6 +512,15 @@ export const DATA_CREDITS = [
       '<a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> ' +
       '(CC BY-NC-SA 3.0 — NonCommercial)',
   },
+  {
+    key: 'sky-catalogues',
+    html:
+      'Sky view stars: HYG database v4.4, David Nash — ' +
+      '<a href="https://codeberg.org/astronexus/hyg" target="_blank" rel="noopener">codeberg.org/astronexus/hyg</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>) · ' +
+      'constellation lines &amp; names: Stellarium sky cultures (western) — ' +
+      '<a href="https://github.com/Stellarium/stellarium-skycultures" target="_blank" rel="noopener">Stellarium team</a> (CC BY-SA)',
+  },
 ];
 
 /**

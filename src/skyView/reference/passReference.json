@@ -1,0 +1,188 @@
+{
+ "generatedBy": "build_pass_reference.py",
+ "versions": {
+  "python": "3.12.3",
+  "skyfield": "1.53",
+  "sgp4": "2.27",
+  "numpy": "2.5.4",
+  "ephemeris": "de421.bsp",
+  "timescale": "builtin"
+ },
+ "noradId": 25544,
+ "epoch": "2026-10-11T04:13:59.875680",
+ "start": "2026-10-11T06:00:00Z",
+ "minElevDeg": 10.0,
+ "sites": [
+  {
+   "latDeg": 0.0,
+   "lonDeg": -95.37,
+   "heightM": 0.0,
+   "passes": [
+    {
+     "riseIso": "2026-10-11T10:21:47.559Z",
+     "peakIso": "2026-10-11T10:25:03.773Z",
+     "setIso": "2026-10-11T10:28:19.990Z",
+     "peakElevDeg": 48.714,
+     "peakAzDeg": 125.4875,
+     "minSunAltDeg": -26.392,
+     "maxSunAltDeg": -24.772,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-11T21:58:24.984Z",
+     "peakIso": "2026-10-11T22:01:26.107Z",
+     "setIso": "2026-10-11T22:04:27.412Z",
+     "peakElevDeg": 31.1133,
+     "peakAzDeg": 54.5242,
+     "minSunAltDeg": 30.634,
+     "maxSunAltDeg": 32.128,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-12T09:35:10.526Z",
+     "peakIso": "2026-10-12T09:37:49.279Z",
+     "setIso": "2026-10-12T09:40:27.845Z",
+     "peakElevDeg": 21.253,
+     "peakAzDeg": 125.7322,
+     "minSunAltDeg": -37.823,
+     "maxSunAltDeg": -36.519,
+     "anySunlit": false
+    },
+    {
+     "riseIso": "2026-10-12T11:13:02.220Z",
+     "peakIso": "2026-10-12T11:14:26.406Z",
+     "setIso": "2026-10-12T11:15:50.823Z",
+     "peakElevDeg": 12.0794,
+     "peakAzDeg": 306.1389,
+     "minSunAltDeg": -13.616,
+     "maxSunAltDeg": -12.92,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-12T21:12:13.575Z",
+     "peakIso": "2026-10-12T21:14:10.567Z",
+     "setIso": "2026-10-12T21:16:07.492Z",
+     "peakElevDeg": 14.5828,
+     "peakAzDeg": 54.0297,
+     "minSunAltDeg": 42.461,
+     "maxSunAltDeg": 43.42,
+     "anySunlit": true
+    }
+   ]
+  },
+  {
+   "latDeg": 30.0,
+   "lonDeg": -95.37,
+   "heightM": 0.0,
+   "passes": [
+    {
+     "riseIso": "2026-10-11T12:04:44.469Z",
+     "peakIso": "2026-10-11T12:08:01.071Z",
+     "setIso": "2026-10-11T12:11:19.044Z",
+     "peakElevDeg": 49.9548,
+     "peakAzDeg": 130.8504,
+     "minSunAltDeg": -4.311,
+     "maxSunAltDeg": -2.896,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-11T13:43:15.367Z",
+     "peakIso": "2026-10-11T13:45:02.469Z",
+     "setIso": "2026-10-11T13:46:50.004Z",
+     "peakElevDeg": 13.5181,
+     "peakAzDeg": 325.1926,
+     "minSunAltDeg": 16.494,
+     "maxSunAltDeg": 17.226,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-11T20:15:10.270Z",
+     "peakIso": "2026-10-11T20:18:25.880Z",
+     "setIso": "2026-10-11T20:21:40.084Z",
+     "peakElevDeg": 44.0976,
+     "peakAzDeg": 43.2303,
+     "minSunAltDeg": 40.849,
+     "maxSunAltDeg": 41.851,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-11T21:53:55.356Z",
+     "peakIso": "2026-10-11T21:54:53.802Z",
+     "setIso": "2026-10-11T21:55:52.166Z",
+     "peakElevDeg": 10.9557,
+     "peakAzDeg": 235.4068,
+     "minSunAltDeg": 23.9,
+     "maxSunAltDeg": 24.283,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-12T11:18:00.375Z",
+     "peakIso": "2026-10-12T11:20:49.715Z",
+     "setIso": "2026-10-12T11:23:40.162Z",
+     "peakElevDeg": 24.8538,
+     "peakAzDeg": 127.9557,
+     "minSunAltDeg": -14.537,
+     "maxSunAltDeg": -13.311,
+     "anySunlit": true
+    }
+   ]
+  },
+  {
+   "latDeg": 60.0,
+   "lonDeg": -95.37,
+   "heightM": 0.0,
+   "passes": [
+    {
+     "riseIso": "2026-10-11T15:23:01.557Z",
+     "peakIso": "2026-10-11T15:25:20.961Z",
+     "setIso": "2026-10-11T15:27:40.627Z",
+     "peakElevDeg": 17.2734,
+     "peakAzDeg": 165.611,
+     "minSunAltDeg": 15.329,
+     "maxSunAltDeg": 15.719,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-11T16:58:50.701Z",
+     "peakIso": "2026-10-11T17:01:24.402Z",
+     "setIso": "2026-10-11T17:03:57.887Z",
+     "peakElevDeg": 19.8354,
+     "peakAzDeg": 185.6379,
+     "minSunAltDeg": 21.394,
+     "maxSunAltDeg": 21.589,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-11T18:35:56.371Z",
+     "peakIso": "2026-10-11T18:37:21.567Z",
+     "setIso": "2026-10-11T18:38:46.698Z",
+     "peakElevDeg": 12.1257,
+     "peakAzDeg": 205.4675,
+     "minSunAltDeg": 22.485,
+     "maxSunAltDeg": 22.535,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-12T14:36:12.988Z",
+     "peakIso": "2026-10-12T14:38:16.091Z",
+     "setIso": "2026-10-12T14:40:19.522Z",
+     "peakElevDeg": 15.1613,
+     "peakAzDeg": 160.6991,
+     "minSunAltDeg": 10.658,
+     "maxSunAltDeg": 11.068,
+     "anySunlit": true
+    },
+    {
+     "riseIso": "2026-10-12T16:11:41.640Z",
+     "peakIso": "2026-10-12T16:14:17.440Z",
+     "setIso": "2026-10-12T16:16:53.370Z",
+     "peakElevDeg": 20.3349,
+     "peakAzDeg": 180.7124,
+     "minSunAltDeg": 18.606,
+     "maxSunAltDeg": 18.928,
+     "anySunlit": true
+    }
+   ]
+  }
+ ]
+}
