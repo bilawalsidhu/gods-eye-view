@@ -14,30 +14,71 @@ function mount(t) {
   const pinia = createPinia();
   const store = useGlobeActionsStore(pinia);
   const calls = [];
-  store.connect({
+  const token = store.connect({
     clear: () => calls.push('clear'),
     share: () => calls.push('share'),
+    tilt: () => calls.push('tilt'),
+    northUp: () => calls.push('northUp'),
   });
   const app = createApp(GlobeActions).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
   t.after(() => app.unmount());
-  return { calls, store };
+  return { calls, store, token };
 }
 const $ = (id) => document.getElementById(id);
 
-test('the clear and share buttons call their owners', (t) => {
+test('every button calls its owner', (t) => {
   const { calls } = mount(t);
   $('clear-selected-layers').click();
   $('share-btn').click();
-  assert.deepEqual(calls, ['clear', 'share']);
+  $('tilt-map-view').click();
+  $('north-up-view').click();
+  assert.deepEqual(calls, ['clear', 'share', 'tilt', 'northUp']);
+});
+
+test('the tilt and compass buttons show the published camera', async (t) => {
+  const { store } = mount(t);
+  const tilt = $('tilt-map-view');
+  const north = $('north-up-view');
+  assert.equal(tilt.getAttribute('aria-pressed'), 'false');
+  assert.equal(tilt.getAttribute('aria-label'), 'Tilt map to oblique view');
+  assert.equal(north.getAttribute('aria-label'), 'Reset map to north up');
+  assert.equal(north.hasAttribute('data-north-up'), false);
+  assert.equal(north.style.getPropertyValue('--camera-heading'), '');
+
+  store.publishCamera({ tilted: true, heading: 0 });
+  await nextTick();
+  assert.equal(tilt.getAttribute('aria-pressed'), 'true');
+  assert.equal(
+    tilt.getAttribute('aria-label'),
+    'Return map to straight-down view',
+  );
+  assert.equal(north.getAttribute('data-north-up'), 'true');
+  assert.equal(north.style.getPropertyValue('--camera-heading'), '0deg');
+
+  store.publishCamera({ tilted: false, heading: 47 });
+  await nextTick();
+  assert.equal(tilt.getAttribute('aria-pressed'), 'false');
+  assert.equal(north.getAttribute('data-north-up'), 'false');
+  assert.equal(north.style.getPropertyValue('--camera-heading'), '47deg');
+  assert.equal(
+    north.getAttribute('aria-label'),
+    'Reset map to north up. Current heading 47 degrees',
+  );
+
+  // A disposed shell hands the next one an unmeasured compass.
+  store.publishCamera(null);
+  await nextTick();
+  assert.equal(north.hasAttribute('data-north-up'), false);
+  assert.equal(north.style.getPropertyValue('--camera-heading'), '');
 });
 
 test('a clear under way marks the button busy and keeps it focusable', async (t) => {
-  const { store } = mount(t);
+  const { store, token } = mount(t);
   const clear = $('clear-selected-layers');
   assert.equal(clear.getAttribute('aria-label'), 'Clear selected data layers');
   assert.equal(clear.hasAttribute('aria-busy'), false);
-  store.publishClearBusy(true);
+  store.publishClearBusy(token, true);
   await nextTick();
   assert.equal(clear.getAttribute('aria-busy'), 'true');
   assert.equal(clear.getAttribute('aria-disabled'), 'true');
@@ -46,13 +87,24 @@ test('a clear under way marks the button busy and keeps it focusable', async (t)
     'Clearing selected data layers',
   );
   assert.equal(clear.disabled, false);
-  store.publishClearBusy(false);
+  store.publishClearBusy(token, false);
   await nextTick();
   assert.equal(clear.getAttribute('aria-busy'), 'false');
   assert.equal(clear.getAttribute('aria-label'), 'Clear selected data layers');
+  // The button shows the clear of the owner that answers it: a newer one's,
+  // then the older one's again once the newer goes.
+  store.publishClearBusy(token, true);
+  const newer = store.connect({ clear() {} });
+  await nextTick();
+  assert.equal(clear.hasAttribute('aria-busy'), false);
+  store.publishClearBusy(newer, false);
+  await nextTick();
+  assert.equal(clear.getAttribute('aria-busy'), 'false');
+  store.detach(newer);
+  await nextTick();
+  assert.equal(clear.getAttribute('aria-busy'), 'true');
   // A shell disposed mid-clear hands the next one a bar that is not busy.
-  store.publishClearBusy(true);
-  store.publishClearBusy(null);
+  store.detach(token);
   await nextTick();
   assert.equal(clear.hasAttribute('aria-busy'), false);
   assert.equal(clear.hasAttribute('aria-disabled'), false);
@@ -66,4 +118,15 @@ test('a detached owner no longer answers', (t) => {
   store.detach(token);
   $('share-btn').click();
   assert.deepEqual(calls, ['newer share', 'share']);
+});
+
+test('the same camera state again changes nothing', () => {
+  const store = useGlobeActionsStore(createPinia());
+  store.publishCamera({ tilted: true, heading: 12 });
+  const kept = store.camera;
+  store.publishCamera({ tilted: true, heading: 12 });
+  assert.equal(store.camera, kept);
+  store.publishCamera({ tilted: true, heading: 13 });
+  assert.notEqual(store.camera, kept);
+  assert.deepEqual(store.camera, { tilted: true, heading: 13 });
 });

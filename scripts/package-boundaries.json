@@ -140,7 +140,8 @@
       "src/ui/kit/UiEmpty.vue",
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
-      "src/ui/views/panels/GlobeActions.vue"
+      "src/ui/views/panels/GlobeActions.vue",
+      "src/ui/views/panels/GlobeCompass.vue"
     ],
     "external": ["vue", "pinia"]
   },

@@ -3,7 +3,7 @@
  * the newest connected owner with an action of that name answers it, so an
  * owner that connects again replaces itself, and owners of different actions
  * sit side by side.
- * @returns {{connect: Function, detach: Function, act: Function}}
+ * @returns {{connect: Function, detach: Function, act: Function, owns: Function, ownerOf: Function}}
  */
 export function createOwners() {
   /** @type {Array<{actions: object}>} Oldest first. */
@@ -40,5 +40,25 @@ export function createOwners() {
     }
   }
 
-  return { connect, detach, act };
+  /**
+   * The token of the owner that answers `name`, if any.
+   * @param {string} name
+   * @returns {object | undefined}
+   */
+  function ownerOf(name) {
+    for (let index = owners.length - 1; index >= 0; index -= 1)
+      if (owners[index].actions[name]) return owners[index];
+  }
+
+  /**
+   * Whether the owner holding `token` is the one that answers `name`, so an
+   * owner that also publishes state can leave it to a newer one.
+   * @param {object} token
+   * @param {string} name
+   */
+  function owns(token, name) {
+    return Boolean(token) && ownerOf(name) === token;
+  }
+
+  return { connect, detach, act, owns, ownerOf };
 }

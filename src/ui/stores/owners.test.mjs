@@ -33,3 +33,25 @@ test('act returns what the answering action returned', () => {
   assert.equal(act('pick', 'jazz'), 'kept jazz');
   assert.equal(act('missing'), undefined);
 });
+
+test('owns names the owner that answers an action', () => {
+  const { connect, detach, owns } = createOwners();
+  const older = connect({ tilt() {}, share() {} });
+  const newer = connect({ tilt() {} });
+  assert.equal(owns(newer, 'tilt'), true);
+  assert.equal(owns(older, 'tilt'), false);
+  assert.equal(owns(older, 'share'), true);
+  assert.equal(owns(newer, 'missing'), false);
+  assert.equal(owns(null, 'tilt'), false);
+  detach(newer);
+  assert.equal(owns(older, 'tilt'), true);
+});
+
+test('ownerOf names the token that answers an action', () => {
+  const { connect, ownerOf } = createOwners();
+  const older = connect({ clear() {}, share() {} });
+  const newer = connect({ clear() {} });
+  assert.equal(ownerOf('clear'), newer);
+  assert.equal(ownerOf('share'), older);
+  assert.equal(ownerOf('missing'), undefined);
+});

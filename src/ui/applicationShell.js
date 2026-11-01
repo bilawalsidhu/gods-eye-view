@@ -1008,10 +1008,7 @@ export class StyleManager extends ShellFacade {
         showToast: (message) => {
           if (!this._disposed) this._showToast(message);
         },
-        setClearBusy: (busy) => {
-          if (!this._disposed)
-            useGlobeActionsStore(applicationPinia()).publishClearBusy(busy);
-        },
+        setClearBusy: (busy) => this._publishClearBusy(busy),
       },
     });
     // The Contacts layer publishes its panel; the view calls its navigation.
@@ -1633,21 +1630,64 @@ export class StyleManager extends ShellFacade {
         if (!this._disposed) void this.clearSelectedLayers();
       },
     });
+    // A clear under way as the shell connects again stays on the button.
+    if (this._clearBusy != null)
+      store.publishClearBusy(this._clearLayersToken, this._clearBusy);
+  }
+
+  /**
+   * Publish this shell's clear under way; the button shows it while this
+   * shell answers the clear.
+   */
+  _publishClearBusy(busy) {
+    if (this._disposed) return;
+    this._clearBusy = Boolean(busy);
+    if (this._clearLayersToken)
+      useGlobeActionsStore(applicationPinia()).publishClearBusy(
+        this._clearLayersToken,
+        busy,
+      );
+  }
+
+  /**
+   * Stop answering the globe actions. Its clear under way goes with its
+   * owner, and its camera state too; a newer shell's stays.
+   */
+  _releaseGlobeActions() {
+    const store = useGlobeActionsStore(applicationPinia());
+    if (store.owns(this._orientationToken, 'tilt')) store.publishCamera(null);
+    if (this._clearLayersToken) store.detach(this._clearLayersToken);
+    if (this._shareToken) store.detach(this._shareToken);
+    if (this._orientationToken) store.detach(this._orientationToken);
+    this._clearLayersToken = this._shareToken = this._orientationToken = null;
   }
 
   /** Wire Google Maps-style tilt and north-up camera actions. */
   _initCameraOrientationControls() {
+    const store = useGlobeActionsStore(applicationPinia());
     this._cameraOrientationControls?.destroy();
-    this._cameraOrientationControls = bindCameraOrientationControls({
+    if (this._orientationToken) store.detach(this._orientationToken);
+    const token = store.connect({
+      tilt: () => controls.tilt(),
+      northUp: () => controls.northUp(),
+    });
+    this._orientationToken = token;
+    // A newer shell's controls own what the buttons show.
+    const controls = bindCameraOrientationControls({
       viewer: this.viewer,
-      elements: {
-        tiltButton: this._tiltMapBtn,
-        northButton: this._northUpBtn,
+      // Every drawn frame publishes: a state the store already shows stops
+      // here, before the store's actions run.
+      publish: (state) => {
+        const shown = store.camera;
+        if (shown?.tilted === state.tilted && shown.heading === state.heading)
+          return;
+        if (store.owns(token, 'tilt')) store.publishCamera(state);
       },
       runNavigation: (noun, navigate) =>
         this._navigation.runOrientation(noun, navigate),
       showToast: (message) => this._showToast(message),
     });
+    this._cameraOrientationControls = controls;
   }
 
   // ── Share Button ─────────────────────────────
@@ -1790,12 +1830,7 @@ export class StyleManager extends ShellFacade {
     useDisplayStore(applicationPinia()).connectMapSource(null);
     useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
-    const globeActions = useGlobeActionsStore(applicationPinia());
-    if (this._clearLayersToken) globeActions.detach(this._clearLayersToken);
-    if (this._shareToken) globeActions.detach(this._shareToken);
-    this._clearLayersToken = this._shareToken = null;
-    // A clear this shell leaves running must not keep the next shell's bar busy.
-    globeActions.publishClearBusy(null);
+    this._releaseGlobeActions();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();

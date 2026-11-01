@@ -226,9 +226,13 @@ a feature supplying only its accent.
    renders what each owner's `createToast()` publishes there, on that
    owner's own timer, and the title bar's FPS readout what
    `createFrameRateMonitor()` publishes), the globe actions (in progress:
-   `GlobeActions` renders the top-center bar; its clear and share buttons
-   call the shell through the `gev-globe-actions` store, which also carries
-   a clear under way), the Scene actions panel (`SceneInteractions`
+   `GlobeActions` renders the top-center bar; its clear, share, tilt and
+   north-up buttons call the shell through the `gev-globe-actions` store,
+   which also carries a clear under way and the camera's tilt and heading
+   that `bindCameraOrientationControls` publishes each drawn frame it
+   changes, which only `GlobeCompass` renders; an owner publishes only
+   while it answers the button, so a shell replaced by a newer one leaves
+   its state alone), the Scene actions panel (`SceneInteractions`
    teleports what the scene interactions owner publishes to the
    `gev-scene-interactions` store into the viewer's container; the owner
    keeps the pick handler and focuses the picked action), the data-pack
