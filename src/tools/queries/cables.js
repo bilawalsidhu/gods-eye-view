@@ -57,6 +57,7 @@ export const findSubmarineCables = defineTool({
           Number.isFinite(point.lat) &&
           (!area || areaContains(area, point)),
       );
+    const seen = new Set();
     const rows = (cables?.features || [])
       .filter((feature) => {
         const name = String(feature.properties?.name || '');
@@ -71,6 +72,11 @@ export const findSubmarineCables = defineTool({
         id: feature.properties.id ?? null,
         name: feature.properties.name,
       }))
+      // TeleGeography splits some cables into several features under one id.
+      .filter((row) => {
+        const key = row.id ?? row.name;
+        return !seen.has(key) && seen.add(key);
+      })
       .sort((a, b) => a.name.localeCompare(b.name));
     const where = area ? ` in ${area.label}` : '';
     const what = wanted ? ` matching "${args.name}"` : '';
