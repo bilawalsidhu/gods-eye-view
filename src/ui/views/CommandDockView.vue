@@ -117,7 +117,7 @@ function selectMapSource(chip) {
           <span data-i18n id="map-source-label">MAP SOURCE</span>
           <span id="map-stack-status" class="pp-stack-status" v-class-toggle="{ warn: !!mapSource?.status.warn }" aria-live="polite">{{ mapSource ? mapSource.status.text : '3D' }}</span>
         </div>
-        <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source" data-i18n-aria-label><button v-for="chip in mapSource?.chips" :key="chip.id" type="button" class="map-stack-chip" v-class-toggle="{ active: chip.active, unavailable: !chip.available }" :data-stack-id="chip.id" :title="chip.title" :aria-pressed="String(chip.active)" :aria-disabled="String(!chip.available)" :aria-label="chip.ariaLabel" @click="selectMapSource(chip)"><span class="map-stack-chip-label">{{ chip.label }}</span><span v-if="chip.requirement" class="map-stack-chip-req">{{ chip.requirement }}</span></button></div>
+        <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source" data-i18n-aria-label><UiButton v-for="chip in mapSource?.chips" :key="chip.id" class="map-stack-chip" :pressed="Boolean(chip.active)" pressed-class="active" v-class-toggle="{ unavailable: !chip.available }" :data-stack-id="chip.id" :title="chip.title" :aria-disabled="String(!chip.available)" :aria-label="chip.ariaLabel" @click="selectMapSource(chip)"><span class="map-stack-chip-label">{{ chip.label }}</span><span v-if="chip.requirement" class="map-stack-chip-req">{{ chip.requirement }}</span></UiButton></div>
       </section>
       </div>
       <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
@@ -145,10 +145,10 @@ function selectMapSource(chip) {
       </div>
       <div id="location-bar-popover" class="dock-popover-content">
         <UiButton variant="icon" class="dock-pin-btn" data-pin-target="location-bar" :label="t('Pin location tray')" :title="t('Keep location tray open')" :pressed="!!panels['location-bar']?.pinned" @click="pin($event, 'location-bar')"><img src="/pin.svg" alt="" /></UiButton>
-        <div id="poi-row" class="poi-row-container" v-class-toggle="{ expanded: !!loc?.poisExpanded }"><button v-for="poi in loc?.pois" :key="`${loc.poiCity}:${poi.index}`" type="button" class="poi-pill" v-class-toggle="{ active: poi.active }" :data-poi-index="poi.index" @click="locationControls?.choosePoi(poi.index)"><span class="poi-pill-key">{{ poi.key }}</span><span class="poi-pill-name">{{ poi.name }}</span></button></div>
+        <div id="poi-row" class="poi-row-container" v-class-toggle="{ expanded: !!loc?.poisExpanded }"><UiButton v-for="poi in loc?.pois" :key="`${loc.poiCity}:${poi.index}`" class="poi-pill" :pressed="Boolean(poi.active)" pressed-class="active" :data-poi-index="poi.index" @click="locationControls?.choosePoi(poi.index)"><span class="poi-pill-key">{{ poi.key }}</span><span class="poi-pill-name">{{ poi.name }}</span></UiButton></div>
         <div class="location-bar-divider" id="location-bar-divider" v-class-toggle="{ visible: !!loc?.poisExpanded }"></div>
         <div class="location-city-row">
-          <div id="location-pills" class="location-pills"><button v-for="city in loc?.cities" :key="city.id" type="button" class="location-pill" v-class-toggle="{ active: city.active }" :data-location-id="city.id" @click="locationControls?.chooseCity(city.id)">{{ city.label }}</button></div>
+          <div id="location-pills" class="location-pills"><UiButton v-for="city in loc?.cities" :key="city.id" class="location-pill" :pressed="Boolean(city.active)" pressed-class="active" :data-location-id="city.id" @click="locationControls?.chooseCity(city.id)">{{ city.label }}</UiButton></div>
           <div class="location-search-wrap">
             <button id="search-toggle" class="search-toggle-btn" title="Search any location" data-i18n-title>
               <span>&#x1F50E;</span>

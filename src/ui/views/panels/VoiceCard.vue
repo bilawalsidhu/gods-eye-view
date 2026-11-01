@@ -1,6 +1,7 @@
 <script setup>
 import { t } from '../../../i18n/index.js';
 import { ASSISTANT_NAME } from '../../../voice/control.js';
+import UiChip from '../../kit/UiChip.vue';
 
 // Captions, plan and result, as VoiceCardControls (src/voice/voiceCard.js)
 // presents them. Captions update silently; the polite live region carries
@@ -22,7 +23,7 @@ const emit = defineEmits(['dismiss']);
         <ol id="gev-voice-card-plan" class="gev-voice-card-plan" :aria-label="t('Plan')" :hidden="card.steps.length === 0"><li v-for="(step, index) in card.steps" :key="step.key ?? index" class="gev-voice-card-step" :data-status="step.status"><span class="gev-voice-card-step-label">{{ step.label }}</span><span class="gev-voice-card-sr">{{ step.statusText ? `, ${step.statusText}` : '' }}</span><span v-if="step.detail" class="gev-voice-card-step-detail">{{ step.detail }}</span></li></ol>
         <div id="gev-voice-card-result" class="gev-voice-card-result" :hidden="!card.result.visible">
           <div id="gev-voice-card-result-title" class="gev-voice-card-result-title">{{ card.result.title }}</div>
-          <div id="gev-voice-card-chips" class="gev-voice-card-chips" :hidden="card.result.chips.length === 0"><span v-for="(chip, index) in card.result.chips" :key="index" class="gev-voice-card-chip" :data-tone="chip">{{ chip }}</span></div>
+          <div id="gev-voice-card-chips" class="gev-voice-card-chips" :hidden="card.result.chips.length === 0"><UiChip v-for="(chip, index) in card.result.chips" :key="index" class="gev-voice-card-chip" :data-tone="chip">{{ chip }}</UiChip></div>
           <ul id="gev-voice-card-lines" class="gev-voice-card-lines"><li v-for="(line, index) in card.result.lines" :key="index">{{ line }}</li></ul>
           <ol id="gev-voice-card-referents" class="gev-voice-card-referents" :aria-label="t('Referenced items')" :hidden="card.result.referents.length === 0"><li v-for="(ref, index) in card.result.referents" :key="index" :value="ref.n">{{ ref.label }}</li></ol>
           <details id="gev-voice-card-notes" class="gev-voice-card-notes" :hidden="card.result.notes.length === 0">

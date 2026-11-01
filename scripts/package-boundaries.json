@@ -134,7 +134,8 @@
       "src/ui/rail/PanelCollapseButton.vue",
       "src/ui/rail/panelState.js",
       "src/sdr/gain.js",
-      "src/ui/kit/UiSlider.js"
+      "src/ui/kit/UiSlider.js",
+      "src/ui/kit/UiChip.vue"
     ],
     "external": ["vue", "pinia"]
   },
@@ -667,7 +668,8 @@
       "src/ui/rail/utcClock.js",
       "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js",
-      "src/ui/weather/WeatherReadout.vue"
+      "src/ui/weather/WeatherReadout.vue",
+      "src/ui/kit/UiButton.vue"
     ],
     "external": ["vue"]
   },
@@ -1066,7 +1068,8 @@
       "src/ui/stores/panelChrome.js",
       "src/ui/rail/panelState.js",
       "src/ui/rail/fieldValue.js",
-      "src/ui/kit/UiSlider.js"
+      "src/ui/kit/UiSlider.js",
+      "src/ui/kit/UiButton.vue"
     ],
     "external": ["cesium", "vue", "pinia"]
   },
@@ -3076,7 +3079,8 @@
       "src/ui/stores/panelChrome.js",
       "src/ui/rail/panelState.js",
       "src/ui/rail/fieldValue.js",
-      "src/ui/kit/UiSlider.js"
+      "src/ui/kit/UiSlider.js",
+      "src/ui/kit/UiButton.vue"
     ],
     "external": [
       "hls.js",

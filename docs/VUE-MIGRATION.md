@@ -61,7 +61,10 @@ adapter is gone.
 `active`); its pressed classes toggle through `classList`, so a class other
 code adds (a voice highlight) survives a press. Every pressed toggle in the
 views is a `UiButton` except Bhote Koshi's cinematic button and the
-tilt-map button, whose owners still write their state into the DOM.
+tilt-map button, whose owners still write their state into the DOM. Core's
+pressable chips and pills (rail card chips, map sources, cities and places)
+are `UiButton`s too; `UiChip` is ui-vue's non-interactive label chip, used by
+the voice card.
 `UiSlider` keeps the native range input where ui-vue draws a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
 it takes ui-vue's `v-model`, `min`, `max`, `step` and `disabled`, emits a

@@ -898,7 +898,9 @@ test('row info and legends reconcile in place while chips retain focus and order
     controls.chips.push({ id: 'two', label: 'Two' });
     manager._refreshTogglePanel();
     assert.deepEqual(
-      [...block.children].map((node) => node.className),
+      [...block.children].map((node) =>
+        [...node.classList].filter((name) => !name.startsWith('ui-')).join(' '),
+      ),
       [
         'data-toggle-chip chip-idle',
         'data-toggle-chip chip-idle',
