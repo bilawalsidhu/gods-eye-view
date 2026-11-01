@@ -11,6 +11,7 @@ import {
   isCurrentPublication,
 } from './inciweb.js';
 import { msg, t } from '../../i18n/index.js';
+import { ICONS } from '../../icons.js';
 export { normalizeFirePerimeterSnapshot } from './records.js';
 export { createWfigsPerimeterSource } from './source.js';
 export * from './cards.js';
@@ -248,7 +249,8 @@ export function createFirePerimetersLayer({
   const layer = {
     id: 'fire-perimeters',
     name: 'Fire Perimeters',
-    icon: '🔥',
+    icon: '',
+    iconSvg: ICONS.flame,
     source: 'NIFC WFIGS',
     updateInterval: 300000,
 

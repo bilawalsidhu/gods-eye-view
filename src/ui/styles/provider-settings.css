@@ -241,6 +241,27 @@
   font-size: 0.55rem;
 }
 
+/* Colored tier dot, drawn in CSS instead of an emoji glyph. */
+.key-setup-tier::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+
+.key-setup-tier.tier-metered::before,
+.key-setup-tier.tier-paid::before {
+  background: #e5484d;
+  box-shadow: 0 0 0.35rem rgba(229, 72, 77, 0.55);
+}
+
+.key-setup-tier.tier-free::before {
+  background: #f5d90a;
+  box-shadow: 0 0 0.35rem rgba(245, 217, 10, 0.45);
+}
+
 .key-setup-exposed {
   padding: 0.05rem 0.3rem;
   color: rgba(255, 200, 120, 0.75);

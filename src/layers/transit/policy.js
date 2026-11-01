@@ -4,10 +4,7 @@
  * scene state, no network: everything here is exercised by node:test.
  */
 
-import {
-  TRANSIT_MODE_ICON,
-  transitRouteLabel,
-} from '../../data/transitFeeds.js';
+import { transitRouteLabel } from '../../data/transitFeeds.js';
 import { displayMotion, playbackPosition } from './movement.js';
 
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_ID = 'transit-selected';
@@ -378,12 +375,11 @@ export function buildTransitSelectionCopy(
   entry = null,
   t = englishText,
 ) {
-  const icon = TRANSIT_MODE_ICON[mode] || TRANSIT_MODE_ICON.unknown;
   const routeLabel = record.routeId
     ? t('Route {route}', { route: transitRouteLabel(feed, record.routeId) })
     : t('Vehicle {vehicle}', { vehicle: record.label || record.id });
-  const title = `${icon} ${routeLabel}`;
-  // The mode is said in words on its own line. A glyph and a route id do not
+  const title = routeLabel;
+  // The mode is said in words on its own line. A route id alone does not
   // tell a reader that the dot on Tremont Street is a subway train, and a
   // subway drawn on a street reads as a bug until the card says what it is.
   // An operator's own mode word (feed.modeWords) is a name and stays as is.

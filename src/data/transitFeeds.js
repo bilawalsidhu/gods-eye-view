@@ -38,15 +38,8 @@ export const TRANSIT_MODES = Object.freeze([
   'unknown',
 ]);
 
-/** Per-mode icon used in labels and the selection card. */
-export const TRANSIT_MODE_ICON = Object.freeze({
-  bus: '🚌',
-  tram: '🚊',
-  subway: '🚇',
-  rail: '🚆',
-  ferry: '⛴️',
-  unknown: '🚏',
-});
+// Transit modes carry no glyph: the selection card leads with the route label
+// and says the mode in words, and layer rows use the shared SVG icon set.
 
 /**
  * MBTA route ids are human-readable and mode-typed: rapid-transit lines carry
