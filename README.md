@@ -2,6 +2,8 @@
 
 # 🌐 God's Eye View
 
+**Official site: [godseyeview.ai](https://godseyeview.ai)** · Official source: this repository · Hosted version coming soon
+
 [![CI](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml) [![Reached #1 on GitHub Trending](https://img.shields.io/badge/%231_GitHub_Trending-thank_you!-F0A63C?style=flat-square&logo=github)](https://x.com/bilawalsidhu/status/2093798887815348521)
 
 ### A spy-satellite simulator in your browser — then you realize the sources are public and the data is real.
@@ -681,7 +683,7 @@ One heads-up from the inside: build in this space for a week and you learn that 
 
 <div align="center">
 
-▶️ [Watch the God's Eye View series](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q) · 📬 [Map the World](https://maptheworld.ai/) — the newsletter behind the project
+🌐 [godseyeview.ai](https://godseyeview.ai), the official site · ▶️ [Watch the God's Eye View series](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q) · 📬 [Map the World](https://maptheworld.ai/) — the newsletter behind the project
 
 **🌐 God's Eye View. No place left behind.**
 
