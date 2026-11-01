@@ -143,6 +143,20 @@ npm run dev
 Open **`http://localhost:4173`**. Choose **Live Contacts**, **Space Missions**,
 **Environmental**, or **Explore Manually** from the first-run panel.
 
+**Windows launcher:** Double-click `Launch Gods Eye View.bat` in the project
+folder. On a clean `main` checkout, each run fetches upstream updates and
+fast-forwards only; it never switches branches or overwrites local changes.
+Open pull requests are included after they are merged into `main`. If an update
+changes dependencies, the launcher reinstalls them. On other branches or with
+uncommitted work, it tells you that updates were skipped and starts the current
+checkout. Keep the launcher window open while using the app; close that window
+to stop the server.
+
+**Keyboard / Xbox controller:** Click the globe to focus it. Use **WASD** or
+the controller's **left stick** to pan, **arrow keys** or the **right stick**
+to orbit, and **LT/RT** to zoom. Keyboard navigation pauses while you type in
+an app field.
+
 <details>
 <summary>Startup performance</summary>
 
