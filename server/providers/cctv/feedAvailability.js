@@ -7,7 +7,14 @@
  *  1. Per camera: NO_FEED_FAILS_TO_MARK consecutive failed frame fetches mark
  *     the camera; any success clears it. A mark expires after
  *     NO_FEED_CAMERA_TTL_MS so the client tries the feed again and the camera
- *     heals by itself when the provider fixes it.
+ *     heals by itself when the provider fixes it. A failure that looks
+ *     temporary (HTTP 5xx/408/429, timeout, network error) is NOT evidence of
+ *     "no public feed": when the marking failure is temporary the mark is a
+ *     short, memory-only retry window (NO_FEED_TRANSIENT_TTL_MS). When it
+ *     ends the catalog advertises the feed again and ONE failed retry
+ *     re-opens the window, so a recovered camera is found again within
+ *     minutes at a bounded cost of one request per window, and a restart
+ *     also clears it.
  *  2. Per group (e.g. a TxDOT district): a small sample is probed. If every
  *     sampled camera fails, the group becomes SUSPECT and is re-probed after
  *     NO_FEED_SUSPECT_TTL_MS; only a second consecutive all-fail probe makes it
@@ -25,6 +32,7 @@ import path from 'node:path';
 
 export const NO_FEED_FAILS_TO_MARK = 2;
 export const NO_FEED_CAMERA_TTL_MS = 24 * 60 * 60 * 1000;
+export const NO_FEED_TRANSIENT_TTL_MS = 10 * 60 * 1000;
 export const NO_FEED_GROUP_TTL_MS = 6 * 60 * 60 * 1000;
 export const NO_FEED_SUSPECT_TTL_MS = 10 * 60 * 1000;
 export const NO_FEED_GROUP_SAMPLE = 3;
@@ -46,6 +54,8 @@ export function createFeedAvailability({
   const fails = new Map();
   /** id -> epoch ms when marked location-only */
   const cameras = new Map();
+  /** id -> epoch ms of a temporary-failure retry window (never persisted) */
+  const transientMarks = new Map();
   /** group key -> { state: 'ok'|'suspect'|'unavailable', at: epoch ms } */
   const groups = new Map();
   let persistTimer = null;
@@ -70,6 +80,8 @@ export function createFeedAvailability({
 
   function prune() {
     const t = now();
+    for (const [id, at] of transientMarks)
+      if (t - at >= NO_FEED_TRANSIENT_TTL_MS) transientMarks.delete(id);
     for (const [id, at] of cameras)
       if (t - at >= NO_FEED_CAMERA_TTL_MS) cameras.delete(id);
     // Suspect verdicts are kept for a full group TTL so the confirming
@@ -111,11 +123,18 @@ export function createFeedAvailability({
     }
   }
 
-  /** Record one real upstream frame attempt for a camera. */
-  function recordFrame(id, ok) {
+  /**
+   * Record one real upstream frame attempt for a camera.
+   * @param {string} id
+   * @param {boolean} ok
+   * @param {{transient?: boolean}} [detail] - transient=true when the failure
+   *   looks temporary (5xx, timeout, network error), not a missing feed.
+   */
+  function recordFrame(id, ok, { transient = false } = {}) {
     if (!id) return;
     if (ok) {
       fails.delete(id);
+      transientMarks.delete(id);
       if (cameras.delete(id)) schedulePersist();
       return;
     }
@@ -123,7 +142,22 @@ export function createFeedAvailability({
     fails.delete(id);
     fails.set(id, count);
     bound(fails);
-    if (count >= NO_FEED_FAILS_TO_MARK && !cameras.has(id)) {
+    if (count < NO_FEED_FAILS_TO_MARK) return;
+    if (transient) {
+      // A retry window, not a verdict. Keep any standing definitive mark.
+      const at = transientMarks.get(id);
+      if (
+        !cameras.has(id) &&
+        (at === undefined || now() - at >= NO_FEED_TRANSIENT_TTL_MS)
+      ) {
+        transientMarks.delete(id);
+        transientMarks.set(id, now());
+        bound(transientMarks);
+      }
+      return;
+    }
+    transientMarks.delete(id);
+    if (!cameras.has(id)) {
       cameras.set(id, now());
       bound(cameras);
       schedulePersist();
@@ -165,6 +199,8 @@ export function createFeedAvailability({
     const t = now();
     const at = cameras.get(id);
     if (at !== undefined && t - at < NO_FEED_CAMERA_TTL_MS) return true;
+    const tAt = transientMarks.get(id);
+    if (tAt !== undefined && t - tAt < NO_FEED_TRANSIENT_TTL_MS) return true;
     if (!groupKey) return false;
     const verdict = groups.get(groupKey);
     return (
