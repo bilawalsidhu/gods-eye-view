@@ -42,13 +42,45 @@ export const GROUND_SAMPLE_MAX_ARMED_RETRIES = 30;
 export const LOCAL_STEM_TIP_EPSILON_M = 0.5;
 const LOCAL_STEM_TIP_EPSILON_SQ = LOCAL_STEM_TIP_EPSILON_M ** 2;
 
+// This package loads no catalogs: the application passes its t() as the
+// `translate` service, and without one the card stays English.
+const msg = (text) => text;
+const englishText = (text, values = {}) =>
+  text.replace(/\{(\w+)\}/g, (all, key) =>
+    key in values ? String(values[key]) : all,
+  );
+
+// OpenStreetMap's aerodrome:type and status values the Norway file holds; a
+// value not listed shows as it came, capitalised.
+const AERODROME_TYPES = Object.freeze({
+  airfield: msg('Airfield'),
+  international: msg('International'),
+  regional: msg('Regional'),
+  public: msg('Public'),
+  'military/public': msg('Military / public'),
+  private: msg('Private'),
+  civil: msg('Civil'),
+  gliding: msg('Gliding'),
+});
+const AERODROME_STATUSES = Object.freeze({
+  'under construction': msg('Under construction'),
+});
+const OPENS = msg('opens {year}');
+const RUNWAY = msg('runway {length}');
+const capitalised = (text) => text[0].toLocaleUpperCase() + text.slice(1);
+
 /**
  * Build the owner-approved local-infrastructure card copy.
  * @param {object} properties Unwrapped GeoJSON feature properties.
  * @param {string} layerId Local layer id.
+ * @param {(text: string, values?: object) => string} [translate] The UI's t().
  * @returns {{title:string,details:string[]}}
  */
-export function localInfrastructureOverlayCopy(properties, layerId) {
+export function localInfrastructureOverlayCopy(
+  properties,
+  layerId,
+  translate = englishText,
+) {
   const props = unwrapProperties(properties) || {};
   const tags = props.tags || {};
   const title = featureLabelFromProperties(props, layerId);
@@ -86,6 +118,38 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     if (river && river.toLocaleLowerCase() !== title.toLocaleLowerCase()) {
       details.push(clampCardLine(river));
     }
+  } else if (layerId === 'local-airports') {
+    const codes = [tags.icao, tags.iata, tags.operator]
+      .map(cleanLabel)
+      .filter(Boolean)
+      .join(' · ');
+    if (codes) details.push(clampCardLine(codes));
+    const status = cleanLabel(tags.status);
+    const kind = cleanLabel(tags['aerodrome:type']);
+    if (status)
+      details.push(
+        clampCardLine(
+          [
+            AERODROME_STATUSES[status]
+              ? translate(AERODROME_STATUSES[status])
+              : capitalised(status),
+            cleanLabel(tags.opening) &&
+              translate(OPENS, { year: cleanLabel(tags.opening) }),
+            cleanLabel(tags.runway_length) &&
+              translate(RUNWAY, { length: cleanLabel(tags.runway_length) }),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        ),
+      );
+    else if (kind)
+      details.push(
+        clampCardLine(
+          AERODROME_TYPES[kind]
+            ? translate(AERODROME_TYPES[kind])
+            : capitalised(kind).replace('/', ' / '),
+        ),
+      );
   }
 
   return { title, details };
@@ -101,6 +165,7 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
  * @param {object} options.properties Unwrapped feature properties.
  * @param {number} options.priority Source-owned importance score.
  * @param {string} options.accent Source accent color.
+ * @param {(text: string, values?: object) => string} [options.translate] The UI's t().
  * @returns {object}
  */
 export function createLocalInfrastructureOverlayEntry({
@@ -110,8 +175,9 @@ export function createLocalInfrastructureOverlayEntry({
   properties,
   priority,
   accent,
+  translate,
 }) {
-  const copy = localInfrastructureOverlayCopy(properties, layerId);
+  const copy = localInfrastructureOverlayCopy(properties, layerId, translate);
   return createInfrastructureOverlayEntry({
     id,
     source: layerId,
@@ -317,6 +383,7 @@ export function createLocalGeoJsonLayer(
   },
   {
     overlayHost,
+    translate = englishText,
     registerEntityContext,
     selectEntityContext,
     clearSelectedEntityContextForLayer,
@@ -642,6 +709,29 @@ export function createLocalGeoJsonLayer(
               for (let i = 0; i < entities.length; i++) {
                 const feature = entities[i];
                 feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
+                // A feature may restyle itself (simplestyle `stroke`), e.g. a
+                // site still under construction.
+                const ownStroke = cleanLabel(
+                  feature.properties?.stroke?.getValue?.(),
+                );
+                const featureColor = ownStroke
+                  ? Cesium.Color.fromCssColorString(ownStroke)
+                  : baseColor;
+                // A drawn part of a site (a runway, a terminal) has no stem or
+                // card: the site's own feature carries them.
+                const role = feature.properties?.role?.getValue?.();
+                if (role) {
+                  if (feature.polygon) {
+                    feature.polygon.outline = true;
+                    feature.polygon.outlineColor = featureColor;
+                    // Surfaces read solid; a whole site stays a light wash.
+                    feature.polygon.material = featureColor.withAlpha(
+                      role === 'site' ? 0.15 : 0.55,
+                    );
+                  }
+                  _count -= 1;
+                  continue;
+                }
 
                 let pos = feature.position?.getValue(Cesium.JulianDate.now());
 
@@ -649,7 +739,7 @@ export function createLocalGeoJsonLayer(
                   // It's a polygon or line
                   if (feature.polygon) {
                     feature.polygon.outline = true;
-                    feature.polygon.outlineColor = baseColor;
+                    feature.polygon.outlineColor = featureColor;
 
                     // Calculate center point for the stem
                     const hierarchy = feature.polygon.hierarchy?.getValue(
@@ -716,11 +806,11 @@ export function createLocalGeoJsonLayer(
                 feature.polyline = new Cesium.PolylineGraphics({
                   positions: stemPositionBuffers[0],
                   width: 3.5,
-                  material: new Cesium.ColorMaterialProperty(baseColor),
+                  material: new Cesium.ColorMaterialProperty(featureColor),
                 });
                 feature.point = new Cesium.PointGraphics({
                   pixelSize: 10,
-                  color: baseColor,
+                  color: featureColor,
                   outlineColor: Cesium.Color.BLACK,
                   outlineWidth: 2,
                   // Never depth-cull the anchor against the photoreal mesh —
@@ -749,7 +839,8 @@ export function createLocalGeoJsonLayer(
                         position: tip,
                         properties,
                         priority,
-                        accent: color,
+                        accent: ownStroke || color,
+                        translate,
                       })
                     : null,
                 });
@@ -1244,6 +1335,8 @@ function labelPriorityFromProperties(props, layerId) {
   if (props.output || tags['plant:output:electricity']) score += 120;
   if (layerId === 'local-dams') score += 80;
   if (layerId === 'local-datacenters') score += 60;
+  // Scheduled airports (with an IATA code) outrank club airfields.
+  if (layerId === 'local-airports' && cleanLabel(tags.iata)) score += 400;
   return score;
 }
 

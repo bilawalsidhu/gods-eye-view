@@ -31,6 +31,7 @@ import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
+import { createAirportsLayer } from '../data/airports.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
@@ -170,6 +171,7 @@ export function createApplicationCatalog({
         }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),
+        createAirportsLayer(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
         createApplicationFirms({
           surface,

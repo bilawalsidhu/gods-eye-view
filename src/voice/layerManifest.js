@@ -401,6 +401,21 @@ const layers = [
     },
   },
   {
+    id: 'local-airports',
+    // The id already names the layer; no spoken aliases keeps the prompt
+    // under its size ceiling.
+    aliases: [],
+    context: true,
+    query: {
+      fields: {
+        name: ['t'],
+        icao: ['t'],
+        iata: ['t'],
+        status: ['t'],
+      },
+    },
+  },
+  {
     id: 'telegeography-submarine-cables',
     aliases: ['submarine cables', 'undersea cables', 'cables', 'telegeography'],
     context: false,
