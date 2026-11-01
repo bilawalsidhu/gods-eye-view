@@ -64,6 +64,7 @@ export function createCyclonesLayer({
   feed,
   hitTestOverlay = hitTestWorldOverlay,
   overlayHost,
+  context = null,
   cesium = Cesium,
   createRendering = createCycloneRendering,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
@@ -79,6 +80,8 @@ export function createCyclonesLayer({
     selectedId = null,
     selectionIntent = 'auto',
     navigationGeneration = 0,
+    selectedContextStormId = null,
+    selectedContextEntity = null,
     clickHandler = null,
     removeClickCapture = null;
   let enabled = false,
@@ -89,6 +92,53 @@ export function createCyclonesLayer({
   const notify = () => listener?.();
   const selected = () =>
     snapshot?.storms.find((storm) => storm.id === selectedId) || null;
+  function clearSelectedContext({ evicted = false } = {}) {
+    if (!evicted)
+      context?.clearSelectedEntityContextForLayer?.('weather-cyclones');
+    context?.removeEntityContextsForLayer?.('weather-cyclones');
+    selectedContextStormId = null;
+    selectedContextEntity = null;
+  }
+
+  function publishSelectedContext({ announce = false } = {}) {
+    const storm = selected();
+    if (!storm || !context) {
+      if (!storm) clearSelectedContext({ evicted: true });
+      return null;
+    }
+    selectedContextEntity ||= { show: true };
+    const contextId = `cyclone:${storm.id}`;
+    const record = context.registerEntityContext?.(selectedContextEntity, {
+      id: contextId,
+      layerId: 'weather-cyclones',
+      layerName: 'Cyclone advisories',
+      source: 'NOAA NHC / CPHC',
+      // Layer identity is already carried separately. Keep source names literal
+      // rather than adding an untranslated user-facing prefix.
+      label: storm.name,
+      latitude: storm.position.latitude,
+      longitude: storm.position.longitude,
+      properties: {
+        classification: storm.classification,
+        basin: storm.basin,
+        advisoryNumber: storm.advisoryNumber,
+        issuedAt: storm.issuedAt,
+        positionAt: storm.positionAt,
+        windKt: storm.windKt,
+        pressureHpa: storm.pressureHpa,
+        movement: storm.movement,
+        advisoryUrl: storm.advisoryUrl,
+      },
+    });
+    if (!record) return null;
+    selectedContextStormId = storm.id;
+    if (announce) context.selectEntityContext?.(selectedContextEntity);
+    context.removeEntityContextsForLayer?.('weather-cyclones', {
+      retainIds: new Set([contextId]),
+    });
+    return record;
+  }
+
   function select(id) {
     if (selectedId !== id) ++navigationGeneration;
     selectedId = id;
@@ -233,6 +283,7 @@ export function createCyclonesLayer({
       selectedId = null;
       selectionIntent = 'auto';
       ++navigationGeneration;
+      clearSelectedContext();
       rendering?.clear();
     },
     async update(_viewer, { signal } = {}) {
@@ -256,6 +307,7 @@ export function createCyclonesLayer({
           snapshot = next;
           selectedId = null;
           ++navigationGeneration;
+          clearSelectedContext({ evicted: true });
           error = next.reason || ADVISORIES_UNAVAILABLE;
           return true;
         }
@@ -278,6 +330,10 @@ export function createCyclonesLayer({
               : snapshot.storms[0]?.id || null,
           );
         else rendering.setSelection(selectedId);
+        if (selectedContextStormId) {
+          if (selectedId === selectedContextStormId) publishSelectedContext();
+          else clearSelectedContext({ evicted: true });
+        }
         return true;
       } catch (cause) {
         if (controller.signal.aborted || request !== controller) return false;
@@ -287,6 +343,7 @@ export function createCyclonesLayer({
         snapshot = null;
         selectedId = null;
         ++navigationGeneration;
+        clearSelectedContext({ evicted: true });
         return true;
       } finally {
         signal?.removeEventListener('abort', abort);
@@ -302,6 +359,7 @@ export function createCyclonesLayer({
       if (params.clear === true || params.stormId === null) {
         selectionIntent = 'cleared';
         select(null);
+        clearSelectedContext();
         notify();
       } else if (
         typeof params.stormId === 'string' &&
@@ -309,6 +367,7 @@ export function createCyclonesLayer({
       ) {
         selectionIntent = 'user';
         select(params.stormId);
+        publishSelectedContext({ announce: true });
         notify();
       }
       const storm = selected();
