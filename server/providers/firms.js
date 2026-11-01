@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import { readResponseTextCapped } from './common/http.js';
+import { gevCachePath } from '../cacheDir.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
@@ -165,7 +166,7 @@ export function firmsProxy() {
    * bound, not a budget.
    */
   const FIRMS_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
-  const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
+  const CACHE_DIR = gevCachePath();
   const CACHE_PATH = path.join(CACHE_DIR, 'firms.json');
 
   /** @type {?{at: number, sources: Array<object>, fires: Array<object>}} */

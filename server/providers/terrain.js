@@ -11,6 +11,7 @@ import {
 } from '../../src/data/terrainHeightsProxy.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
+import { gevCachePath } from '../cacheDir.js';
 
 /**
  * Re:Earth terrain point-height proxy: batched lon/lat → ellipsoidal height
@@ -45,8 +46,7 @@ export function terrainHeightsProxy(options = {}) {
     cachePath,
   } = options;
   const TTL_MS = 30 * 24 * 3600_000;
-  const CACHE_PATH =
-    cachePath || path.join(process.cwd(), '.gev-cache', 'terrain-heights.json');
+  const CACHE_PATH = cachePath || gevCachePath('terrain-heights.json');
   const CACHE_DIR = path.dirname(CACHE_PATH);
   // Sized against measured upstream latency, not the documented page cap.
   // Re:Earth serves 87-186 ms/point depending on load (observed 2026-09-12,

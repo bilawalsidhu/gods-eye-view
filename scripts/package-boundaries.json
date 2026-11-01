@@ -102,6 +102,7 @@
     "exports": ["./server/providers/space"],
     "modules": [
       "server/providers/space.js",
+      "server/cacheDir.js",
       "server/providers/space/celestrak.js",
       "server/providers/common/same-site.js",
       "src/localRequestGate.mjs",
@@ -123,6 +124,7 @@
     "runtime": "node",
     "exports": ["./server/providers/terrain"],
     "modules": [
+      "server/cacheDir.js",
       "server/providers/terrain.js",
       "src/data/terrainHeightsProxy.js",
       "server/providers/common/rate-limit.js",
@@ -141,6 +143,7 @@
     "runtime": "node",
     "exports": ["./server/providers/traffic"],
     "modules": [
+      "server/cacheDir.js",
       "server/providers/traffic.js",
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
@@ -165,6 +168,7 @@
     "runtime": "node",
     "exports": ["./server/providers/firms"],
     "modules": [
+      "server/cacheDir.js",
       "server/providers/firms.js",
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
@@ -286,6 +290,7 @@
     "runtime": "node",
     "exports": ["./server/providers/military-installations"],
     "modules": [
+      "server/cacheDir.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
       "server/providers/common/rate-limit.js",

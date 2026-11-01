@@ -19,6 +19,7 @@ import {
 } from 'gods-eye-view/server/providers/regional';
 import { openAiRealtimeProxy } from 'gods-eye-view/server/providers/openai';
 import { keySetupEndpoint } from 'gods-eye-view/server/standalone/key-setup';
+import { gevCachePath } from '../../server/cacheDir.js';
 import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { createDebugLogHandler } from '../../server/providers/openai/debug-log.js';
@@ -700,7 +701,7 @@ test('key setup writes only the supplied application root, retains request guard
   assert.equal(existsSync(path.join(untouched, '.env')), false);
 });
 
-test('GEV_STATE_DIR moves the key store out of the source tree and leaves it alone when unset', async (t) => {
+test('GEV_STATE_DIR moves the key store out of the source tree', async (t) => {
   const source = root(t),
     state = root(t);
   env(t, 'OPENAI_API_KEY', undefined);
@@ -718,6 +719,38 @@ test('GEV_STATE_DIR moves the key store out of the source tree and leaves it alo
     /OPENAI_API_KEY=sk-fixture-only-not-a-real-key/,
   );
   assert.equal(existsSync(path.join(source, '.env')), false);
+});
+
+test('the key store stays in the source tree when GEV_STATE_DIR is unset', async (t) => {
+  const source = root(t);
+  env(t, 'OPENAI_API_KEY', undefined);
+  env(t, 'GEV_STATE_DIR', undefined);
+  const handler = install(keySetupEndpoint({ sourceRoot: source })).get(
+    '/api/setup/keys',
+  );
+  const saved = await request(handler, {
+    method: 'POST',
+    body: JSON.stringify({ OPENAI_API_KEY: 'sk-fixture-only-not-a-real-key' }),
+  });
+  assert.equal(saved.status, 200);
+  assert.match(
+    readFileSync(path.join(source, '.env'), 'utf8'),
+    /OPENAI_API_KEY=sk-fixture-only-not-a-real-key/,
+  );
+});
+
+test('provider disk caches follow GEV_STATE_DIR and default to the working directory', (t) => {
+  const state = root(t);
+  env(t, 'GEV_STATE_DIR', state);
+  assert.equal(
+    gevCachePath('firms.json'),
+    path.join(state, '.gev-cache', 'firms.json'),
+  );
+  env(t, 'GEV_STATE_DIR', undefined);
+  assert.equal(
+    gevCachePath('firms.json'),
+    path.join(process.cwd(), '.gev-cache', 'firms.json'),
+  );
 });
 
 test('Realtime service configuration selects compatible endpoint/model without forwarding request model IDs or keys', async () => {

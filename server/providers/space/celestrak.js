@@ -4,6 +4,7 @@ import { celestrakTleUrl } from '../../../src/data/spaceProviderRequests.js';
 import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 import { readResponseTextCapped } from '../common/http.js';
+import { gevCachePath } from '../../cacheDir.js';
 
 /**
  * Vite plugin: CelesTrak TLE proxy.
@@ -25,7 +26,7 @@ import { readResponseTextCapped } from '../common/http.js';
  */
 export function celestrakProxy() {
   const TLE_TTL_MS = 6 * 3600_000;
-  const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
+  const CACHE_DIR = gevCachePath();
   const groups = new Set([
     'stations',
     'visual',
