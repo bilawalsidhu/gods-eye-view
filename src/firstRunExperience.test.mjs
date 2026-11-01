@@ -413,11 +413,6 @@ test('one ESC does one thing — a Cockpit utility disclosure stops later docume
 });
 
 test('a refused write takes the tick back instead of promising "never again"', () => {
-  const module = fs.readFileSync(
-    new URL('./firstRunExperience.js', import.meta.url),
-    'utf8',
-  );
-
   // The write stays best-effort; the OUTCOME is now reported, because a box left
   // ticked after a refused write tells the visitor the launcher is gone for good
   // while it is already guaranteed to return next session.
@@ -442,20 +437,7 @@ test('a refused write takes the tick back instead of promising "never again"', (
   assert.equal(working.read(), 'suppressed');
   assert.equal(setFirstRunSuppressed(false, working), true);
   assert.equal(working.read(), null);
-
-  const handler = module.slice(
-    module.indexOf('const onSuppressChange = (event) => {'),
-    module.indexOf('  const keyboard = createSurfaceKeyboard({'),
-  );
-  assert.match(
-    handler,
-    /if \(setFirstRunSuppressed\(wanted, storage\)\) return;/,
-  );
-  assert.match(
-    handler,
-    /box\.checked = !wanted;/,
-    'a refused write must revert the tick',
-  );
+  // The rendered checkbox reverting is firstRunLauncherView.test.mjs.
 });
 
 test('a surface class that never clears is an ACCEPTED no-show, not a timer', () => {
@@ -506,16 +488,8 @@ test('the scroll fade only appears when the list really overflows', () => {
   );
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   // A fade on a card where all five tiles fit promises a sixth mission that does
-  // not exist, which is worse than no affordance at all.
-  assert.match(
-    module,
-    /const overflows = choiceList\.scrollHeight > choiceList\.clientHeight \+ 1;/,
-  );
-  assert.match(
-    module,
-    /choiceList\.dataset\.scrollable = String\(overflows\);/,
-  );
-  // ...and the CSS must be gated on that flag, never on the media query alone.
+  // not exist, which is worse than no affordance at all. The measured flag is
+  // firstRunLauncherView.test.mjs; the CSS must be gated on that flag, never on the media query alone.
   assert.match(
     css,
     /\.first-run-choices\[data-scrollable='true'\] \{[\s\S]*?mask-image/,
@@ -919,10 +893,6 @@ test('the card closes without a keyboard: the ESC hint is a button, kept on phon
   const html = await renderApplicationHtml(
     fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
   );
-  const module = fs.readFileSync(
-    new URL('./firstRunExperience.js', import.meta.url),
-    'utf8',
-  );
   // The whole stylesheet, so a hide rule added in any other file is caught too.
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   const footer = html.slice(
@@ -936,11 +906,7 @@ test('the card closes without a keyboard: the ESC hint is a button, kept on phon
   assert.match(footer, /data-i18n>ESC to dismiss</);
   assert.match(footer, /data-i18n>DISMISS</);
   // It closes the way ESC does, through the one dismiss path, so the session
-  // flag and focus handling are the same.
-  assert.match(
-    module,
-    /querySelector\('\[data-first-run-dismiss\]'\)\s*\?\.addEventListener\('click', \(\) => dismiss\(\)\)/,
-  );
+  // flag and focus handling are the same: firstRunLauncherView.test.mjs.
   // Phones used to hide the hint, leaving no way out but picking a mission.
   assert.doesNotMatch(css, /first-run-footer > span:last-child/);
   assert.doesNotMatch(css, /\.first-run-dismiss\s*\{[^}]*display:\s*none/);
@@ -963,12 +929,9 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
     'utf8',
   );
   // aria-disabled, never the `disabled` property: disabling a focused button
-  // drops the keyboard to <body> and strands the visitor outside the launcher.
-  assert.match(
-    module,
-    /button\.setAttribute\('aria-disabled', String\(next\)\)/,
-  );
-  assert.doesNotMatch(module, /button\.disabled = /);
+  // drops the keyboard to <body> and strands the visitor outside the launcher
+  // (firstRunLauncherView.test.mjs renders it).
+  assert.doesNotMatch(module, /\.disabled = /);
   // Tab is confined to the launcher, and ESC always releases it.
   const keyboard = fs.readFileSync(
     new URL('./ui/surfaceKeyboard.js', import.meta.url),

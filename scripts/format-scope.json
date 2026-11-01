@@ -1157,5 +1157,8 @@
   "src/hudReadouts.js",
   "src/ui/stores/hud.js",
   "src/ui/views/intelHudView.test.mjs",
-  "src/testSupport/hudReadouts.mjs"
+  "src/testSupport/hudReadouts.mjs",
+  "src/ui/stores/firstRun.js",
+  "src/firstRunLauncherView.test.mjs",
+  "src/firstRunCopy.js"
 ]

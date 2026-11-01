@@ -1,9 +1,35 @@
+<script setup>
+import { storeToRefs } from 'pinia';
+import { msg } from '../../i18n/index.js';
+import {
+  FIRST_RUN_TIP,
+  environmentalLabel,
+} from '../../firstRunCopy.js';
+import { useFirstRunStore } from '../stores/firstRun.js';
+
+// The launcher initFirstRunExperience presents, and the controls it connects.
+const { launcher, controls } = storeToRefs(useFirstRunStore());
+// The card stays hidden until it is initialized; these show in the markup.
+const DESCRIPTION = msg(
+  'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
+);
+const ENVIRONMENTAL_SUB = msg(
+  'Live earthquakes and active fires, from USGS and NASA',
+);
+
+// A refused save puts the box back where the stored preference is.
+function onSuppress(event) {
+  const box = event.currentTarget;
+  if (controls.value?.suppress(box.checked) === false) box.checked = !box.checked;
+}
+</script>
+
 <template>
   <!-- Explicit mission choice on a fresh session. Live feeds are not auto-enabled
        until the visitor asks; shared links skip this surface entirely. It returns
        every session until "Don't show this again" is ticked — see
        src/firstRunExperience.js for the full show policy. -->
-  <aside id="first-run-launcher" role="dialog" aria-labelledby="first-run-title" aria-describedby="first-run-description" hidden>
+  <aside v-if="!launcher?.removed" id="first-run-launcher" role="dialog" aria-labelledby="first-run-title" aria-describedby="first-run-description" :class="{ visible: launcher?.visible }" :hidden="!launcher?.shown" :aria-hidden="launcher?.closing ? 'true' : undefined" :aria-busy="launcher?.busy ?? undefined" :data-state="launcher?.state ?? undefined">
     <div class="first-run-scanline" aria-hidden="true"></div>
     <header class="first-run-header">
       <span class="first-run-kicker" data-i18n>MISSION CONTROL · FIRST LAUNCH</span>
@@ -13,28 +39,28 @@
          — including the unspaced em dash. The arc it has to carry: this looks
          like something you should not have access to → the sources are all
          public → the data is real. Tile subcopy stays purely functional. -->
-    <p id="first-run-description" data-i18n-runtime>It feels like a forbidden cockpit—then you realize the sources are public and the data is real.</p>
-    <div class="first-run-choices ui-scroll">
-      <button type="button" data-first-run-choice="contacts">
+    <p id="first-run-description" data-i18n-runtime>{{ launcher?.description ?? DESCRIPTION }}</p>
+    <div class="first-run-choices ui-scroll" :data-scrollable="launcher?.scrollable ?? undefined">
+      <button type="button" data-first-run-choice="contacts" :aria-disabled="launcher?.busy ?? undefined" @click="controls?.choose('contacts')">
         <span class="material-symbols-outlined" aria-hidden="true">radar</span>
         <span><strong data-i18n>LIVE CONTACTS</strong><small data-i18n>Aircraft, vessels and nearby intelligence</small></span>
         <span class="material-symbols-outlined first-run-arrow" aria-hidden="true">arrow_forward</span>
       </button>
-      <button type="button" data-first-run-choice="space-missions">
+      <button type="button" data-first-run-choice="space-missions" :aria-disabled="launcher?.busy ?? undefined" @click="controls?.choose('space-missions')">
         <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
         <span><strong data-i18n>SPACE MISSIONS</strong><small data-i18n>Launches, spacecraft and orbital context</small></span>
         <span class="material-symbols-outlined first-run-arrow" aria-hidden="true">arrow_forward</span>
       </button>
-      <button type="button" data-first-run-choice="environmental">
+      <button type="button" data-first-run-choice="environmental" :aria-disabled="launcher?.busy ?? undefined" @click="controls?.choose('environmental')">
         <span class="material-symbols-outlined" aria-hidden="true">local_fire_department</span>
-        <!-- Title text is painted from ENVIRONMENTAL_LABEL_CHOICE at init. -->
+        <!-- The title is ENVIRONMENTAL_LABEL_CHOICE's label once initialized. -->
         <!-- Subcopy names BOTH feeds this tile turns on, because the launcher
              optimizes for the fully configured experience (owner ruling,
              2026-08-23) — see the mission table in src/firstRunExperience.js. -->
-        <span data-i18n-runtime><strong data-first-run-environmental-title>ENVIRONMENTAL</strong><small>Live earthquakes and active fires, from USGS and NASA</small></span>
+        <span data-i18n-runtime><strong data-first-run-environmental-title>{{ launcher?.environmentalTitle ?? environmentalLabel().title }}</strong><small>{{ launcher?.environmentalSub ?? ENVIRONMENTAL_SUB }}</small></span>
         <span class="material-symbols-outlined first-run-arrow" aria-hidden="true">arrow_forward</span>
       </button>
-      <button type="button" class="first-run-explore" data-first-run-choice="explore">
+      <button type="button" class="first-run-explore" data-first-run-choice="explore" :aria-disabled="launcher?.busy ?? undefined" @click="controls?.choose('explore')">
         <span class="material-symbols-outlined" aria-hidden="true">public</span>
         <span><strong data-i18n>EXPLORE MANUALLY</strong><small data-i18n>Begin with a clean globe</small></span>
         <span class="material-symbols-outlined first-run-arrow" aria-hidden="true">arrow_forward</span>
@@ -42,19 +68,19 @@
     </div>
     <div class="first-run-footer">
       <label class="first-run-suppress">
-        <input type="checkbox" data-first-run-suppress />
+        <input type="checkbox" data-first-run-suppress @change="onSuppress" />
         <span data-i18n>Don't show this again</span>
       </label>
       <!-- A button, not just a hint: phones and tablets have no ESC key. It
            closes exactly as ESC does, for this session only. Touch screens
            see DISMISS; a keyboard keeps the ESC hint (first-run.css). -->
-      <button type="button" class="first-run-dismiss" data-first-run-dismiss>
+      <button type="button" class="first-run-dismiss" data-first-run-dismiss @click="controls?.dismiss()">
         <span class="first-run-dismiss-key" data-i18n>ESC to dismiss</span>
         <span class="first-run-dismiss-touch" data-i18n>DISMISS</span>
       </button>
     </div>
     <!-- Kept out of the footer row: it swaps to mission progress and errors, and
          a live region that also holds layout makes the row jump as it speaks. -->
-    <p class="first-run-note" data-first-run-status role="status" aria-live="polite" data-i18n>Tip: the GEV MIC button in the dock lets you talk to the map.</p>
+    <p class="first-run-note" data-first-run-status role="status" aria-live="polite">{{ launcher?.status ?? FIRST_RUN_TIP }}</p>
   </aside>
 </template>

@@ -28,11 +28,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TESTS = [
   'src/firstRunExperience.test.mjs',
   'src/standalone/startupChrome.test.mjs',
+  'src/firstRunLauncherView.test.mjs',
 ];
 
 const FILES = {
   keyboard: path.join(ROOT, 'src', 'ui', 'surfaceKeyboard.js'),
   module: path.join(ROOT, 'src', 'firstRunExperience.js'),
+  copy: path.join(ROOT, 'src', 'firstRunCopy.js'),
+  surfaces: path.join(ROOT, 'src', 'exclusiveSurfaces.js'),
   html: path.join(ROOT, 'src', 'ui', 'views', 'WelcomeView.vue'),
   css: path.join(ROOT, 'src', 'ui', 'styles', 'first-run.css'),
   voiceInstructions: path.join(ROOT, 'server/providers/openai/instructions.js'),
@@ -146,7 +149,7 @@ const MUTATIONS = [
   {
     defect:
       'cockpit drops off the exclusive list and can stack with the launcher',
-    file: 'module',
+    file: 'surfaces',
     from: "export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([\n  'cockpit-mode',",
     to: 'export const EXCLUSIVE_SURFACE_CLASSES = Object.freeze([',
   },
@@ -219,8 +222,8 @@ const MUTATIONS = [
     defect:
       'a refused write leaves the box ticked, promising a suppression nobody stored',
     file: 'module',
-    from: '    if (setFirstRunSuppressed(wanted, storage)) return;',
-    to: '    setFirstRunSuppressed(wanted, storage);\n    return;',
+    from: '    if (setFirstRunSuppressed(Boolean(wanted), storage)) return true;',
+    to: '    setFirstRunSuppressed(Boolean(wanted), storage);\n    return true;',
   },
   {
     defect: 'a missing storage area reports the write as saved',
@@ -232,8 +235,8 @@ const MUTATIONS = [
     defect:
       'the scroll fade promises more list on a card where everything fits',
     file: 'module',
-    from: 'choiceList.dataset.scrollable = String(overflows);',
-    to: "choiceList.dataset.scrollable = 'true'; void overflows;",
+    from: 'present({ scrollable: String(overflows) });',
+    to: "present({ scrollable: 'true' }); void overflows;",
   },
 
   {
@@ -274,8 +277,8 @@ const MUTATIONS = [
   {
     defect: 'the tile stops promising the fires it actually turns on',
     file: 'html',
-    from: '<small>Live earthquakes and active fires, from USGS and NASA</small>',
-    to: '<small>Live earthquakes worldwide, straight from USGS</small>',
+    from: "  'Live earthquakes and active fires, from USGS and NASA',",
+    to: "  'Live earthquakes worldwide, straight from USGS',",
   },
   {
     defect: 'the owner-authored first-run line is quietly rewritten',
@@ -322,9 +325,9 @@ const MUTATIONS = [
   {
     defect:
       'the fires/quakes tile name stops being switchable from one constant',
-    file: 'module',
-    from: 'return ENVIRONMENTAL_LABELS[choice] || ENVIRONMENTAL_LABELS.ENVIRONMENTAL;',
-    to: 'return ENVIRONMENTAL_LABELS.ENVIRONMENTAL;',
+    file: 'copy',
+    from: 'ENVIRONMENTAL_LABEL_KEYS[choice] || ENVIRONMENTAL_LABEL_KEYS.ENVIRONMENTAL;',
+    to: 'ENVIRONMENTAL_LABEL_KEYS.ENVIRONMENTAL;',
   },
 
   // ── Defaults interplay (the ruling this whole integration turns on) ────────
@@ -367,9 +370,9 @@ const MUTATIONS = [
   {
     defect:
       'disabling the focused tile drops the keyboard to <body> mid-flight',
-    file: 'module',
-    from: "    for (const button of buttons)\n      button.setAttribute('aria-disabled', String(next));",
-    to: '    for (const button of buttons) button.disabled = next;',
+    file: 'html',
+    from: ':aria-disabled="launcher?.busy ?? undefined" @click="controls?.choose(\'contacts\')"',
+    to: ':disabled="launcher?.busy === \'true\'" @click="controls?.choose(\'contacts\')"',
   },
   {
     defect: 'Tab escapes into an app the visitor has not seen yet',
@@ -442,19 +445,19 @@ const MUTATIONS = [
   {
     defect: 'a mission tile is dropped from the menu',
     file: 'html',
-    from: '      <button type="button" data-first-run-choice="space-missions">',
-    to: '      <button type="button" data-first-run-choice-disabled="space-missions">',
+    from: '      <button type="button" data-first-run-choice="space-missions"',
+    to: '      <button type="button" data-first-run-choice-disabled="space-missions"',
   },
   {
     defect: "the menu order stops matching the owner's",
     file: 'html',
-    from: '<button type="button" data-first-run-choice="environmental">',
-    to: '<button type="button" data-first-run-choice="zzz-environmental">',
+    from: '<button type="button" data-first-run-choice="environmental"',
+    to: '<button type="button" data-first-run-choice="zzz-environmental"',
   },
   {
     defect: 'the "don\'t show again" checkbox is removed',
     file: 'html',
-    from: '<input type="checkbox" data-first-run-suppress />',
+    from: '<input type="checkbox" data-first-run-suppress @change="onSuppress" />',
     to: '<span data-first-run-suppress-removed></span>',
   },
   {
@@ -466,8 +469,8 @@ const MUTATIONS = [
   {
     defect: 'the launcher is no longer announced as a dialog',
     file: 'html',
-    from: '<aside id="first-run-launcher" role="dialog"',
-    to: '<aside id="first-run-launcher"',
+    from: 'id="first-run-launcher" role="dialog"',
+    to: 'id="first-run-launcher"',
   },
   {
     defect: 'the launcher is revealed before the loading cover yields',

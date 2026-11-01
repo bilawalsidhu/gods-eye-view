@@ -117,7 +117,9 @@
       "src/ui/stores/awarenessDirection.js",
       "src/ui/views/panels/AwarenessDirection.vue",
       "src/ui/stores/hud.js",
-      "src/ui/views/IntelHudView.vue"
+      "src/ui/views/IntelHudView.vue",
+      "src/ui/stores/firstRun.js",
+      "src/firstRunCopy.js"
     ],
     "external": ["vue", "pinia"]
   },
@@ -3045,7 +3047,9 @@
       "src/ui/stores/worldOverlayActions.js",
       "src/ui/stores/awarenessDirection.js",
       "src/hudReadouts.js",
-      "src/ui/stores/hud.js"
+      "src/ui/stores/hud.js",
+      "src/ui/stores/firstRun.js",
+      "src/firstRunCopy.js"
     ],
     "external": [
       "hls.js",

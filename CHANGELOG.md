@@ -86,6 +86,11 @@
   writing `#hud-ais-vessel`; the application passes `src/hudReadouts.js`,
   which IntelHUD follows (samehkhamis).
 
+- `initFirstRunExperience` (via `./application/chrome`) no longer writes the
+  launcher's classes, attributes or text, or removes the card: it presents
+  them to the welcome view's `gev-first-run` store (its new `store` option)
+  and connects the controls the view's buttons call (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

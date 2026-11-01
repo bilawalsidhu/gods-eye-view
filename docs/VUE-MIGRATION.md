@@ -200,7 +200,13 @@ a feature supplying only its accent.
    readouts, the typing summary, the REC blink, visibility, layout variant
    and style colors; the vessel layer presents the selected vessel's
    readout through `src/hudReadouts.js` instead of writing into the HUD),
-   then
+   the first-run mission launcher (the welcome view renders the card's
+   visibility, busy state, status line, copy and scroll fade from the
+   `gev-first-run` store that `initFirstRunExperience` publishes to, and its
+   choices, DISMISS and "Don't show this again" call the launcher's
+   controls; a refused save hands the tick back to the view to revert. The
+   launcher still reads the rendered card for its hit test, keyboard trap,
+   focus and overflow measurement), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
