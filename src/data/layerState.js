@@ -297,7 +297,49 @@ function satelliteFilterOption() {
   });
 }
 
+const AIR_QUALITY_PROVIDER_TOKENS = new Map([
+  ['eccc', 'c'],
+  ['saaqis', 's'],
+  ['openaq', 'o'],
+]);
+const AIR_QUALITY_PROVIDER_IDS = new Map(
+  [...AIR_QUALITY_PROVIDER_TOKENS].map(([id, token]) => [token, id]),
+);
+
 const OPTION_GROUPS = Object.freeze({
+  'air-quality': Object.freeze([
+    Object.freeze({
+      key: 'provider',
+      token: 'p',
+      defaultValue: 'eccc',
+      normalize: (value) =>
+        typeof value === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(value)
+          ? value
+          : null,
+      encode: (value) => AIR_QUALITY_PROVIDER_TOKENS.get(value) || `x-${value}`,
+      decode: (value) =>
+        AIR_QUALITY_PROVIDER_IDS.get(value) ||
+        (/^x-[a-z][a-z0-9-]{0,39}$/.test(value) ? value.slice(2) : null),
+    }),
+    enumOption(
+      'parameter',
+      'm',
+      'PM2.5',
+      ['PM2.5', 'PM10', 'NO2', 'SO2', 'O3', 'CO', 'CO2', 'NO', 'NOX', 'H2S'],
+      {
+        'PM2.5': 'p',
+        PM10: 'q',
+        NO2: 'n',
+        SO2: 's',
+        O3: 'o',
+        CO: 'c',
+        CO2: 'd',
+        NO: 'i',
+        NOX: 'x',
+        H2S: 'h',
+      },
+    ),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -568,7 +610,8 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
     id: 'air-quality',
     token: '4',
-    disposition: 'enabled-only',
+    disposition: 'enabled+options',
+    optionOwner: 'air-quality',
   }),
   Object.freeze({
     id: 'ais-live-vessels',

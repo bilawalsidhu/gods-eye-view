@@ -142,6 +142,21 @@
 .rail-card-line {
   white-space: pre-line;
 }
+/* Lead explanations must remain readable over bright imagery through glass. */
+.weather-card [data-block-id='overview'] {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}
+.weather-card [data-block-id='overview'] .rail-card-line {
+  color: var(--text-primary);
+  font: 11px/1.45 var(--font-sans);
+  letter-spacing: 0;
+}
+.weather-card [data-block-id='overview'] .rail-card-line:first-child {
+  font-size: 13px;
+  font-weight: 600;
+}
 .weather-card [data-line-id='status'] {
   height: 1.45em;
   overflow-y: auto;
@@ -413,4 +428,34 @@ html:not([lang='en']) .rail-card-setting {
 }
 .rail-card[data-open='true'] > .rail-card-header {
   padding-bottom: 0;
+}
+
+.rail-card .data-row-list-badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.rail-card .data-row-list-badge[hidden] {
+  display: none;
+}
+
+.rail-card .data-row-list-item:has(.data-row-list-badge:not([hidden])) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+}
+.rail-card .data-row-list-item:has(.data-row-list-badge:not([hidden]))::before {
+  display: none;
+}
+.rail-card
+  .data-row-list-item:has(.data-row-list-badge:not([hidden]))
+  .data-row-list-text {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.rail-card .data-row-list-badge {
+  grid-column: 2;
+  grid-row: 1;
+  white-space: nowrap;
 }

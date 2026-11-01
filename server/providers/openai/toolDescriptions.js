@@ -581,7 +581,7 @@ export const ACTION_DESCRIPTIONS = {
           },
         },
         filters: {
-          description: `ANDed; values keep their type (numbers, true/false). Altitude is meters (40,000 ft = 12192). Time fields take ISO; ageHours = hours ago. Every layer has id, lat, lon. Fields — ${voiceQueryFieldHint()}.`,
+          description: `ANDed; preserve value types. Altitude is meters (40,000 ft = 12192). Time fields take ISO; ageHours = hours ago. Every layer has id, lat, lon. Fields — ${voiceQueryFieldHint()}.`,
           $position: 1,
         },
         sortBy: {

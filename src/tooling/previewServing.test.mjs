@@ -42,6 +42,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
   for (const [name, value] of Object.entries({
     AISSTREAM_API_KEY: '',
     FIRMS_MAP_KEY: '',
+    OPENAQ_API_KEY: '',
     FIRMS_API_KEY: '',
     TOMTOM_API_KEY: '',
     GOOGLE_MAPS_API_KEY: '',
@@ -104,6 +105,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/military', 200],
         ['/api/adsbdb/type/invalid', 400],
         ['/api/firms/status', 200],
+        ['/api/air-quality/openaq', 428],
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
         ['/api/gnss-integrity?lat=invalid', 400],
         ['/api/ghostmaps/unknown', 404],

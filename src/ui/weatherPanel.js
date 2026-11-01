@@ -220,6 +220,9 @@ export function createWeatherPanel({
         },
       };
       const blocks = [
+        ...(summary.overview?.length
+          ? [{ id: 'overview', type: 'lines', lines: summary.overview }]
+          : []),
         ...(list?.items?.length ? [{ id: 'list', type: 'list', list }] : []),
         { id: 'details', type: 'lines', lines },
         ...(legend.length ? [legendBlock] : []),
