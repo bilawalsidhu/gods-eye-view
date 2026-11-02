@@ -113,7 +113,8 @@ export function routeDistanceText(meters) {
   const tens = Math.round(meters / 10) * 10;
   if (tens < 1000) return formatQuantity(tens, 'm');
   const km = meters / 1000;
-  return km < 10
+  // Pick the unit from the tenth it prints: 9.96 km read "10.0 km".
+  return Math.round(meters / 100) < 100
     ? formatQuantity(km, 'km', {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
