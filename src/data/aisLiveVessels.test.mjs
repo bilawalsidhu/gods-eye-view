@@ -1336,7 +1336,7 @@ test('the vessel HUD reads a course that rounds to north as HDG 0DEG', () => {
   try {
     Object.assign(harness.record, { heading: null, course: 359.7 });
     assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
-    assert.match(harness.hud.textContent, /HDG: 0DEG/);
+    assert.match(harness.hud.readout.text, /HDG: 0DEG/);
   } finally {
     harness.cleanup();
   }
