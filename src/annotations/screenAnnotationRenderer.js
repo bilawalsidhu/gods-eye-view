@@ -488,7 +488,9 @@ export function createScreenAnnotationRenderer(
 
     for (const rec of records.values()) {
       const { anno, group, parts } = rec;
-      if (rec.hidden) {
+      // A mark hidden from Draw's list is not projected, so it neither shows
+      // nor pushes a visible callout aside in the placement below.
+      if (rec.hidden || anno.hidden) {
         group.display = 'none';
         continue;
       }

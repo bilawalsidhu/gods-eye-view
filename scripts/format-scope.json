@@ -29,6 +29,8 @@
   "src/data/localGeojsonCore.js",
   "src/data/localGeojsonLod.js",
   "src/data/inputOwnership.js",
+  "src/annotations/drawMarks.js",
+  "src/annotations/drawMarks.test.mjs",
   "src/annotations/drawMode.js",
   "src/annotations/drawMode.test.mjs",
   "src/annotations/drawTool.js",
@@ -1182,6 +1184,9 @@
   "src/ui/stores/firstRun.js",
   "src/firstRunLauncherView.test.mjs",
   "src/firstRunCopy.js",
+  "src/data/headingDegrees.test.mjs",
+  "src/data/distanceFormat.test.mjs",
+  "src/sources/adsbFields.test.mjs",
   "src/sources/phaseTiming.test.mjs",
   "scripts/build-census-places.mjs",
   "src/data/placeBoundaries.test.mjs",
@@ -1198,8 +1203,5 @@
   "src/standalone/layerSources.test.mjs",
   "src/tooling/nominatimGuardLifecycle.test.mjs",
   "src/tooling/nominatimLockOwnership.test.mjs",
-  "src/tooling/nominatimOutlineRoute.test.mjs",
-  "src/data/headingDegrees.test.mjs",
-  "src/data/distanceFormat.test.mjs",
-  "src/sources/adsbFields.test.mjs"
+  "src/tooling/nominatimOutlineRoute.test.mjs"
 ]

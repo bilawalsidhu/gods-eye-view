@@ -340,3 +340,94 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
     ],
   );
 });
+
+// Directions renders in the Utilities panel's list; Data Layers keeps the rest.
+async function utilitiesFixture({ withUtilities = true } = {}) {
+  const { LayerPanel } = await import('./layerPanel.js');
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  container.id = 'data-toggles';
+  const utilities = document.createElement('div');
+  utilities.id = 'utilities-toggles';
+  if (withUtilities) document.body.append(utilities);
+  const layers = ['radio', 'directions', 'flights'].map((id) => ({
+    id,
+    name: id,
+    icon: '*',
+    source: 'S',
+    enabled: false,
+    showInTogglePanel: true,
+    stats: {},
+  }));
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    isEnabled: (id) => layers.find((layer) => layer.id === id).enabled,
+    setEnabled() {},
+    setLayerParams() {},
+    getRowControls: () => null,
+    hasRowControls: () => false,
+    subscribeRowControls: () => () => {},
+  });
+  panel.mount(container);
+  const headings = (root) =>
+    [...root.querySelectorAll('.data-layer-group-heading')].map((node) =>
+      node.textContent.trim(),
+    );
+  const rowIds = (root) =>
+    [...root.querySelectorAll('[data-layer-id]')].map(
+      (node) => node.dataset.layerId,
+    );
+  const restore = () => {
+    panel.destroy();
+    document.body.replaceChildren();
+  };
+  return { container, utilities, panel, layers, headings, rowIds, restore };
+}
+
+test('Directions renders in the Utilities list without a heading, and Radio under Audio', async () => {
+  const { container, utilities, panel, headings, rowIds, restore } =
+    await utilitiesFixture();
+  try {
+    assert.deepEqual(rowIds(utilities), ['directions']);
+    assert.deepEqual(headings(utilities), []);
+    assert.deepEqual(rowIds(container), ['flights', 'radio']);
+    assert.deepEqual(headings(container), ['Movement', 'Audio']);
+    panel.mount(container);
+    assert.deepEqual(
+      rowIds(utilities),
+      ['directions'],
+      'a remount replaces it',
+    );
+    panel.destroy();
+    assert.deepEqual(rowIds(utilities), [], 'destroy releases both lists');
+  } finally {
+    restore();
+  }
+});
+
+test('a refresh updates the Directions row in the Utilities list', async () => {
+  const { utilities, panel, layers, restore } = await utilitiesFixture();
+  try {
+    const toggle = () =>
+      utilities.querySelector('[data-layer-id="directions"] .data-toggle-btn');
+    assert.ok(!toggle().classList.contains('active'));
+    layers.find(({ id }) => id === 'directions').enabled = true;
+    panel._refreshTogglePanel();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(toggle().classList.contains('active'));
+  } finally {
+    restore();
+  }
+});
+
+test('without the Utilities list, Directions stays in Data Layers under Utilities', async () => {
+  const { container, headings, rowIds, restore } = await utilitiesFixture({
+    withUtilities: false,
+  });
+  try {
+    assert.deepEqual(rowIds(container), ['flights', 'directions', 'radio']);
+    assert.deepEqual(headings(container), ['Movement', 'Utilities', 'Audio']);
+  } finally {
+    restore();
+  }
+});
