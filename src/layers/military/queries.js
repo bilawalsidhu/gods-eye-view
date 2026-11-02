@@ -353,7 +353,7 @@ export function createQueries({
      * @returns {Array<Object>} Sorted array of nearby aircraft descriptors
      */
     getNearby(center, range, maxCount = 50, { includeHidden = false } = {}) {
-      if (!center || !flightState._renderer?.fleet.visible()) return [];
+      if (!center || !flightState.enabled) return [];
 
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
@@ -363,11 +363,14 @@ export function createQueries({
 
       const nearby = [];
 
-      for (const [icao24, bb] of flightState._billboards) {
+      for (const [icao24, info] of flightState.records.data) {
+        const bb = flightState._billboards.get(icao24);
+        if (!bb && flightState._renderer) continue;
         const isTracked = icao24 === flightState._trackedIcao;
         // Keep planes rendered as a 3D model (billboard hidden) so proximity counts
         // don't drop to zero on the 2D→3D handoff; bb.position stays current while hidden.
         if (
+          bb &&
           !aircraftIncludedInNearby({
             isTracked,
             billboardShown: bb.show,
@@ -380,13 +383,12 @@ export function createQueries({
         const trackedPos = isTracked
           ? parts.motion._trackedDisplayCached()
           : null; // cached, no recompute (anti-jitter)
-        const pos = trackedPos || bb.position;
+        const pos = trackedPos || bb?.position || parts.motion._deadReckon(icao24);
         if (!pos) continue;
 
         const distance = geo.cartesian3.distance(center, pos);
         if (distance > maxRange) continue;
 
-        const info = flightState.records.data.get(icao24);
         nearby.push({
           id: info?.callsign?.trim() || info?.registration?.trim() || icao24,
           icao24,
@@ -581,16 +583,13 @@ export function createQueries({
      *   holds no data and therefore cannot answer.
      */
     hasContact(icao24) {
-      if (
-        !flightState._renderer?.fleet.visible() ||
-        flightState._billboards.size === 0
-      )
+      if (!flightState.enabled || flightState.records.data.size === 0)
         return null;
       if (!icao24) return false;
       const id = String(icao24).trim();
       return (
-        flightState._billboards.has(id) ||
-        flightState._billboards.has(id.toLowerCase())
+        flightState.records.data.has(id) ||
+        flightState.records.data.has(id.toLowerCase())
       );
     },
 
@@ -642,10 +641,7 @@ export function createQueries({
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (
-        !flightState._renderer?.fleet.visible() ||
-        flightState.records.data.size === 0
-      )
+      if (!flightState.enabled || flightState.records.data.size === 0)
         return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))

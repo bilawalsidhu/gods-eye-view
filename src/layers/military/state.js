@@ -4,7 +4,7 @@ import * as geo from '../../geo/index.js';
 
 export function createFlightState({ source, services }) {
   const { createGroundSnap } = services.groundSnap;
-  const flightState = { lifetime: new AbortController() };
+  const flightState = { lifetime: new AbortController(), enabled: false };
   flightState.feed = createMilitaryFeed(source);
   flightState.records = new MilitaryFlightRecords({
     ...services.geoid,

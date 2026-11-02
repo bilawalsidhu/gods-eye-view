@@ -1,3 +1,4 @@
+import { createAircraftSceneBinding } from '../aircraft/sceneBinding.js';
 import { JET_MODEL_URL } from './policy.js';
 
 export function createLifecycle({
@@ -10,13 +11,20 @@ export function createLifecycle({
   const { clearFocusTarget } = services.focus;
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
-  const { registerPickOwner, unregisterPickOwner } = services.picking;
+  const { registerPickOwner } = services.picking;
   const { setMilitaryLayerActive } = services.militaryRegistry;
 
+  const binding = createAircraftSceneBinding({
+    id: 'military', flightState, services, parts,
+    resolveModel: () => resolveAsset(JET_MODEL_URL),
+    enable: () => methods.enable(),
+  });
   const methods = {
+    attachRenderer: binding.attachRenderer,
+    detachRenderer: binding.detachRenderer,
     /** Configure the source before initialization; an active layer keeps its owner. */
     setSource(source) {
-      if (flightState._renderer)
+      if (flightState.initialized)
         throw new Error('Configure the source before layer initialization');
       if (typeof source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
@@ -35,35 +43,13 @@ export function createLifecycle({
      * @param {{ engine?: object }} [context] - LayerLifecycle's context.
      */
     init(viewer, { engine = null } = {}) {
-      if (flightState._renderer)
+      if (flightState.initialized)
         throw new Error('Flight layer is already initialized');
       if (typeof flightState.feed._source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
       if (flightState.lifetime.signal.aborted)
         flightState.lifetime = new AbortController();
       clearFocusTarget('militaryFlights');
-      const renderer = services.renderer.create({ viewer, engine });
-      flightState._renderer = renderer;
-      renderer.fleet.attach();
-      // Warm the glTF cache so the tracked plane's model instantiates instantly when first needed
-      // (keeps the retained instance referenced; never rendered). Captured against this epoch so a
-      // destroy/re-init mid-load doesn't flip the flag for a torn-down lifecycle.
-      if (!flightState._preloadModel) {
-        const epoch = flightState._modelEpoch;
-        renderer.models
-          .preload(resolveAsset(JET_MODEL_URL))
-          .then((m) => {
-            if (epoch === flightState._modelEpoch) {
-              flightState._preloadModel = m;
-              flightState._planeModelLoaded = true;
-            } else {
-              renderer.models.destroy(m);
-            }
-          })
-          .catch(() => {
-            /* tracked plane just stays a billboard a beat longer */
-          });
-      }
       flightState._billboards = new Map();
       flightState._cullPositions.clear();
       flightState._detectionObjects = new Map();
@@ -82,9 +68,9 @@ export function createLifecycle({
       flightState._trackedEntity = null;
       flightState._cockpitSubjectId = null;
       flightState._cockpitContactMode =
-        document.body.classList.contains('cockpit-mode');
+        globalThis.document?.body.classList.contains('cockpit-mode') === true;
       flightState._cockpitNearContacts = new Set();
-      if (!flightState._cockpitModeListener) {
+      if (globalThis.window && !flightState._cockpitModeListener) {
         flightState._cockpitModeListener = (event) =>
           parts.tracking._applyCockpitState(event?.detail);
         window.addEventListener(
@@ -93,11 +79,13 @@ export function createLifecycle({
         );
       }
 
-      parts.tracking._installClickHandler();
-
-      renderer.fleet.restoreOrder();
-
-      console.log('[Data:Military] Initialized with billboard icons');
+      flightState.initialized = true;
+      try {
+        if (viewer || engine) binding.attachRenderer(viewer, { engine });
+      } catch (error) {
+        methods.destroy(viewer);
+        throw error;
+      }
     },
 
     /**
@@ -105,11 +93,12 @@ export function createLifecycle({
      */
     enable() {
       const renderer = flightState._renderer;
+      flightState.enabled = true;
       renderer?.fleet.setVisible(true);
-      holdContinuousRender('military'); // per-frame animator (perf wave 2)
+      if (renderer) holdContinuousRender('military'); // per-frame animator (perf wave 2)
       renderer?.models.setVisible(true);
       parts.tracking._setCockpitContactMode(
-        document.body.classList.contains('cockpit-mode'),
+        globalThis.document?.body.classList.contains('cockpit-mode') === true,
       );
       // Height-datum fix: warm the geoid grid once per layer-enable. The poll loop
       // only reads geoidHeight() synchronously after this resolves (guarded by
@@ -124,12 +113,12 @@ export function createLifecycle({
             /* geoid grid failed to load — baro path stays un-geoid-corrected until retried */
           });
       }
+      setMilitaryLayerActive(true);
+      if (!renderer) return;
       parts.tracking._installClickHandler();
       registerPickOwner('military', (pickedId) =>
         flightState._billboards.has(pickedId),
       );
-      // The flights layer suppresses its military duplicates while we render them
-      setMilitaryLayerActive(true);
       // Force a fresh rotation pass on the first tick after re-enable
       flightState._lastCamPoseSig = '';
       if (!flightState._preRenderRemove && renderer) {
@@ -163,6 +152,7 @@ export function createLifecycle({
      * dispatcher so clicks do not get intercepted while the layer is off.
      */
     disable() {
+      flightState.enabled = false;
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       flightState._renderer?.fleet.setVisible(false);
@@ -171,24 +161,8 @@ export function createLifecycle({
       flightState._renderer?.models.setVisible(false);
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
-      // Leave the selection dispatcher (clicks, Escape) while disabled to
-      // avoid intercepting input when the layer is off
-      parts.tracking._removeClickHandler();
-      unregisterPickOwner('military');
-      // Flights layer takes over rendering known-military aircraft (amber)
+      binding.removeSceneListeners();
       setMilitaryLayerActive(false);
-      if (flightState._preRenderRemove) {
-        flightState._preRenderRemove();
-        flightState._preRenderRemove = null;
-      }
-      if (flightState._trackedModelPreUpdateRemove) {
-        flightState._trackedModelPreUpdateRemove();
-        flightState._trackedModelPreUpdateRemove = null;
-      }
-      if (flightState._moveEndRemove) {
-        flightState._moveEndRemove();
-        flightState._moveEndRemove = null;
-      }
     },
 
     /**
@@ -197,6 +171,9 @@ export function createLifecycle({
      * @param {object|null} viewer - The viewer the layer was drawn on.
      */
     destroy(viewer) {
+      flightState.initialized = false;
+      flightState.enabled = false;
+      setMilitaryLayerActive(false);
       flightState.lifetime.abort();
       parts.controller._abortActiveUpdates();
       releaseContinuousRender('military'); // direct-destroy path (perf wave 2 fix)
@@ -211,38 +188,13 @@ export function createLifecycle({
         );
         flightState._cockpitModeListener = null;
       }
-      unregisterPickOwner('military');
-      if (flightState._preRenderRemove) {
-        flightState._preRenderRemove();
-        flightState._preRenderRemove = null;
-      }
-      if (flightState._trackedModelPreUpdateRemove) {
-        flightState._trackedModelPreUpdateRemove();
-        flightState._trackedModelPreUpdateRemove = null;
-      }
-      if (flightState._moveEndRemove) {
-        flightState._moveEndRemove();
-        flightState._moveEndRemove = null;
-      }
-      parts.rendering._releaseModels();
-      // Removing the model collection destroys it and its models.
-      flightState._renderer?.fleet.detach(viewer);
-      flightState._modelEpoch += 1; // invalidate any in-flight load from this lifecycle (settles post-destroy)
-      flightState._modelPending.clear();
-      flightState._modelGen.clear();
-      if (flightState._preloadModel) {
-        flightState._renderer?.models.destroy(flightState._preloadModel);
-        flightState._preloadModel = null;
-      }
-      flightState._planeModelLoaded = false;
-      flightState._billboards.clear();
-      flightState._cullPositions.clear();
-      flightState._detectionObjects.clear();
+      binding.detachRenderer(viewer);
       flightState.records.data.clear();
       flightState._positionHistory.clear();
       flightState._displayCourse.clear();
       flightState._groundSnap.clear();
       flightState.records.missingPolls.clear();
+      flightState.records.geoidNCache.clear();
       flightState.feed._count = 0;
       flightState.feed._lastUpdate = null;
       flightState._cockpitContactMode = false;
@@ -256,8 +208,6 @@ export function createLifecycle({
         source: flightState.feed._lastSource,
       };
       parts.tracking._resetTrackedSelectionState(); // next lifecycle re-evaluates against the ENTER ceiling
-      flightState._renderer?.destroy();
-      flightState._renderer = null;
     },
   };
 

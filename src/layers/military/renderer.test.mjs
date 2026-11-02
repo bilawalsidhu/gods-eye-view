@@ -292,3 +292,37 @@ test('the military logic draws and follows on the Navara renderer; the follow pa
   assert.equal(engine.movers.list().length, 0, 'no mover set left behind');
   engine.destroy();
 });
+
+test('military classification and the selected aircraft survive an update between scenes', async () => {
+  const first = createFakeEngine(), second = createFakeEngine();
+  let polls = 0, binding;
+  const layer = createApplicationMilitary({
+    surface: defaultSurface, militaryRegistry,
+    source: { getSnapshot: async () => militarySnapshotOf(['ae0001'], 1700000000000 + (++polls)*1000) },
+    renderer: {create: ({engine}) => (binding = recordingAircraftRenderer(engine))},
+  });
+  try {
+    layer.init(null);
+    layer.enable();
+    await layer.update(null);
+    assert.equal(layer.hasContact('AE0001'), true);
+    assert.equal(layer.getAnalystRecords().length, 1);
+    layer.attachRenderer(null, { engine: first });
+    assert.equal(layer.trackById('ae0001'), true);
+    layer.detachRenderer();
+    assert.equal(binding.follow.current(), undefined);
+    assert.equal(militaryRegistry.isMilitaryLayerActive(), true);
+    assert.equal(layer.getTrackedInfo().icao24, 'ae0001');
+    await layer.update(null);
+    layer.attachRenderer(null, {engine: second});
+    assert.ok(binding.follow.current());
+    assert.equal(layer.getStats().lastUpdate, 1700000002000);
+    assert.equal(polls, 2);
+    layer.disable();
+    assert.equal(militaryRegistry.isMilitaryLayerActive(), false);
+    assert.equal(layer.hasContact('ae0001'), null);
+  } finally {
+    layer.destroy(null);
+    first.destroy(); second.destroy();
+  }
+});

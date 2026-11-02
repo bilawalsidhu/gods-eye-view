@@ -25,7 +25,7 @@ export function createMilitaryFlightLayer({
   parts.lifecycle = createLifecycle(context);
   parts.testing = createTesting(context);
   parts.queries = createQueries(context);
-  const applySnapshot = createMilitarySnapshotRenderer({
+  parts.snapshots = createMilitarySnapshotRenderer({
     flightState,
     records: flightState.records,
     groundFloor: services.groundFloor,
@@ -38,7 +38,7 @@ export function createMilitaryFlightLayer({
   });
   parts.ingestion = createIngestion({
     feed: flightState.feed,
-    applySnapshot,
+    applySnapshot: parts.snapshots.applySnapshot,
     setSourceLabel: (source) => {
       layer.source = source;
     },
