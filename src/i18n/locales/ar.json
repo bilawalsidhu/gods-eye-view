@@ -3967,5 +3967,20 @@
   "Cable car": "ترام كابلي",
   "Monorail": "قطار أحادي السكة",
   "Funicular": "قطار جبلي مائل",
-  "Gondola": "تلفريك"
+  "Gondola": "تلفريك",
+  "Tilt up toward the horizon": "إمالة نحو الأفق",
+  "Tilt down toward top-down view": "إمالة نحو المنظر العلوي",
+  "Top-down view": "المنظر العلوي",
+  "Look left": "النظر يسارًا",
+  "Look right": "النظر يمينًا",
+  "Look up": "النظر إلى الأعلى",
+  "Look down": "النظر إلى الأسفل",
+  "Map navigation": "التنقل في الخريطة",
+  "Tilt": "الإمالة",
+  "Tilt: top-down (bottom) to near horizon (top)": "الإمالة: من المنظر العلوي (أسفل) إلى قرب الأفق (أعلى)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "اتجاه الخريطة. اسحب للتدوير، وتدير مفاتيح الأسهم الاتجاه، ومفتاح Home للشمال",
+  "North, 0 degrees": "الشمال، 0 درجة",
+  "Look around": "النظر حولك",
+  "{heading} degrees from north": "{heading} درجة عن الشمال",
+  "{tilt} degrees from top-down": "{tilt} درجة عن المنظر العلوي"
 }
