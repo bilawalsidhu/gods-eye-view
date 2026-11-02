@@ -116,6 +116,51 @@
   opacity: 0.35;
   cursor: default;
 }
+
+/* A collapsible rail shows each item as an icon and its label while no panel
+   is open, and folds the labels away once one is. The collapsed item keeps
+   the plain rail's 32px square. */
+.ui-rail--collapsible {
+  transition: border-radius var(--transition-fast);
+}
+.ui-rail--collapsible .ui-rail__item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 32px;
+  padding: 0 6px;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    border-radius var(--transition-fast);
+}
+.ui-rail__label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: var(--dock-label-font-weight) var(--dock-label-font-size) / 1
+    var(--font-sans);
+  letter-spacing: var(--dock-label-letter-spacing);
+  transition:
+    max-width var(--transition-fast),
+    margin var(--transition-fast),
+    opacity var(--transition-fast);
+}
+.ui-rail--expanded {
+  border-radius: 21px;
+}
+.ui-rail--expanded .ui-rail__item {
+  border-radius: 16px;
+}
+.ui-rail--expanded .ui-rail__label {
+  max-width: 220px;
+  margin-inline: 8px 8px;
+  opacity: 1;
+}
 .ui-rail__badge {
   position: absolute;
   top: 1px;

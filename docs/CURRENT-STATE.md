@@ -1582,6 +1582,10 @@ Imagery (while shown), Street Level and Context on the right. Selecting an item
 opens its panel through `setPanelCollapsed(id, false, {explicit: true})`;
 selecting the open panel's item closes it. The item of the open panel is
 pressed (`aria-pressed`), and its tooltip is suppressed while the panel is open.
+While no panel on its side is open, the rail shows each item as a labelled pill
+(icon and title, `UiRail`'s `collapsible`); opening a panel folds the labels away
+to the icon rail. The rail is placed by its screen-side edge, so the pills grow
+toward the middle of the screen, over the closed side's empty corridor.
 
 One panel is open per desktop side, in every HUD layout. Opening a side panel
 by any route (rail, header, keyboard, voice) collapses its peers; restored or
