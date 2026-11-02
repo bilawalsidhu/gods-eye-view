@@ -458,7 +458,7 @@ filter slider and Soft/Vivid opacity presets in its right-rail settings.
 Left weather rows retain only the toggle and one status line with a source
 tooltip. Configuration and the cyclone Storms list live in the cards, as do the
 cyclone advisory, position time, wind, pressure, geometry status and the
-official advisory link. The panel hides when empty, auto-expands once per page
+official advisory (or GDACS report) link. The panel hides when empty, auto-expands once per page
 session and then preserves the user's collapsed state. Status lines reserve their space and refreshes are coalesced
 per frame. Generic keyed rail cards and the native rail timeline preserve DOM
 nodes and avoid identical writes; the weather panel owns descriptor mapping.
@@ -505,10 +505,36 @@ which carry no `display`, look exactly as before. Accepted source
 and units text is source data and is shown untranslated. The static Data
 attribution entries remain the application's `credits` list.
 
-Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bounded
-same-origin provider. The status endpoint lacks browser CORS; each installation
+Cyclones combine fixed NHC/CPHC status and summary GIS endpoints with GDACS
+tropical cyclones through a bounded same-origin provider. Neither source suits
+browser fetching (the NHC status endpoint lacks CORS); each installation
 fetches keyless public sources at runtime, with no centralized ingestion service.
-The five-minute snapshot covers Atlantic and eastern/central North Pacific only.
+The five-minute snapshot takes NOAA advisories for the Atlantic and
+eastern/central North Pacific and GDACS storms everywhere else: the North
+Indian Ocean (`IO`), the western North Pacific (`WP`) and the Southern
+Hemisphere (`SH`), split by the storm's current position. Each storm names its
+`provider` (`nhc` or `gdacs`) and the snapshot reports each provider as
+`available`, `stale` (its last good copy, up to 12 hours old) or
+`unavailable`; one provider's outage never hides the other's storms, and the
+row then reads "Some cyclone sources unavailable". GDACS redraws JTWC
+advisories automatically: every GDACS storm is labelled a GDACS automatic
+estimate, not an official warning, names its GDACS episode instead of an
+advisory number, and links its GDACS report. A GDACS track may arrive without a
+cone, in which case the legend omits the cone. Winds come from the GDACS JTWC
+timeline, converted from metres per second to knots, only when its current fix
+matches the geometry's current position; otherwise the storm keeps its track
+without winds. A storm whose geometry fails, or belongs to another episode,
+keeps its centroid with geometry unavailable or pending. GDACS runs under its
+own deadline inside the refresh, so a slow GDACS cannot delay NOAA. GDACS is
+slow (seconds per request), and an episode never changes once published, so
+each episode's geometry and winds are downloaded once and remembered; a failed
+download is forgotten and tried again. A download still running at the refresh
+deadline carries on under its own 30-second limit, and the storm shows its
+centroid with geometry pending, or its track with `windsPending`. While either
+is pending the server snapshot lives one minute instead of five, and the layer
+asks once more after 65 seconds instead of waiting for its five-minute poll. GDACS's
+hurricane-strength `HU` reads as Typhoon (`TY`) in the western Pacific and
+Cyclone (`CY`) elsewhere; `TC` is a GDACS storm whose strength is unknown.
 Classification labels follow NHC status codes: `PC` is a potential tropical
 cyclone, `PTC` a post-tropical cyclone, and `STS`/`STD` a subtropical
 storm/depression. Unknown codes remain visible unchanged.

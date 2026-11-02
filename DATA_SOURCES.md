@@ -20,6 +20,7 @@ How to read this:
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
 | **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
+| **GDACS tropical cyclones** (`www.gdacs.org/gdacsapi/api`: `events/geteventlist/SEARCH`, `polygons/getgeometry`, `events/geteventdata`, `export/gettimeline`) | Cyclone advisories outside NHC/CPHC water (North Indian Ocean, western North Pacific, Southern Hemisphere): storm positions, forecast tracks, lead-hour points, cones and winds, redrawn by GDACS from JTWC advisories. Keyless through `/api/cyclones`; cached for 5 minutes | Copyright of the European Commission, reused under its [reuse policy](https://commission.europa.eu/legal-notice_en#copyright-notice) (Decision 2011/833/EU, CC BY 4.0) as linked from the [GDACS terms of use](https://www.gdacs.org/About/termofuse.aspx); automatic estimates, not official warnings | "GDACS (Global Disaster Alert and Coordination System), © European Union, CC BY 4.0" |
 | **Mapillary** (vector tiles, Graph API, MapillaryJS) | Street Level: coverage lines, image cones and the embedded viewer. Coverage tiles kept in server memory for 24 h | Imagery [CC BY-SA 4.0](https://www.mapillary.com/terms); API under the Mapillary terms with a client token | "© Mapillary contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
 | **Google Street View** (Maps JavaScript API) | Street Level, on the Google 3D map only (Google's terms): Google's panorama viewer and nearest-panorama lookups; panorama dates and addresses kept for the session only | Google Maps Platform ToS (your own key + billing; every panorama load is billed) | "Street View imagery © Google" on the globe while the provider is on, and Google's logo and terms in the viewer |
 | **KartaView** (`api.kartaview.org` coverage tiles and photo API, `cdn.kartaview.org` image proxy, `storage*.openstreetcam.org` photos) | Street Level: coverage lines (z13–14 JSON tiles; with the imagery filter on, KartaView's filtered PNG tiles as a mask), nearest-photo lookups, the photo's sequence and the photo itself, fetched by the browser. Keyless; nothing cached beyond the session | Imagery [CC BY-SA 4.0](https://kartaview.org/terms) (KartaView terms §4); the public API needs no token | "© KartaView contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
@@ -394,6 +395,37 @@ Community context: [#85](https://github.com/bilawalsidhu/gods-eye-view/issues/85
 [#457 clouds](https://github.com/bilawalsidhu/gods-eye-view/pull/457).
 This implementation is original; those contributions have not been merged here.
 
+
+### Weather: GDACS tropical cyclones
+
+- **Sources:** the keyless [GDACS API](https://www.gdacs.org/gdacsapi/swagger/index.html):
+  the tropical-cyclone event search, each current storm's episode geometry and
+  event details, and the JTWC timeline export those details name.
+- **Rights/credit:** © European Union, reused under CC BY 4.0
+  (Decision 2011/833/EU) as linked from the [GDACS terms of use](https://www.gdacs.org/About/termofuse.aspx).
+  The change made here: only storm positions, the forecast track, lead-hour
+  points, the uncertainty cone and point winds are kept and redrawn on the globe;
+  past track, wind swaths, impact estimates and imagery are dropped. GDACS
+  redraws JTWC advisories automatically; its information "is purely indicative"
+  and does not replace official warnings from national meteorological services.
+  The layer's row and help text say so for every GDACS storm.
+- **Coverage/meaning:** current GDACS cyclones whose position is outside NHC/CPHC
+  water (the northern hemisphere west of the prime meridian), split into
+  North Indian Ocean (`IO`, west of 100°E), western North Pacific (`WP`) and
+  Southern Hemisphere (`SH`). The episode time is the advisory time; lead hours
+  count from it. Track points carry the times and track segments the exact
+  positions, and the two must agree, or the geometry is dropped and the storm
+  keeps its centroid. Winds come from the timeline only where its current fix
+  matches the geometry's current position; timeline winds are metres per second,
+  converted to knots. GDACS's `HU` category is shown as typhoon (`TY`) in the
+  western Pacific and cyclone (`CY`) elsewhere.
+- **Delivery:** server-side through the same `/api/cyclones` snapshot as NOAA, with
+  its own deadline inside the refresh, bounded bodies and geometry, fixed
+  upstream paths, `redirect: 'error'`, and its own last good copy (stale after a
+  failure, dropped after 12 hours). GDACS answers a search with no events with a
+  404 problem document, which counts as no storms. GDACS publishes no rate limit;
+  one refresh makes one search plus up to three requests per current storm.
+  Verified 2026-11-02.
 
 ### Weather: NHC/CPHC cyclone advisories
 

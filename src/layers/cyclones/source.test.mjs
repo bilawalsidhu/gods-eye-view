@@ -20,6 +20,7 @@ function fixture() {
     storms: [
       {
         id: 'ep152026',
+        provider: 'nhc',
         name: 'Fifteen-E',
         classification: 'PTC',
         basin: 'EP',
@@ -182,6 +183,79 @@ test('mismatched, malformed or unbounded cyclone geometry is rejected whole', ()
       validateCycloneSnapshot({
         ...fixture(),
         storms: Array(33).fill(fixture().storms[0]),
+      }),
+    /Malformed/,
+  );
+});
+function gdacs() {
+  const value = current(),
+    storm = value.storms[0];
+  Object.assign(storm, {
+    id: 'gdacs-1001346',
+    provider: 'gdacs',
+    name: 'Murasu',
+    classification: 'CY',
+    basin: 'IO',
+    advisoryNumber: '6',
+    geometryAdvisoryNumber: '6',
+    advisoryUrl:
+      'https://www.gdacs.org/report.aspx?eventid=1001346&episodeid=6&eventtype=TC',
+    outlookUrl: null,
+  });
+  return value;
+}
+test('GDACS storms keep their provider and may carry a track without a cone', () => {
+  const value = gdacs();
+  value.storms[0].cone = null;
+  value.providers = { nhc: 'available', gdacs: 'available' };
+  const result = validateCycloneSnapshot(value);
+  assert.equal(result.storms[0].provider, 'gdacs');
+  assert.equal(result.storms[0].cone, null);
+  assert.equal(result.storms[0].advisoryUrl, value.storms[0].advisoryUrl);
+  assert.deepEqual(result.providers, value.providers);
+  // An NHC storm still needs its cone.
+  const nhc = current();
+  nhc.storms[0].cone = null;
+  assert.throws(() => validateCycloneSnapshot(nhc), /Malformed/);
+});
+test('GDACS ids, links, basins and provider states are checked', () => {
+  const changes = [
+    (storm) => {
+      storm.id = 'ep152026';
+    },
+    (storm) => {
+      storm.provider = 'cwa';
+    },
+    (storm) => {
+      delete storm.provider;
+    },
+    (storm) => {
+      storm.basin = 'EP';
+    },
+    (storm) => {
+      storm.advisoryUrl =
+        'https://www.gdacs.org/report.aspx?eventid=1&episodeid=6&eventtype=TC&next=https://evil';
+    },
+    (storm) => {
+      storm.advisoryUrl = 'https://www.nhc.noaa.gov/text/MIATCMEP5.shtml';
+    },
+    (storm) => {
+      storm.outlookUrl = 'https://www.nhc.noaa.gov/gtwo.php?basin=epac&fdays=7';
+    },
+    (storm) => {
+      storm.windsPending = 'yes';
+    },
+  ];
+  for (const change of changes) {
+    const value = gdacs();
+    change(value.storms[0]);
+    assert.throws(() => validateCycloneSnapshot(value), /Malformed/);
+  }
+  assert.throws(
+    () =>
+      validateCycloneSnapshot({
+        ...gdacs(),
+        providers: { nhc: 'available', gdacs: 'down' },
       }),
     /Malformed/,
   );

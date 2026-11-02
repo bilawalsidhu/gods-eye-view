@@ -154,6 +154,27 @@ test('cyclones are listed strongest first and can be limited to an area', async 
   );
 });
 
+test('GDACS cyclones carry their provider and caveat; NOAA ones read as before', async () => {
+  const cyclones = {
+    async getSnapshot() {
+      return {
+        stale: false,
+        unavailable: false,
+        storms: [
+          { ...storm('gdacs-1', 'Murasu', 14.3, 80.9, 65), provider: 'gdacs' },
+          { ...storm('ep152026', 'Alpha', 25, -70, 40), provider: 'nhc' },
+        ],
+      };
+    },
+  };
+  const result = await catalogWith({ cyclones }).call('get_cyclones', {});
+  const [gdacs, nhc] = result.data.storms;
+  assert.equal(gdacs.provider, 'gdacs');
+  assert.match(gdacs.caveat, /not an official warning/);
+  assert.equal(nhc.provider, 'nhc');
+  assert.equal('caveat' in nhc, false);
+});
+
 test('fire perimeters are placed by their outline and sorted by size', async () => {
   const ring = (lon, lat) => [
     [

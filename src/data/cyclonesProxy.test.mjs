@@ -6,6 +6,7 @@ import {
   parseCycloneStatus,
   attachCycloneGeometry,
 } from '../../server/providers/cyclones.js';
+import { createGdacsCyclones } from '../../server/providers/cyclonesGdacs.js';
 
 const NOW = Date.UTC(2026, 8, 16, 3, 35);
 const TIME = '2026-09-16T03:00:00.000Z';
@@ -72,9 +73,14 @@ function collections(adv = '10') {
     ],
   }));
 }
+// GDACS has its own tests; these cover NOAA with GDACS answering no storms.
 function install(options = {}, preview = false) {
   let handler;
-  const plugin = cycloneProxy({ now: () => NOW, ...options });
+  const plugin = cycloneProxy({
+    now: () => NOW,
+    fetchGdacs: async () => [],
+    ...options,
+  });
   plugin[preview ? 'configurePreviewServer' : 'configureServer']({
     middlewares: {
       use(path, callback) {
@@ -297,7 +303,10 @@ test('dev and preview serve only fixed bounded NOAA queries, caching a complete 
     const snapshot = body(await request());
     assert.equal(snapshot.unavailable, false);
     assert.equal(snapshot.stale, false);
-    assert.match(snapshot.coverage, /not worldwide/);
+    assert.match(
+      snapshot.coverage,
+      /NOAA NHC\/CPHC .* GDACS .*North Indian Ocean/,
+    );
     assert.equal(snapshot.storms[0].geometryStatus, 'current');
     assert.equal(snapshot.fetchedAt, NOW);
     assert.equal(calls.length, 4);
@@ -370,6 +379,10 @@ test('five-minute TTL, failure cooldown and age-limited last-good retain origina
       calls++;
       if (fail) throw new Error('private');
       return good(...args);
+    },
+    fetchGdacs: async () => {
+      if (fail) throw new Error('private');
+      return [];
     },
   });
   await request();
@@ -445,19 +458,22 @@ test('shared refresh survives one disconnect and aborts when its last consumer l
 test('stream caps and whole refresh deadline cancel oversized or stalled response bodies', async () => {
   for (const stalled of [false, true]) {
     let cancelled = false;
+    // Every upstream, GDACS too, answers the same broken body.
+    const fetchImpl = async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(stalled ? 4 : 128 * 1024 + 1));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      );
     const { request } = install({
       timeoutMs: 15,
-      fetchImpl: async () =>
-        new Response(
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(new Uint8Array(stalled ? 4 : 128 * 1024 + 1));
-            },
-            cancel() {
-              cancelled = true;
-            },
-          }),
-        ),
+      fetchImpl,
+      fetchGdacs: createGdacsCyclones({ fetchImpl }),
     });
     const snapshot = body(await request());
     assert.equal(snapshot.unavailable, true);
@@ -482,12 +498,14 @@ test('shared refresh caps waiting consumers and rejects redirects without exposi
   assert.equal((await request()).statusCode, 429);
   release();
   assert.ok((await Promise.all(waiting)).every((r) => r.statusCode === 200));
+  const redirect = async () =>
+    new Response('private', {
+      status: 302,
+      headers: { Location: 'http://127.0.0.1/' },
+    });
   const redirected = install({
-    fetchImpl: async () =>
-      new Response('private', {
-        status: 302,
-        headers: { Location: 'http://127.0.0.1/' },
-      }),
+    fetchImpl: redirect,
+    fetchGdacs: createGdacsCyclones({ fetchImpl: redirect }),
   });
   assert.equal(body(await redirected.request()).unavailable, true);
 });
