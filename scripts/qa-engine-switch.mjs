@@ -205,6 +205,25 @@ try {
         'data-terrain-daylight',
       ),
   );
+  // Zooming out on the satellite map must keep the same inspection sun.
+  assert.ok(
+    await page.evaluate(async () => {
+      const { engine } = window.__godsEyeView;
+      engine.camera.zoomOut(2_000_000);
+      await new Promise((resolve) => {
+        const remove = engine.frames.postRender.addEventListener(() => {
+          remove();
+          resolve();
+        });
+        engine.render.request('qa-orbital-daylight');
+      });
+      return (
+        engine.camera.height() > 1_500_000 &&
+        engine.host.container.hasAttribute('data-terrain-daylight')
+      );
+    }),
+    'the orbital frame keeps daylight on the inspected globe',
+  );
   await page.$eval('[data-stack-id="osm"]', (el) => el.click());
   await page.waitForFunction(
     () =>
