@@ -117,6 +117,7 @@ test('every noun the callers pass has its own Cockpit refusal', () => {
     'photo',
     'shared view',
     'file',
+    'drawing',
     'scene',
     'route',
     'weather',

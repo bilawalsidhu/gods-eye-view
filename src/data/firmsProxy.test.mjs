@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import { EventEmitter } from 'node:events';
 import dns from 'node:dns/promises';
+import dnsLookup from 'node:dns';
 import https from 'node:https';
 import net from 'node:net';
 import { Readable } from 'node:stream';
@@ -258,7 +259,8 @@ test('the IPv4 retry answering an invalid reason phrase rejects instead of crash
 
 // The fixtures above copy Node's error shape; check it against a real fetch so
 // a Node or undici change that stops matching fails here instead of silently
-// disabling the retry. A closed port on `localhost` refuses both addresses.
+// disabling the retry. A closed port refuses both loopback addresses; resolve
+// `localhost` to both here, since some hosts map it to 127.0.0.1 only.
 test('a real all-addresses connect failure is recognised as address selection', async (t) => {
   const probe = net.createServer();
   try {
@@ -272,7 +274,10 @@ test('a real all-addresses connect failure is recognised as address selection', 
   const v4 = net.createServer();
   await new Promise((resolve, reject) => v4.once('error', reject).listen(port, '127.0.0.1', resolve));
   await new Promise((resolve) => v4.close(resolve));
+  const loopback = [{ address: '::1', family: 6 }, { address: '127.0.0.1', family: 4 }];
+  const lookup = t.mock.method(dnsLookup, 'lookup', (_host, _options, callback) => callback(null, loopback));
   const err = await fetch(`http://localhost:${port}/`).then(() => null, (error) => error);
+  assert.equal(lookup.mock.callCount(), 1, 'fetch resolves localhost through dns.lookup');
   assert.ok(err, 'a closed port refuses the connection');
   assert.equal(isAddressSelectionFailure(err), true, describeFetchError(err));
   assert.match(describeFetchError(err), /ECONNREFUSED .*; .*ECONNREFUSED/);

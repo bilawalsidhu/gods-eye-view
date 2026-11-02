@@ -743,6 +743,61 @@ test('Data Layers voice inventory hides the Context coordinator while current-vi
   assert.deepEqual(current.cockpit, { active: false, entryAllowed: true });
 });
 
+test('showing a layer opens the panel that holds its row: Directions lives in Utilities', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const previous = { document: globalThis.document, CSS: globalThis.CSS };
+  const focused = [];
+  const rowIn = (panelId) => ({
+    dataset: { layerName: panelId === 'utilities-panel' ? 'Directions' : 'Live Flights' },
+    classList: { add: (name) => focused.push(name), remove() {} },
+    scrollIntoView() {},
+    closest: (selector) => (selector === '[data-panel-id]' ? { id: panelId } : null),
+  });
+  const rows = { directions: rowIn('utilities-panel'), flights: rowIn('data-panel') };
+  // Each row is found only inside the list that really holds it.
+  const lists = { directions: '#utilities-toggles', flights: '#data-toggles' };
+  globalThis.CSS = { escape: (value) => value };
+  globalThis.document = {
+    querySelector: (selector) => {
+      for (const part of selector.split(',')) {
+        const [, list, id] = /^\s*(#[\w-]+) \[data-layer-id="([^"]+)"\]\s*$/.exec(part) || [];
+        if (id && lists[id] === list) return rows[id];
+      }
+      return null;
+    },
+  };
+  try {
+    const opened = [];
+    const layers = [
+      { id: 'flights', name: 'Live Flights', enabled: false, showInTogglePanel: true, stats: {} },
+      { id: 'directions', name: 'Directions', enabled: false, showInTogglePanel: true, stats: {} },
+    ];
+    const dataManager = {
+      layers: new Map(layers.map((layer) => [layer.id, { module: {} }])),
+      getAll: () => layers,
+    };
+    const styleManager = {
+      setPanelCollapsed: (panelId, collapsed) => opened.push([panelId, collapsed]),
+    };
+    const viewer = {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    };
+    const runner = createGevActionRunner({ viewer, styleManager, dataManager });
+    const directions = await runner('show_data_layers_menu', { layerId: 'directions' });
+    assert.equal(directions.panelId, 'utilities-panel');
+    assert.deepEqual(directions.focusedLayer, { id: 'directions', name: 'Directions' });
+    const flights = await runner('show_data_layers_menu', { layerId: 'flights' });
+    assert.equal(flights.panelId, 'data-panel');
+    assert.deepEqual(opened, [['utilities-panel', false], ['data-panel', false]]);
+    assert.deepEqual(focused, ['gev-voice-focus', 'gev-voice-focus']);
+  } finally {
+    globalThis.document = previous.document;
+    globalThis.CSS = previous.CSS;
+  }
+});
+
 test('generic layer visibility forwards cancellation and reports semantic failure', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = {
@@ -3930,4 +3985,50 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   const plane = await runner('fly_to_location', { referent: 1 });
   assert.equal(plane.ok, true);
   assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
+});
+
+test('set_panel_open accepts the Authoring name for the scene panel', async () => {
+  const calls = [];
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      },
+    },
+    styleManager: {
+      setPanelCollapsed: (...args) => calls.push(args),
+    },
+    dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+  });
+  for (const panel of ['authoring', 'Authoring', 'scenes']) {
+    const result = await runner('set_panel_open', { panelId: panel, open: true });
+    assert.equal(result.panelId, 'scene-panel');
+  }
+  assert.deepEqual(calls.at(-1), ['scene-panel', false, { explicit: true }]);
+});
+
+test('set_panel_open reaches the Utilities panel by its name, Draw or Import', async () => {
+  const calls = [];
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      },
+    },
+    styleManager: {
+      setPanelCollapsed: (...args) => calls.push(args),
+    },
+    dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+  });
+  for (const panel of ['utilities-panel', 'utilities', 'drawing', 'import']) {
+    const result = await runner('set_panel_open', { panelId: panel, open: true });
+    assert.equal(result.panelId, 'utilities-panel', panel);
+  }
+  assert.deepEqual(calls.at(-1), ['utilities-panel', false, { explicit: true }]);
 });

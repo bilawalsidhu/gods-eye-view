@@ -516,6 +516,26 @@ test('late closures hide and stop dots; coverage counts shown matched dots, and 
   assert.equal(controls.getStats().flowCoveragePct, 80);
 });
 
+test('coverage never rounds to "no matches" or full coverage while both kinds of dot are shown', async () => {
+  const { state, controls } = await matchingContext(async () => []);
+  state._bucketCounts = { free: 1, slow: 0, jam: 0, sim: 300 };
+  assert.equal(controls.getStats().flowCoveragePct, 1);
+  assert.equal(
+    controls.getStats().loadingLabel,
+    'LIVE · Roads: OpenStreetMap · Flow: TomTom · 1% cov · Unmatched: simulated',
+  );
+  state._bucketCounts = { free: 300, slow: 0, jam: 0, sim: 1 };
+  assert.equal(controls.getStats().flowCoveragePct, 99);
+  assert.equal(
+    controls.getStats().loadingLabel,
+    'LIVE · Roads: OpenStreetMap · Flow: TomTom · 99% cov · Unmatched: simulated',
+  );
+  state._bucketCounts = { free: 300, slow: 0, jam: 0, sim: 0 };
+  assert.equal(controls.getStats().flowCoveragePct, 100);
+  state._bucketCounts = { free: 0, slow: 0, jam: 0, sim: 300 };
+  assert.equal(controls.getStats().flowCoveragePct, 0);
+});
+
 test('refresh failure removes cached matches and reports simulated flow', async () => {
   const { flow, state, model, controls } = await matchingContext(async () => {
     throw new Error('HTTP 429');

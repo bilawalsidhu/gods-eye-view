@@ -1,5 +1,5 @@
 import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
-import { expandApplicationHtml } from '../../build/application-html.js';
+import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,7 +21,9 @@ import {
   getOverlayPaintRect,
   getWorldOverlayDiagnostics,
   hitTestWorldOverlay,
+  activateWorldOverlayAction,
   initWorldOverlay,
+  subscribeWorldOverlayActions,
   isOverlayPointVisible,
   normalizeOverlayEntry,
   paintLaneForOverlayEntry,
@@ -447,7 +449,7 @@ test('destroying before the first init leaves pre-init buffering intact', () => 
   env.cleanup();
 });
 
-test('lifecycle is idempotent and teardown removes listeners, observers, and DOM', () => {
+test('lifecycle is idempotent and teardown removes listeners, observers, and DOM', async () => {
   const env = installMockEnvironment();
   assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
   initWorldOverlay(env.viewer);
@@ -465,7 +467,7 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   assert.deepEqual(root.children, [canvas],
     'the overlay root carries only the shared card canvas');
   assert.doesNotMatch(
-    expandApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
+    await renderApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
     /world-overlay-detection-surface/,
     'the surface is runtime host-owned, not static markup',
   );
@@ -1019,7 +1021,14 @@ test('accessible actions announce only accepted focus and expose selected state'
   const env = installMockEnvironment();
   let acceptedActivations = 0;
   let staleActivations = 0;
+  let actions = null;
+  const unsubscribe = subscribeWorldOverlayActions((view) => {
+    actions = view;
+  });
   initWorldOverlay(env.viewer);
+  assert.deepEqual(actions.items, []);
+  assert.equal(actions.status, '');
+  assert.equal(actions.announced, 0);
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     interactive: true,
     accessibilityLabel: 'Focus vessel TEST, MMSI 123',
@@ -1030,15 +1039,20 @@ test('accessible actions announce only accepted focus and expose selected state'
   })]);
   env.postRender.raise();
 
-  const list = env.document.getElementById('world-overlay-action-list');
-  const status = env.document.getElementById('world-overlay-status');
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0]['aria-pressed'], 'true');
-  list.children[0].click();
+  assert.equal(actions.items.length, 1);
+  const [item] = actions.items;
+  assert.equal(item.label, 'Focus vessel TEST, MMSI 123');
+  assert.equal(item.selected, true);
+  const owner = actions.owner;
+  activateWorldOverlayAction({}, item.key);
+  assert.equal(acceptedActivations, 0, 'a list from another host cannot activate');
+  activateWorldOverlayAction(owner, item.key);
   assert.equal(acceptedActivations, 1);
-  assert.equal(status.textContent, 'Focusing Focus vessel TEST, MMSI 123');
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123');
+  assert.equal(actions.announced, 1);
+  activateWorldOverlayAction(owner, item.key);
+  assert.equal(actions.announced, 2, 'a repeated focus is a new announcement');
 
-  status.textContent = 'Focus unchanged';
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     selected: false,
     interactive: true,
@@ -1049,12 +1063,16 @@ test('accessible actions announce only accepted focus and expose selected state'
     },
   })]);
   env.postRender.raise();
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0]['aria-pressed'], 'false');
-  list.children[0].click();
+  assert.equal(actions.items.length, 1);
+  assert.equal(actions.items[0].selected, false);
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123', 'the list keeps its last announcement');
+  activateWorldOverlayAction(owner, actions.items[0].key);
   assert.equal(staleActivations, 1);
-  assert.equal(status.textContent, 'Focus unchanged');
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123', 'a refused focus announces nothing');
+  assert.equal(actions.announced, 2);
   env.cleanup();
+  assert.equal(actions, null, 'teardown withdraws the list');
+  unsubscribe();
 });
 
 test('viewport and horizon culling obey explicit policy inputs', () => {
