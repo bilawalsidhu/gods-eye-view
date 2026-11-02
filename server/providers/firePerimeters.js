@@ -62,6 +62,8 @@ const PERIMETER_SOURCES = [
 // The service caps a single response at its maxRecordCount (2000); a peak
 // season can exceed that, so follow exceededTransferLimit with offset pages.
 const MAX_PAGES = 5;
+/** Longest a failed refresh keeps serving the last perimeter snapshot, marked stale. */
+const STALE_MAX_MS = 24 * 60 * 60 * 1000;
 
 const exceededTransferLimit = (payload) =>
   payload?.exceededTransferLimit === true ||
@@ -122,7 +124,7 @@ export function firePerimetersProxy({
               (id === 'wfigs' ? 16 : 8) * MIB,
             ),
           cache,
-          id === 'infona' ? 1_800_000 : Infinity,
+          id === 'infona' ? 1_800_000 : STALE_MAX_MS,
         ),
       ),
     );

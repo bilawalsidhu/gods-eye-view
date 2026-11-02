@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { hashSeed, escapeXml, pinnedCameraUrl } from './normalize.js';
 import {
+  A22_IMAGE_ORIGIN,
   CALGARY_IMAGE_ORIGIN,
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_FRAME_MAX_BODY_BYTES,
@@ -92,7 +93,7 @@ export function buildSyntheticCctvSvg({ cameraId, label, city, status }) {
  * @param {ReadableStream|NodeJS.ReadableStream|null} body
  * @returns {import('stream').Readable|null}
  */
-export function toReadable(body) {
+function toReadable(body) {
   if (!body) return null;
   if (typeof body.pipe === 'function') return body;
   if (typeof body.getReader === 'function') {
@@ -108,7 +109,7 @@ export function toReadable(body) {
  * @returns {{essence:string,params:Map<string,string>}|null} Null when the
  *   value is missing or is not a `type/subtype` media type.
  */
-export function parseMediaType(value) {
+function parseMediaType(value) {
   const [head, ...rest] = String(value ?? '').split(';');
   const essence = head.trim().toLowerCase();
   if (!/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(essence)) return null;
@@ -528,6 +529,7 @@ for (const prefix of [
   HK_IMAGE_ORIGIN,
   KING_COUNTY_IMAGE_ORIGIN,
   WSDOT_IMAGE_ORIGIN,
+  A22_IMAGE_ORIGIN,
 ]) {
   const host = new URL(prefix).hostname;
   CCTV_PINNED_PREFIXES_BY_HOST.set(host, [

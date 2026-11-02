@@ -2,8 +2,6 @@ export const LAYER_ID = 'military-installations';
 
 export const REQUEST_DEBOUNCE_MS = 180;
 
-export const MAX_VIEWPORT_DEGREES = 10;
-
 export const MAX_RENDERED = 700;
 
 export const GOOGLE_MILITARY_PLACE_TYPES = new Set(['military_base']);

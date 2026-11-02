@@ -76,6 +76,63 @@ export function createState({ services }) {
 
   layerState._scratchFocusScreen = new Cesium.Cartesian2();
 
+  layerState._scratchViewScreen = new Cesium.Cartesian2();
+
+  layerState._scratchViewProjection = new Cesium.Matrix4();
+
+  // Counts view passes; a record shown by the latest pass carries its number.
+
+  layerState._viewPassId = 0;
+
+  // Records whose icons the last view pass showed (see refreshHorizonCulling):
+  // geometry refinement, the tiles-ready completion pass and ambient cards
+  // work over these, not the whole catalog.
+
+  layerState._viewRecords = [];
+
+  // Coverage ids refreshCoverageStyles last drew: part of the geometry
+  // working set even when their icons are thinned out.
+
+  layerState._coverageVisibleIds = new Set();
+
+  // View pass triggers besides camera settle: an interval while the camera
+  // moves, and a canvas resize observer.
+
+  layerState._viewMotionTimer = 0;
+
+  layerState._viewResizeObserver = null;
+
+  layerState._viewResizeCanvas = null;
+
+  // The camera the moveStart/moveEnd listeners are attached to.
+
+  layerState._viewListenerCamera = null;
+
+  // A motion pass changed the shown set and the settle pass has not yet told
+  // subscribers; the camera pose the last view pass ran at.
+
+  layerState._viewUnpublished = false;
+
+  layerState._viewPose = null;
+
+  // { at, ms } — when the last motion pass ran and what it cost.
+
+  layerState._viewMotionPass = null;
+
+  // Retries the view geometry a drain left unresolved, once cells warm.
+
+  layerState._viewGeometryRetryTimer = 0;
+
+  // { key, count } — the active camera's coverage-overlap count, which the
+  // summary reads on every notification.
+
+  layerState._neighborCountCache = null;
+
+  // { view, active, list } — the camera picker's index uiState publishes,
+  // rebuilt only when the view pass or the active camera changes.
+
+  layerState._cameraIndexCache = null;
+
   // Staggered geometry-load queue state (see startGeometryLoadQueue).
 
   layerState._geoQueue = [];

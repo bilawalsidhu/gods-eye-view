@@ -20,8 +20,8 @@ import { ownCameraArrival } from './data/cameraArrival.js';
 /** Minimum eye height above the rendered surface for a usable view. */
 export const MIN_EYE_CLEARANCE_M = 120;
 /** Retries while tiles stream in; sampling fails until the mesh exists. */
-export const GUARD_ATTEMPTS = 8;
-export const GUARD_INTERVAL_MS = 600;
+const GUARD_ATTEMPTS = 8;
+const GUARD_INTERVAL_MS = 600;
 /** Ignore sub-metre noise rather than nudging the camera forever. */
 const GUARD_EPSILON_M = 2;
 
