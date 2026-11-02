@@ -1,5 +1,5 @@
 import { fetchRegionalText, fetchRegionalJson } from './http.js';
-import { normalizeRegionalArticles } from '../../../src/data/regionalBrief.js';
+import { normalizeRegionalArticles } from '../../../src/data/regionalModel.js';
 
 function decodeRssText(value) {
   return String(value || '')

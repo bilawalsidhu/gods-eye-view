@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(
-  new URL('./startupChrome.js', import.meta.url),
+  new URL('../app/startupChrome.js', import.meta.url),
   'utf8',
 )
   .replace(/^import .*;\n/gm, '')
@@ -37,7 +37,8 @@ function fixture() {
   };
   vm.createContext(context);
   vm.runInContext(source, context);
-  const stop = context.startStandaloneChrome({
+  const stop = context.startApplicationChrome({
+    initializeSettings: context.initKeySetup,
     loadingScreen: {
       classList: { add: (value) => events.push(value) },
       addEventListener: (type, listener) => listeners.set(type, listener),

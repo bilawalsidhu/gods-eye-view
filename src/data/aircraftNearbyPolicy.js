@@ -11,5 +11,7 @@ export function aircraftIncludedInNearby({
   modelRendering = false,
   includeHidden = false,
 } = {}) {
-  return Boolean(includeHidden || isTracked || billboardShown || modelRendering);
+  return Boolean(
+    includeHidden || isTracked || billboardShown || modelRendering,
+  );
 }

@@ -1,0 +1,309 @@
+/* ── Unified Command Dock ────────────────────── */
+#command-dock {
+  position: fixed;
+  right: auto;
+  bottom: 2vh;
+  left: 50%;
+  z-index: 145;
+  display: grid;
+  grid-template-areas: 'locations voice presets';
+  grid-template-columns: minmax(300px, 1fr) minmax(230px, 270px) minmax(
+      390px,
+      1.15fr
+    );
+  align-items: stretch;
+  width: min(94vw, 1240px);
+  padding: 6px;
+  overflow: visible;
+  background: rgba(9, 18, 27, 0.84);
+  border: 1px solid rgba(123, 189, 211, 0.28);
+  border-radius: 12px;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.58),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 0 28px rgba(0, 212, 255, 0.06);
+  backdrop-filter: blur(28px) saturate(1.35);
+  -webkit-backdrop-filter: blur(28px) saturate(1.35);
+  transform: translateX(-50%);
+  transition:
+    opacity var(--transition-smooth),
+    visibility var(--transition-smooth);
+}
+
+#command-dock > #location-bar,
+#command-dock > #control-panel,
+#command-dock > #gev-voice-control {
+  position: relative;
+  inset: auto;
+  width: auto;
+  max-width: none;
+  transform: none;
+}
+
+#command-dock > #location-bar {
+  grid-area: locations;
+  min-width: 0;
+  border-right: 1px solid rgba(123, 189, 211, 0.16);
+}
+
+#command-dock > #control-panel {
+  grid-area: presets;
+  min-width: 0;
+  border-left: 1px solid rgba(123, 189, 211, 0.16);
+}
+
+#command-dock > #gev-voice-control {
+  grid-area: voice;
+  z-index: 2;
+  align-self: stretch;
+  justify-content: center;
+  min-width: 0;
+  margin: -14px 0;
+  padding: 19px 14px 12px;
+  border-color: rgba(0, 212, 255, 0.36);
+  border-radius: 12px;
+  background: rgba(8, 31, 42, 0.94);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.56),
+    0 0 26px rgba(0, 212, 255, 0.12),
+    0 0 0 1px rgba(0, 212, 255, 0.08) inset;
+}
+
+#command-dock .gev-voice-kicker {
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  left: 14px;
+  overflow: hidden;
+  color: rgba(190, 221, 230, 0.52);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#command-dock #gev-voice-button {
+  width: 78px;
+  height: 42px;
+}
+
+#command-dock .gev-voice-readout {
+  flex: 1;
+  text-align: left;
+}
+
+#command-dock #gev-voice-detail {
+  max-width: 110px;
+}
+
+#command-dock .panel-glow {
+  display: none;
+}
+
+#command-dock .panel-inner,
+#command-dock .location-inner,
+#command-dock #control-panel.collapsed .panel-inner,
+#command-dock #location-bar.collapsed .location-inner {
+  height: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#command-dock .panel-header,
+#command-dock .location-toolbar,
+#command-dock #control-panel.collapsed .panel-header {
+  min-height: 18px;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+#command-dock .panel-title,
+#command-dock .location-toolbar-label {
+  font-size: 8px;
+  letter-spacing: 1.6px;
+  color: rgba(190, 221, 230, 0.58);
+}
+
+#command-dock .panel-collapse-btn,
+#command-dock .panel-mini-status,
+#command-dock .location-mini-status {
+  display: none !important;
+}
+
+#command-dock #control-panel.collapsed .button-grid,
+#command-dock #location-bar.collapsed .location-city-row {
+  display: flex !important;
+}
+
+#command-dock .button-grid {
+  gap: 6px;
+}
+
+#command-dock .style-btn {
+  min-width: 52px;
+  gap: 4px;
+  padding: 9px 8px 7px;
+  border-radius: 7px;
+}
+
+#command-dock .btn-icon {
+  font-size: 16px;
+}
+
+#command-dock .btn-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+#command-dock .btn-key {
+  top: 3px;
+  right: 4px;
+  font-size: 7px;
+}
+
+#command-dock .location-city-row {
+  min-width: 0;
+  gap: 8px;
+}
+
+#command-dock .location-search-wrap {
+  order: -1;
+  flex: 0 1 190px;
+  min-width: 132px;
+  padding-right: 8px;
+  border-right: 1px solid rgba(123, 189, 211, 0.14);
+}
+
+#command-dock .search-toggle-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+#command-dock #location-search,
+#command-dock #location-search.expanded {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+#command-dock .location-pills {
+  flex: 1;
+  min-width: 0;
+}
+
+#command-dock .location-pill {
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+#command-dock .poi-row-container.expanded {
+  margin-bottom: 4px;
+}
+
+/* Keep required map attribution clear of the full-width command surface. */
+body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
+  bottom: calc(2vh + 7rem);
+}
+
+body:not(.ui-clean-view):not(.recording-mode):has(
+    #intel-hud[data-variant='minimal'].active
+  )
+  #cesium-credits {
+  right: 36px;
+  left: auto;
+  width: min(340px, calc(100vw - 72px)) !important;
+  text-align: right;
+}
+
+body.ui-clean-view #command-dock,
+body.recording-mode #command-dock {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.ui-clean-view #cesium-credits,
+body.recording-mode #cesium-credits {
+  right: auto;
+  bottom: 36px;
+  left: 36px;
+}
+
+#intel-hud[data-variant='minimal'] .hud-bottom-left {
+  bottom: calc(2vh + 7.5rem);
+}
+
+#intel-hud[data-variant='minimal'] .hud-bottom-bar {
+  bottom: calc(2vh + 11.5rem);
+}
+
+@media (max-width: 980px) {
+  #command-dock {
+    grid-template-areas:
+      'locations voice'
+      'presets presets';
+    grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
+    width: calc(100vw - 24px);
+  }
+
+  #command-dock > #location-bar {
+    border-right: 1px solid rgba(123, 189, 211, 0.16);
+    border-bottom: 1px solid rgba(123, 189, 211, 0.16);
+  }
+
+  #command-dock > #control-panel {
+    border-top: 1px solid rgba(123, 189, 211, 0.16);
+    border-left: 0;
+  }
+
+  #command-dock > #gev-voice-control {
+    margin: -10px 0 0;
+  }
+
+  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
+    bottom: calc(2vh + 9.5rem);
+  }
+
+  #intel-hud[data-variant='minimal'] .hud-bottom-left {
+    bottom: calc(2vh + 12rem);
+  }
+
+  #intel-hud[data-variant='minimal'] .hud-bottom-bar {
+    bottom: calc(2vh + 16rem);
+  }
+}
+
+@media (max-width: 720px) {
+  #command-dock {
+    bottom: 8px;
+  }
+
+  #command-dock .location-search-wrap {
+    flex-basis: 150px;
+  }
+
+  #command-dock .panel-inner,
+  #command-dock .location-inner,
+  #command-dock #control-panel.collapsed .panel-inner,
+  #command-dock #location-bar.collapsed .location-inner {
+    padding: 7px 9px;
+  }
+
+  #left-panel-stack {
+    bottom: calc(50vh + 8px);
+  }
+}

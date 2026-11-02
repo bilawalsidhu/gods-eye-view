@@ -8,12 +8,15 @@ import * as Cesium from 'cesium';
 import { createFirmsHeatmapLayer, applyFirmsOverlayPolicy, buildCellCard } from './firmsHeatmap.js';
 import { fireDetectionKey } from './firmsLabels.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import { getSelectedEntityContext } from './contextStore.js';
+import { setLocale } from '../i18n/index.js';
+import { shownEntityLabel } from '../voice/speech.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
-import fs from 'node:fs';
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const LAYER_SOURCE = fs.readFileSync(
+const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
   'utf8',
 );
@@ -40,7 +43,7 @@ function makeFire(overrides = {}) {
  */
 function harness({
   fires = [makeFire()], picked = null, cardHit = null, cameraPosition = null,
-  withDataSource = false,
+  withDataSource = false, feed = null,
 } = {}) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const priorWindow = globalThis.window;
@@ -58,6 +61,7 @@ function harness({
   const published = [];
   let handler = null;
   const layer = createFirmsHeatmapLayer({
+    ...(feed ? { feed } : {}),
     id: 'firms-test',
     name: 'Fires',
     overlayHost: {
@@ -233,6 +237,27 @@ test('clicking a fire CARD behaves exactly like clicking its sprite', () => {
   }
 });
 
+// The voice model reads these labels as data (track_entity, get_entity_context,
+// pointer_context); the voice card translates them where it shows them.
+test('fire labels stay English data in a translated interface', () => {
+  const h = harness({ fires: [makeFire()], picked: { id: 'firms-7' } });
+  try {
+    setLocale('ru');
+    h.click();
+    assert.equal(getSelectedEntityContext().label, 'Fire · FRP 1520 MW');
+    // The card's pattern must match what the producer actually writes.
+    assert.equal(
+      shownEntityLabel(getSelectedEntityContext().label),
+      'Пожар · FRP 1520 МВт',
+    );
+    assert.equal(h.layer.getSelectedInfo().label, 'Fire · FRP 1520 MW');
+    assert.equal(h.layer.getStrongestFire().label, 'Fire · FRP 1520 MW');
+  } finally {
+    h.cleanup();
+    setLocale('en');
+  }
+});
+
 test('a click on neither sprite nor card clears without moving the camera', () => {
   const h = harness({ picked: { primitive: {}, content: {}, featureId: 0 } });
   try {
@@ -348,4 +373,22 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
     else globalThis.fetch = priorFetch;
     h.cleanup();
   }
+});
+
+test('disable cancels a pending source and a late response cannot repopulate the layer', async () => {
+  let resolve, signal;
+  const h = harness({ withDataSource: true, feed: { getSnapshot(options) {
+    signal = options.signal; return new Promise(done => { resolve = done; });
+  } } });
+  try {
+    const before = h.layer.getStats();
+    const pending = h.layer.update();
+    h.layer.disable();
+    assert.equal(signal.aborted, true);
+    resolve({ fires: [], fetchedAt: Date.now() });
+    await pending;
+    assert.equal(h.layer.getStats().count, before.count);
+    assert.equal(h.layer.getStats().lastUpdate, before.lastUpdate);
+    assert.equal(h.layer.getStats().loading, false);
+  } finally { h.layer.destroy(h.viewer); h.cleanup(); }
 });

@@ -1,0 +1,43 @@
+/* Read-only badges. Feature CSS supplies meaning through explicit colors;
+   appearance variants change density/shape without interpreting status codes. */
+.gev-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--status-badge-border, rgba(0, 212, 255, 0.32));
+  border-radius: 999px;
+  background: var(--status-badge-background, rgba(0, 212, 255, 0.09));
+  color: var(--status-badge-color, #9defff);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.3px;
+  overflow-wrap: anywhere;
+}
+
+.gev-status-badge--box {
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.gev-status-badge--plain {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--status-badge-color, var(--text-dim));
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Explicitly beat the component display rule, including in older browsers. */
+.gev-status-badge[hidden] {
+  display: none;
+}

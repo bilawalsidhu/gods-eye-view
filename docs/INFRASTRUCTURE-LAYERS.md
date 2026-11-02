@@ -36,7 +36,8 @@ const layers = createInfrastructureLayers({
 | `governorRequestRender` | `(reason)`; request a frame through the existing render scheduler |
 
 Each returned layer supports `init(viewer)`, `enable(viewer)`, `disable(viewer)`,
-`update(viewer)`, `destroy(viewer)`, `getStats()` and `getLodDiagnostics()`.
+`update(viewer)`, `destroy(viewer)`, `getStats()`, `getLodDiagnostics()` and
+`getAnalystRecords()`.
 Use the same viewer for the instance's entire lifetime. Each viewer/context/overlay
 host permits one live instance per layer ID; destroy an old instance before
 replacing it. Separate applications may use identical IDs with separate hosts.
@@ -52,9 +53,8 @@ Cesium installation shared with its viewer; it must not bundle separate copies.
 `gods-eye-view/infrastructure/geojson` exports the lower-level
 `createLocalGeoJsonLayer(options, services)` and existing infrastructure overlay
 helpers. `gods-eye-view/infrastructure/lod` exports the existing LOD policy helpers.
-The standalone app's `src/data/localGeojson.js` keeps its original single-argument
-factory and supplies its existing functions. Other consumers should use the package
-exports, which do not import standalone application globals.
+Consumers use the package exports, which do not import standalone application
+globals.
 
 Dataset files and source/license notices remain under `src/data/local_data/`.
 Their input counts are 4,351 datacenter features and 704 dam features. Cesium may

@@ -13,7 +13,13 @@ function range01(value, min, max) {
  * Missing weather fails clear instead of inventing conditions.
  */
 export function deriveWeatherEffectProfile(weather) {
-  if (!weather || !Number.isFinite(Number(weather.weatherCode))) {
+  const reported = weather?.weatherCode;
+  // Number(null) and Number('') are 0 (clear), so a missing code is checked first.
+  if (
+    reported == null ||
+    reported === '' ||
+    !Number.isFinite(Number(reported))
+  ) {
     return {
       available: false,
       cloud: 0,
@@ -33,10 +39,13 @@ export function deriveWeatherEffectProfile(weather) {
   const precipitation = Math.max(0, Number(weather.precipitationMm) || 0);
   const wind = range01(weather.windKph, 4, 90);
   const visibilityM = Number(weather.visibilityM);
-  const visibilityFog = Number.isFinite(visibilityM) ? range01(12000 - visibilityM, 0, 11500) : 0;
+  const visibilityFog = Number.isFinite(visibilityM)
+    ? range01(12000 - visibilityM, 0, 11500)
+    : 0;
 
   const drizzle = code >= 51 && code <= 57;
-  const rainCode = (code >= 61 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
+  const rainCode =
+    (code >= 61 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
   const snowCode = (code >= 71 && code <= 77) || (code >= 85 && code <= 86);
   const fogCode = code === 45 || code === 48;
   const stormCode = code >= 95;
@@ -48,7 +57,13 @@ export function deriveWeatherEffectProfile(weather) {
   const snow = snowCode ? Math.max(snowFloor, observedPrecip) : 0;
   const fog = Math.max(fogCode ? 0.78 : 0, visibilityFog);
   const storm = stormCode ? Math.max(0.55, observedPrecip) : 0;
-  const forcedCloud = stormCode ? 0.92 : (rain || snow) ? 0.7 : fogCode ? 0.55 : 0;
+  const forcedCloud = stormCode
+    ? 0.92
+    : rain || snow
+      ? 0.7
+      : fogCode
+        ? 0.55
+        : 0;
   const cloud = Math.max(cover, forcedCloud);
 
   return {

@@ -107,3 +107,22 @@ test('a Node build export must be explicitly classified and scoped', async (t) =
   await writeFile(path.join(root, 'startup.js'), 'export const app = 2;');
   await assert.rejects(checkPackageBoundaries(root), /unowned module.*startup/);
 });
+
+test('a lifecycle owner cannot acquire a layer panel even through an unused import', async (t) => {
+  const root = await fixture(
+    t,
+    "import './panel.js'; export class LayerLifecycle {}",
+  );
+  await writeFile(path.join(root, 'panel.js'), 'export class LayerPanel {}');
+  await writeFile(
+    path.join(root, 'scripts/package-boundaries.json'),
+    JSON.stringify({
+      'layer-lifecycle': {
+        exports: ['./feature'],
+        modules: ['entry.js'],
+        external: [],
+      },
+    }),
+  );
+  await assert.rejects(checkPackageBoundaries(root), /unowned module.*panel/);
+});

@@ -1,32 +1,119 @@
 import {
   googleServerApiKey,
   keylessGooglePlacesResponse,
+  keylessGoogleGeocodeResponse,
 } from './google-key.js';
-import { makeOptInRateLimiter, clientKey } from '../common/rate-limit.js';
+import { makeCostRateLimiter, clientKey } from '../common/rate-limit.js';
+import { admitSameSite } from '../common/same-site.js';
+import { readResponseJsonCapped } from '../common/http.js';
 import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
 } from '../../../src/data/placeProviderPayloads.js';
 
 // Construct lazily after the standalone environment has loaded.
-// undefined = not built yet; null = unlimited; fn = active limiter
+// undefined = not built yet; null = the explicit 0 opt-out; fn = active limiter
 let _googleRateLimiter;
 
-/** Google cost endpoint (nearby-places). Null = unlimited (default). */
+/**
+ * Requests/min/IP applied when GEV_RATELIMIT_GOOGLE_PER_MIN is unset. This is
+ * the value the Pinokio build already ships (pinokio/_ENVIRONMENT), so the
+ * packaged app keeps behaving exactly as it does today and only an
+ * unconfigured server changes — from unlimited to what the product already
+ * runs with. Places calls are user-driven (a search, a nearby lookup, an
+ * installation probe) rather than polled, so this sits far above what the app
+ * generates and bites only a caller enumerating the endpoint. `.env.example`
+ * suggests a tighter 60 when the host is not localhost; that still applies.
+ */
+export const GOOGLE_DEFAULT_PER_MIN = 120;
+
+/** Google cost endpoints (nearby-places, text-search, geocoding). Null only when set to 0. */
 function googleRateLimiter() {
   if (_googleRateLimiter === undefined)
-    _googleRateLimiter = makeOptInRateLimiter(
+    _googleRateLimiter = makeCostRateLimiter(
       process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
+      GOOGLE_DEFAULT_PER_MIN,
     );
   return _googleRateLimiter;
+}
+
+/** Validate raw lat/lon presence and WGS84 bounds before consuming request quota. */
+export function validatePlacesCoordinates(searchParams) {
+  const rawLat = searchParams.get('lat');
+  const rawLon = searchParams.get('lon');
+  if (rawLat === null || rawLon === null || !rawLat.trim() || !rawLon.trim()) {
+    return { ok: false, error: 'lat and lon are required' };
+  }
+  const latitude = Number(rawLat);
+  const longitude = Number(rawLon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return { ok: false, error: 'Valid lat and lon are required' };
+  }
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return {
+      ok: false,
+      error: 'lat must be within [-90, 90] and lon within [-180, 180]',
+    };
+  }
+  return { ok: true, latitude, longitude };
+}
+
+/** Longest accepted geocoder query. Real place names are far shorter. */
+const GEOCODE_MAX_QUERY = 200;
+
+/**
+ * Upstream deadline and body ceiling for the geocode routes. The deadline stays
+ * armed through body consumption, so a stalled upstream cannot hold a handler
+ * open, and the cap bounds a chunked or length-omitted reply. A geocode answer
+ * is a handful of results; 256 KiB is far above any honest one.
+ */
+const GEOCODE_UPSTREAM_TIMEOUT_MS = 10_000;
+
+const GEOCODE_MAX_RESPONSE_BYTES = 256 * 1024;
+
+/** Validate a free-text geocoder query before consuming request quota. */
+export function validateGeocodeAddress(searchParams) {
+  const address = String(searchParams.get('address') || '').trim();
+  if (!address) return { ok: false, error: 'address is required' };
+  if (address.length > GEOCODE_MAX_QUERY)
+    return { ok: false, error: 'address is too long' };
+  return { ok: true, address };
+}
+
+/**
+ * Validate the optional viewport bias, which Google reads as
+ * `sw_lat,sw_lng|ne_lat,ne_lng`. An unparsed value is dropped rather than
+ * refused: the bias only ranks results, so a malformed one costs relevance,
+ * not an answer.
+ */
+export function geocodeBounds(searchParams) {
+  const raw = String(searchParams.get('bounds') || '').trim();
+  if (!raw) return null;
+  const corners = raw.split('|');
+  if (corners.length !== 2) return null;
+  const parts = corners.flatMap((corner) => corner.split(','));
+  // A blank component must be refused before Number() turns it into 0 and a
+  // half-written corner like `30.4,` reads as the equator.
+  if (parts.length !== 4 || parts.some((part) => !part.trim())) return null;
+  const numbers = parts.map(Number);
+  if (!numbers.every(Number.isFinite)) return null;
+  const [swLat, swLon, neLat, neLon] = numbers;
+  if (Math.abs(swLat) > 90 || Math.abs(neLat) > 90) return null;
+  if (Math.abs(swLon) > 180 || Math.abs(neLon) > 180) return null;
+  return raw;
 }
 
 /** Nearby place labels and view-biased text search, with request-time key resolution. */
 export function googlePlacesContextProxy({
   resolveApiKey = googleServerApiKey,
+  fetchImpl = (...args) => fetch(...args),
+  endpoints = {},
 } = {}) {
   function install(middlewares) {
     middlewares.use('/api/google/nearby-places', async (req, res) => {
+      // Gate first, like the OpenAI routes: a cross-site caller learns nothing
+      // about this endpoint's method surface.
+      if (admitSameSite(req, res)) return;
       if (req.method !== 'GET') {
         res.statusCode = 405;
         res.setHeader('Content-Type', 'application/json');
@@ -47,7 +134,17 @@ export function googlePlacesContextProxy({
         return;
       }
 
-      // Opt-in per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). No-op when unset.
+      const requestUrl = new URL(req.url || '', 'http://localhost');
+      const coordinates = validatePlacesCoordinates(requestUrl.searchParams);
+      if (!coordinates.ok) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: coordinates.error, places: [] }));
+        return;
+      }
+      const { latitude, longitude } = coordinates;
+
+      // Per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). On by default; 0 disables.
       // Inlined (not the shared helper) so the 429 body keeps this endpoint's
       // `places: []` contract that the client expects on every error response.
       const _grl = googleRateLimiter();
@@ -59,30 +156,18 @@ export function googlePlacesContextProxy({
         return;
       }
 
-      const requestUrl = new URL(req.url || '', 'http://localhost');
-      const latitude = Number(requestUrl.searchParams.get('lat'));
-      const longitude = Number(requestUrl.searchParams.get('lon'));
       const radiusM = Math.max(
         25,
         Math.min(5000, Number(requestUrl.searchParams.get('radiusM')) || 250),
       );
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(
-          JSON.stringify({
-            error: 'Valid lat and lon are required',
-            places: [],
-          }),
-        );
-        return;
-      }
 
       try {
-        const response = await fetch(
-          'https://places.googleapis.com/v1/places:searchNearby',
+        const response = await fetchImpl(
+          endpoints.nearby ||
+            'https://places.googleapis.com/v1/places:searchNearby',
           {
             method: 'POST',
+            redirect: 'error',
             headers: {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': apiKey,
@@ -140,6 +225,8 @@ export function googlePlacesContextProxy({
     // a view-biased Text Search lands on the actual feature. Same key, field
     // mask, throttle, and `places: []` error contract as nearby-places above.
     middlewares.use('/api/google/text-search', async (req, res) => {
+      // Paid like nearby-places, so gated the same way, first.
+      if (admitSameSite(req, res)) return;
       if (req.method !== 'GET') {
         res.statusCode = 405;
         res.setHeader('Content-Type', 'application/json');
@@ -160,7 +247,26 @@ export function googlePlacesContextProxy({
         return;
       }
 
-      // Opt-in per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). No-op when unset.
+      const requestUrl = new URL(req.url || '', 'http://localhost');
+      const textQuery = String(requestUrl.searchParams.get('q') || '').trim();
+      if (!textQuery) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({ error: 'q, lat and lon are required', places: [] }),
+        );
+        return;
+      }
+      const coordinates = validatePlacesCoordinates(requestUrl.searchParams);
+      if (!coordinates.ok) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: coordinates.error, places: [] }));
+        return;
+      }
+      const { latitude, longitude } = coordinates;
+
+      // Per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN). On by default; 0 disables.
       // Inlined (like nearby-places) so the 429 body keeps the `places: []`
       // contract the client expects on every error response.
       const _grl = googleRateLimiter();
@@ -172,32 +278,18 @@ export function googlePlacesContextProxy({
         return;
       }
 
-      const requestUrl = new URL(req.url || '', 'http://localhost');
-      const textQuery = String(requestUrl.searchParams.get('q') || '').trim();
-      const latitude = Number(requestUrl.searchParams.get('lat'));
-      const longitude = Number(requestUrl.searchParams.get('lon'));
       const radiusM = Math.max(
         50,
         Math.min(50000, Number(requestUrl.searchParams.get('radiusM')) || 4000),
       );
-      if (
-        !textQuery ||
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude)
-      ) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(
-          JSON.stringify({ error: 'q, lat and lon are required', places: [] }),
-        );
-        return;
-      }
 
       try {
-        const response = await fetch(
-          'https://places.googleapis.com/v1/places:searchText',
+        const response = await fetchImpl(
+          endpoints.textSearch ||
+            'https://places.googleapis.com/v1/places:searchText',
           {
             method: 'POST',
+            redirect: 'error',
             headers: {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': apiKey,
@@ -247,6 +339,149 @@ export function googlePlacesContextProxy({
           }),
         );
       }
+    });
+
+    /**
+     * Geocoding belongs on the server, not in the page. Google's Geocoding web
+     * service refuses referrer-restricted keys, so calling it from the browser
+     * forces GOOGLE_MAPS_API_KEY — which ships in the bundle by design — to be
+     * left unrestricted (#363). Here the request carries the server key, and
+     * the browser key no longer needs the Geocoding API at all.
+     *
+     * Unlike the two Places routes above, these answer in Google's own shape
+     * (`status` + `results`) rather than the `places: []` contract: the browser
+     * normalizers read that shape directly, and keeping it means the proxy adds
+     * a hop without adding a translation nobody asked for.
+     */
+    function installGeocodeRoute(path, readQuery) {
+      middlewares.use(path, async (req, res) => {
+        const refuse = (statusCode, error) => {
+          res.statusCode = statusCode;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(
+            JSON.stringify({ status: 'REQUEST_DENIED', results: [], error }),
+          );
+        };
+
+        // Gate first, like the Places routes above: a cross-site caller learns
+        // nothing about this endpoint's method surface.
+        if (admitSameSite(req, res)) return;
+        if (req.method !== 'GET') {
+          refuse(405, 'Method not allowed');
+          return;
+        }
+
+        // A keyless geocode has no provider cost, so it resolves before the
+        // paid-endpoint limiter can consume or exhaust quota (mirrors the
+        // Places routes above).
+        const apiKey = resolveApiKey();
+        const keyless = keylessGoogleGeocodeResponse(apiKey);
+        if (keyless) {
+          res.statusCode = keyless.statusCode;
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(JSON.stringify(keyless.payload));
+          return;
+        }
+
+        const requestUrl = new URL(req.url || '', 'http://localhost');
+        const query = readQuery(requestUrl.searchParams);
+        if (!query.ok) {
+          refuse(400, query.error);
+          return;
+        }
+
+        // Per-IP throttle (GEV_RATELIMIT_GOOGLE_PER_MIN), shared with the
+        // Places routes because both spend the same Google budget.
+        const _grl = googleRateLimiter();
+        if (_grl && !_grl(clientKey(req))) {
+          res.statusCode = 429;
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Retry-After', '5');
+          res.end(
+            JSON.stringify({
+              status: 'OVER_QUERY_LIMIT',
+              results: [],
+              error: 'Rate limit exceeded',
+            }),
+          );
+          return;
+        }
+
+        try {
+          const upstream = new URL(
+            endpoints.geocode ||
+              'https://maps.googleapis.com/maps/api/geocode/json',
+          );
+          for (const [name, value] of Object.entries(query.params))
+            upstream.searchParams.set(name, value);
+          upstream.searchParams.set('key', apiKey);
+          const deadline = AbortSignal.timeout(GEOCODE_UPSTREAM_TIMEOUT_MS);
+          const response = await fetchImpl(upstream.toString(), {
+            redirect: 'error',
+            signal: deadline,
+          });
+          // An unreadable, oversized or timed-out body is not an answer: it
+          // falls through to the same shaped failure as a refusal below.
+          const data = await readResponseJsonCapped(
+            response,
+            GEOCODE_MAX_RESPONSE_BYTES,
+            deadline,
+          ).catch(() => null);
+
+          // A body we could not read is an upstream failure, not an answer with
+          // a status of its own, so it does not borrow the upstream's code.
+          if (!data) {
+            res.statusCode = 502;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(
+              JSON.stringify({
+                status: 'UNKNOWN_ERROR',
+                results: [],
+                error: 'Google Geocoding request failed',
+              }),
+            );
+            return;
+          }
+
+          res.statusCode = response.ok ? 200 : response.status;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'private, max-age=300');
+          res.end(JSON.stringify(data));
+        } catch {
+          // Fixed public text: a transport, URL or runtime message would
+          // describe the server to the browser (SECURITY.md, sanitized errors).
+          res.statusCode = 502;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(
+            JSON.stringify({
+              status: 'UNKNOWN_ERROR',
+              results: [],
+              error: 'Google Geocoding request failed',
+            }),
+          );
+        }
+      });
+    }
+
+    installGeocodeRoute('/api/google/geocode', (searchParams) => {
+      const address = validateGeocodeAddress(searchParams);
+      if (!address.ok) return address;
+      const bounds = geocodeBounds(searchParams);
+      return {
+        ok: true,
+        params: {
+          address: address.address,
+          ...(bounds ? { bounds } : {}),
+        },
+      };
+    });
+
+    installGeocodeRoute('/api/google/reverse-geocode', (searchParams) => {
+      const coordinates = validatePlacesCoordinates(searchParams);
+      if (!coordinates.ok) return coordinates;
+      const { latitude, longitude } = coordinates;
+      return { ok: true, params: { latlng: `${latitude},${longitude}` } };
     });
   }
 

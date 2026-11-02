@@ -1,8 +1,22 @@
+import { msg } from './i18n/marker.js';
+
 const CONTEXT_DEPENDENCIES = Object.freeze({
-  flights: new Set(['military-awareness', 'flights', 'military', 'ais-live-vessels', 'military-installations']),
+  flights: new Set([
+    'military-awareness',
+    'flights',
+    'military',
+    'ais-live-vessels',
+    'military-installations',
+  ]),
   'space-missions': new Set(['rocket-launches', 'satellites']),
 });
 const CONTEXT_COMPANIONS = new Set(['radio']);
+/** The Space Missions refusal, with the blocked layer's name as {layer}. */
+export const SPACE_MISSIONS_LAYER_BLOCK_REASON = msg(
+  'Space Missions isolates replay data. Exit the mode to enable {layer}.',
+);
+const [BLOCK_REASON_PREFIX, BLOCK_REASON_SUFFIX] =
+  SPACE_MISSIONS_LAYER_BLOCK_REASON.split('{layer}');
 /** Return whether an origin represents a direct user choice on this route. */
 export function isExplicitUserIntentOrigin(origin, layerId = null) {
   return origin === 'user' || origin === 'voice';
@@ -11,11 +25,13 @@ export function isExplicitUserIntentOrigin(origin, layerId = null) {
 /** Preserve explicit layer intent that completes while a stale restore is queued. */
 export function recordContextRestoreExplicitChange({ restoreState, change }) {
   if (
-    !restoreState?.enabledLayerIds
-    || change?.type !== 'visibility'
-    || !isExplicitUserIntentOrigin(change.origin, change.layerId)
-  ) return false;
-  if (!restoreState.explicitLayerStates) restoreState.explicitLayerStates = new Map();
+    !restoreState?.enabledLayerIds ||
+    change?.type !== 'visibility' ||
+    !isExplicitUserIntentOrigin(change.origin, change.layerId)
+  )
+    return false;
+  if (!restoreState.explicitLayerStates)
+    restoreState.explicitLayerStates = new Map();
   restoreState.explicitLayerStates.set(change.layerId, Boolean(change.enabled));
   if (change.enabled) restoreState.enabledLayerIds.add(change.layerId);
   else restoreState.enabledLayerIds.delete(change.layerId);
@@ -23,30 +39,41 @@ export function recordContextRestoreExplicitChange({ restoreState, change }) {
 }
 
 /** Settle every explicit Context-restore replay without losing semantic failures. */
-export async function settleContextIntentReplay({ restoreState, setEnabled, notificationToken = null }) {
+export async function settleContextIntentReplay({
+  restoreState,
+  setEnabled,
+  notificationToken = null,
+}) {
   if (restoreState?.cancelled) return null;
   const entries = [...(restoreState?.explicitLayerStates || [])];
-  const results = await Promise.allSettled(entries.map(([layerId, enabled]) => (
-    setEnabled(layerId, enabled, {
-      origin: 'context-intent-replay',
-      ...(notificationToken ? { notificationToken } : {}),
-    })
-  )));
-  const failedIndexes = results.flatMap((result, index) => (
-    result.status === 'rejected' || result.value === false ? [index] : []
-  ));
+  const results = await Promise.allSettled(
+    entries.map(([layerId, enabled]) =>
+      setEnabled(layerId, enabled, {
+        origin: 'context-intent-replay',
+        ...(notificationToken ? { notificationToken } : {}),
+      }),
+    ),
+  );
+  const failedIndexes = results.flatMap((result, index) =>
+    result.status === 'rejected' || result.value === false ? [index] : [],
+  );
   if (failedIndexes.length === 0) return null;
   const failedLayerIds = failedIndexes.map((index) => entries[index][0]);
   const rejected = failedIndexes
     .map((index) => results[index])
     .find((result) => result.status === 'rejected');
-  const error = rejected?.reason instanceof Error
-    ? rejected.reason
-    : new Error(`Context intent replay failed for ${failedLayerIds.map((layerId) => `"${layerId}"`).join(', ')}`);
-  error.failedLayerIds = [...new Set([
-    ...(Array.isArray(error.failedLayerIds) ? error.failedLayerIds : []),
-    ...failedLayerIds,
-  ])];
+  const error =
+    rejected?.reason instanceof Error
+      ? rejected.reason
+      : new Error(
+          `Context intent replay failed for ${failedLayerIds.map((layerId) => `"${layerId}"`).join(', ')}`,
+        );
+  error.failedLayerIds = [
+    ...new Set([
+      ...(Array.isArray(error.failedLayerIds) ? error.failedLayerIds : []),
+      ...failedLayerIds,
+    ]),
+  ];
   return error;
 }
 
@@ -54,18 +81,29 @@ export async function settleContextIntentReplay({ restoreState, setEnabled, noti
 export function mergeContextTransitionErrors(primaryError, secondaryError) {
   if (!primaryError) return secondaryError || null;
   if (!secondaryError) return primaryError;
-  primaryError.failedLayerIds = [...new Set([
-    ...(Array.isArray(primaryError.failedLayerIds) ? primaryError.failedLayerIds : []),
-    ...(Array.isArray(secondaryError.failedLayerIds) ? secondaryError.failedLayerIds : []),
-  ])];
+  primaryError.failedLayerIds = [
+    ...new Set([
+      ...(Array.isArray(primaryError.failedLayerIds)
+        ? primaryError.failedLayerIds
+        : []),
+      ...(Array.isArray(secondaryError.failedLayerIds)
+        ? secondaryError.failedLayerIds
+        : []),
+    ]),
+  ];
   return primaryError;
 }
 
 /** Settle a user-facing Context action and convert every failure form to false. */
-export async function settleUserFacingContextAction({ operation, onFailure, falseIsFailure = true }) {
+export async function settleUserFacingContextAction({
+  operation,
+  onFailure,
+  falseIsFailure = true,
+}) {
   try {
     const result = await operation();
-    if (falseIsFailure && result === false) throw new Error('Context transition did not complete');
+    if (falseIsFailure && result === false)
+      throw new Error('Context transition did not complete');
     return result;
   } catch (error) {
     try {
@@ -83,7 +121,10 @@ export async function settleUserFacingContextAction({ operation, onFailure, fals
  * one into `userAdded` makes exit restoration re-enable the mode layer the
  * user just turned off.
  */
-export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze(['military-awareness', 'rocket-launches']);
+export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze([
+  'military-awareness',
+  'rocket-launches',
+]);
 
 /**
  * Leave a Context transaction: publish the settled coordination flag, then
@@ -108,7 +149,8 @@ export function settleContextModeChange(owner, changing = false) {
   if (!owner) return;
   const wasChanging = Boolean(owner._contextModeChanging);
   owner._contextModeChanging = Boolean(changing);
-  if (wasChanging && !owner._contextModeChanging) owner._syncContextModeButtons?.();
+  if (wasChanging && !owner._contextModeChanging)
+    owner._syncContextModeButtons?.();
 }
 
 /**
@@ -142,19 +184,24 @@ export async function runWithContextModeChanging(owner, operation) {
  * @param {object|null} input.change DataLayerManager visibility notification.
  * @returns {boolean} Whether the active Context bundle should be disabled.
  */
-export function shouldExitContextForLayerChange({ contextMode, globalContextEnabled, change }) {
+export function shouldExitContextForLayerChange({
+  contextMode,
+  globalContextEnabled,
+  change,
+}) {
   if (
-    change?.type !== 'visibility'
-    || !isExplicitUserIntentOrigin(change.origin, change.layerId)
-    || change.layerId === 'military-awareness'
-    || CONTEXT_COMPANIONS.has(change.layerId)
+    change?.type !== 'visibility' ||
+    !isExplicitUserIntentOrigin(change.origin, change.layerId) ||
+    change.layerId === 'military-awareness' ||
+    CONTEXT_COMPANIONS.has(change.layerId)
   ) {
     return false;
   }
   const active = Boolean(globalContextEnabled || contextMode);
   if (!active) return false;
 
-  const dependencies = CONTEXT_DEPENDENCIES[contextMode] || new Set(['military-awareness']);
+  const dependencies =
+    CONTEXT_DEPENDENCIES[contextMode] || new Set(['military-awareness']);
   if (change.enabled) return false;
   return Boolean(contextMode && dependencies.has(change.layerId));
 }
@@ -181,10 +228,10 @@ export function contextAllowedLayerIds(contextMode) {
  */
 export function shouldCaptureContextSession(change) {
   return Boolean(
-    ['visibility-requested', 'visibility-will-change'].includes(change?.type)
-    && isExplicitUserIntentOrigin(change.origin, change.layerId)
-    && change.enabled
-    && CONTEXT_ENTRY_LAYER_IDS.includes(change.layerId)
+    ['visibility-requested', 'visibility-will-change'].includes(change?.type) &&
+    isExplicitUserIntentOrigin(change.origin, change.layerId) &&
+    change.enabled &&
+    CONTEXT_ENTRY_LAYER_IDS.includes(change.layerId),
   );
 }
 
@@ -194,12 +241,12 @@ export function shouldCaptureContextSession(change) {
  */
 export function shouldDeferContextEntryDuringClear({ change, clearInFlight }) {
   return Boolean(
-    clearInFlight
-    && change?.type === 'visibility-requested'
-    && change.layerId === 'rocket-launches'
-    && change.enabled === true
-    && isExplicitUserIntentOrigin(change.origin, change.layerId)
-    && Number.isInteger(change.intentEpoch)
+    clearInFlight &&
+    change?.type === 'visibility-requested' &&
+    change.layerId === 'rocket-launches' &&
+    change.enabled === true &&
+    isExplicitUserIntentOrigin(change.origin, change.layerId) &&
+    Number.isInteger(change.intentEpoch),
   );
 }
 
@@ -218,11 +265,15 @@ export function shouldDeferContextEntryDuringClear({ change, clearInFlight }) {
  * @param {string|null} [input.effectiveContextMode] Committed or entering mode.
  * @returns {boolean} Whether the snapshot's userAdded set was modified.
  */
-export function recordContextSessionUserChange({ snapshot, change, effectiveContextMode = null }) {
+export function recordContextSessionUserChange({
+  snapshot,
+  change,
+  effectiveContextMode = null,
+}) {
   if (
-    !snapshot?.userAdded
-    || change?.type !== 'visibility'
-    || !isExplicitUserIntentOrigin(change.origin, change.layerId)
+    !snapshot?.userAdded ||
+    change?.type !== 'visibility' ||
+    !isExplicitUserIntentOrigin(change.origin, change.layerId)
   ) {
     return false;
   }
@@ -233,7 +284,11 @@ export function recordContextSessionUserChange({ snapshot, change, effectiveCont
       snapshot.userAdded.add(change.layerId);
       return true;
     }
-    if (contextAllowedLayerIds(effectiveContextMode).has(change.layerId) && !isCompanion) return false;
+    if (
+      contextAllowedLayerIds(effectiveContextMode).has(change.layerId) &&
+      !isCompanion
+    )
+      return false;
     snapshot.userAdded.add(change.layerId);
     if (isCompanion) snapshot.userRemoved?.delete(change.layerId);
     return true;
@@ -276,16 +331,43 @@ export function contextSnapshotLayerIds(
  * @param {string|null} [input.layerName] User-facing layer name.
  * @returns {string|null} Honest user-facing refusal reason, or null when allowed.
  */
-export function contextLayerEnableBlockReason({ contextMode, change, layerName = null }) {
+export function contextLayerEnableBlockReason({
+  contextMode,
+  change,
+  layerName = null,
+}) {
   if (
-    contextMode !== 'space-missions'
-    || change?.enabled !== true
-    || contextAllowedLayerIds('space-missions').has(change.layerId)
+    contextMode !== 'space-missions' ||
+    change?.enabled !== true ||
+    contextAllowedLayerIds('space-missions').has(change.layerId)
   ) {
     return null;
   }
   const label = String(layerName || change.layerId || 'that layer');
-  return `Space Missions isolates replay data. Exit the mode to enable ${label}.`;
+  return SPACE_MISSIONS_LAYER_BLOCK_REASON.replace('{layer}', label);
+}
+
+/**
+ * The layer name from a Space Missions refusal, so the UI can rebuild the
+ * sentence in its language.
+ * @param {string} reason
+ * @returns {{layer: string}|null} The blocked layer's name, or null when the
+ *   reason is not a Space Missions refusal.
+ */
+export function parseContextLayerBlockReason(reason) {
+  if (
+    typeof reason !== 'string' ||
+    !reason.startsWith(BLOCK_REASON_PREFIX) ||
+    !reason.endsWith(BLOCK_REASON_SUFFIX) ||
+    reason.length <= BLOCK_REASON_PREFIX.length + BLOCK_REASON_SUFFIX.length
+  )
+    return null;
+  return {
+    layer: reason.slice(
+      BLOCK_REASON_PREFIX.length,
+      reason.length - BLOCK_REASON_SUFFIX.length,
+    ),
+  };
 }
 
 /**
@@ -297,20 +379,20 @@ export function contextLayerEnableBlockReason({ contextMode, change, layerName =
  * @param {object|null} input.change Manager visibility notification.
  * @returns {'ignore'|'replacement'|'restore'} Cancellation disposition.
  */
-export function spaceMissionEntryCancellationDisposition({
-  change,
-}) {
+export function spaceMissionEntryCancellationDisposition({ change }) {
   if (
-    change?.type !== 'visibility-cancelled'
-    || change.layerId !== 'rocket-launches'
-    || change.enabled !== true
-  ) return 'ignore';
+    change?.type !== 'visibility-cancelled' ||
+    change.layerId !== 'rocket-launches' ||
+    change.enabled !== true
+  )
+    return 'ignore';
   if (
-    change.cancellationReason === 'superseded'
-    && Number.isInteger(change.successorIntentEpoch)
-    && change.successorIntentEpoch > change.intentEpoch
-    && change.successorEnabled === true
-  ) return 'replacement';
+    change.cancellationReason === 'superseded' &&
+    Number.isInteger(change.successorIntentEpoch) &&
+    change.successorIntentEpoch > change.intentEpoch &&
+    change.successorEnabled === true
+  )
+    return 'replacement';
   return 'restore';
 }
 
@@ -348,10 +430,12 @@ export function cockpitEntryAllowed({
   flightsEnabled,
   militaryEnabled,
 }) {
-  return contextMode === 'flights'
-    && !contextModeChanging
-    && Boolean(flightsEnabled)
-    && Boolean(militaryEnabled);
+  return (
+    contextMode === 'flights' &&
+    !contextModeChanging &&
+    Boolean(flightsEnabled) &&
+    Boolean(militaryEnabled)
+  );
 }
 
 /**

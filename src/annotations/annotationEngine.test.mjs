@@ -1,3 +1,4 @@
+import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 // Voice-annotation resilience contract tests — pure logic, no network, no browser.
 //
 // Locks the 2026-07-21 field-test fixes:
@@ -253,7 +254,9 @@ test('retry: HTTP 429 Retry-After 5s gets one ladder-spaced retry; a second 429 
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 10_000 });
   globalThis.window = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
   const requestTimes = [];
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (url) => {
+    // The one-time capability probe is not an outline request.
+    if (String(url).endsWith('/status')) return httpFailure(404);
     requestTimes.push(Date.now());
     return httpFailure(429, '5');
   };
@@ -310,7 +313,9 @@ test('retry: a plain HTTP 500 still exhausts the existing 8s/25s transient ladde
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 100_000 });
   globalThis.window = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
   const requestTimes = [];
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/status'))
+      return Response.json({ configured: true });
     requestTimes.push(Date.now());
     return httpFailure(500);
   };
@@ -385,7 +390,7 @@ test('targetKey: empty / absent targets stay null (coord and pixel specs never p
   assert.equal(normalizeTargetKey(undefined), null);
 });
 
-test('outline upgrade updates the rendered element in place without remove/add', async (t) => {
+test('outline upgrade updates the rendered element in place without remove/add', { timeout: 5000 }, async (t) => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
   const originalWindow = globalThis.window;
@@ -399,7 +404,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
   };
   let overpassCall = 0;
   globalThis.fetch = async (url) => {
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       return { json: async () => ({
         status: 'OK',
         results: [{
@@ -466,7 +471,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
     sync() {},
   };
   const viewer = {};
-  const engine = createAnnotationEngine({ viewer, renderer });
+  const engine = createAnnotationEngine({ viewer, renderer, placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => 'unit-test-key' }) });
   const upgraded = new Promise((resolve) => engine.onOutlineEvent(resolve));
 
   const result = await engine.annotate([{
@@ -708,4 +713,35 @@ test('a late annotation resolver cannot redraw after destruction', async (t) => 
   await pending;
   assert.equal(calls.add, 0);
   assert.equal(engine.count(), 0);
+});
+
+test('only an explicit navigation request permits resolving distant annotation targets', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer } = throwingRendererHarness();
+  renderer.destroy = () => {};
+  const received = [];
+  const engine = createAnnotationEngine({ viewer: {}, renderer,
+    resolveTarget: async (options) => { received.push(options); return null; },
+  });
+  await engine.annotate([{ type: 'point', target: 'Remote landmark' }]);
+  await engine.annotate([{ type: 'point', target: 'Remote landmark' }], { flyTo: true });
+  assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
+  engine.destroy();
+});
+
+test('a drawn line that rounds up to the next unit is labelled in it, not as 1000 m or 10.0 km', async (t) => {
+  installAnimationFrameStubs(t);
+  const labels = [];
+  const renderer = { add(anno) { labels.push(anno.label); }, update() {}, remove() {}, sync() {}, destroy() {} };
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const metresPerDegree = (6371.0088 * 1000 * Math.PI) / 180;
+  for (const metres of [994, 996, 9940, 9960]) {
+    await engine.annotate([
+      { type: 'route', manual: true, path: [[0, 0], [0, metres / metresPerDegree]] },
+    ]);
+  }
+  assert.deepEqual(labels, ['990 m', '1.0 km', '9.9 km', '10 km']);
+  engine.destroy();
 });

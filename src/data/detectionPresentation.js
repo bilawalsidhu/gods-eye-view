@@ -10,4 +10,3 @@ export const COCKPIT_BRACKET_OPACITY = 0.45;
 export function detectionBracketOpacity(cockpitActive) {
   return cockpitActive === true ? COCKPIT_BRACKET_OPACITY : 1;
 }
-

@@ -4,6 +4,15 @@ import {
   getActiveTrackedReadoutId,
   TRACKED_OVERLAY_SOURCE_ID,
 } from '../data/trackedReadout.js';
+import { t } from '../i18n/index.js';
+import { nextTick } from 'vue';
+import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
+
+/** A label whose detailed outline could not be resolved. */
+function outlineUnavailableLabel(label) {
+  return t('{label} · Detailed outline unavailable', { label: label || '' });
+}
 
 /**
  * Screen-space annotation renderer (Direction B — the "whiteboard" aesthetic).
@@ -21,11 +30,17 @@ import {
  * Marks behind the globe horizon are culled with an EllipsoidalOccluder, and
  * anything that projects off-screen / behind the camera is hidden.
  *
+ * The board is presented to the screen annotations store, whose view renders
+ * the SVG overlay; each mark's parts are plain attribute records here, and the
+ * view hands back the elements this measures (callout text and mark groups).
+ *
  * Screen-renderer contract (update is used by the hybrid outline-upgrade path):
  *   add(anno) / update(anno) / remove(anno) / sync(map) / destroy()
  */
 
-const SVGNS = 'http://www.w3.org/2000/svg';
+// Keys each mark, so a mark re-added while its predecessor fades out never
+// reuses the fading one's elements.
+let marks = 0;
 const PALETTE = {
   primary: '#8be9ff',
   amber: '#ffb547',
@@ -37,9 +52,9 @@ const PALETTE = {
 // Altitude-scaled marker geometry. Zoomed in (≤ NEAR_H) reticles are full-size; pulling
 // back shrinks them toward small recon dots (MIN floor) so many world-anchored marks no
 // longer collapse into an overlapping blob when their anchors project close together.
-const MARK_SCALE_NEAR_H = 800;   // m: at/below this, full-size reticles
-const MARK_SCALE_FAR_H = 6000;   // m: at/above this, minimum size
-const MARK_SCALE_MIN = 0.32;     // floor so dots never vanish
+const MARK_SCALE_NEAR_H = 800; // m: at/below this, full-size reticles
+const MARK_SCALE_FAR_H = 6000; // m: at/above this, minimum size
+const MARK_SCALE_MIN = 0.32; // floor so dots never vanish
 const RING_OUTER_R = 34;
 const RING_INNER_R = 18;
 const DOT_R = 5;
@@ -51,17 +66,31 @@ function markScale(h) {
   return 1 - t * (1 - MARK_SCALE_MIN);
 }
 
-export function createScreenAnnotationRenderer(viewer, {
-  overlayPaintRect = getOverlayPaintRect,
-  activeTrackedReadoutId = getActiveTrackedReadoutId,
-} = {}) {
-  injectStyles();
-  const { layer, svg, defs } = buildOverlay();
-  document.body.appendChild(layer);
+export function createScreenAnnotationRenderer(
+  viewer,
+  {
+    overlayPaintRect = getOverlayPaintRect,
+    activeTrackedReadoutId = getActiveTrackedReadoutId,
+    store = useScreenAnnotationsStore(applicationPinia()),
+  } = {},
+) {
+  // The arrowhead markers the board's defs hold, in the order first used.
+  const arrowMarkers = new Map();
+  let viewBox = null;
 
   const scene = viewer.scene;
-  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, scene.camera.positionWC);
-  const records = new Map(); // anno.id -> { anno, group, parts }
+  const occluder = new Cesium.EllipsoidalOccluder(
+    Cesium.Ellipsoid.WGS84,
+    scene.camera.positionWC,
+  );
+  const records = new Map(); // anno.id -> { key, anno, group, parts }
+  const leaving = new Map(); // key -> a removed mark's record while it fades out
+  const byKey = new Map(); // key -> record, live or fading
+  const timers = new Set();
+  const owner = {};
+  let published = '';
+  // Only the renderer whose board the store shows may change or remove it.
+  const shown = () => store.board?.owner === owner;
   const scratch = new Cesium.Cartesian2();
   const scratchDir = new Cesium.Cartesian3();
   // Per-point ground height cache. Marks must sit on the real surface, not at
@@ -112,8 +141,13 @@ export function createScreenAnnotationRenderer(viewer, {
       return cached.h;
     }
     try {
-      if (scene.clampToHeightSupported && typeof scene.clampToHeight === 'function') {
-        const c = scene.clampToHeight(Cesium.Cartesian3.fromDegrees(lon, lat, 0));
+      if (
+        scene.clampToHeightSupported &&
+        typeof scene.clampToHeight === 'function'
+      ) {
+        const c = scene.clampToHeight(
+          Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        );
         if (c) {
           const h = Cesium.Cartographic.fromCartesian(c).height;
           if (Number.isFinite(h) && h > -430 && h < 9000) {
@@ -123,7 +157,9 @@ export function createScreenAnnotationRenderer(viewer, {
           }
         }
       }
-    } catch { /* tiles not ready */ }
+    } catch {
+      /* tiles not ready */
+    }
     const fallback = cached ? cached.h : 0;
     heightCache.set(key, { h: fallback, settled: false, gen: projGen });
     trimHeightCache();
@@ -132,95 +168,144 @@ export function createScreenAnnotationRenderer(viewer, {
 
   function add(anno) {
     const c = color(anno);
-    const group = svgEl('g', { class: 'gev-anno', opacity: '0' });
+    const group = { opacity: '0', display: '', entered: false };
     const parts = {};
 
     if (anno.type === 'area' && anno.ring && anno.ring.length >= 3) {
       // Synthesized (buffered/approximate) areas render DASHED + fainter, with no
       // "draw-on" gesture, so they never masquerade as an authoritative boundary.
-      parts.poly = svgEl('polygon', {
+      parts.poly = svgPart('polygon', {
         class: anno.synthesized ? 'gev-anno-area' : 'gev-anno-area gev-draw',
-        fill: c, stroke: c,
+        fill: c,
+        stroke: c,
         'fill-opacity': anno.synthesized ? '0.08' : '0.14',
         'stroke-width': '2.5',
         ...(anno.synthesized ? { 'stroke-dasharray': '9 7' } : {}),
         filter: 'url(#gev-sketch)',
       });
-      group.appendChild(parts.poly);
-      parts.label = makeCallout(anno.label, c);
-      if (parts.label) group.appendChild(parts.label.node);
+      parts.label = makeCallout(
+        anno.outlineUnavailable
+          ? outlineUnavailableLabel(anno.label)
+          : anno.label,
+        c,
+      );
     } else if (anno.type === 'arrow' && anno.to) {
-      parts.path = svgEl('path', {
-        class: 'gev-anno-arrow gev-draw', fill: 'none', stroke: c,
-        'stroke-width': '3', 'marker-end': `url(#gev-arrow-${anno.color || 'primary'})`,
+      parts.path = svgPart('path', {
+        class: 'gev-anno-arrow gev-draw',
+        fill: 'none',
+        stroke: c,
+        'stroke-width': '3',
+        'marker-end': `url(#gev-arrow-${anno.color || 'primary'})`,
         filter: 'url(#gev-sketch)',
       });
-      ensureArrowMarker(defs, anno.color || 'primary', c);
-      group.appendChild(parts.path);
-      parts.label = makeCallout(anno.label, c);
-      if (parts.label) group.appendChild(parts.label.node);
-    } else if (anno.type === 'route' && Array.isArray(anno.path) && anno.path.length >= 2) {
+      ensureArrowMarker(arrowMarkers, anno.color || 'primary', c);
+      parts.label = makeCallout(
+        anno.outlineUnavailable
+          ? outlineUnavailableLabel(anno.label)
+          : anno.label,
+        c,
+      );
+    } else if (
+      anno.type === 'route' &&
+      Array.isArray(anno.path) &&
+      anno.path.length >= 2
+    ) {
       // Multi-waypoint path: a drawn-on polyline with a dot at each waypoint.
-      parts.poly = svgEl('polyline', {
-        class: 'gev-anno-arrow gev-draw', fill: 'none', stroke: c,
-        'stroke-width': '3', 'marker-end': `url(#gev-arrow-${anno.color || 'primary'})`,
+      parts.poly = svgPart('polyline', {
+        class: 'gev-anno-arrow gev-draw',
+        fill: 'none',
+        stroke: c,
+        'stroke-width': '3',
+        'marker-end': `url(#gev-arrow-${anno.color || 'primary'})`,
         filter: 'url(#gev-sketch)',
       });
-      ensureArrowMarker(defs, anno.color || 'primary', c);
-      group.appendChild(parts.poly);
-      parts.dots = anno.path.map(() => {
-        const dot = svgEl('circle', { class: 'gev-anno-dot', fill: c, stroke: '#06121c', 'stroke-width': '2', r: '4' });
-        group.appendChild(dot);
-        return dot;
-      });
-      parts.label = makeCallout(anno.label, c);
-      if (parts.label) group.appendChild(parts.label.node);
+      ensureArrowMarker(arrowMarkers, anno.color || 'primary', c);
+      parts.dots = anno.path.map(() =>
+        svgPart('circle', {
+          class: 'gev-anno-dot',
+          fill: c,
+          stroke: '#06121c',
+          'stroke-width': '2',
+          r: '4',
+        }),
+      );
+      parts.label = makeCallout(
+        anno.outlineUnavailable
+          ? outlineUnavailableLabel(anno.label)
+          : anno.label,
+        c,
+      );
     } else {
       // pin / highlight / label — pulsing target rings + a marker dot + callout
       if (anno.type !== 'label') {
-        parts.ringOuter = svgEl('circle', { class: 'gev-anno-ring gev-pulse', fill: 'none', stroke: c, 'stroke-width': '2', r: '34' });
-        parts.ringInner = svgEl('circle', { class: 'gev-anno-ring', fill: c, 'fill-opacity': '0.12', stroke: c, 'stroke-width': '2.5', r: '18', filter: 'url(#gev-sketch)' });
-        group.appendChild(parts.ringOuter);
-        group.appendChild(parts.ringInner);
+        parts.ringOuter = svgPart('circle', {
+          class: 'gev-anno-ring gev-pulse',
+          fill: 'none',
+          stroke: c,
+          'stroke-width': '2',
+          r: '34',
+        });
+        parts.ringInner = svgPart('circle', {
+          class: 'gev-anno-ring',
+          fill: c,
+          'fill-opacity': '0.12',
+          stroke: c,
+          'stroke-width': '2.5',
+          r: '18',
+          filter: 'url(#gev-sketch)',
+        });
       }
-      parts.dot = svgEl('circle', { class: 'gev-anno-dot', fill: c, stroke: '#06121c', 'stroke-width': '2', r: anno.type === 'label' ? '4' : '5' });
-      group.appendChild(parts.dot);
-      parts.leader = svgEl('line', { class: 'gev-anno-leader', stroke: c, 'stroke-width': '1.5', 'stroke-opacity': '0.7' });
-      group.appendChild(parts.leader);
-      parts.label = makeCallout(anno.label, c);
-      if (parts.label) group.appendChild(parts.label.node);
+      parts.dot = svgPart('circle', {
+        class: 'gev-anno-dot',
+        fill: c,
+        stroke: '#06121c',
+        'stroke-width': '2',
+        r: anno.type === 'label' ? '4' : '5',
+      });
+      parts.leader = svgPart('line', {
+        class: 'gev-anno-leader',
+        stroke: c,
+        'stroke-width': '1.5',
+        'stroke-opacity': '0.7',
+      });
+      parts.label = makeCallout(
+        anno.outlineUnavailable
+          ? outlineUnavailableLabel(anno.label)
+          : anno.label,
+        c,
+      );
     }
 
-    // Record the mark BEFORE it touches the live document, then unwind on any
-    // throw from here down (projectAll reaches into Cesium and can fail on a
-    // lost context). Previously a throw past the DOM insert left an ORPHANED
-    // <g>: the engine's rollback only deletes its own map entry, so the next
-    // annotate of the same geometry stacked a fresh mark on top of the corpse.
-    records.set(anno.id, { anno, group, parts });
+    // Record the mark BEFORE it reaches the board, then unwind on any throw
+    // from here down (projectAll reaches into Cesium and can fail on a lost
+    // context). Previously a throw past the insert left an ORPHANED mark: the
+    // engine's rollback only deletes its own map entry, so the next annotate
+    // of the same geometry stacked a fresh mark on top of the corpse.
+    const rec = { key: ++marks, anno, group, parts, drawn: false };
+    records.set(anno.id, rec);
+    byKey.set(rec.key, rec);
     try {
-      svg.appendChild(group);
-      // trigger draw-on / fade-in on the next frame
-      requestAnimationFrame(() => group.classList.add('gev-in'));
-      // The draw-on effect uses a fixed stroke-dasharray of 1400 (see CSS). Any
-      // stroke longer than 1400px (a long arrow/route on a wide window) would keep
-      // a permanent dash gap — the arrowhead detaches from the truncated line (H6).
-      // Once the dashoffset transition finishes the stroke is meant to be fully
-      // drawn, so drop the dasharray entirely then and the stroke reads solid at
-      // any length. Guarded on the specific property so an unrelated transition
-      // (none here, but defensive) doesn't clear it early.
-      for (const drawEl of group.querySelectorAll('.gev-draw')) {
-        drawEl.addEventListener('transitionend', (e) => {
-          if (e.propertyName === 'stroke-dashoffset') {
-            drawEl.style.strokeDasharray = 'none';
-          }
-        }, { once: true });
-      }
+      publish({ force: true });
+      // Trigger draw-on / fade-in on the next frame, once the view has the
+      // mark in the document. The draw-on effect uses a fixed
+      // stroke-dasharray of 1400 (see CSS); the view reports the end of the
+      // dashoffset transition, after which the stroke drops its dasharray so
+      // a stroke longer than 1400px reads solid (H6).
+      requestAnimationFrame(() => {
+        group.entered = true;
+        publish();
+      });
       projectAll();
     } catch (error) {
       // Hard, immediate unwind — a mark that never finished has nothing to
       // fade out, and the caller (engine rollback) must find a clean board.
       records.delete(anno.id);
-      try { group.remove(); } catch { /* never inserted */ }
+      byKey.delete(rec.key);
+      try {
+        publish({ force: true });
+      } catch {
+        /* the board is unreachable */
+      }
       if (records.size === 0) heightCache.clear();
       throw error;
     }
@@ -238,9 +323,19 @@ export function createScreenAnnotationRenderer(viewer, {
       return;
     }
     rec.anno = anno;
+    if (anno.outlineUnavailable && rec.parts.label) {
+      rec.parts.label.text = outlineUnavailableLabel(anno.label);
+      // Re-measure once the view shows the new text.
+      const label = rec.parts.label;
+      publish();
+      void nextTick(() => {
+        if (rec.parts.label !== label || !sizeCallout(label)) return;
+        projectAll();
+        publish();
+      });
+    }
 
     if (empty) {
-      for (const child of Array.from(rec.group.children)) child.remove();
       rec.parts = {};
       rec.hidden = true;
       projectAll();
@@ -253,11 +348,9 @@ export function createScreenAnnotationRenderer(viewer, {
     // label, whose dot/leader/callout already exist; remove the two reticle rings and
     // keep every remaining node (especially the group and callout) alive.
     if (anno.type === 'label' && rec.parts.dot) {
-      rec.parts.ringOuter?.remove();
-      rec.parts.ringInner?.remove();
       delete rec.parts.ringOuter;
       delete rec.parts.ringInner;
-      rec.parts.dot.setAttribute('r', String(LABEL_DOT_R));
+      rec.parts.dot.set.r = String(LABEL_DOT_R);
       projectAll();
       return;
     }
@@ -269,13 +362,22 @@ export function createScreenAnnotationRenderer(viewer, {
     // Anchor at the real surface height (cached + validated), so marks sit on
     // the ground/building instead of at sea level. The settle-once cache keeps
     // it stable (no per-frame jitter that earlier broke nearby projections).
-    const world = Cesium.Cartesian3.fromDegrees(lon, lat, groundHeight(lon, lat));
+    const world = Cesium.Cartesian3.fromDegrees(
+      lon,
+      lat,
+      groundHeight(lon, lat),
+    );
     // Reject points behind the camera (they produce wrapped/extreme coords).
     Cesium.Cartesian3.subtract(world, scene.camera.positionWC, scratchDir);
-    if (Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0) return null;
+    if (Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0)
+      return null;
     // Reject points beyond the globe horizon.
     if (!occluder.isPointVisible(world)) return null;
-    const win = Cesium.SceneTransforms.worldToWindowCoordinates(scene, world, scratch);
+    const win = Cesium.SceneTransforms.worldToWindowCoordinates(
+      scene,
+      world,
+      scratch,
+    );
     if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y)) return null;
     // Reject absurd off-screen projections (anchor not in view).
     const w = scene.canvas.clientWidth || scene.canvas.width;
@@ -291,9 +393,9 @@ export function createScreenAnnotationRenderer(viewer, {
   // tracked subject's screen FOOTPRINT is faded. The complete card footprint comes
   // from the host's ACTUAL painted rectangle after final layout; the billboard extent
   // is unioned for aircraft/satellites that also own a native tracked graphic.
-  const TRACKED_BBOX_MARGIN = 8;     // px buffer added around the footprint
-  const TRACKED_FADE_EASE = 0.22;    // per-frame ease toward hidden(0) / visible(1)
-  const TRACKED_HYSTERESIS_PX = 18;  // dead-band so the overlap test can't flip-flop
+  const TRACKED_BBOX_MARGIN = 8; // px buffer added around the footprint
+  const TRACKED_FADE_EASE = 0.22; // per-frame ease toward hidden(0) / visible(1)
+  const TRACKED_HYSTERESIS_PX = 18; // dead-band so the overlap test can't flip-flop
   const _scratchTrackedWin = new Cesium.Cartesian2();
 
   // Evaluate a NearFarScalar (billboard scaleByDistance) at a camera distance.
@@ -317,11 +419,16 @@ export function createScreenAnnotationRenderer(viewer, {
 
     const ent = viewer.trackedEntity;
     const now = Cesium.JulianDate.now();
-    const world = typeof ent?.gevDisplayPosition === 'function'
-      ? ent.gevDisplayPosition()
-      : null;
+    const world =
+      typeof ent?.gevDisplayPosition === 'function'
+        ? ent.gevDisplayPosition()
+        : null;
     const win = world
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(scene, world, _scratchTrackedWin)
+      ? Cesium.SceneTransforms.worldToWindowCoordinates(
+          scene,
+          world,
+          _scratchTrackedWin,
+        )
       : null;
 
     // Billboard box — centered on the anchor, magnified by scaleByDistance.
@@ -331,8 +438,13 @@ export function createScreenAnnotationRenderer(viewer, {
       const baseH = bb.height?.getValue?.(now) ?? 28;
       let scale = 1;
       const sbd = bb.scaleByDistance?.getValue?.(now);
-      if (sbd) scale = nearFarValue(sbd, Cesium.Cartesian3.distance(scene.camera.positionWC, world));
-      const hw = (baseW * scale) / 2; const hh = (baseH * scale) / 2;
+      if (sbd)
+        scale = nearFarValue(
+          sbd,
+          Cesium.Cartesian3.distance(scene.camera.positionWC, world),
+        );
+      const hw = (baseW * scale) / 2;
+      const hh = (baseH * scale) / 2;
       const bbLeft = win.x - hw;
       const bbRight = win.x + hw;
       const bbTop = win.y - hh;
@@ -345,61 +457,90 @@ export function createScreenAnnotationRenderer(viewer, {
     if (![left, right, top, bottom].every(Number.isFinite)) return null;
 
     const m = TRACKED_BBOX_MARGIN;
-    return { left: left - m, right: right + m, top: top - m, bottom: bottom + m };
+    return {
+      left: left - m,
+      right: right + m,
+      top: top - m,
+      bottom: bottom + m,
+    };
   }
 
   function projectAll() {
-    if (!records.size) return;
+    if (!records.size) {
+      publish();
+      return;
+    }
     projGen += 1; // new frame: entries touched below are "hot" and survive trimming
     const trackedRect = trackedEntityRect();
     occluder.cameraPosition = scene.camera.positionWC;
     const h = scene.canvas.clientHeight || scene.canvas.height;
     const w = scene.canvas.clientWidth || scene.canvas.width;
-    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    viewBox = `0 0 ${w} ${h}`;
     // Shrink point-marker geometry as the camera pulls back (declutter the blob).
-    const mScale = markScale(viewer.camera.positionCartographic?.height ?? 1000);
+    const mScale = markScale(
+      viewer.camera.positionCartographic?.height ?? 1000,
+    );
 
     for (const rec of records.values()) {
       const { anno, group, parts } = rec;
       if (rec.hidden) {
-        group.style.display = 'none';
+        group.display = 'none';
         continue;
       }
-      group.setAttribute('opacity', String(anno.alpha ?? 1));
+      // The last frame's tracked fade holds until this frame's is measured.
+      group.opacity = String(
+        (anno.alpha ?? 1) *
+          (rec._trackedFade !== undefined && rec._trackedFade !== 1
+            ? rec._trackedFade
+            : 1),
+      );
 
       if (anno.type === 'area' && parts.poly) {
         const pts = [];
-        let cx = 0; let cy = 0; let n = 0;
+        let cx = 0;
+        let cy = 0;
+        let n = 0;
         for (const [lon, lat] of anno.ring) {
           const p = project(lon, lat);
           if (!p) continue;
           pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
-          cx += p.x; cy += p.y; n++;
+          cx += p.x;
+          cy += p.y;
+          n++;
         }
         if (pts.length >= 3) {
-          parts.poly.setAttribute('points', pts.join(' '));
-          group.style.display = '';
-          if (parts.label) positionCallout(parts.label, cx / n, cy / n - 6, true);
+          parts.poly.set.points = pts.join(' ');
+          group.display = '';
+          if (parts.label)
+            positionCallout(parts.label, cx / n, cy / n - 6, true);
         } else {
-          group.style.display = 'none';
+          group.display = 'none';
         }
       } else if (anno.type === 'arrow' && parts.path) {
         const a = project(anno.anchor.lon, anno.anchor.lat);
         const b = project(anno.to.lon, anno.to.lat);
         if (a && b) {
           // gentle arc so the connector reads as a drawn gesture, not a ruler line
-          const mx = (a.x + b.x) / 2; const my = (a.y + b.y) / 2;
-          const dx = b.x - a.x; const dy = b.y - a.y;
+          const mx = (a.x + b.x) / 2;
+          const my = (a.y + b.y) / 2;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
           const len = Math.hypot(dx, dy) || 1;
           const bow = Math.min(60, len * 0.18);
           const ctrlX = mx - (dy / len) * bow;
           const ctrlY = my + (dx / len) * bow;
-          parts.path.setAttribute('d', `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`);
-          group.style.display = '';
+          parts.path.set.d = `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+          group.display = '';
           // Anchor the label to the (stable) endpoint midpoint, lifted toward the bow.
-          if (parts.label) positionCallout(parts.label, mx + (ctrlX - mx) * 0.5, my + (ctrlY - my) * 0.5 - 8, true);
+          if (parts.label)
+            positionCallout(
+              parts.label,
+              mx + (ctrlX - mx) * 0.5,
+              my + (ctrlY - my) * 0.5 - 8,
+              true,
+            );
         } else {
-          group.style.display = 'none';
+          group.display = 'none';
         }
       } else if (anno.type === 'route' && parts.poly) {
         const projected = anno.path.map((pt) => project(pt.lon, pt.lat));
@@ -408,40 +549,59 @@ export function createScreenAnnotationRenderer(viewer, {
           if (p) pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
         }
         if (pts.length >= 2) {
-          parts.poly.setAttribute('points', pts.join(' '));
+          parts.poly.set.points = pts.join(' ');
           // dots at each resolvable waypoint; hide the rest
           parts.dots.forEach((dot, i) => {
             const p = projected[i];
-            if (p) { dot.setAttribute('cx', p.x.toFixed(1)); dot.setAttribute('cy', p.y.toFixed(1)); dot.style.display = ''; }
-            else { dot.style.display = 'none'; }
+            if (p) {
+              dot.set.cx = p.x.toFixed(1);
+              dot.set.cy = p.y.toFixed(1);
+              dot.display = '';
+            } else {
+              dot.display = 'none';
+            }
           });
-          group.style.display = '';
+          group.display = '';
           // label at the middle waypoint
-          const mid = projected.filter(Boolean)[Math.floor(projected.filter(Boolean).length / 2)];
-          if (parts.label && mid) positionCallout(parts.label, mid.x, mid.y - 12, true);
+          const mid =
+            projected.filter(Boolean)[
+              Math.floor(projected.filter(Boolean).length / 2)
+            ];
+          if (parts.label && mid)
+            positionCallout(parts.label, mid.x, mid.y - 12, true);
         } else {
-          group.style.display = 'none';
+          group.display = 'none';
         }
       } else {
         const p = project(anno.anchor.lon, anno.anchor.lat);
         if (p) {
-          group.style.display = '';
+          group.display = '';
           const baseDotR = anno.type === 'label' ? LABEL_DOT_R : DOT_R;
-          if (parts.dot) { parts.dot.setAttribute('cx', p.x.toFixed(1)); parts.dot.setAttribute('cy', p.y.toFixed(1)); parts.dot.setAttribute('r', (baseDotR * mScale).toFixed(1)); }
-          if (parts.ringOuter) { parts.ringOuter.setAttribute('cx', p.x.toFixed(1)); parts.ringOuter.setAttribute('cy', p.y.toFixed(1)); parts.ringOuter.setAttribute('r', (RING_OUTER_R * mScale).toFixed(1)); }
-          if (parts.ringInner) { parts.ringInner.setAttribute('cx', p.x.toFixed(1)); parts.ringInner.setAttribute('cy', p.y.toFixed(1)); parts.ringInner.setAttribute('r', (RING_INNER_R * mScale).toFixed(1)); }
+          for (const [part, radius] of [
+            [parts.dot, baseDotR],
+            [parts.ringOuter, RING_OUTER_R],
+            [parts.ringInner, RING_INNER_R],
+          ]) {
+            if (!part) continue;
+            part.set.cx = p.x.toFixed(1);
+            part.set.cy = p.y.toFixed(1);
+            part.set.r = (radius * mScale).toFixed(1);
+          }
           if (parts.label) {
             // Keep the callout tucked near the (now smaller) reticle by scaling its offset.
-            const lx = p.x + 18 * mScale; const ly = p.y - 34 * mScale;
+            const lx = p.x + 18 * mScale;
+            const ly = p.y - 34 * mScale;
             positionCallout(parts.label, lx, ly, false);
             if (parts.leader) {
-              parts.leader.setAttribute('x1', p.x.toFixed(1)); parts.leader.setAttribute('y1', p.y.toFixed(1));
-              parts.leader.setAttribute('x2', lx.toFixed(1)); parts.leader.setAttribute('y2', (ly + parts.label.height).toFixed(1));
+              parts.leader.set.x1 = p.x.toFixed(1);
+              parts.leader.set.y1 = p.y.toFixed(1);
+              parts.leader.set.x2 = lx.toFixed(1);
+              parts.leader.set.y2 = (ly + parts.label.height).toFixed(1);
               parts.label._leader = parts.leader; // so de-collision can re-point it
             }
           }
         } else {
-          group.style.display = 'none';
+          group.display = 'none';
         }
       }
     }
@@ -450,28 +610,58 @@ export function createScreenAnnotationRenderer(viewer, {
     const placed = [];
     for (const rec of records.values()) {
       const cal = rec.parts.label;
-      if (cal && cal.sized && rec.group.style.display !== 'none' && Number.isFinite(cal._x)) {
+      if (
+        cal &&
+        cal.sized &&
+        rec.group.display !== 'none' &&
+        Number.isFinite(cal._x)
+      ) {
         placed.push(cal);
       }
     }
     if (placed.length > 1) decollideCallouts(placed);
 
-    // Tracked-entity z-order — runs AFTER all geometry + callout de-collision so each
-    // group's bbox reflects its final on-screen extent. Any mark whose bbox INTERSECTS
-    // the tracked entity's screen footprint is faded toward FULLY HIDDEN (target 0, not a
-    // partial dim) so the tracked plane/ship reads as genuinely ON TOP. The fade is EASED
-    // per frame (no abrupt pop as the entity crosses a mark) and reverses smoothly when
-    // it moves off. Every screen mark here is point-like (pins/labels/reticles/arrows) —
-    // the big area/route footprints live in the world layer — so fully hiding an
-    // overlapped one is safe and not jarring.
+    publish();
+    // Tracked-entity z-order — measured once the view shows this frame's
+    // geometry (still before the browser paints it).
+    const fading = [...records.values()].some(
+      (rec) => rec._trackedFade !== undefined && rec._trackedFade !== 1,
+    );
+    if ((trackedRect || fading) && !trackedPending) {
+      trackedPending = true;
+      void nextTick(() => {
+        trackedPending = false;
+        fadeTracked(trackedRect);
+      });
+    }
+  }
+
+  let trackedPending = false;
+
+  // Runs AFTER all geometry + callout de-collision are in the document so each
+  // group's bbox reflects its final on-screen extent. Any mark whose bbox
+  // INTERSECTS the tracked entity's screen footprint is faded toward FULLY
+  // HIDDEN (target 0, not a partial dim) so the tracked plane/ship reads as
+  // genuinely ON TOP. The fade is EASED per frame (no abrupt pop as the entity
+  // crosses a mark) and reverses smoothly when it moves off. Every screen mark
+  // here is point-like (pins/labels/reticles/arrows) — the big area/route
+  // footprints live in the world layer — so fully hiding an overlapped one is
+  // safe and not jarring.
+  function fadeTracked(trackedRect) {
+    if (!shown()) return;
+    let changed = false;
     for (const rec of records.values()) {
       const { anno, group } = rec;
-      if (group.style.display === 'none') continue;
+      if (group.display === 'none') continue;
       const cur = rec._trackedFade ?? 1;
       let overlapping = false;
       if (trackedRect) {
         let bb = null;
-        try { bb = group.getBBox(); } catch { bb = null; }
+        try {
+          bb = rec.element?.getBBox() ?? null;
+        } catch {
+          bb = null;
+        }
         if (bb && (bb.width !== 0 || bb.height !== 0)) {
           // HYSTERESIS: a mark that's already hidden must clear the rect by
           // TRACKED_HYSTERESIS_PX before it starts showing again; one that's visible fades
@@ -479,30 +669,119 @@ export function createScreenAnnotationRenderer(viewer, {
           // frame-to-frame (the pulsing reticle stroke + de-collided cards keep the bbox in
           // motion), which was the source of the flicker.
           const m = cur < 0.5 ? TRACKED_HYSTERESIS_PX : 0;
-          overlapping = bb.x <= trackedRect.right + m && bb.x + bb.width >= trackedRect.left - m
-            && bb.y <= trackedRect.bottom + m && bb.y + bb.height >= trackedRect.top - m;
+          overlapping =
+            bb.x <= trackedRect.right + m &&
+            bb.x + bb.width >= trackedRect.left - m &&
+            bb.y <= trackedRect.bottom + m &&
+            bb.y + bb.height >= trackedRect.top - m;
         }
       }
       const target = overlapping ? 0 : 1;
       const next = cur + (target - cur) * TRACKED_FADE_EASE;
       rec._trackedFade = Math.abs(next - target) < 0.02 ? target : next;
-      // Only override when faded — otherwise leave the base alpha (set above) intact.
-      // (The CSS `transition: opacity` was removed from .gev-anno so this per-frame JS ease
-      // is the ONLY easing — previously the two fought and produced an opacity oscillation.)
-      if (rec._trackedFade !== 1) {
-        group.setAttribute('opacity', String((anno.alpha ?? 1) * rec._trackedFade));
+      // The base alpha applies unless faded. (The CSS `transition: opacity` was
+      // removed from .gev-anno so this per-frame JS ease is the ONLY easing —
+      // previously the two fought and produced an opacity oscillation.)
+      const opacity = String(
+        (anno.alpha ?? 1) * (rec._trackedFade !== 1 ? rec._trackedFade : 1),
+      );
+      if (opacity !== group.opacity) {
+        group.opacity = opacity;
+        changed = true;
       }
     }
+    if (changed) publish();
+  }
+
+  /** The board as its view renders it: one entry per live or fading mark. */
+  function boardView() {
+    const view = (rec, fading) => ({
+      key: rec.key,
+      className: fading
+        ? 'gev-anno gev-out'
+        : rec.group.entered
+          ? 'gev-anno gev-in'
+          : 'gev-anno',
+      opacity: rec.group.opacity,
+      display: rec.group.display,
+      drawn: rec.drawn,
+      children: partViews(rec.parts),
+    });
+    return {
+      owner,
+      viewBox,
+      markers: [...arrowMarkers].map(([key, fill]) => ({ key, fill })),
+      // In the order the marks were added, fading ones where they were.
+      marks: [
+        ...[...records.values()].map((rec) => view(rec, false)),
+        ...[...leaving.values()].map((rec) => rec.view),
+      ].sort((a, b) => a.key - b.key),
+    };
+  }
+
+  /** Present the board; an unchanged one is not sent again unless forced. */
+  function publish({ force = false } = {}) {
+    if (!shown()) return;
+    const board = boardView();
+    const signature = JSON.stringify(board, (name, value) =>
+      name === 'owner' ? undefined : value,
+    );
+    if (!force && signature === published) return;
+    published = signature;
+    store.publish(board);
+  }
+
+  /** Take (or, with null, drop) an element the view rendered for a mark. */
+  function attach(key, kind, element) {
+    const rec = byKey.get(key);
+    if (!rec) return;
+    if (kind === 'group') {
+      rec.element = element;
+      // Lay the new mark out before its next-frame `gev-in`, so the draw-on
+      // transition starts from the undrawn stroke.
+      try {
+        element?.getBBox();
+      } catch {
+        /* not laid out */
+      }
+    } else if (kind === 'text' && rec.parts.label) {
+      rec.parts.label.element = element;
+      // Size the card to its text once the text is in the document.
+      if (element && sizeCallout(rec.parts.label) && records.has(rec.anno.id))
+        projectAll();
+    }
+  }
+
+  /** The draw-on stroke finished: it reads solid from now on. */
+  function drawn(key) {
+    const rec = byKey.get(key);
+    if (!rec || rec.drawn) return;
+    rec.drawn = true;
+    publish();
   }
 
   function remove(anno) {
     const rec = records.get(anno.id);
     if (!rec) return;
-    rec.group.classList.remove('gev-in');
-    rec.group.classList.add('gev-out');
-    const node = rec.group;
-    window.setTimeout(() => { try { node.remove(); } catch { /* gone */ } }, 360);
+    // The fading mark keeps the look it had; it leaves the board after 360 ms.
+    rec.view = { ...boardView().marks.find((mark) => mark.key === rec.key) };
+    rec.view.className = 'gev-anno gev-out';
+    leaving.set(rec.key, rec);
+    let timer;
+    try {
+      timer = window.setTimeout(() => {
+        timers.delete(timer);
+        leaving.delete(rec.key);
+        byKey.delete(rec.key);
+        publish();
+      }, 360);
+    } catch (error) {
+      leaving.delete(rec.key);
+      throw error;
+    }
+    if (leaving.has(rec.key)) timers.add(timer);
     records.delete(anno.id);
+    publish();
     // Board emptied → drop accumulated height samples (natural reset point).
     if (records.size === 0) heightCache.clear();
   }
@@ -513,75 +792,110 @@ export function createScreenAnnotationRenderer(viewer, {
   }
 
   function destroy() {
-    try { scene.postRender.removeEventListener(onPostRender); } catch { /* torn down */ }
-    try { layer.remove(); } catch { /* gone */ }
+    try {
+      scene.postRender.removeEventListener(onPostRender);
+    } catch {
+      /* torn down */
+    }
+    for (const timer of timers) clearTimeout(timer);
+    timers.clear();
+    if (shown()) {
+      store.connect(null);
+      store.publish(null);
+    }
     records.clear();
+    leaving.clear();
+    byKey.clear();
     heightCache.clear();
   }
+
+  // Claim the board; from here on only this renderer's own board changes.
+  store.publish(boardView());
+  store.connect({
+    attach: (from, key, kind, element) => {
+      if (from === owner && shown()) attach(key, kind, element);
+    },
+    drawn: (from, key) => {
+      if (from === owner && shown()) drawn(key);
+    },
+  });
 
   return { add, update, remove, sync, destroy };
 }
 
 // --- SVG helpers ------------------------------------------------------------
 
-function buildOverlay() {
-  const layer = document.createElement('div');
-  layer.className = 'gev-screen-whiteboard';
-  const svg = document.createElementNS(SVGNS, 'svg');
-  svg.setAttribute('class', 'gev-screen-whiteboard-svg');
-  svg.setAttribute('preserveAspectRatio', 'none');
-  const defs = document.createElementNS(SVGNS, 'defs');
-  // subtle hand-drawn wobble for strokes
-  defs.innerHTML = `
-    <filter id="gev-sketch" x="-20%" y="-20%" width="140%" height="140%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="7" result="n"/>
-      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>`;
-  svg.appendChild(defs);
-  layer.appendChild(svg);
-  return { layer, svg, defs };
+/**
+ * One SVG element of a mark as plain data: the attributes it starts with, the
+ * ones each frame sets, and whether it is shown.
+ */
+function svgPart(tag, attrs) {
+  return { tag, attrs, set: {}, display: '' };
+}
+
+/** A mark's parts in document order, as the view renders them. */
+function partViews(parts) {
+  const views = [];
+  const element = (key, part) =>
+    views.push({
+      key,
+      tag: part.tag,
+      attrs: { ...part.attrs, ...part.set },
+      display: part.display,
+    });
+  if (parts.poly) element('poly', parts.poly);
+  if (parts.path) element('path', parts.path);
+  parts.dots?.forEach((dot, index) => element(`dot-${index}`, dot));
+  if (parts.ringOuter) element('ring-outer', parts.ringOuter);
+  if (parts.ringInner) element('ring-inner', parts.ringInner);
+  if (parts.dot) element('dot', parts.dot);
+  if (parts.leader) element('leader', parts.leader);
+  const label = parts.label;
+  if (label)
+    views.push({
+      key: 'callout',
+      tag: 'callout',
+      text: label.text,
+      fill: label.fill,
+      transform: label.transform,
+      // The card is sized to its text once the text has been measured.
+      card: label.sized
+        ? { width: String(label.width), height: String(label.height) }
+        : {},
+      accent: label.sized
+        ? { height: String(label.height - 8), x: '0', y: '4' }
+        : {},
+    });
+  return views;
 }
 
 function makeCallout(text, c) {
   if (!text) return null;
-  const node = document.createElementNS(SVGNS, 'g');
-  node.setAttribute('class', 'gev-anno-callout');
-  const rect = document.createElementNS(SVGNS, 'rect');
-  rect.setAttribute('rx', '5');
-  rect.setAttribute('class', 'gev-anno-card');
-  const t = document.createElementNS(SVGNS, 'text');
-  t.setAttribute('class', 'gev-anno-text');
-  t.setAttribute('x', '9');
-  t.setAttribute('y', '16');
-  t.textContent = text;
-  const accent = document.createElementNS(SVGNS, 'rect');
-  accent.setAttribute('class', 'gev-anno-accent');
-  accent.setAttribute('width', '3');
-  accent.setAttribute('rx', '1.5');
-  accent.setAttribute('fill', c);
-  node.appendChild(rect);
-  node.appendChild(accent);
-  node.appendChild(t);
-  const callout = { node, rect, text: t, accent, width: 0, height: 26, sized: false };
-  // size the card to the text once it is in the DOM
-  requestAnimationFrame(() => sizeCallout(callout));
-  return callout;
+  return {
+    text,
+    fill: c,
+    element: null,
+    transform: null,
+    width: 0,
+    height: 26,
+    sized: false,
+  };
 }
 
+/** Size a callout to its rendered text; false until the text is laid out. */
 function sizeCallout(callout) {
   try {
-    const bbox = callout.text.getBBox();
+    const bbox = callout.element.getBBox();
     const w = Math.max(24, bbox.width + 18);
     const h = Math.max(22, bbox.height + 10);
-    callout.rect.setAttribute('width', String(w));
-    callout.rect.setAttribute('height', String(h));
-    callout.accent.setAttribute('height', String(h - 8));
-    callout.accent.setAttribute('x', '0');
-    callout.accent.setAttribute('y', '4');
     callout.width = w;
     callout.height = h;
     callout.sized = true;
-  } catch { /* not laid out yet */ }
+    return true;
+  } catch {
+    /* not laid out yet */
+    return false;
+  }
 }
 
 function positionCallout(callout, x, y, center) {
@@ -589,7 +903,7 @@ function positionCallout(callout, x, y, center) {
   const tx = center ? x - callout.width / 2 : x;
   callout._x = tx;
   callout._y = y;
-  callout.node.setAttribute('transform', `translate(${tx.toFixed(1)}, ${y.toFixed(1)})`);
+  callout.transform = `translate(${tx.toFixed(1)}, ${y.toFixed(1)})`;
 }
 
 /**
@@ -607,68 +921,17 @@ function decollideCallouts(callouts) {
       const overlapY = a._y < b._y + b.height && a._y + a.height > b._y;
       if (overlapX && overlapY) {
         a._y = b._y + b.height + 5;
-        a.node.setAttribute('transform', `translate(${a._x.toFixed(1)}, ${a._y.toFixed(1)})`);
+        a.transform = `translate(${a._x.toFixed(1)}, ${a._y.toFixed(1)})`;
         if (a._leader) {
-          a._leader.setAttribute('x2', a._x.toFixed(1));
-          a._leader.setAttribute('y2', a._y.toFixed(1));
+          a._leader.set.x2 = a._x.toFixed(1);
+          a._leader.set.y2 = a._y.toFixed(1);
         }
       }
     }
   }
 }
 
-function ensureArrowMarker(defs, key, c) {
-  if (defs.querySelector(`#gev-arrow-${key}`)) return;
-  const marker = document.createElementNS(SVGNS, 'marker');
-  marker.setAttribute('id', `gev-arrow-${key}`);
-  marker.setAttribute('viewBox', '0 0 10 10');
-  marker.setAttribute('refX', '8');
-  marker.setAttribute('refY', '5');
-  marker.setAttribute('markerWidth', '7');
-  marker.setAttribute('markerHeight', '7');
-  marker.setAttribute('orient', 'auto-start-reverse');
-  const path = document.createElementNS(SVGNS, 'path');
-  path.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
-  path.setAttribute('fill', c);
-  marker.appendChild(path);
-  defs.appendChild(marker);
-}
-
-function svgEl(tag, attrs) {
-  const el = document.createElementNS(SVGNS, tag);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-  return el;
-}
-
-function injectStyles() {
-  if (document.getElementById('gev-screen-whiteboard-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'gev-screen-whiteboard-styles';
-  style.textContent = `
-  .gev-screen-whiteboard { position: fixed; inset: 0; pointer-events: none; z-index: 90; }
-  .gev-screen-whiteboard-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  /* No CSS opacity transition here on purpose: group opacity is driven per-frame in JS
-     (the 260ms fade-in via computeAlpha, and the tracked-entity z-order ease). A CSS
-     transition fought those per-frame writes and made the tracked-fade opacity oscillate
-     (flicker). Fade-OUT keeps its own transition via .gev-anno.gev-out below. */
-  .gev-anno-ring { filter: drop-shadow(0 0 6px currentColor); }
-  .gev-anno-dot { filter: drop-shadow(0 0 5px rgba(255,255,255,0.6)); }
-  .gev-anno-area { filter: drop-shadow(0 0 5px currentColor); }
-  .gev-anno-arrow { filter: drop-shadow(0 0 4px currentColor); stroke-linecap: round; }
-  .gev-anno-leader { stroke-dasharray: 2 3; }
-  .gev-anno-card { fill: rgba(8,18,28,0.78); stroke: rgba(255,255,255,0.14); stroke-width: 1; }
-  .gev-anno-text { fill: #eaf6ff; font: 600 13px "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.02em; }
-  /* draw-on: outlined shapes reveal their stroke */
-  .gev-draw { stroke-dasharray: 1400; stroke-dashoffset: 1400; }
-  .gev-anno.gev-in .gev-draw { transition: stroke-dashoffset 900ms ease-out; stroke-dashoffset: 0; }
-  /* opacity-only fade-in: a CSS transform here would override the SVG transform
-     attribute used to POSITION the callout and snap it to 0,0. */
-  .gev-anno-callout { opacity: 0; }
-  .gev-anno.gev-in .gev-anno-callout { animation: gev-pop 320ms ease-out both; }
-  .gev-anno.gev-out { opacity: 0 !important; transition: opacity 320ms ease; }
-  .gev-pulse { animation: gev-ring-pulse 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-  @keyframes gev-ring-pulse { 0%,100% { opacity: 0.9; stroke-width: 2; } 50% { opacity: 0.35; stroke-width: 3.5; } }
-  @keyframes gev-pop { from { opacity: 0; } to { opacity: 1; } }
-  `;
-  document.head.appendChild(style);
+/** Record the arrowhead marker for a color, unless one is already defined. */
+function ensureArrowMarker(markers, key, c) {
+  if (!markers.has(key)) markers.set(key, c);
 }

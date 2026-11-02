@@ -1,7 +1,10 @@
+import { readResponseTextCapped } from './common/http.js';
+import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 import {
   isAllowedGbfsHost,
   isAllowedGbfsPath,
   gbfsCacheControl,
+  gbfsUpstreamHeaders,
 } from '../../src/data/gbfsSource.js';
 
 // ---------------------------------------------------------------------------
@@ -9,6 +12,118 @@ import {
 // ---------------------------------------------------------------------------
 /** Upstream fetch timeout for GBFS requests (ms). */
 const GBFS_PROXY_TIMEOUT_MS = 12000;
+
+/** Value of the Client-Identifier header sent with every upstream request. */
+export const GBFS_CLIENT_IDENTIFIER = 'gods-eye-view';
+
+export const GBFS_MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Requests/minute/IP admitted by the proxy.
+ *
+ * The bikeshare layer's own demand is small and known: `src/layers/bikeshare/
+ * registry.js` catalogues 15 systems, station information is cached per city
+ * after its first fetch, and station status refreshes once per city every
+ * `STATUS_POLL_MS` (60 s) with in-flight requests deduplicated. Even with every
+ * catalogued system in camera range at once that is about 15 requests a minute,
+ * so 120 is eight times a maximal real session while still capping a caller
+ * using this proxy as an open relay against a third-party GBFS host.
+ */
+export const GBFS_RATE_PER_MIN = 120;
+
+function gbfsRedirectHost(location, requestUrl) {
+  if (!location) return '';
+  try {
+    return new URL(String(location), requestUrl).hostname;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Fetch one validated GBFS endpoint without following redirects and with the
+ * body cap enforced while the response streams.
+ *
+ * The middleware validates the target before calling this; the network step
+ * lives apart from it so a unit test can stand in for a hostile upstream — the
+ * host allowlist keeps the real handler from being pointed at a local server.
+ * `redirect: 'manual'` makes fetch() return a 3xx response instead of
+ * following it, so an allowlisted operator that redirects cannot steer the
+ * proxy to a destination the allowlist never saw; any 3xx is rejected with
+ * { code:'GBFS_REDIRECT', redirectHost }. An oversized body surfaces as
+ * { code:'RESPONSE_TOO_LARGE' } from readResponseTextCapped, which cancels the
+ * upstream read the moment the running byte count passes the cap.
+ *
+ * @param {string} url - Validated https GBFS endpoint URL.
+ * @param {object} [options]
+ * @param {typeof fetch} [options.fetchImpl=fetch] - Fetch implementation.
+ * @param {number} [options.timeoutMs=GBFS_PROXY_TIMEOUT_MS] - Upstream abort timeout.
+ * @param {number} [options.maxBytes=GBFS_MAX_BODY_BYTES] - Body byte cap.
+ * @returns {Promise<{status:number,contentType:string,body:string}>}
+ */
+export async function fetchGbfsUpstream(
+  url,
+  {
+    fetchImpl = fetch,
+    timeoutMs = GBFS_PROXY_TIMEOUT_MS,
+    maxBytes = GBFS_MAX_BODY_BYTES,
+  } = {},
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let upstream;
+  try {
+    upstream = await fetchImpl(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'gods-eye-view-gbfs-proxy/1.0',
+        // Urban Sharing (the Norwegian city-bike feeds) asks every client to
+        // name itself in this header; other operators ignore it.
+        'Client-Identifier': GBFS_CLIENT_IDENTIFIER,
+        ...gbfsUpstreamHeaders(new URL(url).hostname),
+      },
+      redirect: 'manual',
+      signal: controller.signal,
+    });
+
+    if (upstream.status >= 300 && upstream.status < 400) {
+      try {
+        void upstream.body?.cancel().catch(() => {});
+      } catch {
+        /* no-op */
+      }
+      const err = new Error(
+        'GBFS upstream redirected; redirects are not followed',
+      );
+      err.code = 'GBFS_REDIRECT';
+      err.redirectHost = gbfsRedirectHost(
+        upstream.headers.get('location'),
+        url,
+      );
+      throw err;
+    }
+
+    const body = await readResponseTextCapped(
+      upstream,
+      maxBytes,
+      controller.signal,
+    );
+    return {
+      status: upstream.status,
+      contentType: upstream.headers.get('content-type') || 'application/json',
+      body,
+    };
+  } catch (error) {
+    controller.abort();
+    if (upstream?.body && !upstream.body.locked) {
+      void upstream.body.cancel().catch(() => {});
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 /**
  * Vite plugin: GBFS bike-share proxy with host allowlisting and size limits.
@@ -20,7 +135,12 @@ const GBFS_PROXY_TIMEOUT_MS = 12000;
  *
  * @returns {import('vite').Plugin}
  */
-export function gbfsProxy() {
+export function gbfsProxy({ ratePerMinute = GBFS_RATE_PER_MIN } = {}) {
+  const allow = makeRateLimiter({
+    windowMs: 60_000,
+    max: ratePerMinute,
+    globalMax: ratePerMinute * 3,
+  });
   const installMiddleware = (server) => {
     server.middlewares.use('/api/gbfs', async (req, res) => {
       try {
@@ -30,6 +150,19 @@ export function gbfsProxy() {
             'Cache-Control': 'no-store',
           });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+          return;
+        }
+
+        // Frequency, checked before the target is even parsed: the allowlist
+        // already says WHERE this proxy may go, nothing said HOW OFTEN. A
+        // refused request performs no outbound fetch and starts no timer.
+        if (!allow(clientKey(req))) {
+          res.writeHead(429, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'Retry-After': '10',
+          });
+          res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
           return;
         }
 
@@ -88,7 +221,7 @@ export function gbfsProxy() {
           return;
         }
 
-        if (!isAllowedGbfsPath(upstreamUrl.pathname)) {
+        if (!isAllowedGbfsPath(upstreamUrl.pathname, upstreamUrl.hostname)) {
           res.writeHead(400, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
@@ -102,61 +235,27 @@ export function gbfsProxy() {
           return;
         }
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(
-          () => controller.abort(),
-          GBFS_PROXY_TIMEOUT_MS,
-        );
-        let upstream;
+        const upstream = await fetchGbfsUpstream(upstreamUrl.toString());
+        // Only JSON is relayed, re-serialized under a fixed type: neither the
+        // upstream's text nor its declared type reaches the browser.
+        let payload;
         try {
-          upstream = await fetch(upstreamUrl.toString(), {
-            method: 'GET',
-            headers: {
-              Accept: 'application/json',
-              'User-Agent': 'gods-eye-view-gbfs-proxy/1.0',
-            },
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-
-        // Limit response size to prevent memory exhaustion from malicious upstream
-        const GBFS_MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB
-        const contentLength = Number(upstream.headers.get('content-length'));
-        if (
-          Number.isFinite(contentLength) &&
-          contentLength > GBFS_MAX_BODY_BYTES
-        ) {
+          payload = JSON.parse(upstream.body);
+        } catch {
           res.writeHead(502, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
           });
-          res.end(
-            JSON.stringify({ error: 'GBFS upstream response too large' }),
-          );
+          res.end(JSON.stringify({ error: 'GBFS upstream returned non-JSON' }));
           return;
         }
-        const body = await upstream.text();
-        if (Buffer.byteLength(body, 'utf8') > GBFS_MAX_BODY_BYTES) {
-          res.writeHead(502, {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store',
-          });
-          res.end(
-            JSON.stringify({ error: 'GBFS upstream response too large' }),
-          );
-          return;
-        }
-        const contentType =
-          upstream.headers.get('content-type') || 'application/json';
         res.writeHead(upstream.status, {
-          'Content-Type': contentType,
+          'Content-Type': 'application/json; charset=utf-8',
           'Cache-Control': gbfsCacheControl(upstreamUrl.pathname),
           'X-GBFS-Upstream': upstreamUrl.hostname,
           'X-GBFS-Cache': 'MISS',
         });
-        res.end(body);
+        res.end(JSON.stringify(payload));
       } catch (error) {
         if (error?.name === 'AbortError') {
           res.writeHead(504, {
@@ -164,6 +263,26 @@ export function gbfsProxy() {
             'Cache-Control': 'no-store',
           });
           res.end(JSON.stringify({ error: 'GBFS upstream timeout' }));
+          return;
+        }
+        if (
+          error?.code === 'GBFS_REDIRECT' ||
+          error?.code === 'RESPONSE_TOO_LARGE'
+        ) {
+          if (error.code === 'GBFS_REDIRECT')
+            console.warn('[GBFS Proxy] Redirect refused', error.redirectHost);
+          res.writeHead(502, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(
+            JSON.stringify({
+              error:
+                error.code === 'GBFS_REDIRECT'
+                  ? 'GBFS upstream redirect refused'
+                  : 'GBFS upstream response too large',
+            }),
+          );
           return;
         }
         console.error('[GBFS Proxy]', error?.message || String(error));

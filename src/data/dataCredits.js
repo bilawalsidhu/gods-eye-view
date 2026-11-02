@@ -7,7 +7,7 @@ import * as Cesium from 'cesium';
  * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
  * display carries its own license and required attribution — ODbL (OSM
  * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
- * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, GBFS operators, OpenSky.
+ * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic (CC BY 4.0),
  * The MIT code license does NOT cover this data.
  *
  * These credits are registered ONCE at init as STATIC credits with
@@ -25,6 +25,79 @@ import * as Cesium from 'cesium';
  * follows DATA_SOURCES.md (live sources, then bundled snapshots).
  * @type {{ key: string, html: string }[]}
  */
+const OSM_CREDIT = {
+  key: 'openstreetmap',
+  html: 'Map and place data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>)',
+};
+const OPENMAPTILES_CREDIT = {
+  key: 'openfreemap',
+  html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
+};
+
+const osmDisplays = new WeakMap();
+
+function updateOsmDisplay(viewer, state) {
+  const osm = state.owners.size > 0;
+  let tiles = false;
+  for (const usesTiles of state.owners.values()) tiles ||= usesTiles;
+  for (const [key, visible] of [
+    ['osm', osm],
+    ['tiles', tiles],
+  ]) {
+    if (state[key].visible === visible) continue;
+    state[key].visible = visible;
+    viewer.creditDisplay[visible ? 'addStaticCredit' : 'removeStaticCredit'](
+      state[key].credit,
+    );
+    viewer.scene?.requestRender?.();
+  }
+}
+
+/** Keep one short inline credit while an OSM display owner has visible data. */
+export function showOsmCredit(viewer, owner, { openMapTiles = false } = {}) {
+  if (!viewer?.creditDisplay?.addStaticCredit || !owner) return false;
+  let state = osmDisplays.get(viewer);
+  if (!state) {
+    state = {
+      owners: new Map(),
+      osm: {
+        visible: false,
+        credit: new Cesium.Credit(
+          '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>',
+          true,
+        ),
+      },
+      tiles: {
+        visible: false,
+        credit: new Cesium.Credit(
+          '<a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a>',
+          true,
+        ),
+      },
+    };
+    osmDisplays.set(viewer, state);
+  }
+  if (state.owners.get(owner) === openMapTiles) return false;
+  state.owners.set(owner, openMapTiles);
+  updateOsmDisplay(viewer, state);
+  return true;
+}
+
+/** Release only this owner's credit; other displayed OSM sources retain theirs. */
+export function hideOsmCredit(viewer, owner) {
+  const state = osmDisplays.get(viewer);
+  if (!state?.owners.delete(owner)) return false;
+  updateOsmDisplay(viewer, state);
+  return true;
+}
+
+/** NYC DOT asks every application that uses its data to carry this
+ * disclaimer verbatim (nyc.gov/html/dot/html/about/datafeeds.shtml). */
+export const NYC_DOT_DISCLAIMER =
+  'This application may contain and/or utilize information which was originally compiled by the New York City Department of Transportation (NYC DOT) for governmental purposes; the information may subsequently been modified by entity/entities other than NYC DOT. ' +
+  'NYC DOT and the City of New York make no representation as to the accuracy or usefulness of the information provided by this application or the information&#39;s suitability for any purpose and disclaim any liability for omissions or errors that may be contained therein. ' +
+  'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
+
 export const DATA_CREDITS = [
   // ── Live sources ────────────────────────────────────────────────
   {
@@ -38,9 +111,20 @@ export const DATA_CREDITS = [
   {
     key: 'adsblol',
     html:
-      'Military flights, aircraft traces &amp; bounded regional flight fallback: ' +
+      'Military flights, aircraft traces, bounded regional flight fallback &amp; GNSS navigation integrity: ' +
       '<a href="https://adsb.lol" target="_blank" rel="noopener">adsb.lol</a> ' +
       '(ODbL 1.0)',
+  },
+  {
+    key: 'adsbdb',
+    html:
+      'Aircraft type, registration &amp; flight routes: ' +
+      '<a href="https://www.adsbdb.com" target="_blank" rel="noopener">adsbdb</a> ' +
+      '· aircraft data from PlaneBase · ICAO-to-N-number conversion by ' +
+      'Guillaume Michel · route data is the work of ' +
+      'David Taylor, Edinburgh, and Jim Mason, Glasgow, and may not be ' +
+      'copied, published, or incorporated into other databases without the ' +
+      'explicit permission of David J Taylor, Edinburgh',
   },
   {
     key: 'aisstream',
@@ -70,34 +154,49 @@ export const DATA_CREDITS = [
     key: 'openseamap',
     html:
       'Sea marks overlay: ' +
-      '<a href="https://www.openseamap.org" target="_blank" rel="noopener">© OpenSeaMap contributors</a>',
+      '<a href="https://www.openseamap.org" target="_blank" rel="noopener">© OpenSeaMap contributors</a> (CC BY-SA 2.0) · ' +
+      'Data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL)',
   },
   {
     key: 'opensnowmap',
     html:
-      'Ski pistes overlay: Map data © OpenStreetMap contributors, SRTM | Map style © ' +
-      '<a href="https://www.opensnowmap.org" target="_blank" rel="noopener">OpenSnowMap.org</a> (CC BY-SA)',
+      'Ski pistes overlay: ' +
+      '<a href="https://www.opensnowmap.org" target="_blank" rel="noopener">© www.opensnowmap.org</a> (CC BY-SA) · ' +
+      'Data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL)',
   },
   {
-    key: 'overpass',
+    key: 'nasa-gibs',
     html:
-      'Road geometry (traffic): ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0)',
+      'Recent imagery: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
   },
   {
-    key: 'military-installations-osm',
+    key: 'wfigs',
     html:
-      'Mapped installation context: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0; incomplete mapped context)',
+      'Wildfire perimeters: ' +
+      '<a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">National Interagency Fire Center (WFIGS)</a>' +
+      ' · Incident information: ' +
+      '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
+  },
+  OSM_CREDIT,
+  OPENMAPTILES_CREDIT,
+  {
+    key: 'eccc-aqhi',
+    html:
+      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
+      '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
+      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>',
   },
   {
-    key: 'cockpit-place-osm',
-    html:
-      'Cockpit place context: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      'via Nominatim (ODbL 1.0)',
+    key: 'overture-military-names',
+    html: 'Military area names: <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps Foundation</a> (ODbL)',
+  },
+  {
+    key: 'photon-geocoder',
+    html: 'Keyless place search: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> (komoot)',
   },
   {
     key: 'open-meteo',
@@ -127,6 +226,16 @@ export const DATA_CREDITS = [
       '<a href="https://data.austintexas.gov" target="_blank" rel="noopener">data.austintexas.gov</a>',
   },
   {
+    key: 'txdot-cctv',
+    html:
+      'CCTV cameras &amp; frames (Texas): ' +
+      '<a href="https://its.txdot.gov/" target="_blank" rel="noopener">Texas Department of Transportation</a> (courtesy)',
+  },
+  {
+    key: 'deldot-cctv',
+    html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
+  },
+  {
     key: 'caltrans-cctv',
     html:
       'CCTV cameras &amp; frames (California): Caltrans — ' +
@@ -140,8 +249,163 @@ export const DATA_CREDITS = [
       'Contains OS data © Crown copyright and database rights.',
   },
   {
+    key: 'ontario-511-cctv',
+    html:
+      'CCTV cameras &amp; frames (Ontario): ' +
+      '<a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a> ' +
+      '(<a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence - Ontario</a>) ' +
+      '· provided as is, without warranty; actual road conditions may differ',
+  },
+  {
+    key: 'fintraffic-cctv',
+    html:
+      'CCTV cameras &amp; frames (Finland): Fintraffic / ' +
+      '<a href="https://www.digitraffic.fi/en/" target="_blank" rel="noopener">digitraffic.fi</a>, ' +
+      'license CC BY 4.0',
+  },
+  {
+    key: 'lithuania-cctv',
+    html:
+      // Opt-in: the camera endpoints are the eismoinfo.lt website backend, not
+      // among the services Via Lietuva's open-data statement lists (its
+      // conditions: attribution, reuse on the same terms).
+      'Road-camera stills (Lithuania, when enabled): ' +
+      '<a href="https://eismoinfo.lt/" target="_blank" rel="noopener">Via Lietuva / Eismoinfo</a>; periodically updated images',
+  },
+  {
+    key: 'taiwan-cctv',
+    html:
+      'Freeway camera stills (Taiwan): ' +
+      '<a href="https://www.freeway.gov.tw/" target="_blank" rel="noopener">Freeway Bureau, MOTC</a>, ' +
+      'CCTV static data (MOTC 2.0), released under the ' +
+      '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, Taiwan (Version 1.0)</a>',
+  },
+  {
+    key: 'calgary-cctv',
+    html:
+      'Traffic cameras (Calgary): contains information licensed under the ' +
+      '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
+  },
+  {
+    key: 'florida-cctv',
+    html:
+      'Traffic cameras (Florida): FL511, Florida Department of Transportation. ' +
+      'Individual, personal use only under the ' +
+      '<a href="https://fl511.com/privacy#disclaimer" target="_blank" rel="noopener">FL511 terms</a>; ' +
+      "any other use needs FDOT's express written consent",
+  },
+  {
+    key: 'catalonia-cctv',
+    html:
+      'CCTV cameras &amp; frames (Catalonia): ' +
+      '<a href="https://transit.gencat.cat/" target="_blank" rel="noopener">Servei Català de Trànsit</a> ' +
+      '(Llicència oberta d’ús d’informació - Catalunya); some cameras are supplied by partners ' +
+      '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
+  },
+  {
+    key: 'kingcounty-cctv',
+    html:
+      'CCTV cameras &amp; frames (King County, WA): King County Road Services — ' +
+      '<a href="https://kingcounty.gov/en/dept/local-services/roads" target="_blank" rel="noopener">kingcounty.gov</a>, ' +
+      'per the ' +
+      '<a href="https://kingcounty.gov/en/dept/kcit/data-information-services/gis-center/about/terms-conditions-copyrights" target="_blank" rel="noopener">KCGIS Center terms</a>. ' +
+      'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
+  },
+  {
+    key: 'hk-cctv',
+    html:
+      'Traffic snapshot cameras (Hong Kong): ' +
+      '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">Transport Department / DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
+    key: 'vegvesen-cctv',
+    html:
+      'Road cameras (Norway): contains data under the ' +
+      '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
+      'distributed by Statens vegvesen · camera ground heights © ' +
+      '<a href="https://kartverket.no/en/api-and-data/terrengdata" target="_blank" rel="noopener">Kartverket</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); ' +
+      'modified: heights over water set to 0 m and rounded to 0.1 m',
+  },
+  {
+    key: 'nyc-cctv',
+    html:
+      'CCTV cameras &amp; frames (New York City, when enabled): ' +
+      '<a href="https://webcams.nyctmc.org/" target="_blank" rel="noopener">NYC DOT Traffic Management Center</a>. ' +
+      NYC_DOT_DISCLAIMER,
+  },
+  {
+    key: 'toronto-cctv',
+    html:
+      'Traffic cameras (Toronto): contains information licensed under the ' +
+      '<a href="https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/" target="_blank" rel="noopener">Open Government Licence – Toronto</a>',
+  },
+  {
+    key: 'mapillary',
+    html: 'Street Level: imagery © <a href="https://www.mapillary.com" target="_blank" rel="noopener">Mapillary</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>',
+  },
+  {
+    key: 'google-street-view',
+    html: 'Street Level: Street View imagery © <a href="https://www.google.com/streetview/" target="_blank" rel="noopener">Google</a>',
+  },
+  {
+    key: 'kartaview',
+    html: 'Street Level: imagery © <a href="https://kartaview.org" target="_blank" rel="noopener">KartaView</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>',
+  },
+  {
+    key: 'panoramax',
+    html: 'Street Level: imagery © <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> contributors, licence per picture',
+  },
+  {
+    key: 'a22-cctv',
+    html:
+      'Motorway webcams (A22 Brennero–Modena): images © ' +
+      '<a href="https://www.autobrennero.it/" target="_blank" rel="noopener">Autostrada del Brennero S.p.A.</a>, ' +
+      'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
+  },
+  {
     key: 'gbfs',
-    html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
+    html:
+      'Bikeshare availability: GBFS operator feeds ' +
+      '(e.g. Austin BCycle; Bike Share Toronto, operated by the Toronto Parking Authority; Bike Itaú and Tembici Bogotá, operated by Tembici; ' +
+      'Bicing, Barcelona City Council (B:SM); AMBici, Àrea Metropolitana de Barcelona, operated by nextbike; ' +
+      'BiciMAD, <a href="https://www.emtmadrid.es" target="_blank" rel="noopener">Powered by EMT de Madrid</a>; ' +
+      'Bizi Zaragoza; BIKI, AUVASA (Valladolid); BiciCoruña; Dbizi (Donostia-San Sebastián); ' +
+      'Bilbao Bizi, Bilbao City Council; BicinRivas, Rivas-Vaciamadrid City Council)',
+  },
+  {
+    key: 'urbansharing-gbfs',
+    html:
+      'City bikes (Norway): contains data under the ' +
+      '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
+      'made available by Oslo Bysykkel, Bergen Bysykkel and Trondheim Bysykkel',
+  },
+  {
+    key: 'entur-mobility-gbfs',
+    html:
+      'City bikes (Stavanger, Skien/Porsgrunn): contains data under the ' +
+      '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
+      'made available by Entur (Kolumbus Bysykkel, Farte Bysykkel)',
+  },
+  {
+    key: 'jcdecaux-gbfs',
+    html:
+      'City bikes (Lillestrøm, Valencia, Seville): Bysykkel Lillestrøm, Valenbisi, Sevici, JCDecaux — ' +
+      '<a href="https://developer.jcdecaux.com/files/Open-Licence-fr.pdf" target="_blank" rel="noopener">Licence Ouverte</a>',
+  },
+  {
+    key: 'osrm-routing',
+    // The service asks for its attribution to carry a "fix the map" link, so
+    // a reader who spots a wrong turn can go and correct the data it came from.
+    html:
+      'Routing (voice routes and Directions): OSRM on the FOSSGIS servers — ' +
+      '<a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">routing.openstreetmap.de</a> · ' +
+      '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>',
+  },
+  {
+    key: 'gtfs-rt',
+    html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
   },
   {
     key: 'radio-browser',
@@ -157,20 +421,45 @@ export const DATA_CREDITS = [
       '<a href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / ' +
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
   },
+  {
+    key: 'weather-noaa',
+    html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
+  },
+  {
+    key: 'weather-cyclones',
+    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
+  },
+  {
+    key: 'weather-lightning',
+    html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
+  },
+  {
+    key: 'wind-gfs',
+    html:
+      'Wind: resampled NOAA Global Forecast System (GFS) 10 m wind via ' +
+      '<a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/" target="_blank" rel="noopener">NOAA Open Data on AWS</a> ' +
+      '(U.S. public domain; forecast, not observations)',
+  },
+  {
+    key: 'ecmwf-ifs',
+    html:
+      'This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF). ' +
+      '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a> · ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
+      'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
+      'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
+  },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
-    key: 'datacenters',
+    key: 'sky-background',
     html:
-      'Datacenters: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0)',
+      'Stars: <a href="https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50" target="_blank" rel="noopener">Yale Bright Star Catalogue</a> ' +
+      '(Hoffleit &amp; Warren, via CDS). Milky Way: <a href="https://www.eso.org/public/images/eso0932a/" target="_blank" rel="noopener">ESO/S. Brunier</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; stars removed, blurred and reprojected)',
   },
   {
     key: 'dams',
-    html:
-      'Dams: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0) + Open Infrastructure Map',
+    html: 'Dams: Open Infrastructure Map',
   },
   {
     key: 'firms',
@@ -179,6 +468,56 @@ export const DATA_CREDITS = [
       'from NASA’s Fire Information for Resource Management System ' +
       '(<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>), ' +
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
+  },
+  {
+    key: 's2-ghostmaps',
+    html:
+      'S2 GhostMaps intel products: S2 Underground © by S2A1, ' +
+      '<a href="https://github.com/s2underground/GhostMaps" target="_blank" rel="noopener">github.com/s2underground/GhostMaps</a>, ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. ' +
+      'Shown as published; reports are S2 assessments, not verified fact.',
+  },
+  {
+    key: 'drivebc-cctv',
+    html:
+      'CCTV cameras &amp; frames (British Columbia): ' +
+      '<a href="https://www.drivebc.ca/" target="_blank" rel="noopener">DriveBC</a>. ' +
+      'Contains information licensed under the ' +
+      '<a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc" target="_blank" rel="noopener">Open Government Licence – British Columbia</a>. ' +
+      'Some cameras are supplied by partners (TransLink, the City of Vancouver, the City of Surrey, Parks Canada and others); each names its provider in the CCTV panel.',
+  },
+  {
+    key: 'wsdot-cctv',
+    html:
+      'CCTV cameras &amp; frames (Washington State): ' +
+      '<a href="https://wsdot.wa.gov/" target="_blank" rel="noopener">Washington State Department of Transportation</a> ' +
+      '(<a href="https://wsdot.com/travel/real-time/cameras" target="_blank" rel="noopener">Travel Center</a>), ' +
+      'used per the ' +
+      '<a href="https://wsdot.wa.gov/about/policies/travel-information-disclaimer" target="_blank" rel="noopener">WSDOT travel information disclaimer</a> ' +
+      '(low-volume public feed; catalog cached, frames proxied on demand)',
+  },
+  {
+    key: 'tallinn-cctv',
+    html:
+      'CCTV cameras &amp; frames (Tallinn): City of Tallinn — ' +
+      '<a href="https://ristmikud.tallinn.ee/" target="_blank" rel="noopener">ristmikud.tallinn.ee</a> (courtesy)',
+  },
+  {
+    key: 'tarktee-cctv',
+    html:
+      'CCTV cameras &amp; frames (Estonia road weather): Transpordiamet / Tarktee — ' +
+      '<a href="https://tarktee.transpordiamet.ee/" target="_blank" rel="noopener">tarktee.transpordiamet.ee</a> (courtesy)',
+  },
+  {
+    key: 'warendorf-cctv',
+    html: 'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy)',
+  },
+  {
+    key: 'nsw-cctv',
+    html:
+      'CCTV cameras &amp; frames (New South Wales): ' +
+      '<a href="https://www.livetraffic.com/" target="_blank" rel="noopener">Live Traffic NSW</a> — Transport for NSW ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
   },
   {
     key: 'telegeography',
@@ -204,13 +543,62 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
-/** Registered when the first Natural Earth region outline resolves (public
- * domain — no attribution required; credited as a courtesy). */
+/** Registered when the first Natural Earth region or state/province outline
+ * resolves (public domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
   key: 'natural-earth',
   html:
-    'Physical region boundaries from ' +
+    'Country, state/province and physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
+};
+
+/** Registered when the first bundled US county outline resolves (public
+ * domain — credited as a courtesy). */
+export const US_CENSUS_CREDIT = {
+  key: 'us-census-counties',
+  html:
+    'US county boundaries from the ' +
+    '<a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">U.S. Census Bureau</a> (public domain)',
+};
+
+/**
+ * Per-feed transit credit, registered the first time that feed's vehicles
+ * render (see `src/data/transitFeeds.js` for the license of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function transitFeedCredit(feed) {
+  const escape = (text) =>
+    String(text)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+  return {
+    key: `transit-${feed.id}`,
+    html:
+      `Transit (${escape(feed.attribution)}): ` +
+      `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
+
+/** Registered when the Bhote Koshi event reconstruction activates. */
+export const BHOTE_KOSHI_CREDIT = {
+  key: 'bhote-koshi-2026',
+  html:
+    'Bhote Koshi 2026 event imagery and derived reconstruction: ' +
+    '<a href="https://vantor.com/company/open-data-program" target="_blank" rel="noopener">Vantor Open Data</a> ' +
+    'and <a href="https://github.com/geo-pera/bhotekoshi-2026-reconstruction" target="_blank" rel="noopener">GeoPera</a> ' +
+    '(CC BY-NC 4.0); terrain © Re:Earth / Mapterhorn (CC BY 4.0)',
+};
+
+/** Registered when the scene-friendly Nepal incident locator activates. */
+export const BHOTE_KOSHI_LOCATOR_CREDIT = {
+  key: 'bhote-koshi-locator',
+  html:
+    'Flood corridor derived from the ' +
+    '<a href="https://github.com/geo-pera/bhotekoshi-2026-reconstruction/blob/main/vectors/river_centerline.geojson" target="_blank" rel="noopener">GeoPera river centerline</a> ' +
+    '(CC BY-NC 4.0)',
 };
 
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */
@@ -242,12 +630,12 @@ export function registerDynamicCredit(viewer, credit) {
  * present in the "Data attribution" popover.
  * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
  */
-export function registerDataCredits(viewer) {
+export function registerDataCredits(viewer, credits = DATA_CREDITS) {
   const creditDisplay = viewer?.creditDisplay;
   if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
     return;
   }
-  for (const { html } of DATA_CREDITS) {
+  for (const { html } of credits) {
     // showOnScreen=false → lives in the expandable "Data attribution" popover,
     // not the on-globe credit line.
     creditDisplay.addStaticCredit(new Cesium.Credit(html, false));

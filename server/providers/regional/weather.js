@@ -1,5 +1,5 @@
 import { fetchRegionalJson } from './http.js';
-import { normalizeRegionalWeather } from '../../../src/data/regionalBrief.js';
+import { normalizeRegionalWeather } from '../../../src/data/regionalModel.js';
 
 const WEATHER_EFFECTS_MAX_RESPONSE_BYTES = 512 * 1024;
 

@@ -156,16 +156,52 @@ const pressTabs = async (count, backwards = false) => {
   // The row scrolls smoothly when native Tab brings an edge button into view.
   await new Promise((resolve) => setTimeout(resolve, 250));
 };
+// Phones (≤720px) present the dock's Presets inline in the More tab's sheet.
+// It opens from the keyboard, as a keyboard user would, so the focus it moves
+// into the sheet shows a ring.
+const openPhoneMoreSheet = async () => {
+  const tab = '#mobile-tab-bar [data-mobile-sheet="more"]';
+  if (await page.evaluate(() => document.body.dataset.mobileSheet === 'more')) {
+    await page.focus(tab);
+    await page.keyboard.press('Enter');
+  }
+  await page.focus(tab);
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+};
+
+// Media-query changes reach the page on a rendering step; wait until the
+// phone shell agrees with the viewport before measuring.
+const waitForShellSettled = () => page.waitForFunction(() => (
+  document.body.classList.contains('mobile-shell')
+    === matchMedia('(max-width: 720px)').matches
+), { timeout: 10_000, polling: 100 });
+
+// The dock slides back into place when the layout leaves the phone shell.
+const waitForDockSettled = () => page.waitForFunction(() => (
+  !document.getElementById('command-dock').getAnimations({ subtree: true })
+    .some((animation) => animation.playState === 'running')
+), { timeout: 5_000 });
+
 const checkResponsiveStyleFocus = async (width) => {
   // The disclosure is only the starting boundary. Every style target below is
   // reached by actual Tab events, never by focusing the style under test.
   const selectedMapBefore = await page.evaluate(() => (
     window.__godsEyeView.styleManager.mapStackController.getActiveId()
   ));
-  await page.focus('#control-panel-toggle');
-  await pressTabs(2); // disclosure -> pin -> Normal
-  for (const [index, style] of ['normal', 'thermal', 'snow'].entries()) {
-    if (index) await pressTabs(3);
+  if (width <= 720) {
+    // Phones show Presets in the More tab's sheet, which focuses its first
+    // visible control (Normal) when it opens; the tray toggle and pin are
+    // desktop chrome there.
+    await openPhoneMoreSheet();
+  } else {
+    await page.focus('#control-panel-toggle');
+    await pressTabs(2); // disclosure -> pin -> Normal
+  }
+  for (const [tabs, style] of [[0, 'normal'], [3, 'thermal'], [2, 'noir']]) {
+    if (tabs) await pressTabs(tabs);
     const state = await styleFocusMetrics();
     check(`${width} px ${style} keyboard ring is visible and unclipped`,
       hasVisibleStyleFocus(state, style) && state.selectedStyle === 'normal'
@@ -215,7 +251,16 @@ const layerFocusState = async (id) => ({
   ...await page.evaluate((layerId) => {
     const manager = window.__godsEyeView.dataManager;
     const button = document.querySelector(`[data-layer-id="${layerId}"] .data-toggle-btn`);
-    const list = document.getElementById('data-toggles');
+    // The list scrolls on its own on desktop; in a phone sheet the sheet
+    // scrolls instead. Measure whichever container actually scrolls.
+    let list = document.getElementById('data-toggles');
+    for (let node = list; node; node = node.parentElement) {
+      const overflow = getComputedStyle(node).overflowY;
+      if ((overflow === 'auto' || overflow === 'scroll') && node.scrollHeight > node.clientHeight) {
+        list = node;
+        break;
+      }
+    }
     return {
       lifecycle: manager.getLayerLifecycleState(layerId),
       feedState: button?.dataset.feedState, label: button?.textContent.trim(),
@@ -522,13 +567,13 @@ try {
   // Visual Styles precede the five Map Source tiles. Keep the existing opening
   // handoff to selected OSM, then use the user's real Shift+Tab path into styles.
   await pressTabs(5, true);
-  const snowFocus = await styleFocusMetrics();
-  check('Shift+Tab reaches Snow with a visible ring while Normal and OSM stay selected',
-    hasVisibleStyleFocus(snowFocus, 'snow') && !snowFocus.selected
-      && snowFocus.selectedStyle === 'normal' && snowFocus.selectedMap === 'osm',
-    JSON.stringify(snowFocus));
+  const noirFocus = await styleFocusMetrics();
+  check('Shift+Tab reaches Noir with a visible ring while Normal and OSM stay selected',
+    hasVisibleStyleFocus(noirFocus, 'noir') && !noirFocus.selected
+      && noirFocus.selectedStyle === 'normal' && noirFocus.selectedMap === 'osm',
+    JSON.stringify(noirFocus));
   await page.screenshot({ path: path.join(shotsDir, 'keyboard-style-focus.png') });
-  await pressTabs(3, true);
+  await pressTabs(2, true);
   const middleFocus = await styleFocusMetrics();
   check('Shift+Tab traverses the middle FLIR style without activating it',
     hasVisibleStyleFocus(middleFocus, 'thermal') && !middleFocus.selected
@@ -569,7 +614,13 @@ try {
       trusted: event.isTrusted, detail: event.detail ?? null,
       style: event.target.closest('.style-btn')?.dataset.style || null,
     });
-    for (const type of ['keydown', 'keyup', 'click']) grid.addEventListener(type, record, true);
+    // A claimed hold deliberately blurs the button. Repeats and release then
+    // target the document body, so observe Space beyond the original grid.
+    const recordSpace = (event) => {
+      if (event.code === 'Space') record(event);
+    };
+    for (const type of ['keydown', 'keyup']) document.addEventListener(type, recordSpace, true);
+    grid.addEventListener('click', record, true);
     manager.setStyle = function (...args) {
       probe.activations.push(args[0]);
       return originalSetStyle.apply(this, args);
@@ -597,6 +648,11 @@ try {
       voiceBefore: probe.voiceBefore, voiceNow: voiceState(),
       selectedStyle: manager.activeStyle, selectedMap: manager.mapStackController.getActiveId(),
       focusedStyle: document.activeElement?.dataset.style || null,
+      holdObservation: {
+        pageFocused: document.hasFocus(), visibility: document.visibilityState,
+        timerPending: Boolean(voice.pushToTalkHoldTimer),
+        focusOwnerMatches: document.activeElement === voice.pushToTalkHoldFocusOwner,
+      },
     });
     probe.reset = () => {
       probe.events.length = 0;
@@ -609,7 +665,8 @@ try {
       manager.setStyle = originalSetStyle;
       voice.start = originalVoiceStart;
       observer.disconnect();
-      for (const type of ['keydown', 'keyup', 'click']) grid.removeEventListener(type, record, true);
+      for (const type of ['keydown', 'keyup']) document.removeEventListener(type, recordSpace, true);
+      grid.removeEventListener('click', record, true);
     };
     window.__qaStyleKeyProbe = probe;
   });
@@ -638,9 +695,11 @@ try {
     await page.keyboard.down('Space');
     styleSpaceIsDown = true;
     longSpaceDown = await page.evaluate(() => window.__qaStyleKeyProbe.snapshot());
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Use the browser's clock, like the production hold timer. Runner-side
+    // delays can finish while Chromium's timer is still pending under load.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 250)));
     await page.keyboard.down('Space'); // exercise repeat without resetting the hold deadline
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 400)));
     longSpaceHeld = await page.evaluate(() => window.__qaStyleKeyProbe.snapshot());
     await page.keyboard.up('Space');
     styleSpaceIsDown = false;
@@ -700,6 +759,14 @@ try {
       if (controller.googleTileset) controller.googleTileset.show = false;
       controller.googleTileset = null;
       controller.cesiumToken = '';
+      // Availability is now composed in the source registry. Override only
+      // this fixture's choices, as the previous token-field seam did.
+      for (const source of controller._sources.values()) {
+        if (source.descriptor.requiresIon || source.descriptor.kind === 'photoreal') {
+          source.available = false;
+        }
+      }
+      controller._registry.state.hasCesiumIonToken = false;
       await styleManager._setMapStack('osm', { syncShare: false });
       styleManager._initMapStackControl();
     });
@@ -804,6 +871,9 @@ try {
       return originalSetStack(stackId);
     };
     const switchPromise = styleManager._setMapStack('osm', { syncShare: false });
+    // The dock renders the published row on Vue's next flush.
+    const rendered = () => new Promise((resolve) => setTimeout(resolve, 0));
+    await rendered();
     const during = {
       status: document.getElementById('map-stack-status').textContent,
       active: [...document.querySelectorAll('.map-stack-chip')]
@@ -812,6 +882,7 @@ try {
     };
     release();
     await switchPromise;
+    await rendered();
     const after = {
       status: document.getElementById('map-stack-status').textContent,
       active: [...document.querySelectorAll('.map-stack-chip')]
@@ -904,15 +975,15 @@ try {
     });
     const waitForQueuedNotice = async (label, timeoutMs = 1000) => {
       const deadline = performance.now() + timeoutMs;
-      while (styleManager._globalStatusNotice?.label !== label
+      while (styleManager._feedback._globalStatusNotice?.label !== label
           && performance.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 16));
       }
-      return styleManager._globalStatusNotice?.label === label;
+      return styleManager._feedback._globalStatusNotice?.label === label;
     };
     const baseNow = performance.now();
     try {
-      styleManager._loadingFeedbackState = {
+      styleManager._feedback._loadingFeedbackState = {
         phase: 'idle', visible: false, startedAt: 0, showAt: 0, hideAt: 0,
         activeIds: [], batchOutcome: null, terminal: null, operation: null,
       };
@@ -932,7 +1003,7 @@ try {
       styleManager._updateGlobalLoadingFeedback(baseNow);
       styleManager._updateGlobalLoadingFeedback(baseNow + 200);
       dataManager.getAll = () => [];
-      styleManager._loadingFeedbackEvent = {
+      styleManager._feedback._loadingFeedbackEvent = {
         type: 'visibility-failed',
         layerId: 'qa-unrelated-layer',
         error: new Error('QA offline'),
@@ -1124,6 +1195,8 @@ try {
 
   await page.setViewport({ width: 620, height: 900, deviceScaleFactor: 1 });
   await new Promise((resolve) => setTimeout(resolve, 180));
+  await waitForShellSettled();
+  await openPhoneMoreSheet();
   const at620 = await trayMetrics();
   check(
     '620 px tray uses two rows without clipping',
@@ -1157,7 +1230,13 @@ try {
   await page.screenshot({ path: path.join(shotsDir, '480-open.png') });
   await checkResponsiveStyleFocus(480);
 
+  // Pinning and the compact wing are the narrow desktop dock (721–900 px);
+  // phones use the tab bar instead.
+  await page.setViewport({ width: 800, height: 900, deviceScaleFactor: 1 });
+  await waitForShellSettled();
+  await waitForDockSettled();
   await page.click('.dock-pin-btn[data-pin-target="control-panel"]');
+  await waitForDockSettled();
   await page.click('#control-panel-toggle');
   const cdp = await page.createCDPSession();
   await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
@@ -1243,9 +1322,10 @@ try {
       manager._setCommandDockPanelPinState(id, false, { persist: false, syncShare: false });
       manager.setPanelCollapsed(id, true, { persist: false, syncShare: false });
     }
-    const original = manager.setPanelCollapsed;
-    const probe = { transitions: [], restore: () => { manager.setPanelCollapsed = original; } };
-    manager.setPanelCollapsed = function (id, ...args) {
+    const chrome = manager._panelChrome;
+    const original = chrome.setPanelCollapsed;
+    const probe = { transitions: [], restore: () => { chrome.setPanelCollapsed = original; } };
+    chrome.setPanelCollapsed = function (id, ...args) {
       const before = document.getElementById(id)?.classList.contains('collapsed');
       const result = original.call(this, id, ...args);
       const after = document.getElementById(id)?.classList.contains('collapsed');
@@ -1351,6 +1431,27 @@ try {
 
     for (const width of [1000, 620, 480]) {
       await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+      await waitForShellSettled();
+      if (width <= 720) {
+        // Phones present Location as the Search tab's sheet: the keyboard opens
+        // it onto the field, and Escape returns focus to the tab.
+        const searchTab = '#mobile-tab-bar [data-mobile-sheet="search"]';
+        await page.focus(searchTab);
+        await page.keyboard.press('Enter');
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const field = await focusMetrics('#location-search');
+        check(`Search: ${width} px keyboard opens the sheet on the location field`,
+          field.focusedId === 'location-search' && field.visible && field.insideViewport,
+          JSON.stringify(field));
+        await page.screenshot({ path: path.join(shotsDir, `${width}-search-open.png`) });
+        await page.keyboard.press('Escape');
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const tab = await focusMetrics(searchTab);
+        const closedSheet = await page.evaluate(() => !document.body.dataset.mobileSheet);
+        check(`Search: ${width} px Escape closes the sheet with a visible ring on its tab`,
+          closedSheet && hasVisibleControlFocus(tab), JSON.stringify({ closedSheet, tab }));
+        continue;
+      }
       await page.evaluate(() => {
         const manager = window.__godsEyeView.styleManager;
         manager.setPanelCollapsed('control-panel', true, { persist: false, syncShare: false });
@@ -1452,7 +1553,8 @@ try {
         getStats: () => ({ count: 1, lastUpdate: Date.now(), source: 'Local focus fixture' }),
       });
       state.ids.push(transitionId);
-      manager._renderToggles();
+      const { application } = await import('/src/main.js');
+      application.getComponents().data.presentation.panel._renderToggles();
       const offId = manager.getAll().find((layer) => !state.ids.includes(layer.id) && layer.showInTogglePanel && !layer.enabled)?.id;
       return {
         ready: Boolean(offId), offId, fixtureIds: state.ids.slice(0, 2), transitionId,
@@ -1465,7 +1567,27 @@ try {
     if (dataSetup.ready) {
       for (const width of [1000, 620, 480]) {
         await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+        await waitForShellSettled();
+        if (width <= 720 && !(await page.evaluate(() => document.body.dataset.mobileSheet === 'layers'))) {
+          // Phones present Data Layers in the Layers tab's sheet.
+          await page.focus('#mobile-tab-bar [data-mobile-sheet="layers"]');
+          await page.keyboard.press('Enter');
+        }
         await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false }));
+        // Resizing schedules rail placement on animation frames. Wait for that
+        // pass and its CSS transitions before comparing a focus rectangle with
+        // hit testing; a fixed Tab delay can observe two different positions.
+        await page.evaluate(() => new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+        await page.waitForFunction((expectedWidth) => {
+          const stack = document.getElementById('left-panel-stack');
+          if (innerWidth !== expectedWidth || !stack) return false;
+          if ((stack.dataset.layoutMode === 'mobile') !== (expectedWidth <= 720)) return false;
+          return !stack.getAnimations({ subtree: true }).some((animation) => (
+            animation instanceof CSSTransition && animation.playState === 'running'
+          ));
+        }, { timeout: 5_000 }, width);
         await page.focus('#data-panel .panel-collapse-btn');
         const targets = [[dataSetup.offId, 'OFF', false], [dataSetup.fixtureIds[0], 'ON', true], [dataSetup.fixtureIds[1], 'STALE', true]];
         for (const [id, label, enabled] of targets) {
@@ -1478,12 +1600,13 @@ try {
             JSON.stringify({ setup: enabled ? 'dev QA fixture' : 'real production OFF row; not activated', navigation, state }));
           await page.screenshot({ path: path.join(shotsDir, `${width}-data-${label.toLowerCase()}-focus.png`) });
           if (label === 'OFF') {
-            const passive = await page.evaluate((layerId) => {
+            const passive = await page.evaluate(async (layerId) => {
               const probe = window.__qaDataFocus;
               const focusBefore = document.activeElement;
               const productionBefore = JSON.stringify(probe.production());
               const durableBefore = localStorage.getItem('gev:layer-state:v2');
-              window.__godsEyeView.dataManager._refreshTogglePanel();
+              const { application } = await import('/src/main.js');
+              application.getComponents().data.presentation.refresh();
               return {
                 focusRetained: document.activeElement === focusBefore
                   && focusBefore.matches('.data-toggle-btn')
@@ -1510,6 +1633,7 @@ try {
       )));
 
       await page.setViewport({ width: 1000, height: 900, deviceScaleFactor: 1 });
+      await waitForShellSettled();
       await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false }));
       await page.focus('#data-panel .panel-collapse-btn');
       const transitionTab = await tabTo(`[data-layer-id="${dataSetup.transitionId}"] .data-toggle-btn`);
@@ -1589,7 +1713,8 @@ try {
       state.transition?.releaseDisable?.();
       const removed = [];
       for (const id of state.ids) removed.push(await window.__gevQaUnregisterLayer(manager, id));
-      manager._renderToggles();
+      const { application } = await import('/src/main.js');
+      application.getComponents().data.presentation.panel._renderToggles();
       window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', state.collapsed, { persist: false, syncShare: false });
       // A native user-origin toggle legitimately asks the production state
       // coordinator to persist. Restore the exact pre-fixture value so this

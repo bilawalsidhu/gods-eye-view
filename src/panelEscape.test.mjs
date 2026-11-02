@@ -1,8 +1,12 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
+import { onKeyDown as cockpitKeyDown } from './ui/cockpitInput.js';
+import { readFileSync as readRadioSource } from 'node:fs';
+const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
+import { bindPanelDisclosure, collapsePanelOnEscape } from './ui/panelDisclosure.js';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import test from 'node:test';
 
-const source = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const source = readShellSource();
 
 function method(name, nextName) {
   const start = source.indexOf(`  ${name}(`);
@@ -38,7 +42,7 @@ function panelFixture({ id = 'data-panel', nested = false, nestedCollapsed = fal
     disclosure.closest = () => panel;
   }
   const document = { getElementById: (candidate) => candidate === id ? panel : null };
-  const manager = new Function('document', `return {${method('_collapsePanelOnEscape', '_initCommandDockPins')}};`)(document);
+  const manager = new Function('document', 'getComputedStyle', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_togglePanel')}};`)(document, (el) => ({ visibility: el.visibility ?? 'visible' }), collapsePanelOnEscape);
   manager.setPanelCollapsed = (candidate, value, options) => {
     assert.equal(candidate, id);
     assert.equal(value, true);
@@ -51,7 +55,7 @@ function panelFixture({ id = 'data-panel', nested = false, nestedCollapsed = fal
     stopPropagation() { this.propagationStopped = true; },
   };
   return {
-    manager, panel, inner, target, event,
+    manager, panel, inner, target, event, document,
     collapsed: () => collapsed,
     focused: () => focused,
     blurred: () => blurred,
@@ -65,6 +69,41 @@ test('Escape collapses an expanded panel and returns focus to its disclosure', (
   assert.equal(fixture.focused(), true);
   assert.equal(fixture.event.defaultPrevented, true);
   assert.equal(fixture.event.propagationStopped, true);
+});
+
+test('Escape hands focus to the rail item when collapsing hides the panel', () => {
+  const fixture = panelFixture();
+  let railFocused = false;
+  const railItem = {
+    disabled: false,
+    getClientRects: () => [{}],
+    focus: () => { railFocused = true; },
+  };
+  fixture.panel.getClientRects = () => (fixture.collapsed() ? [] : [{}]);
+  fixture.document.querySelector = (selector) => {
+    assert.equal(selector, '.ui-rail [data-rail-item="data-panel"]');
+    return railItem;
+  };
+  assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'data-panel'), true);
+  assert.equal(fixture.collapsed(), true);
+  assert.equal(railFocused, true);
+  assert.equal(fixture.focused(), false, 'not the hidden disclosure');
+});
+
+test('Escape keeps the disclosure path when the rail is hidden', () => {
+  const fixture = panelFixture();
+  let railFocused = false;
+  const railItem = {
+    disabled: false,
+    visibility: 'hidden',
+    getClientRects: () => [{}],
+    focus: () => { railFocused = true; },
+  };
+  fixture.panel.getClientRects = () => (fixture.collapsed() ? [] : [{}]);
+  fixture.document.querySelector = () => railItem;
+  assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'data-panel'), true);
+  assert.equal(railFocused, false);
+  assert.equal(fixture.focused(), true);
 });
 
 test('Escape on an expanded panel disclosure closes it without retaining focus', () => {
@@ -112,28 +151,24 @@ test('a collapsed nested panel does not block the next Escape from closing its p
 
 test('Location Escape clears a hidden draft search before restoring disclosure focus', () => {
   const fixture = panelFixture({ id: 'location-bar' });
-  const removed = [];
-  let blurred = false;
-  fixture.manager._locationSearch = {
-    classList: { remove: (...names) => removed.push(...names) },
-    value: 'focus cleanup',
-    blur: () => { blurred = true; },
-  };
+  // The location controls close the field and drop its draft
+  // (src/ui/locationControls.test.mjs).
+  let closed = 0;
+  fixture.manager._closeLocationSearch = () => { closed += 1; };
   assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'location-bar'), true);
-  assert.deepEqual(removed, ['expanded']);
-  assert.equal(fixture.manager._locationSearch.value, '');
-  assert.equal(blurred, true);
+  assert.equal(closed, 1);
   assert.equal(fixture.focused(), true);
 });
 
 test('panel chrome wires Escape for every declared collapse target', () => {
   const init = method('_initPanelChrome', '_collapsePanelOnEscape');
-  assert.match(init, /for \(const targetId of targets\)[\s\S]*?addEventListener\('keydown'[\s\S]*?_collapsePanelOnEscape\(event, targetId\)/);
-  assert.match(source, /_initAutoHoverPanel[\s\S]*?if \(event\.key !== 'Escape'\) return;[\s\S]*?_collapsePanelOnEscape\(event, panelId\)[\s\S]*?clearOpen\(\);[\s\S]*?clearClose\(\);/);
+  assert.match(init, /for \(const targetId of targets\)/);
+  assert.match(init, /bindPanelDisclosure\(\{[\s\S]*?onEscape: \(event\) => this\._collapsePanelOnEscape\(event, targetId\)/);
+  assert.match(source, /createHoverDisclosure\(\{[\s\S]*?onEscape: \(event\) => this\._collapsePanelOnEscape\(event, panelId\)/);
 });
 
 test('Cockpit Escape collapses Contact or Live Signals before exiting Cockpit', () => {
-  const onKeyDown = method('onKeyDown', 'enter');
+  const onKeyDown = cockpitKeyDown.toString();
   assert.match(
     onKeyDown,
     /event\.target\?\.closest\?\.\('\.cesium-credit-lightbox'\)[\s\S]*?return;/,
@@ -153,17 +188,30 @@ test('Cockpit Escape collapses Contact or Live Signals before exiting Cockpit', 
 
 test('Cockpit utility Escape leaves an expanded nested Parameters panel to the shared handler', () => {
   assert.match(
-    source,
-    /const nestedPanel = event\.target\?\.closest\?\.\('\.panel-collapsible:not\(\.collapsed\), #param-slider-panel:not\(\.collapsed\)'\);[\s\S]*?if \(nestedPanel\) return;[\s\S]*?setCockpitDisclosure/,
+    radioBindings,
+    /const nestedPanel = event\.target\?\.closest\?\.\(\s*'\.panel-collapsible:not\(\.collapsed\), #param-slider-panel:not\(\.collapsed\)',?\s*\);[\s\S]*?if \(nestedPanel\) return;[\s\S]*?setCockpitDisclosure/,
   );
   assert.match(
-    source,
+    radioBindings,
     /const kind = displayOpen \? 'display' : 'radio';[\s\S]*?escapedFromDisclosure[\s\S]*?returnFocus: !escapedFromDisclosure[\s\S]*?disclosure\?\.blur/,
     'Cockpit utility disclosures clear their own focus when Escape closes them',
   );
-  assert.match(
-    source,
-    /_contextRadioDock\?\.classList\.contains\('disclosure-open'\)[\s\S]*?escapedFromDisclosure[\s\S]*?setRadioDisclosure\(false, \{ returnFocus: !escapedFromDisclosure \}\)[\s\S]*?_contextRadioToggleBtn\?\.blur/,
-    'compact Radio disclosure clears its own focus when Escape closes it',
-  );
+});
+
+
+test('panel bindings have a single owner and are inert after destruction', () => {
+  const panel = new EventTarget();
+  let keys = 0;
+  const bind = () => bindPanelDisclosure({ panel, onEscape() { keys += 1; } });
+  const first = bind();
+  panel.dispatchEvent(new Event('keydown'));
+  assert.equal(keys, 1);
+  first.destroy();
+  first.destroy();
+  panel.dispatchEvent(new Event('keydown'));
+  assert.equal(keys, 1);
+  const second = bind();
+  panel.dispatchEvent(new Event('keydown'));
+  assert.equal(keys, 2);
+  second.destroy();
 });

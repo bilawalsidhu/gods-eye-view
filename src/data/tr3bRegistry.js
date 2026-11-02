@@ -38,7 +38,9 @@ export const TR3B_CLASS = 'tr3b';
 
 /** @param {*} id Raw contact id. @returns {string} Normalized registry key. */
 function key(id) {
-  return String(id ?? '').trim().toLowerCase();
+  return String(id ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 /**

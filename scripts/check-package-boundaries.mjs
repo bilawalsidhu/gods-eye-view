@@ -1,6 +1,8 @@
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import vue from '@vitejs/plugin-vue';
+import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 import { build, normalizePath } from 'vite';
 
 /** Build each browser or Node export group and reject imports outside its declared ownership. */
@@ -89,21 +91,30 @@ export async function checkPackageBoundaries(root) {
     const seen = new Set();
     await build({
       root,
+      // Keep this gate out of a running dev server's dependency cache
+      // (node_modules/.vite): a build there re-optimizes dependencies and the
+      // dev server's workers then fail with 504 "Outdated Optimize Dep".
+      cacheDir: path.join(root, 'node_modules/.vite-boundaries'),
       configFile: false,
       envFile: false,
       publicDir: false,
       ssr: node ? { noExternal: true } : undefined,
       logLevel: 'silent',
       plugins: [
+        vue(VUE_PLUGIN_OPTIONS),
         {
           name: 'check-package-ownership',
           moduleParsed(info) {
-            if (!allowed.has(info.id)) {
+            // Plugin helpers are virtual; a single-file component's style and
+            // template blocks belong to the component file itself.
+            if (info.id.startsWith('\0')) return;
+            const id = info.id.split('?')[0];
+            if (!allowed.has(id)) {
               throw new Error(
-                `Package boundary ${name} imports an unowned module: ${path.relative(root, info.id)}`,
+                `Package boundary ${name} imports an unowned module: ${path.relative(root, id)}`,
               );
             }
-            seen.add(info.id);
+            seen.add(id);
           },
         },
       ],
@@ -115,7 +126,12 @@ export async function checkPackageBoundaries(root) {
         assetsInlineLimit: 0,
         rollupOptions: {
           input,
-          external: group.external,
+          // A declared dependency also owns its package subpath exports
+          // (for example `@jtarrio/webrtlsdr/rtlsdr.js`).
+          external: (id) =>
+            group.external.some(
+              (name) => id === name || id.startsWith(`${name}/`),
+            ),
           // Unused imports must still obey ownership; tree shaking is not a boundary.
           treeshake: false,
           preserveEntrySignatures: 'strict',

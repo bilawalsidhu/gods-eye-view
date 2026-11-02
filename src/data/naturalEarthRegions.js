@@ -11,14 +11,15 @@
  *
  * PURE data module — no Cesium imports, node-testable. The packs are lazy-
  * loaded on first lookup and cached in module scope (bbox/area computed once
- * at load). In the browser Vite bundles the JSON via dynamic import; under
- * node the same files are read from disk. A failed load is retried on the
- * next lookup rather than cached (see `createRetryableLoader`).
+ * at load) through `loadBundledJson`, which works in the browser and under
+ * node:test. A failed load is retried on the next lookup rather than cached
+ * (see `createRetryableLoader`).
  */
 
+import { loadBundledJson } from './bundledJson.js';
 import { createRetryableLoader } from './retryableLoad.js';
+import { EARTH_RADIUS_KM, greatCircleKm } from '../geoDistance.js';
 
-const EARTH_RADIUS_KM = 6371;
 const toRad = (d) => (d * Math.PI) / 180;
 
 /** Spherical-excess ring area (km²) — same family as turf/geojson-area. */
@@ -29,17 +30,10 @@ function ringAreaKm2(ring) {
   for (let i = 0; i < n; i++) {
     const [lon1, lat1] = ring[i];
     const [lon2, lat2] = ring[(i + 1) % n];
-    sum += toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
+    sum +=
+      toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
   }
   return Math.abs((sum * EARTH_RADIUS_KM * EARTH_RADIUS_KM) / 2);
-}
-
-function haversineKm(lon1, lat1, lon2, lat2) {
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const h = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 /**
@@ -62,34 +56,34 @@ function normalizeName(s) {
  * Keys and values are both in normalizeName() form.
  */
 const ALIASES = {
-  'rockies': 'rocky mountains',
-  'himalaya': 'himalayas',
+  rockies: 'rocky mountains',
+  himalaya: 'himalayas',
   'the himalaya': 'himalayas',
   'alps mountains': 'alps',
   'sahara desert': 'sahara',
-  'gobi': 'gobi desert',
-  'kalahari': 'kalahari desert',
-  'atacama': 'desierto de atacama',
+  gobi: 'gobi desert',
+  kalahari: 'kalahari desert',
+  atacama: 'desierto de atacama',
   'atacama desert': 'desierto de atacama',
   'tibetan plateau': 'plateau of tibet',
   'tibet plateau': 'plateau of tibet',
-  'appalachians': 'appalachian mts',
+  appalachians: 'appalachian mts',
   'appalachian mountains': 'appalachian mts',
-  'caucasus': 'caucasus mts',
+  caucasus: 'caucasus mts',
   'caucasus mountains': 'caucasus mts',
-  'balkans': 'balkan pen',
+  balkans: 'balkan pen',
   'balkan peninsula': 'balkan pen',
   'andes mountains': 'andes',
-  'urals': 'ural mountains',
+  urals: 'ural mountains',
   'pyrenees mountains': 'pyrenees',
   'arabian gulf': 'persian gulf',
   'gulf of arabia': 'persian gulf',
-  'mediterranean': 'mediterranean sea',
-  'caribbean': 'caribbean sea',
-  'baja': 'baja california',
-  'yucatan': 'pen de yucatan',
+  mediterranean: 'mediterranean sea',
+  caribbean: 'caribbean sea',
+  baja: 'baja california',
+  yucatan: 'pen de yucatan',
   'yucatan peninsula': 'pen de yucatan',
-  'kamchatka': 'kamchatka peninsula',
+  kamchatka: 'kamchatka peninsula',
   'sierra nevada mountains': 'sierra nevada',
 };
 
@@ -97,8 +91,13 @@ const ALIASES = {
 function suffixVariants(norm) {
   const v = [];
   // "x mountains" ↔ "x mts" (pack uses "Mts."; normalization strips the dot)
-  if (norm.endsWith(' mountains')) v.push(norm.replace(/ mountains$/, ' mts'), norm.replace(/ mountains$/, ''));
-  if (norm.endsWith(' mts')) v.push(norm.replace(/ mts$/, ' mountains'), norm.replace(/ mts$/, ''));
+  if (norm.endsWith(' mountains'))
+    v.push(
+      norm.replace(/ mountains$/, ' mts'),
+      norm.replace(/ mountains$/, ''),
+    );
+  if (norm.endsWith(' mts'))
+    v.push(norm.replace(/ mts$/, ' mountains'), norm.replace(/ mts$/, ''));
   // "x desert" ↔ "x"
   if (norm.endsWith(' desert')) v.push(norm.replace(/ desert$/, ''));
   else v.push(norm + ' desert');
@@ -113,15 +112,14 @@ function suffixVariants(norm) {
 /** @type {Array|null} flat entry list for listRegions() */
 let _entries = null;
 
-async function loadPackFile(base) {
-  // Vite bundles these JSON files as modules; the import attribute is what Node
-  // needs to load the same files under node:test (same pattern as
-  // neighborhoodPolygons.js). One path, so no node: import reaches the browser.
-  const mod = base === 'regions'
-    ? await import('./local_data/natural_earth/regions.json', { with: { type: 'json' } })
-    : await import('./local_data/natural_earth/marine.json', { with: { type: 'json' } });
-  return mod.default || mod;
-}
+const PACKS = {
+  regions: {
+    url: new URL('./local_data/natural_earth/regions.json', import.meta.url),
+  },
+  marine: {
+    url: new URL('./local_data/natural_earth/marine.json', import.meta.url),
+  },
+};
 
 function buildEntries(pack, kind) {
   const out = [];
@@ -129,7 +127,10 @@ function buildEntries(pack, kind) {
     const polygons = ft.polygons || [];
     if (!polygons.length) continue;
     let areaKm2 = 0;
-    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    let minLon = Infinity,
+      minLat = Infinity,
+      maxLon = -Infinity,
+      maxLat = -Infinity;
     for (const ring of polygons) {
       areaKm2 += ringAreaKm2(ring);
       for (const [lon, lat] of ring) {
@@ -147,7 +148,10 @@ function buildEntries(pack, kind) {
       polygons,
       areaKm2,
       bbox: [minLon, minLat, maxLon, maxLat],
-      bboxDiagonalKm: haversineKm(minLon, minLat, maxLon, maxLat),
+      bboxDiagonalKm: greatCircleKm(
+        { lat: minLat, lon: minLon },
+        { lat: maxLat, lon: maxLon },
+      ),
     });
   }
   return out;
@@ -160,8 +164,8 @@ function buildEntries(pack, kind) {
  */
 const loadIndex = createRetryableLoader(async () => {
   const [regions, marine] = await Promise.all([
-    loadPackFile('regions'),
-    loadPackFile('marine'),
+    loadBundledJson(PACKS.regions.url),
+    loadBundledJson(PACKS.marine.url),
   ]);
   _entries = [
     ...buildEntries(regions, 'natural'),
@@ -169,10 +173,14 @@ const loadIndex = createRetryableLoader(async () => {
   ];
   const index = new Map();
   for (const entry of _entries) {
-    for (const key of new Set([normalizeName(entry.name), normalizeName(entry.namealt)])) {
+    for (const key of new Set([
+      normalizeName(entry.name),
+      normalizeName(entry.namealt),
+    ])) {
       if (!key) continue;
       const list = index.get(key);
-      if (list) list.push(entry); else index.set(key, [entry]);
+      if (list) list.push(entry);
+      else index.set(key, [entry]);
     }
   }
   // duplicate names exist in Natural Earth (e.g. two "Cordillera Oriental",
@@ -181,7 +189,7 @@ const loadIndex = createRetryableLoader(async () => {
   return index;
 });
 
-function toResult(entry) {
+function toResult(entry, candidates = 1) {
   return {
     name: entry.name,
     featurecla: entry.featurecla,
@@ -189,6 +197,7 @@ function toResult(entry) {
     polygons: entry.polygons,
     bboxDiagonalKm: entry.bboxDiagonalKm,
     areaKm2: entry.areaKm2,
+    candidates,
   };
 }
 
@@ -201,17 +210,23 @@ function toResult(entry) {
  * @param {string} query e.g. "the Alps", "Rockies", "Gulf of Mexico"
  * @returns {Promise<{name:string, featurecla:string, kind:'natural'|'marine',
  *   polygons:Array<Array<[number,number]>>, bboxDiagonalKm:number,
- *   areaKm2:number}|null>} largest-area match, or null when nothing matches.
+ *   areaKm2:number, candidates:number}|null>} largest-area match plus the
+ *   number of same-name entries, or null when nothing matches. Uniqueness in
+ *   this pack alone does not establish the user's intended place.
  */
 export async function findNaturalRegion(query) {
   const norm = normalizeName(query);
   if (!norm) return null;
   const index = await loadIndex();
-  const candidates = [norm, ALIASES[norm], ...suffixVariants(ALIASES[norm] || norm)];
+  const candidates = [
+    norm,
+    ALIASES[norm],
+    ...suffixVariants(ALIASES[norm] || norm),
+  ];
   for (const key of candidates) {
     if (!key) continue;
     const list = index.get(key);
-    if (list && list.length) return toResult(list[0]);
+    if (list && list.length) return toResult(list[0], list.length);
   }
   return null;
 }
@@ -248,8 +263,8 @@ export function pointInRing(ring, lat, lon) {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
-    const intersects = (yi > lat) !== (yj > lat)
-      && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    const intersects =
+      yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
     if (intersects) inside = !inside;
   }
   return inside;
@@ -258,9 +273,10 @@ export function pointInRing(ring, lat, lon) {
 /**
  * Resolve a natural-region OUTLINE ring for the annotation resolver's first
  * rung. Stricter than `findNaturalRegion`: walks ALL entries sharing the
- * matched name (duplicate names included — the US and Spanish "Sierra
- * Nevada" both exist upstream) and returns the single ring that CONTAINS the
- * geocoded anchor. Containment is simultaneously the disambiguator and the
+ * matched name (duplicate names included), trying exact names, aliases and
+ * broader suffix variants in that order. Returns a ring only when exactly one
+ * entry under the matched name CONTAINS the anchor. Containment is the
+ * disambiguator and the
  * wrong-place guard: when no ring contains the anchor this returns null and
  * the resolver's normal ladder continues unchanged.
  *
@@ -274,24 +290,67 @@ export async function lookupNaturalRegionOutline(query, lat, lon) {
   const norm = normalizeName(query);
   if (!norm || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const index = await loadIndex();
-  const candidates = [norm, ALIASES[norm], ...suffixVariants(ALIASES[norm] || norm)];
-  const seen = new Set();
-  for (const key of candidates) {
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
+  const candidates = [
+    norm,
+    ALIASES[norm],
+    ...suffixVariants(ALIASES[norm] || norm),
+  ];
+  for (const key of new Set(candidates.filter(Boolean))) {
+    const containing = [];
     for (const entry of index.get(key) || []) {
-      for (const ring of entry.polygons) {
-        if (pointInRing(ring, lat, lon)) {
-          return {
-            name: entry.name,
-            kind: entry.kind,
-            featurecla: entry.featurecla,
-            ring,
-            areaKm2: entry.areaKm2,
-          };
-        }
-      }
+      const ring = entry.polygons.find((candidate) =>
+        pointInRing(candidate, lat, lon),
+      );
+      if (ring) containing.push({ entry, ring });
     }
+    // Specific names win over aliases and broader rewrites. Ambiguity belongs
+    // to this name, not the union of every lower-priority candidate name.
+    if (containing.length > 1) return null;
+    if (containing.length === 0) continue;
+    const [{ entry, ring }] = containing;
+    return {
+      name: entry.name,
+      kind: entry.kind,
+      featurecla: entry.featurecla,
+      ring,
+      areaKm2: entry.areaKm2,
+    };
   }
   return null;
+}
+
+/** Resolve the smallest containing bundled physical region without a network geocoder. */
+export async function naturalRegionAtPoint(latitude, longitude) {
+  if (
+    ![latitude, longitude].every(Number.isFinite) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  )
+    return null;
+  await loadIndex();
+  let best = null;
+  for (const entry of _entries) {
+    const [west, south, east, north] = entry.bbox;
+    if (
+      longitude < west ||
+      longitude > east ||
+      latitude < south ||
+      latitude > north
+    )
+      continue;
+    if (best && entry.areaKm2 >= best.areaKm2) continue;
+    if (entry.polygons.some((ring) => pointInRing(ring, latitude, longitude)))
+      best = entry;
+  }
+  return best
+    ? {
+        label: best.name,
+        locality: null,
+        region: best.name,
+        country: null,
+        countryCode: null,
+        source: 'Natural Earth',
+        kind: best.kind,
+      }
+    : null;
 }

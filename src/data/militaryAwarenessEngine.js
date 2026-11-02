@@ -1,5 +1,11 @@
 /** Pure proximity helpers for Global Context. No capability modeling. */
 
+import { msg, t } from '../i18n/index.js';
+import { UNNAMED_PLACE_NAMES } from './installationNames.js';
+import { formatDistanceText } from './distanceFormat.js';
+
+const UNNAMED_NAMES = new Set(UNNAMED_PLACE_NAMES);
+
 export const AWARENESS_RADIUS_M = 250000;
 export const AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M = 16000000;
 export const AWARENESS_RELATIONSHIP = Object.freeze({
@@ -18,10 +24,13 @@ export const AWARENESS_RELATIONSHIP = Object.freeze({
  * @param {{initialRadiusM?: number, maxRadiusM?: number}} [options] Bounds.
  * @returns {{candidate: T, radiusM: number}|null} First match and radius used.
  */
-export function findByDoublingRadius(search, {
-  initialRadiusM = AWARENESS_RADIUS_M,
-  maxRadiusM = AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
-} = {}) {
+export function findByDoublingRadius(
+  search,
+  {
+    initialRadiusM = AWARENESS_RADIUS_M,
+    maxRadiusM = AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
+  } = {},
+) {
   if (typeof search !== 'function') return null;
   if (!Number.isFinite(initialRadiusM) || initialRadiusM <= 0) return null;
   if (!Number.isFinite(maxRadiusM) || maxRadiusM < initialRadiusM) return null;
@@ -38,20 +47,34 @@ export function findByDoublingRadius(search, {
 
 /** @param {number} meters @returns {string} */
 export function formatAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
-  return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+  return formatDistanceText(meters) ?? '—';
 }
 
-/** Return a stable visible label without leaking missing values into UI text. */
+/**
+ * Return a stable visible label without leaking missing values into UI text.
+ * The English name the data gives an unnamed installation ("Military area")
+ * is shown in the UI language; mapped names and callsigns show as they are.
+ */
 export function formatAwarenessLabel(value) {
   if (value && typeof value === 'object') {
-    for (const candidate of [value.callsign, value.name, value.label, value.id, value.icao24, value.mmsi]) {
+    for (const candidate of [
+      value.callsign,
+      value.name,
+      value.label,
+      value.id,
+      value.icao24,
+      value.mmsi,
+    ]) {
       const label = formatAwarenessLabel(candidate);
       if (label !== '—') return label;
     }
     return '—';
   }
-  if (typeof value === 'string') return value.trim() || '—';
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return '—';
+    return UNNAMED_NAMES.has(text) ? t(text) : text;
+  }
   if (Number.isFinite(value)) return String(value);
   return '—';
 }
@@ -59,21 +82,44 @@ export function formatAwarenessLabel(value) {
 /**
  * Summarize sorted nearby results without promoting missing/stale feeds to a
  * negative finding. `UNKNOWN` is an input-data state, never an out-of-range
- * claim in this MVP.
+ * claim in this MVP. `reason` is English data; the awareness panel shows it
+ * in the UI language.
  */
-export function summarizeAwarenessCohort(items, { available = true, stale = false, limit = 3 } = {}) {
-  if (!available) return { relationship: AWARENESS_RELATIONSHIP.UNKNOWN, count: null, nearest: [], reason: 'feed unavailable' };
-  if (stale) return { relationship: AWARENESS_RELATIONSHIP.UNKNOWN, count: null, nearest: [], reason: 'feed stale' };
+export function summarizeAwarenessCohort(
+  items,
+  { available = true, stale = false, limit = 3 } = {},
+) {
+  if (!available)
+    return {
+      relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
+      count: null,
+      nearest: [],
+      reason: msg('feed unavailable'),
+    };
+  if (stale)
+    return {
+      relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
+      count: null,
+      nearest: [],
+      reason: msg('feed stale'),
+    };
   const normalized = (Array.isArray(items) ? items : [])
-    .filter((item) => Number.isFinite(item?.distanceM ?? item?.distance)
-      && (item.distanceM ?? item.distance) >= 0)
+    .filter(
+      (item) =>
+        Number.isFinite(item?.distanceM ?? item?.distance) &&
+        (item.distanceM ?? item.distance) >= 0,
+    )
     .map((item) => ({ ...item, distanceM: item.distanceM ?? item.distance }))
     .sort((a, b) => a.distanceM - b.distanceM);
   return {
-    relationship: normalized.length ? AWARENESS_RELATIONSHIP.NEARBY : AWARENESS_RELATIONSHIP.UNKNOWN,
+    relationship: normalized.length
+      ? AWARENESS_RELATIONSHIP.NEARBY
+      : AWARENESS_RELATIONSHIP.UNKNOWN,
     count: normalized.length,
     nearest: normalized.slice(0, limit),
-    reason: normalized.length ? 'observed or mapped nearby context' : 'no observed or mapped objects in current feeds',
+    reason: normalized.length
+      ? msg('observed or mapped nearby context')
+      : msg('no observed or mapped objects in current feeds'),
   };
 }
 
@@ -84,21 +130,40 @@ export function summarizeAwarenessCohort(items, { available = true, stale = fals
  * @param {Iterable<string>} [visitedKeys] Previously visited layer/id keys.
  * @returns {Array<{layerId: string, id: string, item: Object}>} Selectable targets.
  */
-export function getAwarenessNavigationTargets(cohorts, subject = null, visitedKeys = []) {
+export function getAwarenessNavigationTargets(
+  cohorts,
+  subject = null,
+  visitedKeys = [],
+) {
   const visited = new Set(visitedKeys);
   const targets = [];
   for (const cohort of Array.isArray(cohorts) ? cohorts : []) {
     const layerId = cohort?.id;
-    if (!['flights', 'military', 'ais-live-vessels', 'military-installations'].includes(layerId)) continue;
+    if (
+      ![
+        'flights',
+        'military',
+        'ais-live-vessels',
+        'military-installations',
+      ].includes(layerId)
+    )
+      continue;
     const sourceItems = Array.isArray(cohort?.summary?.navigationNearest)
       ? cohort.summary.navigationNearest
-      : (Array.isArray(cohort?.summary?.nearest) ? cohort.summary.nearest : []);
+      : Array.isArray(cohort?.summary?.nearest)
+        ? cohort.summary.nearest
+        : [];
     for (const item of sourceItems) {
       const id = item?.icao24 || item?.mmsi || item?.id;
       if (!id) continue;
       const key = `${layerId}:${id}`;
       if (key === `${subject?.layerId}:${subject?.id}`) continue;
-      targets.push({ layerId, id: String(id), item, visited: visited.has(key) });
+      targets.push({
+        layerId,
+        id: String(id),
+        item,
+        visited: visited.has(key),
+      });
     }
   }
   targets.sort((a, b) => {
@@ -108,7 +173,9 @@ export function getAwarenessNavigationTargets(cohorts, subject = null, visitedKe
     // reached vessels, installations, or the other flight layer at all.
     const visitedOrder = Number(a.visited) - Number(b.visited);
     if (visitedOrder) return visitedOrder;
-    const subjectOrder = Number(a.layerId !== subject?.layerId) - Number(b.layerId !== subject?.layerId);
+    const subjectOrder =
+      Number(a.layerId !== subject?.layerId) -
+      Number(b.layerId !== subject?.layerId);
     if (subjectOrder) return subjectOrder;
     return (a.item.distanceM ?? Infinity) - (b.item.distanceM ?? Infinity);
   });

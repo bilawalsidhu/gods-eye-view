@@ -26,17 +26,23 @@ export function trackedModelScaleForPixelCap({
   maximumPixelSize,
 }) {
   if (
-    !Number.isFinite(baseScale) || baseScale <= 0
-    || !Number.isFinite(nativeRadiusM) || nativeRadiusM <= 0
-    || !Number.isFinite(rangeM) || rangeM <= 0
-    || !Number.isFinite(viewportHeightPx) || viewportHeightPx <= 0
-    || !Number.isFinite(fovyRad) || fovyRad <= 0
-    || !Number.isFinite(maximumPixelSize) || maximumPixelSize <= 0
-  ) return baseScale;
+    !Number.isFinite(baseScale) ||
+    baseScale <= 0 ||
+    !Number.isFinite(nativeRadiusM) ||
+    nativeRadiusM <= 0 ||
+    !Number.isFinite(rangeM) ||
+    rangeM <= 0 ||
+    !Number.isFinite(viewportHeightPx) ||
+    viewportHeightPx <= 0 ||
+    !Number.isFinite(fovyRad) ||
+    fovyRad <= 0 ||
+    !Number.isFinite(maximumPixelSize) ||
+    maximumPixelSize <= 0
+  )
+    return baseScale;
   const focalLengthPx = viewportHeightPx / (2 * Math.tan(fovyRad / 2));
-  const projectedDiameterPx = (
-    2 * nativeRadiusM * baseScale * focalLengthPx
-  ) / rangeM;
+  const projectedDiameterPx =
+    (2 * nativeRadiusM * baseScale * focalLengthPx) / rangeM;
   if (projectedDiameterPx <= maximumPixelSize) return baseScale;
   return baseScale * (maximumPixelSize / projectedDiameterPx);
 }
@@ -99,17 +105,25 @@ export function clampTrackedCameraPosition(
   previousPosition,
   minimumRangeM = MIN_TRACKED_RANGE_M,
 ) {
-  const crossedOrigin = Cesium.Cartesian3.dot(camera.position, previousPosition) <= 0;
-  const forwardDistance = -Cesium.Cartesian3.dot(camera.position, camera.direction);
+  const crossedOrigin =
+    Cesium.Cartesian3.dot(camera.position, previousPosition) <= 0;
+  const forwardDistance = -Cesium.Cartesian3.dot(
+    camera.position,
+    camera.direction,
+  );
   const rangeSquared = Cesium.Cartesian3.magnitudeSquared(camera.position);
   if (crossedOrigin) {
     Cesium.Cartesian3.normalize(previousPosition, camera.position);
-    Cesium.Cartesian3.multiplyByScalar(camera.position, minimumRangeM, camera.position);
+    Cesium.Cartesian3.multiplyByScalar(
+      camera.position,
+      minimumRangeM,
+      camera.position,
+    );
     return true;
   }
   if (
-    forwardDistance < minimumRangeM
-    || rangeSquared < minimumRangeM * minimumRangeM
+    forwardDistance < minimumRangeM ||
+    rangeSquared < minimumRangeM * minimumRangeM
   ) {
     Cesium.Cartesian3.multiplyByScalar(
       camera.direction,
@@ -192,10 +206,14 @@ export function applyTrackedCameraFrame(viewer, entity, viewFrom) {
         Cesium.Ellipsoid.WGS84,
         trackedTransform,
       );
-      const offset = typeof viewFrom.getValue === 'function'
-        ? viewFrom.getValue(viewer.clock.currentTime, resolvedViewFrom)
-        : Cesium.Cartesian3.clone(viewFrom, resolvedViewFrom);
-      if (!offset || Cesium.Cartesian3.magnitudeSquared(offset) < Cesium.Math.EPSILON12) {
+      const offset =
+        typeof viewFrom.getValue === 'function'
+          ? viewFrom.getValue(viewer.clock.currentTime, resolvedViewFrom)
+          : Cesium.Cartesian3.clone(viewFrom, resolvedViewFrom);
+      if (
+        !offset ||
+        Cesium.Cartesian3.magnitudeSquared(offset) < Cesium.Math.EPSILON12
+      ) {
         stop();
         return;
       }

@@ -2,7 +2,7 @@
 /**
  * Credentialed AI voice acceptance using a prerecorded Chromium microphone.
  *
- * Run: node scripts/qa-voice-wav.mjs http://localhost:4189
+ * Run: node scripts/qa-voice-wav.mjs http://localhost:4189 [--push-to-talk]
  */
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -11,8 +11,13 @@ import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const appUrl = process.argv[2] || 'http://localhost:4189';
-const wavPath = process.argv[3]
+const pushToTalk = process.argv.includes('--push-to-talk');
+const positional = process.argv.slice(2).filter(arg => arg !== '--push-to-talk');
+const targetUrl = new URL(positional[0] || 'http://localhost:4189');
+// Keep first-run focus changes outside this voice/keyboard acceptance test.
+targetUrl.searchParams.set('welcome', '0');
+const appUrl = targetUrl.href;
+const wavPath = positional[1]
   || path.join(repoRoot, 'scripts', 'fixtures', 'voice', 'full-globe-turn-on-radio.wav');
 const expectedFixtureSha256 = 'b57af70db1922b72fec2c6c58348ccd3309e10aa1e8edec2890277dff26cc7bb';
 
@@ -60,6 +65,7 @@ try {
   await page.waitForFunction(() => (
     window.__godsEyeView?.voiceCommands
     && document.getElementById('gev-voice-button')
+    && document.getElementById('loading-screen')?.classList.contains('hidden')
   ), { timeout: 30_000 });
 
   const readState = () => page.evaluate(() => {
@@ -81,7 +87,26 @@ try {
   });
 
   const initial = await readState();
-  await page.evaluate(() => document.getElementById('gev-voice-button').click());
+  let pushToTalkStarted = false;
+  let microphoneReleased = false;
+  if (pushToTalk) {
+    await page.bringToFront();
+    await page.focus('.cesium-widget canvas');
+    await page.keyboard.down('Space');
+    await page.waitForFunction(() => document.querySelector(
+      '[data-push-to-talk="held"][data-microphone="active"]',
+    ), { timeout: 30_000 });
+    pushToTalkStarted = true;
+    // The hash-pinned fixture is 9.2 seconds long and plays once from mic acquisition.
+    await new Promise(resolve => setTimeout(resolve, 10_000));
+    await page.keyboard.up('Space');
+    microphoneReleased = await page.evaluate(() => {
+      const status = window.__godsEyeView.voiceCommands.status;
+      return status === 'idle' || Boolean(document.querySelector('[data-microphone="muted"]'));
+    });
+  } else {
+    await page.click('#gev-voice-button');
+  }
 
   const timeline = [initial];
   let lastSignature = JSON.stringify(initial);
@@ -113,10 +138,14 @@ try {
   }
 
   const result = {
-    ok: finalState.voiceStatus === 'idle'
+    ok: (!pushToTalk || (pushToTalkStarted && microphoneReleased))
+      && finalState.voiceStatus === 'idle'
       && finalState.radioAudioState === 'playing'
       && finalState.radioVoiceDucked === false
       && Number(finalState.cameraHeightM) >= 10_000_000,
+    mode: pushToTalk ? 'push-to-talk' : 'click',
+    pushToTalkStarted,
+    microphoneReleased,
     fixture: wavPath,
     fixtureSha256,
     appUrl,

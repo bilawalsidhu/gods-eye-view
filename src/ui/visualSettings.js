@@ -1,0 +1,1623 @@
+import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
+import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
+import { useDisplayStore } from './stores/display.js';
+import { applicationPinia } from './vueRuntime.js';
+import { onLocaleChange, t } from '../i18n/index.js';
+import { UiLifetime } from './uiLifetime.js';
+import {
+  VisualEffects,
+  STYLES,
+  GLOBAL_POST_DEFAULTS,
+  STYLE_PRESET_DEFAULTS,
+  MILITARY_DETECTION_PRESET,
+} from './effects.js';
+import { styleParameterRows, withParameterValue } from './styleParameters.js';
+import {
+  BLOOM_SCALE_VERSION,
+  clampBloomIntensity,
+  decodeBloomIntensity,
+} from '../bloom.js';
+import {
+  ALLOCATION_STRATEGIES,
+  canonicalizeDensity,
+  defaultDensityForProfile,
+  normalizeAllocationStrategy,
+  normalizeProfile,
+  profileForDensity,
+} from '../data/detectionPolicy.js';
+import {
+  applyCockpitVisionStageIntensities,
+  captureCockpitVisionBaseline,
+  normalizeCockpitVisionMode,
+} from '../cockpitVisionPolicy.js';
+import {
+  applyContactsDetection,
+  shareCacheNeedsHeal,
+  shareableDetectionState,
+} from '../contactsDetectionPolicy.js';
+import {
+  applyCyberSonarSettings,
+  isCyberSonarEnabled,
+  readCyberSonarSettings,
+  setCyberSonarEnabled,
+} from '../cyberSonar.js';
+import { cyberVisualDefaultsForHudTransition } from '../hudLayouts.js';
+const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
+
+/** Own visual preferences, detection overrides and display-control state. */
+export class VisualSettings {
+  async restoreShareState(state) {
+    const { setScopeTerminusOverride, clampScopeTerminusPct } = this.services;
+    const {
+      style,
+      bloom,
+      sharpen,
+      bloomIntensity,
+      bloomVersion,
+      sharpenIntensity,
+      hudVariant,
+      hudVisible,
+      detectionMode,
+      detectionDensity,
+      detectionAllocation,
+      detectionFadePct,
+      detectionOutsideOpacityPct,
+      celestialRing,
+      scopeEnabled,
+      scopeFeatherPct,
+      scopeTerminusPct,
+      mapStack,
+      panelState,
+      styleParams,
+    } = state || {};
+    // Ignore the retired 'ai-edit' style from older share links. Normal is
+    // the start-up style, but a share opened later in the tab must still leave
+    // a filtered style for it.
+    if (
+      style &&
+      style !== 'ai-edit' &&
+      (style !== 'normal' || this.activeStyle !== 'normal')
+    ) {
+      const alreadyActive = style === this.activeStyle;
+      this.setStyle(style, {
+        applyPreset: true,
+        revealParameters: false,
+        restore: true,
+      });
+      // setStyle leaves an already-active style untouched; the incoming share
+      // still starts from that preset before its own parameters apply.
+      if (alreadyActive && style !== 'normal')
+        this._applyStylePresetDefaults(style);
+    }
+    if (styleParams && style && this.stages[style] && STYLES[style]?.uniforms) {
+      for (const [uniformName, uniformValue] of Object.entries(styleParams)) {
+        if (!Object.hasOwn(STYLES[style].uniforms, uniformName)) continue;
+        this.stages[style].uniforms[uniformName] = uniformValue;
+      }
+      this._updateSliderPanel(style, { reveal: false });
+    }
+    if (typeof bloomIntensity === 'number') {
+      const intensity = decodeBloomIntensity(bloomIntensity, bloomVersion);
+      this._setBloomIntensity(intensity, { syncShare: false });
+    }
+    if (typeof sharpenIntensity === 'number')
+      this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
+    if (typeof bloom === 'boolean') this._setBloomEnabled(bloom);
+    if (typeof sharpen === 'boolean') this._setSharpenEnabled(sharpen);
+    if (hudVariant) this._setHudVariant(hudVariant);
+    if (typeof hudVisible === 'boolean') {
+      this.hud.setMode(hudVisible ? 'on' : 'off');
+      this._updateHudButtonState();
+    }
+    if (typeof detectionDensity === 'number')
+      this._setDetectionDensity(detectionDensity);
+    if (detectionAllocation) {
+      this._setDetectionAllocation(detectionAllocation, {
+        syncShare: false,
+        persist: false,
+      });
+    }
+    this._setDetectionFade({
+      fadePct:
+        typeof detectionFadePct === 'number' ? detectionFadePct : undefined,
+      outsideOpacityPct:
+        typeof detectionOutsideOpacityPct === 'number'
+          ? detectionOutsideOpacityPct
+          : undefined,
+    });
+    if (detectionMode) this._setDetectionMode(detectionMode);
+    if (typeof celestialRing === 'boolean') {
+      this.setCelestialRingEnabled(celestialRing, {
+        syncShare: false,
+        focus: false,
+      });
+    }
+    this._setScope({ enabled: scopeEnabled, featherPct: scopeFeatherPct });
+    // null restores the altitude-adaptive ramp; a number pins the terminus
+    // (clamped to the supported 94..100 band, same as the `sce` hash key).
+    if (scopeTerminusPct === null) setScopeTerminusOverride(null);
+    else if (typeof scopeTerminusPct === 'number') {
+      const pinned = clampScopeTerminusPct(scopeTerminusPct);
+      setScopeTerminusOverride(pinned == null ? null : pinned / 100);
+    }
+    const mapStackRestore = mapStack
+      ? this._setMapStack(mapStack, { syncShare: false })
+      : Promise.resolve();
+    if (panelState) this._restorePanelState(panelState);
+    await mapStackRestore;
+    this._syncShareState();
+  }
+
+  constructor({
+    viewer,
+    services,
+    elements,
+    operations,
+    mapStackController,
+    readHud,
+    readCockpit,
+    readDataManager,
+    readShareLinks,
+    readCelestialRing,
+    readContextMode,
+    readContextChanging,
+    readDisplayPortalActive,
+    store = useDisplayStore(applicationPinia()),
+  }) {
+    this.store = store;
+    Object.assign(this, elements, operations, {
+      viewer,
+      services,
+      mapStackController,
+      readHud,
+      readCockpit,
+      readDataManager,
+      readShareLinks,
+      readCelestialRing,
+      readContextMode,
+      readContextChanging,
+      readDisplayPortalActive,
+    });
+    this._lifetime = new UiLifetime();
+    // The display, the active style and the style sliders carry translated
+    // text; publish them again in a new locale.
+    this._lifetime.own(
+      onLocaleChange(() => {
+        this._publishActiveStyle();
+        this._publishDisplay();
+        this._refreshParameters();
+      }),
+    );
+    // The active style's published parameter rows; null while it has none.
+    this._parameters = null;
+    this._parametersToken = store.connect({
+      setStyleParameter: (name, value) => this.setStyleParameter(name, value),
+    });
+    this._visualEffects = new VisualEffects({
+      viewer,
+      requestRender: services.governorRequestRender,
+      holdRender: services.holdContinuousRender,
+      releaseRender: services.releaseContinuousRender,
+    });
+    // The sharpen amount as a whole percentage. VisualEffects keeps the
+    // fraction it applies, and drops writes once it is stopped.
+    this._sharpenPct = 49;
+    // Detection's density stop, keyhole fade and outside opacity, in whole
+    // percentages; the mode label the button shows (null until first
+    // synced) and the allocation its segments show (null until set).
+    this._detectionDensityPct = 50;
+    this._detectionFadePct = 7;
+    this._detectionOutsidePct = 1;
+    this._detectionModeLabel = null;
+    this._detectionAllocationShown = null;
+    // What the HUD and Sonar controls show; null until first synced, so the
+    // initial markup stands.
+    this._hudVisibleShown = null;
+    this._hudVariantShown = null;
+    this._sonarShown = null;
+    // What the Scope and Celestial controls show; null until first set.
+    this._scopeEnabledShown = null;
+    this._scopeFeatherShown = null;
+    this._celestialShown = null;
+    this.activeStyle = 'normal';
+    this._preCyberStyle = null;
+    this._cyberStyleUserSelected = false;
+    document.documentElement.dataset.gevStyle = this.activeStyle;
+    this._detectionUserOverridden = false;
+    this._cockpitVisionMode = 'optical';
+    this._cockpitVisionRestore = null;
+    this._contactsDetectionRestore = null;
+    let storedDetectionAllocation = 'ELASTIC';
+    try {
+      storedDetectionAllocation =
+        localStorage.getItem(DETECTION_ALLOCATION_STORAGE_KEY) || 'ELASTIC';
+    } catch {
+      /* unavailable storage */
+    }
+    this._detectionAllocationPreference = normalizeAllocationStrategy(
+      storedDetectionAllocation,
+    );
+  }
+  get hud() {
+    return this.readHud();
+  }
+  get cockpitView() {
+    return this.readCockpit();
+  }
+  get _dataManager() {
+    return this.readDataManager();
+  }
+  get shareLinkManager() {
+    return this.readShareLinks();
+  }
+  get celestialRing() {
+    return this.readCelestialRing();
+  }
+  get _contextMode() {
+    return this.readContextMode();
+  }
+  get _contextModeChanging() {
+    return this.readContextChanging();
+  }
+  get _cockpitDisplayPortalActive() {
+    return this.readDisplayPortalActive();
+  }
+  get stages() {
+    return this._visualEffects.stages;
+  }
+
+  get transitions() {
+    return this._visualEffects.transitions;
+  }
+
+  get bloomEnabled() {
+    return this._visualEffects.bloomEnabled;
+  }
+
+  get sharpenEnabled() {
+    return this._visualEffects.sharpenEnabled;
+  }
+
+  /** Bloom intensity as the Display slider shows it, 0-200. */
+  get bloomIntensityPct() {
+    return clampBloomIntensity(this._getBloomIntensity());
+  }
+
+  /** Sharpen amount as the Display slider shows it, 0-100. */
+  get sharpenIntensityPct() {
+    return this._sharpenPct;
+  }
+
+  _initStages() {
+    this._visualEffects.initStyles();
+  }
+
+  _setStageIntensity(stage, value) {
+    this._visualEffects.setStageIntensity(stage, value);
+  }
+
+  _syncStagesEnabledFromIntensity() {
+    this._visualEffects.syncStagesEnabledFromIntensity();
+  }
+
+  _syncContactsDetection() {
+    if (this._contextModeChanging) return;
+    const result = applyContactsDetection({
+      active: this._contextMode === 'flights',
+      restore: this._contactsDetectionRestore,
+      // A map style picked DURING the session owns detection on the way out —
+      // its auto-enable preset is younger than the entry snapshot.
+      styleOwnsDetection:
+        !this._detectionUserOverridden &&
+        Boolean(STYLE_PRESET_DEFAULTS[this.activeStyle]?.detection),
+      // The snapshot must cover everything activation mutates — the preset
+      // writes DENSITY as well as mode, so a mode-only snapshot returned
+      // OFF @ 25% as OFF @ 75% and the next manual enable came back Dense.
+      getState: () => {
+        const state = this.getDetectionState();
+        return { mode: state.detectionMode, densityPct: state.densityPct };
+      },
+      // Owner playtest: the force-on lands on the tactical look the military
+      // styles apply — the SAME preset object — not on whatever profile the
+      // operator last happened to leave detection at.
+      applyPreset: () => this._applyDetectionPreset(MILITARY_DETECTION_PRESET),
+      // The preset applier IS the state replayer: same density-then-mode order,
+      // same slider writes, so a restore round-trips exactly.
+      restoreState: (state) => this._applyDetectionPreset(state),
+    });
+    const hadOwnership = Boolean(this._contactsDetectionRestore);
+    this._contactsDetectionRestore = result.restore;
+    // Serialization reads that ownership: while Contacts holds it the link
+    // carries the SAVED snapshot, and once released it carries live state. The
+    // share cache therefore goes stale on any ownership transition, whether or
+    // not the detection engine itself moved — and it does not always move.
+    // Exiting while a military style owns detection returns changed:false (the
+    // style's preset already matches), and returning early there left a copied
+    // link claiming the operator's pre-Contacts values while the map showed
+    // Dense @ 75%.
+    if (
+      !shareCacheNeedsHeal({
+        changed: result.changed,
+        hadOwnership,
+        hasOwnership: Boolean(result.restore),
+      })
+    )
+      return;
+    if (result.changed) this._syncDetectionUiFromEngine();
+    this._syncShareState();
+  }
+
+  _setCockpitVision(mode, active, { revealParameters = false } = {}) {
+    const next = active ? normalizeCockpitVisionMode(mode) : 'optical';
+    if (!this.stages) return;
+    if (!active) {
+      if (this._cockpitVisionRestore) {
+        for (const [name, intensity] of Object.entries(
+          this._cockpitVisionRestore,
+        )) {
+          if (this.stages[name])
+            this._setStageIntensity(this.stages[name], intensity);
+        }
+      }
+      this._cockpitVisionRestore = null;
+      this._cockpitVisionMode = 'optical';
+      this._syncIrBoost(); // Cockpit exit: fall back to the map preset's IR state
+      this._updateSliderPanel(this.activeStyle, { reveal: false });
+      this._revealCockpitStyleParameters({ openDisplay: revealParameters });
+      return;
+    }
+    if (!this._cockpitVisionRestore) {
+      this._cockpitVisionRestore = captureCockpitVisionBaseline(
+        this.stages,
+        this.transitions,
+      );
+    }
+    if (next === 'optical') {
+      applyCockpitVisionStageIntensities(this.stages, next);
+      this._syncStagesEnabledFromIntensity();
+      this._cockpitVisionMode = next;
+      this._syncIrBoost();
+      this._updateSliderPanel(null, { reveal: false });
+      this._revealCockpitStyleParameters({ openDisplay: revealParameters });
+      return;
+    }
+    const target = applyCockpitVisionStageIntensities(this.stages, next);
+    this._syncStagesEnabledFromIntensity();
+    this._cockpitVisionMode = next;
+    this._syncIrBoost(); // Cockpit vision override ('nvg'/'thermal' boost; CRT/NOIR clear)
+    this._updateSliderPanel(target || null, { reveal: false });
+    this._revealCockpitStyleParameters({ openDisplay: revealParameters });
+  }
+
+  _syncIrBoost() {
+    const cockpitMode = this.cockpitView?.active
+      ? this._cockpitVisionMode
+      : null;
+    const effective = cockpitMode
+      ? cockpitMode === 'optical'
+        ? 'normal'
+        : cockpitMode
+      : this.activeStyle;
+    const irBoost =
+      effective === 'surveillance' ||
+      effective === 'thermal' ||
+      effective === 'nvg';
+    this._dataManager?.setLayerParams('flights', { irBoost });
+    this._dataManager?.setLayerParams('military', { irBoost });
+    // Layers whose in-scene sprites restyle for a sensor preset need the
+    // EFFECTIVE style — a cockpit vision override sets no map style, so the
+    // map's own style event never fires for it.
+    window.dispatchEvent(
+      new CustomEvent('gev:vision-change', {
+        detail: {
+          style: effective,
+          cockpit: Boolean(cockpitMode),
+        },
+      }),
+    );
+    // Fog blends distant geometry toward an effectively-BLACK color in this
+    // app (the Cesium globe is hidden), so beyond ~100 km every 3D aircraft
+    // fogs to a black silhouette — lighting and shaders can't reach past it
+    // (owner cockpit-FLIR field rounds, 2026-08-16). IR sensors see through
+    // haze, so the boost styles simply turn fog off; the prior state restores
+    // on exit. Transition-guarded so repeated syncs don't clobber the saved value.
+    const scene = this.viewer?.scene;
+    if (scene?.fog && irBoost !== this._irBoostActive) {
+      this._irBoostActive = irBoost;
+      if (irBoost) {
+        this._irFogWasEnabled = scene.fog.enabled;
+        scene.fog.enabled = false;
+      } else if (this._irFogWasEnabled != null) {
+        scene.fog.enabled = this._irFogWasEnabled;
+        this._irFogWasEnabled = null;
+      }
+      scene.requestRender?.();
+    }
+  }
+
+  _syncCockpitInheritedStyle() {
+    if (!this.cockpitView?.active || !this.stages) return;
+    this._cockpitVisionRestore = Object.fromEntries(
+      Object.keys(this.stages).map((name) => [
+        name,
+        name === this.activeStyle ? 1 : 0,
+      ]),
+    );
+    for (const name of Object.keys(this.stages)) this.transitions.delete(name);
+    this.cockpitView.setVisionMode(this.cockpitView.visionMode);
+  }
+
+  _revealCockpitStyleParameters({ openDisplay = false } = {}) {
+    if (!this.cockpitView?.active || !this._parameters) return;
+    if (openDisplay && !this._cockpitDisclosureOpen?.('display')) {
+      this._setCockpitDisclosure?.('display', true);
+      return;
+    }
+    if (!this._cockpitDisclosureOpen?.('display')) return;
+    this._presentPanel(this._sliderPanel, { collapsed: false });
+    this._lifetime.frame(() =>
+      this._lifetime.frame(() => {
+        this._sliderPanel?.scrollIntoView?.({ block: 'nearest' });
+      }),
+    );
+  }
+
+  _initBloomSharpen() {
+    this._visualEffects.initPostProcess(this._sharpenPct / 100);
+    this._publishDisplay();
+  }
+
+  /** Present the Display panel's post-processing groups. */
+  _presentDisplay() {
+    return {
+      bloom: { active: this.bloomEnabled, intensity: this.bloomIntensityPct },
+      sharpen: { active: this.sharpenEnabled, intensity: this._sharpenPct },
+      detection: this._presentDetection(),
+      hud: { visible: this._hudVisibleShown, variant: this._hudVariantShown },
+      sonar: this._sonarShown,
+      scope: {
+        enabled: this._scopeEnabledShown,
+        featherPct: this._scopeFeatherShown,
+      },
+      celestial: this._celestialShown,
+    };
+  }
+
+  /**
+   * Apply the Scope mask and show it on its controls; a field that is not
+   * given stays as it is. `apply: false` only shows the mask's state.
+   */
+  _setScope({ enabled, featherPct } = {}, { apply = true } = {}) {
+    if (typeof enabled === 'boolean') {
+      if (apply) this.services.setScopeMaskEnabled(enabled);
+      this._scopeEnabledShown = enabled;
+    }
+    if (typeof featherPct === 'number') {
+      const pct = clampScopeFeatherPct(featherPct);
+      if (apply) this.services.setScopeMaskFeather(pct / 100);
+      this._scopeFeatherShown = pct;
+    }
+    this._publishDisplay();
+  }
+
+  /** Detection's button, rows, sliders and allocation segments. */
+  _presentDetection() {
+    const mode = this._detectionModeLabel;
+    const enabled = mode != null && mode !== 'OFF';
+    const labels = {
+      SPARSE: t('SPARSE'),
+      BALANCED: t('BALANCED'),
+      DENSE: t('DENSE'),
+    };
+    return {
+      // Null until the first sync, so the initial markup stands.
+      button:
+        mode == null
+          ? null
+          : {
+              pressed: enabled,
+              ariaLabel: enabled
+                ? t('Detection overlay: {mode}', {
+                    mode: String(mode).toLowerCase(),
+                  })
+                : t('Detection overlay: off'),
+              label: labels[mode] ?? t('DETECT'),
+              active: Object.hasOwn(labels, mode),
+              panoptic: mode === 'DENSE',
+            },
+      rowsVisible: enabled,
+      densityPct: this._detectionDensityPct,
+      fadePct: this._detectionFadePct,
+      outsideOpacityPct: this._detectionOutsidePct,
+      allocation: this._detectionAllocationShown,
+    };
+  }
+
+  _publishDisplay() {
+    this.store.publish(this._presentDisplay());
+  }
+
+  _getBloomIntensity() {
+    return this._visualEffects.bloomIntensity;
+  }
+
+  _syncBloomStageEnabled() {
+    this._visualEffects.syncBloomEnabled();
+  }
+
+  _setBloomIntensity(intensity, { syncShare = true } = {}) {
+    const { governorRequestRender } = this.services;
+    governorRequestRender('bloom');
+    this._applyBloomIntensity(clampBloomIntensity(intensity));
+    this._publishDisplay();
+    if (syncShare) this._syncShareState();
+  }
+
+  _applyBloomIntensity(intensity) {
+    this._visualEffects.applyBloomIntensity(intensity);
+  }
+
+  _setBloomEnabled(enabled) {
+    const { governorRequestRender } = this.services;
+    governorRequestRender('bloom');
+    this._visualEffects.setBloomEnabled(enabled);
+    this._syncBloomStageEnabled();
+    this._publishDisplay();
+    if (this.bloomEnabled) {
+      this._applyBloomIntensity(this._getBloomIntensity());
+    }
+    this._syncShareState();
+    this._layoutRightPanels();
+  }
+
+  _applySharpenIntensity(val) {
+    this._visualEffects.applySharpenIntensity(val);
+  }
+
+  /** Set the sharpen amount, a percentage clamped to 0-100, and apply it. */
+  _setSharpenIntensity(pct, { syncShare = true } = {}) {
+    if (!Number.isFinite(pct)) return;
+    this._sharpenPct = Math.max(0, Math.min(100, Math.round(pct)));
+    this._applySharpenIntensity(this._sharpenPct / 100);
+    this._publishDisplay();
+    if (syncShare) this._syncShareState();
+  }
+
+  _setSharpenEnabled(enabled) {
+    const { governorRequestRender } = this.services;
+    governorRequestRender('sharpen');
+    this._visualEffects.setSharpenEnabled(enabled);
+    this._publishDisplay();
+    if (this.sharpenEnabled)
+      this._applySharpenIntensity(this._sharpenPct / 100);
+    this._syncShareState();
+    this._layoutRightPanels();
+  }
+
+  /** Set detection's density to its nearest stop and apply it. */
+  _setDetectionDensity(pct = this._detectionDensityPct) {
+    const { getDetectionMode, setDetectionTuning } = this.services;
+    this._detectionDensityPct = canonicalizeDensity(pct);
+    setDetectionTuning({ densityPct: this._detectionDensityPct });
+    this._updateDetectionButton(getDetectionMode());
+  }
+
+  /**
+   * Set the keyhole fade distance (0-40%) and the opacity outside it
+   * (0-100%), keeping either one that is not given, and apply them.
+   */
+  _setDetectionFade({
+    fadePct = this._detectionFadePct,
+    outsideOpacityPct = this._detectionOutsidePct,
+  } = {}) {
+    const { setKeyholeFadeTuning } = this.services;
+    const whole = (value, max) =>
+      Math.max(0, Math.min(max, Math.round(Number(value) || 0)));
+    this._detectionFadePct = whole(fadePct, 40);
+    this._detectionOutsidePct = whole(outsideOpacityPct, 100);
+    this._publishDisplay();
+    setKeyholeFadeTuning({
+      fadeRatio: this._detectionFadePct / 100,
+      outsideOpacity: this._detectionOutsidePct / 100,
+    });
+    this.viewer.scene.requestRender?.();
+  }
+
+  _setDetectionAllocation(strategy, { syncShare = true, persist = true } = {}) {
+    const { setDetectionTuning } = this.services;
+    const raw = String(strategy || '')
+      .trim()
+      .toUpperCase();
+    if (!ALLOCATION_STRATEGIES.includes(raw)) return false;
+    const normalized = normalizeAllocationStrategy(raw);
+    this._detectionAllocationPreference = normalized;
+    setDetectionTuning({ allocationStrategy: normalized });
+    this._detectionAllocationShown = normalized;
+    this._publishDisplay();
+    if (persist) {
+      try {
+        localStorage.setItem(DETECTION_ALLOCATION_STORAGE_KEY, normalized);
+      } catch {
+        /* best effort */
+      }
+    }
+    if (syncShare) this._syncShareState();
+    return true;
+  }
+
+  _syncDetectionUiFromEngine() {
+    const { getKeyholeFadeTuning, getDetectionTuning, getDetectionMode } =
+      this.services;
+    const tuning = getDetectionTuning();
+    this._detectionDensityPct = canonicalizeDensity(tuning.densityPct);
+    this._setDetectionAllocation(tuning.allocationStrategy, {
+      syncShare: false,
+      persist: false,
+    });
+    const fadeTuning = getKeyholeFadeTuning();
+    this._setDetectionFade({
+      fadePct: fadeTuning.fadeRatio * 100,
+      outsideOpacityPct: fadeTuning.outsideOpacity * 100,
+    });
+    this._updateDetectionButton(getDetectionMode());
+  }
+
+  _setDetectionMode(modeLabel) {
+    const { setDetectionModeByLabel } = this.services;
+    if (!modeLabel) return;
+    setDetectionModeByLabel(modeLabel);
+    this._syncDetectionUiFromEngine();
+    this._syncShareState();
+  }
+
+  _setHudVariant(variantName, { applyVisualDefaults = false } = {}) {
+    if (!variantName) return;
+    const previousVariant = this.hud.getVariant();
+    this.hud.setVariant(variantName);
+    const nextVariant = this.hud.getVariant();
+    const enteredCyber = previousVariant !== 'cyber' && nextVariant === 'cyber';
+    const leftCyber = previousVariant === 'cyber' && nextVariant !== 'cyber';
+    if (!applyVisualDefaults) {
+      // Scene/share/programmatic state is authoritative even when it reapplies
+      // the current Cyber variant. Do not let an older explicit entry restore
+      // stale local preset memory on the next user-selected exit.
+      this._preCyberStyle = null;
+      this._cyberStyleUserSelected = false;
+    } else if (enteredCyber) {
+      this._preCyberStyle = this.activeStyle;
+      this._cyberStyleUserSelected = false;
+    }
+    this._hudVariantShown = nextVariant;
+    this._publishDisplay();
+    const visualDefaults = cyberVisualDefaultsForHudTransition(
+      previousVariant,
+      nextVariant,
+      { explicit: applyVisualDefaults },
+    );
+    if (visualDefaults) this._applyCyberVisualDefaults(visualDefaults);
+    if (leftCyber) {
+      const restoreStyle =
+        applyVisualDefaults && !this._cyberStyleUserSelected
+          ? this._preCyberStyle
+          : null;
+      this._preCyberStyle = null;
+      this._cyberStyleUserSelected = false;
+      if (restoreStyle && restoreStyle !== this.activeStyle) {
+        this.setStyle(restoreStyle, {
+          applyPreset: false,
+          revealParameters: false,
+          preserveCyberRestore: true,
+        });
+      }
+    }
+    this._syncCyberSonarControl();
+    this._syncShareState();
+    this._scheduleAdaptivePanelLayout({ settle: true });
+  }
+
+  _applyCyberVisualDefaults({ style, ironbow }) {
+    this.setStyle(style, {
+      applyPreset: false,
+      revealParameters: false,
+      preserveCyberRestore: true,
+    });
+    const thermalUniforms = this.stages?.thermal?.uniforms;
+    if (!thermalUniforms || thermalUniforms.palette === undefined) return;
+    thermalUniforms.palette = ironbow;
+    this._updateSliderPanel('thermal', { reveal: false });
+    this.services.governorRequestRender('cyber-visual-defaults');
+  }
+
+  _syncCyberSonarControl() {
+    const settings = applyCyberSonarSettings(readCyberSonarSettings());
+    this._sonarShown = {
+      enabled: isCyberSonarEnabled(),
+      rings: settings.rings,
+      range: settings.range,
+      intensity: settings.intensity,
+      opacity: settings.opacity,
+      sector: settings.sector,
+    };
+    this._publishDisplay();
+  }
+
+  _setCyberSonarEnabled(enabled = !isCyberSonarEnabled()) {
+    const next = setCyberSonarEnabled(!!enabled);
+    this._syncCyberSonarControl();
+    this.services.governorRequestRender('cyber-sonar-toggle');
+    return next;
+  }
+
+  _setCyberSonarSetting(name, value) {
+    const settings = readCyberSonarSettings();
+    if (!Object.hasOwn(settings, name)) return settings;
+    const next = applyCyberSonarSettings({ ...settings, [name]: value });
+    this._syncCyberSonarControl();
+    this.services.governorRequestRender(`cyber-sonar-${name}`);
+    return next;
+  }
+
+  _applyStylePresetDefaults(styleName) {
+    const { governorRequestRender } = this.services;
+    const preset = STYLE_PRESET_DEFAULTS[styleName];
+    if (!preset) return;
+
+    if (preset.styleParams && typeof preset.styleParams === 'object') {
+      for (const [targetStyle, params] of Object.entries(preset.styleParams)) {
+        const stage = this.stages[targetStyle];
+        if (!stage || !params || typeof params !== 'object') continue;
+        for (const [uniformName, uniformValue] of Object.entries(params)) {
+          if (stage.uniforms[uniformName] === undefined) continue;
+          stage.uniforms[uniformName] = uniformValue;
+          governorRequestRender('style-param');
+        }
+      }
+      this._refreshParameters();
+    }
+
+    const bloomInput = preset.bloom || {};
+    if (typeof bloomInput.intensity === 'number') {
+      this._setBloomIntensity(clampBloomIntensity(bloomInput.intensity), {
+        syncShare: false,
+      });
+    }
+    if (typeof bloomInput.enabled === 'boolean') {
+      this._setBloomEnabled(bloomInput.enabled);
+    }
+
+    const sharpenInput = preset.sharpen || {};
+    if (typeof sharpenInput.intensity === 'number')
+      this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
+    if (typeof sharpenInput.enabled === 'boolean') {
+      this._setSharpenEnabled(sharpenInput.enabled);
+    }
+
+    // Cyber is an explicit shell choice, independent of the imagery filter.
+    // Scene/share restoration still applies its own HUD through _setHudVariant.
+    if (preset.hudVariant && this.hud.getVariant() !== 'cyber') {
+      this._setHudVariant(preset.hudVariant);
+    }
+    if (typeof preset.hudVisible === 'boolean') {
+      this.hud.setMode(preset.hudVisible ? 'on' : 'off');
+      this._updateHudButtonState();
+    }
+
+    // A style may set a detection default (e.g. military styles -> Dense for
+    // the "epic" default view), but ONLY if the user hasn't manually changed
+    // detection this session. Detection is user-controlled and persists across
+    // style switches, so an explicit Sparse/Off choice is never stomped.
+    if (preset.detection && !this._detectionUserOverridden) {
+      this._applyDetectionPreset(preset.detection);
+    }
+  }
+
+  _applyDetectionPreset(det) {
+    if (!det) return;
+    if (typeof det.densityPct === 'number')
+      this._setDetectionDensity(det.densityPct);
+    if (det.mode) this._setDetectionMode(String(det.mode).toUpperCase());
+  }
+
+  _applyGlobalPostDefaults() {
+    const defaults = GLOBAL_POST_DEFAULTS;
+    if (typeof defaults.bloom?.intensity === 'number') {
+      this._setBloomIntensity(clampBloomIntensity(defaults.bloom.intensity), {
+        syncShare: false,
+      });
+    }
+    if (typeof defaults.bloom?.enabled === 'boolean') {
+      this._setBloomEnabled(defaults.bloom.enabled);
+    }
+
+    if (typeof defaults.sharpen?.intensity === 'number')
+      this._setSharpenIntensity(defaults.sharpen.intensity, {
+        syncShare: false,
+      });
+    if (typeof defaults.sharpen?.enabled === 'boolean') {
+      this._setSharpenEnabled(defaults.sharpen.enabled);
+    }
+
+    if (defaults.hudVariant) {
+      this._setHudVariant(defaults.hudVariant);
+    }
+    if (typeof defaults.hudVisible === 'boolean') {
+      this.hud.setMode(defaults.hudVisible ? 'on' : 'off');
+      this._updateHudButtonState();
+    }
+
+    if (defaults.detectionMode) {
+      this._setDetectionMode(defaults.detectionMode);
+    }
+    if (typeof defaults.detectionDensity === 'number')
+      this._setDetectionDensity(defaults.detectionDensity);
+    this._setDetectionAllocation(
+      this._detectionAllocationPreference ||
+        defaults.detectionAllocation ||
+        'ELASTIC',
+      { syncShare: false, persist: false },
+    );
+    this._setDetectionFade({
+      fadePct: defaults.detectionFadePct ?? 7,
+      outsideOpacityPct: defaults.detectionOutsideOpacityPct ?? 1,
+    });
+    if (typeof defaults.celestialRing === 'boolean') {
+      this.setCelestialRingEnabled(defaults.celestialRing, {
+        syncShare: false,
+        focus: false,
+      });
+    }
+  }
+
+  _shareableDetectionState() {
+    const { getDetectionMode } = this.services;
+    return shareableDetectionState({
+      owned: this._contactsDetectionRestore,
+      liveMode: getDetectionMode(),
+      liveDensityPct: this._detectionDensityPct,
+    });
+  }
+
+  _readShareState() {
+    const {
+      getDetectionTuning,
+      isScopeMaskEnabled,
+      getScopeMaskFeather,
+      getScopeTerminusOverride,
+    } = this.services;
+    const detection = this._shareableDetectionState();
+    return {
+      bloomEnabled: this.bloomEnabled,
+      sharpenEnabled: this.sharpenEnabled,
+      options: {
+        bloomIntensity: this._getBloomIntensity(),
+        bloomVersion: BLOOM_SCALE_VERSION,
+        sharpenIntensity: this._sharpenPct,
+        hudVariant: this.hud.getVariant(),
+        hudVisible: this.hud.visible,
+        detectionMode: detection.mode,
+        detectionDensity: detection.densityPct,
+        detectionAllocation: getDetectionTuning().allocationStrategy,
+        detectionFadePct: this._detectionFadePct,
+        detectionOutsideOpacityPct: this._detectionOutsidePct,
+        celestialRingEnabled: this.celestialRingEnabled,
+        scopeEnabled: isScopeMaskEnabled(),
+        scopeFeatherPct: Math.round(getScopeMaskFeather() * 100),
+        // null when adaptive — the share layer omits `sce` entirely in that case.
+        scopeTerminusPct:
+          getScopeTerminusOverride() == null
+            ? null
+            : Math.round(getScopeTerminusOverride() * 100),
+        mapStack: this.mapStackController?.getActiveId?.() || 'photoreal',
+      },
+    };
+  }
+
+  getDetectionState() {
+    const { getDetectionTuning, getDetectionMode } = this.services;
+    return {
+      detectionMode: getDetectionMode(),
+      densityPct: this._detectionDensityPct,
+      allocationStrategy: getDetectionTuning().allocationStrategy,
+      fadePct: this._detectionFadePct,
+      outsideOpacityPct: this._detectionOutsidePct,
+    };
+  }
+
+  getDetectionDiagnostics() {
+    const { readDetectionDiagnostics } = this.services;
+    return readDetectionDiagnostics();
+  }
+
+  setDetection({
+    enabled,
+    mode,
+    densityPct,
+    allocationStrategy,
+    fadePct,
+    outsideOpacityPct,
+  } = {}) {
+    const { getDetectionMode, setDetectionModeByLabel } = this.services;
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return {
+        ok: false,
+        error: `Invalid detection enabled value: ${enabled}`,
+        ...this.getDetectionState(),
+      };
+    }
+    let requestedProfile = null;
+    if (typeof mode === 'string' && mode.trim()) {
+      requestedProfile = normalizeProfile(mode);
+      if (!requestedProfile) {
+        return {
+          ok: false,
+          error: `Unknown detection mode: ${mode}`,
+          ...this.getDetectionState(),
+        };
+      }
+    }
+    let requestedDensity = null;
+    if (densityPct != null) {
+      if (!Number.isFinite(Number(densityPct))) {
+        return {
+          ok: false,
+          error: `Invalid density: ${densityPct}`,
+          ...this.getDetectionState(),
+        };
+      }
+      requestedDensity = canonicalizeDensity(Number(densityPct));
+    }
+    if (
+      requestedProfile &&
+      requestedProfile !== 'OFF' &&
+      requestedDensity != null &&
+      profileForDensity(requestedDensity) !== requestedProfile
+    ) {
+      return {
+        ok: false,
+        error: `Detection mode ${requestedProfile} conflicts with density ${requestedDensity}%`,
+        ...this.getDetectionState(),
+      };
+    }
+    let requestedAllocation = null;
+    if (allocationStrategy != null) {
+      requestedAllocation = String(allocationStrategy).trim().toUpperCase();
+      if (!ALLOCATION_STRATEGIES.includes(requestedAllocation)) {
+        return {
+          ok: false,
+          error: `Unknown allocation strategy: ${allocationStrategy}`,
+          ...this.getDetectionState(),
+        };
+      }
+    }
+    if (fadePct != null) {
+      if (!Number.isFinite(Number(fadePct))) {
+        return {
+          ok: false,
+          error: `Invalid fade distance: ${fadePct}`,
+          ...this.getDetectionState(),
+        };
+      }
+    }
+    if (outsideOpacityPct != null) {
+      if (!Number.isFinite(Number(outsideOpacityPct))) {
+        return {
+          ok: false,
+          error: `Invalid outside opacity: ${outsideOpacityPct}`,
+          ...this.getDetectionState(),
+        };
+      }
+    }
+    const hasExplicitVisualChange =
+      typeof enabled === 'boolean' ||
+      requestedProfile !== null ||
+      requestedDensity !== null ||
+      requestedAllocation !== null ||
+      fadePct != null ||
+      outsideOpacityPct != null;
+    if (hasExplicitVisualChange) {
+      // Voice/scripted detection control counts as an explicit user choice, so
+      // neither style presets nor a still-pending shared visual restore can
+      // overwrite it afterward.
+      this.shareLinkManager?.claimRestoreLane?.('visual');
+      this._detectionUserOverridden = true;
+    }
+    if (requestedAllocation) {
+      this._setDetectionAllocation(requestedAllocation, { syncShare: false });
+    }
+    if (fadePct != null || outsideOpacityPct != null)
+      this._setDetectionFade({
+        fadePct: fadePct ?? undefined,
+        outsideOpacityPct: outsideOpacityPct ?? undefined,
+      });
+
+    if (
+      requestedProfile &&
+      requestedProfile !== 'OFF' &&
+      requestedDensity == null
+    ) {
+      requestedDensity = defaultDensityForProfile(requestedProfile);
+    }
+    if (requestedDensity != null) this._setDetectionDensity(requestedDensity);
+
+    if (enabled === false || requestedProfile === 'OFF') {
+      setDetectionModeByLabel('OFF');
+    } else if (requestedProfile) {
+      setDetectionModeByLabel(requestedProfile);
+    } else if (enabled === true && getDetectionMode() === 'OFF') {
+      setDetectionModeByLabel(
+        profileForDensity(requestedDensity ?? this._detectionDensityPct),
+      );
+    }
+    this._syncDetectionUiFromEngine();
+    this._syncShareState();
+    return { ok: true, ...this.getDetectionState() };
+  }
+
+  setBloom({ enabled, intensityPct } = {}) {
+    const current = () => ({
+      enabled: !!this.bloomEnabled,
+      intensityPct: this.bloomIntensityPct,
+    });
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return {
+        ok: false,
+        error: `Invalid bloom enabled value: ${enabled}`,
+        bloom: current(),
+      };
+    }
+    if (
+      intensityPct !== undefined &&
+      (typeof intensityPct !== 'number' || !Number.isFinite(intensityPct))
+    ) {
+      return {
+        ok: false,
+        error: `Invalid bloom intensity: ${intensityPct}`,
+        bloom: current(),
+      };
+    }
+    const hasExplicitVisualChange =
+      intensityPct !== undefined || enabled !== undefined;
+    if (hasExplicitVisualChange)
+      this.shareLinkManager?.claimRestoreLane?.('visual');
+    if (intensityPct !== undefined) {
+      this._setBloomIntensity(
+        Math.round(Math.max(0, Math.min(200, intensityPct))),
+      );
+    }
+    if (enabled !== undefined) this._setBloomEnabled(enabled);
+    return {
+      ok: true,
+      bloom: current(),
+    };
+  }
+
+  setSharpen({ enabled, intensityPct } = {}) {
+    const current = () => ({
+      enabled: !!this.sharpenEnabled,
+      intensityPct: this.sharpenIntensityPct,
+    });
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return {
+        ok: false,
+        error: `Invalid sharpen enabled value: ${enabled}`,
+        sharpen: current(),
+      };
+    }
+    if (
+      intensityPct !== undefined &&
+      (typeof intensityPct !== 'number' || !Number.isFinite(intensityPct))
+    ) {
+      return {
+        ok: false,
+        error: `Invalid sharpen intensity: ${intensityPct}`,
+        sharpen: current(),
+      };
+    }
+    const hasExplicitVisualChange =
+      intensityPct !== undefined || enabled !== undefined;
+    if (hasExplicitVisualChange)
+      this.shareLinkManager?.claimRestoreLane?.('visual');
+    if (intensityPct !== undefined) {
+      this._setSharpenIntensity(intensityPct);
+    }
+    if (enabled !== undefined) this._setSharpenEnabled(enabled);
+    return {
+      ok: true,
+      sharpen: current(),
+    };
+  }
+
+  get celestialRingEnabled() {
+    return !!this.celestialRing?.enabled;
+  }
+
+  setCelestialRingEnabled(enabled, { syncShare = true, focus = false } = {}) {
+    const { isCelestialRingStyleSupported } = this.services;
+    const styleSupported = isCelestialRingStyleSupported(this.activeStyle);
+    const current = () => ({
+      enabled: this.celestialRingEnabled,
+      visible: !!this.celestialRing?.visible,
+    });
+    if (typeof enabled !== 'boolean') {
+      return {
+        ok: false,
+        celestialRing: current(),
+        cameraFocused: false,
+        error: `Invalid celestial ring enabled value: ${enabled}`,
+      };
+    }
+    if (typeof syncShare !== 'boolean' || typeof focus !== 'boolean') {
+      return {
+        ok: false,
+        celestialRing: current(),
+        cameraFocused: false,
+        error: 'Celestial ring options must be boolean',
+      };
+    }
+    if (!styleSupported && enabled) {
+      return {
+        ok: false,
+        celestialRing: current(),
+        cameraFocused: false,
+        error: 'Celestial ring is available only in Normal style',
+      };
+    }
+    if (syncShare) this.shareLinkManager?.claimRestoreLane?.('visual');
+    const nextEnabled = styleSupported && enabled;
+    this.celestialRing?.setEnabled(nextEnabled);
+    this._celestialShown = { active: nextEnabled, supported: styleSupported };
+    this._publishDisplay();
+    let cameraFocused = false;
+    if (nextEnabled && focus) {
+      cameraFocused = !!this.celestialRing?.focusFullGlobe();
+    }
+    if (syncShare) this._syncShareState();
+    return {
+      ok: styleSupported || !enabled,
+      celestialRing: current(),
+      cameraFocused,
+    };
+  }
+
+  getVisualState() {
+    const {
+      getDetectionTuning,
+      getDetectionMode,
+      isScopeMaskEnabled,
+      getScopeMaskFeather,
+    } = this.services;
+    const styleParams = {};
+    for (const [styleName, stage] of Object.entries(this.stages)) {
+      const shader = STYLES[styleName];
+      if (!shader?.uniforms) continue;
+      styleParams[styleName] = {};
+      for (const uniformName of Object.keys(shader.uniforms)) {
+        styleParams[styleName][uniformName] = stage.uniforms[uniformName];
+      }
+    }
+
+    return {
+      style: this.activeStyle,
+      bloom: {
+        enabled: this.bloomEnabled,
+        intensity: this._getBloomIntensity(),
+        version: BLOOM_SCALE_VERSION,
+      },
+      sharpen: {
+        enabled: this.sharpenEnabled,
+        intensity: this._sharpenPct,
+      },
+      hud: {
+        visible: this.hud.visible,
+        variant: this.hud.getVariant(),
+      },
+      detection: {
+        mode: getDetectionMode(),
+        density: this._detectionDensityPct,
+        allocation: getDetectionTuning().allocationStrategy,
+        fadePct: this._detectionFadePct,
+        outsideOpacityPct: this._detectionOutsidePct,
+      },
+      scope: {
+        enabled: isScopeMaskEnabled(),
+        featherPct: Math.round(getScopeMaskFeather() * 100),
+      },
+      mapStack: this.mapStackController?.getActiveId?.() || 'photoreal',
+      styleParams,
+    };
+  }
+
+  async applyVisualState(state = {}, { isCurrent = null } = {}) {
+    const superseded = () => typeof isCurrent === 'function' && !isCurrent();
+    if (superseded()) return false;
+
+    const style = RETIRED_STYLES.includes(state.style) ? 'normal' : state.style;
+    if (style && style !== this.activeStyle) {
+      this.setStyle(style, { applyPreset: false });
+    }
+
+    const bloomState = state.bloom || {};
+    if (typeof bloomState.intensity === 'number') {
+      const intensity = decodeBloomIntensity(
+        bloomState.intensity,
+        bloomState.version ?? state.bloomVersion ?? BLOOM_SCALE_VERSION,
+      );
+      this._setBloomIntensity(intensity, { syncShare: false });
+    }
+    if (typeof bloomState.enabled === 'boolean') {
+      this._setBloomEnabled(bloomState.enabled);
+    }
+
+    const sharpenState = state.sharpen || {};
+    if (typeof sharpenState.intensity === 'number')
+      this._setSharpenIntensity(sharpenState.intensity, { syncShare: false });
+    if (typeof sharpenState.enabled === 'boolean') {
+      this._setSharpenEnabled(sharpenState.enabled);
+    }
+
+    const hudState = state.hud || {};
+    if (hudState.variant) {
+      this._setHudVariant(hudState.variant);
+    }
+    if (typeof hudState.visible === 'boolean') {
+      this.hud.setMode(hudState.visible ? 'on' : 'off');
+      this._updateHudButtonState();
+    }
+
+    const scopeState = state.scope || {};
+    this._setScope({
+      enabled: scopeState.enabled,
+      featherPct: scopeState.featherPct,
+    });
+
+    const detectionState = state.detection || {};
+    if (typeof detectionState.density === 'number')
+      this._setDetectionDensity(detectionState.density);
+    if (detectionState.allocation) {
+      this._setDetectionAllocation(detectionState.allocation, {
+        syncShare: false,
+      });
+    }
+    this._setDetectionFade({
+      fadePct:
+        typeof detectionState.fadePct === 'number'
+          ? detectionState.fadePct
+          : undefined,
+      outsideOpacityPct:
+        typeof detectionState.outsideOpacityPct === 'number'
+          ? detectionState.outsideOpacityPct
+          : undefined,
+    });
+    if (detectionState.mode) {
+      this._setDetectionMode(detectionState.mode);
+    }
+
+    if (state.mapStack) {
+      // The stack switch is itself a MUTATION, not merely a suspension point,
+      // so it needs a gate on BOTH sides of the await.
+      if (superseded()) return false;
+      const stackBefore = this.mapStackController?.getActiveId?.() ?? null;
+      const genBefore =
+        this.mapStackController?.getSwitchGeneration?.() ?? null;
+
+      await this._setMapStack(state.mapStack, { syncShare: false });
+
+      if (superseded()) {
+        // Superseded DURING the switch, which the pre-check above cannot catch
+        // and which has already moved the globe. The controller only
+        // invalidates a switch when another setStack() arrives, and a winning
+        // state that omits `mapStack` never issues one — every normalized scene
+        // shot omits it — so this stale globe would simply stand. Put back what
+        // the winner inherited.
+        const genAfter =
+          this.mapStackController?.getSwitchGeneration?.() ?? null;
+        // _setMapStack issues exactly one setStack(), which advances the
+        // generation once, or not at all when the stack was unavailable and
+        // nothing was mutated. Anything past that is a NEWER switch whose
+        // caller owns the globe now, and reverting would stomp a live intent.
+        const globeIsStillOurs =
+          genBefore !== null && genAfter !== null && genAfter <= genBefore + 1;
+        const landed = this.mapStackController?.getActiveId?.() ?? null;
+        if (globeIsStillOurs && stackBefore && landed !== stackBefore) {
+          await this._setMapStack(stackBefore, { syncShare: false });
+        }
+        return false;
+      }
+      // Everything below is the uniform commit, already past its own gate.
+    }
+
+    if (state.styleParams && typeof state.styleParams === 'object') {
+      for (const [styleName, params] of Object.entries(state.styleParams)) {
+        const stage = this.stages[styleName];
+        if (!stage || !params) continue;
+        for (const [uniformName, uniformValue] of Object.entries(params)) {
+          if (stage.uniforms[uniformName] === undefined) continue;
+          stage.uniforms[uniformName] = uniformValue;
+        }
+      }
+      this._updateSliderPanel(this.activeStyle);
+    }
+
+    this._syncShareState();
+    return true;
+  }
+
+  applyCinematicPreset(preset = {}) {
+    const bloomInput =
+      typeof preset.bloom === 'object'
+        ? preset.bloom
+        : { intensity: preset.bloom };
+    let decodedBloomIntensity = null;
+    if (typeof bloomInput.intensity === 'number') {
+      decodedBloomIntensity = decodeBloomIntensity(
+        bloomInput.intensity,
+        bloomInput.version ?? preset.bloomVersion ?? BLOOM_SCALE_VERSION,
+      );
+      this._setBloomIntensity(decodedBloomIntensity, { syncShare: false });
+    }
+    if (typeof bloomInput.enabled === 'boolean') {
+      this._setBloomEnabled(bloomInput.enabled);
+    } else if (typeof bloomInput.intensity === 'number') {
+      this._setBloomEnabled(
+        (decodedBloomIntensity ?? this._getBloomIntensity()) > 0,
+      );
+    }
+
+    const sharpenInput =
+      typeof preset.sharpen === 'object'
+        ? preset.sharpen
+        : { enabled: preset.sharpen };
+    if (typeof sharpenInput.intensity === 'number')
+      this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
+    if (typeof sharpenInput.enabled === 'boolean') {
+      this._setSharpenEnabled(sharpenInput.enabled);
+    } else if (typeof sharpenInput.intensity === 'number') {
+      this._setSharpenEnabled(sharpenInput.intensity > 0);
+    }
+
+    if (preset.hudVariant) {
+      this._setHudVariant(preset.hudVariant);
+    }
+
+    if (preset.detectionMode) {
+      this._setDetectionMode(preset.detectionMode);
+    }
+    if (typeof preset.detectionDensity === 'number')
+      this._setDetectionDensity(preset.detectionDensity);
+    if (preset.detectionAllocation) {
+      this._setDetectionAllocation(preset.detectionAllocation, {
+        syncShare: false,
+      });
+    }
+
+    if (preset.styleParams && typeof preset.styleParams === 'object') {
+      for (const [styleName, params] of Object.entries(preset.styleParams)) {
+        const stage = this.stages[styleName];
+        if (!stage || !params || typeof params !== 'object') continue;
+        for (const [uniformName, uniformValue] of Object.entries(params)) {
+          if (stage.uniforms[uniformName] === undefined) continue;
+          stage.uniforms[uniformName] = uniformValue;
+        }
+      }
+
+      // Keep slider panel values in sync when updating the active style.
+      this._updateSliderPanel(this.activeStyle);
+    }
+
+    this._syncShareState();
+  }
+
+  /** Publish the style's parameter rows, or none for a style without any. */
+  _updateSliderPanel(styleName, { reveal = false } = {}) {
+    const shader = STYLES[styleName];
+    if (!shader || !shader.uniforms || styleName === 'normal') {
+      this._publishParameters(null);
+      this._scheduleRightPanelLayout();
+      return;
+    }
+    this._publishParameters({
+      style: styleName,
+      rows: styleParameterRows(
+        shader.uniforms,
+        (name) => this.stages[styleName].uniforms[name],
+      ),
+    });
+    this._scheduleRightPanelLayout();
+    if (reveal) this._revealStyleParameters();
+  }
+
+  /** Publish the shown style's rows again from its uniforms as they stand. */
+  _refreshParameters() {
+    const style = this._parameters?.style;
+    if (style) this._updateSliderPanel(style);
+  }
+
+  _publishParameters(next) {
+    this._parameters = next;
+    this.store.publishParameters(next);
+  }
+
+  /** A parameter slider moved: write the active style's uniform. */
+  setStyleParameter(name, value) {
+    const parameters = this._parameters;
+    // Only the shown style's own parameters.
+    if (!parameters?.rows.some((row) => row.name === name)) return;
+    this.shareLinkManager?.claimRestoreLane?.('visual');
+    this.stages[parameters.style].uniforms[name] = value;
+    this._publishParameters({
+      ...parameters,
+      rows: withParameterValue(parameters.rows, name, value),
+    });
+    // Uniform writes need an explicit render under the idle governor.
+    this.services.governorRequestRender('style-param-slider');
+    this._syncShareState();
+  }
+
+  _revealStyleParameters() {
+    if (!this._parameters) return;
+    if (this._cockpitDisplayPortalActive) return;
+    this._presentPanel(this._sliderPanel, { collapsed: false });
+    this.setPanelCollapsed('pp-toggles', false, { explicit: true });
+    this._lifetime.frame(() =>
+      this._lifetime.frame(() => {
+        const scrollOwner = this._ppToggles;
+        if (!scrollOwner) return;
+        const ownerRect = scrollOwner.getBoundingClientRect();
+        const panelRect = this._sliderPanel.getBoundingClientRect();
+        scrollOwner.scrollTop += panelRect.top - ownerRect.top - 8;
+      }),
+    );
+  }
+
+  setStyle(
+    styleName,
+    {
+      applyPreset = true,
+      revealParameters = applyPreset,
+      restore = false,
+      userInitiated = false,
+      preserveCyberRestore = false,
+    } = {},
+  ) {
+    if (
+      typeof styleName !== 'string' ||
+      (styleName !== 'normal' && !Object.hasOwn(STYLES, styleName))
+    )
+      return;
+    const { setDetectionStyle } = this.services;
+    if (!restore) this.shareLinkManager?.claimRestoreLane?.('visual');
+    if (this.hud.getVariant() === 'cyber') {
+      if (userInitiated) {
+        // A direct preset choice owns the active style even when it selects the
+        // same value as Cyber's automatic FLIR default.
+        this._cyberStyleUserSelected = true;
+      } else if (!preserveCyberRestore) {
+        // Scene/share/reset state is authoritative and must not be overwritten
+        // by a remembered local Cyber entry when the user later exits.
+        this._preCyberStyle = null;
+        this._cyberStyleUserSelected = false;
+      }
+    }
+    if (styleName === this.activeStyle) {
+      if (revealParameters && styleName !== 'normal')
+        this._revealStyleParameters();
+      return;
+    }
+
+    const previousStyle = this.activeStyle;
+    this.activeStyle = styleName;
+    document.documentElement.dataset.gevStyle = styleName;
+
+    // The celestial optics treatment belongs to the unfiltered globe only.
+    // Leaving Normal turns it off; returning merely re-enables the control.
+    this.setCelestialRingEnabled(false, { syncShare: false, focus: false });
+
+    // Transition out the previous shader style
+    if (previousStyle !== 'normal' && this.stages[previousStyle]) {
+      this._startTransition(
+        previousStyle,
+        this.stages[previousStyle].uniforms.intensity,
+        0.0,
+      );
+    }
+
+    // Transition in the new shader style
+    if (styleName !== 'normal' && this.stages[styleName]) {
+      this._startTransition(
+        styleName,
+        this.stages[styleName].uniforms.intensity,
+        1.0,
+      );
+    }
+
+    if (applyPreset) {
+      this._applyStylePresetDefaults(styleName);
+    }
+
+    // The style buttons, the dock's mini status and the ACTIVE STYLE corner.
+    this._publishActiveStyle(styleName);
+
+    // Update parameter sliders
+    this._updateSliderPanel(styleName, { reveal: revealParameters });
+
+    // Notify HUD (color adaptation + auto show/hide)
+    this.hud.onStyleChange(styleName);
+    this._updateHudButtonState();
+
+    // Sync detection overlay tone to active post-process style
+    setDetectionStyle(styleName);
+    this._syncIrBoost();
+    window.dispatchEvent(
+      new CustomEvent('gev:style-change', {
+        detail: { style: styleName },
+      }),
+    );
+
+    this._syncCockpitInheritedStyle();
+
+    // Notify share link manager
+    this.shareLinkManager.onStyleChange(styleName);
+    this._syncShareState();
+  }
+
+  _startTransition(styleName, fromValue, toValue) {
+    this._visualEffects.startTransition(styleName, fromValue, toValue);
+  }
+
+  /** Publish the active style and its label in the UI language. */
+  _publishActiveStyle(styleName = this.activeStyle) {
+    const name = String(styleName || 'normal');
+    this.store.publishStyle({
+      name,
+      label: STYLE_STATUS_LABELS[name]
+        ? t(STYLE_STATUS_LABELS[name])
+        : name.toUpperCase(),
+    });
+  }
+
+  _updateHudButtonState() {
+    this._syncHudControls();
+  }
+
+  /**
+   * Show the HUD's current visibility and layout on its controls; the layout
+   * row's visibility changes the panel's height, so the rails settle again.
+   */
+  _syncHudControls() {
+    this._hudVisibleShown = Boolean(this.hud.visible);
+    this._hudVariantShown = this.hud.getVariant();
+    this._publishDisplay();
+    this._scheduleAdaptivePanelLayout({ settle: true });
+  }
+
+  _updateDetectionButton(modeLabel) {
+    this._detectionModeLabel = modeLabel;
+    this._publishDisplay();
+    this._layoutRightPanels();
+  }
+  stop() {
+    this._lifetime.destroy();
+    if (this._parametersToken) this.store.detach(this._parametersToken);
+    this._parametersToken = null;
+    // The sliders go with their owner, unless a newer owner has published
+    // its own since.
+    if (this._parameters && this.store.parameters === this._parameters)
+      this._publishParameters(null);
+    this._visualEffects.stop();
+  }
+  releaseIrBoost() {
+    if (!this._irBoostActive) return;
+    if (this._irFogWasEnabled != null && this.viewer?.scene?.fog)
+      this.viewer.scene.fog.enabled = this._irFogWasEnabled;
+    this._dataManager?.setLayerParams('flights', { irBoost: false });
+    this._dataManager?.setLayerParams('military', { irBoost: false });
+    this._irBoostActive = false;
+    this._irFogWasEnabled = null;
+  }
+  destroy() {
+    this.stop();
+    this.releaseIrBoost();
+    this._visualEffects.destroy();
+  }
+}

@@ -1,0 +1,629 @@
+import {
+  voiceLayerAliasHint,
+  voiceQueryFieldHint,
+} from '../../../src/voice/layerManifest.js';
+
+export const ACTION_DESCRIPTIONS = {
+  fly_to_location: {
+    description:
+      "Fly the God's Eye View camera to a known city, geocoded country/region/city/landmark, or explicit WGS84 coordinate. Countries/cities frame the whole place; landmarks/buildings use close framing.",
+    $position: 1,
+    parameters: {
+      properties: {
+        locationId: {
+          description:
+            'Known city preset ID. Use when the requested place matches one of these cities.',
+          $position: 2,
+        },
+        query: {
+          description:
+            'Plain place search query, e.g. "London", "Eiffel Tower", or "Dubai Marina". "pointer" = the spot under the cursor.',
+          $position: 1,
+        },
+        referent: {
+          description: 'Numbered item n from the last result list.',
+          $position: 1,
+        },
+        viewMode: {
+          description:
+            'Optional framing intent. Usually omit this; GEV infers whole-place framing for countries/cities and close framing for landmarks.',
+          $position: 2,
+        },
+        rangeM: {
+          description:
+            'Optional camera range from the target in meters. Omit it for automatic whole-country/whole-city or close-landmark framing; provide it only when the user explicitly requests a numeric height or distance.',
+          $position: 3,
+        },
+        waitForArrival: {
+          description:
+            'Set true when a later tool depends on the destination viewport. The result then waits for the camera flight and returns arrived=true; cancellation returns ok=false.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  select_nearest_aircraft: {
+    description:
+      'Atomically fly to a place, wait for arrival, enable and load Flights or Military Flights in that viewport, exclude on-ground records, and select/follow the nearest airborne aircraft. Healthy fallback feeds remain usable and are reported in the result.',
+    $position: 1,
+    parameters: {
+      properties: {
+        layerId: {
+          description:
+            'Aircraft layer to enable and search. Use flights unless the user explicitly asks for military aircraft.',
+          $position: 2,
+        },
+        locationId: {
+          description:
+            'Known city preset ID when the place matches one of these cities.',
+          $position: 2,
+        },
+        locationQuery: {
+          description: 'Free-form destination when no locationId matches.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  adjust_camera_zoom: {
+    description:
+      'Move the current Cesium camera closer to or farther from what it is presently looking at. Use for relative zoom requests without changing location.',
+    $position: 1,
+    parameters: {
+      properties: {
+        amount: {
+          description:
+            'Use little for phrases like "a bit" or "a little", medium for ordinary zoom requests, and lot for "way out/in".',
+          $position: 2,
+        },
+      },
+    },
+  },
+  zoom_to_globe: {
+    description:
+      'Pull the camera out to an ABSOLUTE full-Earth globe view (~18,000 km altitude, the whole planet in frame), keeping the current region centered. Use for "globe view", "whole earth", "see the planet", "zoom all the way out". Never use adjust_camera_zoom for these — its relative steps cannot reach the globe.',
+    $position: 1,
+  },
+  set_layer_visibility: {
+    description:
+      "Enable or disable one God's Eye View data layer. Every shipped layer is in the enum; never tell the user a listed layer does not exist.",
+    $position: 1,
+    parameters: {
+      properties: {
+        layerId: {
+          description: `Spoken names: ${voiceLayerAliasHint()}.`,
+          $position: 1,
+        },
+      },
+    },
+  },
+  show_data_layers_menu: {
+    description:
+      'Open the data layers dropdown/menu and optionally scroll to a specific layer row without toggling it.',
+    $position: 1,
+    parameters: {
+      properties: {
+        layerId: {
+          description: 'Optional layer row to scroll into view and highlight.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  set_panel_open: {
+    description:
+      'Visual Presets/styles/filters=control-panel; Scenes/saved scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit directly.',
+    $position: 1,
+  },
+  set_voice_inactivity_timeout: {
+    description:
+      'Set the requested exact inactivity duration directly: integer minutes 1–60, 0=None. Report applied/persisted truthfully; an unsaved live change is not saved.',
+    $position: 1,
+  },
+  set_context_mode: {
+    description:
+      'Enter/exit Contacts or Space Missions only when explicitly requested; opening Context alone uses set_panel_open.',
+    $position: 1,
+    parameters: {
+      properties: {
+        mode: {
+          description: 'Use off to exit context mode.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  control_cockpit: {
+    description:
+      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (establishes Contacts itself; no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
+    $position: 1,
+    parameters: {
+      properties: {
+        action: {
+          description:
+            'previous/next (or prev) cycles nearby Cockpit contacts.',
+          $position: 2,
+        },
+        targetLayer: {
+          description:
+            'Optional next/previous layer filter (e.g. military-only).',
+          $position: 2,
+        },
+        aircraftClass: {
+          description:
+            'Optional next/previous aircraft class filter (e.g. helicopter).',
+          $position: 1,
+        },
+      },
+    },
+  },
+  set_visual_style: {
+    description: "Set the active God's Eye View visual filter/style.",
+    $position: 1,
+  },
+  get_entity_context: {
+    description:
+      'Get current GEV scene context, including basemap/3D-tile target context, selected entity metadata if active, and entities currently visible in the camera view.',
+    $position: 1,
+    parameters: {
+      properties: {
+        scope: {
+          description:
+            'Use auto by default. selected returns the clicked/selected entity; in_view returns visible entities near the screen center; pointer returns what the cursor is on.',
+          $position: 2,
+        },
+        referent: {
+          description: 'Numbered item n from the last result list.',
+          $position: 1,
+        },
+        layerId: {
+          description: 'Optional layer filter for visible entity context.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  get_current_view_state: {
+    description:
+      'Read the current camera, style, Context, Cockpit, HUD, detection, map stack, post-processing, scene-playback, tracked-entity, and layer state before choosing another action. Tracked aircraft emergency status is a crowd-sourced transponder broadcast, not a confirmed incident: quote emergencyBroadcast and never infer a hijack or an incident ending from a code change.',
+    $position: 1,
+  },
+  set_hud: {
+    description:
+      'Control the intelligence HUD overlay: visibility and/or layout variant.',
+    $position: 1,
+    parameters: {
+      properties: {
+        visible: {
+          description: 'auto restores style-driven show/hide.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  set_cyber_sonar: {
+    description:
+      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
+    $position: 1,
+    parameters: {
+      properties: {
+        enabled: { description: 'Explicitly turn sonar on or off.' },
+        rings: { description: 'Number of decorative sonar rings, 3–12.' },
+        rangePct: {
+          description:
+            'Visual ring range, 60–120 percent; not geographic distance.',
+        },
+        intensityPct: {
+          description: 'Sonar Power slider, 0–100 percent. Zero is valid.',
+        },
+        opacityPct: {
+          description:
+            'Contact opacity floor between passes, 35–100 percent; labels have a derived floor. Not whole-scene dimming.',
+        },
+        sectorDeg: { description: 'Sonar sweep sector width, 8–60 degrees.' },
+      },
+    },
+  },
+  set_detection: {
+    description:
+      'Control the detection overlay: on/off, density-derived Sparse/Balanced/Dense profile, and Elastic/Weighted layer allocation.',
+    $position: 1,
+    parameters: {
+      properties: {
+        enabled: {
+          description:
+            'false turns detection OFF; true restores the current density-derived profile.',
+          $position: 1,
+        },
+        densityPct: {
+          description:
+            'Density snaps to 0, 25, 50, 75, or 100 and derives the active profile.',
+          $position: 1,
+        },
+        allocationStrategy: {
+          description:
+            'Elastic splits evenly then lends unused slots; Weighted follows demand and semantic weight.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  set_map_stack: {
+    description:
+      'Switch the basemap/imagery stack (NOT the satellites data layer and NOT a visual style filter).',
+    $position: 1,
+    parameters: {
+      properties: {
+        stack: {
+          description:
+            'photoreal = Google 3D. Use bing-aerial only when the user explicitly says "Bing aerial" — "satellite(s)" never means a basemap; only the explicit phrase "Esri" / "Esri imagery" means esri-imagery.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  set_post_processing: {
+    description:
+      'Control bloom and sharpen post-processing toggles and intensities.',
+    $position: 1,
+    parameters: {
+      properties: {
+        bloom: {
+          properties: {
+            intensityPct: {
+              description: '0-200 (UI percent).',
+              $position: 1,
+            },
+          },
+        },
+        sharpen: {
+          properties: {
+            intensityPct: {
+              description: '0-100 (UI percent).',
+              $position: 1,
+            },
+          },
+        },
+      },
+    },
+  },
+  control_scene: {
+    description:
+      'Cinematic scene playback: list scenes, play one scene by name, stop, advance, or read status. Play starts a single named scene and returns immediately.',
+    $position: 1,
+    parameters: {
+      properties: {
+        sceneId: {
+          description: 'Scene id or (partial) title for play.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  control_cctv: {
+    description:
+      'CCTV camera operations: enable/disable the layer, select a camera by name, next/prev/nearest/focus, toggle coverage wedges / projection overlay / auto-hop, "viewshed" for color-coded per-camera coverage volumes, and "adjust" for the on-camera calibration gizmo.',
+    $position: 1,
+    parameters: {
+      properties: {
+        cameraQuery: {
+          description: 'Camera name or id for select.',
+          $position: 1,
+        },
+        enabled: {
+          description:
+            'Explicit on/off for coverage/viewshed/adjust/projection/autohop; omit to toggle.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  control_radio: {
+    description:
+      'Control Internet Radio playback without moving the map. Use select whenever the request includes a station category, name, country, coordinates, or nearby place—even when the user says play. Use play only for an unqualified "turn on/start the radio" request so the current or nearest station begins. Enable only reveals the Radio layer/markers without audio. Also supports disable, resume, pause, stop, next/previous, volume, and status.',
+    $position: 1,
+    parameters: {
+      properties: {
+        action: {
+          description:
+            'Use select for any request qualified by category, station, country, coordinates, or place. Use play only for an unqualified turn on/start/listen request. Use enable only when the user explicitly asks to show or enable the Radio layer or its markers without requesting audio.',
+          $position: 2,
+        },
+        volumePct: {
+          description:
+            'Required for volume; sets the persistent Radio playback volume.',
+          $position: 3,
+        },
+        category: {
+          description:
+            'Station category for select/next/previous. When the user requests playback with a category, action must be select, not play.',
+          $position: 2,
+        },
+        locationId: {
+          description: 'Known nearby-city anchor for select.',
+          $position: 2,
+        },
+        locationQuery: {
+          description:
+            'Place to search near, such as "Austin, Texas" or "Seattle". Selection does not fly the camera.',
+          $position: 2,
+        },
+        country: {
+          description:
+            'Country code or name filter, for example US or United States.',
+          $position: 2,
+        },
+        stationQuery: {
+          description: 'Optional station name/tag substring.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  track_entity: {
+    description:
+      'Find and follow a specific aircraft (callsign/ICAO hex), ship (name/MMSI), or satellite (name/NORAD id) on enabled layers. Camera follows the entity.',
+    $position: 1,
+    parameters: {
+      properties: {
+        query: {
+          description:
+            'Callsign, ship name, satellite name, ICAO hex, MMSI, or NORAD id. "pointer" = the contact under the cursor.',
+          $position: 1,
+        },
+        referent: {
+          description:
+            'Numbered item n from the last result list (-1 = last); query may then be its label.',
+          $position: 1,
+        },
+        layerId: {
+          description:
+            'Optional: flights, military, ais-live-vessels or satellites. Other layers are not trackable; for fires use query "biggest fire".',
+          $position: 1,
+        },
+      },
+    },
+  },
+  stop_tracking: {
+    description:
+      'Stop following the tracked aircraft/satellite and clear any selected vessel.',
+    $position: 1,
+  },
+  frame_overhead: {
+    description:
+      'Cinematically frame entities near the current view: pulls the camera back and angles it so nearby aircraft, ships, or satellites are visible together.',
+    $position: 1,
+    parameters: {
+      properties: {
+        radiusKm: {
+          description:
+            'Search radius around the view target. Defaults: 150 aircraft, 120 ships, 3000 satellites.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  annotate_map: {
+    description:
+      'Mark places on the 3D map as you talk about them (see WHITEBOARD): pins, highlights, footprints and boundaries, arrows, routes and labels. Give place names (or explicit lat/lng); the app resolves real positions and outlines. Several places may go in one call.',
+    $position: 1,
+    parameters: {
+      properties: {
+        annotations: {
+          description:
+            'One or more things to mark. Mark multiple related places together when describing them as a group.',
+          $position: 1,
+          items: {
+            properties: {
+              type: {
+                description:
+                  'pin = planted marker at a spot; highlight = pulsing ring drawing the eye to a point; area = trace the outline of a building/campus/compound/district; arrow = a connector from one place to another (use target as the origin and toTarget as the destination); route = a path through several waypoints (use the points array); label = a floating text callout.',
+                $position: 2,
+              },
+              target: {
+                description:
+                  'Place name to resolve ("Palace of Fine Arts, San Francisco"), or "pointer" for the spot under the cursor. A monument inside a larger landmark gets its own name + city ("Tejano Monument, Austin"), never "X at the Texas State Capitol" (that stacks them on one centroid).',
+                $position: 2,
+              },
+              points: {
+                description:
+                  'For type=route: 2+ ordered waypoints the path passes through, each a place name (or coordinates / screen point).',
+                $position: 1,
+                items: {
+                  properties: {
+                    target: {
+                      description: 'Waypoint place name.',
+                      $position: 2,
+                    },
+                  },
+                },
+              },
+              mode: {
+                description:
+                  'For type=route: travel mode for a real street-following route (the app returns distance + time). Pick from the verb the user used ("walk" → walking, "drive" → driving). Defaults to walking.',
+                $position: 2,
+              },
+              latitude: {
+                description:
+                  'Explicit latitude (use only if no good place name exists).',
+                $position: 3,
+              },
+              toTarget: {
+                description: 'For type=arrow: the destination place name.',
+                $position: 2,
+              },
+              label: {
+                description:
+                  'Short caption shown on the map (a few words). Optional.',
+                $position: 2,
+              },
+              color: {
+                description:
+                  'Accent color. primary = neutral, amber = point of interest, cyan = infrastructure, green = confirmed/safe, red = alert.',
+                $position: 2,
+              },
+              footprint: {
+                description:
+                  'For type=area/highlight: trace the real building or campus outline from map data. Defaults true for area.',
+                $position: 1,
+              },
+              intent: {
+                description:
+                  'For type=area: "the_thing" (default) outlines the place itself (its footprint/boundary); "around_the_thing" highlights a surrounding zone (a buffered radius around it). Infer from phrasing: "the Capitol"/"show me X" → the_thing; "around/near/by X" or "the area around X" → around_the_thing.',
+                $position: 2,
+              },
+              entityKind: {
+                description:
+                  'What the target IS (a fact, not a style): building = one structure; compound = campus/grounds/mall/park; district = neighborhood; street = a named road; point_feature = monument/statue/memorial/fountain, anchored as a precise point. Set it whenever you know it.',
+                $position: 2,
+              },
+              screenX: {
+                description:
+                  'Fallback only, for a spot visible in the latest screenshot that you cannot name: normalized x (0=left, 1=right).',
+                $position: 3,
+              },
+              screenY: {
+                description: 'Fallback only: normalized y (0=top, 1=bottom).',
+                $position: 3,
+              },
+              toScreenX: {
+                description: 'For type=arrow: destination x (pixel fallback).',
+                $position: 3,
+              },
+              toScreenY: {
+                description: 'For type=arrow: destination y (pixel fallback).',
+                $position: 3,
+              },
+            },
+          },
+        },
+        flyTo: {
+          description:
+            'Also move the camera to frame the first annotation. Default false — leave false if the user is already looking at the spot.',
+          $position: 1,
+        },
+        persist: {
+          description:
+            'Keep annotations until cleared (true, default) or let them auto-fade after ~20s (false).',
+          $position: 1,
+        },
+      },
+    },
+  },
+  clear_annotations: {
+    description:
+      'Erase ALL map annotations previously drawn with annotate_map. Call this ONLY when the user EXPLICITLY asks to clear or reset the map. Annotations accumulate and persist across navigation and topic changes by design — never clear on your own initiative.',
+    $position: 1,
+  },
+  move_camera: {
+    description:
+      'Direct the camera like a drone operator: orbit the current view target, pan, tilt, or rotate — one bounded nudge (mode=once) or continuous motion until stopped (mode=continuous). Continuous motion also stops on any manual camera input or when a navigation tool runs. Say the RESULTING state when confirming ("Orbiting slowly"). Globe rotation (rotate_globe) spins Earth right continuously by default; explicit direction, mode and speed take precedence. It checks fit and may refuse.',
+    $position: 1,
+    parameters: {
+      properties: {
+        direction: {
+          description:
+            'Required for pan/tilt/rotate; orbit/rotate_globe default right.',
+          $position: 2,
+        },
+        mode: {
+          description:
+            'once = bounded eased nudge; continuous = until stop/manual input. rotate_globe defaults continuous; other motions default once.',
+          $position: 2,
+        },
+      },
+    },
+  },
+  fly_route: {
+    description:
+      'Cinematic dolly along an EXISTING route annotation (drawn earlier with annotate_map type=route) — flies the street-following path from start to end. Omit label for the newest route. If no route is drawn, this fails with guidance: draw the route first.',
+    $position: 1,
+    parameters: {
+      properties: {
+        label: {
+          description: 'Match an existing route mark by (partial) label.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  analyst_query: {
+    description:
+      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". A requested list or ranking requires this tool even after set_context_mode returned a Contacts count; that count alone has no requested items. complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values). Aircraft emergency fields describe broadcasts, not confirmed incidents: narrate emergencyBroadcast with emergencySource. emergencyKind values are general, unlawful, nordo, downed, minfuel and lifeguard; GEV treats the last two as priorities (emergency:false). lastContactAtMs says when the transponder was last heard, not when the status arrived.',
+    $position: 1,
+    parameters: {
+      properties: {
+        layers: {
+          description:
+            'Layers to query. fires → local-firms; ships → ais-live-vessels; buses/trains → transit; hurricanes → weather-cyclones; bases → military-installations; my receiver → local-adsb. Units differ per layer, so rank speed within one layer.',
+          $position: 2,
+        },
+        scope: {
+          description:
+            'Always set it (see WHERE). Explicit "in view" uses view; "nearby" uses view when Contacts is off. Around the active Contacts subject uses radius with the requested km and center omitted, never view: the five closest within 250 km use scope:{kind:"radius",km:250}, sortBy:"distance", limit:5. For another requested radius use its actual km, not 250. pointer = "around here/this" while pointing (radius at the cursor); region = "over Texas"; radius with center {lat, lon} = "near <place>" or explicit coordinates; anywhere = no place ("biggest anywhere", "today"). Preserve explicit view, named place, pointer and explicit center even while Contacts is active; never invent coordinates. There is no drawn-area scope yet: say so rather than answering for the view.',
+          $position: 2,
+          properties: {
+            name: {
+              description:
+                'For kind=region: a state/country ("Texas", "France") or a named natural region ("the Alps", "Gulf of Mexico").',
+              $position: 1,
+            },
+            km: {
+              description:
+                'For kind=radius or pointer: the actual requested kilometers. An active-subject 250 km request uses 250; another requested radius keeps that number.',
+              $position: 1,
+            },
+            center: {
+              description:
+                'Omit for a radius around the active Contacts subject. Supply only an explicitly requested coordinate or a resolved named-place coordinate; never invent 0,0 or replace an explicit center with the subject.',
+              $position: 1,
+            },
+          },
+        },
+        filters: {
+          description: `ANDed; values keep their type (numbers, true/false). Altitude is meters (40,000 ft = 12192). Time fields take ISO; ageHours = hours ago. Every layer has id, lat, lon. Fields — ${voiceQueryFieldHint()}.`,
+          $position: 1,
+        },
+        sortBy: {
+          description:
+            'Field to rank by, or "distance" (nearest first unless sortDir=desc).',
+          $position: 1,
+        },
+        followUp: {
+          description:
+            'true = re-filter the last answer (its layers) instead of fresh data.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  next_iss_pass: {
+    description:
+      'Next ISS pass over the camera location (or lat/lon): rise time, direction, peak elevation, duration and estimated visibility. Needs the satellites layer to have loaded once; if not, ask the user to enable it.',
+    $position: 1,
+    parameters: {
+      properties: {
+        latitude: {
+          description:
+            'Optional observer latitude. Omit to use the current camera position.',
+          $position: 3,
+        },
+        longitude: {
+          description:
+            'Optional observer longitude. Omit to use the current camera position.',
+          $position: 3,
+        },
+        minElevationDeg: {
+          description:
+            'Minimum peak elevation (deg) to count as a pass. Default 10.',
+          $position: 3,
+        },
+      },
+    },
+  },
+  next_satellite_pass: {
+    description:
+      'Predict the next pass in 24 hours for one satellite in the loaded catalog, identified by exact NORAD ID or name. Ambiguous names return candidates: ask for a choice rather than selecting one. Defaults to geometric passes; visibleOnly requires estimated illumination and a dark observer sky, which does not guarantee naked-eye visibility. Uses camera location unless coordinates are supplied.',
+    $position: 1,
+  },
+};

@@ -10,8 +10,10 @@ export const RADIO_CATALOG_HEALTHY_MIN_STATIONS = Math.ceil(
 );
 export const RADIO_USER_AGENT =
   'GodsEyeView/1.0 (Radio Browser directory client)';
-export const RADIO_UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export { RADIO_UUID_RE } from '../../../src/sources/radioBrowser.js';
+// Upper bound for the structurally malformed upstream rows reported in the
+// /stations envelope. The client layer validates against the same bound.
+export const RADIO_REJECTED_STATION_COUNT_MAX = 10_000;
 export const RADIO_FALLBACK_MIRRORS = Object.freeze([
   'https://de1.api.radio-browser.info',
   'https://de2.api.radio-browser.info',

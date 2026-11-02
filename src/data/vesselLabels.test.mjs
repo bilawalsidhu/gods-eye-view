@@ -29,6 +29,8 @@ test('normalizeVesselType preserves text and degrades unknown codes', () => {
   assert.equal(normalizeVesselType('Crude Oil Tanker'), 'Crude Oil Tanker');
   assert.equal(normalizeVesselType('0'), '');
   assert.equal(normalizeVesselType('25'), 'OTHER');
+  assert.equal(normalizeVesselType('100'), '');
+  assert.equal(normalizeVesselType('255'), '');
   assert.equal(normalizeVesselType(undefined), '');
 });
 
@@ -75,6 +77,7 @@ test('vessel host policy uses always-on shared fade and protected selected lane'
     id: 'vessel:2', position, title: 'SELECTED', gapPx: 12, selected: true,
   });
   assert.equal(selected.variant, 'selected');
+  assert.equal(selected.verticalOnly, false, 'selected detail can clear panels on either side');
   assert.equal(selected.protected, true);
   assert.equal(selected.collisionGroup, 'ambient-card');
   assert.equal(selected.maxDistance, Number.POSITIVE_INFINITY);

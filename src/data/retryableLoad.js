@@ -34,11 +34,14 @@ export const RETRY_COOLDOWN_MAX_MS = 300_000;
  * @param {() => number} [options.now] - Clock seam for tests.
  * @returns {() => Promise<T>} Memoized loader; retries once the cooldown elapses.
  */
-export function createRetryableLoader(load, {
-  cooldownMs = RETRY_COOLDOWN_MS,
-  maxCooldownMs = RETRY_COOLDOWN_MAX_MS,
-  now = () => Date.now(),
-} = {}) {
+export function createRetryableLoader(
+  load,
+  {
+    cooldownMs = RETRY_COOLDOWN_MS,
+    maxCooldownMs = RETRY_COOLDOWN_MAX_MS,
+    now = () => Date.now(),
+  } = {},
+) {
   /** @type {Promise<T>|null} */
   let inflight = null;
   /** @type {*} Last rejection, replayed to callers inside the cooldown. */
@@ -51,7 +54,10 @@ export function createRetryableLoader(load, {
   return function loadOnce() {
     if (inflight) return inflight;
     if (hasFailure) {
-      const wait = Math.min(cooldownMs * 2 ** (consecutiveFailures - 1), maxCooldownMs);
+      const wait = Math.min(
+        cooldownMs * 2 ** (consecutiveFailures - 1),
+        maxCooldownMs,
+      );
       // Replay the recorded reason rather than re-running a loader that is
       // probably still broken. Callers see identical behavior either way.
       if (now() - failedAt < wait) return Promise.reject(failure);

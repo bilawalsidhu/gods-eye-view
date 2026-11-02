@@ -2,22 +2,34 @@
  * Adds the keyboard semantics omitted by Cesium's href-less attribution links.
  * Cesium retains ownership of showing and hiding its required credit lightbox.
  */
+import { t } from './i18n/index.js';
+
 export function configureCreditKeyboardAccess(root = document) {
-  const expand = root?.querySelector?.('#cesium-credits .cesium-credit-expand-link');
+  const expand = root?.querySelector?.(
+    '#cesium-credits .cesium-credit-expand-link',
+  );
   const lightbox = root?.querySelector?.('.cesium-credit-lightbox');
   const close = lightbox?.querySelector?.('.cesium-credit-lightbox-close');
   if (!expand || !lightbox || !close) return false;
   const overlay = lightbox.parentElement;
+
+  // Cesium writes these two texts in English once, when it builds the credit
+  // display, and never rewrites them; English is Cesium's own text. Called
+  // again after a locale change, this words them again.
+  expand.textContent = t('Data attribution');
+  const title = lightbox.querySelector?.('.cesium-credit-lightbox-title');
+  if (title) title.textContent = t('Data provided by:');
 
   if (!lightbox.id) lightbox.id = 'cesium-credit-lightbox';
   expand.setAttribute('role', 'button');
   expand.setAttribute('tabindex', '0');
   expand.setAttribute('aria-haspopup', 'dialog');
   expand.setAttribute('aria-controls', lightbox.id);
-  expand.setAttribute('aria-expanded', 'false');
+  if (!expand.hasAttribute?.('aria-expanded'))
+    expand.setAttribute('aria-expanded', 'false');
   close.setAttribute('role', 'button');
   close.setAttribute('tabindex', '0');
-  close.setAttribute('aria-label', 'Close data attribution');
+  close.setAttribute('aria-label', t('Close data attribution'));
 
   if (expand.dataset.gevKeyboardReady === 'true') return true;
   expand.dataset.gevKeyboardReady = 'true';
@@ -44,7 +56,9 @@ export function configureCreditKeyboardAccess(root = document) {
     // A long Space hold may hand control to push-to-talk and move focus away.
     // Cancelling the armed release prevents that eventual keyup from also
     // activating the attribution control.
-    control.addEventListener('blur', () => { spacePressed = false; });
+    control.addEventListener('blur', () => {
+      spacePressed = false;
+    });
   };
   const closeAndRestoreFocus = () => {
     expand.setAttribute('aria-expanded', 'false');

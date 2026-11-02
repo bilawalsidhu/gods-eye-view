@@ -9,7 +9,7 @@ import {
   filterTrailing24h,
   isLikelyCsv,
   parseFirmsCsv,
-} from './firmsCsv.js';
+} from 'gods-eye-view/sources/firms-csv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = fs.readFileSync(
@@ -46,6 +46,25 @@ test('fixture first row maps every field, categorical confidence preserved raw',
   assert.equal(first.acqTime, '1006'); // string, as-is
   assert.equal(first.satellite, 'N20');
   assert.equal(first.instrument, 'VIIRS');
+});
+
+test('MODIS schema maps fields and preserves numeric confidence raw', () => {
+  const header =
+    'latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_t31,frp,daynight';
+  const row =
+    '34.123,-117.456,321.5,1.2,0.8,2026-07-16,1045,Aqua,MODIS,78,6.1NRT,290.25,12.4,D';
+  const [record] = parseFirmsCsv(`${header}\n${row}\n`);
+  assert.equal(record.lat, 34.123);
+  assert.equal(record.lon, -117.456);
+  assert.equal(record.frp, 12.4);
+  assert.equal(record.brightness, 321.5);
+  assert.equal(record.brightnessTi5, 290.25);
+  assert.equal(record.daynight, 'D');
+  assert.equal(record.acqDate, '2026-07-16');
+  assert.equal(record.acqTime, '1045');
+  assert.equal(record.satellite, 'Aqua');
+  assert.equal(record.instrument, 'MODIS');
+  assert.equal(record.confidence, '78');
 });
 
 test('acquisitionMsUtc: "1006" = 10:06 UTC', () => {
@@ -144,3 +163,21 @@ test('filterTrailing24h on the fixture keeps everything for a same-night now', (
   const kept = filterTrailing24h(records, Date.UTC(2026, 6, 17, 2, 0));
   assert.equal(kept.length, records.length);
 });
+
+const contractCases = JSON.parse(
+  fs.readFileSync(
+    path.join(__dirname, 'fixtures', 'firms-csv-cases.json'),
+    'utf8',
+  ),
+);
+for (const fixture of contractCases) {
+  test(`portable FIRMS CSV contract: ${fixture.name}`, () => {
+    const records = parseFirmsCsv(fixture.csv);
+    assert.equal(records === null ? null : records.length, fixture.parsedCount);
+    const recent = filterTrailing24h(records, Date.parse(fixture.now));
+    assert.deepEqual(
+      recent.map((record) => record.acqTime),
+      fixture.recentTimes,
+    );
+  });
+}

@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a new layer, data source, tool, or UI capability.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The project only ships public data with a license that allows redistribution, and it does not build features for identifying or tracking individuals. Read the "Responsible & Open" section of the README before proposing a data source.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can you not do today, and who needs it?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should it do? Keep the first version small.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Data source, license, and attribution
+      description: For anything that shows data, link the feed or API, name its license, and say whether it works without a key. Write "none" for pure UI changes.
+    validations:
+      required: true
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Will you build it?
+      options:
+        - Yes, I plan to open a PR
+        - No, this is a request for someone else
+    validations:
+      required: true

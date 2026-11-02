@@ -1,3 +1,5 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 // src/reasonableDefaults.test.mjs
 //
 // What the console looks like the FIRST time it opens — before any share link,
@@ -9,9 +11,8 @@
 //      actually decides fresh-boot layer state — including the early return that
 //      makes each layer's own initializer the operative default.
 //   2. Scope feather. Owner: "I like to hide feather" set it to 0% on
-//      2026-08-22; the owner revised that to 8% on 2026-08-23 and locked 11%
-//      on 2026-08-24, a soft
-//      edge. The hard crop is still one drag away, and that is pinned too.
+//      2026-08-22; later revisions were 8%, then 11%, then 100% on
+//      2026-10-25. Scope stays ON on a fresh boot. The hard crop remains available.
 //   3. Detection ON (Dense @ 75%) for EVERY style, Normal included.
 //      Owner: "detect should also be on by default."
 //   4. Detection OUTSIDE opacity 1% (owner final lock, 2026-08-24; 3% on 08-23, 5% before), with
@@ -36,13 +37,16 @@ import { AIRCRAFT_BRACKET_FLOOR_ANCHOR } from './data/detectionPolicy.js';
 import {
   SCOPE_FEATHER_RATIO_DEFAULT,
   getScopeMaskFeather,
+  isScopeMaskEnabled,
   scopeMaskGeometry,
   setScopeMaskFeather,
 } from './scopeMask.js';
 import { ShareLinkManager } from './sharelink.js';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+// Follow the UI wiring and its extracted preset definitions.
+const uiSource = readShellSource()
+  + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
+const indexHtml = await renderApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
 
 /** Slice ui.js between two literal anchors, so a pin reads one method, not the file. */
@@ -57,7 +61,7 @@ function uiBlock(start, end) {
 /** A ShareLinkManager over a synthetic hash — enough surface for parseInitialHash. */
 function managerForHash(hash) {
   globalThis.window = { location: { hash, href: `http://localhost/${hash}` } };
-  globalThis.history = { replaceState(_s, _t, next) { window.location.hash = next; } };
+  globalThis.history = { replaceState(_s, _t, next) { window.location.hash = new URL(next, window.location.href).hash; } };
   const viewer = {
     camera: {
       changed: { addEventListener() {} },
@@ -71,32 +75,40 @@ function managerForHash(hash) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Scope feather — a subtle soft edge on a first run
+// 2. Scope ON with 100% feather on a first run
 // ---------------------------------------------------------------------------
 
-test('first run opens with a subtle scope feather, at every surface that decides it', () => {
-  assert.equal(SCOPE_FEATHER_RATIO_DEFAULT, 0.11,
-    'owner final lock 2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings');
-  assert.equal(getScopeMaskFeather(), 0.11,
+test('first run opens with Scope ON and 100% feather at every default surface', () => {
+  assert.equal(isScopeMaskEnabled(), true, 'the live mask starts enabled');
+  assert.equal(SCOPE_FEATHER_RATIO_DEFAULT, 1, 'owner preference 2026-10-25');
+  assert.equal(getScopeMaskFeather(), 1,
     'and the live module starts there, not merely documents it');
 
   // The slider and its readout are the same default rendered as markup — a
   // fresh boot applies no restore, so a stale value here would show one number
   // over a mask drawn at another.
-  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\svalue="11"/,
-    'index.html: the feather slider ships at 11');
-  assert.match(indexHtml, /id="scope-feather-value"[^>]*>11%</,
+  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\svalue="100"/,
+    'index.html: the feather slider ships at 100');
+  assert.match(indexHtml, /id="scope-feather-value"[^>]*>100%</,
     'index.html: and its readout agrees with the handle');
+
+  assert.match(indexHtml, /<input type="checkbox" id="scope-toggle"[^>]*\schecked\s*\/?>/,
+    'the native Scope checkbox starts checked');
 
   // The link this session generates must describe the mask this session draws,
   // for the window before the first _syncShareState.
-  assert.match(shareSource, /this\._scopeFeatherPct = 11;/,
+  assert.match(shareSource, /this\._scopeFeatherPct = 100;/,
     'sharelink.js: the generator starts from the same value the mask starts at');
+  const params = managerForHash('')._buildHashParams();
+  assert.equal(params.get('sc'), '1');
+  assert.equal(params.get('scf'), '100');
 });
 
-test('an explicit feather still wins over the subtle default', () => {
+test('an explicit feather still wins over the 100% default', () => {
   // A link is authored state. The new default governs a session that said
   // nothing; it must never overwrite one that said something.
+  assert.equal(managerForHash('#lat=10&lon=20&scf=11').parseInitialHash().scopeFeatherPct, 11,
+    'links carrying the previous default preserve their authored feather');
   assert.equal(managerForHash('#lat=10&lon=20&scf=35').parseInitialHash().scopeFeatherPct, 35);
   assert.equal(managerForHash('#lat=10&lon=20&scf=64').parseInitialHash().scopeFeatherPct, 64);
   assert.equal(managerForHash('#lat=10&lon=20&scf=0').parseInitialHash().scopeFeatherPct, 0,
@@ -109,23 +121,28 @@ test('an explicit feather still wins over the subtle default', () => {
     'a pre-scf link restores the author\'s view, not the new default');
 });
 
-test('the subtle default did not weaken the feather control, and 0 is still reachable', () => {
+test('share links preserve explicit Scope OFF and feather choices over the defaults', () => {
+  const shared = managerForHash('#lat=10&lon=20&sc=0&scf=11').parseInitialHash();
+  assert.equal(shared.scopeEnabled, false);
+  assert.equal(shared.scopeFeatherPct, 11);
+});
+
+test('the 100% default retains the expanded feather range and hard edge', () => {
   // The cheap way to move a default would be to nerf the control. Prove the
   // slider still spans its full range and the geometry is still DERIVED from
   // the ratio — a check that would pass vacuously if it only ever saw one value.
-  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\smin="0"[^>]*\smax="100"/,
+  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\smin="0"[^>]*\smax="200"/,
     'the slider still offers the whole range');
   const previous = getScopeMaskFeather();
   try {
-    for (const ratio of [0.35, 0.7, 1]) {
+    for (const ratio of [0.35, 0.7, 1, 1.75, 2]) {
       setScopeMaskFeather(ratio);
       const geo = scopeMaskGeometry(1200, 900);
       const keyholeR = 900 * 0.5 * KEYHOLE_OUTER_RADIUS;
       assert.ok(Math.abs((geo.outerR - geo.innerR) - keyholeR * ratio) < 1e-9,
         `feather ${ratio} must still widen the band to that fraction of the keyhole`);
     }
-    // The new default is a real, narrow band — not the hard crop, and nowhere
-    // near the retired 35 % halo.
+    // The first-run value draws a band derived from the same keyhole radius.
     setScopeMaskFeather(SCOPE_FEATHER_RATIO_DEFAULT);
     const soft = scopeMaskGeometry(1200, 900);
     const keyholeR = 900 * 0.5 * KEYHOLE_OUTER_RADIUS;
@@ -210,7 +227,7 @@ test('first run opens with detection on, in every style, using the one tactical 
   // Normal used to start OFF while only CRT/NVG/FLIR auto-applied the preset.
   // It is now the baseline for all of them, reusing the SAME frozen object, so
   // "the tactical look" cannot fork into two definitions.
-  assert.match(uiSource, /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{ mode: 'dense', densityPct: 75 \}\);/,
+  assert.match(uiSource, /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: 'dense',\s*densityPct: 75,?\s*\}\);/,
     'the tactical look is still Dense @ 75%');
   const baseline = uiBlock('const GLOBAL_POST_DEFAULTS = {', '\n};');
   assert.match(baseline, /detectionMode: MILITARY_DETECTION_PRESET\.mode\.toUpperCase\(\),/,
@@ -246,9 +263,12 @@ test('detection-on-by-default is a default, not an operator override', () => {
   // preset consults the flag, and the detection button sets it.
   assert.match(uiSource, /if \(preset\.detection && !this\._detectionUserOverridden\) \{/,
     'a style preset still yields to an operator who changed detection by hand');
-  const detectionButton = uiBlock("this._detectionBtn.addEventListener('click'", 'cycleDetectionMode()');
-  assert.match(detectionButton, /this\._detectionUserOverridden = true;/,
+  const displayActions = uiSource.slice(uiSource.indexOf('const token = store.connect('));
+  const detectionButton = displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:'));
+  assert.match(detectionButton, /cycleDetectionMode\(\)/, 'the button still invokes the detection action');
+  assert.match(detectionButton, /this\.claimDetection\(\);/,
     'and the detection control still claims the override when the operator uses it');
+  assert.match(uiSource, /claimDetection: \(\) => \{\s*this\._visualSettings\._detectionUserOverridden = true;/);
 
   // Style-switch semantics are unchanged: Normal is still not a preset owner,
   // so switching TO Normal does not re-apply or clear anything.

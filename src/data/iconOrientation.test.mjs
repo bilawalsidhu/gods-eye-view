@@ -47,8 +47,12 @@ test('off-center oblique contacts pin the documented perspective divergence', ()
   const right = new Cesium.Cartesian3(0, 1, 0);
   const up = new Cesium.Cartesian3(Math.sin(pitch), 0, Math.cos(pitch));
   const forward = new Cesium.Cartesian3(-Math.cos(pitch), 0, Math.sin(pitch));
-  const basisRotation = screenProjectedRotation({ camera: { rightWC: right, upWC: up } },
-    equatorPosition, 0, null);
+  const basisRotation = screenProjectedRotation(
+    { camera: { rightWC: right, upWC: up } },
+    equatorPosition,
+    0,
+    null,
+  );
 
   // Exact pinhole derivative for a contact 2 km right of center and 5 km in
   // front. North has a depth component under this oblique camera, so exact
@@ -65,26 +69,29 @@ test('off-center oblique contacts pin the documented perspective divergence', ()
   const exactRotation = Math.atan2(-exactScreenX, exactScreenUp);
 
   assert.ok(Math.abs(basisRotation) < 1e-12);
-  assert.ok(Math.abs(wrappedDelta(exactRotation, basisRotation)) > Cesium.Math.toRadians(5));
+  assert.ok(
+    Math.abs(wrappedDelta(exactRotation, basisRotation)) >
+      Cesium.Math.toRadians(5),
+  );
 });
 
 test('screen rotation holds sub-degree projection noise', () => {
   const previous = 1;
   assert.equal(
-    stabilizeScreenRotation(previous, previous + (0.25 * Math.PI / 180)),
+    stabilizeScreenRotation(previous, previous + (0.25 * Math.PI) / 180),
     previous,
   );
 });
 
 test('screen rotation accepts deliberate camera-orbit movement', () => {
   const previous = 1;
-  const next = previous + (2 * Math.PI / 180);
+  const next = previous + (2 * Math.PI) / 180;
   assert.equal(stabilizeScreenRotation(previous, next), next);
 });
 
 test('screen rotation compares across the wrapped angle boundary', () => {
-  const previous = Math.PI - (0.1 * Math.PI / 180);
-  const next = -Math.PI + (0.1 * Math.PI / 180);
+  const previous = Math.PI - (0.1 * Math.PI) / 180;
+  const next = -Math.PI + (0.1 * Math.PI) / 180;
   assert.equal(stabilizeScreenRotation(previous, next), previous);
 });
 
@@ -102,10 +109,12 @@ const cruiseCamera = Cesium.Cartesian3.fromDegrees(0, 0, CRUISE_M);
  * tangent condition is exact here and the expected answer is derived, not
  * guessed.
  */
-const tangentLonDeg = Cesium.Math.toDegrees(Math.acos(
-  Cesium.Ellipsoid.WGS84.maximumRadius
-  / (Cesium.Ellipsoid.WGS84.maximumRadius + CRUISE_M),
-));
+const tangentLonDeg = Cesium.Math.toDegrees(
+  Math.acos(
+    Cesium.Ellipsoid.WGS84.maximumRadius /
+      (Cesium.Ellipsoid.WGS84.maximumRadius + CRUISE_M),
+  ),
+);
 
 test('a contact above the silhouette is read against sky', () => {
   // Another aircraft at the same flight level 200 km ahead. The chord between
@@ -124,7 +133,10 @@ test('a contact below the silhouette keeps ground behind it', () => {
   // the horizon, so the plate has real imagery to separate the text from.
   const below = Cesium.Cartesian3.fromDegrees(30_000 / 111_320, 0, 2_000);
   assert.equal(skyBackdropFactor(cruiseCamera, below), 0);
-  assert.equal(skyBackdropFactor(cruiseCamera, Cesium.Cartesian3.fromDegrees(0.05, 0, 0)), 0);
+  assert.equal(
+    skyBackdropFactor(cruiseCamera, Cesium.Cartesian3.fromDegrees(0.05, 0, 0)),
+    0,
+  );
 });
 
 test('the silhouette itself lands exactly mid-band', () => {
@@ -144,10 +156,12 @@ test('the silhouette itself lands exactly mid-band', () => {
 function climbSweep(step = 500) {
   const samples = [];
   for (let height = 0; height <= 12_000; height += step) {
-    samples.push(skyBackdropFactor(
-      cruiseCamera,
-      Cesium.Cartesian3.fromDegrees(100_000 / 111_320, 0, height),
-    ));
+    samples.push(
+      skyBackdropFactor(
+        cruiseCamera,
+        Cesium.Cartesian3.fromDegrees(100_000 / 111_320, 0, height),
+      ),
+    );
   }
   return samples;
 }
@@ -163,9 +177,16 @@ test('the band lerps monotonically and saturates on both sides', () => {
     );
   }
   assert.equal(samples[0], 0, 'well below the horizon is fully grounded');
-  assert.equal(samples[samples.length - 1], 1, 'well above the horizon is fully sky');
+  assert.equal(
+    samples[samples.length - 1],
+    1,
+    'well above the horizon is fully sky',
+  );
   const partial = samples.filter((value) => value > 0 && value < 1);
-  assert.ok(partial.length >= 3, `expected a real blend band, saw ${partial.length} partial samples`);
+  assert.ok(
+    partial.length >= 3,
+    `expected a real blend band, saw ${partial.length} partial samples`,
+  );
 });
 
 test('the band, not the geometry, is what smooths the crossing', () => {
@@ -174,13 +195,19 @@ test('the band, not the geometry, is what smooths the crossing', () => {
   // if the two ever get conflated, only one of these two tests goes red.
   const hard = [];
   for (let height = 0; height <= 12_000; height += 500) {
-    hard.push(skyBackdropFactor(
-      cruiseCamera,
-      Cesium.Cartesian3.fromDegrees(100_000 / 111_320, 0, height),
-      0,
-    ));
+    hard.push(
+      skyBackdropFactor(
+        cruiseCamera,
+        Cesium.Cartesian3.fromDegrees(100_000 / 111_320, 0, height),
+        0,
+      ),
+    );
   }
-  assert.deepEqual([...new Set(hard)], [0, 1], 'a zero band must produce only the two end states');
+  assert.deepEqual(
+    [...new Set(hard)],
+    [0, 1],
+    'a zero band must produce only the two end states',
+  );
 });
 
 /**
@@ -200,12 +227,19 @@ test('below the ellipsoid, a contact against open sky still reads as sky', () =>
   // ~6.5° above eye level — the whole band is 1.09° per side, so this is not a
   // near call. Before the fix a sub-ellipsoid camera fell into the degenerate
   // guard and every one of these came back 0: a row of dark boxes on empty sky.
-  const approach = Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT + 8_000 * DEG_PER_M_LAT, 900);
+  const approach = Cesium.Cartesian3.fromDegrees(
+    JFK_LON,
+    JFK_LAT + 8_000 * DEG_PER_M_LAT,
+    900,
+  );
   assert.equal(skyBackdropFactor(jfkCockpit, approach), 1);
   // Straight overhead is the unambiguous case, from under the surface as much
   // as from cruise altitude.
   assert.equal(
-    skyBackdropFactor(jfkCockpit, Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, 10_000)),
+    skyBackdropFactor(
+      jfkCockpit,
+      Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, 10_000),
+    ),
     1,
   );
 });
@@ -225,7 +259,11 @@ test('below the ellipsoid, a contact on the ramp still keeps its plate', () => {
   assert.equal(
     skyBackdropFactor(
       jfkCockpit,
-      Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT + 400 * DEG_PER_M_LAT, JFK_RAMP_H - 5),
+      Cesium.Cartesian3.fromDegrees(
+        JFK_LON,
+        JFK_LAT + 400 * DEG_PER_M_LAT,
+        JFK_RAMP_H - 5,
+      ),
     ),
     0,
   );
@@ -246,14 +284,21 @@ test('at the surface the horizon is exactly eye level, geodetic not geocentric',
     new Cesium.Cartesian3(20_000, 0, 0),
     new Cesium.Cartesian3(),
   );
-  const alongHorizontal = Cesium.Cartesian3.add(onSurface, east, new Cesium.Cartesian3());
+  const alongHorizontal = Cesium.Cartesian3.add(
+    onSurface,
+    east,
+    new Cesium.Cartesian3(),
+  );
   assert.ok(
     Math.abs(skyBackdropFactor(onSurface, alongHorizontal) - 0.5) < 1e-5,
     `eye level must be the band centre, got ${skyBackdropFactor(onSurface, alongHorizontal)}`,
   );
   // The geocentric radial is NOT the answer: a contact perpendicular to it
   // lands measurably off centre, so this test cannot pass by accident.
-  const radialUp = Cesium.Cartesian3.normalize(onSurface, new Cesium.Cartesian3());
+  const radialUp = Cesium.Cartesian3.normalize(
+    onSurface,
+    new Cesium.Cartesian3(),
+  );
   const perpToRadial = Cesium.Cartesian3.cross(
     radialUp,
     Cesium.Cartesian3.UNIT_Z,
@@ -265,7 +310,11 @@ test('at the surface the horizon is exactly eye level, geodetic not geocentric',
     20_000,
     perpToRadial,
   );
-  const alongRadialPlane = Cesium.Cartesian3.add(onSurface, perpToRadial, new Cesium.Cartesian3());
+  const alongRadialPlane = Cesium.Cartesian3.add(
+    onSurface,
+    perpToRadial,
+    new Cesium.Cartesian3(),
+  );
   assert.ok(
     Math.abs(skyBackdropFactor(onSurface, alongRadialPlane) - 0.5) > 0.05,
     'a geocentric horizontal would be a different plane; the test must be able to tell',
@@ -284,7 +333,9 @@ function surfaceCrossingSweep(from = -50, to = 50, step = 1) {
   const contact = Cesium.Cartesian3.fromDegrees(30_000 / 111_319.49, 0, 0);
   const samples = [];
   for (let height = from; height <= to; height += step) {
-    samples.push(skyBackdropFactor(Cesium.Cartesian3.fromDegrees(0, 0, height), contact));
+    samples.push(
+      skyBackdropFactor(Cesium.Cartesian3.fromDegrees(0, 0, height), contact),
+    );
   }
   return samples;
 }
@@ -300,7 +351,10 @@ test('the answer stays continuous as the camera rises through the surface', () =
   for (let i = 1; i < samples.length; i++) {
     worst = Math.max(worst, Math.abs(samples[i] - samples[i - 1]));
   }
-  assert.ok(worst < 0.05, `no step across the surface may pop; worst adjacent jump ${worst}`);
+  assert.ok(
+    worst < 0.05,
+    `no step across the surface may pop; worst adjacent jump ${worst}`,
+  );
 });
 
 test('the crossover has no seam at the surface itself', () => {
@@ -308,9 +362,18 @@ test('the crossover has no seam at the surface itself', () => {
   // 1 cm is 5.6e-5 rad, a thousandth of the band, so any visible difference
   // here is a discontinuity in the code rather than in the geometry.
   const contact = Cesium.Cartesian3.fromDegrees(30_000 / 111_319.49, 0, 0);
-  const under = skyBackdropFactor(Cesium.Cartesian3.fromDegrees(0, 0, -0.01), contact);
-  const over = skyBackdropFactor(Cesium.Cartesian3.fromDegrees(0, 0, 0.01), contact);
-  assert.ok(Math.abs(under - over) < 5e-3, `seam at the surface: ${under} vs ${over}`);
+  const under = skyBackdropFactor(
+    Cesium.Cartesian3.fromDegrees(0, 0, -0.01),
+    contact,
+  );
+  const over = skyBackdropFactor(
+    Cesium.Cartesian3.fromDegrees(0, 0, 0.01),
+    contact,
+  );
+  assert.ok(
+    Math.abs(under - over) < 5e-3,
+    `seam at the surface: ${under} vs ${over}`,
+  );
 });
 
 test('a sub-surface camera carries real information, not one frozen answer', () => {
@@ -319,7 +382,10 @@ test('a sub-surface camera carries real information, not one frozen answer', () 
   // sub-surface camera heights must produce different answers.
   const belowOnly = surfaceCrossingSweep(-200, -1, 1);
   const spread = Math.max(...belowOnly) - Math.min(...belowOnly);
-  assert.ok(spread > 0.05, `a sub-surface camera must still discriminate; spread ${spread}`);
+  assert.ok(
+    spread > 0.05,
+    `a sub-surface camera must still discriminate; spread ${spread}`,
+  );
   assert.ok(
     belowOnly.every((value) => value > 0 && value < 1),
     'this sweep is deliberately mid-band the whole way',
@@ -334,7 +400,11 @@ test('a sub-surface camera carries real information, not one frozen answer', () 
  * a future edit to the shared lines could drift the cruise answer while every
  * sub-surface test stayed green.
  */
-function legacyAboveSurfaceFactor(cameraPosition, position, featherRad = HORIZON_FEATHER_RAD) {
+function legacyAboveSurfaceFactor(
+  cameraPosition,
+  position,
+  featherRad = HORIZON_FEATHER_RAD,
+) {
   const s = Cesium.Ellipsoid.WGS84.oneOverRadii;
   const cx = cameraPosition.x * s.x;
   const cy = cameraPosition.y * s.y;
@@ -415,22 +485,39 @@ test('below the surface the backdrop test agrees with the occluder beside it', (
   const camera = Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, -18);
   const occluder = horizonOccluder({ positionWC: camera });
   const enu = Cesium.Transforms.eastNorthUpToFixedFrame(camera);
-  const offsetBy = (up) => Cesium.Cartesian3.add(
-    camera,
-    Cesium.Matrix4.multiplyByPointAsVector(
-      enu,
-      new Cesium.Cartesian3(0, 20_000, up),
+  const offsetBy = (up) =>
+    Cesium.Cartesian3.add(
+      camera,
+      Cesium.Matrix4.multiplyByPointAsVector(
+        enu,
+        new Cesium.Cartesian3(0, 20_000, up),
+        new Cesium.Cartesian3(),
+      ),
       new Cesium.Cartesian3(),
-    ),
-    new Cesium.Cartesian3(),
-  );
+    );
   // 20 km out and 600 m clear of eye level is well outside the 1.09° band.
   const aboveEye = offsetBy(600);
   const belowEye = offsetBy(-600);
-  assert.equal(occluder.isPointVisible(aboveEye), true, 'the occluder keeps what is above eye level');
-  assert.equal(skyBackdropFactor(camera, aboveEye), 1, 'and the backdrop test must call it sky');
-  assert.equal(occluder.isPointVisible(belowEye), false, 'the occluder culls what is below it');
-  assert.equal(skyBackdropFactor(camera, belowEye), 0, 'and the backdrop test must call it ground');
+  assert.equal(
+    occluder.isPointVisible(aboveEye),
+    true,
+    'the occluder keeps what is above eye level',
+  );
+  assert.equal(
+    skyBackdropFactor(camera, aboveEye),
+    1,
+    'and the backdrop test must call it sky',
+  );
+  assert.equal(
+    occluder.isPointVisible(belowEye),
+    false,
+    'the occluder culls what is below it',
+  );
+  assert.equal(
+    skyBackdropFactor(camera, belowEye),
+    0,
+    'and the backdrop test must call it ground',
+  );
 });
 
 test('a degenerate camera or contact reports ground rather than throwing', () => {
@@ -442,12 +529,24 @@ test('a degenerate camera or contact reports ground rather than throwing', () =>
   assert.equal(skyBackdropFactor(cruiseCamera, cruiseCamera), 0);
   // The planet's centre has no local vertical to measure against.
   assert.equal(skyBackdropFactor(Cesium.Cartesian3.ZERO, cruiseCamera), 0);
-  assert.equal(skyBackdropFactor(new Cesium.Cartesian3(NaN, NaN, NaN), cruiseCamera), 0);
-  assert.equal(skyBackdropFactor(cruiseCamera, new Cesium.Cartesian3(NaN, NaN, NaN)), 0);
+  assert.equal(
+    skyBackdropFactor(new Cesium.Cartesian3(NaN, NaN, NaN), cruiseCamera),
+    0,
+  );
+  assert.equal(
+    skyBackdropFactor(cruiseCamera, new Cesium.Cartesian3(NaN, NaN, NaN)),
+    0,
+  );
   // An infinite coordinate normalizes to NaN a few lines later, and a NaN plate
   // alpha reaches the canvas as an invisible label rather than a caught error.
-  assert.equal(skyBackdropFactor(new Cesium.Cartesian3(Infinity, 0, 0), cruiseCamera), 0);
-  assert.equal(skyBackdropFactor(cruiseCamera, new Cesium.Cartesian3(Infinity, 0, 0)), 0);
+  assert.equal(
+    skyBackdropFactor(new Cesium.Cartesian3(Infinity, 0, 0), cruiseCamera),
+    0,
+  );
+  assert.equal(
+    skyBackdropFactor(cruiseCamera, new Cesium.Cartesian3(Infinity, 0, 0)),
+    0,
+  );
 });
 
 test('the feather band is a named constant in a sane screen-space range', () => {
@@ -455,4 +554,194 @@ test('the feather band is a named constant in a sane screen-space range', () => 
   // crossfade. A band of degrees would smear plates across half the sky; a
   // band of arc-seconds would pop.
   assert.ok(HORIZON_FEATHER_RAD > 0.002 && HORIZON_FEATHER_RAD < 0.09);
+});
+
+// --- Perspective projection through a real view-projection --------------------
+
+import {
+  PERSPECTIVE_BLEND_MAX_PX,
+  PERSPECTIVE_BLEND_MIN_PX,
+  PERSPECTIVE_PROBE_M,
+  perspectiveProjectedRotation,
+} from './iconOrientation.js';
+
+/**
+ * A scene the exact projector accepts: 3D mode, a canvas, and a camera with a
+ * real view matrix and perspective frustum. The camera sits `altitudeM` above
+ * the origin and looks north, pitched down by `pitchDeg`, with world east as
+ * screen right — the oblique street-level pose where the camera-basis answer
+ * is wrong off-centre and the exact one is not.
+ */
+function obliqueScene(
+  altitudeM,
+  pitchDeg,
+  { width = 1280, height = 800 } = {},
+) {
+  const position = Cesium.Cartesian3.fromDegrees(0, 0, altitudeM);
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(position);
+  const east = Cesium.Matrix4.getColumn(enu, 0, new Cesium.Cartesian3());
+  const north = Cesium.Matrix4.getColumn(enu, 1, new Cesium.Cartesian3());
+  const up = Cesium.Matrix4.getColumn(enu, 2, new Cesium.Cartesian3());
+  const pitch = Cesium.Math.toRadians(pitchDeg);
+  const direction = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.add(
+      Cesium.Cartesian3.multiplyByScalar(
+        north,
+        Math.cos(pitch),
+        new Cesium.Cartesian3(),
+      ),
+      Cesium.Cartesian3.multiplyByScalar(
+        up,
+        -Math.sin(pitch),
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const cameraUp = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.add(
+      Cesium.Cartesian3.multiplyByScalar(
+        north,
+        Math.sin(pitch),
+        new Cesium.Cartesian3(),
+      ),
+      Cesium.Cartesian3.multiplyByScalar(
+        up,
+        Math.cos(pitch),
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const viewMatrix = Cesium.Matrix4.computeView(
+    position,
+    direction,
+    cameraUp,
+    east,
+    new Cesium.Matrix4(),
+  );
+  const frustum = new Cesium.PerspectiveFrustum({
+    fov: Cesium.Math.toRadians(60),
+    aspectRatio: width / height,
+    near: 1,
+    far: 1e7,
+  });
+  return {
+    frameState: { mode: Cesium.SceneMode.SCENE3D },
+    canvas: { clientWidth: width, clientHeight: height },
+    camera: {
+      viewMatrix,
+      frustum,
+      rightWC: east,
+      upWC: cameraUp,
+      positionWC: position,
+    },
+  };
+}
+
+/** Probe separation (px) the helper sees for a contact and course in a scene. */
+function probeSeparation(scene, contact, courseDeg) {
+  const courseRad = Cesium.Math.toRadians(courseDeg);
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(contact);
+  const forward = Cesium.Matrix4.multiplyByPointAsVector(
+    enu,
+    new Cesium.Cartesian3(
+      Math.sin(courseRad) * PERSPECTIVE_PROBE_M,
+      Math.cos(courseRad) * PERSPECTIVE_PROBE_M,
+      0,
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const probe = Cesium.Cartesian3.add(
+    contact,
+    forward,
+    new Cesium.Cartesian3(),
+  );
+  const at = Cesium.SceneTransforms.worldToWindowCoordinates(scene, contact);
+  const ahead = Cesium.SceneTransforms.worldToWindowCoordinates(scene, probe);
+  const dx = ahead.x - at.x;
+  const dy = ahead.y - at.y;
+  return { separation: Math.hypot(dx, dy), exact: Math.atan2(-dx, -dy) };
+}
+
+test('the perspective helper is continuous through the sub-pixel band, not a 23° flip', () => {
+  // Codex's reproduction: a contact near the right edge of an oblique view,
+  // the camera altitude walked so the probe separation crosses half a pixel.
+  // The rotation jumped 23° → 0° between two adjacent altitudes. The exact
+  // and camera-basis answers now blend across a band, the short way round.
+  //
+  // The contact keeps the SAME screen position across the walk — its ground
+  // offsets scale with the altitude — so the two answers disagree by the
+  // same twenty-odd degrees at every altitude while the separation alone
+  // walks from well above the band to well below it.
+  const course = 0; // northbound
+  const contactFor = (altitude) =>
+    Cesium.Cartesian3.fromDegrees(
+      (0.7 * altitude) / 111_320,
+      (1.2 * altitude) / 111_320,
+      0,
+    );
+  const samples = [];
+  // Geometric steps: separation scales with altitude, so equal ratios give
+  // equal-sized steps in the quantity the band is defined on.
+  for (let altitude = 500; altitude <= 600_000; altitude *= 1.02) {
+    const scene = obliqueScene(altitude, 45);
+    const contact = contactFor(altitude);
+    if (!Cesium.SceneTransforms.worldToWindowCoordinates(scene, contact))
+      continue;
+    const { separation, exact } = probeSeparation(scene, contact, course);
+    samples.push({
+      altitude,
+      separation,
+      exact,
+      rotation: perspectiveProjectedRotation(scene, contact, course, null),
+      basis: screenProjectedRotation(scene, contact, course, null),
+    });
+  }
+  const inBand = samples.filter(
+    (s) =>
+      s.separation > PERSPECTIVE_BLEND_MIN_PX &&
+      s.separation < PERSPECTIVE_BLEND_MAX_PX,
+  );
+  const above = samples.filter((s) => s.separation >= PERSPECTIVE_BLEND_MAX_PX);
+  const below = samples.filter((s) => s.separation <= PERSPECTIVE_BLEND_MIN_PX);
+  assert.ok(
+    inBand.length >= 5 && above.length >= 5 && below.length >= 5,
+    `the walk crosses the whole band (${below.length}/${inBand.length}/${above.length})`,
+  );
+
+  // Off-centre and oblique, the two answers genuinely disagree — that is the
+  // divergence the exact projection exists to fix.
+  const disagreement = Math.abs(
+    wrappedDelta(above[0].rotation, above[0].basis),
+  );
+  assert.ok(
+    disagreement > Cesium.Math.toRadians(5),
+    `exact and camera-basis differ by ${Cesium.Math.toDegrees(disagreement).toFixed(1)}° above the band`,
+  );
+
+  let worstStep = 0;
+  for (let i = 1; i < samples.length; i += 1) {
+    worstStep = Math.max(
+      worstStep,
+      Math.abs(wrappedDelta(samples[i].rotation, samples[i - 1].rotation)),
+    );
+  }
+  assert.ok(
+    worstStep < Cesium.Math.toRadians(3),
+    `no step between neighbouring altitudes exceeds 3° (worst ${Cesium.Math.toDegrees(worstStep).toFixed(2)}°)`,
+  );
+  // Below the band it is the camera-basis answer; above it the exact one, unblended.
+  for (const s of below)
+    assert.ok(
+      Math.abs(wrappedDelta(s.rotation, s.basis)) < 1e-6,
+      `basis alone at ${s.separation.toFixed(2)} px`,
+    );
+  for (const s of above)
+    assert.ok(
+      Math.abs(wrappedDelta(s.rotation, s.exact)) < 1e-6,
+      `exact alone at ${s.separation.toFixed(2)} px`,
+    );
 });

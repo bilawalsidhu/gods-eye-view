@@ -76,5 +76,8 @@ export const TRACKED_MODEL_EXIT_ALT_M =
  */
 export function trackedModelZoomActive(cameraHeightM, wasActive = false) {
   if (!Number.isFinite(cameraHeightM)) return false;
-  return cameraHeightM < (wasActive ? TRACKED_MODEL_EXIT_ALT_M : TRACKED_MODEL_ENTER_ALT_M);
+  return (
+    cameraHeightM <
+    (wasActive ? TRACKED_MODEL_EXIT_ALT_M : TRACKED_MODEL_ENTER_ALT_M)
+  );
 }

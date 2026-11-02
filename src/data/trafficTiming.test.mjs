@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { getTrafficTimingDiagnostics } from './traffic.js';
 
-const SOURCE = readFileSync(new URL('./traffic.js', import.meta.url), 'utf8');
+const SOURCE = readLayerSource(new URL('./traffic.js', import.meta.url), 'utf8').replace(/parts\.(?:model|timing)\./g, '');
 
 function functionBody(name) {
   const declaration = `function ${name}(`;
@@ -136,6 +139,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
   const timeouts = new Map();
   let timerId = 0;
   let server;
+  const cacheDir = mkdtempSync(path.join(tmpdir(), 'gev-traffic-timing-vite-'));
   let trafficLayer;
   let viewer;
 
@@ -159,6 +163,12 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     };
     server = await createServer({
       root: fileURLToPath(new URL('../..', import.meta.url)),
+      // Its own optimizer cache, not node_modules/.vite in the package tree:
+      // a host running Core's suite refuses files inside Core.
+      cacheDir,
+      // The test loads modules over SSR; the browser dependency optimizer would
+      // keep writing its cache after the server closes.
+      optimizeDeps: { noDiscovery: true, include: [] },
       configFile: false,
       appType: 'custom',
       logLevel: 'silent',
@@ -166,9 +176,8 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       plugins: [{
         name: 'traffic-timing-test-hooks',
         transform(code, id) {
-          if (!id.endsWith('/src/data/traffic.js')) return null;
-          return `${code}\nexport const __trafficTimingTestHooks = {\n` +
-            `  currentAnchor: () => _trafficTimingCurrentAnchor,\n};\n`;
+          if (!id.endsWith('/src/layers/traffic/index.js')) return null;
+          return code.replace('return Object.assign(', 'return Object.assign({ __trafficTimingTestHooks: { currentAnchor: () => state._trafficTimingCurrentAnchor } },');
         },
       }],
     });
@@ -240,7 +249,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     });
     trafficLayer.enable(viewer);
     assert.equal(traffic.getTrafficTimingDiagnostics().marksInstalled, 1);
-    assert.equal(moveEnd.listenerCount(), 1, 'marksInstalled must represent a live listener');
+    assert.equal(moveEnd.listenerCount(), 2, 'one timing listener plus the production arrival check');
     assert.equal(performance.getEntriesByName('traffic:stale:mark').length, 0);
     assert.equal(performance.getEntriesByName('traffic:stale:measure').length, 0);
 
@@ -248,7 +257,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     // and moveEnd arrives only after cameraEventWaitTime (~500 ms).
     setLongitude(-97.72);
     changed.raise();
-    const anchorA = traffic.__trafficTimingTestHooks.currentAnchor();
+    const anchorA = traffic.default.__trafficTimingTestHooks.currentAnchor();
     const anchorMarkA = performance.getEntriesByType('mark').find((entry) => (
       entry.detail?.segment === 'last-camera-change'
       && entry.detail?.interactionId === anchorA.interactionId
@@ -262,7 +271,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       traceObjectsCreated: 1,
       uncorrelatedTracesDropped: 0,
     });
-    assert.equal(traffic.__trafficTimingTestHooks.currentAnchor(), null);
+    assert.equal(traffic.default.__trafficTimingTestHooks.currentAnchor(), null);
     const fetchFromA = performance.getEntriesByType('measure').find((entry) => (
       entry.detail?.segment === 'last-camera-change-to-fetch-start'
       && entry.detail?.interactionId === anchorA.interactionId
@@ -288,16 +297,16 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     // and must count one drop without consuming C's current anchor.
     setLongitude(-97.70);
     changed.raise();
-    const anchorB = traffic.__trafficTimingTestHooks.currentAnchor();
+    const anchorB = traffic.default.__trafficTimingTestHooks.currentAnchor();
     const [timerBId, timerB] = pendingDebounce();
     setLongitude(-97.68);
     changed.raise();
-    const anchorC = traffic.__trafficTimingTestHooks.currentAnchor();
+    const anchorC = traffic.default.__trafficTimingTestHooks.currentAnchor();
     assert.notEqual(anchorC.interactionId, anchorB.interactionId);
     assert.equal(timeouts.has(timerBId), false, 'the ordinary debounce path must cancel B');
     await timerB.callback();
     assert.equal(
-      traffic.__trafficTimingTestHooks.currentAnchor().interactionId,
+      traffic.default.__trafficTimingTestHooks.currentAnchor().interactionId,
       anchorC.interactionId,
       'a stale callback must not consume the newer C anchor',
     );
@@ -329,6 +338,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     console.warn = originalWarn;
     performance.clearMarks();
     performance.clearMeasures();
+    rmSync(cacheDir, { recursive: true, force: true, maxRetries: 3 });
   }
 });
 
@@ -367,7 +377,7 @@ test('the timed parser stays source-equivalent to the production parser', () => 
 
   assert.doesNotMatch(SOURCE, /function fetchRoadsTimed\s*\(/);
   assert.doesNotMatch(SOURCE, /function renderRoadsForAltitudeTimed\s*\(/);
-  const fetchBody = canonicalSemanticBody(functionBody('fetchRoads'));
+  const fetchBody = canonicalSemanticBody(functionBody('readRoads'));
   assert.equal(fetchBody.includes('response.text()'), false);
   assert.equal(fetchBody.includes('JSON.parse('), false);
   const okCheck = fetchBody.indexOf('if(!response.ok)');

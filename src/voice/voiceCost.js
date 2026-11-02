@@ -50,7 +50,7 @@ export const VOICE_MODELS = Object.freeze({
   standard: Object.freeze({
     tier: 'standard',
     id: 'gpt-realtime-2',
-    label: 'STANDARD',
+    label: 'STANDARD', // i18n-ignore: model data; the tier button has its own text
     /** USD per 1M tokens — gpt-realtime-2. */
     rates: Object.freeze({
       textInput: 4,
@@ -66,7 +66,7 @@ export const VOICE_MODELS = Object.freeze({
   mini: Object.freeze({
     tier: 'mini',
     id: 'gpt-realtime-2.1-mini',
-    label: 'MINI',
+    label: 'MINI', // i18n-ignore: model data; the tier button has its own text
     /** USD per 1M tokens — gpt-realtime-2.1-mini (~3.2× cheaper on audio). */
     rates: Object.freeze({
       textInput: 0.6,
@@ -122,7 +122,7 @@ export function isKnownVoiceTier(tier) {
 export function mostExpensiveVoiceModel() {
   // Rank by audio output — the dominant cost in a speech-to-speech session.
   return Object.values(VOICE_MODELS).reduce((worst, entry) =>
-    entry.rates.audioOutput > worst.rates.audioOutput ? entry : worst
+    entry.rates.audioOutput > worst.rates.audioOutput ? entry : worst,
   );
 }
 
@@ -152,6 +152,69 @@ export function resolveVoiceModelById(modelId) {
     id: id || worst.id,
     recognized: false,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * INPUT TRANSCRIPTION (voice-card captions)
+ * ------------------------------------------------------------------ */
+
+/**
+ * ⚠️ VERIFY AT RELEASE — external prices, USD per 1M tokens, same shape as
+ * the realtime rate tables. Transcription is billed separately from the
+ * session's responses and arrives as `usage` on
+ * `conversation.item.input_audio_transcription.completed`. An unknown model
+ * bills at the most expensive entry, as for session models.
+ */
+const transcriptionTable = ({ textInput, audioInput, textOutput }) =>
+  Object.freeze({
+    textInput,
+    audioInput,
+    textOutput,
+    // Transcription output is text; usage without output details would
+    // otherwise be read as audio and priced at zero. Cached input is priced
+    // as uncached so the meter never under-counts.
+    audioOutput: textOutput,
+    textCachedInput: textInput,
+    audioCachedInput: audioInput,
+  });
+
+export const TRANSCRIPTION_MODEL_RATES = Object.freeze({
+  'gpt-4o-mini-transcribe': transcriptionTable({
+    textInput: 1.25,
+    audioInput: 3,
+    textOutput: 5,
+  }),
+  'gpt-4o-transcribe': transcriptionTable({
+    textInput: 2.5,
+    audioInput: 6,
+    textOutput: 10,
+  }),
+});
+
+/** Per-second rate for duration-billed transcription (whisper-style). */
+export const TRANSCRIPTION_USD_PER_SECOND = 0.006 / 60;
+
+/** Rate table for a transcription model; unknown ids bill at the priciest. */
+export function transcriptionRates(modelId) {
+  const id = typeof modelId === 'string' ? modelId.trim() : '';
+  if (Object.prototype.hasOwnProperty.call(TRANSCRIPTION_MODEL_RATES, id))
+    return TRANSCRIPTION_MODEL_RATES[id];
+  return Object.values(TRANSCRIPTION_MODEL_RATES).reduce((worst, rates) =>
+    rates.audioInput > worst.audioInput ? rates : worst,
+  );
+}
+
+/**
+ * USD for one transcription's usage: token usage priced with the model's
+ * rates, or duration usage priced per second.
+ */
+export function estimateTranscriptionCostUsd(usage, modelId) {
+  if (!usage) return 0;
+  if (usage.type === 'duration') {
+    const usd = nonNegative(usage.seconds) * TRANSCRIPTION_USD_PER_SECOND;
+    return Number.isFinite(usd) ? usd : 0;
+  }
+  return estimateUsageCostUsd(usage, transcriptionRates(modelId));
 }
 
 /* ------------------------------------------------------------------ *
@@ -191,7 +254,10 @@ export const VOICE_COST_LIMIT_OFF = 'off';
  */
 export function normalizeCostLimits(limits) {
   const clean = (value, fallback) => {
-    if (typeof value === 'string' && value.trim().toLowerCase() === VOICE_COST_LIMIT_OFF) {
+    if (
+      typeof value === 'string' &&
+      value.trim().toLowerCase() === VOICE_COST_LIMIT_OFF
+    ) {
       return Infinity;
     }
     if (value === Infinity) return Infinity;
@@ -209,7 +275,8 @@ export function normalizeCostLimits(limits) {
 /** Convert limits to a JSON-safe shape that round-trips a disabled threshold. */
 export function serializeCostLimits(limits) {
   const normalized = normalizeCostLimits(limits);
-  const encode = (value) => (Number.isFinite(value) ? value : VOICE_COST_LIMIT_OFF);
+  const encode = (value) =>
+    Number.isFinite(value) ? value : VOICE_COST_LIMIT_OFF;
   return {
     warnUsd: encode(normalized.warnUsd),
     capUsd: encode(normalized.capUsd),
@@ -269,7 +336,7 @@ export function splitUsageTokens(usage) {
     if (!cached && nonNegative(inDetails.cached_tokens) > 0) {
       audioCached = Math.min(
         nonNegative(inDetails.cached_tokens),
-        nonNegative(inDetails.audio_tokens)
+        nonNegative(inDetails.audio_tokens),
       );
     }
     textIn = Math.max(0, nonNegative(inDetails.text_tokens) - textCached);
@@ -289,12 +356,15 @@ export function splitUsageTokens(usage) {
   // to audio (priciest) so a partial payload over-estimates, never under.
   const inputResidual = Math.max(
     0,
-    inputTotal - (textIn + audioIn + imageIn + textCached + audioCached + imageCached)
+    inputTotal -
+      (textIn + audioIn + imageIn + textCached + audioCached + imageCached),
   );
   audioIn += inputResidual;
 
   const textOut = outDetails ? nonNegative(outDetails.text_tokens) : 0;
-  let audioOut = outDetails ? nonNegative(outDetails.audio_tokens) : outputTotal;
+  let audioOut = outDetails
+    ? nonNegative(outDetails.audio_tokens)
+    : outputTotal;
   const outputResidual = Math.max(0, outputTotal - (textOut + audioOut));
   audioOut += outputResidual;
 
@@ -422,7 +492,14 @@ export function createVoiceCostTracker(options = {}) {
      * @param {object} usage - `response.usage`
      */
     record(usage) {
-      const usd = estimateUsageCostUsd(usage, model.rates);
+      return this.recordUsd(estimateUsageCostUsd(usage, model.rates));
+    },
+    /**
+     * Fold an already-priced cost (e.g. input transcription) into the same
+     * session total, so the warning and the cap cover it.
+     * @param {number} usd
+     */
+    recordUsd(usd) {
       if (usd > 0) {
         totalUsd += usd;
         responses += 1;

@@ -1,6 +1,6 @@
+import { readShellSource } from './testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import {
   CCTV_WORLD_CLICK_FOCUS_DURATION_SEC,
   CCTV_FOCUS_REQUEST_EVENT,
@@ -57,7 +57,7 @@ test('UI CCTV focus listener registration disposes the exact added callback once
   assert.strictEqual(added[0].callback, listener);
   assert.strictEqual(removed[0].callback, added[0].callback);
 
-  const uiSource = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const uiSource = readShellSource();
   assert.match(
     uiSource,
     /_removeCctvRequestFocusListener = registerCctvFocusRequestListener\([\s\S]+this\._cctvRequestFocusHandler/,

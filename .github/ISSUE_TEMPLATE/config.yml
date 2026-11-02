@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/bilawalsidhu/gods-eye-view/security/advisories/new
+    about: Report anything exploitable privately. Do not open a public issue for it.
+  - name: Setup and quick start
+    url: https://github.com/bilawalsidhu/gods-eye-view#readme
+    about: Install paths (Pinokio, terminal), provider keys, and what runs keyless.
+  - name: Known issues
+    url: https://github.com/bilawalsidhu/gods-eye-view/blob/main/docs/KNOWN-ISSUES.md
+    about: Check here before filing. Your problem may already be tracked with a workaround.

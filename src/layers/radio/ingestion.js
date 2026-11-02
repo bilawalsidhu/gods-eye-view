@@ -1,0 +1,204 @@
+import { msg } from '../../i18n/index.js';
+import {
+  RADIO_DIRECTORY_STALE_MS,
+  RADIO_DIRECTORY_FUTURE_SKEW_MS,
+  RADIO_REJECTED_STATION_COUNT_MAX,
+} from './policy.js';
+
+// Directory errors stay English in layer state and stats; the layer row and
+// the Radio panel translate them when shown.
+const ERROR_REFRESH_DEGRADED = msg(
+  'Directory refresh degraded; showing the previous station catalog.',
+);
+const ERROR_COVERAGE_DEGRADED = msg('Radio directory coverage is degraded.');
+const ERROR_REFRESH_FAILED = msg(
+  'Directory refresh failed; showing the previous station catalog.',
+);
+const ERROR_DIRECTORY_UNAVAILABLE = msg(
+  'Radio directory is temporarily unavailable.',
+);
+
+export function createIngestion({
+  state: layerState,
+  services,
+  parts,
+  source,
+}) {
+  const methods = {
+    /** Refresh directory metadata through the hardened same-origin broker. */
+    async update() {
+      if (!layerState._enabled) return;
+      const generation = ++layerState._requestGeneration;
+      const sessionGeneration = layerState._sessionGeneration;
+      layerState._abortController?.abort();
+      layerState._abortController = new AbortController();
+      layerState._loading = true;
+      layerState._error = null;
+      parts.presentation.emitState();
+      try {
+        const body = await source.getDirectory({
+          signal: layerState._abortController.signal,
+        });
+        if (
+          !parts.model.radioRequestIsCurrent(
+            generation,
+            layerState._requestGeneration,
+            layerState._enabled,
+            sessionGeneration,
+            layerState._sessionGeneration,
+          )
+        )
+          return;
+        if (!Array.isArray(body?.stations))
+          throw new Error('Radio directory response was malformed');
+        const updatedAt =
+          typeof body.updatedAt === 'string' &&
+          Number.isFinite(Date.parse(body.updatedAt))
+            ? body.updatedAt
+            : null;
+        const updatedAtMs = updatedAt ? Date.parse(updatedAt) : NaN;
+        if (
+          !updatedAt ||
+          updatedAtMs < Date.now() - RADIO_DIRECTORY_STALE_MS ||
+          updatedAtMs > Date.now() + RADIO_DIRECTORY_FUTURE_SKEW_MS ||
+          typeof body.stale !== 'boolean' ||
+          typeof body.degraded !== 'boolean'
+        )
+          throw new Error('Radio directory freshness metadata was malformed');
+        // Rows the server skipped as structurally malformed. Older envelopes
+        // omit the field; a present value must be a bounded count.
+        const serverRejectedStationCount =
+          body.rejectedStationCount === undefined
+            ? 0
+            : body.rejectedStationCount;
+        if (
+          !Number.isSafeInteger(serverRejectedStationCount) ||
+          serverRejectedStationCount < 0 ||
+          serverRejectedStationCount > RADIO_REJECTED_STATION_COUNT_MAX
+        )
+          throw new Error('Radio directory diagnostic metadata was malformed');
+        const rows = body.stations;
+        const acceptedRows = rows.filter(
+          parts.catalogModel.isValidRadioDirectoryStation,
+        );
+        if (!acceptedRows.length)
+          throw new Error('Radio directory returned no usable stations');
+        const acceptedGeneration = body.acceptedGeneration;
+        if (
+          acceptedGeneration !== null &&
+          (!Number.isSafeInteger(acceptedGeneration) || acceptedGeneration < 1)
+        )
+          throw new Error('Radio directory generation metadata was malformed');
+        if (!body.stale && !body.degraded && acceptedGeneration === null) {
+          throw new Error('Radio directory omitted its accepted generation');
+        }
+        const catalogInstance = body.catalogInstance;
+        if (
+          !body.stale &&
+          !body.degraded &&
+          (typeof catalogInstance !== 'string' || !catalogInstance)
+        ) {
+          throw new Error('Radio directory omitted its catalog instance');
+        }
+        const preservingWarmCatalog =
+          layerState._stations.length > 0 && (body.stale || body.degraded);
+        // Generations are only comparable within one producer instance. A new
+        // instance token (server restart, different proxy process) starts a fresh
+        // sequence: never a repeat and never a regression.
+        const sameCatalogInstance =
+          layerState._acceptedCatalogSnapshot?.instance === catalogInstance;
+        const currentAcceptedGeneration = sameCatalogInstance
+          ? layerState._acceptedCatalogSnapshot?.generation
+          : null;
+        if (
+          !body.stale &&
+          !body.degraded &&
+          Number.isSafeInteger(currentAcceptedGeneration) &&
+          acceptedGeneration < currentAcceptedGeneration
+        )
+          throw new Error('Radio directory generation regressed');
+        const repeatingAcceptedGeneration =
+          !body.stale &&
+          !body.degraded &&
+          Number.isSafeInteger(currentAcceptedGeneration) &&
+          acceptedGeneration === currentAcceptedGeneration;
+        if (!preservingWarmCatalog) {
+          const immutableRows = acceptedRows.map(
+            parts.catalogModel.freezeRadioStation,
+          );
+          if (repeatingAcceptedGeneration) {
+            layerState._updatedAt =
+              layerState._acceptedCatalogSnapshot.updatedAt;
+            if (
+              !layerState._tuningActive &&
+              layerState._cancelledTuningPresentationStation
+            ) {
+              layerState._cancelledTuningPresentationStation = null;
+              parts.rendering.updateSelectionEntity();
+            }
+          } else if (!body.stale && !body.degraded) {
+            const acceptedSnapshot =
+              parts.catalogModel.createAcceptedCatalogSnapshot(
+                catalogInstance,
+                acceptedGeneration,
+                updatedAt,
+                immutableRows,
+              );
+            if (!acceptedSnapshot)
+              throw new Error(
+                'Radio directory generation metadata was malformed',
+              );
+            layerState._acceptedCatalogSnapshot = acceptedSnapshot;
+            parts.rendering.reconcileStations(acceptedSnapshot.stations);
+          } else {
+            parts.rendering.reconcileStations(immutableRows);
+          }
+          if (!repeatingAcceptedGeneration) layerState._updatedAt = updatedAt;
+        }
+        // Combine server-side structural rejections with rows this client
+        // refused. The count is diagnostic: it marks coverage degraded but does
+        // not undo the generation admitted above.
+        layerState._rejectedStationCount = Math.min(
+          RADIO_REJECTED_STATION_COUNT_MAX,
+          serverRejectedStationCount + rows.length - acceptedRows.length,
+        );
+        layerState._degraded =
+          body.degraded || layerState._rejectedStationCount > 0;
+        layerState._stale = body.stale;
+        layerState._error = preservingWarmCatalog
+          ? ERROR_REFRESH_DEGRADED
+          : layerState._degraded
+            ? ERROR_COVERAGE_DEGRADED
+            : null;
+      } catch (error) {
+        if (
+          error?.name === 'AbortError' ||
+          !parts.model.radioRequestIsCurrent(
+            generation,
+            layerState._requestGeneration,
+            layerState._enabled,
+            sessionGeneration,
+            layerState._sessionGeneration,
+          )
+        )
+          return;
+        layerState._error = layerState._stations.length
+          ? ERROR_REFRESH_FAILED
+          : ERROR_DIRECTORY_UNAVAILABLE;
+        layerState._stale = layerState._stations.length > 0;
+        layerState._degraded = layerState._stations.length > 0;
+      } finally {
+        if (
+          generation === layerState._requestGeneration &&
+          sessionGeneration === layerState._sessionGeneration
+        ) {
+          layerState._loading = false;
+          layerState._abortController = null;
+          parts.presentation.emitState();
+        }
+      }
+    },
+  };
+
+  return { methods };
+}

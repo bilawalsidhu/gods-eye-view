@@ -1,26 +1,21 @@
+import { shellMethod } from './testSupport/readShellSource.mjs';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
+import { createHoverDisclosure, collapsePanelOnEscape } from './ui/panelDisclosure.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createPinia } from 'pinia';
+import { msg, t } from './i18n/index.js';
+import { followPanelState, readPanelState } from './ui/rail/panelState.js';
+import { usePanelChromeStore } from './ui/stores/panelChrome.js';
 
 // Exercise the installed event routes and central close method, without WebGL.
-const source = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const markup = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const locationMarkup = markup.slice(markup.indexOf('<div id="location-bar"'), markup.indexOf('<div id="left-panel-stack"'));
 const locationToggleMarkup = locationMarkup.match(/<button\b([^>]*\bid="location-bar-toggle"[^>]*)>([\s\S]*?)<\/button>/);
 const locationToggleAttributes = Object.fromEntries(
   [...(locationToggleMarkup?.[1] || '').matchAll(/([\w-]+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
 );
-const initStart = source.indexOf('  _initAutoHoverPanel(');
-const initEnd = source.indexOf('  /**\n   * Sets up drag-to-reposition', initStart);
-const escapeStart = source.indexOf('  _collapsePanelOnEscape(');
-const escapeEnd = source.indexOf('  _initCommandDockPins(', escapeStart);
-const closeStart = source.indexOf('  setPanelCollapsed(panelId, collapsed, {');
-const closeEnd = source.indexOf('  /**\n   * Toggles "clean view"', closeStart);
-const syncStart = source.indexOf('  _syncPanelCollapseButton(panelEl) {');
-const syncEnd = source.indexOf('  /**\n   * Converts a panel', syncStart);
-assert.ok(initStart >= 0 && initEnd > initStart && escapeStart >= 0 && escapeEnd > escapeStart
-  && closeStart >= 0 && closeEnd > closeStart);
-assert.ok(syncStart >= 0 && syncEnd > syncStart);
 
 function harness({ hidden = false, selected = true, noChips = false } = {}) {
   let now = 0;
@@ -43,6 +38,10 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
       addEventListener(type, callback) {
         if (!listeners.has(type)) listeners.set(type, []);
         listeners.get(type).push(callback);
+      },
+      removeEventListener(type, callback) {
+        const values = listeners.get(type) || [];
+        listeners.set(type, values.filter((item) => item !== callback));
       },
       matches(selector) { return selector === ':hover' ? this.hovered : true; },
       closest() { return this.isDisclosure ? this : null; },
@@ -107,14 +106,26 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   const window = {
     setTimeout(callback, delay) { timers.set(++nextTimer, { callback, at: now + delay }); return nextTimer; },
   };
-  const methods = new Function('document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame',
-    `return ({${source.slice(initStart, initEnd)},\n${source.slice(escapeStart, escapeEnd)},\n${source.slice(closeStart, closeEnd)},\n${source.slice(syncStart, syncEnd)}});`)(
-    document, window, (id) => timers.delete(id), { now: () => now }, () => {},
+  window.clearTimeout = (id) => timers.delete(id);
+  window.performance = { now: () => now };
+  document.defaultView = window;
+  const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame', 't', 'msg', 'readPanelState',
+    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_presentPanel').toString()},\n${shellMethod('_shownPanel').toString()}});`)(
+    createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {}, t, msg, readPanelState,
   );
   const saves = [];
   const claims = [];
   let shareSyncs = 0;
+  const chromeStore = usePanelChromeStore(createPinia());
+  const chromeToken = chromeStore.connect({});
+  // The trays' roots draw the store's state, as v-panel-state does.
+  followPanelState(chromeStore, 'control-panel', panel);
+  followPanelState(chromeStore, 'location-bar', location);
   const manager = {
+    _lifetime: { frame() {} },
+    _chromeStore: chromeStore,
+    _chromeToken: chromeToken,
+    _panelLayout: { _leftStackPreferredPanelId: null, _rightStackPreferredPanelId: null },
     ...methods,
     _savePanelCollapsedState(...args) { saves.push(args); },
     _scheduleLeftPanelLayout() {}, _scheduleRightPanelLayout() {},
@@ -135,6 +146,8 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
     manager, panel, location, disclosure, locationDisclosure, locationSearch,
     first, active, elsewhere, document, timers, emit, focus, tick, saves, claims,
     calls: () => focusCalls,
+    /** A tray's state as PanelChrome presents it to the dock's buttons. */
+    tray: (id) => chromeStore.panels[id],
     shareSyncs: () => shareSyncs,
     show() { hidden = false; },
     select(value) { selected = value; },
@@ -235,7 +248,7 @@ test('opening the unpinned Location sibling cancels the Map Source request', () 
   assert.equal(h.timers.size, 0); h.drain(); assert.equal(h.calls(), 0);
 });
 test('a pinned Map Source tray retains its own request when the sibling opens', () => {
-  const h = harness(); h.panel.classes.add('dock-pinned'); h.key();
+  const h = harness(); h.manager._presentPanel(h.panel, { pinned: true }); h.key();
   h.manager.setPanelCollapsed('location-bar', false); h.tick();
   assert.equal(h.panel.classList.contains('collapsed'), false);
   assert.equal(h.document.activeElement, h.active);
@@ -296,8 +309,7 @@ test('Location Enter stays immediate while Space waits for native key release', 
       h.locationKeyUp(key);
     }
     assert.equal(h.location.classList.contains('collapsed'), false);
-    assert.equal(h.locationDisclosure.getAttribute('aria-expanded'), 'true');
-    assert.equal(h.locationDisclosure.getAttribute('aria-label'), 'Collapse LOCATION');
+    assert.equal(h.tray('location-bar').collapsed, false);
     assert.equal(h.document.activeElement, h.locationDisclosure);
     assert.equal(h.timers.size, 0);
     assert.equal(h.calls(), 0);
@@ -312,7 +324,7 @@ test('Location Enter stays immediate while Space waits for native key release', 
     h.locationKey(key);
     if (key === ' ') h.locationKeyUp(key);
     assert.equal(h.location.classList.contains('collapsed'), true);
-    assert.equal(h.locationDisclosure.getAttribute('aria-label'), 'Expand LOCATION');
+    assert.equal(h.tray('location-bar').collapsed, true);
   }
 });
 
@@ -326,9 +338,7 @@ test('Location synthesized click and Escape retain focus and its accessible name
   const escape = h.locationEscape();
   assert.equal(escape.defaultPrevented, true);
   assert.equal(h.location.classList.contains('collapsed'), true);
-  assert.equal(h.locationDisclosure.getAttribute('aria-expanded'), 'false');
-  assert.equal(h.locationDisclosure.getAttribute('aria-label'), 'Expand LOCATION');
-  assert.equal(h.locationDisclosure.title, 'Expand LOCATION');
+  assert.equal(h.tray('location-bar').collapsed, true);
   assert.equal(h.document.activeElement, h.locationDisclosure);
   h.drain();
   assert.equal(h.calls(), 0);
@@ -347,20 +357,21 @@ test('Location keyboard opening cancels the unpinned sibling and cannot revive i
 });
 
 test('Location keyboard opening preserves a pinned sibling and a pinned Location survives sibling opening', () => {
-  const h = harness(); h.panel.classes.add('dock-pinned'); h.key(); h.tick();
+  // Pins go through the store, as the dock's pin button does.
+  const h = harness(); h.manager._presentPanel(h.panel, { pinned: true }); h.key(); h.tick();
   h.focus(h.locationDisclosure); h.locationKey(); h.drain();
   assert.equal(h.panel.classList.contains('collapsed'), false);
   assert.equal(h.location.classList.contains('collapsed'), false);
   assert.equal(h.document.activeElement, h.locationDisclosure);
-  h.location.classes.add('dock-pinned');
+  h.manager._presentPanel(h.location, { pinned: true });
   h.manager.setPanelCollapsed('control-panel', true);
   h.focus(h.disclosure); h.key(); h.tick();
   assert.equal(h.location.classList.contains('collapsed'), false);
-  assert.equal(h.locationDisclosure.getAttribute('aria-expanded'), 'true');
+  assert.equal(h.tray('location-bar').collapsed, false);
   assert.equal(h.document.activeElement, h.active);
 });
 
-test('Location restoration syncs its real name without claiming focus, collapsing its sibling or persisting', () => {
+test('Location restoration presents its state without claiming focus, collapsing its sibling or persisting', () => {
   const h = harness(); h.key(); h.tick();
   const saves = h.saves.length;
   const claims = h.claims.length;
@@ -368,14 +379,14 @@ test('Location restoration syncs its real name without claiming focus, collapsin
   h.manager.setPanelCollapsed('location-bar', false, { restore: true, persist: false, syncShare: false });
   assert.equal(h.panel.classList.contains('collapsed'), false);
   assert.equal(h.location.classList.contains('collapsed'), false);
-  assert.equal(h.locationDisclosure.getAttribute('aria-label'), 'Collapse LOCATION');
+  assert.equal(h.tray('location-bar').collapsed, false);
   assert.equal(h.document.activeElement, h.active);
   assert.equal(h.saves.length, saves);
   assert.equal(h.claims.length, claims);
   assert.equal(h.shareSyncs(), shareSyncs);
-  h.locationDisclosure.setAttribute('aria-label', 'stale');
+  const presented = h.tray('location-bar');
   h.manager.setPanelCollapsed('location-bar', false, { restore: true, persist: false, syncShare: false });
-  assert.equal(h.locationDisclosure.getAttribute('aria-label'), 'Collapse LOCATION', 'same-state synchronization keeps the Location name');
+  assert.ok(h.tray('location-bar') === presented, 'same-state synchronization does not republish');
   assert.equal(h.timers.size, 0);
 });
 
@@ -384,4 +395,62 @@ test('disposed UI cannot complete a pending handoff', () => {
   h.manager._disposed = true; h.show(); h.drain();
   assert.equal(h.document.activeElement, h.disclosure);
   assert.equal(h.calls(), 1); assert.equal(h.timers.size, 0);
+});
+
+
+test('destroying hover controls cancels pending opens and removes their event routes', () => {
+  const h = harness();
+  h.panel.hovered = true;
+  h.emit(h.panel, 'pointerenter', { pointerType: 'mouse' });
+  assert.ok(h.timers.size > 0);
+  const control = h.manager._hoverPanelControls.get('control-panel');
+  control.destroy();
+  control.destroy();
+  assert.equal(h.timers.size, 0);
+  for (const node of [h.panel, h.disclosure]) {
+    assert.equal([...node.listeners.values()].flat().length, 0);
+  }
+  h.key();
+  h.drain();
+  assert.equal(h.panel.classes.has('collapsed'), true);
+  assert.equal(h.calls(), 0);
+});
+
+test('destroying an open tray cancels close and focus work without changing saved state', () => {
+  const h = harness({ hidden: true });
+  h.key();
+  h.emit(h.panel, 'pointerleave', { pointerType: 'mouse' });
+  const callbacks = [...h.timers.values()].map((timer) => timer.callback);
+  const saves = h.saves.length;
+  h.manager._hoverPanelControls.get('control-panel').destroy();
+  assert.equal(h.timers.size, 0);
+  h.show();
+  for (const callback of callbacks) callback();
+  assert.equal(h.panel.classes.has('collapsed'), false);
+  assert.equal(h.saves.length, saves);
+  assert.equal(h.calls(), 0, 'even an already queued focus attempt is revoked');
+});
+
+test('replacing hover controls removes the previous listeners before rebinding', () => {
+  const h = harness();
+  h.manager._initAutoHoverPanel('control-panel');
+  h.key();
+  assert.equal(h.panel.classes.has('collapsed'), false, 'one activation toggles only once');
+  h.tick();
+  assert.equal(h.calls(), 1);
+});
+
+
+test('teardown during an opening callback cannot enqueue a later focus handoff', () => {
+  const h = harness({ hidden: true });
+  const change = h.manager.setPanelCollapsed.bind(h.manager);
+  h.manager.setPanelCollapsed = (...args) => {
+    change(...args);
+    h.manager._hoverPanelControls.get('control-panel').destroy();
+  };
+  h.key();
+  assert.equal(h.timers.size, 0);
+  h.show();
+  h.drain();
+  assert.equal(h.calls(), 0);
 });

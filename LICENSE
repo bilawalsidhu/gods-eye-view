@@ -38,6 +38,14 @@ remain subject to their own licenses and terms. Notably:
     Open Database License (ODbL) 1.0 — attribution + share-alike on the data.
   - NASA FIRMS active-fire snapshot: CC0 / U.S. public domain (citation
     requested).
+  - Bhote Koshi event imagery and derived river centerline
+    (public/events/bhote-koshi-2026/ and the coordinate dataset in
+    src/data/bhoteKoshiFloodPath.js): Vantor / GeoPera, CC BY-NC 4.0.
+    NOT for commercial use without separate permission. Source-linked witness
+    posts retain their owners' terms; no witness clips are bundled. See the
+    folder README for attribution and modification notices. The derived
+    coordinates remain third-party data even though they are embedded in a
+    JavaScript source file; the MIT grant does not cover that dataset.
 
 Live sources (Google Maps, OpenSky, adsb.lol, AISStream, CelesTrak, USGS,
 OSM Overpass, City of Austin, GBFS) are fetched at runtime under each

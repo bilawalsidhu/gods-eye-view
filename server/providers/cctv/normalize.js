@@ -1,3 +1,8 @@
+import {
+  normalizeFeedType,
+  isVideoFeedType,
+} from '../../../src/sources/cctvTypes.js';
+export { normalizeFeedType, isVideoFeedType };
 import { directionToHeading } from '../../../src/data/directionText.js';
 import { haversineKm } from '../common/geo.js';
 /**
@@ -32,42 +37,23 @@ export function escapeXml(text) {
 }
 
 /**
- * Canonicalize a CCTV feed type string to one of:
- * 'image', 'mjpeg', 'mp4', 'webm', 'hls', or pass-through.
- *
- * @param {string} value - Raw feed type (e.g. 'jpeg', 'mjpg', 'video', 'stream').
- * @returns {string} Normalized feed type.
- */
-export function normalizeFeedType(value) {
-  const raw = String(value || '')
-    .trim()
-    .toLowerCase();
-  if (!raw) return 'image';
-  if (raw === 'jpeg' || raw === 'jpg' || raw === 'png') return 'image';
-  if (raw === 'mjpg') return 'mjpeg';
-  if (raw === 'video') return 'mp4';
-  if (raw === 'stream') return 'hls';
-  return raw;
-}
-
-/**
- * Check whether a normalized feed type represents streaming video.
- *
- * @param {string} feedType
- * @returns {boolean}
- */
-export function isVideoFeedType(feedType) {
-  return feedType === 'mp4' || feedType === 'webm' || feedType === 'hls';
-}
-
-/**
  * Coerce a value to a finite number, returning fallback if NaN/Infinity.
+ *
+ * Absent, blank and boolean values take the fallback too: `Number` reads
+ * null, '' and false as 0, which would turn a missing coordinate, heading or
+ * elevation into a real zero.
  *
  * @param {*} value
  * @param {number} [fallback=NaN]
  * @returns {number}
  */
 export function toFiniteNumber(value, fallback = NaN) {
+  if (
+    value == null ||
+    typeof value === 'boolean' ||
+    (typeof value === 'string' && !value.trim())
+  )
+    return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 }
@@ -78,7 +64,7 @@ export function toFiniteNumber(value, fallback = NaN) {
  * @param {string} text
  * @returns {string}
  */
-export function normalizeKey(text) {
+function normalizeKey(text) {
   return String(text || '')
     .trim()
     .toLowerCase()
@@ -94,7 +80,7 @@ export function normalizeKey(text) {
  * @param {string} value
  * @returns {{lat:number, lon:number}}
  */
-export function parsePointString(value) {
+function parsePointString(value) {
   const match = String(value || '').match(
     /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
   );
@@ -114,7 +100,7 @@ export function parsePointString(value) {
  * @param {string|object|null} value
  * @returns {{lat:number, lon:number}}
  */
-export function coerceLatLon(value) {
+function coerceLatLon(value) {
   if (!value) return { lat: NaN, lon: NaN };
 
   if (typeof value === 'string') {
@@ -307,6 +293,213 @@ export function isLikelyAustinCoordinate(lat, lon) {
 }
 
 /**
+ * Bounding-box sanity check: is this coordinate plausibly on the Finnish road
+ * network? Generous around the observed catalog extent (59.86..70.09 N,
+ * 19.62..31.28 E) so a real new station is never dropped, tight enough that a
+ * swapped lat/lon or a null island record is.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {boolean}
+ */
+/** Longest unselected camera label the HUD shows before it gets noisy. */
+export const CAMERA_CODE_MAX_CHARS = 28;
+
+/**
+ * Short display code for the unselected camera label ("CAM-<code>"): the
+ * feed's own name for the camera ("5TH ST / CONGRESS AVE", "TRAFALGAR
+ * SQUARE"), trimmed to CAMERA_CODE_MAX_CHARS. A pack may pass an explicit
+ * `code` (TxDOT's device key, NSW's title); the id is the last resort.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function cameraDisplayCode(text) {
+  const clean = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean.length <= CAMERA_CODE_MAX_CHARS) return clean;
+  return `${clean.slice(0, CAMERA_CODE_MAX_CHARS - 1).trimEnd()}…`;
+}
+
+/** Finite, in range, and not the null island that Number(null) produces. */
+export function isPlausibleLatLon(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lon) <= 180 &&
+    !(lat === 0 && lon === 0)
+  );
+}
+
+/** British Columbia bounding box (with the neighbouring border crossings). */
+export function isLikelyBcCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 48 &&
+    lat <= 60.5 &&
+    lon >= -139.5 &&
+    lon <= -114
+  );
+}
+
+/** Texas bounding box. */
+export function isLikelyTexasCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 25.5 &&
+    lat <= 36.7 &&
+    lon >= -107 &&
+    lon <= -93.4
+  );
+}
+
+/** New South Wales bounding box (incl. the ACT and Lord Howe Island). */
+export function isLikelyNswCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= -38 &&
+    lat <= -28 &&
+    lon >= 140.9 &&
+    lon <= 159.2
+  );
+}
+
+/** Calgary's municipal extent, with slack for the ring road. */
+export function isLikelyCalgaryCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 50.8 &&
+    lat <= 51.25 &&
+    lon >= -114.4 &&
+    lon <= -113.8
+  );
+}
+
+/** Florida statewide, Key West to Georgia state line, with slack at each edge */
+export function isLikelyFloridaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 24.3 &&
+    lat <= 31.1 &&
+    lon >= -87.7 &&
+    lon <= -79.8
+  );
+}
+
+/** New York City's five boroughs, with slack for the harbor and city line. */
+export function isLikelyNycCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 40.45 &&
+    lat <= 40.95 &&
+    lon >= -74.3 &&
+    lon <= -73.65
+  );
+}
+
+/** Hong Kong SAR extent, with slack for the outlying islands. */
+export function isLikelyHongKongCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 22.15 &&
+    lat <= 22.6 &&
+    lon >= 113.8 &&
+    lon <= 114.45
+  );
+}
+
+/** Mainland Norway, with slack for the coast and the Finnmark border. */
+export function isLikelyNorwayCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 57.9 &&
+    lat <= 71.3 &&
+    lon >= 4.4 &&
+    lon <= 31.3
+  );
+}
+
+/** The A22 corridor, Brenner Pass to Modena, with slack either side. */
+export function isLikelyA22Coordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 44.5 &&
+    lat <= 47.1 &&
+    lon >= 10.5 &&
+    lon <= 11.8
+  );
+}
+
+export function isLikelyFinlandCoordinate(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;
+}
+
+/** Catalonia bounding box (mainland is roughly 40.5..42.9 N, 0.15..3.4 E). */
+export function isLikelyCataloniaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 40.3 &&
+    lat <= 42.9 &&
+    lon >= 0.0 &&
+    lon <= 3.4
+  );
+}
+
+/**
+ * Decode numeric HTML character references, decimal ("&#237;") and hex
+ * ("&#xED;") alike, the entity form the Catalonia feed uses for accented
+ * place names, plus the handful of named entities XML/HTML text commonly
+ * carries. A reference that names no valid character (NUL, a surrogate, or
+ * anything past U+10FFFF) is left as written rather than thrown on, so one
+ * bad field cannot fail a whole catalog.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function decodeNumericEntities(text) {
+  return String(text || '')
+    .replace(/&#(?:x([0-9a-f]+)|(\d+));/gi, (match, hex, dec) => {
+      const code = hex ? Number.parseInt(hex, 16) : Number(dec);
+      const valid =
+        code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
+      return valid ? String.fromCodePoint(code) : match;
+    })
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
+
+/**
+ * Human label for one Fintraffic preset (camera view).
+ *
+ * Station names are machine-shaped road codes ("vt3_Hyvinkää_Noppo"); the
+ * underscores become spaces. A preset id is always its station id plus a
+ * two-digit view number, so the remainder distinguishes the several views that
+ * share one station position. The station list endpoint carries no
+ * presentationName ("Helsinkiin"); that lives only on the per-station detail
+ * endpoint, which would cost one request per station.
+ *
+ * @param {string} stationName - Raw `properties.name`.
+ * @param {string} stationId - Raw `properties.id` (e.g. "C01503").
+ * @param {string} presetId - Raw preset id (e.g. "C0150301").
+ * @returns {string}
+ */
+export function fintrafficCameraName(stationName, stationId, presetId) {
+  const base =
+    String(stationName || '')
+      .replace(/_/g, ' ')
+      .trim() || `Fintraffic ${stationId}`;
+  const view = String(presetId || '').slice(String(stationId || '').length);
+  return view ? `${base} (view ${view})` : base;
+}
+
+/**
  * Derive a deterministic fallback heading from a camera ID hash.
  *
  * Produces one of 16 evenly-spaced compass directions (0, 22.5, 45, ...).
@@ -353,14 +546,15 @@ export function prioritizeSources(cameras, maxCount, anchors) {
   const anchorList = (Array.isArray(anchors) ? anchors : []).filter(
     (a) => Number.isFinite(a?.lat) && Number.isFinite(a?.lon),
   );
-  if (
-    !Number.isFinite(maxCount) ||
-    maxCount <= 0 ||
-    list.length <= maxCount ||
-    !anchorList.length
-  ) {
-    return list;
-  }
+  if (!anchorList.length) return list;
+  // Always sort when anchors exist, even when the pack fits its own cap: the
+  // catalog-wide cap (cap.js) thins a pack from the END of this order, so
+  // "nearest to an anchor first" has to hold whether or not the pack was
+  // trimmed here.
+  const cap =
+    Number.isFinite(maxCount) && maxCount > 0
+      ? Math.min(maxCount, list.length)
+      : list.length;
 
   const scored = list.map((camera, idx) => {
     const lat = Number(camera?.lat);
@@ -379,7 +573,31 @@ export function prioritizeSources(cameras, maxCount, anchors) {
     return a.idx - b.idx;
   });
 
-  return scored.slice(0, maxCount).map((entry) => entry.camera);
+  const kept = scored.slice(0, cap).map((entry) => entry.camera);
+  // How many cameras the pack offered before trimming, and where, for
+  // coverage reports.
+  Object.defineProperty(kept, 'available', { value: list.length });
+  Object.defineProperty(kept, 'region', { value: cameraRegion(list) });
+  return kept;
+}
+
+/** The bounding box of cameras with coordinates, or null. */
+export function cameraRegion(cameras) {
+  let region = null;
+  for (const camera of cameras || []) {
+    const lat = Number(camera?.lat);
+    const lon = Number(camera?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    region = region
+      ? {
+          west: Math.min(region.west, lon),
+          south: Math.min(region.south, lat),
+          east: Math.max(region.east, lon),
+          north: Math.max(region.north, lat),
+        }
+      : { west: lon, south: lat, east: lon, north: lat };
+  }
+  return region;
 }
 
 /**
@@ -410,6 +628,14 @@ export function normalizeSourceItem(item) {
     url: typeof item.url === 'string' ? item.url : '',
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
     license: String(item.license || item.licenseNote || ''),
+    // Per-camera attribution for feeds a partner supplies inside a pack
+    // (DriveBC: TransLink, city cameras). Shown beside the provider.
+    credit: String(item.credit || '').trim(),
+    // Unselected-label code: the pack's explicit short name, else the feed's
+    // name, else the id.
+    code: cameraDisplayCode(
+      item.code || String(item.name || '').toUpperCase() || item.id || '',
+    ),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
     // global constraints — nothing else in this file changes): hand-authored
@@ -417,5 +643,65 @@ export function normalizeSourceItem(item) {
     // badge can distinguish them from raw automated priors (e.g. Austin Open
     // Data, which never sets this field). Passed through as-is to the client.
     poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
+    // Optional hardware-model passthrough (additive, like poseSource): packs
+    // whose catalog publishes the camera's hardware model — King County's
+    // layer carries Manufacturer/Model per camera — pass it through so
+    // identified-hardware consumers can use it. Absent everywhere else.
+    model:
+      typeof item.model === 'string' && item.model.trim()
+        ? item.model.trim()
+        : undefined,
+    // Bare model strings collide across vendors (e.g. "3950"), so the
+    // publishing pack's manufacturer rides along for disambiguation.
+    manufacturer:
+      typeof item.manufacturer === 'string' && item.manufacturer.trim()
+        ? item.manufacturer.trim()
+        : undefined,
   };
+}
+
+/** City of Toronto bounding box (Steeles to the lake, Etobicoke to Scarborough). */
+export function isLikelyTorontoCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 43.55 &&
+    lat <= 43.9 &&
+    lon >= -79.7 &&
+    lon <= -79.1
+  );
+}
+
+/**
+ * A camera URL under a pinned directory, by parsed URL rather than string
+ * prefix: the same scheme and exact host as `prefix`, no credentials, the
+ * default port, and a normalized path inside the prefix's directory. Dot
+ * segments (including encoded ones) and backslashes are resolved before the
+ * path is compared, and an encoded slash or backslash is refused.
+ *
+ * @param {string} raw - Camera URL from a catalog or redirect.
+ * @param {string} prefix - Pinned origin and directory, ending in `/`.
+ * @returns {string|null} The normalized URL, or null when it is not pinned.
+ */
+export function pinnedCameraUrl(raw, prefix) {
+  let url;
+  let pin;
+  try {
+    url = new URL(String(raw ?? '').trim());
+    pin = new URL(prefix);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== pin.protocol ||
+    url.hostname !== pin.hostname ||
+    url.username ||
+    url.password ||
+    url.port ||
+    !url.pathname.startsWith(
+      pin.pathname.endsWith('/') ? pin.pathname : `${pin.pathname}/`,
+    ) ||
+    /%2f|%5c/i.test(url.pathname)
+  )
+    return null;
+  return url.href;
 }

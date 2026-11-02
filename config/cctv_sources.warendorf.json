@@ -1,0 +1,23 @@
+[
+  {
+    "id": "warendorf-marktplatz-rathaus",
+    "name": "Marktplatz / Historisches Rathaus",
+    "city": "Warendorf",
+    "provider": "Stadt Warendorf",
+    "sourceKind": "municipal-webcam",
+    "feedType": "image",
+    "url": "http://webcam.warendorf.de/image/jpeg.cgi",
+    "snapshotUrl": "http://webcam.warendorf.de/image/jpeg.cgi",
+    "lat": 51.9526613,
+    "lon": 7.9908867,
+    "headingDeg": 221,
+    "headingConfidence": "high",
+    "pitchDeg": -23,
+    "fovDeg": 84,
+    "rangeM": 260,
+    "mountHeightM": 14,
+    "groundElevationM": 55,
+    "poseSource": "curated",
+    "license": "Public municipal webcam data — Stadt Warendorf (courtesy). Mount and heading derived from OpenStreetMap geometry, © OpenStreetMap contributors (ODbL)."
+  }
+]
