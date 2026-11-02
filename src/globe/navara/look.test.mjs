@@ -193,6 +193,41 @@ test('daylight inspection restores live exposure, tone mapping and time when lef
   assert.equal(view.atmosphere.date.getTime(), 0);
 });
 
+test('the dark side retains satellite imagery down to the surface', () => {
+  const view = fakeView(0);
+  const look = warmCinematic(view);
+  const aerial = view.added.find(({ desc }) =>
+    Object.hasOwn(desc, 'aerialPerspective'),
+  );
+  const opacity = { value: 1 };
+  aerial.ref = { raw: { rawEffect: { blendMode: { opacity } } } };
+  const origin = { lat: 21.975, lng: 20.9038 };
+  const fuji = { lat: 35.2599, lng: 138.6574 };
+  let elevation = 40;
+  view.atmosphere.getSunElevation = () => elevation;
+  look.frame(33_529_370, false, 0, origin, true);
+  const sun = view.atmosphere.date;
+  const ambient = view.added.find(({ desc }) => Object.hasOwn(desc, 'ambient'));
+  elevation = -30;
+  for (const height of [2_000_000, 100_000, 50_000, 6508, 600]) {
+    look.frame(height, true, 0, fuji, true);
+    assert.equal(opacity.value, 0.8);
+    assert.equal(
+      ambient.updates.length,
+      0,
+      'the orbital fill remains at full strength',
+    );
+    assert.equal(view.atmosphere.date, sun);
+  }
+  elevation = -3;
+  look.frame(600, false, 0, fuji, true);
+  assert.equal(ambient.updates.at(-1).ambient.intensity, 0.5);
+  elevation = 10;
+  look.frame(600, false, 0, origin, true);
+  assert.equal(ambient.updates.at(-1).ambient.intensity, 0);
+  assert.equal(opacity.value, 1);
+});
+
 test('inspection sunlight stays fixed through orbit, zoom and move end', () => {
   const view = fakeView(0);
   const look = warmCinematic(view);

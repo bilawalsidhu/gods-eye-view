@@ -108,24 +108,6 @@ export function buildNavaraLook(
       tone.update({ toneMapping: { mode: landscape ? AGX : ACES_FILMIC } });
       changed = true;
     }
-    // In orbit, retain some of the underlying imagery in the atmospheric
-    // shadow. Fade up with altitude so ground views keep their original light.
-    const nextFill =
-      landscape && Number.isFinite(height)
-        ? Math.min(1, Math.max(0, (height - 50_000) / 250_000))
-        : 0;
-    if (nextFill !== fill) {
-      fill = nextFill;
-      if (fillLight) fillLight.update({ ambient: { intensity: fill } });
-      else fillLight = view.addLight({ ambient: { intensity: fill } });
-      changed = true;
-    }
-    const opacity = aerial?.ref?.raw?.rawEffect?.blendMode.opacity;
-    const strength = 1 - 0.2 * fill;
-    if (opacity && opacity.value !== strength) {
-      opacity.value = strength;
-      changed = true;
-    }
     const atmosphere = view.atmosphere;
     // Choose inspection daylight once. Rotating the camera must not rotate
     // the terminator across the geography.
@@ -140,6 +122,27 @@ export function buildNavaraLook(
       place && typeof atmosphere?.getSunElevation === 'function'
         ? atmosphere.getSunElevation(place)
         : Number.NaN;
+    // Keep the map legible from orbit and when descending into darkness.
+    // At low altitude the fill increases from sunset to civil dusk.
+    const orbitalFill = Number.isFinite(height)
+      ? Math.min(1, Math.max(0, (height - 50_000) / 250_000))
+      : 0;
+    const nightFill = Number.isFinite(elevation)
+      ? Math.min(1, Math.max(0, -elevation / 6))
+      : 0;
+    const nextFill = landscape ? Math.max(orbitalFill, nightFill) : 0;
+    if (nextFill !== fill) {
+      fill = nextFill;
+      if (fillLight) fillLight.update({ ambient: { intensity: fill } });
+      else fillLight = view.addLight({ ambient: { intensity: fill } });
+      changed = true;
+    }
+    const opacity = aerial?.ref?.raw?.rawEffect?.blendMode.opacity;
+    const strength = 1 - 0.2 * fill;
+    if (opacity && opacity.value !== strength) {
+      opacity.value = strength;
+      changed = true;
+    }
     if (warmUp) {
       warmUp -= 1;
       aerial.update(warmUp ? IRRADIANCE_ON : IRRADIANCE_OFF);
