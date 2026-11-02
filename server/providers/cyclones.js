@@ -344,11 +344,13 @@ export function cycloneProxy({
   async function refresh(signal) {
     const results = await Promise.allSettled([
       refreshNhc(signal),
-      // GDACS stops a second before the whole refresh deadline.
+      // GDACS stops well inside the refresh deadline, leaving the browser's
+      // 15-second request room on a cold dev server; anything slower
+      // arrives a minute later.
       fetchGdacs({
         now: now(),
         signal,
-        timeoutMs: Math.max(1, timeoutMs - 1000),
+        timeoutMs: Math.max(1, timeoutMs - 4000),
       }),
     ]);
     signal.throwIfAborted();

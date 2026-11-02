@@ -529,8 +529,10 @@ own deadline inside the refresh, so a slow GDACS cannot delay NOAA. GDACS is
 slow (seconds per request), and an episode never changes once published, so
 each episode's geometry and winds are downloaded once and remembered; a failed
 download is forgotten and tried again. A download still running at the refresh
-deadline carries on under its own 30-second limit, and the storm shows its
-centroid with geometry pending, or its track with `windsPending`. While either
+deadline (eight seconds of the twelve-second refresh) carries on under its
+own 30-second limit, and the storm shows its centroid with geometry pending,
+or its track with `windsPending`. Once the geometry is in, a refresh waits at
+most 1.5 seconds more for winds. While either
 is pending the server snapshot lives one minute instead of five, and the layer
 asks once more after 65 seconds instead of waiting for its five-minute poll. GDACS's
 hurricane-strength `HU` reads as Typhoon (`TY`) in the western Pacific and

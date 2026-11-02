@@ -22,6 +22,8 @@ const TIMELINE_CAP = 2 * 1024 * 1024;
 const KT_PER_MS = 1.943844;
 // One episode's downloads may outlive a refresh, but not this.
 const EPISODE_TIMEOUT_MS = 30_000;
+// How long a refresh waits for winds once it has the geometry.
+const WIND_GRACE_MS = 1_500;
 // Track-point markers are small circles around a track vertex.
 const MARKER_TOLERANCE_DEG = 0.3;
 
@@ -586,7 +588,7 @@ export function createGdacsCyclones({ fetchImpl = fetch } = {}) {
   return async function fetchGdacs({
     now = Date.now(),
     signal,
-    timeoutMs = 11_000,
+    timeoutMs = 8_000,
   }) {
     signal.throwIfAborted();
     // The refresh deadline: GDACS never holds the NHC snapshot past it.
@@ -624,10 +626,22 @@ export function createGdacsCyclones({ fetchImpl = fetch } = {}) {
       const storms = await Promise.all(
         events.map(async (event) => {
           const entry = download(event);
-          const [shape, winds] = await Promise.all([
-            Promise.race([entry.geometry, deadline]),
-            Promise.race([entry.winds, deadline]),
+          const shape = await Promise.race([entry.geometry, deadline]);
+          // Winds get a short grace after the geometry, not the whole
+          // deadline: GDACS's details request can outlast the refresh, and
+          // a pending wind is asked for again a minute later.
+          let grace;
+          const winds = await Promise.race([
+            entry.winds,
+            deadline,
+            new Promise((resolve) => {
+              grace = setTimeout(
+                () => resolve({ status: 'pending' }),
+                WIND_GRACE_MS,
+              );
+            }),
           ]);
+          clearTimeout(grace);
           // Geometry dated for another episode never relabels this one;
           // forget it so a later refresh asks again.
           if (
