@@ -189,9 +189,9 @@ export function createApplicationCatalog({
       [
         'fire-perimeters',
         () =>
-          createApplicationFirePerimeters({
+          sessionModel('fire-perimeters', () => createApplicationFirePerimeters({
             source: sources['fire-perimeters'],
-          }),
+          })),
       ],
       [
         'gnss-integrity',

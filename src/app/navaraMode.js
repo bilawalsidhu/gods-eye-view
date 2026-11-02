@@ -57,6 +57,7 @@ const NAVARA_CREDIT_KEYS = new Set([
   'launch-library-2',
   'usgs',
   'eccc-aqhi',
+  'wfigs',
   'firms',
   'gbfs',
   'overture-military-names',
@@ -122,6 +123,10 @@ export async function registerNavaraLayerRenderers() {
           ...options,
           ...navaraViews.get(engine),
         });
+    },
+    'fire-perimeters': async () => {
+      const { createPerimetersNavaraRenderer } = await import('../layers/perimeters/render/navara.js');
+      return (engine) => createPerimetersNavaraRenderer(engine, navaraViews.get(engine));
     },
     'gnss-integrity': async () => {
       const { createGnssNavaraRenderer } = await import('../layers/gnss/render/navara.js');
