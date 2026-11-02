@@ -889,7 +889,7 @@ function openExternal(url) {
   if (target) target.opener = null;
 }
 
-function focusView(viewer, viewpoint) {
+function focusView(viewer, viewpoint, engine) {
   announceNavigationAuthority('bhote-koshi-event-focus');
   const target = Cesium.Cartesian3.fromDegrees(
     viewpoint.lon,
@@ -901,6 +901,17 @@ function focusView(viewer, viewpoint) {
     Cesium.Math.toRadians(viewpoint.pitchDeg),
     viewpoint.rangeM,
   );
+  if (engine) {
+    engine.camera.cancelFlight();
+    engine.camera.flyToSphere({center: target, radius: 80}, {
+      heading:offset.heading, pitch:offset.pitch, range:offset.range, duration:2.2,
+      complete: () => {
+        engine.camera.lookAt(target, offset);
+        engine.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      },
+    });
+    return;
+  }
   viewer.camera.cancelFlight?.();
   viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 80), {
     offset,
@@ -994,9 +1005,16 @@ export function createBhoteKoshiEventLayer({
   evidenceFrameUpdater = updateEvidenceFrame,
   videoFactory = DEFAULT_VIDEO_FACTORY,
   embeddedMediaFactory = createBhoteKoshiEmbeddedMedia,
+  createNativeRenderer,
   panelStore = useBhoteKoshiPanelStore(applicationPinia()),
 } = {}) {
   let _viewer = null;
+  let _engine = null;
+  let _native = null;
+  let _nativeFlood = null;
+  let _providers = null;
+  const cameraForScene = () => _engine?.camera ?? _viewer?.camera;
+  const canvasForScene = () => _engine?.host.canvas ?? _viewer?.scene?.canvas;
   let _dataManager = null;
   let _mapStackController = null;
   let _event = null;
@@ -1160,7 +1178,7 @@ export function createBhoteKoshiEventLayer({
       event.imagery.rectangle.east,
       event.imagery.rectangle.north,
     );
-    const [beforeProvider, afterProvider] = await Promise.all([
+    const [beforeProvider, afterProvider] = await (_providers ??= Promise.all([
       imageryProviderFactory(eventAsset(event.imagery.before.path), {
         rectangle,
         credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
@@ -1169,8 +1187,13 @@ export function createBhoteKoshiEventLayer({
         rectangle,
         credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
       }),
-    ]);
+    ]));
     if (!_enabled) return;
+    if (_native) {
+      await _native.loadImages(event.imagery.rectangle, [beforeProvider, afterProvider]);
+      setSplit(_split);
+      return;
+    }
     _imageryLayerCollection = _viewer.imageryLayers;
     _beforeLayer = _imageryLayerCollection.addImageryProvider(beforeProvider);
     _afterLayer = _imageryLayerCollection.addImageryProvider(afterProvider);
@@ -1187,7 +1210,11 @@ export function createBhoteKoshiEventLayer({
       : [];
     let sampled = null;
     try {
-      sampled = await terrainSampler(_viewer, observations, { signal });
+      sampled = _engine && !_viewer
+        ? observations.map(({lon,lat}) => ({
+            height: _engine.surface.terrainHeight(Cesium.Cartographic.fromDegrees(lon,lat)),
+          }))
+        : await terrainSampler(_viewer, observations, { signal });
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
       console.warn(
@@ -1574,13 +1601,13 @@ export function createBhoteKoshiEventLayer({
       if (_sceneControls.evidencePathElevation !== 'source') {
         // Sample once while preparing the shot, never from an animation frame.
         try {
-          height = _viewer?.scene?.sampleHeight?.(
+          height = _engine?.surface?.sampleHeight?.(position) ?? _viewer?.scene?.sampleHeight?.(
             position,
             [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
           );
         } catch {}
         if (!Number.isFinite(height))
-          height = _viewer?.scene?.globe?.getHeight?.(position);
+          height = _engine?.surface?.terrainHeight(position) ?? _viewer?.scene?.globe?.getHeight?.(position);
       }
       if (!Number.isFinite(height)) height = point.fallbackElevationM;
       return Cesium.Cartesian3.fromDegrees(point.lon, point.lat, height + 8);
@@ -2582,13 +2609,16 @@ export function createBhoteKoshiEventLayer({
         disableDepthTestDistance: tileSafe ? Number.POSITIVE_INFINITY : 0,
       },
     });
-    _viewer.dataSources.add(_floodDataSource);
+    if (_native) _nativeFlood = _native.draw(_floodDataSource);
+    else _viewer.dataSources.add(_floodDataSource);
   }
 
   function syncFloodSurfaceMode() {
     const nextMode = usesPhotorealFloodSurface() ? 'tiles' : 'terrain';
-    if (!_viewer || !_floodDataSource || _floodSurfaceMode === nextMode) return;
-    _viewer.dataSources.remove(_floodDataSource, true);
+    if ((!_viewer && !_native) || !_floodDataSource || _floodSurfaceMode === nextMode) return;
+    _nativeFlood?.destroy();
+    _nativeFlood = null;
+    _viewer?.dataSources.remove(_floodDataSource, true);
     _floodDataSource = null;
     _floodHalo = null;
     _floodCore = null;
@@ -2601,7 +2631,7 @@ export function createBhoteKoshiEventLayer({
 
   function createSplitControl(event) {
     _splitControl = createImagerySplit({
-      scene: _viewer.scene,
+      scene: _viewer?.scene,
       initialValue: _split,
       id: 'bhote-koshi-split-line',
       handleClass: 'bhote-koshi-split-handle',
@@ -2621,7 +2651,7 @@ export function createBhoteKoshiEventLayer({
   function applyCinematicCamera() {
     if (
       !_cinematicActive ||
-      !_viewer?.camera ||
+      !cameraForScene() ||
       _cinematicKeyframes.length === 0
     )
       return;
@@ -2635,7 +2665,7 @@ export function createBhoteKoshiEventLayer({
     _cinematicOffset.heading = Cesium.Math.toRadians(pose.headingDeg);
     _cinematicOffset.pitch = Cesium.Math.toRadians(pose.pitchDeg);
     _cinematicOffset.range = pose.rangeM;
-    _viewer.camera.lookAt(pose.target, _cinematicOffset);
+    cameraForScene().lookAt(pose.target, _cinematicOffset);
     _lastCinematicProgress = _progress;
   }
 
@@ -2705,7 +2735,7 @@ export function createBhoteKoshiEventLayer({
       _cinematicActive = true;
       _lastCinematicProgress = null;
       announceNavigationAuthority('bhote-koshi-cinematic');
-      _viewer?.camera?.cancelFlight?.();
+      cameraForScene()?.cancelFlight?.();
     }
     syncCinematicButton();
     return true;
@@ -2723,7 +2753,7 @@ export function createBhoteKoshiEventLayer({
     _cinematicActive = false;
     _lastCinematicProgress = null;
     if (releaseCamera)
-      _viewer?.camera?.lookAtTransform?.(Cesium.Matrix4.IDENTITY);
+      cameraForScene()?.lookAtTransform?.(Cesium.Matrix4.IDENTITY);
     syncCinematicButton();
     renderHost.request('bhote-koshi-cinematic-stop');
   }
@@ -2757,7 +2787,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   function attachCameraInputRelease() {
-    _cameraInputTarget = _viewer?.scene?.canvas || null;
+    _cameraInputTarget = canvasForScene() || null;
     for (const type of CINEMATIC_INPUT_EVENTS) {
       _cameraInputTarget?.addEventListener?.(type, handleManualCameraInput);
     }
@@ -2803,7 +2833,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   function attachEvidenceCardActivation() {
-    _evidenceClickTarget = _viewer?.scene?.canvas || null;
+    _evidenceClickTarget = canvasForScene() || null;
     _evidenceClickTarget?.addEventListener?.('click', handleEvidenceCardClick);
   }
 
@@ -3273,6 +3303,7 @@ export function createBhoteKoshiEventLayer({
     if (_panelRefs?.progressInput)
       _panelRefs.progressInput.hidden = !scrubberAvailable;
     _splitControl?.setVisible(imageryAvailable);
+    _native?.setVisible(imageryAvailable);
     if (_beforeLayer) _beforeLayer.show = imageryAvailable;
     if (_afterLayer) _afterLayer.show = imageryAvailable;
     if (_panelRefs?.caveat) {
@@ -3391,6 +3422,7 @@ export function createBhoteKoshiEventLayer({
   function setSplit(split) {
     _split = clampUnit(split);
     _splitControl?.setValue(_split);
+    _native?.setSplit(_split);
     syncPanel();
     renderHost.request('bhote-koshi-split');
   }
@@ -3451,7 +3483,7 @@ export function createBhoteKoshiEventLayer({
     _embeddedEvidenceIndex = -1;
     _embeddedMedia?.hide?.();
     setSplit(0.5);
-    focusView(_viewer, _event.viewpoints.corridor);
+    if (cameraForScene()) focusView(_viewer, _event.viewpoints.corridor, _engine);
   }
 
   function removeImagery() {
@@ -3462,9 +3494,59 @@ export function createBhoteKoshiEventLayer({
     _imageryLayerCollection = null;
   }
 
-  async function init(viewer) {
+  async function attachRenderer(viewer, {engine = null} = {}) {
     _viewer = viewer;
-    _embeddedMedia = embeddedMediaFactory({ viewer });
+    _engine = engine;
+    if (!_viewer && _engine) _native = createNativeRenderer(engine);
+    _embeddedMedia?.attachScene?.(viewer,engine);
+    if (!_enabled) return;
+    // The catalog has rebound the incoming map controller before this call.
+    if (_mapStackController) {
+      _comparisonLease = acquireImageryComparison(_mapStackController, {
+        owner: BHOTE_KOSHI_LAYER_ID,
+        switchPolicy: _presentation === BHOTE_KOSHI_SCENE_PRESENTATION ? 'preserve' : 'esri',
+      });
+      await _comparisonLease.ready;
+    }
+    await createImagery(_event);
+    if (_floodDataSource) {
+      if (_native) _nativeFlood = _native.draw(_floodDataSource);
+      else await _viewer.dataSources.add(_floodDataSource);
+    }
+    registerDynamicCredit(engine ?? viewer, BHOTE_KOSHI_CREDIT);
+    _scenePathPositionCache.clear();
+    _lastCinematicProgress = null;
+    await syncTerrainComparison();
+    createSplitControl(_event);
+    syncPresentationMode();
+    attachCameraInputRelease();
+    attachEvidenceCardActivation();
+    updateProgress(_progress);
+    setSplit(_split);
+  }
+
+  async function detachRenderer() {
+    detachCameraInputRelease();
+    detachEvidenceCardActivation();
+    _splitControl?.destroy();
+    _splitControl = null;
+    _embeddedMedia?.attachScene?.(null,null);
+    removeImagery();
+    _nativeFlood?.destroy();
+    _nativeFlood = null;
+    if (_floodDataSource && _viewer) _viewer.dataSources.remove(_floodDataSource,false);
+    _native?.destroy();
+    _native = null;
+    _engine = _viewer = null;
+    _mapStackController?.clearTerrainComparison?.();
+    const lease = _comparisonLease;
+    _comparisonLease = _mapStackController = null;
+    await lease?.release();
+  }
+
+  async function init(viewer, options) {
+    await attachRenderer(viewer,options);
+    _embeddedMedia = embeddedMediaFactory({ viewer, engine: _engine });
     await loadEvent();
     console.log('[Data:BhoteKoshi] Event pack ready');
     return true;
@@ -3480,7 +3562,7 @@ export function createBhoteKoshiEventLayer({
     try {
       const event = await loadEvent();
       throwIfEnableCancelled(signal, _enabled);
-      registerDynamicCredit(viewer, BHOTE_KOSHI_CREDIT);
+      registerDynamicCredit(_engine ?? viewer, BHOTE_KOSHI_CREDIT);
       if (_mapStackController) {
         _comparisonLease = acquireImageryComparison(_mapStackController, {
           owner: BHOTE_KOSHI_LAYER_ID,
@@ -3618,7 +3700,11 @@ export function createBhoteKoshiEventLayer({
       closeFrame(slot.poster);
     }
     _evidenceFrameSlots = [];
-    if (_floodDataSource) _viewer.dataSources.remove(_floodDataSource, true);
+    _nativeFlood?.destroy();
+    _nativeFlood = null;
+    _native?.clear();
+    _providers = null;
+    if (_floodDataSource && _viewer) _viewer.dataSources.remove(_floodDataSource, true);
     _floodDataSource = null;
     _floodSurfaceMode = null;
     _floodHalo = null;
@@ -3672,7 +3758,8 @@ export function createBhoteKoshiEventLayer({
     _embeddedMedia?.destroy?.();
     _embeddedMedia = null;
     _event = null;
-    _viewer = null;
+    _native?.destroy();
+    _native = _engine = _viewer = null;
   }
 
   /**
@@ -3849,6 +3936,8 @@ export function createBhoteKoshiEventLayer({
     source: 'Vantor + GeoPera',
     updateInterval: 0,
     init,
+    attachRenderer,
+    detachRenderer,
     enable,
     disable,
     update: async () => true,

@@ -89,7 +89,6 @@ const follow = (engine, position) =>
 
 test('the viewer-only actions are one exported list of real tools', () => {
   assert.deepEqual(VIEWER_ONLY_ACTIONS, [
-    'control_scene',
     'annotate_map',
     'clear_annotations',
     'fly_route',

@@ -55,3 +55,7 @@ One layer retains A/B, a pending route, maneuver selection and the flight trajec
 ### Nepal locator
 
 The locator owns its Nepal boundary, presentation clock and source graphics, and switches only their scene attachment. Navara draws map-colored clamped geometry and pulse markers. The release test compared the same viewport with the river visible and hidden: 374 additional cyan pixels on Navara, 413 on Cesium, and 353 after returning to Navara. Also corrected engine-specific color evaluation for TeleGeography and dynamic credit ownership per display. The cable round trip passed again.
+
+### Bhote Koshi reconstruction
+
+The event pack, historical image pair, paused/playing timeline, player host and divider persist. Navara applies the geographic rasters to terrain depth and samples the same authored flood geometry. The release round trip proved different real before/after image pixels, one read of each event/image asset, identical 52 percent paused progress and continued playback on the next engine. Scene Director is now installed on Navara and its voice scene list works. Continuity of the Director’s own multi-shot queue and third-party scene data packs is separate from the event timeline round trip.

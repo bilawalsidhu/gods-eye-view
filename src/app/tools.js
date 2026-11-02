@@ -41,22 +41,6 @@ export function createApplicationTools({
   const { viewer, engine, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
-  // Without a viewer (the Navara mode) the tools load with that mode's code.
-  if (!viewer) {
-    return import('./navaraMode.js').then(({ createViewerlessTools }) =>
-      createViewerlessTools({
-        scene,
-        controls,
-        data,
-        loadingScreen,
-        placeSearch,
-        voice,
-        startChrome,
-        signal,
-        defer,
-      }),
-    );
-  }
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
     engine,
     dataPacks: sceneDataPacks,
@@ -68,6 +52,23 @@ export function createApplicationTools({
     ?.module.attachSceneController(sceneDirector);
   defer(() => sceneDirector.destroy());
   onSceneDirector?.(sceneDirector);
+  // Without a viewer (the Navara mode) the tools load with that mode's code.
+  if (!viewer) {
+    return import('./navaraMode.js').then(({ createViewerlessTools }) =>
+      createViewerlessTools({
+        scene,
+        controls,
+        data,
+        loadingScreen,
+        placeSearch,
+        voice,
+        sceneDirector,
+        startChrome,
+        signal,
+        defer,
+      }),
+    );
+  }
   const annotations = initAnnotations({
     viewer,
     tileset,

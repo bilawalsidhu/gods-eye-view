@@ -160,7 +160,9 @@ export function createApplicationCatalog({
     // Catalog order: [layer id(s), construction]. Only the layers the
     // engine can show are constructed (renderers.js).
     const entries = [
-      ['bhote-koshi-2026', () => createBhoteKoshiEventLayer()],
+      ['bhote-koshi-2026', () => sessionModel('bhote-koshi-2026', () => createBhoteKoshiEventLayer({
+        createNativeRenderer: (engine) => rendererFor('bhote-koshi-2026', engine),
+      }))],
       [
         'bhote-koshi-locator',
         () =>

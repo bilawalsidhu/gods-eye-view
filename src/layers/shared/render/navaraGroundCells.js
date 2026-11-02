@@ -212,6 +212,8 @@ function groundEffectClass(EffectDesc, NavaraEffect) {
     static key = KEY;
     static insertAfter = [
       'gevEarthquakeGround',
+      'gevObservedWeather',
+      'gevNepalEvent',
       'gevRecentImagery',
       'toneMapping',
     ];

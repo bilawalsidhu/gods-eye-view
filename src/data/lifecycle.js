@@ -130,7 +130,7 @@ export class LayerLifecycle {
     for (const [id, entry] of [...this.layers]) {
       await entry.toggleChain.catch(() => {});
       if (entry.module.attachRenderer && entry.module.detachRenderer) {
-        if (entry.initialized) entry.module.detachRenderer(this.viewer);
+        if (entry.initialized) await entry.module.detachRenderer(this.viewer);
       } else if (!(await this.destroyLayer(id))) {
         throw new Error(`Cannot detach layer ${id}`);
       }

@@ -17,11 +17,15 @@ import {
 // The tools without a viewer (the experimental Navara engine); they load
 // from src/app/navaraMode.js.
 test('without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine', async (t) => {
-  const saved = { window: globalThis.window, document: globalThis.document };
+  const saved = { window: globalThis.window, document: globalThis.document, localStorage:globalThis.localStorage };
   const listeners = new Map();
   globalThis.window = {};
+  globalThis.localStorage = { getItem:()=>null,setItem(){},removeItem(){} };
   globalThis.document = {
     hidden: false,
+    getElementById: () => null,
+    querySelector: () => null,
+    body: {classList:{add(){},remove(){},toggle(){},contains(){return false;}},appendChild(){}},
     addEventListener: (type, fn) => listeners.set(type, fn),
     removeEventListener: (type, fn) => {
       if (listeners.get(type) === fn) listeners.delete(type);
@@ -84,7 +88,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
     signal: new AbortController().signal,
     defer: (dispose) => cleanups.push(dispose),
   });
-  assert.equal(tools.sceneDirector, null);
+  assert.ok(tools.sceneDirector);
   assert.equal(tools.annotations, null);
   assert.ok(tools.voiceCommands, 'voice runs on the engine');
   assert.equal(window.__gevVoiceCommands, tools.voiceCommands);
@@ -94,8 +98,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
   const scene = await voice.runner('control_scene', {
     action: 'list',
   });
-  assert.equal(scene.ok, false);
-  assert.equal(scene.code, 'UNAVAILABLE_ON_ENGINE');
+  assert.equal(scene.ok, true);
   assert.equal(chrome.length, 1);
   assert.equal(chrome[0].initializeWelcome, null, 'no first-run welcome');
   assert.equal(chrome[0].styleManager, styleManager);
@@ -112,14 +115,14 @@ test('without a viewer the tools run the governor on the engine, show the notice
   ]);
   assert.match(
     `${notice.label}: ${notice.detail}`,
-    /^Experimental Navara engine: no data layers on this engine yet; cockpit and director are unavailable$/i,
+    /^Experimental Navara engine: no registered data layers$/i,
   );
   // With Navara renderers, the notice names the layers it shows.
   const registry = createRendererRegistry();
   registry.register('navara', { satellites: () => ({}), flights: () => ({}) });
   assert.equal(
     navaraModeNotice(createLayerAvailability('navara', { registry })).detail,
-    'Data layers: Live Flights, Satellites; the other layers and director are unavailable',
+    'Data layers: Live Flights, Satellites',
   );
   // The governor drives the engine's continuous rendering.
   assert.equal(isRenderGovernorInstalled(engine), true);
@@ -130,7 +133,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
   const debug = window.__godsEyeView;
   assert.equal(debug.viewer, null);
   assert.equal(debug.engine, engine);
-  assert.equal(debug.sceneDirector, null);
+  assert.equal(debug.sceneDirector, tools.sceneDirector);
   assert.equal(debug.dataManager, dataManager);
   assert.equal(debug.voiceCommands, tools.voiceCommands);
   listeners.get('visibilitychange')();
