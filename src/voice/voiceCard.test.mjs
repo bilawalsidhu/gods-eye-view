@@ -1,6 +1,9 @@
+import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { nextTick } from 'vue';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
+import { mountVoiceView } from '../testSupport/voiceView.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import { VoiceCardControls } from './voiceCard.js';
 import { getLocale, setLocale } from '../i18n/index.js';
@@ -10,10 +13,6 @@ import {
   voiceCardView,
 } from './voiceCardPresentation.js';
 
-const controlSource = readFileSync(
-  new URL('./control.js', import.meta.url),
-  'utf8',
-);
 const css = readStylesheet(new URL('../../style.css', import.meta.url));
 
 function fold(events) {
@@ -157,33 +156,46 @@ test('presentation: silent lookups, dismissal and session end', () => {
   );
 });
 
-test('markup: the card nests inside the voice control with every element and a polite live region', () => {
-  const root = controlSource.indexOf("root.id = 'gev-voice-control'");
-  const card = controlSource.indexOf('id="gev-voice-card"');
-  assert.ok(
-    root >= 0 && card > root,
-    'the card is part of the voice control markup',
-  );
-  for (const id of [
-    'gev-voice-card-phase',
-    'gev-voice-card-dismiss',
-    'gev-voice-card-user-text',
-    'gev-voice-card-user-who',
-    'gev-voice-card-assistant-text',
-    'gev-voice-card-plan',
-    'gev-voice-card-result-title',
-    'gev-voice-card-chips',
-    'gev-voice-card-lines',
-    'gev-voice-card-referents',
-    'gev-voice-card-note-list',
-  ]) {
-    assert.match(controlSource, new RegExp(`id="${id}"`), `${id} is missing`);
+test('markup: the card nests inside the voice control with every element and a polite live region', async (t) => {
+  const { pinia } = mountVoiceView(t);
+  for (const panel of [false, true]) {
+    const ui = createTestVoiceUi({ panel, pinia });
+    await nextTick();
+    const card = document.getElementById('gev-voice-card');
+    assert.equal(
+      document.getElementById('gev-voice-control').contains(card),
+      true,
+      'the card is part of the voice control',
+    );
+    assert.equal(document.querySelectorAll('#gev-voice-card').length, 1);
+    if (panel)
+      assert.equal(card.parentElement.id, 'gev-voice-preview-panel');
+    for (const id of [
+      'gev-voice-card-phase',
+      'gev-voice-card-dismiss',
+      'gev-voice-card-user-text',
+      'gev-voice-card-user-who',
+      'gev-voice-card-assistant-text',
+      'gev-voice-card-plan',
+      'gev-voice-card-result-title',
+      'gev-voice-card-chips',
+      'gev-voice-card-lines',
+      'gev-voice-card-referents',
+      'gev-voice-card-note-list',
+    ])
+      assert.equal(card.contains(document.getElementById(id)), true, id);
+    assert.equal(
+      document.getElementById('gev-voice-card-live').getAttribute('aria-live'),
+      'polite',
+    );
+    assert.equal(
+      document
+        .getElementById('gev-voice-card-dismiss')
+        .getAttribute('aria-label'),
+      'Dismiss voice card',
+    );
+    ui.remove();
   }
-  assert.match(
-    controlSource,
-    /id="gev-voice-card-live"[^>]*aria-live="polite"/,
-  );
-  assert.match(controlSource, /aria-label="\$\{t\('Dismiss voice card'\)\}"/);
   assert.match(css, /#gev-voice-control \.gev-voice-card \{/);
   assert.match(
     css,
@@ -197,60 +209,31 @@ test('markup: the card nests inside the voice control with every element and a p
   );
 });
 
-function fakeRoot() {
-  const make = (id) => {
-    const listeners = new Map();
-    const node = {
-      id,
-      hidden: false,
-      textContent: '',
-      dataset: {},
-      children: [],
-      ownerDocument: null,
-      addEventListener(type, handler, options) {
-        listeners.set(type, handler);
-        options?.signal?.addEventListener('abort', () =>
-          listeners.delete(type),
-        );
-      },
-      removeEventListener(type, handler) {
-        if (listeners.get(type) === handler) listeners.delete(type);
-      },
-      fire: (type) => listeners.get(type)?.({}),
-      listenerCount: () => listeners.size,
-      replaceChildren(...nodes) {
-        this.children = nodes;
-      },
-      append(...nodes) {
-        this.children.push(...nodes);
-      },
-      matches: () => false,
+// A real control whose listeners are counted, so a test sees teardown
+// release them.
+function countedUi(options) {
+  const ui = createTestVoiceUi(options);
+  const on = ui.on;
+  const live = new Set();
+  ui.on = (name, listener) => {
+    const entry = { name };
+    live.add(entry);
+    const off = on(name, listener);
+    return () => {
+      live.delete(entry);
+      off();
     };
-    return node;
   };
-  const nodes = new Map();
-  const doc = { createElement: (tag) => ({ ...make(tag), tag }) };
-  const root = {
-    ...make('gev-voice-control'),
-    querySelector(selector) {
-      const id = selector.slice(1);
-      if (!nodes.has(id)) {
-        const node = make(id);
-        node.ownerDocument = doc;
-        nodes.set(id, node);
-      }
-      return nodes.get(id);
-    },
-  };
-  return { root, nodes };
+  return { ui, listenerCount: () => live.size };
 }
 
 test('controls: render, idle hide, dismiss and idempotent teardown', () => {
-  const { root, nodes } = fakeRoot();
+  const { ui, listenerCount } = countedUi();
+  const shown = () => ui.state.card.visible;
   const timers = new Map();
   let nextId = 1;
   const card = new VoiceCardControls({
-    root,
+    ui,
     idleMs: 1000,
     setTimer: (fn) => {
       const id = nextId++;
@@ -262,7 +245,7 @@ test('controls: render, idle hide, dismiss and idempotent teardown', () => {
     },
     clearTimer: (id) => timers.delete(id),
   });
-  assert.equal(nodes.get('gev-voice-card').hidden, true, 'starts hidden');
+  assert.equal(shown(), false, 'starts hidden');
   card.handle({ type: 'interruption' });
   card.handle({
     type: 'action-call',
@@ -277,33 +260,26 @@ test('controls: render, idle hide, dismiss and idempotent teardown', () => {
       display: { title: 'Tokyo', lines: [], chips: [{ label: 'stale' }] },
     },
   });
-  assert.equal(nodes.get('gev-voice-card').hidden, false);
-  assert.equal(nodes.get('gev-voice-card-result-title').textContent, 'Tokyo');
-  assert.equal(nodes.get('gev-voice-card-plan').children.length, 1);
-  assert.equal(
-    nodes.get('gev-voice-card-chips').children[0].textContent,
-    'stale',
-  );
+  assert.equal(shown(), true);
+  assert.equal(ui.state.card.result.title, 'Tokyo');
+  assert.equal(ui.state.card.steps.length, 1);
+  assert.equal(ui.state.card.result.chips[0], 'stale');
   assert.equal(timers.size, 1, 'one idle timer at a time');
   [...timers.values()][0]();
-  assert.equal(nodes.get('gev-voice-card').hidden, true, 'hides when idle');
+  assert.equal(shown(), false, 'hides when idle');
   card.handle({ type: 'interruption' });
-  nodes.get('gev-voice-card-dismiss').fire('click');
-  assert.equal(nodes.get('gev-voice-card').hidden, true, 'dismiss hides it');
+  ui.emit('card-dismiss');
+  assert.equal(shown(), false, 'dismiss hides it');
   card.destroy();
   card.destroy();
   assert.equal(timers.size, 0);
-  assert.equal(nodes.get('gev-voice-card-dismiss').listenerCount(), 0);
+  assert.equal(listenerCount(), 0);
   card.handle({ type: 'interruption' });
-  assert.equal(
-    nodes.get('gev-voice-card').hidden,
-    true,
-    'a destroyed card ignores late events',
-  );
+  assert.equal(shown(), false, 'a destroyed card ignores late events');
 });
 
-test('controls: a control without card markup is inert', () => {
-  const card = new VoiceCardControls({ root: { querySelector: () => null } });
+test('controls: card controls without a voice control are inert', () => {
+  const card = new VoiceCardControls({});
   assert.doesNotThrow(() => card.handle({ type: 'interruption' }));
   card.destroy();
 });
@@ -433,12 +409,12 @@ test('presentation: stale and unmatched events never reopen the card', () => {
 });
 
 test('presentation controls preserve real reducer content and the existing 14-second idle deadline', () => {
-  const { root, nodes } = fakeRoot();
+  const ui = createTestVoiceUi();
   const timers = new Map();
   let next = 0,
     renders = 0;
   const card = new VoiceCardControls({
-    root,
+    ui,
     setTimer(fn, ms) {
       const id = ++next;
       timers.set(id, { fn, ms });
@@ -464,7 +440,7 @@ test('presentation controls preserve real reducer content and the existing 14-se
   assert.equal(timers.get(timer).ms, 14000);
   card.setPresented(false);
   assert.equal(card.snapshot().visible, false);
-  assert.equal(nodes.get('gev-voice-card-live').textContent, '');
+  assert.equal(ui.state.card.announce, '');
   card.setPresented(true);
   assert.equal(card.snapshot().visible, true);
   assert.equal(card.snapshot().assistant.text, 'A current answer');
@@ -507,9 +483,9 @@ test('presentation controls preserve real reducer content and the existing 14-se
 });
 
 test('a new hidden reply with identical words is still a fresh announcement', () => {
-  const { root } = fakeRoot();
+  const ui = createTestVoiceUi();
   const card = new VoiceCardControls({
-    root,
+    ui,
     setTimer: () => 1,
     clearTimer() {},
   });
@@ -538,9 +514,9 @@ test('additive presentation gates retain the current localized reducer labels', 
   const previous = getLocale();
   try {
     setLocale('es');
-    const { root } = fakeRoot();
+    const ui = createTestVoiceUi();
     const card = new VoiceCardControls({
-      root,
+      ui,
       setTimer: () => 1,
       clearTimer() {},
     });
@@ -554,15 +530,15 @@ test('additive presentation gates retain the current localized reducer labels', 
     assert.equal(card.snapshot().phase, 'EN CURSO');
     const steps = card.state.steps;
     const result = card.state.result;
-    const who = root.querySelector('#gev-voice-card-user-who');
+    const who = () => ui.state.card.user.label;
     card.handle({ type: 'transcript', role: 'user', text: 'Same words', attribution: 'unverified' });
     assert.equal(card.state.userAttribution, 'unverified');
     assert.equal(card.snapshot().user.label, 'Habla reciente');
-    assert.equal(who.textContent, 'Habla reciente');
+    assert.equal(who(), 'Habla reciente');
     card.handle({ type: 'transcript', role: 'user', text: 'Same words' });
     assert.equal(card.state.userAttribution, null);
     assert.equal(card.snapshot().user.label, 'TÚ');
-    assert.equal(who.textContent, 'TÚ');
+    assert.equal(who(), 'TÚ');
     assert.equal(card.state.steps, steps);
     assert.equal(card.state.result, result);
 
@@ -582,24 +558,14 @@ test('manual panel and preference compose with the actual card without changing 
   const { createManualVoicePanel } = await import('./panel/manualPanel.js');
   const { createVoicePreferences, bindPreferenceControls } =
     await import('./panel/preferences.js');
-  const { root } = fakeRoot();
+  const ui = createTestVoiceUi({ panel: true });
   let panel;
   const card = new VoiceCardControls({
-    root,
+    ui,
     setTimer: () => 1,
     clearTimer() {},
     onRender: () => panel?.sync(),
   });
-  const ui = {
-    root,
-    card: root.querySelector('#gev-voice-card'),
-    voicePanel: root.querySelector('#panel'),
-    previewPanel: root.querySelector('#preview-panel'),
-    voiceSettingsPanel: root.querySelector('#settings-panel'),
-    previewEmpty: root.querySelector('#empty'),
-    voicePreviewInput: root.querySelector('#preview-input'),
-    voicePreviewNote: root.querySelector('#preview-note'),
-  };
   const preference = createVoicePreferences({ storage: null });
   const fields = bindPreferenceControls({
     ui,
@@ -639,7 +605,7 @@ test('manual panel and preference compose with the actual card without changing 
   assert.equal(card.snapshot().visible, true);
   preference.setPreviewEnabled(false);
   assert.equal(card.snapshot().visible, false);
-  assert.equal(ui.previewEmpty.textContent, 'Desactivada.');
+  assert.equal(ui.state.previewEmpty.text, 'Desactivada.');
   panel.select('settings');
   panel.select('preview');
   assert.equal(preference.snapshot().previewEnabled, false);
