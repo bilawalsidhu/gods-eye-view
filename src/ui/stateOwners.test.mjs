@@ -17,7 +17,6 @@ function navigation() {
   return new NavigationController({
     viewer: { camera: { cancelFlight() {}, lookAtTransform() {} } },
     tracking,
-    searchInput: null,
     interruptCameraMotion() {},
     isCockpitActive: () => false,
     clearLocation() {},

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import test from 'node:test';
 import { GevRealtimeController } from './realtimeController.js';
 import { RealtimeInput } from './realtimeInput.js';
@@ -60,7 +61,7 @@ test('retained peer and channel callbacks cannot act after stop or enter a repla
       async negotiate() { return 'answer'; },
     },
     debugSink: null,
-    ui: { root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] }, status: {}, detail: {} },
+    ui: createTestVoiceUi(),
   });
   await controller.start();
   const old = peers[0];
@@ -106,7 +107,7 @@ test('an offer resolved after restart cannot change the replacement peer descrip
       async negotiate() { return 'answer'; },
     },
     debugSink: null,
-    ui: { root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] }, status: {}, detail: {} },
+    ui: createTestVoiceUi(),
   });
   const firstStart = controller.start();
   while (!finishOldOffer) await new Promise(resolve => setImmediate(resolve));
@@ -170,8 +171,9 @@ test('audio meter initialization failure releases its newly acquired AudioContex
     close() { closes++; return Promise.resolve(); }
   }
   installGlobals(t, { window: { AudioContext } });
+  const ui = createTestVoiceUi();
   const owner = new RealtimeInput({
-    readUi: () => ({ root: { querySelectorAll: () => [{ style: { setProperty() {}, removeProperty() {} } }] } }),
+    readUi: () => ui,
     readStatus: () => 'listening', readStream: () => null, operations: {},
   });
   owner.startVoiceVisualizer({});
@@ -199,10 +201,13 @@ test('stopping one audio meter revokes retained frames without stopping another 
     requestAnimationFrame: callback => { frames.push(callback); return frames.length; },
     cancelAnimationFrame() {},
   });
-  const create = () => new RealtimeInput({
-    readUi: () => ({ root: { querySelectorAll: () => [{ style: { setProperty() {}, removeProperty() {} } }] } }),
-    readStatus: () => 'listening', readStream: () => null, operations: {},
-  });
+  const create = () => {
+    const ui = createTestVoiceUi();
+    return new RealtimeInput({
+      readUi: () => ui,
+      readStatus: () => 'listening', readStream: () => null, operations: {},
+    });
+  };
   const first = create();
   const second = create();
   first.startVoiceVisualizer({}); second.startVoiceVisualizer({});
@@ -236,7 +241,7 @@ test('late action or viewport completion cannot resume a stopped or replacement 
           async negotiate() { return 'answer'; },
         },
         debugSink: null,
-        ui: { root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] }, status: {}, detail: {} },
+        ui: createTestVoiceUi(),
       });
       if (phase === 'viewport') controller._viewport.capture = () => new Promise(resolve => {
         finish = () => resolve('data:image/jpeg;base64,abc');
