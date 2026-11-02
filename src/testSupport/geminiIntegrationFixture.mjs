@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createVoiceSession } from '../voice/session.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { createGeminiSession } from '../voice/geminiSession.js';
+import { createTestVoiceUi } from './voiceUi.mjs';
 import { createNarrationScheduler } from '../voice/narration.js';
 
 export const turnOfEventLoop = () =>
@@ -158,7 +159,7 @@ export function nativeIntegrationFixture(t) {
     createAdapter: (hooks) =>
       createGeminiSession({
         ...hooks,
-        ui: { root: { remove() {} } },
+        ui: createTestVoiceUi(),
         dataManager,
         now: clock.now,
         setTimer: clock.setTimer,
