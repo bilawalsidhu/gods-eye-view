@@ -346,6 +346,14 @@ test('a line that rounds up to a kilometre reads 1.0 km, not 1000 m', () => {
   assert.match(drawHint(line), /^1\.0 km · /);
 });
 
+test('a line that rounds to 10.0 km reads in whole kilometres', () => {
+  const metresPerDegree = (6371.0088 * 1000 * Math.PI) / 180;
+  const line = createDrawSession('line');
+  addVertex(line, { lon: 0, lat: 0 });
+  addVertex(line, { lon: 0, lat: 9960 / metresPerDegree });
+  assert.equal(formatMeasure(line), '10 km');
+});
+
 test('an area that rounds up to the next unit reads in that unit', () => {
   // A square on the equator whose shoelace area is about `m2`.
   const square = (m2) => {

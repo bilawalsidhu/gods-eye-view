@@ -2,6 +2,7 @@
 
 import { msg, t } from '../i18n/index.js';
 import { UNNAMED_PLACE_NAMES } from './installationNames.js';
+import { formatDistanceText } from './distanceFormat.js';
 
 const UNNAMED_NAMES = new Set(UNNAMED_PLACE_NAMES);
 
@@ -46,12 +47,7 @@ export function findByDoublingRadius(
 
 /** @param {number} meters @returns {string} */
 export function formatAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
-  // Round before the kilometre cut. 999.6 m was printed as "1000 m".
-  const wholeMeters = Math.round(meters);
-  return wholeMeters < 1000
-    ? `${wholeMeters} m`
-    : `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+  return formatDistanceText(meters) ?? '—';
 }
 
 /**

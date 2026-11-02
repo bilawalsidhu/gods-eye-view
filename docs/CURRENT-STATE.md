@@ -4614,7 +4614,19 @@ point is the right-side `CONTEXT` chooser's `CONTACTS` mode.
 
 Contacts distance labels, in the panel and on the globe's contact markers,
 select metres or kilometres after rounding to the nearest metre, so a
-999.5-metre contact displays as `1.0 km`, not `1000 m`.
+999.5-metre contact displays as `1.0 km`, not `1000 m`, and drop the
+kilometre decimal from 9.95 km, so 9,960 m displays as `10 km`.
+
+Distance labels that switch between metres and kilometres share
+`distanceParts` / `formatDistanceText` in `src/data/distanceFormat.js`: the
+Contacts panel and markers, Directions rows and step cards, placed annotation
+labels, the drawn-line measure and `formatRouteDistance`. Each cut is taken on
+the value as it prints, and kilometres come back already rounded, so the
+plain and localized labels agree. Callers choose the metre step (whole metres;
+tens, as annotation labels use; or tens with whole metres under 100, as
+Directions uses) and keep their own rendering; the Cockpit's kilometre-only
+distance uses `kilometreDigits`. The HUD altitude tag and the spoken view
+height still choose their own unit.
 
 At global scale, ambient Radio cluster badges are hard-opacity shared-host
 entries: count/category updates and identity replacement do not run keyhole or
@@ -5500,7 +5512,7 @@ request viewbox and continues searching without that geographic preference.
 - **A vertex is a lon/lat, and the mark is DRAPED.** Clicks are picked through `pickWorldFromScreen` — one of two scene helpers the annotation resolver factory (`src/annotations/resolver.js`) exposes alongside `sampleGroundHeight`, so the app has ONE depth-aware pick cascade rather than a second written beside it — which returns the height the pick landed on as well as the coordinate, so the live preview hangs on the roof or hillside under the pointer instead of sinking to sea level. The world renderer draws areas and routes with `clampToGround`, so the height is dropped at finish in one place (`finishSpec`) rather than being carried downstream and discarded silently: what you get is the outline you drew, lying on the surface beneath it.
 - **Draped marks classify onto `ClassificationType.BOTH`** — terrain AND 3D tiles — not onto 3D tiles alone. With only `CESIUM_3D_TILE`, every area fill, area outline, route and arrow rendered to nothing on a keyless boot, where Cesium's own globe carries Esri/OSM imagery and there are no tiles to classify against; the labels appeared and the geometry did not. That hit spoken annotations exactly as hard as hand-drawn ones. `scripts/qa-draw-tool.mjs` counts the mark's own colour in the rendered frame before and after a shape is finished, on a keyed AND a keyless server, so "the board says there is a mark" can no longer pass for "the mark is on screen".
 - **A finished area is a CLOSED ring.** The fill polygon closes itself but the outline beside it is a polyline, so an open ring drew every edge except the one back to the first vertex — a triangle with two sides. `finishSpec` repeats the first position at the end. A line is never closed: joining its ends would invent a segment nobody drew.
-- Drawn-line distance labels select metres or kilometres after rounding to the nearest metre, so a 999.5-metre line displays as `1.0 km` rather than `1000 m`. The placed mark's label (shared with spoken routes and arrows) rounds before each unit cut, so a 996-metre line is labelled `1.0 km`, not `1000 m`, and a 9,960-metre one `10 km`, not `10.0 km`.
+- Drawn-line distance labels select metres or kilometres after rounding to the nearest metre, so a 999.5-metre line displays as `1.0 km` rather than `1000 m`, and drop the kilometre decimal from 9.95 km. The placed mark's label (shared with spoken routes and arrows) rounds before each unit cut, so a 996-metre line is labelled `1.0 km`, not `1000 m`, and a 9,960-metre one `10 km`, not `10.0 km`.
 - **Measurements and centres are computed on unwrapped longitudes** (`unwrapLongitudes` / `wrapLongitude` in `drawMode.js`, used by `ringAreaM2`, `ringCentroid` and the engine's manual-area anchor). A ~50,000 m² rectangle straddling the antimeridian reads its 0.002° width as 359.998° under raw arithmetic: it measured thousands of square kilometres and anchored on the Greenwich meridian, half a world from the shape. Path length was already safe — haversine is periodic in the longitude delta — and a test pins that so a "fix" cannot break it.
 - **Bounds.** One shape holds at most `MAX_VERTICES` = 512 points; two clicks within 0.5 m are one vertex (that is what makes a double-click finish without leaving a stray point); a vertex that is not a finite on-globe coordinate is refused. A shape that encloses nothing is refused rather than placed: three collinear points are not an area and a line under a metre long is not a line, and the hint says which.
 - Drawn-area measures round before choosing m², ha or km², so 9,999.6 m² displays as `1.0 ha`, not `10000 m²`, and 999,960 m² as `1.00 km²`, not `100.0 ha`.
