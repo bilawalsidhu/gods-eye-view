@@ -37,3 +37,8 @@
 - Outline nothing from tiles when the tile under the point failed to load, so a
   neighbouring building or area never stands in for it, and match each of a
   Nominatim name tag's ";"-separated names (manjunath22466, #842).
+- Keep bent streets outlined when the geocoded point sits beside the
+  centreline, never answer a landmark ask with the park or square around it,
+  pick the same-name Nominatim outline that holds the resolved place, and keep
+  a new outline when an identical older mark fails to clean up
+  (samehkhamis, #842).

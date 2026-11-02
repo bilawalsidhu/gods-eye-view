@@ -79,10 +79,16 @@ export function createNominatimOutlineClient({
   }
 
   /**
-   * @param {{query: string, kind: string, lat?: number, lon?: number}} ask
+   * `lat, lon` bias the search; `anchorLat, anchorLon` (the resolved place)
+   * pick which same-name result answers.
+   *
+   * @param {{query: string, kind: string, lat?: number, lon?: number, anchorLat?: number, anchorLon?: number}} ask
    * @param {{signal?: AbortSignal}} [options]
    */
-  async function lookup({ query, kind, lat, lon }, { signal } = {}) {
+  async function lookup(
+    { query, kind, lat, lon, anchorLat, anchorLon },
+    { signal } = {},
+  ) {
     if (unavailable) return unavailable;
     const text = String(query || '').trim();
     if (!text || text.length > 200 || !NOMINATIM_OUTLINE_KINDS.includes(kind))
@@ -91,6 +97,11 @@ export function createNominatimOutlineClient({
     if (Number.isFinite(lat) && Number.isFinite(lon)) {
       params.set('lat', lat.toFixed(3));
       params.set('lon', lon.toFixed(3));
+    }
+    if (Number.isFinite(anchorLat) && Number.isFinite(anchorLon)) {
+      // Full anchor precision: rounding could cross a building's edge.
+      params.set('alat', anchorLat.toFixed(6));
+      params.set('alon', anchorLon.toFixed(6));
     }
     const key = params.toString();
     if (remembered.has(key)) return remembered.get(key);

@@ -11,6 +11,7 @@ import {
   ringAreaM2,
   closeRing,
   stitchLines,
+  nearestPointOnLines,
 } from './featureGeometry.js';
 import { phaseTiming } from './phaseTiming.js';
 import { normalizePlaceName } from '../data/placeBoundaries.js';
@@ -406,21 +407,7 @@ function distanceToPolygonM(lon, lat, rings) {
 
 /** Distance (m) from a point to the nearest segment of a line or ring. */
 function distanceToLineM(lon, lat, ring) {
-  const mLat = 111_320;
-  const mLon = mLat * Math.cos((lat * Math.PI) / 180);
-  let best = Infinity;
-  for (let i = 1; i < ring.length; i++) {
-    const ax = (ring[i - 1][0] - lon) * mLon;
-    const ay = (ring[i - 1][1] - lat) * mLat;
-    const bx = (ring[i][0] - lon) * mLon;
-    const by = (ring[i][1] - lat) * mLat;
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len2 = dx * dx + dy * dy;
-    const t = len2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
-    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
-  }
-  return best;
+  return nearestPointOnLines([ring], lat, lon)?.distanceM ?? Infinity;
 }
 
 /**

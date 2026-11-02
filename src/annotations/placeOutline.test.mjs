@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from './resolver.js';
 import { polygonsContain } from '../data/adminBoundaries.js';
+import { streetFootprint } from './outlineRungs.js';
 
 function viewerAt(lat, lon, height = 20_000) {
   return {
@@ -336,6 +337,54 @@ test('a courtyard outline with no filled candidate anchor remains a point', asyn
     if (resolved?.polygons)
       assert.ok(polygonsContain(resolved.polygons, resolved.lat, resolved.lon));
   }
+});
+
+test('a bent street keeps its outline when the anchor sits beside the centreline', async () => {
+  // 500 m east then 500 m north: the ring mean lands off the 22 m ribbon.
+  const lat0 = 30.27;
+  const lon0 = -97.74;
+  const dLon = 500 / (111320 * Math.cos((lat0 * Math.PI) / 180));
+  const dLat = 500 / 111320;
+  const line = [
+    [lon0, lat0],
+    [lon0 + dLon / 2, lat0],
+    [lon0 + dLon, lat0],
+    [lon0 + dLon, lat0 + dLat / 2],
+    [lon0 + dLon, lat0 + dLat],
+  ];
+  const footprint = streetFootprint({ lines: [line] });
+  // A geocoded point 15 m north of the first leg, outside the ribbon.
+  const lat = lat0 + 15 / 111320;
+  const lon = lon0 + dLon / 2;
+  assert.equal(polygonsContain(footprint.polygons, lat, lon), false);
+  const { resolve } = harness(
+    { lat, lng: lon, name: 'Bent Street', label: 'Bent St', types: ['route'] },
+    { outlineRungs: rungsAnswering(footprint) },
+  );
+  const pending = await resolve('Bent Street', viewerAt(lat, lon, 3000), {
+    entityKind: 'street',
+  });
+  const outline = await pending.resolveOutline();
+  assert.equal(outline?.ring, footprint.ring, 'the street is still drawn');
+  assert.ok(polygonsContain(outline.polygons, outline.lat, outline.lon));
+  assert.ok(Math.abs(outline.lat - lat0) < 1e-7, 'centred on the street');
+  assert.ok(Math.abs(outline.lon - lon) < 1e-7);
+  // A same-name street that never comes near the anchor is not that street.
+  const far = lat0 + 300 / 111320;
+  const away = harness(
+    {
+      lat: far,
+      lng: lon,
+      name: 'Bent Street',
+      label: 'Bent St',
+      types: ['route'],
+    },
+    { outlineRungs: rungsAnswering(footprint) },
+  );
+  const distant = await away.resolve('Bent Street', viewerAt(far, lon, 3000), {
+    entityKind: 'street',
+  });
+  assert.equal((await distant.resolveOutline())?.ring ?? null, null);
 });
 
 test('local dateline outlines share a frame for area, centering and filled anchors', async () => {

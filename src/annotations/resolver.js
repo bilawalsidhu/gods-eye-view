@@ -11,6 +11,7 @@ import {
   approximateAreaM2,
   approximateDistanceM,
   pointInPolygon,
+  nearestPointOnLines,
 } from '../sources/featureGeometry.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
@@ -78,6 +79,9 @@ function localOutlineFrame(fp) {
 
 /** Ms the analyst region lookup waits on geocode + admin boundary. */
 const REGION_FALLBACK_BUDGET_MS = 3_000;
+
+/** How far a street may run from its anchor when the ribbon holds neither. */
+const STREET_SNAP_MAX_M = 100;
 
 /**
  * Names that end like a landmark rather than a district: "Central Park",
@@ -830,8 +834,18 @@ export function createAnnotationResolver({
           frame.reference === null
             ? lon
             : lon - 360 * Math.round((lon - frame.reference) / 360);
-        if (!polygonsContainPoint(frame.polygons, lat, anchorLon)) return null;
-        centroid = { lat, lon };
+        if (polygonsContainPoint(frame.polygons, lat, anchorLon)) {
+          centroid = { lat, lon };
+        } else if (Array.isArray(fp.lines)) {
+          // A bent street's ribbon rarely holds its ring mean, and a geocoded
+          // anchor can sit beside the centreline: centre on the street itself,
+          // only when it runs beside the anchor.
+          const onStreet = nearestPointOnLines(fp.lines, lat, lon);
+          if (!onStreet || onStreet.distanceM > STREET_SNAP_MAX_M) return null;
+          centroid = { lat: onStreet.lat, lon: onStreet.lon };
+        } else {
+          return null;
+        }
       }
       if (
         frame.reference !== null &&

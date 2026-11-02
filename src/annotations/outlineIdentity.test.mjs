@@ -120,3 +120,45 @@ test('the engine resolves a bare street highlight with its footprint', async (t)
   assert.equal(seen[0].footprint, true);
   assert.equal(seen[0].entityKind, 'street');
 });
+
+test('a duplicate that fails to clean up never costs the new outline', async (t) => {
+  installAnimationFrameStubs(t);
+  const polygons = [[outer]];
+  const outline = { ring: outer, polygons, footprintKind: 'area' };
+  const point = { lon: 0.005, lat: 0.005, height: 0, source: 'fake' };
+  // "Old" draws at once; "New" resolves the same polygon later.
+  const resolveTarget = async ({ target }) =>
+    target === 'old'
+      ? { ...point, label: target, ...outline }
+      : {
+          ...point,
+          label: target,
+          resolveOutline: async () => ({ ...point, ...outline }),
+        };
+  const stuck = new Set();
+  const outcomes = [];
+  const engine = createAnnotationEngine({
+    viewer: {},
+    renderer: {
+      ...renderer,
+      add(anno) {
+        if (anno.label === 'Old') stuck.add(anno);
+      },
+      remove(anno) {
+        if (stuck.has(anno)) throw new Error('renderer refused');
+      },
+    },
+    resolveTarget,
+  });
+  engine.onOutlineEvent((event) => outcomes.push(event));
+  await engine.annotate({ type: 'area', target: 'old', label: 'Old' });
+  await engine.annotate({ type: 'area', target: 'new', label: 'New' });
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  const fresh = engine.list().find((mark) => mark.label === 'New');
+  assert.equal(fresh?.footprintKind, 'area', 'the new mark keeps its outline');
+  assert.notEqual(fresh.outlineUnavailable, true);
+  assert.deepEqual(
+    outcomes.filter((event) => event.label === 'New').map((e) => e.status),
+    ['resolved'],
+  );
+});

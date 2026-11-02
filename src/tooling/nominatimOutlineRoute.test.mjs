@@ -27,6 +27,7 @@ import {
 import {
   acceptsOutlineClass,
   capOutlineVertices,
+  outlineAt,
   outlineBias,
   selectOutlineResult,
 } from '../../server/providers/regional/outlineSelect.js';
@@ -1092,6 +1093,16 @@ test('the outline route answers OK with polygons and validates its input', async
   assert.match(calls[0], /polygon_geojson=1/);
   assert.match(calls[0], /polygon_threshold=0\.0005/);
   assert.match(calls[0], /limit=3/);
+  // The resolved anchor picks among cached same-name results.
+  const anchored = await request(
+    '/outline?q=Paris&kind=city&lat=48.85&lon=2.35&alat=10&alon=10',
+  );
+  assert.equal(
+    anchored.body.outline.osm,
+    ok.body.outline.osm,
+    'else the first',
+  );
+  assert.equal(calls.length, 1, 'the anchor is not part of the upstream ask');
   for (const bad of [
     '/outline?q=Paris',
     '/outline?kind=city',
@@ -1270,4 +1281,133 @@ test('the outline route reports disabled and capped as permanent, busy as retrya
   const refused = await busy('/outline?q=Paris&kind=city');
   assert.equal(refused.status, 429);
   assert.equal(refused.headers['Retry-After'], '90');
+});
+
+test('a landmark ask is not answered by the place around it', () => {
+  const park = (name) =>
+    row({ category: 'leisure', type: 'park', name, display_name: name });
+  const landmark = (query) => ({ kind: 'landmark', query });
+  for (const query of [
+    'Central Park Zoo',
+    'Washington Square Arch',
+    'Lincoln Park Conservatory',
+  ])
+    assert.equal(
+      selectOutlineResult(
+        [park(query.split(' ').slice(0, -1).join(' '))],
+        landmark(query),
+      ).outline,
+      null,
+      query,
+    );
+  // The last word may say where the result is, or what it is.
+  const at = (name, display_name, overrides = {}) =>
+    row({
+      category: 'tourism',
+      type: 'attraction',
+      name,
+      display_name,
+      ...overrides,
+    });
+  for (const [query, result] of [
+    [
+      'Space Needle Seattle',
+      at('Space Needle', 'Space Needle, Seattle, King County, Washington'),
+    ],
+    [
+      'Golden Gate Bridge San Francisco',
+      at('Golden Gate Bridge', 'Golden Gate Bridge, San Francisco, California'),
+    ],
+    [
+      'Notre Dame Cathedral',
+      at('Notre-Dame de Paris', 'Notre-Dame de Paris, Paris, France', {
+        category: 'building',
+        type: 'cathedral',
+      }),
+    ],
+  ])
+    assert.ok(selectOutlineResult([result], landmark(query)).outline, query);
+  // An exact name, then one holding every asked word, outranks earlier
+  // partial matches.
+  const exact = selectOutlineResult(
+    [park('Zilker Metropolitan Park'), park('Zilker Park')],
+    landmark('Zilker Park'),
+  );
+  assert.deepEqual(
+    exact.outlines.map((outline) => outline.name),
+    ['Zilker Park', 'Zilker Metropolitan Park'],
+  );
+  const every = selectOutlineResult(
+    [park('Royal Park'), park('Royal Botanic Historic Park')],
+    landmark('Royal Botanic Park'),
+  );
+  assert.equal(every.outline.name, 'Royal Botanic Historic Park');
+});
+
+test('outlineAt reads a ring crossing the antimeridian in its own frame', () => {
+  const band = {
+    osm: 'way/1',
+    polygons: [
+      [
+        [
+          [170, -17],
+          [175, -17],
+          [175, -16],
+          [170, -16],
+          [170, -17],
+        ],
+      ],
+    ],
+  };
+  const fiji = {
+    osm: 'way/2',
+    polygons: [
+      [
+        [
+          [179.9, -17],
+          [-179.9, -17],
+          [-179.9, -16],
+          [179.9, -16],
+          [179.9, -17],
+        ],
+      ],
+    ],
+  };
+  assert.equal(outlineAt([band, fiji], -16.5, 179.995).osm, 'way/2');
+  assert.equal(outlineAt([band, fiji], -16.5, 172).osm, 'way/1');
+  assert.equal(
+    outlineAt([fiji, band], -16.5, 0).osm,
+    'way/2',
+    'else the first',
+  );
+});
+
+test('a same-name outline answers the ask whose anchor it holds, cached or not', async (t) => {
+  const london = (lon, lat, osm_id) =>
+    row({
+      category: 'place',
+      type: 'city',
+      addresstype: 'city',
+      name: 'London',
+      osm_id,
+      geojson: { type: 'Polygon', coordinates: square(lon, lat, 0.2) },
+    });
+  const { calls, fetchImpl } = stubFetch(async () =>
+    json([london(-0.2, 51.4, 1), london(-81.35, 42.9, 2)]),
+  );
+  const gate = publicGate(t, { fetchImpl, ...clock() });
+  const outline = createNominatimOutlineProvider({ gate });
+  const ask = { query: 'London', kind: 'city', lat: 43, lon: -81 };
+  const ontario = await outline({
+    ...ask,
+    anchorLat: 42.98,
+    anchorLon: -81.25,
+  });
+  assert.equal(ontario.outline.osm, 'relation/2');
+  const england = await outline({ ...ask, anchorLat: 51.5, anchorLon: -0.12 });
+  assert.equal(england.outline.osm, 'relation/1');
+  assert.equal(england.cached, true);
+  const unanchored = await outline(ask);
+  assert.equal(unanchored.outline.osm, 'relation/1', 'first without an anchor');
+  assert.equal(calls.length, 1, 'one upstream request for every anchor');
 });

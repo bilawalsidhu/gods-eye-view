@@ -1,5 +1,8 @@
 import { normalizePlaceName } from './nominatimCache.js';
-import { pointInRing } from '../../../src/data/adminBoundaries.js';
+import {
+  containsAnchor,
+  pointInRing,
+} from '../../../src/data/adminBoundaries.js';
 
 /**
  * Which Nominatim results may answer which voice ask, and how their polygons
@@ -249,13 +252,6 @@ const STOP_WORDS = new Set(['the', 'of', 'de', 'la', 'le', 'el', 'and']);
 const UNSPACED_SCRIPT_RE =
   /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 
-/** Whether `needle` occurs in `hay` as whole consecutive words. */
-function containsWords(hay, needle) {
-  for (let i = 0; i + needle.length <= hay.length; i++)
-    if (needle.every((word, j) => hay[i + j] === word)) return true;
-  return false;
-}
-
 /** Significant words of the part of a query before the first comma. */
 function queryWords(query) {
   const head = String(query ?? '').split(',')[0];
@@ -264,11 +260,19 @@ function queryWords(query) {
     .filter((word) => word && !STOP_WORDS.has(word));
 }
 
+/** How well a result's names answer the ask. */
+const NAME_MISS = 0;
+const NAME_OVERLAP = 1;
+const NAME_WHOLE = 2;
+const NAME_EXACT = 3;
+
 /**
  * Settlements require one complete normalized name or explicit returned alias.
- * Landmark/building asks retain their word-overlap and unspaced-script shorthand.
+ * Landmark/building asks retain their word-overlap and unspaced-script
+ * shorthand. An exact name ranks first, then one holding every asked word,
+ * then an overlap.
  */
-function outlineNameMatches(row, query, kind) {
+function outlineNameMatch(row, query, kind) {
   const names = new Set();
   const add = (value) => {
     const name = normalizePlaceName(value);
@@ -282,24 +286,54 @@ function outlineNameMatches(row, query, kind) {
       for (const part of String(value ?? '').split(';')) add(part);
   if (kind === 'city' || kind === 'admin' || kind === 'neighborhood') {
     const head = normalizePlaceName(String(query ?? '').split(',')[0]);
-    return Boolean(head) && names.has(head);
+    return head && names.has(head) ? NAME_EXACT : NAME_MISS;
   }
   const words = queryWords(query);
-  if (!words.length) return false;
+  if (!words.length) return NAME_MISS;
   const whole = words.join(' ');
   const unspaced = UNSPACED_SCRIPT_RE.test(whole);
+  // The last word usually names the feature ("Zoo", "Arch"): a name without
+  // it is the place around the feature ("Central Park"), unless the word is
+  // where the result is ("Space Needle Seattle") or what it is ("… Bridge").
+  const context = new Set(
+    normalizePlaceName(
+      [
+        String(row?.display_name || '')
+          .split(',')
+          .slice(1)
+          .join(' '),
+        row?.type,
+        row?.category || row?.class,
+      ]
+        .join(' ')
+        .replace(/_/g, ' '),
+    ).split(' '),
+  );
+  let match = NAME_MISS;
   for (const name of names) {
-    const nameWords = name.split(' ');
-    // Whole words only: "York" never matches "Yorkshire Park".
-    if (containsWords(nameWords, words)) return true;
+    if (
+      name
+        .split(' ')
+        .filter((word) => !STOP_WORDS.has(word))
+        .join(' ') === whole
+    )
+      return NAME_EXACT;
     // Scripts without spaces compare by characters instead.
     if (unspaced && name.replace(/ /g, '').includes(whole.replace(/ /g, '')))
-      return true;
-    const nameSet = new Set(nameWords);
+      match = NAME_WHOLE;
+    // Whole words only: "York" never matches "Yorkshire Park".
+    const nameSet = new Set(name.split(' '));
     const hits = words.filter((word) => nameSet.has(word)).length;
-    if (words.length > 1 && hits >= Math.ceil(words.length * 0.6)) return true;
+    if (hits === words.length) match = NAME_WHOLE;
+    const last = words.at(-1);
+    if (
+      words.length > 1 &&
+      hits >= Math.ceil(words.length * 0.6) &&
+      (unspaced || nameSet.has(last) || context.has(last))
+    )
+      match = Math.max(match, NAME_OVERLAP);
   }
-  return false;
+  return match;
 }
 
 const finiteLon = (value) =>
@@ -500,14 +534,16 @@ export function capOutlineVertices(
 }
 
 /**
- * The first result within the limit that suits the ask, names the place and
- * carries a polygon — or null with the reason each result was passed over.
+ * Every result within the limit that suits the ask, names the place and
+ * carries a polygon — best name match first, then upstream order — with the reason each other result was passed over. `outline` is
+ * the first of them, or null.
  *
  * @param {object[]} rows  Nominatim jsonv2 results, in upstream order.
  * @param {{kind: string, query: string}} ask
  */
 export function selectOutlineResult(rows, { kind, query }) {
   const skipped = [];
+  const found = [];
   for (const row of Array.isArray(rows) ? rows : []) {
     const osmClass = row?.category || row?.class;
     const osmType = row?.type;
@@ -525,7 +561,8 @@ export function selectOutlineResult(rows, { kind, query }) {
       skipped.push(`${label}: level`);
       continue;
     }
-    if (!outlineNameMatches(row, query, kind)) {
+    const nameMatch = outlineNameMatch(row, query, kind);
+    if (nameMatch === NAME_MISS) {
       skipped.push(`${label}: name`);
       continue;
     }
@@ -549,7 +586,8 @@ export function selectOutlineResult(rows, { kind, query }) {
       skipped.push(`${label}: too large`);
       continue;
     }
-    return {
+    found.push({
+      nameMatch,
       outline: {
         name: String(row.name || '').slice(0, 160) || null,
         displayName: String(row.display_name || '').slice(0, 300) || null,
@@ -561,10 +599,27 @@ export function selectOutlineResult(rows, { kind, query }) {
             : null,
         polygons,
       },
-      skipped,
-    };
+    });
   }
-  return { outline: null, skipped };
+  // Stable: equal matches keep upstream order.
+  const outlines = found
+    .sort((a, b) => b.nameMatch - a.nameMatch)
+    .map((entry) => entry.outline);
+  return { outline: outlines[0] || null, outlines, skipped };
+}
+
+/**
+ * The outline holding `lat, lon` (the resolved anchor), else the first.
+ * Without an anchor the first answers, as before.
+ */
+export function outlineAt(outlines, lat, lon) {
+  const list = Array.isArray(outlines) ? outlines : [];
+  if (!finiteLat(lat) || !finiteLon(lon)) return list[0] || null;
+  return (
+    list.find((outline) => containsAnchor(outline.polygons, lat, lon)) ||
+    list[0] ||
+    null
+  );
 }
 
 /**

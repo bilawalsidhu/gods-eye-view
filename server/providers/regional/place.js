@@ -19,6 +19,7 @@ import {
 import {
   OUTLINE_KINDS,
   OUTLINE_POLYGON_THRESHOLD,
+  outlineAt,
   outlineBias,
   selectOutlineResult,
 } from './outlineSelect.js';
@@ -50,6 +51,11 @@ export function upstreamQuery(query) {
 function requestKey(gate, kind, params) {
   const endpoint = gate.settings?.()?.endpoint || 'none';
   return `${CACHE_SCHEMA}|${endpoint}|${kind}|${params}`;
+}
+
+/** A decimal coordinate query value, or NaN: never "" or " " as 0. */
+function coordinateParam(value) {
+  return /^-?\d+(\.\d+)?$/.test(value ?? '') ? Number(value) : NaN;
 }
 
 function malformed() {
@@ -222,8 +228,10 @@ export function createNominatimSearchProvider({
 
 /**
  * Construct the outline lookup: one guarded search with polygons for one
- * explicit ask, accepting only a result whose class suits the ask kind.
- * Found outlines are kept 90 days and genuine no-results 24 hours.
+ * explicit ask, accepting only results whose class suits the ask kind.
+ * Every accepted result is kept (90 days; genuine no-results 24 hours), and
+ * each ask is answered with the one holding its anchor, so a same-name place
+ * elsewhere neither answers nor repeats from the cache.
  */
 export function createNominatimOutlineProvider({
   gate = () => sharedNominatimGate(),
@@ -232,8 +240,15 @@ export function createNominatimOutlineProvider({
   const inFlight = new Map();
   const currentGate = () => (typeof gate === 'function' ? gate() : gate);
 
+  const answer = (payload, anchorLat, anchorLon, cached) => ({
+    status: payload.status,
+    outline: outlineAt(payload.outlines, anchorLat, anchorLon),
+    ...(payload.skipped ? { skipped: payload.skipped } : {}),
+    ...(cached ? { cached: true } : {}),
+  });
+
   return async function fetchNominatimOutline(
-    { query, kind, lat, lon },
+    { query, kind, lat, lon, anchorLat = null, anchorLon = null },
     { signal } = {},
   ) {
     const bias = outlineBias(kind, lat, lon);
@@ -249,10 +264,10 @@ export function createNominatimOutlineProvider({
     });
     if (bias) params.set('viewbox', bias.viewbox);
     const gateNow = currentGate();
-    const cacheKey = requestKey(gateNow, `outline-${kind}`, params);
+    const cacheKey = requestKey(gateNow, `outlines-${kind}`, params);
     const cached = await cache.get(cacheKey);
-    if (cached) return { ...cached.payload, cached: true };
-    return await subscribeSharedRequest(
+    if (cached) return answer(cached.payload, anchorLat, anchorLon, true);
+    const payload = await subscribeSharedRequest(
       inFlight,
       cacheKey,
       signal,
@@ -262,23 +277,24 @@ export function createNominatimOutlineProvider({
           { signal: sharedSignal, maxBytes: OUTLINE_MAX_RESPONSE_BYTES },
         );
         if (!Array.isArray(rows)) throw malformed();
-        const { outline, skipped } = selectOutlineResult(rows, {
+        const { outlines, skipped } = selectOutlineResult(rows, {
           kind,
           query: sent,
         });
-        const payload = outline
-          ? { status: 'OK', outline }
-          : { status: 'ZERO_RESULTS', outline: null, skipped };
+        const found = outlines.length
+          ? { status: 'OK', outlines }
+          : { status: 'ZERO_RESULTS', outlines: [], skipped };
         await cache.set(
           cacheKey,
-          payload,
-          outline
+          found,
+          outlines.length
             ? NOMINATIM_CACHE_TTL_MS.outline
             : NOMINATIM_CACHE_TTL_MS.notFound,
         );
-        return payload;
+        return found;
       },
     );
+    return answer(payload, anchorLat, anchorLon, false);
   };
 }
 
@@ -428,6 +444,8 @@ export function geocodeProxy({
           kind,
           lat: url.searchParams.get('lat'),
           lon: url.searchParams.get('lon'),
+          anchorLat: coordinateParam(url.searchParams.get('alat')),
+          anchorLon: coordinateParam(url.searchParams.get('alon')),
         },
         { signal },
       );

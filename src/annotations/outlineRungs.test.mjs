@@ -420,6 +420,8 @@ test('a city with no configured Overpass is outlined by Nominatim', async () => 
     kind: 'city',
     lat: CAPITOL.lat,
     lon: CAPITOL.lon,
+    anchorLat: 43.6,
+    anchorLon: 1.44,
   });
   assert.deepEqual(
     run.calls.finished,

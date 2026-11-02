@@ -4,7 +4,7 @@ import {
   ringCentroid,
 } from '../sources/featureGeometry.js';
 import { isUnavailableCapability } from '../sources/capability.js';
-import { polygonsContain } from '../data/adminBoundaries.js';
+import { containsAnchor } from '../data/adminBoundaries.js';
 import { lonLatToTile } from '../data/tomtomTiles.js';
 import {
   BUILDING_MAX_DISTANCE_M,
@@ -18,6 +18,8 @@ import {
   streetFromTiles,
 } from '../sources/openFreeMapOutlines.js';
 import { createNominatimOutlineClient } from '../sources/nominatimOutlines.js';
+
+export { containsAnchor };
 
 /**
  * Outline rungs that need no Overpass, around the resolver's existing ladder:
@@ -80,46 +82,6 @@ export function nominatimKindFor({ scope, groundsLike, pointLike, around }) {
   if (scope === 'building') return 'building';
   if (scope === 'compound' || scope === 'auto') return 'landmark';
   return null;
-}
-
-/**
- * Whether polygons contain a point. A part whose outer ring crosses the
- * antimeridian ([179.99, …], [-179.99, …]) is read contiguously in its own
- * longitude frame, with the point moved into that frame; every other part,
- * including one genuinely wider than 180°, is tested as stored. Crossing is
- * read from an edge jumping more than 180°, which assumes densely noded rings
- * (OSM, Nominatim, tiles); a ring that is both wider than 180° and crossing, or
- * a non-crossing ring with a single edge over 180°, is not supported.
- */
-export function containsAnchor(polygons, lat, lon) {
-  if (!Number.isFinite(lon)) return false;
-  for (const part of polygons || []) {
-    const outer = part?.[0];
-    if (!Array.isArray(outer) || !outer.length) continue;
-    const reference = outer[0][0];
-    const shift = (x) => x - 360 * Math.round((x - reference) / 360);
-    const span = (ring, f) => {
-      let west = Infinity;
-      let east = -Infinity;
-      for (const [x] of ring) {
-        west = Math.min(west, f(x));
-        east = Math.max(east, f(x));
-      }
-      return east - west;
-    };
-    // An edge jumping more than 180° wraps the line; a polar ring whose
-    // edges run along ±180 collapses when reframed and is read as stored.
-    const jumps = outer.some(
-      ([x], i) => i > 0 && Math.abs(x - outer[i - 1][0]) > 180,
-    );
-    const framedSpan = jumps ? span(outer, shift) : 0;
-    const crosses = framedSpan > 0 && framedSpan < 180;
-    const framed = crosses
-      ? part.map((ring) => ring.map(([x, y]) => [shift(x), y]))
-      : part;
-    if (polygonsContain([framed], lat, crosses ? shift(lon) : lon)) return true;
-  }
-  return false;
 }
 
 /**
@@ -275,7 +237,14 @@ export function createOutlineRungs({
     if (!isNamedAsk(query)) return null;
     const bias = ctx.view || { lat: ctx.lat, lon: ctx.lon };
     const outline = await nominatim.lookup(
-      { query, kind, lat: bias.lat, lon: bias.lon },
+      {
+        query,
+        kind,
+        lat: bias.lat,
+        lon: bias.lon,
+        anchorLat: ctx.lat,
+        anchorLon: ctx.lon,
+      },
       { signal: ctx.signal },
     );
     if (!outline?.polygons?.length) return outline; // null | undefined | unavailable | rateLimited

@@ -1128,8 +1128,13 @@ export function createAnnotationEngine({
             if ((other.footprintKind || null) !== (anno.footprintKind || null))
               continue;
             if (!outlinesEqual(other, anno)) continue;
-            removeRendered(other);
-            annotations.delete(other.id);
+            try {
+              removeRendered(other);
+              annotations.delete(other.id);
+            } catch {
+              // The duplicate's failure is its own: leave it addressable for
+              // later cleanup and keep this mark's installed outline.
+            }
           }
       }
       renderer.sync(annotations);

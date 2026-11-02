@@ -210,3 +210,21 @@ test('an ask cancelled while the capability probe is pending spends nothing', as
     assert.equal(calls.length, 0, `${label}: no outline request`);
   }
 });
+
+test('the resolved anchor is sent at full precision, apart from the bias', async () => {
+  const { calls, lookup } = client(() =>
+    reply(200, { status: 'OK', outline: { polygons: [[ring]] } }),
+  );
+  await lookup({
+    query: 'Paris',
+    kind: 'city',
+    lat: 48.85,
+    lon: 2.35,
+    anchorLat: 48.8566,
+    anchorLon: 2.35221,
+  });
+  assert.match(
+    calls[0],
+    /&lat=48\.850&lon=2\.350&alat=48\.856600&alon=2\.352210$/,
+  );
+});
