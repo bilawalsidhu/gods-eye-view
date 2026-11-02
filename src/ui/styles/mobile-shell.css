@@ -166,6 +166,9 @@ body.mobile-shell #right-context-rail > #recent-imagery-panel {
 /* Rail-scoped ids so a rail's own hiding rules (for example the Tactical HUD
    hiding collapsed siblings) never take a panel out of an open sheet. */
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel,
+body.mobile-shell[data-mobile-sheet='layers']
+  #left-panel-stack
+  > #utilities-panel,
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #scene-panel,
 body.mobile-shell[data-mobile-sheet='cameras']
   #right-context-rail
