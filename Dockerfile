@@ -7,7 +7,7 @@
 
 # `dev` is what compose.yaml builds; `runtime` (last) is the published image
 # and the default target.
-FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS dev
+FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS dev
 
 # Puppeteer is only used by the QA scripts; skip its ~150MB Chromium download.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
@@ -57,14 +57,14 @@ CMD ["node", "scripts/docker-start.mjs"]
 # change it; that user owns only the paths the app writes. The README's run
 # flags (read-only root, no capabilities) are defence in depth, not required.
 
-FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS deps
+FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS deps
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 WORKDIR /app
 COPY package.json package-lock.json ./
 # Built here, per architecture, so esbuild and sharp are this platform's own.
 RUN npm ci && npm cache clean --force && rm -rf /root/.npm
 
-FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8 AS runtime
+FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS runtime
 WORKDIR /app
 COPY --from=deps --chmod=u=rwX,go=rX /app/node_modules ./node_modules
 COPY --chmod=u=rwX,go=rX . .
