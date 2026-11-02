@@ -151,6 +151,18 @@ export function createTesting({
     };
   }
 
+  /** Run one preRender visibility/focus pass. Test-only seam. */
+
+  function _runVisibilityPassForTest(force = false) {
+    components.rendering.updateVisibility(force);
+  }
+
+  /** True while a trailing visibility frame is scheduled. Test-only seam. */
+
+  function _hasTrailingVisibilityPassForTest() {
+    return state.trailingVisibilityTimer !== null;
+  }
+
   /**
    * Read lifecycle ownership state without exposing the mutable state object.
    * Test-only seam.
@@ -176,5 +188,7 @@ export function createTesting({
     _setAisRuntimeForTest,
     _getVesselFeedStateForTest,
     _getVesselStateForTest,
+    _runVisibilityPassForTest,
+    _hasTrailingVisibilityPassForTest,
   };
 }

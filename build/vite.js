@@ -1,8 +1,29 @@
-import { applicationHtmlPlugin } from './application-html.js';
+import { fileURLToPath } from 'node:url';
 import cesium from 'vite-plugin-cesium';
+import vue from '@vitejs/plugin-vue';
+import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
+
+/**
+ * The repository root (this file lives at `<root>/build/vite.js`), as a
+ * forward-slash path for glob matching. Vite's `fs.deny` patterns are
+ * matched against the full absolute file path, and a bare `**\/dist/**`
+ * matches a `dist` directory at *any* depth — including dependencies that
+ * ship their own, such as `node_modules/vite/dist/client/client.mjs` (the
+ * dev client itself). Anchoring to this repository's root denies only the
+ * project's own build output.
+ */
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+  .replace(/\\/g, '/')
+  .replace(/\/$/, '');
+
+export function escapeFsDenyPath(path) {
+  return path.replace(/[()[\]{}*?!+@|]/g, '\\$&');
+}
+
+const REPO_ROOT_GLOB = escapeFsDenyPath(REPO_ROOT);
 
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
@@ -135,7 +156,8 @@ export function createBrowserViteConfig({
       // Next, so no provider route answers a Host the server does not allow.
       hostCheckPlugin(),
       cesium(),
-      applicationHtmlPlugin(),
+      // Application views are Vue single-file components.
+      vue(VUE_PLUGIN_OPTIONS),
       ...plugins,
       embedFramingPlugin(),
       panelBuildPlugin(),
@@ -165,7 +187,19 @@ export function createBrowserViteConfig({
       // build/allowedHosts.js); IP addresses are always accepted.
       allowedHosts: [...allowedHosts],
       fs: {
-        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
+        deny: [
+          '.env',
+          '.env.*',
+          '*.{crt,pem}',
+          '**/.git/**',
+          '**/ENVIRONMENT',
+          '**/.gev-logs/**',
+          '**/.gev-cache/**',
+          // Root-anchored: a bare '**/dist/**' would also deny every
+          // dependency's own dist/ (e.g. node_modules/vite/dist/client),
+          // breaking /@vite/client and other dev-client assets.
+          `${REPO_ROOT_GLOB}/dist/**`,
+        ],
       },
       // These headers protect the document containing Provider Settings and
       // give the whole page a real Content-Security-Policy (BROWSER_CSP).
@@ -177,6 +211,12 @@ export function createBrowserViteConfig({
     // framing + CSP hardening (one constant, no drift).
     preview: { headers: BROWSER_HEADERS },
     define: {
+      // vue-i18n holds the locale and catalogs; Core formats the messages
+      // (src/ui/i18n.js), so the build drops vue-i18n's message compiler.
+      __VUE_I18N_FULL_INSTALL__: 'false',
+      __VUE_I18N_LEGACY_API__: 'false',
+      __INTLIFY_PROD_DEVTOOLS__: 'false',
+      __INTLIFY_DROP_MESSAGE_COMPILER__: 'true',
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
       // Mapillary client tokens are public by design (see SECURITY.md).

@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { formatNumber, t, tn } from '../../i18n/index.js';
+import { formatNumber, getLocale, isolate, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
@@ -438,7 +438,9 @@ export function createModel({
       ? tn(cell.count, '{count} DETECTION', '{count} DETECTIONS', {
           count: formatNumber(cell.count),
         })
-      : `${formatNumber(cell.count)} ${cell.count === 1 ? t('FIRE') : t('FIRES')}`;
+      : tn(cell.count, '{n} fire', '{n} fires', {
+          n: cell.count,
+        }).toLocaleUpperCase(getLocale());
     const parts = [
       Number.isFinite(cell.maxFrp)
         ? t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })
@@ -569,7 +571,7 @@ export function createModel({
       lon >= 0
         ? t('{value}°E', { value: amount(lon) })
         : t('{value}°W', { value: amount(lon) });
-    return `${latPart} ${lonPart}`;
+    return `${isolate(latPart)} ${isolate(lonPart)}`;
   }
 
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */

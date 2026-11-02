@@ -2,6 +2,11 @@
 
 God's Eye View is a local-first client for **public** data. It is built for exploration, demos, and learning — not as a hardened production service. This document explains the security model so you can run it safely and report issues responsibly.
 
+Vite's development file server also denies `.gev-logs/`, `.gev-cache/`, and
+the package checkout's root `dist/` directory. Dependency `dist/` directories
+remain available. This filesystem deny list does not filter `public/` assets or
+preview output; never put private artifacts in a public asset directory.
+
 ## Reporting a vulnerability
 
 Please report security issues **privately** — do not open a public issue for anything exploitable.
