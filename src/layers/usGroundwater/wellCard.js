@@ -15,6 +15,22 @@ export function wrapWellCardLine(value, limit = 68) {
   return lines;
 }
 
+/** Leave room for native tactical-card padding at the current canvas width.
+ * The tracked detail font is 11px monospace; 7.2px per column is conservative.
+ */
+export function wellCardColumns(canvasWidth) {
+  return Number.isFinite(canvasWidth) && canvasWidth > 0
+    ? Math.max(16, Math.min(68, Math.floor((canvasWidth - 32) / 7.2)))
+    : 68;
+}
+
+/** Legacy USGS packs omit per-record source; never invent an agency label. */
+export function wellRecordLabel(record) {
+  return [record.source, record.metadata?.sourceRecordId || record.id]
+    .filter(Boolean)
+    .join(' ');
+}
+
 /** Display-only identity; frozen source names and quality flags remain evidence. */
 export function wellDisplayName(record) {
   return record.source === 'USGWD'

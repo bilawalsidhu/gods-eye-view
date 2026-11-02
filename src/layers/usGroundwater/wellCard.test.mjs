@@ -1,6 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { wrapWellCardLine } from './wellCard.js';
+import {
+  wrapWellCardLine,
+  wellCardColumns,
+  wellRecordLabel,
+} from './wellCard.js';
+
+test('phone card lines fit a bounded native card without changing source text', () => {
+  const width = wellCardColumns(390);
+  assert.ok(width <= 49);
+  const url =
+    'https://waterdata.usgs.gov/monitoring-location/USGS-330548081391102/';
+  const lines = wrapWellCardLine(url, width);
+  assert.ok(lines.every((line) => line.length <= width));
+  assert.equal(lines.join(''), url);
+  assert.equal(wellCardColumns(1440), 68);
+  assert.equal(wellCardColumns(undefined), 68);
+});
+
+test('valid legacy record identity omits absent source instead of showing undefined', () => {
+  assert.equal(
+    wellRecordLabel({ id: 'USGS-330548081391102', metadata: {} }),
+    'USGS-330548081391102',
+  );
+  assert.equal(
+    wellRecordLabel({
+      id: 'internal-id',
+      source: 'USGWD',
+      metadata: { sourceRecordId: 'NY001' },
+    }),
+    'USGWD NY001',
+  );
+});
 
 test('native well card wraps coverage and source URLs without losing content', () => {
   const coverage =

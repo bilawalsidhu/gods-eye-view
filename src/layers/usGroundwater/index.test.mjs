@@ -17,6 +17,65 @@ const fixture = JSON.parse(
   ),
 );
 
+test('pre-render clears broad-scale well selection without a moveEnd and preserves foreign selection', async () => {
+  const owned = ownedViewer(() => false);
+  owned.viewer.camera.positionCartographic.height = 25000;
+  owned.viewer.scene.preRender = new Cesium.Event();
+  const layer = createUsGroundwaterLayer({
+    source: {
+      async getSnapshot() {
+        return fixture;
+      },
+    },
+  });
+  layer.init(owned.viewer);
+  await layer.enable();
+  owned.viewer.selectedEntity = owned.collection.get(0).entities.values[0];
+  owned.viewer.camera.positionCartographic.height = 90000;
+  owned.viewer.scene.preRender.raiseEvent();
+  assert.equal(owned.viewer.selectedEntity, undefined);
+  const foreign = { id: 'another-layer' };
+  owned.viewer.selectedEntity = foreign;
+  owned.viewer.scene.preRender.raiseEvent();
+  assert.equal(owned.viewer.selectedEntity, foreign);
+  layer.destroy();
+  assert.equal(owned.viewer.scene.preRender.numberOfListeners, 0);
+});
+
+test('canvas resize reflows a selected card without refetching or changing record identity', async () => {
+  const owned = ownedViewer(() => false);
+  owned.viewer.camera.positionCartographic.height = 25000;
+  owned.viewer.scene.canvas.clientWidth = 1440;
+  owned.viewer.scene.preRender = new Cesium.Event();
+  let reads = 0;
+  const layer = createUsGroundwaterLayer({
+    source: {
+      async getSnapshot() {
+        reads++;
+        return fixture;
+      },
+    },
+  });
+  layer.init(owned.viewer);
+  await layer.enable();
+  const first = owned.collection.get(0).entities.values[0];
+  assert.equal(
+    first.gevWellRecordLabel,
+    first.id.slice('us-groundwater:'.length),
+  );
+  owned.viewer.selectedEntity = first;
+  owned.viewer.scene.canvas.clientWidth = 390;
+  owned.viewer.scene.preRender.raiseEvent();
+  const replacement = owned.viewer.selectedEntity;
+  assert.equal(replacement.id, first.id);
+  assert.notEqual(replacement, first);
+  assert.ok(
+    replacement.gevLabelModel.details.every((line) => line.length <= 49),
+  );
+  assert.equal(reads, 1);
+  layer.destroy();
+});
+
 test('viewport refresh retains the current well by ID and clears it when absent', async () => {
   const owned = ownedViewer(() => false);
   owned.viewer.camera.positionCartographic.height = 25000;

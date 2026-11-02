@@ -12,6 +12,8 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 import { getKeyholeGeometry } from '../../celestialRing.js';
 import {
   wrapWellCardLine,
+  wellCardColumns,
+  wellRecordLabel,
   wellDisplayName,
   visibleWellWarnings,
   historicalWellCardLines,
@@ -71,6 +73,8 @@ export function createUsGroundwaterLayer({
   let removeCameraChanged;
   let viewportTimer;
   let removeReadyFrame;
+  let removePresentationFrame;
+  let cardColumns = 68;
   let error = null;
   let visible = 0;
   let selectedGroupCount = null;
@@ -183,7 +187,14 @@ export function createUsGroundwaterLayer({
   }
   function selectWell(entity) {
     const record = recordsByEntity.get(entity?.id);
-    if (!enabled || !attached || !record) return false;
+    if (
+      !enabled ||
+      !attached ||
+      !record ||
+      (viewer.camera.positionCartographic?.height ?? Infinity) >
+        WELL_DETAIL_HEIGHT
+    )
+      return false;
     selectedGroupCount = null;
     entity.gevUpdateWellAnchor();
     viewer.selectedEntity = entity;
@@ -261,6 +272,8 @@ export function createUsGroundwaterLayer({
     attached = false;
     removeReadyFrame?.();
     removeReadyFrame = undefined;
+    removePresentationFrame?.();
+    removePresentationFrame = undefined;
     removeCamera?.();
     removeCamera = undefined;
     removeCameraChanged?.();
@@ -285,6 +298,7 @@ export function createUsGroundwaterLayer({
   }
   function draw() {
     if (!enabled || destroyed || !pack || !dataSource || !attached) return;
+    cardColumns = wellCardColumns(viewer.scene.canvas?.clientWidth);
     recordPicker.close();
     // Capture the current owner at draw time: an intervening user selection
     // must never be replaced by the result of an older viewport request.
@@ -382,7 +396,7 @@ export function createUsGroundwaterLayer({
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
-      entity.gevWellRecordLabel = `${record.source} ${record.metadata?.sourceRecordId || record.id}`;
+      entity.gevWellRecordLabel = wellRecordLabel(record);
       recordsByEntity.set(entity.id, record);
       entity.__localLayerId = 'us-groundwater';
       // Supply the same presentation contract as selectable static ALPR sites.
@@ -433,7 +447,7 @@ export function createUsGroundwaterLayer({
               `${msg('Metadata retrieved')}: ${details.metadataRetrievedAt ?? msg('Unknown')}`,
               record.sourceUrl,
             ]
-        ).flatMap((line) => wrapWellCardLine(line)),
+        ).flatMap((line) => wrapWellCardLine(line, cardColumns)),
         accent: '#00ffff',
         cardStyle: 'tactical',
         selected: true,
@@ -504,6 +518,23 @@ export function createUsGroundwaterLayer({
         return false;
       }
       attached = true;
+
+      // Camera.setView and resize need not emit moveEnd. Enforce the detail
+      // gate before painting, and reflow only when the column budget changes.
+      let previousDetailView;
+      removePresentationFrame = viewer.scene.preRender?.addEventListener(() => {
+        if (!enabled || !attached || destroyed) return;
+        const near =
+          (viewer.camera.positionCartographic?.height ?? Infinity) <=
+          WELL_DETAIL_HEIGHT;
+        if (!near) {
+          clearWellSelection();
+          if (previousDetailView !== false) recordPicker.close();
+        }
+        previousDetailView = near;
+        if (wellCardColumns(viewer.scene.canvas?.clientWidth) !== cardColumns)
+          draw();
+      });
 
       clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
       let pressedFlag;
