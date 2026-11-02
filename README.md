@@ -129,8 +129,9 @@ hardware; it does not establish a minimum GPU requirement.
 
 ### Path 2 — Terminal / coding agent
 
-Use **Node.js 24.x (24.14.0 or later) or 26.x**. The setup doctor warns about
-Node 25, which is end-of-life.
+Use **Node.js 24.x (24.14.0 or later) or 26.x**; 24.22.1 or later (26.12.1 or
+later on 26) includes the October 21, 2026 security fixes, among them
+CVE-2026-111497. The setup doctor warns about Node 25, which is end-of-life.
 
 ```bash
 git clone https://github.com/bilawalsidhu/gods-eye-view.git
