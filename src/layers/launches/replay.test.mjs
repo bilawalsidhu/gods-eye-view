@@ -16,7 +16,7 @@ function replayRig() {
       },
     },
   });
-  const parts = {};
+  const parts = { panel: { publishPanel: noop } };
   parts.paths = createPaths({ state, parts });
   return { state, replay: createReplay({ state, parts }) };
 }
