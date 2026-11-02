@@ -41,17 +41,15 @@ one-panel rule too. Share links continue to record which panels are open.
 `UiBadge` and `UiEmpty` so far, with more joining as the controls they serve
 are converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
-`sideways`, `glow`, `scroll`), rather than a copy per panel. Names, props,
-events and class names follow Halfpixel's `ui-vue` kit so the two can merge
-later, but the components are written for this repository and styled by its
-existing stylesheet and custom properties; a kit class such as
+`sideways`, `glow`, `scroll`), rather than a copy per panel. The components
+are styled by the existing stylesheet and custom properties; a kit class such as
 `ui-button--icon` carries no Core style yet, and a converted control keeps
 its own classes beside it. They contain no application state.
-`UiPanel` takes ui-vue's `title`, slots and `v-model:collapsed`, but its
+`UiPanel` takes a `title`, slots and `v-model:collapsed`, but its
 `collapsed` drives only the button and `ui-panel--collapsed`: the root's
 `collapsed` class, which hides the body, is drawn at once by `v-panel-state`
 from the panel chrome store, and there is no `closable`, since Core's panels collapse rather than close.
-`UiSegmented` adds `keyboard` (`none`, `arrows` as in ui-vue, or `radio` with
+`UiSegmented` adds `keyboard` (`none`, `arrows`, or `radio` with
 Home and End), since each of Core's groups keeps its own keyboard policy, and
 `itemClass`/`activeClass` for Core's segment classes. A key moves focus at
 once and asks for a change only when it lands on another option. Every
@@ -63,26 +61,25 @@ code adds (a voice highlight) survives a press. Every pressed toggle in the
 views is a `UiButton` except Bhote Koshi's cinematic button and the
 tilt-map button, whose owners still write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
-are `UiButton`s too; `UiChip` is ui-vue's non-interactive label chip, used by
+are `UiButton`s too; `UiChip` is a non-interactive label chip, used by
 the voice card.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
-come as an `aria-label`) with ui-vue's `v-model`, `options` and `disabled`;
+come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
 `@change` still reaches the select, and `hold` works as in `UiSlider`.
 Without `hold`, a select takes its model back after its own change renders,
 so a pick its owner refuses goes back; an owner that answers later (the SDR
 gain) takes `hold`. Every select in the views is a `UiSelect`.
-`UiBadge` takes ui-vue's `tone` and carries Core's `gev-status-badge`; its
+`UiBadge` takes a `tone` and carries Core's `gev-status-badge`; its
 density variants and colours stay caller classes, and it renders the CCTV
 source and calibration badges and the rail card badges. `UiEmpty` takes
-ui-vue's `title` and `hint`, but Core's empty states are one line, so the title
+a `title` and `hint`, but Core's empty states are one line, so the title
 is the text itself rather than a bold heading; the Scene shot list, mission
 roster and imagery strip use it. The locale picker's and the mission tables'
-empty rows stay a paragraph and table cells, and no Core block matches
-`UiSection`'s header and well, so none uses it yet.
-`UiSlider` keeps the native range input where ui-vue draws a
+empty rows stay a paragraph and table cells.
+`UiSlider` keeps the native range input rather than drawing a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
-it takes ui-vue's `v-model`, `min`, `max`, `step` and `disabled`, emits a
+it takes `v-model`, `min`, `max`, `step` and `disabled`, emits a
 number, and adds `hold` (never rewrite a focused handle, and take the model
 back on blur) and `unstyled` (the browser's own range, as Bhote Koshi's
 are, without Core's slider surface). A caller's own input, change and blur
@@ -91,11 +88,10 @@ a functional render-function component, so the portable `./ui/input` rows
 use it without a component compiler. Every range in the views is a
 `UiSlider` except the radio tuner's: its owner moves the handle back to the
 selected station on a drag's first input without changing the slot, which
-a functional component would not render again. Merging the kits means
-settling native input against the drawn track.
+a functional component would not render again.
 
 Controls share one skin, so every panel reads the same. Every scrolling
-surface carries the kit's `.ui-scroll` (ui-vue's name), which draws the thin
+surface carries the kit's `.ui-scroll`, which draws the thin
 themed scrollbar from `--scroll-thumb` and `--scroll-track`; the Cyber theme
 sets those two tokens, and Cockpit's HUD windows keep their accent tint. A
 surface without it would draw the platform's light scrollbar, because the

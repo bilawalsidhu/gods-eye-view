@@ -2,8 +2,7 @@
 import { computed } from 'vue';
 import { vClassToggle } from '../rail/classToggle.js';
 
-// Core's button, with @halfpixel/ui-vue UiButton's props, classes and
-// attribute contract so the two kits can merge: the button is always the root,
+// Core's button and its attribute contract: the button is always the root,
 // attributes passed in win over its own (a `title` replaces the label's), and
 // `pressed` renders aria-pressed only when it is passed. Core styles the
 // button through the classes its callers pass; the kit classes carry no Core

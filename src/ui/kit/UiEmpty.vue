@@ -1,7 +1,7 @@
 <script setup>
-// Core's empty state, with @halfpixel/ui-vue UiEmpty's `title` and `hint` so
-// the two kits can merge. Core's empty states are one line, so the title is
-// the text itself rather than ui-vue's bold heading; a hint follows it. Core
+// Core's empty state, with a `title` and `hint`. Core's empty states are one
+// line, so the title is the text itself rather than a bold heading; a hint
+// follows it. Core
 // styles it through the classes its callers pass. Not mirrored yet: icon.
 defineProps({
   title: { type: String, required: true },

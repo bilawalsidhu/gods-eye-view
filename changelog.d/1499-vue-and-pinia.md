@@ -56,7 +56,7 @@
   panel's open and pinned state to the `gev-panel-chrome` store, and the
   buttons, now views, call it there. `bindPanelDisclosure` (`./ui/panels`) binds
   only a panel's Escape; it no longer takes `buttons` or `onChange`. `UiButton`
-  joins the component kit with ui-vue's props (samehkhamis, #1499).
+  joins the component kit (samehkhamis, #1499).
 
 - `SceneControls` (`./ui/scenes`) no longer takes `elements` or writes the Scene
   panel's buttons, status, progress or runtime chip: it presents them to the

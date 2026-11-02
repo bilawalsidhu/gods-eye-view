@@ -1,6 +1,5 @@
 <script setup>
-// Core's read-only badge, with @halfpixel/ui-vue UiBadge's `tone` and classes
-// so the two kits can merge. It carries Core's `gev-status-badge` class, and
+// Core's read-only badge, with a `tone` and the kit's classes. It carries Core's `gev-status-badge` class, and
 // callers add its density variants (`gev-status-badge--box`, `--plain`) and
 // the feature classes that colour it; the kit classes carry no Core styles
 // yet. Not mirrored yet: pulse, busy, the tone glyphs and the clipped title.

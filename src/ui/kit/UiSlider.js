@@ -18,10 +18,9 @@ function takeModel(input, props) {
 }
 
 /**
- * Core's slider, with @halfpixel/ui-vue UiSlider's v-model, min, max, step
- * and disabled so the two kits can merge. Core keeps the native range input
- * (its keyboard, form and styling) where ui-vue draws a `role="slider"`
- * track. The input carries Core's `gev-quantitative-slider` class ahead of
+ * Core's slider, with v-model, min, max, step and disabled. Core keeps the
+ * native range input (its keyboard, form and styling) rather than drawing a
+ * `role="slider"` track. The input carries Core's `gev-quantitative-slider` class ahead of
  * the caller's (`unstyled` leaves it off, for a range drawn as the browser's
  * own), the caller's attributes come first, as in the markup this replaced,
  * and the accessible name comes as an `aria-label` attribute so the attribute

@@ -16,8 +16,7 @@ function takeModel(select, props) {
 }
 
 /**
- * Core's select, with @halfpixel/ui-vue UiSelect's v-model, options and
- * disabled so the two kits can merge. Core renders the bare select: its
+ * Core's select, with v-model, options and disabled. Core renders the bare select: its
  * labels sit outside it or come as an `aria-label` attribute, so the attribute
  * pass translates them. Options come from `options` ({ value, label }) or,
  * where they carry their own attributes, the default slot. A change emits the

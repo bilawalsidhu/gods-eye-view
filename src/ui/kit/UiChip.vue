@@ -1,6 +1,5 @@
 <script setup>
-// Core's chip, with @halfpixel/ui-vue UiChip's props and classes so the two
-// kits can merge: a label that says what something is, never a control.
+// Core's chip: a label that says what something is, never a control.
 // Core styles it through the classes its callers pass; the kit classes carry
 // no Core styles yet. A chip that presses is a UiButton with pressedClass.
 defineProps({

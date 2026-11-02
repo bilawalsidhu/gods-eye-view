@@ -2,11 +2,10 @@
 import { vClassToggle } from '../rail/classToggle.js';
 import UiPanelToggle from './UiPanelToggle.vue';
 
-// Core's panel, with @halfpixel/ui-vue UiPanel's name, title, slots and
-// v-model:collapsed so the two kits can merge. It draws Core's panel markup
+// Core's panel, with a name, title, slots and v-model:collapsed. It draws Core's panel markup
 // (glow, inner, a header with the title, badges, divider, actions and the
 // collapse button, then the body) and keeps Core's classes beside the kit's.
-// Unlike ui-vue's, `collapsed` does not hide the body: the root's classes
+// `collapsed` does not hide the body: the root's classes
 // stay as rendered, and whatever owns the panel's state writes its
 // `collapsed` class at once (PanelChrome, through vPanelState), because the
 // rails measure a panel in the task that opens it. `collapsed` drives the

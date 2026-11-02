@@ -1,11 +1,10 @@
 <script setup>
 import { computed } from 'vue';
 
-// Core's segmented control, with @halfpixel/ui-vue UiSegmented's
-// v-model, options, label, stacked and disabled so the two kits can merge.
-// Core adds `keyboard`, because its groups keep their own policy: `none`
+// Core's segmented control, with v-model, options, label, stacked and
+// disabled. It adds `keyboard`, because its groups keep their own policy: `none`
 // (Tab reaches every option and arrows do nothing), `arrows` (a roving tab
-// stop that arrows move, as in ui-vue) or `radio` (arrows plus Home and
+// stop that arrows move) or `radio` (arrows plus Home and
 // End). Each option may carry `attrs` (an id, data attributes, a tip), and
 // Core's classes sit beside the kit's: `gev-segmented`, `gev-segment` and the
 // selected option's `activeClass`. Not mirrored yet: an option's icon.

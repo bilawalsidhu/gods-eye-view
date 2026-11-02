@@ -155,8 +155,7 @@ are existing ones when a change converts them:
   `UiSlider`, `UiSegmented`, `UiChip` (a label, not a control), `UiBadge`,
   `UiEmpty`, `UiIcon`, `UiTooltip`, `UiPanel` and `UiRail`. Use these before
   writing a control. When the kit lacks something, extend a kit component or
-  add one that follows the names, props, events and class names of
-  Halfpixel's `ui-vue` kit, as the existing ones do (see
+  add one that follows the kit's names, props, events and class names (see
   [Component kit](docs/VUE-MIGRATION.md#component-kit)), rather than
   building a one-off.
 - **No hand-written DOM binding.** Don't build elements or write text,

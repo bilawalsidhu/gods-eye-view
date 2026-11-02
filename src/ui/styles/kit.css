@@ -1,8 +1,7 @@
-/* Generic components in src/ui/kit. Names follow Halfpixel's ui-vue kit; the
-   surfaces use this application's glass, accent and type tokens. */
+/* Generic components in src/ui/kit. The surfaces use this application's
+   glass, accent and type tokens. */
 
-/* The thin themed scrollbar every scrolling surface wears, as ui-vue's
-   .ui-scroll. Without it a surface draws the platform's light scrollbar,
+/* The thin themed scrollbar every scrolling surface wears (.ui-scroll). Without it a surface draws the platform's light scrollbar,
    because the page declares no dark color-scheme. */
 /* Cesium builds its credit list and the rail card builder its lines, so
    those two surfaces are named here instead of carrying the class. */
