@@ -182,6 +182,7 @@ test('Navara keeps attribution for every available W1/W2 source and excludes una
     'celestrak',
     'launch-library-2',
     'usgs',
+    'eccc-aqhi',
     'firms',
     'gbfs',
     'overture-military-names',
