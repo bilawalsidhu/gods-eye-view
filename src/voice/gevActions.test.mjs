@@ -3241,6 +3241,42 @@ const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () =>
 function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
 function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
 
+test('analyst_query wires the camera and IGN attribution through the real resolver and follow-ups', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(-55.9, -27.37, 20_000);
+  const credits = [];
+  viewer.creditDisplay = { addStaticCredit: (credit) => credits.push(credit.html) };
+  const records = [
+    { id: 'POSADAS', lat: -27.37, lon: -55.9, onGround: false },
+    { id: 'CORDOBA', lat: -31.42, lon: -64.19, onGround: true },
+  ];
+  const geocodes = [];
+  const runner = createActionRunner({
+    viewer, styleManager,
+    placeSearch: { async geocode(name) { geocodes.push(name); return { place: null }; } },
+    dataManager: {
+      layers: new Map([['flights', { module: { getAnalystRecords: () => records } }]]),
+      isEnabled: () => true,
+      getAll: () => [{ id: 'flights', enabled: true, stats: { count: 2 } }],
+    },
+  });
+  const first = await runner('analyst_query', {
+    layers: ['flights'], scope: { kind: 'region', name: 'Departamento Capital' },
+  });
+  assert.equal(first.ok, true);
+  assert.deepEqual(first.items.map((item) => item.id), ['POSADAS']);
+  assert.equal(first.coverage.scopeSource, 'ign-argentina');
+  assert.ok(credits.some((html) => html.includes('Instituto Geográfico Nacional de la República Argentina') &&
+    html.includes('https://www.ign.gob.ar/descargas/tyc1.html')));
+  // Moving the camera cannot change the cohort retained by a filter-only follow-up.
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(-64.19, -31.42, 20_000);
+  const followUp = await runner('analyst_query', { followUp: true });
+  assert.deepEqual(followUp.items.map((item) => item.id), ['POSADAS']);
+  assert.equal(followUp.coverage.scopeSource, 'ign-argentina');
+  assert.deepEqual(geocodes, []);
+});
+
 test('ALPR common names toggle only the registered camera layer through the normal voice action', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = { clock: { onTick: { addEventListener: () => () => {} } },

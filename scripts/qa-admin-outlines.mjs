@@ -29,6 +29,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
+import { redact } from './qa-browserEvidence.mjs';
 
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
@@ -69,6 +70,9 @@ const browser = await puppeteer.launch({
   args: [
     '--no-sandbox',
     '--use-gl=angle',
+    ...(process.platform === 'linux' && !args.includes('--headful')
+      ? ['--use-angle=swiftshader']
+      : []),
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
@@ -85,6 +89,20 @@ try {
   page = await browser.newPage();
   await page.evaluateOnNewDocument(() => {
     sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
+    // Like radio QA, this keyless-map fixture offers no optional Google token.
+    const original = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const target = new URL(
+        typeof input === 'string' || input instanceof URL ? input : input.url,
+        location.href,
+      );
+      if (
+        target.origin === location.origin &&
+        target.pathname === '/api/google/tiles-token'
+      )
+        return Promise.resolve(Response.json({}));
+      return original(input, init);
+    };
   });
   await page.setViewport({ width: 1280, height: 800 });
   const client = await page.createCDPSession();
@@ -112,7 +130,11 @@ try {
           target.pathname.includes('/geocode/')) ||
         target.hostname === 'photon.komoot.io');
     if (lookup) result.lookups.push({ step: marker, request: where });
-    if (/\/(states_provinces|countries|counties)\.json$/.test(target.pathname))
+    if (
+      /\/(states_provinces|countries|counties|departments)\.json$/.test(
+        target.pathname,
+      )
+    )
       result.packRequests.push({ step: marker, pack: target.pathname });
   });
   page.on('pageerror', (error) =>
@@ -120,7 +142,11 @@ try {
   );
   page.on('console', (message) => {
     if (message.type() === 'error')
-      result.consoleErrors.push({ step: marker, message: message.text() });
+      result.consoleErrors.push({
+        step: marker,
+        message: redact(message.text()),
+        url: redact(message.location().url),
+      });
   });
 
   client.on('Page.screencastFrame', async ({ data, metadata, sessionId }) => {
@@ -507,6 +533,21 @@ try {
     ['georgia-state', 'Georgia', 32.6, -83.4, 650000],
     ['georgia-country', 'Georgia', 42, 43.6, 700000],
     ['georgia-qualified', 'the country of Georgia', 42, 43.6, 700000],
+    [
+      'argentina-capital',
+      'Departamento Capital, Misiones',
+      -27.4,
+      -55.9,
+      80000,
+    ],
+    [
+      'argentina-matanza',
+      'Partido de La Matanza, Buenos Aires',
+      -34.8,
+      -58.6,
+      90000,
+    ],
+    ['argentina-comuna', 'Comuna 1, CABA', -34.6, -58.37, 14000],
   ]) {
     await page.evaluate(() => window.__godsEyeView.annotations.clear());
     await move(name, { lat, lon, height, pitch: -90 }, 1);
@@ -537,6 +578,7 @@ try {
       ['outline:texas', 'states_provinces.json'],
       ['outline:travis', 'counties.json'],
       ['outline:scotland', 'countries.json'],
+      ['outline:argentina-capital', 'departments.json'],
     ],
     'packs load lazily, once each',
   );
