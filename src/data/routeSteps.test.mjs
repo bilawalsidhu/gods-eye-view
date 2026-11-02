@@ -236,6 +236,8 @@ test('distance and duration formatting', () => {
   assert.equal(formatRouteDistance(8), '8 m');
   assert.equal(formatRouteDistance(846), '850 m');
   assert.equal(formatRouteDistance(1234), '1.2 km');
+  assert.equal(formatRouteDistance(996), '1.0 km');
+  assert.equal(formatRouteDistance(9960), '10 km');
   assert.equal(formatRouteDistance(21479), '21 km');
   assert.equal(formatRouteDistance(-1), '');
   assert.equal(formatRouteDuration(40), '40 s');
