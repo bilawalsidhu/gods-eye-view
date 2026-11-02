@@ -39,7 +39,7 @@ export function navaraModeNotice(availability) {
   return Object.freeze({
     label: t('Experimental Navara engine'),
     detail: names.length
-      ? `Data layers: ${names.join(', ')}; the other layers, cockpit and director are unavailable`
+      ? `Data layers: ${names.join(', ')}; the other layers and director are unavailable`
       : 'No data layers on this engine yet; cockpit and director are unavailable',
   });
 }
@@ -347,7 +347,7 @@ export function createViewerlessTools({
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
   // Voice on the engine (phase 3, Task 9): the W1 tools drive the engine;
-  // the viewer-only ones (director, annotations, cockpit…) refuse.
+  // the viewer-only ones (director, annotations…) refuse.
   const voiceCommands = initGevVoiceCommands({
     ...voice,
     annotationResolver: operations.annotationResolver,

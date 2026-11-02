@@ -738,6 +738,7 @@ export function createAircraftNavaraRenderer({
       // The tracked glyph's distance scale is its bank's (as Cesium's).
       sprite._scaleByDistance = spec.scaleByDistance;
       sprite.spec = spec;
+      sprite.resumeAircraftFollow = () => follow.start(sprite);
       sprite.viewFrom = null;
       trackedSprites.add(sprite);
       placeTracked(sprite);
@@ -783,6 +784,7 @@ export function createAircraftNavaraRenderer({
       position: () => handle.gevDisplayPosition?.() ?? handle.spec.position(),
     };
     return engine.camera.follow({
+      native: handle,
       position: () => handle.spec.position(),
       viewFrom: () => handle.viewFrom,
       label: card,

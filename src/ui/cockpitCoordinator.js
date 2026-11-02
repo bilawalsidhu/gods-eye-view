@@ -9,6 +9,7 @@ import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
 export class CockpitCoordinator {
   constructor({
     viewer,
+    engine,
     services,
     elements,
     operations,
@@ -23,6 +24,7 @@ export class CockpitCoordinator {
       this,
       {
         viewer,
+        engine,
         services,
         readDataManager,
         readContext,
@@ -35,10 +37,7 @@ export class CockpitCoordinator {
       operations,
     );
     this._cockpitDisplayPortal = null;
-    // The cockpit flies the Cesium camera after tracked aircraft; without a
-    // viewer (the Navara engine) there is no cockpit and controlCockpit
-    // reports it unavailable.
-    this.cockpitView = viewer
+    this.cockpitView = viewer || engine?.kind === 'navara'
       ? this._createCockpitView(viewer, services)
       : null;
   }
@@ -62,6 +61,7 @@ export class CockpitCoordinator {
       weatherCodeLabel,
     } = services;
     return new CockpitViewController(viewer, {
+      engine: this.engine,
       services: {
         flightsLayer,
         militaryFlightsLayer,
@@ -88,6 +88,7 @@ export class CockpitCoordinator {
         this._stampNavigation({ cancelPendingSelection: false }),
       isEntryAllowed: () =>
         cockpitEntryAllowed({
+          standaloneAircraft: this.engine?.kind === 'navara',
           contextMode: this._contextMode,
           contextModeChanging: this._contextModeChanging,
           flightsEnabled: !!this._dataManager?.isEnabled('flights'),
@@ -136,7 +137,7 @@ export class CockpitCoordinator {
     // (including the voice model) read that as a broken half-entered state.
     const entryAllowed =
       !active &&
-      Boolean(gateOpen && info && this.viewer?.trackedEntity?.position);
+      Boolean(gateOpen && info && this.cockpitView?.host.current());
     return {
       active,
       entryAllowed,
@@ -278,7 +279,9 @@ export class CockpitCoordinator {
           action: 'control_cockpit',
           error: this._contextModeChanging
             ? 'Contacts is still starting up — try Cockpit again in a moment'
-            : 'Contacts must be active to enter Cockpit — say "open contacts" first',
+            : this.engine?.kind === 'navara'
+              ? 'Enable an aircraft layer and track a flight to enter Cockpit'
+              : 'Contacts must be active to enter Cockpit — say "open contacts" first',
           state: this.getCockpitState(),
         };
       }

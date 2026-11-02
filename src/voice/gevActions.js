@@ -229,7 +229,7 @@ const FRAME_TARGETS = new Map([
 /**
  * The tools that still need the Cesium viewer or a subsystem built on it:
  * the scene director, annotations and routes over them, the camera verbs
- * (orbit, pan, tilt), the cockpit, Contacts (the context mode), Radio and
+ * (orbit, pan, tilt), Contacts (the context mode), Radio and
  * CCTV. Without a viewer (the Navara engine) each answers a structured
  * refusal (UNAVAILABLE_ON_ENGINE) instead of running.
  */
@@ -239,7 +239,6 @@ export const VIEWER_ONLY_ACTIONS = Object.freeze([
   'clear_annotations',
   'fly_route',
   'move_camera',
-  'control_cockpit',
   'set_context_mode',
   'control_radio',
   'control_cctv',
@@ -265,7 +264,6 @@ export const UNAVAILABLE_FEATURES = Object.freeze({
   clear_annotations: 'Map annotation',
   fly_route: 'Route flying',
   move_camera: 'Camera motion (orbit, pan, tilt)',
-  control_cockpit: 'The cockpit',
   set_context_mode: 'The Contacts mode',
   control_radio: 'Radio',
   control_cctv: 'CCTV',
@@ -1078,7 +1076,7 @@ export function createGevActionRunner({
           contextState?.mode === 'flights' &&
           contextState?.active !== false &&
           contextState?.changing !== true;
-        if (!contactsReady) {
+        if (!contactsReady && engine?.kind !== 'navara') {
           const contextResult = await styleManager.setContextMode('flights', {
             signal: runOptions.signal,
             isCurrent: runOptions.isCurrent,

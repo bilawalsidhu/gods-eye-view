@@ -45,7 +45,7 @@ export function update() {
   if (
     !info ||
     !this.trackedEntity ||
-    !this.viewer.entities.contains(this.trackedEntity)
+    !this.host.contains(this.trackedEntity)
   ) {
     if (nowMs < this.contextNavigationDeadlineMs) return;
     this.exit({ restoreTracking: false });
@@ -61,8 +61,8 @@ export function update() {
     return;
   this.lastCameraUpdateMs = nowMs;
 
-  const target = this.trackedEntity.position.getValue(
-    this.viewer.clock.currentTime,
+  const target = this.host.position(
+    this.trackedEntity,
     this.scratchTarget,
   );
   if (!target) return;
@@ -182,8 +182,8 @@ export function update() {
         )
       ) {
         this.lastGroundProbeMs = nowMs;
-        const viewerCartographic = this.viewer.camera.positionCartographic;
-        this.services.sampleMeshFloorCells(this.viewer.scene, groundPoint, {
+        const viewerCartographic = this.host.cartographic();
+        this.services.sampleMeshFloorCells(this.host.surface, groundPoint, {
           excludeObjects: [this.trackedEntity],
           viewerLat: geo.math.toDegrees(viewerCartographic.latitude),
           viewerLon: geo.math.toDegrees(viewerCartographic.longitude),
@@ -345,7 +345,7 @@ export function update() {
     }
   }
 
-  this.viewer.camera.setView({
+  this.host.camera.setView({
     destination: this.scratchCamera,
     orientation: { direction: this.scratchForward, up: this.scratchUp },
   });

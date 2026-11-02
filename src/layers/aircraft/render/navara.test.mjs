@@ -190,6 +190,7 @@ test('the tracked glyph reads its callbacks every frame; follow carries its read
   assert.equal(typeof stop, 'function');
   const following = engine.camera.following();
   assert.equal(following, handle.gevFollowHandle);
+  assert.equal(following.native, handle, 'cockpit follows the rendered aircraft');
   assert.equal(following.label.id, 'flights:abc123');
   assert.equal(following.label.model(), handle.gevLabelModel);
   assert.equal(renderer.follow.isFollowing(handle), true);
@@ -197,7 +198,10 @@ test('the tracked glyph reads its callbacks every frame; follow carries its read
   renderer.follow.release();
   assert.equal(engine.camera.following(), null);
   assert.equal(renderer.follow.current(), undefined);
+  handle.resumeAircraftFollow();
+  assert.equal(renderer.follow.current(), handle);
   renderer.tracked.remove(handle);
+  assert.equal(engine.camera.following(), null);
   assert.equal(renderer.tracked.isLive(handle), false);
   renderer.destroy();
   engine.destroy();

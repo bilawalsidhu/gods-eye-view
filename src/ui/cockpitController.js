@@ -63,11 +63,14 @@ import {
 import { onKeyDown } from './cockpitInput.js';
 import * as geo from '../geo/index.js';
 
+import { cockpitHost } from './cockpitHost.js';
+
 export class CockpitViewController {
   constructor(
     viewer,
     {
       services,
+      engine = null,
       onVisionChange = null,
       getInitialVisionMode = null,
       onCameraTakeover = null,
@@ -79,7 +82,7 @@ export class CockpitViewController {
       publish = {},
     } = {},
   ) {
-    this.viewer = viewer;
+    this.host = cockpitHost(viewer, engine);
     this.services = services;
     this.destroyed = false;
     this.disposed = false;
@@ -198,8 +201,8 @@ export class CockpitViewController {
     // from preRender makes 3D Tiles discover a new view after traversal and can
     // create a self-sustaining refinement loop under a moving cockpit camera.
     this._listenerRemovers.push(
-      viewer.scene.preUpdate.addEventListener(() => this.update()),
-      viewer.trackedEntityChanged.addEventListener(() => {
+      this.host.preUpdate.addEventListener(() => this.update()),
+      this.host.followChanged.addEventListener(() => {
         if (this.active) this._adoptTrackedEntity(performance.now());
         else this.syncEntry();
       }),

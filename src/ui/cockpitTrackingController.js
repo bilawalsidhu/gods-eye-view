@@ -9,7 +9,7 @@ import {
 export function readAircraftInfo() {
   // In cockpit mode the controller takes the entity off `viewer.trackedEntity`
   // (see update()), so the cockpit's own handle is the tracked identity there.
-  const trackedEntity = this.viewer?.trackedEntity || this.trackedEntity;
+  const trackedEntity = this.host.followed() || this.trackedEntity;
   return resolveTrackedAircraftInfo({
     civilian: this.services.flightsLayer.getTrackedInfo?.() || null,
     military: this.services.militaryFlightsLayer.getTrackedInfo?.() || null,
@@ -77,7 +77,7 @@ export function syncEntry() {
   if (this.destroyed) return false;
   if (this.active) return;
   const info = this.readAircraftInfo();
-  const trackedContact = !!(info && this.viewer.trackedEntity?.position);
+  const trackedContact = !!(info && this.host.current());
   this.syncTr3bToggle(trackedContact ? info : null);
   const available = !!(this.isEntryAllowed() && trackedContact);
   // Change-only publishes: this runs on a preUpdate cadence, and a fresh
@@ -108,22 +108,22 @@ export function navigateContext(direction, options = {}) {
 }
 
 export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
-  const nextEntity = this.viewer.trackedEntity;
+  const nextEntity = this.host.current();
   if (
     !this.active ||
-    !nextEntity?.position ||
+    !nextEntity ||
     nextEntity === this.trackedEntity
   )
     return false;
   const info = suppliedInfo || this.readAircraftInfo();
   if (!info) return false;
-  if (this.trackedEntity && this.viewer.entities.contains(this.trackedEntity)) {
+  if (this.trackedEntity && this.host.contains(this.trackedEntity)) {
     this.trackedEntity.show = this.trackedEntityWasShown;
   }
   this.trackedEntity = nextEntity;
   this.trackedEntityWasShown = nextEntity.show;
   nextEntity.show = false;
-  this.viewer.trackedEntity = undefined;
+  this.host.release();
   this.cockpitAnchorValid = false;
   this.heading = normalizeHeading(info.track ?? 0);
   this.lastFrameMs = nowMs;
@@ -140,15 +140,15 @@ export function enter() {
   if (this.active) return false;
   if (!this.isEntryAllowed()) return false;
   const info = this.readAircraftInfo();
-  const entity = this.viewer.trackedEntity;
-  if (!info || !entity?.position) return false;
+  const entity = this.host.current();
+  if (!info || !entity) return false;
   this.entryFocusOrigin =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
   // Retire deferred navigation before cancelFlight can run its callbacks.
   this.onCameraTakeover?.();
-  this.viewer.camera.cancelFlight();
+  this.host.camera.cancelFlight();
   this.trackedEntity = entity;
   this.trackedEntityWasShown = entity.show;
   entity.show = false;
@@ -169,8 +169,8 @@ export function enter() {
   // runs on rendered frames, so idle mode would freeze the cockpit solid.
   // (perf wave 2)
   this.services.holdContinuousRender('cockpit');
-  this.viewer.trackedEntity = undefined;
-  this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+  this.host.release();
+  this.host.inputs(false);
   document.body.classList.add('cockpit-mode');
   // Activation hides the entry and TR-3B chip; clearing the chip's signature
   // lets the exit-path syncEntry publish it again.
@@ -237,14 +237,13 @@ export function exit({ restoreTracking = true } = {}) {
   this.routeView.visible = false;
   this.clearPredictiveRoute();
   this.setVisionMode('optical');
-  this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-  if (entity && this.viewer.entities.contains(entity))
+  this.host.inputs(true);
+  if (entity && this.host.contains(entity))
     entity.show = this.trackedEntityWasShown;
   this.trackedEntityWasShown = true;
   this.dispatchCockpitModeChanged(false);
-  if (restoreTracking && entity && this.viewer.entities.contains(entity)) {
-    this.viewer.trackedEntity = entity;
-    this.restoreTrackingFrame(entity);
+  if (restoreTracking && entity && this.host.contains(entity)) {
+    this.host.restore(entity, this.restoreTrackingFrame);
   }
   this.syncEntry();
   const restoreTarget =

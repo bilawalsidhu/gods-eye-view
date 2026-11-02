@@ -223,7 +223,7 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
   assert.match(enter, /activeElement/);
   assert.match(enter, /mapViewButton.*focus|focus.*mapViewButton/s);
   assert.match(exit, /focus\(\{ preventScroll: true \}\)/);
-  assert.match(exit, /this\.restoreTrackingFrame\(entity\)/);
+  assert.match(exit, /this\.host\.restore\(entity, this\.restoreTrackingFrame\)/);
   assert.doesNotMatch(exit, /applyTrackedCameraFrame/);
   assert.match(
     ui,
@@ -238,7 +238,7 @@ test('Cockpit shortcut failures do not leak and open utilities own the first Esc
   assert.match(keydown, /if \(this\.isUtilityDisclosureOpen\?\.\(\)\) return;/);
   assert.match(
     keydown,
-    /const cockpitAttempt = !!\(\s*this\.readAircraftInfo\(\) && this\.viewer\.trackedEntity\?\.position\s*\);[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?!this\.isEntryAllowed\(\)/,
+    /const cockpitAttempt = !!\(\s*this\.readAircraftInfo\(\) && this\.host\.current\(\)\s*\);[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?!this\.isEntryAllowed\(\)/,
   );
 });
 
@@ -302,7 +302,7 @@ test('the cockpit reads its aircraft from the layer that owns Cesium tracking', 
   assert.match(read, /gevTrackedId/);
   // In cockpit mode the controller moves the entity off viewer.trackedEntity,
   // so its own handle is the tracked identity there.
-  assert.match(read, /this\.viewer\?\.trackedEntity \|\| this\.trackedEntity/);
+  assert.match(read, /this\.host\.followed\(\) \|\| this\.trackedEntity/);
 });
 
 test('programmatic Context layer changes cannot bypass explicit expansion policy', () => {
@@ -1165,7 +1165,7 @@ test('cockpit route direction uses self-contained vector artwork, not a font lig
 test('cockpit aircraft handoff invalidates the prior world-position anchor', () => {
   const match = _adoptTrackedEntity.toString();
   assert.ok(match, 'cockpit tracked-entity handoff block is missing');
-  assert.match(match, /this\.viewer\.trackedEntity = undefined;/);
+  assert.match(match, /this\.host\.release\(\);/);
   assert.match(match, /this\.cockpitAnchorValid = false;/);
   assert.match(
     match,
