@@ -373,7 +373,21 @@ for (const [locale, summary] of [
   });
 }
 
-test('a five-word summary is capped in characters too', async () => {
+for (const [locale, summary] of [
+  ['fr', 'Rue de Rivoli Vols en direct'],
+  ['es', 'Times Square Nueva York Vuelos en vivo'],
+  ['ru', 'Times Square Рейсы онлайн и суда'],
+]) {
+  test(`a ${locale} summary keeps a multi-word name whole: ${summary}`, async () => {
+    // The parser itself: the file's HUD requests share one rate limiter.
+    const { parseHudSummaryReply } =
+      await import('../server/providers/openai/hud-summary.js');
+    const reply = JSON.stringify({ summary, feedState: 'partial' });
+    assert.equal(parseHudSummaryReply(reply, locale).summary, summary);
+  });
+}
+
+test('a summary is capped in characters', async () => {
   const { response } = await postHudSummary(
     { locale: 'de', feedProvenance: { overall: null } },
     JSON.stringify({ summary: `Berlin ${'x'.repeat(200)}`, feedState: null }),
@@ -386,7 +400,7 @@ for (const [locale, summary] of [
   ['es', 'Vuelos sobre 東京駅 datos antiguos'],
   ['ru', 'Башня Тайбэй 101 台北101 рейсы'],
 ]) {
-  test(`a ${locale} summary with a Han place name keeps its five words`, async () => {
+  test(`a ${locale} summary with a Han place name keeps its words`, async () => {
     const { response } = await postHudSummary(
       { locale, feedProvenance: { overall: 'stale' } },
       JSON.stringify({ summary, feedState: 'stale' }),

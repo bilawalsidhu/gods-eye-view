@@ -72,7 +72,7 @@ export const HUD_SUMMARY_INSTRUCTIONS = [
 /** Longest summary, in characters, for a script written without spaces. */
 export const HUD_SUMMARY_MAX_UNSPACED_CHARS = 20;
 
-/** Longest five-word summary, in characters. */
+/** Longest summary, in characters; the cut falls between words. */
 export const HUD_SUMMARY_MAX_CHARS = 80;
 
 /** feedState values the model may return besides null. */
@@ -142,6 +142,9 @@ function flatWords(value) {
     .trim();
 }
 
+const UNSPACED_WORD =
+  /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー]+$/u;
+
 function sameScript(a, b) {
   return WORD_SCRIPTS.some((script) => script.test(a ?? '') && script.test(b));
 }
@@ -149,6 +152,7 @@ function sameScript(a, b) {
 /**
  * Whether `word` stands on its own in `text`. Only a letter of the same
  * script extends it, so `stale` flush against kana or Han still counts.
+ * Han and kana have no word edges: a word in them counts anywhere.
  * @param {string} text
  * @param {string} word
  * @returns {boolean}
@@ -157,6 +161,7 @@ export function hasWord(text, word) {
   const haystack = flatWords(text);
   const needle = flatWords(word);
   if (!needle) return false;
+  if (UNSPACED_WORD.test(needle)) return haystack.includes(needle);
   for (
     let at = haystack.indexOf(needle);
     at >= 0;

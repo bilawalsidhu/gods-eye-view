@@ -258,6 +258,22 @@ test('with every feed healthy a reply calling one unavailable falls back', async
   assert.equal(shown(), hud._composeSummary());
 });
 
+for (const [locale, place, summary] of [
+  ['zh-CN', '北京', '北京航班不可用'],
+  ['zh-Hant', '北京', '北京航班不可用'],
+  ['ja', '東京', '東京航空便利用不可'],
+]) {
+  test(`a ${locale} reply calling a feed unavailable flush against Han falls back`, async (t) => {
+    const { hud, shown } = createHud(
+      t,
+      { summary, feedState: null },
+      { locale, places: [place], layers: () => [] },
+    );
+    await hud._updateSummary(false, true);
+    assert.equal(shown(), hud._composeSummary());
+  });
+}
+
 test('an ar reply opening with a Latin name keeps reading right to left', async (t) => {
   const { hud, shown } = createHud(
     t,

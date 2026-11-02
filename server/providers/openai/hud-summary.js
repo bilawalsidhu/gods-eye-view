@@ -37,12 +37,12 @@ function parseHudSummaryReply(text, locale) {
     ? reply.feedState
     : null;
   return {
-    summary: toFiveWordHudSummary(reply?.summary, locale),
+    summary: toHudSummary(reply?.summary, locale),
     feedState,
   };
 }
 
-function toFiveWordHudSummary(value, requested) {
+function toHudSummary(value, requested) {
   const locale = hudSummaryLocale(requested);
   const words = String(value || '')
     .normalize('NFC')
@@ -55,7 +55,8 @@ function toFiveWordHudSummary(value, requested) {
   // Japanese and Chinese have no spaces to count words by: cap characters.
   if (hudSummaryIsUnspaced(locale))
     return capAtWord(words.join(' '), HUD_SUMMARY_MAX_UNSPACED_CHARS, locale);
-  return capAtWord(words.slice(0, 5).join(' '), HUD_SUMMARY_MAX_CHARS, locale);
+  // No word count: the model counts Rue de Rivoli as one word.
+  return capAtWord(words.join(' '), HUD_SUMMARY_MAX_CHARS, locale);
 }
 
 /**
@@ -170,4 +171,4 @@ async function handleHudSummary(req, res) {
   }
 }
 
-export { handleHudSummary };
+export { handleHudSummary, parseHudSummaryReply };
