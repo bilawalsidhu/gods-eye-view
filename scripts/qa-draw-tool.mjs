@@ -66,6 +66,47 @@ const CANVAS_CLIP = { x: 340, y: 200, width: 560, height: 380 };
  * the board. Decoding happens in the page because Node here has no image
  * decoder.
  */
+/** The canvas clip as a PNG, for comparing two moments of the same view. */
+// Clear of the open UTILITIES panel (x 100–380), whose own amber swatch
+// dims when its row's shape is hidden.
+const LINE_CLIP = { x: 390, y: 200, width: 510, height: 380 };
+const canvasShot = () =>
+  page.screenshot({ clip: LINE_CLIP, type: 'png', encoding: 'base64' });
+
+/**
+ * Amber pixels in one shot that are not amber in another of the same view:
+ * a mark's own pixels, apart from imagery and panels that both shots share.
+ */
+function amberOnlyIn(shotA, shotB) {
+  return page.evaluate(
+    async (a, b) => {
+      const pixels = async (base64) => {
+        const bitmap = await createImageBitmap(
+          await (await fetch(`data:image/png;base64,${base64}`)).blob(),
+        );
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const context = canvas.getContext('2d');
+        context.drawImage(bitmap, 0, 0);
+        return context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+      };
+      const amber = (d, i) =>
+        d[i] > 150 &&
+        d[i + 1] > 90 &&
+        d[i + 1] < 220 &&
+        d[i + 2] < 130 &&
+        d[i] - d[i + 2] > 70 &&
+        d[i] - d[i + 1] > 20;
+      const [da, db] = [await pixels(a), await pixels(b)];
+      let only = 0;
+      for (let i = 0; i < da.length; i += 4)
+        if (amber(da, i) && !amber(db, i)) only += 1;
+      return only;
+    },
+    shotA,
+    shotB,
+  );
+}
+
 async function amberPixels() {
   const shot64 = await page.screenshot({
     clip: CANVAS_CLIP,
@@ -313,7 +354,8 @@ try {
 
   // ── a line along a road, with Backspace ─────────────────────────────────
   await page.click('.pp-mode-btn[data-shape="line"]');
-  await clickWorld(360, 300);
+  // Clear of the open UTILITIES panel, which sits beside the left rail.
+  await clickWorld(420, 300);
   await clickWorld(470, 380);
   await clickWorld(600, 470);
   const beforeBackspace = (await drawState()).vertices;
@@ -409,15 +451,34 @@ try {
         mark && { color: mark.color, hidden: mark.hidden, alpha: mark.alpha }
       );
     }, id);
+  // Wait for a mark to reach a state rather than for a fixed time.
+  const markReaches = (id, want) =>
+    page
+      .waitForFunction(
+        (id, want) => {
+          const mark = window.__gevAnnotations.list().find((m) => m.id === id);
+          return (
+            mark &&
+            Object.entries(want).every(([key, value]) => mark[key] === value)
+          );
+        },
+        { timeout: 10_000 },
+        id,
+        want,
+      )
+      .then(
+        () => true,
+        () => false,
+      );
   await page.click(rowControl(areaId, 'swatch'));
   await page.click(rowControl(areaId, 'color-green'));
-  await wait(300);
+  await markReaches(areaId, { color: 'green' });
   check(
     'a colour picked in the row recolours that shape',
     (await markState(areaId))?.color === 'green',
   );
   await page.click(rowControl(areaId, 'toggle'));
-  await wait(600);
+  await markReaches(areaId, { hidden: true, alpha: 0 });
   const hidden = await markState(areaId);
   check(
     'hiding a shape keeps it on the board but draws it at zero alpha',
@@ -425,23 +486,73 @@ try {
     JSON.stringify(hidden),
   );
   await page.click(rowControl(areaId, 'toggle'));
-  await wait(600);
   check(
     'showing it again brings it straight back',
-    (await markState(areaId))?.alpha === 1,
+    await markReaches(areaId, { hidden: false, alpha: 1 }),
   );
-  const cameraAt = () =>
-    page.evaluate(() => {
-      const p = window.__godsEyeView.viewer.camera.positionWC;
-      return [p.x, p.y, p.z];
-    });
-  const beforeFly = await cameraAt();
+  // Fly-to frames the line by its whole path: once the flight settles, the
+  // middle of the line sits near the middle of the view.
   await page.click(rowControl(ids[1], 'fly'));
-  await wait(2600);
-  const afterFly = await cameraAt();
+  await page
+    .waitForFunction(() => !window.__godsEyeView.viewer.camera._currentFlight, {
+      timeout: 15_000,
+    })
+    .catch(() => {});
+  await wait(300);
+  const framed = await page.evaluate((id) => {
+    const { viewer } = window.__godsEyeView;
+    // No Cesium global in the page: borrow Cartesian3 from a live object.
+    const Cartesian3 = viewer.camera.positionWC.constructor;
+    const mark = window.__gevAnnotations.list().find((m) => m.id === id);
+    const lons = mark.path.map((p) => p.lon);
+    const lats = mark.path.map((p) => p.lat);
+    const middle = Cartesian3.fromDegrees(
+      (Math.min(...lons) + Math.max(...lons)) / 2,
+      (Math.min(...lats) + Math.max(...lats)) / 2,
+    );
+    const at = viewer.scene.cartesianToCanvasCoordinates(middle);
+    const canvas = viewer.scene.canvas;
+    return (
+      at && {
+        dx: Math.abs(at.x - canvas.clientWidth / 2) / canvas.clientWidth,
+        dy: Math.abs(at.y - canvas.clientHeight / 2) / canvas.clientHeight,
+      }
+    );
+  }, ids[1]);
   check(
-    'fly to frames that shape',
-    Math.hypot(...afterFly.map((v, i) => v - beforeFly[i])) > 1,
+    'fly to frames that shape: its middle is near the middle of the view',
+    Boolean(framed) && framed.dx < 0.2 && framed.dy < 0.2,
+    JSON.stringify(framed),
+  );
+
+  // ── a hidden Line leaves the globe: its flowing stroke keeps its own
+  // colour, so the check is the pixels, not the mark's state ─────────────
+  const lineId = ids[1];
+  await page.click(rowControl(lineId, 'swatch'));
+  await page.click(rowControl(lineId, 'color-amber'));
+  await markReaches(lineId, { color: 'amber', alpha: 1 });
+  await wait(800);
+  const shown = await canvasShot();
+  await page.click(rowControl(lineId, 'toggle'));
+  await markReaches(lineId, { hidden: true, alpha: 0 });
+  await wait(800);
+  const hiddenShot = await canvasShot();
+  // Amber the shown line had and the hidden one lost; amber that appears
+  // only once it is hidden is noise, and must stay small beside it.
+  const gone = await amberOnlyIn(shown, hiddenShot);
+  const noise = await amberOnlyIn(hiddenShot, shown);
+  check(
+    'a hidden Line is no longer painted',
+    gone > 40 && noise < gone * 0.2,
+    `${gone} amber pixels went with the line, ${noise} appeared`,
+  );
+  await page.click(rowControl(lineId, 'toggle'));
+  await wait(1200);
+  const back = await amberOnlyIn(await canvasShot(), hiddenShot);
+  check(
+    'and paints again when shown',
+    back > gone * 0.5,
+    `${back} of ${gone} line pixels back`,
   );
   await shot('03-pins-and-shapes');
 
