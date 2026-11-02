@@ -28,13 +28,15 @@ test('a parked renderer is reused, but a lost context is disposed before rebuild
       released += 1;
     });
     return {
-      setRenderLoop(enabled) {
-        this.running = enabled;
+      suspend() {
+        this.running = false;
+      },
+      resume() {
+        this.running = true;
       },
       engine: {
         host: { container, canvas: new EventTarget() },
-        camera: { cancelFlight() {} },
-        render: { request() {}, setContinuous() {} },
+        render: { request() {} },
       },
     };
   };
@@ -53,9 +55,24 @@ test('a parked renderer is reused, but a lost context is disposed before rebuild
   cache.retain('navara');
   release();
   first.engine.host.canvas.dispatchEvent(new Event('webglcontextlost'));
-  assert.notEqual(await open(), first);
+  const second = await open();
+  assert.notEqual(second, first);
   assert.equal(released, 1);
+  cache.retain('navara');
   release();
-  cache.clear();
+  second.resume = () => {
+    throw new Error('resume failed');
+  };
+  await assert.rejects(open(), /resume failed/);
+  assert.equal(second.engine.host.container.isConnected, false);
   assert.equal(released, 2);
+  const third = await open();
+  third.suspend = () => {
+    throw new Error('suspend failed');
+  };
+  cache.retain('navara');
+  assert.throws(release, /suspend failed/);
+  assert.equal(third.engine.host.container.isConnected, false);
+  cache.clear();
+  assert.equal(released, 3);
 });
