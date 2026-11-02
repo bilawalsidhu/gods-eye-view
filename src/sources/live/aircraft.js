@@ -48,7 +48,8 @@ export function normalizeReadsbAircraft(row, snapshotTimeMs) {
   const baroFt = finite(row.alt_baro),
     geoFt = finite(row.alt_geom);
   const speedKts = finite(row.gs),
-    rateFtMin = finite(row.baro_rate);
+    // readsb sends a GNSS-sourced rate as geom_rate instead of baro_rate.
+    rateFtMin = finite(row.baro_rate) ?? finite(row.geom_rate);
   const seen = finite(row.seen),
     seenPos = finite(row.seen_pos);
   return {
