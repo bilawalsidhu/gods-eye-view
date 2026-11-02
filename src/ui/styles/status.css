@@ -53,6 +53,12 @@
   font-size: 18px;
 }
 
+#top-center-actions .cctv-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 #tilt-map-view[aria-pressed='true'] {
   border-color: var(--accent);
   color: var(--accent);

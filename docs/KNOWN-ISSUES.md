@@ -31,17 +31,20 @@ Next iteration candidates:
 ---
 
 ### CCTV panel can appear "missing"
-Status: Open (workaround available)
+Status: Mitigated (persistent CCTV shortcut)
 
 Context:
-- The rails lay their panels out themselves. No panel is dragged into place at
-  startup and no stored position is read, so a panel that looks missing is
-  collapsed or its layer is off rather than parked off-screen. The CCTV panel
-  starts collapsed and stays that way until you open it or a camera activates.
+- The CCTV panel starts collapsed. On a compact screen, expanding another
+  right-rail panel can hide the collapsed CCTV header entirely.
+- The globe-actions camera button remains visible and opens CCTV without
+  enabling the camera feed. It reveals the panel before focusing its keyboard
+  disclosure; Escape or manual collapse returns focus to the camera button.
 
 Workaround:
-- Check that the CCTV layer is enabled in the Layers panel, then open the panel
-  from its header control; it also opens on its own when a camera activates.
+- Use the camera button in the top globe-actions bar to open CCTV, even when
+  another right-rail panel has hidden its header.
+- Enable the CCTV layer in Data Layers to load cameras; the shortcut itself
+  does not turn on the feed.
 - To force it open on an ordinary load, store the expanded state and reload. In
   the browser console:
   - `localStorage.setItem('godsEyeView.v6.panelCollapsed.cctv-panel', '0');`
@@ -51,7 +54,7 @@ Workaround:
   - `location.reload();`
 - Neither console line changes anything when the page was opened from a share
   link: a shared view is laid out from the link, not from what this browser has
-  stored, so open the panel from its header control instead.
+  stored, so use the globe-actions CCTV button instead.
 
 Related keys (current versions):
 - Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>` — `'0'` open,

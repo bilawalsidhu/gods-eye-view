@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCctvSource, createCctvLayer } from './index.js';
+import { feedProvenanceNote, layerSnapshot } from '../../data/layerSnapshot.js';
+import { createControls } from './controls.js';
 
 const camera = {
   id: 'pack/camera ?x',
@@ -12,6 +14,50 @@ const camera = {
   fovDeg: 60,
   pitchDeg: -12,
 };
+
+test('CCTV provenance distinguishes public catalogs from bundled seed positions', () => {
+  const state = {
+    _count: 2,
+    _lastUpdate: Date.now(),
+    _lastError: null,
+    _geoLoading: false,
+    _geoLoadDone: 0,
+    _geoLoadTotal: 0,
+    _catalogFromSeeds: false,
+  };
+  const { methods } = createControls({
+    state,
+    services: {
+      render: { holdContinuousRender() {}, releaseContinuousRender() {} },
+      activation: {},
+    },
+    parts: {},
+    source: {},
+  });
+  const snapshot = () =>
+    layerSnapshot({
+      id: 'cctv',
+      name: 'CCTV',
+      enabled: true,
+      source: methods.source,
+      stats: methods.getStats(),
+    });
+  const publicCatalog = snapshot();
+  assert.equal(publicCatalog.feedState, 'nominal');
+  assert.doesNotMatch(
+    feedProvenanceNote([publicCatalog], 'nominal'),
+    /fallback/i,
+  );
+
+  state._catalogFromSeeds = true;
+  const seedCatalog = snapshot();
+  assert.equal(seedCatalog.feedState, 'fallback');
+  assert.match(seedCatalog.source, /bundled camera/i);
+  assert.match(
+    feedProvenanceNote([seedCatalog], 'fallback'),
+    /bundled camera/i,
+  );
+});
 
 test('camera catalog and health use fixed source routes and caller cancellation', async () => {
   const calls = [];

@@ -183,6 +183,7 @@
       "server/providers/live.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
+      "server/providers/common/rate-limit.js",
       "server/providers/aircraft/opensky.js",
       "server/providers/aircraft/adsb-lol.js",
       "server/providers/aircraft/enrichment.js",
@@ -193,7 +194,8 @@
       "src/data/aisStreamAdapter.js",
       "src/data/aisWatchdog.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "src/sources/rateLimit.js"
     ],
     "external": ["ws"]
   },

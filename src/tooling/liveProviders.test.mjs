@@ -15,7 +15,7 @@ function install(plugin, preview = false) {
       },
     },
   });
-  return async (route, url = '/', method = 'GET') => {
+  return async (route, url = '/', method = 'GET', remoteAddress = 'local') => {
     assert.ok(routes.has(route), `registered route: ${route}`);
     const response = {
       statusCode: 200,
@@ -32,7 +32,10 @@ function install(plugin, preview = false) {
         this.body = body;
       },
     };
-    await routes.get(route)({ url, method }, response);
+    await routes.get(route)(
+      { url, method, socket: { remoteAddress } },
+      response,
+    );
     return response;
   };
 }

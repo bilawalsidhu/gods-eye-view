@@ -80,6 +80,7 @@ export class PanelChrome {
       },
     });
     this._cockpitPanelRestore = null;
+    this._cctvShortcutFocusOrigin = null;
     this._cockpitContextCollapsedForDataPanel = false;
     this._panelPosition = new PanelPositionControls({
       presentPanel: (panel, patch) => this._presentPanel(panel, patch),
@@ -165,17 +166,42 @@ export class PanelChrome {
       closeDelayMs: 420,
     });
     this._initCommandDockTrayMetrics();
+    this._initCctvShortcut();
     this._maybeNotifyLayoutReset();
+  }
+
+  _initCctvShortcut() {
+    const button = this._cctvGlobeBtn;
+    this._removeCctvShortcut?.();
+    this._removeCctvShortcut = null;
+    if (!button) return;
+    this._removeCctvShortcut = this._lifetime.listen(button, 'click', () => {
+      this.setPanelCollapsed('cctv-panel', false, { explicit: true });
+      const panel = document.getElementById('cctv-panel');
+      if (panel) {
+        panel.removeAttribute('aria-hidden');
+        panel.scrollIntoView?.({ block: 'nearest' });
+        this._cctvShortcutFocusOrigin = button;
+        const disclosure = panel.querySelector?.(
+          '[data-collapse-target="cctv-panel"]',
+        );
+        disclosure?.focus?.();
+      }
+    });
   }
 
   _collapsePanelOnEscape(event, panelId) {
     // In a phone sheet, Escape closes the sheet (mobileShell.js), not a panel.
     if (globalThis.document?.body?.hasAttribute?.('data-mobile-sheet'))
       return false;
-    return collapsePanelOnEscape(event, {
+    const focusOrigin =
+      panelId === 'cctv-panel'
+        ? this._cctvShortcutFocusOrigin || this._cctvGlobeBtn
+        : null;
+    const collapsed = collapsePanelOnEscape(event, {
       panel: document.getElementById(panelId),
-      onChange: (collapsed, options) =>
-        this.setPanelCollapsed(panelId, collapsed, options),
+      onChange: (nextCollapsed, options) =>
+        this.setPanelCollapsed(panelId, nextCollapsed, options),
       beforeCollapse: () => {
         if (panelId === 'location-bar') this._closeLocationSearch?.();
       },
@@ -196,6 +222,8 @@ export class PanelChrome {
           : null;
       },
     });
+    if (collapsed) focusOrigin?.focus?.({ preventScroll: true });
+    return collapsed;
   }
 
   /** A collapse button's click: flip its panel. */
@@ -405,6 +433,14 @@ export class PanelChrome {
     if (explicit && !restore)
       this.shareLinkManager?.claimRestoreLane?.('panel', panelId);
     const nextCollapsed = Boolean(collapsed);
+    const focusOrigin =
+      panelId === 'cctv-panel' &&
+      nextCollapsed &&
+      panelEl.contains(document.activeElement)
+        ? this._cctvShortcutFocusOrigin || this._cctvGlobeBtn
+        : null;
+    if (panelId === 'cctv-panel' && nextCollapsed)
+      this._cctvShortcutFocusOrigin = null;
     const wasAutoCollapsed = Boolean(this._shownPanel(panelEl).auto);
     // One panel is open per desktop side: opening a side panel, whether the
     // user asked or a feature revealed it (Street Level's viewer, a selected
@@ -491,6 +527,7 @@ export class PanelChrome {
       if (priorRightOwner !== this._panelLayout._rightStackPreferredPanelId) {
         this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
       }
+      focusOrigin?.focus?.({ preventScroll: true });
       return;
     }
     if (
@@ -524,6 +561,7 @@ export class PanelChrome {
       }
     }
     this._presentPanel(panelEl, { collapsed: nextCollapsed, auto: null });
+    focusOrigin?.focus?.({ preventScroll: true });
     if (
       nextCollapsed &&
       this.cockpitView?.active &&
