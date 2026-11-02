@@ -181,5 +181,19 @@ async function createRenderer({
   });
 
   signal.throwIfAborted();
-  return { viewer, engine, tileset, mapStackController };
+  return {
+    viewer,
+    engine,
+    tileset,
+    mapStackController,
+    suspend() {
+      uninstallRenderGovernor(viewer);
+      engine.camera.cancelFlight();
+      releaseCameraVerbs(viewer);
+      viewer.useDefaultRenderLoop = false;
+    },
+    resume() {
+      viewer.useDefaultRenderLoop = !document.hidden;
+    },
+  };
 }

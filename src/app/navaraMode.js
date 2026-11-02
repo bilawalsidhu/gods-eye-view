@@ -242,7 +242,15 @@ export async function createNavaraScene({
     viewer: null,
     engine,
     tileset: null,
-    setRenderLoop: globe.setRenderLoop,
+    suspend() {
+      uninstallRenderGovernor(engine);
+      engine.camera.cancelFlight();
+      engine.render.setContinuous(false);
+      globe.setRenderLoop(false);
+    },
+    resume() {
+      globe.setRenderLoop(true);
+    },
     mapStackController,
   };
 }

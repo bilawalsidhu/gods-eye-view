@@ -1,6 +1,3 @@
-import { releaseCameraVerbs } from '../cameraVerbs.js';
-import { uninstallRenderGovernor } from '../renderGovernor.js';
-
 // Only the renderer and its map survive a switch. The outgoing UI, data feeds,
 // tools and their subscriptions are still disposed with their application.
 export function createRendererCache() {
@@ -50,25 +47,24 @@ export function createRendererCache() {
         throw error;
       }
     } else {
-      host.prepend(entry.container);
-      if (entry.scene.viewer)
-        entry.scene.viewer.useDefaultRenderLoop = !document.hidden;
-      else entry.scene.setRenderLoop(true);
-      entry.scene.engine.render.request('engine-resume');
+      try {
+        host.prepend(entry.container);
+        entry.scene.resume();
+        entry.scene.engine.render.request('engine-resume');
+      } catch (error) {
+        entry.dispose();
+        throw error;
+      }
     }
-    const { viewer, engine } = entry.scene;
     defer(() => {
       const keep = retainKind === kind && !entry.lost;
       retainKind = null;
       if (!keep) return entry.dispose();
-      uninstallRenderGovernor(viewer ?? engine);
-      engine.camera.cancelFlight();
-      if (viewer) {
-        releaseCameraVerbs(viewer);
-        viewer.useDefaultRenderLoop = false;
-      } else {
-        engine.render.setContinuous(false);
-        entry.scene.setRenderLoop(false);
+      try {
+        entry.scene.suspend();
+      } catch (error) {
+        entry.dispose();
+        throw error;
       }
       entry.container.remove();
       idle.set(kind, entry);
