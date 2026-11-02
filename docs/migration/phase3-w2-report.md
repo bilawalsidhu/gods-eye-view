@@ -1,6 +1,6 @@
 # Phase 3 W2 — execution report
 
-Status: all nine W2 implementations and the reviewed performance comparison are complete. Whole-wave acceptance is NOT passed; performance, shell and broader visual gates remain open. Dioxus is deferred by the current user scope. The execution sequence is in [the detailed plan](phase3-w2-plan.md).
+Status: all nine W2 implementations and the reviewed performance comparison are complete. Whole-wave acceptance is NOT passed; performance, shell and broader visual gates remain open. The November 2 product decision keeps the JavaScript UI and supports switching between Cesium and Navara. The Dioxus experiment is retired. The execution sequence is in [the detailed plan](phase3-w2-plan.md).
 
 ## W2 closure review and completed comparison (2026-10-29)
 

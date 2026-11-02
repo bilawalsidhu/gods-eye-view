@@ -1080,6 +1080,7 @@
   "build/navaraAssets.js",
   "scripts/qa-engine-bench.mjs",
   "scripts/qa-engine-shell.mjs",
+  "scripts/qa-engine-switch.mjs",
   "scripts/qa/navara-contract.html",
   "scripts/qa/navaraContractPage.js",
   "scripts/qa/tileCache.mjs",
