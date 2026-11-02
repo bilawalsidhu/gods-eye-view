@@ -572,14 +572,22 @@ export function createUsGroundwaterLayer({
           return;
         const picked = viewer.scene.pick(event.position);
         const entity = picked?.id;
-        if (recordsByEntity.has(entity?.id)) {
+        const detailVisible =
+          dataSource.show &&
+          viewer.camera.positionCartographic.height <= WELL_DETAIL_HEIGHT;
+        // Hollow source-location symbols have transparent centers. Use the same
+        // small pixel neighborhood as overlapping-record selection when the
+        // scene pick misses, while respecting any other layer's picked object.
+        if (detailVisible && (recordsByEntity.has(entity?.id) || !picked)) {
           const candidates = recordsAtPixel(
             viewer,
             dataSource.entities.values.filter((e) => recordsByEntity.has(e.id)),
             event.position,
           );
-          recordPicker.choose(candidates.length ? candidates : [entity]);
-          return;
+          if (candidates.length || recordsByEntity.has(entity?.id)) {
+            recordPicker.choose(candidates.length ? candidates : [entity]);
+            return;
+          }
         }
         if (!selectWell(entity) && !picked) {
           if (recordsByEntity.has(viewer.selectedEntity?.id))

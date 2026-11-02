@@ -17,6 +17,76 @@ const fixture = JSON.parse(
   ),
 );
 
+test('hollow marker center uses the bounded record hit area without stealing foreign picks or hidden records', async () => {
+  const owned = ownedViewer(() => false);
+  owned.viewer.camera.positionCartographic.height = 25000;
+  owned.viewer.scene.canvas.clientWidth = 800;
+  owned.viewer.scene.canvas.clientHeight = 600;
+  let picked;
+  owned.viewer.scene.pick = () => picked;
+  const firstPosition = Cesium.Cartesian3.fromDegrees(
+    fixture.records[0].longitude,
+    fixture.records[0].latitude,
+  );
+  owned.viewer.scene.cartesianToCanvasCoordinates = (position) =>
+    Cesium.Cartesian3.equals(position, firstPosition)
+      ? new Cesium.Cartesian2(100, 100)
+      : new Cesium.Cartesian2(500, 500);
+  const actions = new Map();
+  const original = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
+  const layer = createUsGroundwaterLayer({
+    source: {
+      async getSnapshot() {
+        return fixture;
+      },
+    },
+  });
+  try {
+    Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (
+      callback,
+      type,
+      modifier,
+    ) {
+      actions.set(type, callback);
+      return original.call(this, callback, type, modifier);
+    };
+    layer.init(owned.viewer);
+    await layer.enable();
+  } finally {
+    Cesium.ScreenSpaceEventHandler.prototype.setInputAction = original;
+  }
+  try {
+    const click = actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    click({ position: new Cesium.Cartesian2(104, 104) });
+    assert.equal(
+      owned.viewer.selectedEntity.id,
+      `us-groundwater:${fixture.records[0].id}`,
+    );
+    click({ position: new Cesium.Cartesian2(120, 120) });
+    assert.equal(
+      owned.viewer.selectedEntity,
+      undefined,
+      'the hit area is bounded',
+    );
+    const foreign = { id: 'other-layer:point' };
+    picked = { id: foreign };
+    owned.viewer.selectedEntity = foreign;
+    click({ position: new Cesium.Cartesian2(100, 100) });
+    assert.equal(owned.viewer.selectedEntity, foreign);
+    picked = undefined;
+    owned.viewer.selectedEntity = undefined;
+    owned.viewer.camera.positionCartographic.height = 90000;
+    click({ position: new Cesium.Cartesian2(100, 100) });
+    assert.equal(owned.viewer.selectedEntity, undefined);
+    owned.viewer.camera.positionCartographic.height = 25000;
+    owned.collection.get(0).show = false;
+    click({ position: new Cesium.Cartesian2(100, 100) });
+    assert.equal(owned.viewer.selectedEntity, undefined);
+  } finally {
+    layer.destroy();
+  }
+});
+
 test('pre-render clears broad-scale well selection without a moveEnd and preserves foreign selection', async () => {
   const owned = ownedViewer(() => false);
   owned.viewer.camera.positionCartographic.height = 25000;
