@@ -360,23 +360,24 @@
   height: 1.25rem;
   flex-basis: 1.25rem;
 }
-/* The narrow dock's wings are too slim for their labels; show icons only. */
+/* At this width main shows the wings' icons only (command-dock-trays.css);
+   centre them in the slim wings. Cyber keeps its labels. */
 @media (max-width: 900px) {
-  #command-dock > :is(#location-bar, #control-panel) .dock-tray-toggle {
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    > :is(#location-bar, #control-panel)
+    .dock-tray-toggle {
     justify-content: center;
   }
-  #command-dock :is(.location-toolbar-label, .panel-header .panel-title) {
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    :is(.location-toolbar-label, .panel-title) {
     width: auto;
     min-width: 0;
-    font-size: 0;
-    letter-spacing: 0;
-    gap: 0;
     justify-content: center;
   }
-  #command-dock #location-bar .location-toolbar-label {
-    justify-content: center;
-  }
-  #command-dock .dock-label-icon {
+  :root:not([data-ui-theme='cyber']) #command-dock .dock-label-icon {
     width: 1.25rem;
     height: 1.25rem;
     flex-basis: 1.25rem;
