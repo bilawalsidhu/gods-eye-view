@@ -22,6 +22,7 @@ import {
 import { resolveAnnotationTarget } from './annotationResolver.js';
 import {
   getRenderGovernorDiagnostics,
+  installRenderGovernor,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
 
@@ -970,4 +971,19 @@ test('hand-drawn marks: only a manual mark can be restyled', async (t) => {
   assert.equal(voiceMark.manual, false);
   assert.equal(engine.restyle(voiceMark.id, { name: 'Renamed' }), false);
   assert.equal(voiceMark.label, 'Capitol');
+});
+
+test('a drawn line that rounds up to the next unit is labelled in it, not as 1000 m or 10.0 km', async (t) => {
+  installAnimationFrameStubs(t);
+  const labels = [];
+  const renderer = { add(anno) { labels.push(anno.label); }, update() {}, remove() {}, sync() {}, destroy() {} };
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const metresPerDegree = (6371.0088 * 1000 * Math.PI) / 180;
+  for (const metres of [994, 996, 9940, 9960]) {
+    await engine.annotate([
+      { type: 'route', manual: true, path: [[0, 0], [0, metres / metresPerDegree]] },
+    ]);
+  }
+  assert.deepEqual(labels, ['990 m', '1.0 km', '9.9 km', '10 km']);
+  engine.destroy();
 });

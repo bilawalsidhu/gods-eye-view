@@ -9,7 +9,7 @@ export function createManualVoicePanel({
   copy,
   onPresentationIntent,
 }) {
-  if (!ui?.voicePanel || typeof getPreviewEnabled !== 'function')
+  if (!ui?.panel || typeof getPreviewEnabled !== 'function')
     throw new TypeError(
       'A voice panel and Preview preference reader are required.',
     );
@@ -18,67 +18,53 @@ export function createManualVoicePanel({
     typeof copy?.previewDisabled !== 'string'
   )
     throw new TypeError('Localized Preview messages are required.');
-  const lifetime = new AbortController();
-  const panel = ui.voicePanel;
-  const tabs = [ui.previewTab, ui.settingsTab];
-  const doc = panel.ownerDocument;
+  const offs = [];
+  const tabs = ['previewTab', 'settingsTab'];
+  const panes = { preview: 'previewPanel', settings: 'settingsPanel' };
   let disposed = false;
   let open = false;
   let view = 'preview';
+  let graceTimer;
   const enabled = () => getPreviewEnabled() === true;
   const suppressed = () => view === 'preview' && getCockpitActive() === true;
-  const visible = (element) =>
-    Boolean(
-      element &&
-      !element.hidden &&
-      element.isConnected !== false &&
-      element.checkVisibility?.({
-        opacityProperty: true,
-        visibilityProperty: true,
-      }) !== false,
-    );
+  const holdsFocus = (name) =>
+    Boolean(ui.element(name)?.contains?.(globalThis.document?.activeElement));
   const snapshot = () => ({
     view,
     panelOpen: !disposed && open,
     settingsOpen: !disposed && open && view === 'settings',
     previewEnabled: enabled(),
+    // The card as presented, on a control the page shows.
     previewVisible:
       !disposed &&
       open &&
       view === 'preview' &&
       !suppressed() &&
       enabled() &&
-      visible(ui.card),
+      ui.state.card.visible &&
+      // The error tray takes the card's place.
+      ui.state.root.status !== 'error' &&
+      ui.visible('root'),
   });
   const sync = () => {
     if (disposed) return;
     const hidePanel = !open || suppressed();
-    const restoreFocus = hidePanel && panel.contains?.(doc?.activeElement);
-    panel.hidden = hidePanel;
-    panel.dataset.view = view;
-    if (ui.previewPanel)
-      ui.previewPanel.hidden = !open || view !== 'preview' || suppressed();
-    if (ui.voiceSettingsPanel)
-      ui.voiceSettingsPanel.hidden = !open || view !== 'settings';
-    ui.voiceSettingsButton?.setAttribute(
-      'aria-expanded',
-      String(open && view === 'settings'),
-    );
-    tabs.forEach((tab, index) => {
-      if (!tab) return;
-      const selected = view === (index === 0 ? 'preview' : 'settings');
-      tab.setAttribute('aria-selected', String(selected));
-      tab.tabIndex = selected ? 0 : -1;
+    const restoreFocus = hidePanel && holdsFocus('voicePanel');
+    ui.update('voicePanel', {
+      hidden: hidePanel,
+      view,
+      previewHidden: !open || view !== 'preview' || suppressed(),
+      settingsHidden: !open || view !== 'settings',
+      settingsExpanded: open && view === 'settings',
+      selected: view,
     });
     card?.setPresented?.(open && view === 'preview' && !suppressed());
-    if (ui.previewEmpty) {
-      ui.previewEmpty.hidden = Boolean(ui.card && !ui.card.hidden);
-      ui.previewEmpty.textContent = enabled()
-        ? copy.previewEmpty
-        : copy.previewDisabled;
-    }
-    if (restoreFocus)
-      [ui.voiceSettingsButton, ui.button].find(visible)?.focus?.();
+    const previewOn = enabled();
+    ui.update('previewEmpty', {
+      hidden: ui.state.card.visible,
+      text: () => (previewOn ? copy.previewEmpty : copy.previewDisabled),
+    });
+    if (restoreFocus) void ui.focus(['settingsButton', 'button']);
   };
   const refuse = (reason) => ({
     ok: false,
@@ -90,16 +76,14 @@ export function createManualVoicePanel({
     if (disposed) return refuse('disposed');
     if (!['preview', 'settings'].includes(next)) return refuse('unknown-view');
     const changed = !open || view !== next;
-    const outgoing =
-      view === 'preview' ? ui.previewPanel : ui.voiceSettingsPanel;
-    const transferFocus = changed && outgoing?.contains?.(doc?.activeElement);
+    const transferFocus = changed && holdsFocus(panes[view]);
     open = true;
     view = next;
     onPresentationIntent?.({ automatic });
     sync();
-    const tab = tabs[next === 'preview' ? 0 : 1];
-    if ((focus || transferFocus) && visible(panel) && visible(tab))
-      tab.focus?.();
+    // The tab takes focus once it shows, inside a shown panel.
+    if (focus || transferFocus)
+      void ui.focus([tabs[next === 'preview' ? 0 : 1]]);
     return { ok: true, changed, ...snapshot() };
   };
   const close = (onlyView) => {
@@ -114,58 +98,49 @@ export function createManualVoicePanel({
     sync();
     return { ok: true, changed, ...snapshot() };
   };
-  const listen = (element, type, handler) =>
-    element?.addEventListener(type, handler, { signal: lifetime.signal });
   const toggleSettings = () =>
     open && view === 'settings'
       ? close('settings')
       : select('settings', { focus: true });
-  try {
-    listen(ui.voiceSettingsButton, 'click', toggleSettings);
-    tabs.forEach((tab, index) => {
-      listen(tab, 'click', () =>
-        select(index === 0 ? 'preview' : 'settings', { focus: true }),
-      );
-      listen(tab, 'keydown', (event) => {
-        const next =
-          event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? 1
-              : ['ArrowLeft', 'ArrowRight'].includes(event.key)
-                ? 1 - index
-                : null;
-        if (next === null) return;
-        event.preventDefault();
-        select(next === 0 ? 'preview' : 'settings', { focus: true });
-      });
-    });
-    listen(ui.voiceSettingsClose, 'click', () => close());
-    listen(panel, 'keydown', (event) => {
+  // Keep the raised row reachable across pinned trays without intercepting
+  // their controls. The same lifetime owns the listeners and pending timer.
+  const endGrace = () => {
+    clearTimeout(graceTimer);
+    if (ui.state.root.rowGrace) ui.update('root', { rowGrace: false });
+  };
+  offs.push(
+    ui.on('settings-button', toggleSettings),
+    ui.on('tab', (index) =>
+      select(index === 0 ? 'preview' : 'settings', { focus: true }),
+    ),
+    ui.on('tab-keydown', (index, event) => {
+      const next =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? 1
+            : ['ArrowLeft', 'ArrowRight'].includes(event.key)
+              ? 1 - index
+              : null;
+      if (next === null) return;
+      event.preventDefault();
+      select(next === 0 ? 'preview' : 'settings', { focus: true });
+    }),
+    ui.on('settings-close', () => close()),
+    ui.on('panel-keydown', (event) => {
       if (event.key !== 'Escape' || !open) return;
       event.preventDefault();
       close();
-    });
-    // Keep the raised row reachable across pinned trays without intercepting
-    // their controls. The same lifetime owns the listeners and pending timer.
-    let graceTimer;
-    const endGrace = () => {
-      clearTimeout(graceTimer);
-      if (ui.root) delete ui.root.dataset.rowGrace;
-    };
-    listen(ui.root, 'pointerleave', (event) => {
+    }),
+    ui.on('pointerleave', (event) => {
       if (event.pointerType === 'touch') return;
       endGrace();
-      ui.root.dataset.rowGrace = 'true';
+      ui.update('root', { rowGrace: true });
       graceTimer = setTimeout(endGrace, ROW_GRACE_MS);
-    });
-    listen(ui.root, 'pointerenter', endGrace);
-    lifetime.signal.addEventListener('abort', endGrace, { once: true });
-    sync();
-  } catch (error) {
-    lifetime.abort();
-    throw error;
-  }
+    }),
+    ui.on('pointerenter', endGrace),
+  );
+  sync();
   return {
     select,
     close,
@@ -176,7 +151,8 @@ export function createManualVoicePanel({
       open = false;
       sync();
       disposed = true;
-      lifetime.abort();
+      for (const off of offs) off();
+      endGrace();
     },
   };
 }

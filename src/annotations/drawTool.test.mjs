@@ -23,7 +23,7 @@ test('the application composition wires the draw tool and owns its teardown', ()
   const tools = read('src/app/tools.js');
   const engineAt = tools.indexOf('const annotations = initAnnotations({');
   const drawAt = tools.indexOf(
-    'const drawTool = initDrawTool({ viewer, annotations });',
+    'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    navigation: styleManager,\n    publish: (view) => displayStore.publishDraw(view),',
   );
   assert.ok(engineAt >= 0, 'initAnnotations call missing');
   assert.ok(
@@ -62,49 +62,67 @@ test('the engine resolves manual geometry before any name resolution', () => {
 });
 
 test('the Draw control markup carries the ids the tool binds to', () => {
-  // UTILITIES is a component template now, assembled into index.html at
-  // build time — the markup is not in index.html any more.
-  const html = read('src/ui/templates/layer-panels.html');
+  // UTILITIES ▸ Draw is a Vue view (DrawControls, with DrawMarkList for the
+  // drawn shapes' rows), rendered into the Utilities panel.
+  const html = [
+    read('src/ui/views/panels/DrawControls.vue'),
+    read('src/ui/views/panels/DrawMarkList.vue'),
+  ].join('\n');
   const ids = [
     'draw-toggle',
     'draw-mode-row',
-    'draw-label-row',
     'draw-colors',
-    'draw-mark-list',
+    'draw-label-row',
     'draw-clear',
     'draw-hint',
+    'draw-mark-list',
   ];
   for (const id of ids) {
     assert.match(
       html,
       new RegExp(`id="${id}"`),
-      `#${id} missing from index.html`,
+      `#${id} missing from the Draw views`,
     );
   }
   // Shapes are icons, named for screen readers and tooltips.
-  for (const [shape, name] of [
-    ['area', 'Area'],
-    ['line', 'Line'],
-    ['pin', 'Pin'],
+  for (const [shape, icon] of [
+    ['area', 'pentagon'],
+    ['line', 'timeline'],
+    ['pin', 'location_on'],
   ]) {
     assert.match(
       html,
-      new RegExp(
-        `data-shape="${shape}"[^>]*aria-label="${name}"[^>]*title="${name}"`,
-      ),
+      new RegExp(`icon: '${icon}', attrs: \\{ 'data-shape': '${shape}' \\}`),
       `shape button ${shape} missing`,
     );
   }
-  for (const color of ['primary', 'amber', 'cyan', 'green', 'red'])
-    assert.match(
-      html,
-      new RegExp(`class="draw-color[^"]*" type="button" data-color="${color}"`),
-    );
-  for (const id of ids) {
+  assert.ok(
+    read('src/ui/views/LayerPanelsView.vue').includes('<DrawControls />'),
+    'the Utilities panel renders Draw',
+  );
+  assert.ok(
+    !read('src/ui/views/panels/DisplayPanel.vue').includes('draw-toggle'),
+    'Draw is no longer in DISPLAY',
+  );
+  // The rows and the hint render what the tool publishes; the controls
+  // call the actions the tool connects to the display store.
+  for (const action of [
+    "act('toggleDraw')",
+    "act('setDrawShape', $event)",
+    "act('setDrawColor', $event)",
+    "act('clearDraw')",
+    "act('renameDrawMark', row.id, next)",
+    "act('recolorDrawMark', row.id, color)",
+    "act('toggleDrawMark', row.id)",
+    "act('flyToDrawMark', row.id)",
+    "act('removeDrawMark', row.id)",
+  ]) {
+    assert.ok(html.includes(action), `the Draw views must call ${action}`);
+    const name = /act\('([a-zA-Z]+)'/.exec(action)[1];
     assert.match(
       tool(),
-      new RegExp(`getElementById\\('${id}'\\)`),
-      `drawTool must bind #${id}`,
+      new RegExp(`\\b${name}: `),
+      `drawTool must answer ${name}`,
     );
   }
 });
@@ -114,10 +132,11 @@ test('the DISPLAY rail styles live in their current owner, not the shim', () => 
   // these rules lived in the root style.css. That file is an import shim now,
   // and putting rules back into it would silently undo the split.
   const shim = read('style.css');
-  assert.ok(
-    shim.split('\n').length < 40,
-    'style.css is an import shim, not a stylesheet',
-  );
+  const rules = shim
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => line.trim() && !/^@import '[^']+';$/.test(line.trim()));
+  assert.deepEqual(rules, [], 'style.css is an import shim, not a stylesheet');
   assert.doesNotMatch(
     shim,
     /draw-hint|draw-color/,

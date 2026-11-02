@@ -66,9 +66,16 @@
     "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
+    "pinia": "^2.3.1",
+    "satellite.js": "^6.0.2",
+    "vue": "^3.5.44",
+    "vue-i18n": "^11.4.15"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.14.6",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/test-utils": "^2.5.1",
+    "happy-dom": "^20.14.6",
     "prettier": "3.9.6",
     "puppeteer": "^25.16.0",
     "sharp": "^0.35.4",
@@ -213,8 +220,8 @@
     "./voice/actions": "./src/voice/gevActions.js",
     "./annotations": "./src/annotations/index.js",
     "./context": "./src/data/contextStore.js",
-    "./build/html": {
-      "node": "./build/application-html.js"
+    "./build/register-vue": {
+      "node": "./build/registerVue.js"
     },
     "./application/catalog": "./src/app/catalog.js",
     "./standalone/catalog": "./src/standalone/catalog.js",
