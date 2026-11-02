@@ -1076,7 +1076,9 @@ export function createGevActionRunner({
           contextState?.mode === 'flights' &&
           contextState?.active !== false &&
           contextState?.changing !== true;
-        if (!contactsReady && engine?.kind !== 'navara') {
+        const directEntry = !targetLayer && !aircraftClass &&
+          styleManager.getCockpitState?.()?.entryAllowed === true;
+        if (!contactsReady && !directEntry) {
           const contextResult = await styleManager.setContextMode('flights', {
             signal: runOptions.signal,
             isCurrent: runOptions.isCurrent,

@@ -104,10 +104,11 @@ test('the viewer-only actions are one exported list of real tools', () => {
     assert.ok(tools.has(name), `${name} is a voice tool`);
 });
 
-test('Navara enters cockpit on the tracked aircraft without starting Contacts', async () => {
-  const engine = engineOverAustin({ kind: 'navara' });
+for (const kind of ['cesium', 'navara']) test(`${kind} enters cockpit on a ready tracked aircraft without starting Contacts`, async () => {
+  const engine = engineOverAustin({kind});
   const runner = runnerOn(engine, {
     styleManager: {
+      getCockpitState: () => ({ entryAllowed: true }),
       getAircraftTrackingTarget: () => ({ layerId: 'flights', id: '507c84' }),
       setContextMode: () => assert.fail('the selected flight already owns the camera'),
       controlCockpit: (action, { rollbackTarget }) => {
