@@ -234,7 +234,6 @@ const FRAME_TARGETS = new Map([
  * refusal (UNAVAILABLE_ON_ENGINE) instead of running.
  */
 export const VIEWER_ONLY_ACTIONS = Object.freeze([
-  'control_scene',
   'annotate_map',
   'clear_annotations',
   'fly_route',
@@ -470,7 +469,7 @@ export function createGevActionRunner({
     };
     if (
       !viewer &&
-      (VIEWER_ONLY_ACTIONS.includes(name) || CESIUM_LOOK_ACTIONS.includes(name))
+      ((name === 'control_scene' && !sceneDirector) || VIEWER_ONLY_ACTIONS.includes(name) || CESIUM_LOOK_ACTIONS.includes(name))
     )
       return unavailableOnEngine(name, engine);
 

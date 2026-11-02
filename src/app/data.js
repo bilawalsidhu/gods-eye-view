@@ -45,10 +45,10 @@ export function createApplicationData({
   onData?.(dataManager);
   if (!catalog?.layers || !catalog?.metadata)
     throw new TypeError('An application layer catalog is required');
-  const attached = dataManager.bindCatalog(viewer, engine, catalog);
-  for (const layer of catalog.layers) layer.attachDataManager?.(dataManager);
   for (const layer of catalog.layers)
     layer.attachMapStackController?.(mapStackController);
+  const attached = dataManager.bindCatalog(viewer, engine, catalog);
+  for (const layer of catalog.layers) layer.attachDataManager?.(dataManager);
 
   if (allowQaRegistration) {
     window.__gevQaRegisterLayer = (targetManager, layerModule) => {

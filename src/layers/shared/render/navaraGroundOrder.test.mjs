@@ -7,6 +7,8 @@ import fs from 'node:fs/promises';
 // minimal look, whose pipeline has no toneMapping anchor.
 const declarations = [
   ['gevRecentImagery', '../../recentImagery/render/navaraGround.js'],
+  ['gevNepalEvent', '../../recentImagery/render/navaraGround.js'],
+  ['gevObservedWeather', '../../weather/render/navaraSurface.js'],
   ['gevEarthquakeGround', '../../earthquakes/render/navara.js'],
   ['gevFirmsGround', './navaraGroundCells.js'],
   ['gevPreSharpenOverlay', '../../../globe/navara/overlay.js'],
@@ -18,7 +20,7 @@ const specs = await Promise.all(
       source = source.split('class GevPreSharpenOverlayEffectDesc')[1];
     const anchors = (name) =>
       [
-        ...source
+        ...(key === 'gevNepalEvent' && name === 'insertAfter' ? source.split('class NepalEffect')[1] : source)
           .match(new RegExp(`static ${name} = \\[([^\\]]*)\\]`))[1]
           .matchAll(/'([^']+)'/g),
       ].map((m) => m[1]);

@@ -38,9 +38,7 @@ export function navaraModeNotice(availability) {
   const names = availability.available().map(({ name }) => name);
   return Object.freeze({
     label: t('Experimental Navara engine'),
-    detail: names.length
-      ? `Data layers: ${names.join(', ')}; the other layers and director are unavailable`
-      : 'No data layers on this engine yet; cockpit and director are unavailable',
+    detail: names.length ? `Data layers: ${names.join(', ')}` : 'No registered data layers',
   });
 }
 
@@ -120,6 +118,10 @@ export async function registerNavaraLayerRenderers() {
         return (engine, options) => createWeatherNavaraRenderer(engine, navaraViews.get(engine), options);
       },
     ])),
+    'bhote-koshi-2026': async () => {
+      const { createNepalEventDisplay } = await import('../layers/bhoteKoshi/render/navara.js');
+      return (engine) => createNepalEventDisplay(engine, navaraViews.get(engine));
+    },
     'bhote-koshi-locator': async () => {
       const { drawStorySource } = await import('../layers/shared/render/navaraStory.js');
       return (engine, { data }) => drawStorySource(engine, navaraViews.get(engine), data);
@@ -331,6 +333,7 @@ export function createViewerlessTools({
   placeSearch,
   voice = {},
   startChrome,
+  sceneDirector,
   signal,
   defer,
 }) {
@@ -402,7 +405,7 @@ export function createViewerlessTools({
     styleManager,
     tileset: null,
     dataManager,
-    sceneDirector: null,
+    sceneDirector,
     mapStackController,
     annotations: null,
     weatherEffects: null,
@@ -428,7 +431,7 @@ export function createViewerlessTools({
     engine,
     styleManager,
     dataManager,
-    sceneDirector: null,
+    sceneDirector,
     annotations: null,
   });
   defer(() => {
@@ -437,5 +440,5 @@ export function createViewerlessTools({
       delete window.__gevVoiceCommands;
   });
   debug.voiceCommands = voiceCommands;
-  return { sceneDirector: null, annotations: null, voiceCommands };
+  return { sceneDirector, annotations: null, voiceCommands };
 }

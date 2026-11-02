@@ -6,14 +6,14 @@ import {
 } from '../../shared/render/navaraGroundSurface.js';
 
 const KEY = 'gevRecentImagery',
-  registered = new WeakSet();
+  registered = new WeakMap();
 const shader = /* glsl */ `
 uniform sampler2D tAllDepth,tSurfaceDepth,tA,tB;
 uniform mat4 uInverseProjection,uWorld;
 uniform float uLogDepthFC,uSplit,uPixelRatio;
 uniform vec4 uBoundsA,uBoundsB,uBoxA,uBoxB,uPreview;
 uniform vec2 uLookA,uLookB;
-uniform bool uPreviewVisible;
+uniform bool uPreviewVisible,uGeographicA,uGeographicB;
 vec3 displayColor(vec3 c) {
   return mix(c*12.92,1.055*pow(max(c,vec3(0.0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),c));
 }
@@ -21,10 +21,10 @@ vec3 linearColor(vec3 c) {
   return mix(c/12.92,pow(max((c+0.055)/1.055,vec3(0.0)),vec3(2.4)),step(vec3(0.04045),c));
 }
 bool inBox(vec2 geo,vec4 box) { return geo.x>=box.x && geo.y>=box.y && geo.x<=box.z && geo.y<=box.w; }
-vec3 imageColor(vec3 color,sampler2D image,vec4 bounds,vec4 box,vec2 look,vec2 geo,vec2 mercator,float x) {
+vec3 imageColor(vec3 color,sampler2D image,vec4 bounds,vec4 box,vec2 look,vec2 geo,vec2 mercator,float x,bool geographic) {
   if(look.x<=0.0 || !inBox(geo,box)) return color;
   if((look.y<0.0 && x>uSplit)||(look.y>0.0 && x<uSplit)) return color;
-  vec2 at=(mercator-bounds.xy)/bounds.zw;
+  vec2 at=((geographic?geo:mercator)-bounds.xy)/bounds.zw;
   if(any(lessThan(at,vec2(0.0)))||any(greaterThan(at,vec2(1.0)))) return color;
   vec4 pixel=texture2D(image,at);
   return mix(color,pixel.rgb,pixel.a*look.x);
@@ -42,8 +42,8 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
   vec2 geo=vec2(atan(point.y,point.x),latitude)*57.29577951308232;
   vec2 mercator=vec2((geo.x+180.0)/360.0,(1.0-log(tan(0.7853981633974483+latitude*0.5))/3.141592653589793)/2.0);
   vec3 color=displayColor(inputColor.rgb);
-  color=imageColor(color,tA,uBoundsA,uBoxA,uLookA,geo,mercator,uv.x);
-  color=imageColor(color,tB,uBoundsB,uBoxB,uLookB,geo,mercator,uv.x);
+  color=imageColor(color,tA,uBoundsA,uBoxA,uLookA,geo,mercator,uv.x,uGeographicA);
+  color=imageColor(color,tB,uBoundsB,uBoxB,uLookB,geo,mercator,uv.x,uGeographicB);
   if(uPreviewVisible && inBox(geo,uPreview)) {
     vec2 pixelWidth=max(fwidth(geo),vec2(1e-7));
     vec2 edges=min(geo-uPreview.xy,uPreview.zw-geo)/pixelWidth;
@@ -61,14 +61,18 @@ export function createImageryGround(
   engine,
   { view, EffectDesc, NavaraEffect },
   owner,
+  key = KEY,
 ) {
   if (!view || !EffectDesc || !NavaraEffect)
     throw new TypeError('Imagery requires Navara ground effects');
-  if (!registered.has(view)) {
+  if (!registered.has(view)) registered.set(view, new Set());
+  if (!registered.get(view).has(key)) {
     class ImageryEffect extends EffectDesc {
-      static key = KEY;
+      static key = key;
       static insertAfter = ['toneMapping'];
       static insertBefore = [
+        'gevNepalEvent',
+        'gevObservedWeather',
         'gevEarthquakeGround',
         'gevFirmsGround',
         'gevPreSharpenOverlay',
@@ -80,13 +84,15 @@ export function createImageryGround(
       ];
       constructor(view, context, config) {
         super(view, context, config);
-        this.owner = config[KEY].owner;
+        this.owner = config[key].owner;
       }
       createPass() {
         this.effect = new Effect('GevRecentImagery', shader, {
           attributes: EffectAttribute.CONVOLUTION,
           uniforms: new Map([
             ...groundSurfaceUniforms(),
+            ['uGeographicA', new Uniform(false)],
+            ['uGeographicB', new Uniform(false)],
             ['uWorld', new Uniform(new Matrix4())],
             ['uSplit', new Uniform(0.5)],
             ['uPixelRatio', new Uniform(1)],
@@ -115,6 +121,7 @@ export function createImageryGround(
         u.get('uPreviewVisible').value = Boolean(o.preview);
         for (const id of ['A', 'B']) {
           const r = o.slots[id.toLowerCase()];
+          u.get(`uGeographic${id}`).value = r?.atlas?.plan.geographic === true;
           u.get(`t${id}`).value = r?.atlas?.texture || o.empty;
           u.get(`uBounds${id}`).value = r?.atlas?.plan.bounds || [0, 0, 1, 1];
           u.get(`uBox${id}`).value = boxVector(r?.box);
@@ -129,8 +136,11 @@ export function createImageryGround(
         super.onDestroy();
       }
     }
-    view.registerEffect(KEY, ImageryEffect);
-    registered.add(view);
+    class NepalEffect extends ImageryEffect {
+      static insertAfter = ['gevRecentImagery', 'toneMapping'];
+    }
+    view.registerEffect(key, key === KEY ? ImageryEffect : NepalEffect);
+    registered.get(view).add(key);
   }
   owner.empty = new DataTexture(new Uint8Array(4), 1, 1);
   owner.empty.needsUpdate = true;
@@ -141,7 +151,7 @@ export function createImageryGround(
     sync() {
       const visible = Boolean(owner.slots.a || owner.slots.b || owner.preview);
       if (visible && !handle)
-        handle = view.addEffect({ [KEY]: { owner }, visible: true });
+        handle = view.addEffect({ [key]: { owner }, visible: true });
       else handle?.update({ visible });
     },
     destroy() {
