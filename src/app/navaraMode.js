@@ -56,6 +56,7 @@ const NAVARA_CREDIT_KEYS = new Set([
   'celestrak',
   'launch-library-2',
   'usgs',
+  'eccc-aqhi',
   'firms',
   'gbfs',
   'overture-military-names',
@@ -121,6 +122,11 @@ export async function registerNavaraLayerRenderers() {
           ...options,
           ...navaraViews.get(engine),
         });
+    },
+    'air-quality': async () => {
+      const { createAirQualityNavaraRenderer } =
+        await import('../layers/airQuality/render/navara.js');
+      return (engine) => createAirQualityNavaraRenderer(engine, navaraViews.get(engine));
     },
     earthquakes: async () => {
       const { createEarthquakesNavaraRenderer } =

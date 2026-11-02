@@ -184,7 +184,7 @@ export function createApplicationCatalog({
       ],
       [
         'air-quality',
-        () => createApplicationAirQuality({ source: sources['air-quality'] }),
+        () => sessionModel('air-quality', () => createApplicationAirQuality({ source: sources['air-quality'] })),
       ],
       [
         'fire-perimeters',

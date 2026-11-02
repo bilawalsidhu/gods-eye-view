@@ -273,3 +273,24 @@ test('a failed refresh over good readings reports degraded, not nominal', async 
     'showing old data after a failure is degraded',
   );
 });
+
+test('station data stays queryable and attaches to a fresh scene without polling', async () => {
+  let polls = 0;
+  const h = harness({ getSnapshot: async () => {
+    polls++;
+    return [reading('Toronto', 7)];
+  } });
+  try {
+    h.layer.detachRenderer();
+    assert.equal(h.sources.length, 0);
+    assert.equal(await h.layer.update(), true);
+    assert.equal(h.events.length, 0);
+    assert.equal(h.layer.getAnalystRecords()[0].value, 7);
+    h.layer.attachRenderer(h.viewer);
+    assert.equal(h.events.at(-1)[0], 'air-quality');
+    assert.equal(h.sources[0].entities.values.length, 1);
+    assert.equal(polls, 1);
+  } finally {
+    h.layer.destroy();
+  }
+});
