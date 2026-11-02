@@ -66,11 +66,12 @@ export function createApplicationRequestServices({
       throw new Error(`${label} unavailable (${response.status})`);
     return response.data;
   }
-  // Learn once per page whether the server has an Overpass instance, so an
+  // Remember valid capability decisions for the page, so an
   // unconfigured server is never asked (and never answers with an error).
-  // Discovery is bounded; a failed or timed-out probe is forgotten and not
+  // Discovery is bounded; failed, malformed or timed-out probes are forgotten and not
   // retried for a short backoff, during which queries go to the server as
   // they would against an older server without the probe.
+  let summaryCapability = null;
   let boundaryCapability = null;
   let boundaryProbeRetryAt = 0;
   function boundariesConfigured() {
@@ -79,10 +80,13 @@ export function createApplicationRequestServices({
     boundaryCapability = request(`${urls.boundaries}/status`, {
       signal: AbortSignal.timeout(boundaryProbe.timeoutMs),
     }).then(
-      (response) =>
-        response.ok && typeof response.data?.configured === 'boolean'
-          ? response.data.configured
-          : null, // an older server: fall back to asking per query
+      (response) => {
+        if (response.ok && typeof response.data?.configured === 'boolean')
+          return response.data.configured;
+        boundaryCapability = null;
+        boundaryProbeRetryAt = Date.now() + boundaryProbe.retryMs;
+        return null; // capability unknown: let this query ask the server
+      },
       (error) => {
         boundaryCapability = null;
         if (lifetime?.aborted) throw error;
@@ -172,6 +176,23 @@ export function createApplicationRequestServices({
       },
     },
     summary: {
+      // The capability probe, asked once per page: true or false from a
+      // server that answers it, null (unknown) from one that does not.
+      configured() {
+        summaryCapability ??= request(`${urls.summary}/status`, {
+          signal: AbortSignal.timeout(3000),
+        }).then(
+          (response) =>
+            response.ok && typeof response.data?.configured === 'boolean'
+              ? response.data.configured
+              : null,
+          (error) => {
+            if (lifetime?.aborted) throw error;
+            return null;
+          },
+        );
+        return summaryCapability;
+      },
       async summarize(context, { signal } = {}) {
         return request(urls.summary, {
           method: 'POST',

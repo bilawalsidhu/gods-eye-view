@@ -154,6 +154,8 @@ test('model loads carry the layer spec; the IR boost loads an UNLIT model', asyn
   }
   assert.equal(calls.length, 3);
   for (const call of calls) assert.equal(call.asynchronous, false);
+  assert.deepEqual(calls[0].environmentMapOptions, { enabled: false });
+  assert.deepEqual(calls[1].environmentMapOptions, { enabled: false });
   assert.equal(calls[0].colorBlendMode, Cesium.ColorBlendMode.MIX);
   assert.equal(calls[0].colorBlendAmount, 0.94);
   assert.equal(calls[0].customShader, undefined);

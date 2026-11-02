@@ -52,10 +52,9 @@ test('without a viewer the tools run the governor on the engine, show the notice
   let uiRemoved = 0;
   const voice = {
     createControl: () => ({
-      button,
-      root: { dataset: {}, remove: () => uiRemoved++ },
-      status: {},
-      detail: {},
+      update() {},
+      on: () => () => {},
+      remove: () => uiRemoved++,
     }),
     createCard: () => null,
     createSession: (hooks) => ({

@@ -11,6 +11,7 @@ import {
   FAST_FETCH_ALTITUDE,
   roadDotBudget,
 } from './policy.js';
+import { msg } from '../../i18n/index.js';
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
@@ -36,11 +37,13 @@ export function createFlow({ state: layerState, services, parts, source }) {
     const status = Number.isFinite(error.status)
       ? error.status
       : Number(message.match(/HTTP (\d{3})/)?.[1]);
-    if (status === 503) return 'TomTom key unavailable';
-    if (status === 429) return 'TomTom daily budget reached';
-    if (status === 502 || status === 504) return 'TomTom upstream unreachable';
+    // English in state; trafficFeedPresentation translates it for the panel.
+    if (status === 503) return msg('TomTom key unavailable');
+    if (status === 429) return msg('TomTom daily budget reached');
+    if (status === 502 || status === 504)
+      return msg('TomTom upstream unreachable');
     if (Number.isFinite(status)) return `TomTom flow error (HTTP ${status})`;
-    return 'TomTom flow unavailable';
+    return msg('TomTom flow unavailable');
   }
 
   /**
@@ -183,10 +186,19 @@ export function createFlow({ state: layerState, services, parts, source }) {
       return layerState._warmFlow;
     layerState._warmFlowGeneration = generation;
     const signal = layerState._activeFetchAbort?.signal;
-    layerState._warmFlow = ensureFlowStatus(signal).then(() => {
+    layerState._warmFlow = ensureFlowStatus(signal).then(async () => {
       if (!layerState._liveMode || generation !== layerState._loadGeneration)
         return [];
-      return fetchFlowForBounds(clamped, { signal });
+      if (typeof source.fetchFlowDetail !== 'function')
+        return fetchFlowForBounds(clamped, { signal });
+      // The proxy serves cached tiles once the TomTom budget is spent or the
+      // upstream fails; carry that mark so getStats() reads STALE, not LIVE.
+      const detail = await source.fetchFlowDetail(clamped, { signal });
+      if (generation === layerState._loadGeneration) {
+        layerState._flowStale = detail.stale === true;
+        layerState._flowOldestTileAt = detail.oldestTileAt ?? null;
+      }
+      return detail.segments;
     });
     layerState._warmFlow.catch(() => {});
     return layerState._warmFlow;

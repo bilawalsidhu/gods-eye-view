@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createCivilFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createEnrichment } from './enrichment.js';
+import { createTracking } from './tracking.js';
 
 function services() {
   const names = [
@@ -123,4 +124,25 @@ test('a synchronous enrichment failure stays bounded and releases its slot', asy
   );
   await new Promise((done) => setImmediate(done));
   assert.equal(flightState._enrichActive, 0);
+});
+
+test('voice context reads a track that rounds to north as 0°, not 360°', () => {
+  const tracking = createTracking({
+    flightState: {
+      feed: { _lastSource: 'Fixture aircraft' },
+      records: { data: new Map() },
+    },
+    services: services(),
+    parts: {
+      queries: {
+        _describeFlight: () => ({ track: 359.6, altitudeM: 9000 }),
+        _contactLabel: () => 'AAL1',
+      },
+    },
+    layer: {},
+  });
+  assert.equal(
+    tracking._contextSubjectMetadata('abc123').properties.heading,
+    '0°',
+  );
 });

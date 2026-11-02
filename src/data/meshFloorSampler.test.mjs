@@ -181,3 +181,12 @@ test('sampler on a globe engine: a high camera, loading tiles or no photoreal ti
   }
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);
 });
+
+test('sampler: a cell just across the antimeridian is still near the viewer', async () => {
+  reset();
+  let calls = 0;
+  const scene = await fakeEngineAt({ lat: -16.8, lon: 179.999 }, { sample: () => { calls += 1; return undefined; } });
+  sampleMeshFloorCells(scene, [{ lat: -16.8, lon: -179.999 }], { viewerLat: -16.8, viewerLon: 179.999 });
+  sampleMeshFloorCells(scene, [{ lat: -16.81, lon: 179.999 }], { viewerLat: -16.81, viewerLon: -179.999 });
+  assert.equal(calls, 2, 'about 200 m apart, so both cells are probed');
+});

@@ -206,7 +206,7 @@ export function createRendering({
       : null;
     layerState._horizonScanCount += 1;
     let visibilityChanged = false;
-    for (const [id, record] of layerState._renderById) {
+    for (const record of layerState._renderById.values()) {
       const matches = parts.categories.stationMatchesRadioCategory(
         record.station,
         layerState._filter,
@@ -240,11 +240,7 @@ export function createRendering({
     layerState._stationById = new Map(
       stations.map((station) => [station.id, station]),
     );
-    layerState._categories = Object.freeze(
-      parts.categories
-        .buildRadioCategories(stations)
-        .map((category) => Object.freeze(category)),
-    );
+    parts.presentation.buildCategories();
     if (
       layerState._filter === DEFAULT_RADIO_FILTER &&
       !parts.categories.filterRadioStations(stations, DEFAULT_RADIO_FILTER)

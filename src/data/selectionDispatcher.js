@@ -1,3 +1,4 @@
+import { nearbyContact } from './pickRegistry.js';
 // One selection dispatcher for the layers that have moved onto the globe
 // engine (phase 3 Task 4): one click subscription with picks
 // (engine.input.on('click', …, { pick: true, drill: 8 })), the press
@@ -117,6 +118,12 @@ export function createSelectionDispatcher(
     const gesture = completed ?? { travelPx: 0, durationMs: 0 };
     completed = null;
     if (!isPointerFree()) return;
+    const picked = nearbyContact(
+      event.picked,
+      event.position,
+      engine.picker?.drillPick,
+    );
+    if (picked !== event.picked) event = { ...event, picked };
     const ctx = {
       position: event.position,
       picked: event.picked,

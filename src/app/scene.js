@@ -1,3 +1,4 @@
+import { releaseCameraVerbs } from '../cameraVerbs.js';
 import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
 import {
@@ -15,6 +16,7 @@ import {
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
 import { createSceneEngine } from './globeEngine.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 
 /**
  * Construct the application globe using the caller's local configuration.
@@ -65,7 +67,7 @@ export async function createApplicationScene({
     });
   if (engineKind !== 'cesium')
     throw new TypeError(`Unknown globe engine: ${engineKind}`);
-  loaderStatus.textContent = 'Configuring viewer...';
+  loaderStatus.textContent = t('Configuring viewer...');
   // Provider attribution stays visible, including clean-view and recording.
   const creditContainer = document.createElement('div');
   creditContainer.id = 'cesium-credits';
@@ -76,6 +78,7 @@ export async function createApplicationScene({
     creditContainer,
   });
   defer(() => {
+    releaseCameraVerbs(viewer);
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
@@ -86,10 +89,11 @@ export async function createApplicationScene({
   defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(engine, credits);
   configureCreditKeyboardAccess(document);
+  defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));
   loaderStatus.textContent =
     googleApiKey || googleTokens || cesiumToken
-      ? 'Loading Google 3D Tiles...'
-      : 'Loading the keyless globe...';
+      ? t('Loading Google 3D Tiles...')
+      : t('Loading the keyless globe...');
   const photoreal = await loadPhotorealisticTileset(Cesium, {
     googleApiKey,
     googleTokens,
@@ -118,12 +122,17 @@ export async function createApplicationScene({
         tileError,
       );
       const tileErrorDetail = describeError(tileError);
-      loaderStatus.textContent = `Google 3D Tiles unavailable (${tileErrorDetail}). Loading the keyless globe...`;
+      loaderStatus.textContent = t(
+        'Google 3D Tiles unavailable ({detail}). Loading the keyless globe...',
+        {
+          detail: tileErrorDetail,
+        },
+      );
     }
     viewer.scene.globe.show = true;
   }
 
-  loaderStatus.textContent = 'Initializing systems...';
+  loaderStatus.textContent = t('Initializing systems...');
 
   const mapStackController = new MapController(viewer, {
     requestRender: governorRequestRender,

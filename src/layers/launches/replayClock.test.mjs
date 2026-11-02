@@ -11,7 +11,10 @@ function setup() {
     _replaySpeed: 1,
     _animationStarts: new Map([['qa', 1000]]),
   };
-  const parts = { paths: { orbitInsertionOffsetSeconds: () => 600 } };
+  const parts = {
+    panel: { publishPanel() {} },
+    paths: { orbitInsertionOffsetSeconds: () => 600 },
+  };
   return {
     state,
     replay: createReplay({ state, services: {}, parts, source: {} }),

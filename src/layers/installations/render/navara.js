@@ -1,3 +1,4 @@
+import { t } from '../../../i18n/index.js';
 import { Effect, EffectAttribute } from 'postprocessing';
 import * as geo from '../../../geo/index.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
@@ -277,7 +278,7 @@ export function createInstallationsNavaraRenderer(
     }
     context.gevContextId = record.id;
     context.gevLabelModel = {
-      title: record.name || 'MAPPED INSTALLATION',
+      title: record.name || t('MAPPED INSTALLATION'),
       details: [
         String(record.class || 'installation')
           .replaceAll('_', ' ')

@@ -9,7 +9,7 @@ export function createSelection({
   options,
 }) {
   const { state } = vesselState;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
   const { requestWorldFocus } = services.worldFocus;
   const {
     selectEntityContext,
@@ -57,7 +57,7 @@ export function createSelection({
     handler.setInputAction((click) =>
       handleClick({
         position: click.position,
-        picked: viewer.scene.pick(click.position),
+        picked: pickContact(viewer.scene, click.position),
       }),
     );
     // The follow signal of the Cesium renderer over that viewer.

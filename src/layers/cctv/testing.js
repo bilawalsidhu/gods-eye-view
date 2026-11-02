@@ -99,6 +99,7 @@ export function createTesting({
    * @param {boolean} [options.enabled=true] Layer enabled state.
    * @param {'off'|'on'|'viewshed'} [options.coverageMode='on'] Coverage mode.
    * @param {boolean} [options.showProjection=false] Projection visibility.
+   * @param {Map<string, Object>} [options.healthById] Health rows by camera id.
    * @returns {void}
    */
 
@@ -109,6 +110,7 @@ export function createTesting({
     enabled = true,
     coverageMode = 'on',
     showProjection = false,
+    healthById = new Map(),
   } = {}) {
     useRenderer(viewer);
     layerState._records = Array.isArray(records) ? records : [];
@@ -127,6 +129,11 @@ export function createTesting({
       'on',
     );
     layerState._showProjection = !!showProjection;
+    layerState._healthById = healthById;
+    layerState._viewRecords = [];
+    layerState._cameraIndexCache = null;
+    layerState._coverageVisibleIds = new Set();
+    layerState._neighborCountCache = null;
   }
   return {
     _cctvRecordsForTest: () => layerState._records,

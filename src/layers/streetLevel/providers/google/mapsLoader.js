@@ -3,16 +3,21 @@
  * `gm_authFailure` (key refused) reaches every `onAuthFailure` listener.
  */
 
+import { msg } from '../../../../i18n/index.js';
+
 const SCRIPT_ORIGIN = 'https://maps.googleapis.com';
 const READY_CALLBACK = '__gevGoogleMapsReady';
 /** The page's one script load, shared by every loader on it. */
 const PAGE_LOAD = Symbol.for('gev.googleMapsLoad');
 
 /**
- * @param {{getApiKey: () => string|null|undefined, document?: Document, global?: object}} options
+ * @param {{getApiKey: () => string|null|undefined, getLanguage?: () => string|null|undefined, document?: Document, global?: object}} options
+ *   `getLanguage` names the UI language; Google's own controls (Terms,
+ *   Report a problem) follow it. English adds nothing, as before.
  */
 export function createMapsLoader({
   getApiKey,
+  getLanguage,
   document = globalThis.document,
   global = globalThis,
 }) {
@@ -41,7 +46,7 @@ export function createMapsLoader({
   function load() {
     const key = getApiKey?.();
     if (!key)
-      return Promise.reject(new Error('GOOGLE_MAPS_API_KEY is not set'));
+      return Promise.reject(new Error(msg('GOOGLE_MAPS_API_KEY is not set')));
     installAuthHandler();
     if (global[PAGE_LOAD]) return global[PAGE_LOAD];
     if (global.google?.maps?.importLibrary)
@@ -53,17 +58,20 @@ export function createMapsLoader({
       };
       const script = document.createElement('script');
       script.async = true;
-      script.src = `${SCRIPT_ORIGIN}/maps/api/js?${new URLSearchParams({
+      const params = new URLSearchParams({
         key,
         v: 'weekly',
         loading: 'async',
         callback: READY_CALLBACK,
-      })}`;
+      });
+      const language = getLanguage?.();
+      if (language && language !== 'en') params.set('language', language);
+      script.src = `${SCRIPT_ORIGIN}/maps/api/js?${params}`;
       script.onerror = () => {
         if (global[PAGE_LOAD] === loading) delete global[PAGE_LOAD];
         script.remove();
         delete global[READY_CALLBACK];
-        reject(new Error('The Google Maps JavaScript API could not load'));
+        reject(new Error(msg('The Google Maps JavaScript API could not load')));
       };
       document.head.append(script);
     });

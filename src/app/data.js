@@ -1,6 +1,7 @@
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { LayerPresentation } from './layerPresentation.js';
 import { createCyberSonarScene } from '../cyberSonarScene.js';
+import { panelAwareVisibility } from './embed.js';
 /** Register the application layer catalog before allowing state restoration. */
 export function createApplicationData({
   scene: { viewer, engine, mapStackController },
@@ -15,6 +16,9 @@ export function createApplicationData({
   const dataManager = new LayerLifecycle(viewer, {
     engine,
     allowQaRegistration,
+    // A panel's host may report it hidden while it is on screen; its layers
+    // keep polling (see keepPanelRendering in embed.js).
+    visibilityTarget: panelAwareVisibility(document),
     getSourceAvailability: catalog?.getSourceAvailability,
   });
   defer(async () => {

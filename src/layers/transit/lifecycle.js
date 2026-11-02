@@ -86,6 +86,7 @@ export function createLifecycle({
     else if (hidden) {
       hidden = false;
       parts.rendering.resumePlayback();
+      parts.viewport.runProximityCheck();
     }
   }
   function bindVisibility() {

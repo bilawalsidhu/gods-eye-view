@@ -40,6 +40,7 @@ export function launchFixture() {
         id,
         name,
         net: new Date(LAUNCH_FIXTURE_EPOCH - (i + 1) * 86400000).toISOString(),
+        // i18n-ignore: synthetic provider data
         status: { name: 'Launch Successful' },
         launch_service_provider: { name: provider },
         pad: {

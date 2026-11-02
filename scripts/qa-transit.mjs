@@ -38,9 +38,11 @@ import {
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { chromeExecutablePath, captureQaScreenshot } from './qa-chrome.mjs';
 import { createTransitHistory } from '../server/providers/transitHistory.js';
 import { DETECTION_THEME_MAP } from '../src/overlays/worldOverlayTokens.js';
 import { transitModeTier } from '../src/data/transitPresetStyle.js';
+import { TRANSIT_POLL_MS } from '../src/layers/transit/policy.js';
 
 import {
   reduceAnchor,
@@ -48,8 +50,6 @@ import {
   reduceScenario,
   reduceSensorContrast,
   reduceScriptedMotion,
-  reduceMotion,
-  reduceFleet,
 } from '../src/layers/transit/qaMetrics.js';
 
 const BASE = transitQaBase(process.env.QA_BASE_URL);
@@ -264,8 +264,7 @@ await mkdir(SHOTS, { recursive: true });
 const browser = await puppeteer.launch({
   headless: true,
   protocolTimeout: 150000,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: chromeExecutablePath(),
   args: [
     '--no-sandbox',
     '--use-angle=metal',
@@ -278,6 +277,10 @@ const browser = await puppeteer.launch({
 });
 const page = await browser.newPage();
 await blockPaidQaMaps(page);
+// This gate measures visible-page motion. OS minimization must not silently
+// switch it into the app's intentional hidden-tab polling pause.
+const focus = await page.createCDPSession();
+await focus.send('Emulation.setFocusEmulationEnabled', { enabled: true });
 boundPageEvaluations(page);
 await page.setViewport({ width: 1920, height: 1080 });
 const pageErrors = [];
@@ -293,11 +296,13 @@ page.on('request', (request) => {
 });
 
 const shot = (name, caption) =>
-  page
-    .screenshot({ path: `${SHOTS}/${name}`, type: 'jpeg', quality: 82 })
-    .then(() => {
-      console.log(`  shot ${name} — ${caption}`);
-    });
+  captureQaScreenshot(page, {
+    path: `${SHOTS}/${name}`,
+    type: 'jpeg',
+    quality: 82,
+  }).then(() => {
+    console.log(`  shot ${name} — ${caption}`);
+  });
 
 const view = (city) =>
   `${BASE}/?welcome=0#lat=${city.lat}&lon=${city.lon}&alt=600&heading=${city.heading}&pitch=-45`;
@@ -396,22 +401,42 @@ try {
         orientation: { heading: 0, pitch: (-40 * Math.PI) / 180, roll: 0 },
       });
     }, city);
-    await page.waitForFunction(
-      () =>
-        (window.__godsEyeView.dataManager.layers
-          .get('transit')
-          .module.getStats().count || 0) > 0,
-      { timeout: 90_000 },
-    );
+    const arrived = await page
+      .waitForFunction(
+        (feedId) =>
+          [
+            ...window.__godsEyeView.dataManager.layers
+              .get('transit')
+              .module._transitStateForTest()
+              ._vehicles.keys(),
+          ].some((key) => key.startsWith(`${feedId}:`)),
+        { timeout: 90_000 },
+        city.feedId,
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+    if (!arrived) {
+      check(
+        `${city.label}: live feed arrived`,
+        false,
+        `No vehicles from ${city.feedId}; retained vehicles from other cities cannot qualify this view`,
+        { unexercised: true },
+      );
+      continue;
+    }
     await wait(9_000);
-    const fleet = await page.evaluate(() => {
+    const fleet = await page.evaluate((feedId) => {
       const layer =
         window.__godsEyeView.dataManager.layers.get('transit').module;
       return {
-        count: layer._transitStateForTest()._vehicles.size,
+        count: [...layer._transitStateForTest()._vehicles.keys()].filter(
+          (key) => key.startsWith(`${feedId}:`),
+        ).length,
         stats: layer.getStats(),
       };
-    });
+    }, city.feedId);
     check(
       `${city.label}: vehicles are rendered`,
       fleet.count >= 20,
@@ -433,6 +458,7 @@ try {
         .module._transitStateForTest();
       let best = null;
       for (const entry of state._vehicles.values()) {
+        if (!entry.key.startsWith(`${c.feedId}:`)) continue;
         const d = Math.hypot(entry.to.lat - c.lat, entry.to.lon - c.lon);
         if (!best || d < best.d)
           best = { d, lat: entry.to.lat, lon: entry.to.lon, key: entry.key };
@@ -1615,6 +1641,7 @@ try {
             m[3] * v[0] + m[7] * v[1] + m[11] * v[2] + m[15] * v[3],
           ];
           const frames = [];
+          const observedPolls = new Set();
           const publicationsBefore = state._cardPublications || 0;
           let headSamples = 0,
             headErrorPx = 0,
@@ -1631,6 +1658,13 @@ try {
                 const proj = scene.camera.frustum.projectionMatrix;
                 const p = entry.marker.position;
                 const clip = mul(proj, mul(view, [p.x, p.y, p.z, 1]));
+                if (
+                  entry.marker.show !== false &&
+                  rect &&
+                  Number.isFinite(entry.pollSeq)
+                ) {
+                  observedPolls.add(entry.pollSeq);
+                }
                 frames.push({
                   t: performance.now() - t0,
                   mx: ((clip[0] / clip[3]) * 0.5 + 0.5) * canvas.clientWidth,
@@ -1676,7 +1710,15 @@ try {
                   headSamples++;
                 }
               }
-              if (performance.now() - t0 >= durationMs) finish();
+              const elapsed = performance.now() - t0;
+              // Keep at least 20 seconds of motion and require an observed poll
+              // transition. A fixed 20s wall-clock window can miss a 15s poll
+              // when an earlier refresh is still settling.
+              if (
+                (elapsed >= 20_000 && observedPolls.size >= 2) ||
+                elapsed >= durationMs
+              )
+                finish();
             };
             let remove;
             const finish = () => {
@@ -1684,6 +1726,7 @@ try {
               remove?.();
               resolve({
                 selected: true,
+                elapsedMs: performance.now() - t0,
                 frames,
                 textPublishes:
                   (state._cardPublications || 0) - publicationsBefore,
@@ -1698,7 +1741,7 @@ try {
           });
         },
         target.key,
-        20_000,
+        3 * TRANSIT_POLL_MS,
       );
     }
     check(
@@ -1719,8 +1762,9 @@ try {
       );
       check(
         'card text publication stays throttled while the anchor runs at frame rate',
-        anchor.textPublishes > 0 && anchor.textPublishes <= 20_000 / 250 + 3,
-        `${anchor.textPublishes} text publications in 20 s`,
+        anchor.textPublishes > 0 &&
+          anchor.textPublishes <= anchor.elapsedMs / 250 + 3,
+        `${anchor.textPublishes} text publications in ${(anchor.elapsedMs / 1000).toFixed(1)} s`,
       );
     } else {
       check(

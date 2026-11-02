@@ -12,6 +12,7 @@ import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
  *  only leaves the DEM prior in place. Cesium does not size its answers, so
  *  its gates are the camera height and tilesLoaded below. */
 export const MAX_FLOOR_TILE_SIZE_M = 1000;
+import { approxDistanceKm } from '../data/approxDistance.js';
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
@@ -127,7 +128,8 @@ export function createMeshFloorSampler({
       if (
         Number.isFinite(viewerLat) &&
         Number.isFinite(viewerLon) &&
-        _approxKm(viewerLat, viewerLon, cell.lat, cell.lon) > MAX_SAMPLE_DIST_KM
+        approxDistanceKm(viewerLat, viewerLon, cell.lat, cell.lon) >
+          MAX_SAMPLE_DIST_KM
       ) {
         continue; // too far: tiles not streamed there, probe would be a guaranteed miss
       }

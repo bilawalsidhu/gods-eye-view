@@ -12,6 +12,7 @@ import * as render from '../../renderGovernor.js';
 import * as selection from '../../data/selectionDispatcher.js';
 import { rendererFor } from './renderers.js';
 import { createVesselsCesiumRenderer } from '../../layers/vessels/render/cesium.js';
+import * as readouts from '../../hudReadouts.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationVessels({
@@ -43,6 +44,7 @@ export function createApplicationVessels({
       // The engine's vessel renderer from the registry (render/cesium.js on
       // Cesium); a bare viewer without an engine (unit tests) draws on Cesium.
       renderer,
+      readouts,
     },
   });
 }

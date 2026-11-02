@@ -12,9 +12,11 @@ function setup() {
   };
   const calls = { health: 0, notify: 0, queues: [] };
   const parts = {
+    rendering: { refreshHorizonCulling: () => false },
     model: { projectionTilesReady: () => true },
     ground: { isGroundResolved: () => false },
     geometryQueue: {
+      geometryWorkingSet: () => state._records,
       enqueueGeometryRefresh: (records) => calls.queues.push(records),
     },
     health: {

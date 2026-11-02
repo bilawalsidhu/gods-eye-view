@@ -2,6 +2,8 @@ import * as geo from '../../geo/index.js';
 import { constantRgba } from '../shared/color.js';
 import { appClock } from '../../time/clock.js';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
+import { t } from '../../i18n/index.js';
+import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
 import {
   ISS_NORAD,
   CONTEXT_REFRESH_INTERVAL_MS,
@@ -251,7 +253,10 @@ export function createTracking({
         name,
         operator: '',
         noradId: String(noradId),
-        class: satelliteClassLabel(sat.group, { isIss: noradId === ISS_NORAD }),
+        class: satelliteClassLabel(sat.group, {
+          isIss: noradId === ISS_NORAD,
+          localize: false,
+        }),
         altitude:
           altitudeKm === null ? '' : `${altitudeKm.toLocaleString('en-US')} km`,
       },
@@ -363,7 +368,12 @@ export function createTracking({
     const title = sat?.name?.trim() || `SAT-${layerState._trackedNorad}`;
     const altitudeM =
       layerState._trackedFrameGeo?.altitude ?? fallbackAltitudeM;
-    const detail = `${Number.isFinite(altitudeM) ? Math.round(altitudeM / 1000) : '?'} km · NORAD ${layerState._trackedNorad}`;
+    // The card is display only (the voice context slot keeps its own English
+    // copy), so the altitude unit and the companions line follow the language.
+    const altitudeText = Number.isFinite(altitudeM)
+      ? formatQuantity(Math.round(altitudeM / 1000), 'km')
+      : `?\u00a0${unitLabel('km')}`;
+    const detail = `${altitudeText} · NORAD ${layerState._trackedNorad}`;
     // Class leads the detail block: it is what tells the operator WHAT they are
     // looking at, and it stays readable under the IR styles that flatten the
     // dot colors to a single channel (the card is painted above post-FX).
@@ -381,7 +391,9 @@ export function createTracking({
     if (companions.length > 0) {
       const extra = companions.length - 1;
       details.push(
-        `DOCKED · ${companions[0]}${extra > 0 ? ` · +${extra}` : ''}`,
+        extra > 0
+          ? t('DOCKED · {name} · +{extra}', { name: companions[0], extra })
+          : t('DOCKED · {name}', { name: companions[0] }),
       );
     }
     const current = layerState._trackedEntity.gevLabelModel;

@@ -1,3 +1,4 @@
+import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../../data/aircraftModelLighting.js';
 // The aircraft renderer on Cesium (contract: ./contract.js): the Cesium
 // objects the aircraft layers used to build themselves, moved here one for
 // one — the fleet BillboardCollection and its sprite-order slot, the model
@@ -209,6 +210,7 @@ export function createAircraftCesiumRenderer({
       loadModel({
         url,
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize,
         scale,
         color,
@@ -229,6 +231,7 @@ export function createAircraftCesiumRenderer({
       loadModel({
         url,
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize,
         scale,
         color,

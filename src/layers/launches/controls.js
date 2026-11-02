@@ -58,6 +58,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         orbitMatches: layerState._orbitMatches,
         lastUpdate: layerState._lastUpdate,
         error: layerState._lastError,
+        stale: layerState._stale,
       };
     },
 

@@ -1,17 +1,14 @@
+import { t, tn, msg } from '../../i18n/index.js';
 import { isUnavailableCapability } from '../../sources/capability.js';
 import {
   LAYER_ID,
   REQUEST_DEBOUNCE_MS,
-  QUERY_LIMIT,
-  MAX_RENDERED,
-  QUERY_SNAP_DEGREES,
   QUERY_REUSE_MS,
   ALPR_COLOR,
 } from './policy.js';
 import {
   snapAlprBox,
   boxContains,
-  destinationPointDeg,
   alprRetryDelayMs,
   validateAlprSnapshot,
 } from './model.js';
@@ -246,7 +243,7 @@ export function createAlprCamerasLayer({
       state.stale = Boolean(state.lastUpdate);
       setAlprStatus(
         'unavailable',
-        error?.message || 'Camera source temporarily unavailable',
+        error?.message || msg('Camera source temporarily unavailable'),
       );
       if (!isUnavailableCapability(error)) scheduleUnavailableRetry();
     } finally {
@@ -264,7 +261,8 @@ export function createAlprCamerasLayer({
     id: LAYER_ID,
     name: 'ALPR Cameras',
     icon: '📷',
-    source: source.label || 'Mapped camera locations',
+    // English in layer state; the layer row translates it.
+    source: source.label || msg('Mapped camera locations'),
     updateInterval: 0,
     statsRefreshInterval: 1000,
     init(viewer, options = {}) {
@@ -326,10 +324,12 @@ export function createAlprCamerasLayer({
         chips: [
           {
             id: 'find-camera',
-            label: 'SHOW NEAREST',
+            label: t('SHOW NEAREST'),
             title: renderer?.following()
-              ? 'Stop following the current object before navigating to a camera'
-              : 'Move to the nearest loaded camera and show its details',
+              ? t(
+                  'Stop following the current object before navigating to a camera',
+                )
+              : t('Move to the nearest loaded camera and show its details'),
             disabled:
               !state.enabled || !count || Boolean(renderer?.following()),
             onClick: () => renderer?.focusNearest(),
@@ -337,11 +337,12 @@ export function createAlprCamerasLayer({
         ],
         legend: [
           {
-            label: 'Camera badges',
+            label: t('Camera badges'),
             color: ALPR_COLOR,
             count,
-            blurb:
+            blurb: t(
               'Cyan cameras turn coral when selected. Wedges illustrate mapped direction, not measured coverage. Nearby cameras may be outside the screen.',
+            ),
           },
         ],
       };
@@ -382,11 +383,14 @@ export function createAlprCamerasLayer({
         count: renderer?.count() || 0,
         countLabel:
           state.enabled && !state.noCoverage && state.status !== 'zoom-in'
-            ? `${renderer?.count() || 0} nearby${
-                Number.isInteger(state.onScreen)
-                  ? ` · ${state.onScreen} on screen`
-                  : ''
-              }`
+            ? Number.isInteger(state.onScreen)
+              ? tn(
+                  renderer?.count() || 0,
+                  '{count} nearby · {onScreen} on screen',
+                  '{count} nearby · {onScreen} on screen',
+                  { onScreen: state.onScreen },
+                )
+              : tn(renderer?.count() || 0, '{count} nearby', '{count} nearby')
             : '',
         noCoverage: Boolean(state.noCoverage),
         lastUpdate: state.lastUpdate,
@@ -405,20 +409,22 @@ export function createAlprCamerasLayer({
           : 0,
         loadingLabel: state.loading
           ? state.retrying
-            ? 'retrying mapped ALPR cameras'
-            : 'loading mapped ALPR cameras'
+            ? t('retrying mapped ALPR cameras')
+            : t('loading mapped ALPR cameras')
           : state.noCoverage
-            ? 'No ALPR data for this area — US and Canada only'
+            ? t('No ALPR data for this area — US and Canada only')
             : state.status === 'zoom-in'
-              ? 'Zoom in to load mapped cameras'
+              ? t('Zoom in to load mapped cameras')
               : [
-                  state.stale ? 'Showing cached locations' : '',
+                  state.stale ? t('Showing cached locations') : '',
                   state.saturated || state.renderSaturated
-                    ? 'Coverage limited — zoom in'
+                    ? t('Coverage limited — zoom in')
                     : '',
-                  state.status === 'empty' ? 'No ALPR data for this area' : '',
+                  state.status === 'empty'
+                    ? t('No ALPR data for this area')
+                    : '',
                   state.status === 'ready' && state.onScreen === 0
-                    ? 'None on screen — nearby cameras are outside the view'
+                    ? t('None on screen — nearby cameras are outside the view')
                     : '',
                 ]
                   .filter(Boolean)

@@ -17,7 +17,6 @@ function navigation() {
   return new NavigationController({
     viewer: { camera: { cancelFlight() {}, lookAtTransform() {} } },
     tracking,
-    searchInput: null,
     interruptCameraMotion() {},
     isCockpitActive: () => false,
     clearLocation() {},
@@ -188,8 +187,7 @@ test('on Navara, presets set the Sharpen slider to 80 % and the engine draws it'
   });
   owner._detectionUserOverridden = true;
   owner._applyStylePresetDefaults('retro');
-  assert.equal(elements._sharpenSlider.value, '80');
-  assert.equal(elements._sharpenSliderValue.textContent, '80%');
+  assert.equal(owner._sharpenPct, 80);
   // _setSharpenEnabled applies the slider again; the engine skips repeats.
   assert.deepEqual(sharpen, [
     { amount: 1.7000000000000002 },
@@ -198,7 +196,7 @@ test('on Navara, presets set the Sharpen slider to 80 % and the engine draws it'
   ]);
   // A share link carries an explicit value: 49 stays 49 on Navara.
   await owner.restoreShareState({ sharpenIntensity: 49, sharpen: true });
-  assert.equal(elements._sharpenSlider.value, '49');
+  assert.equal(owner._sharpenPct, 49);
   assert.deepEqual(sharpen.at(-1), { amount: 1.08 });
   owner.destroy();
 });

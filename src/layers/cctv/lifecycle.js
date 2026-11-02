@@ -5,7 +5,13 @@ import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
   CALIBRATION_RANGE_FLOOR_M,
+  VIEW_MOTION_REFRESH_MS,
+  VIEW_MOTION_MIN_MOVE_FRACTION,
+  VIEW_MOTION_MIN_TURN_DEG,
+  VIEW_MOTION_COST_FACTOR,
 } from './policy.js';
+
+const MIN_TURN_COS = Math.cos((VIEW_MOTION_MIN_TURN_DEG * Math.PI) / 180);
 
 export function createLifecycle({
   state: layerState,
@@ -20,15 +26,93 @@ export function createLifecycle({
   const { onFocusTargetAppear } = services.focus;
   const { releaseContinuousRender } = services.render;
 
+  /**
+   * The settled-view pass: thin the icons, queue the newly visible geometry,
+   * reselect cards, and tell subscribers (the camera picker) when the shown
+   * set changed since they were last told, including by motion passes.
+   */
+  function settleView() {
+    const changed = parts.rendering.refreshHorizonCulling();
+    noteViewPose();
+    parts.geometryQueue.enqueueViewGeometry();
+    parts.cards.refreshAmbientCards();
+    if (changed || layerState._viewUnpublished) {
+      layerState._viewUnpublished = false;
+      parts.presentation.notifyListeners();
+    }
+  }
+
+  /** Records the camera pose the last view pass ran at. */
+  function noteViewPose() {
+    const camera = layerState._viewer?.camera;
+    if (!camera?.positionWC) return;
+    layerState._viewPose = {
+      position: geo.cartesian3.clone(camera.positionWC),
+      direction: camera.directionWC && geo.cartesian3.clone(camera.directionWC),
+    };
+  }
+
+  /**
+   * Whether the camera moved or turned enough since the last view pass to
+   * change what is on screen. A camera that tracks or flies without settling
+   * would otherwise rerun the full pass on every tick.
+   */
+  function viewPoseChanged() {
+    const camera = layerState._viewer?.camera;
+    const pose = layerState._viewPose;
+    if (!pose || !camera?.positionWC) return true;
+    const height = Math.max(1, camera.positionCartographic?.height ?? 0);
+    const moved = geo.cartesian3.distance(camera.positionWC, pose.position);
+    if (moved > height * VIEW_MOTION_MIN_MOVE_FRACTION) return true;
+    if (!pose.direction || !camera.directionWC) return false;
+    return (
+      geo.cartesian3.dot(camera.directionWC, pose.direction) < MIN_TURN_COS
+    );
+  }
+
+  function viewMotionTick() {
+    if (!layerState._enabled) return;
+    const now = performance.now();
+    const pass = layerState._viewMotionPass;
+    if (pass && now - pass.at < pass.ms * VIEW_MOTION_COST_FACTOR) return;
+    if (!viewPoseChanged()) return;
+    if (parts.rendering.refreshHorizonCulling())
+      layerState._viewUnpublished = true;
+    noteViewPose();
+    parts.geometryQueue.enqueueViewGeometry();
+    layerState._viewMotionPass = { at: now, ms: performance.now() - now };
+  }
+
+  function startViewMotionTimer() {
+    if (layerState._viewMotionTimer) return;
+    layerState._viewMotionTimer = setInterval(
+      viewMotionTick,
+      VIEW_MOTION_REFRESH_MS,
+    );
+  }
+
+  function stopViewMotionTimer() {
+    clearInterval(layerState._viewMotionTimer);
+    layerState._viewMotionTimer = 0;
+  }
+
   /** Resets all module-scoped runtime state to initial values. */
 
   function clearRuntimeState() {
     parts.geometryQueue.stopGeometryLoadQueue();
+    stopViewMotionTimer();
     // Idempotent — also covers a re-init without a prior destroy().
     parts.cards.teardownAmbientCards();
     parts.projection.clearProjectionOverlay();
     layerState._records = [];
     layerState._recordById = new Map();
+    layerState._viewRecords = [];
+    layerState._cameraIndexCache = null;
+    layerState._coverageVisibleIds = new Set();
+    layerState._neighborCountCache = null;
+    layerState._viewUnpublished = false;
+    layerState._viewPose = null;
+    layerState._viewMotionPass = null;
     layerState._healthById = new Map();
     layerState._count = 0;
     layerState._lastUpdate = null;
@@ -241,15 +325,23 @@ export function createLifecycle({
           // the layer is disabled).
           layerState._horizonCullListener = parts.renderer.onMoveEnd(() => {
             layerState._cameraMoving = false;
-            parts.rendering.refreshHorizonCulling();
-            parts.cards.refreshAmbientCards();
+            stopViewMotionTimer();
+            if (layerState._enabled) settleView();
           });
         }
         if (!layerState._moveStartListener) {
           // Item B: hover picking pauses while the camera is in motion.
           layerState._moveStartListener = parts.renderer.onMoveStart(() => {
             layerState._cameraMoving = true;
+            if (layerState._enabled) startViewMotionTimer();
           });
+        }
+        const canvas = options.engine?.host.canvas ?? viewer?.scene?.canvas;
+        if (canvas && typeof ResizeObserver === 'function') {
+          layerState._viewResizeObserver = new ResizeObserver(() => {
+            if (layerState._enabled) settleView();
+          });
+          layerState._viewResizeObserver.observe(canvas);
         }
         parts.rendering.refreshHorizonCulling();
 
@@ -328,6 +420,7 @@ export function createLifecycle({
      */
     enable() {
       layerState._enabled = true;
+      if (layerState._cameraMoving) startViewMotionTimer();
       if (
         layerState._records.some(
           (record) => record.camera.cityId === 'warendorf',
@@ -359,6 +452,9 @@ export function createLifecycle({
         parts.projection.ensureProjectionRuntime(activeRecord);
         parts.frames.refreshProjectionImage(activeRecord, true);
       }
+      parts.rendering.refreshHorizonCulling();
+      // Re-enabled mid-flight: moveStart has already fired.
+      if (layerState._cameraMoving) startViewMotionTimer();
       parts.geometryQueue.startGeometryLoadQueue();
       parts.rendering.refreshCoverageStyles();
       parts.projection.startProjectionLoop();
@@ -391,10 +487,14 @@ export function createLifecycle({
       layerState._removeFocusAppearListener = null;
       parts.projection.stopProjectionLoop();
       parts.geometryQueue.stopGeometryLoadQueue();
+      stopViewMotionTimer();
       // Ambient cards tear down COMPLETELY on disable (owner design point 6):
       // source entries, pacer timer, in-flight handlers, and caches.
       parts.cards.teardownAmbientCards();
       parts.rendering.hideCctvVisuals();
+      // Nothing is in view while the layer is off.
+      layerState._viewRecords = [];
+      layerState._cameraIndexCache = null;
       parts.presentation.notifyListeners();
     },
 
@@ -419,6 +519,8 @@ export function createLifecycle({
         );
         layerState._mapStackListener = null;
       }
+      layerState._viewResizeObserver?.disconnect();
+      layerState._viewResizeObserver = null;
       layerState._horizonCullListener?.();
       layerState._horizonCullListener = null;
       layerState._moveStartListener?.();

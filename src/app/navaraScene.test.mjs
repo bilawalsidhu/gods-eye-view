@@ -23,7 +23,8 @@ function installDom() {
     getElementById: (id) => (id === 'cesiumContainer' ? container : null),
     querySelector: () => null,
     querySelectorAll: () => [],
-    createElement: () => {
+    createElement: (tag) => {
+      if (tag === 'template') return {};
       throw new Error('the Navara scene creates no Cesium credit container');
     },
     body: { appendChild: (node) => appended.push(node) },

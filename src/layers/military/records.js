@@ -1,6 +1,7 @@
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { stickyText, stickyNumber } from '../../data/aircraftMeta.js';
 import { classifyAircraft } from '../../data/aircraftClass.js';
+import { aircraftEmergency } from '../../data/aircraftEmergency.js';
 import {
   GROUND_FLOOR_WARM_MAX_ALT_M,
   LANDED_MISSING_POLL_LIMIT,
@@ -38,8 +39,6 @@ export class MilitaryFlightRecords {
           ? prevMeta.altitudeFt * 0.3048
           : 0
         : 3048);
-    const track = aircraft.courseDeg || 0;
-    const speedMps = aircraft.speedMps ?? 0;
     const verticalRateMps = aircraft.verticalRateMps;
     const callsign = aircraft.callsign;
     const type = aircraft.typeCode;
@@ -147,8 +146,15 @@ export class MilitaryFlightRecords {
       // altitudeFt/baro).
       geoAltitudeM,
       renderAltitudeM,
-      speedMps: stickyNumber(speedMps, prevMeta?.speedMps, null),
-      track: stickyNumber(track, prevMeta?.track, null),
+      // A poll that omits track/speed holds the last values, like the civil
+      // records; 0 only until one is known. A grounded row without a speed
+      // reads 0, so a parked plane never coasts at its landing speed.
+      speedMps: stickyNumber(
+        aircraft.speedMps,
+        onGround ? 0 : prevMeta?.speedMps,
+        0,
+      ),
+      track: stickyNumber(aircraft.courseDeg, prevMeta?.track, 0),
       // Analyst seam (additive): sticky like the other kinematics.
       verticalRateMps: stickyNumber(
         verticalRateMps,
@@ -161,6 +167,9 @@ export class MilitaryFlightRecords {
         null,
       ),
       turnRateDps: prevMeta?.turnRateDps || 0,
+      // Per poll, NOT sticky (mirror of flights): a cleared code clears here.
+      squawk: aircraft.squawk ?? null,
+      emergency: aircraftEmergency(aircraft),
       onGround,
       // Round 7: sticky airborne history (see _likelyLanded).
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,

@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 // The experimental Navara mode (?engine=navara) of the application: its
 // scene and its viewerless tools. src/app/scene.js and src/app/tools.js load
 // this module with import() only in that mode, and it loads the Navara globe
@@ -36,7 +37,7 @@ const loadNavaraGlobeModule = async () =>
 export function navaraModeNotice(availability) {
   const names = availability.available().map(({ name }) => name);
   return Object.freeze({
-    label: 'Experimental Navara engine',
+    label: t('Experimental Navara engine'),
     detail: names.length
       ? `Data layers: ${names.join(', ')}; the other layers, cockpit and director are unavailable`
       : 'No data layers on this engine yet; cockpit and director are unavailable',
@@ -186,7 +187,7 @@ export async function createNavaraScene({
   signal,
   defer,
 }) {
-  loaderStatus.textContent = 'Loading the experimental Navara engine...';
+  loaderStatus.textContent = t('Loading the experimental Navara engine...');
   const createNavaraGlobe = await loadNavaraGlobe();
   signal.throwIfAborted();
   const globe = await createNavaraGlobe({
@@ -212,7 +213,7 @@ export async function createNavaraScene({
   // The tools install the governor on this engine; it goes before the engine.
   defer(() => uninstallRenderGovernor(engine));
   signal.throwIfAborted();
-  loaderStatus.textContent = 'Initializing systems...';
+  loaderStatus.textContent = t('Initializing systems...');
   const mapStackController = new MapController(null, {
     requestRender: governorRequestRender,
     engine,
