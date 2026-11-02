@@ -400,6 +400,10 @@ export function createLocalAdsbLayer({
     const newFix = marker.motion.observe(record, at);
     rejectedFixes += marker.motion.rejectedFixes - rejectedBefore;
     updateDisplay(marker, at);
+    if (!renderer) {
+      refreshClass(marker);
+      return id;
+    }
     if (!marker.entity) {
       // Magenta glyph, 20 px, ×3 near / ×0.5 far, always on top, not drawn
       // past 2,000 km (the renderer's display distance).
@@ -432,13 +436,13 @@ export function createLocalAdsbLayer({
 
   function refreshSelectedCard() {
     const marker = selectedId ? markers.get(selectedId) : null;
-    if (!marker) return;
+    if (!marker?.entity) return;
     marker.entity.gevLabelModel = cardModel(marker, now());
     services.overlays?.refreshReadout?.(marker.entity);
   }
 
   function updateRenderHold() {
-    const want = enabled && markers.size > 0;
+    const want = Boolean(renderer) && enabled && markers.size > 0;
     if (want === renderHeld) return;
     renderHeld = want;
     if (want) holdContinuousRender(RENDER_HOLD_ID);
@@ -457,7 +461,6 @@ export function createLocalAdsbLayer({
   function sync() {
     clearTimeout(syncTimer);
     syncTimer = null;
-    if (!renderer) return;
     const at = now();
     const live = new Set();
     let added = false;
@@ -479,8 +482,8 @@ export function createLocalAdsbLayer({
     if (removed) models?.retain(markers);
     if (selectedId && !live.has(selectedId))
       clearSelection({ evicted: enabled });
-    removeEntityContextsForLayer(LAYER_ID, { retainIds: live });
-    if (selectedId) {
+    if (renderer) removeEntityContextsForLayer(LAYER_ID, { retainIds: live });
+    if (renderer && selectedId) {
       const selected = markers.get(selectedId);
       if (getSelectedEntityContext()?.id !== selectedId) {
         selectedId = null;
@@ -515,7 +518,7 @@ export function createLocalAdsbLayer({
 
   function selectMarker(id) {
     const marker = markers.get(id);
-    if (!marker) return false;
+    if (!marker?.entity) return false;
     const reselect = id === selectedId && selectedTrail?.id === id;
     selectedId = id;
     enrichment.request(marker.record, { selected: true });
@@ -610,7 +613,22 @@ export function createLocalAdsbLayer({
      *   without one).
      * @param {{ engine?: object }} [context] LayerLifecycle's context.
      */
-    init(nextViewer, { engine = null } = {}) {
+    init(nextViewer, options = {}) {
+      services.geoid
+        ?.ensureGeoidReady?.()
+        ?.then(() => {
+          geoidReady = true;
+          for (const marker of markers.values()) marker.geoidN = null;
+        })
+        ?.catch(() => {
+          /* the baro path stays un-geoid-corrected */
+        });
+      unsubscribe = receiver.subscribe?.(scheduleSync) || null;
+      unsubscribeFeeds = feeds?.subscribe?.(requestSync) || null;
+      return this.attachRenderer(nextViewer, options);
+    },
+
+    attachRenderer(nextViewer, { engine = null } = {}) {
       renderer = services.renderer.create({
         viewer: nextViewer,
         engine,
@@ -626,18 +644,39 @@ export function createLocalAdsbLayer({
           groundSnap: services.groundSnap?.createGroundSnap?.() || null,
         });
       }
-      services.geoid
-        ?.ensureGeoidReady?.()
-        ?.then(() => {
-          geoidReady = true;
-          for (const marker of markers.values()) marker.geoidN = null;
-        })
-        ?.catch(() => {
-          /* the baro path stays un-geoid-corrected */
-        });
-      unsubscribe = receiver.subscribe?.(scheduleSync) || null;
-      unsubscribeFeeds = feeds?.subscribe?.(requestSync) || null;
+      if (enabled) {
+        const restore = selectedId;
+        selectedId = null;
+        renderer.setVisible(true);
+        registerPickOwner(LAYER_ID, (id) => markers.has(id));
+        installInteraction();
+        installFrame();
+        sync();
+        const selected = getSelectedEntityContext();
+        if (restore && (!selected || selected.id === restore)) selectMarker(restore);
+      }
       return true;
+    },
+
+    detachRenderer() {
+      if (!renderer) return;
+      if (getSelectedEntityContext()?.id !== selectedId) selectedId = null;
+      releaseInteraction();
+      releaseFrame();
+      unregisterPickOwner(LAYER_ID);
+      releaseTrail();
+      models?.destroy();
+      models = null;
+      renderer.detach();
+      renderer.destroy();
+      renderer = null;
+      for (const marker of markers.values()) {
+        marker.entity = null;
+        marker.iconKind = marker.iconScale = null;
+        marker.modelOwnsVisual = false;
+      }
+      removeEntityContextsForLayer(LAYER_ID);
+      updateRenderHold();
     },
 
     async enable() {
@@ -686,9 +725,6 @@ export function createLocalAdsbLayer({
       clearTimeout(syncTimer);
       tickTimer = null;
       syncTimer = null;
-      releaseInteraction();
-      releaseFrame();
-      unregisterPickOwner(LAYER_ID);
       unsubscribe?.();
       unsubscribe = null;
       unsubscribeFeeds?.();
@@ -696,14 +732,8 @@ export function createLocalAdsbLayer({
       feeds?.destroy?.();
       enrichment.destroy();
       clearSelection();
-      removeEntityContextsForLayer(LAYER_ID);
+      this.detachRenderer();
       markers.clear();
-      updateRenderHold();
-      models?.destroy();
-      models = null;
-      renderer?.detach();
-      renderer?.destroy();
-      renderer = null;
       void receiver.destroy?.();
     },
 

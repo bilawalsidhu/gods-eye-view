@@ -173,7 +173,7 @@ export function createApplicationCatalog({
       [
         'local-adsb',
         () =>
-          createApplicationLocalAdsb({
+          sessionModel('local-adsb', () => createApplicationLocalAdsb({
             surface,
             // QA fixture receivers (?qaFeed=local-adsb:fixture, dev only).
             ...(sources.localAdsbFeeds
@@ -182,7 +182,7 @@ export function createApplicationCatalog({
             enrichment: sources.flights,
             displayParams: () => flights().getParams(),
             ...(resolveAsset ? { resolveAsset } : {}),
-          }),
+          })),
       ],
       [
         'earthquakes',

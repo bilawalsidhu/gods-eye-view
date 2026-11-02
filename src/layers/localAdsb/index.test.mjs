@@ -1165,3 +1165,24 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   harness.click();
   assert.equal(calls.selected.length, 2, 'the Flights contact is not taken');
 });
+
+test('globe handoff retains the receiver, feed, trail fixes and selection', async (t) => {
+  const receiver = fakeReceiver({ aircraft: [record()] });
+  const feeds = fakeFeeds();
+  let closes = 0;
+  receiver.destroy = () => { closes++; };
+  const clock = { now: 100_000 };
+  const { layer, calls } = await enabledLayer(receiver, clock, feeds);
+  t.after(() => layer.destroy());
+  assert.ok(layer.selectAircraft('abc123'));
+  layer.detachRenderer();
+  clock.now += 1000;
+  receiver.set({ aircraft: [record({ lon: 0.001, lastPositionAt: clock.now, lastMessageAt: clock.now })] });
+  await layer.update();
+  assert.equal(layer.getAnalystRecords()[0].icao24, 'abc123');
+  layer.attachRenderer(fakeViewer().viewer);
+  assert.deepEqual(receiver.modeCalls, ['adsb']);
+  assert.deepEqual(feeds.calls, ['start']);
+  assert.equal(closes, 0);
+  assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:abc123']);
+});

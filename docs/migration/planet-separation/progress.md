@@ -35,3 +35,7 @@
 
 Из 33 слоёв каталога исходно в Navara зарегистрировано 15. С добавлением Air quality, GNSS Integrity и Fire Perimeters зарегистрировано 18. С Global Context зарегистрировано 19, с S2 GhostMaps — 20, с тремя погодными продуктами — 23, с циклонами — 24, с дамбами и дата-центрами — 26. У остальных исходных адаптеров ещё нужно отделить данные от сцены и пройти проверки по `layers.md`. Семь слоёв ожидают переноса графики. Строка выбранного рейса в панели Vue сохраняет идентичность при успешном переключении и отказе запуска кандидата. Остальные контроллеры интерфейса и инструменты ещё создаются заново. Нужны отдельные проверки фонового/быстрого переключения и потери активного графического контекста. Полный паритет не достигнут.
 
+
+### Local ADS-B receiver handoff
+
+The tuner, decoder poller, ICAO motion history and selected flight belong to the layer session. Only model banks, trail draws and input handlers change on switch. The receiver fixture advanced while detached. Headless release round trip kept one feed start, zero stops and zero device closes, with the selected aircraft restored on both globes. No physical USB device was opened.
