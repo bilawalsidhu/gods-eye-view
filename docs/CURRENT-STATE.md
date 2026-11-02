@@ -197,6 +197,9 @@ catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
 Aircraft altitude-band queries require a reported barometric or geometric altitude
 for each match, so a grounded contact that reports none is left out of a band too.
 Queries without an altitude band retain unknown-altitude contacts.
+`find_submarine_cables` lists and counts each cable once: TeleGeography splits
+a few cables (2Africa, Echo) into several features under one id, and such a
+cable matches when any of its parts crosses the area.
 
 Catalog calls check their cancellation signal immediately before executing a
 tool. Already-cancelled queries do not start; cancellation after execution starts
@@ -4616,8 +4619,21 @@ silent for five minutes are removed. Credits appear when the feed is used.
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry
 point is the right-side `CONTEXT` chooser's `CONTACTS` mode.
 
-Contacts distance labels select metres or kilometres after rounding to the
-nearest metre, so a 999.5-metre contact displays as `1.0 km`, not `1000 m`.
+Contacts distance labels, in the panel and on the globe's contact markers,
+select metres or kilometres after rounding to the nearest metre, so a
+999.5-metre contact displays as `1.0 km`, not `1000 m`, and drop the
+kilometre decimal from 9.95 km, so 9,960 m displays as `10 km`.
+
+Distance labels that switch between metres and kilometres share
+`distanceParts` / `formatDistanceText` in `src/data/distanceFormat.js`: the
+Contacts panel and markers, Directions rows and step cards, placed annotation
+labels, the drawn-line measure and `formatRouteDistance`. Each cut is taken on
+the value as it prints, and kilometres come back already rounded, so the
+plain and localized labels agree. Callers choose the metre step (whole metres;
+tens, as annotation labels use; or tens with whole metres under 100, as
+Directions uses) and keep their own rendering; the Cockpit's kilometre-only
+distance uses `kilometreDigits`. The HUD altitude tag and the spoken view
+height still choose their own unit.
 
 At global scale, ambient Radio cluster badges are hard-opacity shared-host
 entries: count/category updates and identity replacement do not run keyhole or
@@ -5267,6 +5283,8 @@ and unreachable upstream (502/504) separately from road geometry.
   cannot race the nearest-aircraft query ahead of layer enablement. A healthy fallback feed is
   queried normally and its source is returned with the selection; fallback with
   no airborne records remains an honest no-data result, not an enable failure.
+  The spoken reply and the card leave out an altitude the feed did not report
+  rather than reading it as 0 feet.
 - Voice treats the parent Context panel and Contacts as separate intents. An
   explicit request to open Context expands only `global-context-panel`; it does
   not choose a mode. An explicit request to open Contacts expands that parent
@@ -5503,7 +5521,7 @@ request viewbox and continues searching without that geographic preference.
 - **A vertex is a lon/lat, and the mark is DRAPED.** Clicks are picked through `pickWorldFromScreen` — one of two scene helpers the annotation resolver factory (`src/annotations/resolver.js`) exposes alongside `sampleGroundHeight`, so the app has ONE depth-aware pick cascade rather than a second written beside it — which returns the height the pick landed on as well as the coordinate, so the live preview hangs on the roof or hillside under the pointer instead of sinking to sea level. The world renderer draws areas and routes with `clampToGround`, so the height is dropped at finish in one place (`finishSpec`) rather than being carried downstream and discarded silently: what you get is the outline you drew, lying on the surface beneath it.
 - **Draped marks classify onto `ClassificationType.BOTH`** — terrain AND 3D tiles — not onto 3D tiles alone. With only `CESIUM_3D_TILE`, every area fill, area outline, route and arrow rendered to nothing on a keyless boot, where Cesium's own globe carries Esri/OSM imagery and there are no tiles to classify against; the labels appeared and the geometry did not. That hit spoken annotations exactly as hard as hand-drawn ones. `scripts/qa-draw-tool.mjs` counts the mark's own colour in the rendered frame before and after a shape is finished, on a keyed AND a keyless server, so "the board says there is a mark" can no longer pass for "the mark is on screen".
 - **A finished area is a CLOSED ring.** The fill polygon closes itself but the outline beside it is a polyline, so an open ring drew every edge except the one back to the first vertex — a triangle with two sides. `finishSpec` repeats the first position at the end. A line is never closed: joining its ends would invent a segment nobody drew.
-- Drawn-line distance labels select metres or kilometres after rounding to the nearest metre, so a 999.5-metre line displays as `1.0 km` rather than `1000 m`. The placed mark's label (shared with spoken routes and arrows) rounds before each unit cut, so a 996-metre line is labelled `1.0 km`, not `1000 m`, and a 9,960-metre one `10 km`, not `10.0 km`.
+- Drawn-line distance labels select metres or kilometres after rounding to the nearest metre, so a 999.5-metre line displays as `1.0 km` rather than `1000 m`, and drop the kilometre decimal from 9.95 km. The placed mark's label (shared with spoken routes and arrows) rounds before each unit cut, so a 996-metre line is labelled `1.0 km`, not `1000 m`, and a 9,960-metre one `10 km`, not `10.0 km`.
 - **Measurements and centres are computed on unwrapped longitudes** (`unwrapLongitudes` / `wrapLongitude` in `drawMode.js`, used by `ringAreaM2`, `ringCentroid` and the engine's manual-area anchor). A ~50,000 m² rectangle straddling the antimeridian reads its 0.002° width as 359.998° under raw arithmetic: it measured thousands of square kilometres and anchored on the Greenwich meridian, half a world from the shape. Path length was already safe — haversine is periodic in the longitude delta — and a test pins that so a "fix" cannot break it.
 - **Bounds.** One shape holds at most `MAX_VERTICES` = 512 points; two clicks within 0.5 m are one vertex (that is what makes a double-click finish without leaving a stray point); a vertex that is not a finite on-globe coordinate is refused. A shape that encloses nothing is refused rather than placed: three collinear points are not an area and a line under a metre long is not a line, and the hint says which.
 - Drawn-area measures round before choosing m², ha or km², so 9,999.6 m² displays as `1.0 ha`, not `10000 m²`, and 999,960 m² as `1.00 km²`, not `100.0 ha`.
@@ -5972,9 +5990,11 @@ easier to meet (detection is now on more often), but does not create it.
   OSM choice), so Hybrid fill is never replayed as OSM roads. Failed flow
   refreshes clear old matches and report simulation. `flowCoveragePct` is the
   percentage of shown dots on roads with flow, including all unmatched dots in
-  the denominator and excluding dots hidden by closures. The OSM keyed status
-  reads `LIVE · Roads: OpenStreetMap · Flow: TomTom · N% cov`. Road fetch
-  coverage follows a 5×5 ellipsoid sample of the central screen square.
+  the denominator and excluding dots hidden by closures. It reads 1–99 whenever
+  both matched and simulated dots are shown, so rounding never turns a few
+  matches into `(no matches)` or a few simulated dots into full coverage. The
+  OSM keyed status reads `LIVE · Roads: OpenStreetMap · Flow: TomTom · N% cov`.
+  Road fetch coverage follows a 5×5 ellipsoid sample of the central screen square.
   Horizon rays are capped at 10 km from nadir (reduced if necessary to fit
   16 z12 tiles); polygon-intersecting tiles load nearest first. Up to 16 z14
   tiles provide near detail, with z12 roads beyond them. Cached tiles serve
