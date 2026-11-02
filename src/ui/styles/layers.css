@@ -84,27 +84,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.5) rgba(255, 255, 255, 0.04);
   scrollbar-gutter: stable;
-}
-
-.data-toggle-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.data-toggle-list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 999px;
-}
-
-.data-toggle-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 212, 255, 0.65),
-    rgba(0, 212, 255, 0.2)
-  );
-  border-radius: 999px;
 }
 
 .data-layer-group-heading {
@@ -260,6 +240,39 @@
 #right-context-rail.layout-exclusive > [data-panel-id].collapsed {
   display: none;
 }
+#left-panel-stack.layout-exclusive > [data-panel-id].collapsed {
+  display: none;
+}
+
+/* Panel rails (src/ui/panelNavigation.js). Each rail lives inside its stack,
+   so it shows and hides with the stack, and floats in the screen-edge gutter.
+   The stack's layout offsets it back to its resting top, so it holds still
+   when an opened panel moves the stack. */
+.gev-panel-rail {
+  position: absolute;
+  top: var(--panel-rail-offset, 0px);
+  z-index: 1;
+  pointer-events: auto;
+  transition: top var(--transition-fast);
+}
+.gev-panel-rail--left {
+  right: calc(100% + 6px);
+}
+.gev-panel-rail--right {
+  left: calc(100% + 6px);
+}
+body.mobile-shell #left-panel-stack > .gev-panel-rail,
+body.mobile-shell #right-context-rail > .gev-panel-rail,
+body.cockpit-mode .gev-panel-rail {
+  display: none;
+}
+/* Clean view and recording hide the panels one by one, not their stacks. */
+body.ui-clean-view .gev-panel-rail,
+body.recording-mode .gev-panel-rail {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 #right-context-rail.layout-focus > [data-panel-id].collapsed {
   display: block;
   flex: 0 0 auto;
@@ -281,8 +294,6 @@
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed) {
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.4) transparent;
 }
 #right-context-rail.layout-focus
   > #weather-panel:not(.collapsed)
@@ -415,8 +426,6 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding-right: 3px;
-  scrollbar-color: rgba(34, 230, 230, 0.38) transparent;
-  scrollbar-width: thin;
 }
 #space-mission-panel-host .space-mission-roster-item {
   position: relative;

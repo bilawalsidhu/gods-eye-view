@@ -38,6 +38,7 @@ export function createState({ services }) {
   layerState._stationById = new Map();
 
   layerState._categories = [];
+  layerState._categoriesLocale = null;
 
   layerState._renderById = new Map();
 
