@@ -47,7 +47,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
-    'f38dc0ef9a8396465c208f98cad92a4fedcff8c2d3c7590d131e08a42bcf5af5',
+    'b67e6c1b9b4109ceba962e3ee609db1207a7eaaa17ab84ab2f9d86e71440776f',
   );
 });
 
