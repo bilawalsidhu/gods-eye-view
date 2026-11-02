@@ -1,9 +1,25 @@
-/** Move the existing Display groups between their two presentation surfaces. */
+import { displayPanelScroller } from './displayPanelScroll.js';
+
+/**
+ * Show the existing Display groups in Cockpit's Display popover while Cockpit
+ * is on. The portal publishes the popover's slots; the Display panel
+ * teleports its groups into them and back. The portal keeps each surface's
+ * scroll position and puts back focus the move dropped.
+ */
 export class CockpitDisplayPortal {
-  constructor({ standardPanel, cockpitPanel, groups, layout }) {
+  constructor({
+    standardPanel,
+    cockpitPanel,
+    groups,
+    layout,
+    publish = () => {},
+    afterRender = (callback) => callback(),
+  }) {
     this.standardPanel = standardPanel;
     this.cockpitPanel = cockpitPanel;
     this.layout = layout;
+    this.publish = publish;
+    this.afterRender = afterRender;
     this.active = false;
     this.destroyed = false;
     this.stopped = false;
@@ -15,20 +31,24 @@ export class CockpitDisplayPortal {
       const slot = cockpitPanel?.querySelector(
         `[data-cockpit-display-slot="${name}"]`,
       );
-      if (!group || !slot || !group.parentNode) return [];
-      const anchor = document.createComment(`cockpit-display-home:${name}`);
-      group.before(anchor);
-      return [{ name, group, slot, anchor }];
+      if (!group || !slot) return [];
+      return [{ name, group, slot }];
     });
-    this.standardScrollTop = standardPanel?.scrollTop || 0;
+    this.slots = Object.freeze(
+      Object.fromEntries(this.records.map(({ name, slot }) => [name, slot])),
+    );
+    this.standardScrollTop =
+      displayPanelScroller(standardPanel)?.scrollTop || 0;
     this.cockpitScrollTop = cockpitPanel?.scrollTop || 0;
     const options = { passive: true, signal: this.listeners.signal };
     standardPanel?.addEventListener(
       'scroll',
       () => {
-        if (!this.active) this.standardScrollTop = standardPanel.scrollTop;
+        if (!this.active)
+          this.standardScrollTop =
+            displayPanelScroller(standardPanel).scrollTop;
       },
-      options,
+      { ...options, capture: true },
     );
     cockpitPanel?.addEventListener(
       'scroll',
@@ -73,34 +93,42 @@ export class CockpitDisplayPortal {
     const focusedElement = focusedRecord ? document.activeElement : null;
     this.restoreOwner = nextActive ? 'cockpit' : 'standard';
     this.active = nextActive;
-    for (const record of this.records) {
-      if (nextActive) record.slot.append(record.group);
-      else if (record.anchor.parentNode) record.anchor.after(record.group);
-    }
-    this.cockpitPanel?.classList.toggle(
-      'uses-shared-display-controls',
-      nextActive,
-    );
+    this.publish(nextActive ? this.slots : null);
     const restoreScroll = () => {
       if (nextActive && this.cockpitPanel)
         this.cockpitPanel.scrollTop = this.cockpitScrollTop;
       if (!nextActive && this.standardPanel)
-        this.standardPanel.scrollTop = this.standardScrollTop;
+        displayPanelScroller(this.standardPanel).scrollTop =
+          this.standardScrollTop;
     };
     if (!settle) {
-      restoreScroll();
-      this.restoreOwner = null;
+      this.afterRender(() => {
+        if (generation !== this.generation) return;
+        restoreScroll();
+        this.restoreOwner = null;
+      });
       return;
     }
     this._frame(generation, () => {
       restoreScroll();
-      focusedElement?.focus?.({ preventScroll: true });
+      // Restore only the focus the move dropped: Cockpit entry hands focus to
+      // its exit button in the meantime, and that wins.
+      const current = document.activeElement;
+      if (
+        !current ||
+        current === document.body ||
+        focusedRecord?.group.contains(current)
+      )
+        focusedElement?.focus?.({ preventScroll: true });
       this._frame(generation, () => {
         restoreScroll();
         this.restoreOwner = null;
       });
     });
-    this.layout();
+    // The surfaces are measured once the groups have moved.
+    this.afterRender(() => {
+      if (!this.stopped && generation === this.generation) this.layout();
+    });
   }
 
   stop() {
@@ -115,13 +143,12 @@ export class CockpitDisplayPortal {
     this.stop();
     this.destroyed = true;
     this.active = false;
-    for (const record of this.records) {
-      if (record.anchor.parentNode) record.anchor.after(record.group);
-      record.anchor.remove();
-    }
-    this.cockpitPanel?.classList.remove('uses-shared-display-controls');
-    if (this.standardPanel)
-      this.standardPanel.scrollTop = this.standardScrollTop;
+    this.publish(null);
+    const { standardPanel, standardScrollTop } = this;
+    this.afterRender(() => {
+      if (standardPanel)
+        displayPanelScroller(standardPanel).scrollTop = standardScrollTop;
+    });
     this.records = [];
     this.restoreOwner = null;
   }

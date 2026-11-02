@@ -2,7 +2,7 @@ import {
   HUD_SUMMARY_INSTRUCTIONS,
   keylessHudSummaryResponse,
 } from '../../../src/hudSummaryResponse.js';
-import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
+import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
 
@@ -29,6 +29,19 @@ function toFiveWordHudSummary(value) {
 }
 
 async function handleHudSummary(req, res) {
+  // Capability probe: lets the HUD skip its paid place lookups when there is
+  // no summary to feed them to.
+  if (req.method === 'GET' && req.url?.split('?')[0] === '/status') {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(
+      JSON.stringify({
+        configured: !keylessHudSummaryResponse(process.env.OPENAI_API_KEY),
+      }),
+    );
+    return;
+  }
   if (req.method !== 'POST') {
     res.statusCode = 405;
     res.setHeader('Content-Type', 'application/json');
@@ -46,10 +59,10 @@ async function handleHudSummary(req, res) {
     return;
   }
 
-  // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). Keyless HUD
-  // fallback has no provider cost and resolves above without consuming a
-  // paid-endpoint quota slot.
-  if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
+  // Per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). On by default; 0 disables.
+  // Keyless HUD fallback has no provider cost and resolves above without
+  // consuming a paid-endpoint quota slot.
+  if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
 
   try {
     const body = await readRequestBody(req, 64 * 1024);

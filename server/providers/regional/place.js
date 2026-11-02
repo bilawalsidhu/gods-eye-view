@@ -1,7 +1,7 @@
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { coalesceProxyRequest } from '../common/http.js';
 import { fetchRegionalJson } from './http.js';
-import { normalizeRegionalPlace } from '../../../src/data/regionalModel.js';
+import { naturalRegionAtPoint } from '../../../src/data/naturalEarthRegions.js';
 import {
   nominatimToGeocodeResult,
   nominatimViewboxFromBounds,
@@ -51,8 +51,8 @@ const NOMINATIM_SEARCH_MAX_QUERY = 200;
 // The pacer is deliberately module state while everything else here is
 // per-instance. One request per second is a budget for the whole application,
 // not for each provider object: two instances each pacing themselves would
-// send two requests a second between them. Reverse lookups and searches
-// therefore queue together.
+// send two requests a second between them. Only last-resort forward searches
+// use this queue.
 let _nominatimQueue = Promise.resolve();
 
 let _nominatimLastRequestAt = 0;
@@ -77,9 +77,7 @@ function abandonedError() {
  * Run one piece of upstream work, never closer than the policy spacing to the
  * last one.
  *
- * `bounded` applies the queue-depth and staleness limits. The cockpit's reverse
- * lookups are a slow background trickle and stay unbounded; the search route,
- * which a person can fire as fast as they can type, does not.
+ * `bounded` applies queue-depth and staleness limits to interactive forward searches.
  *
  * @param {() => Promise<unknown>} work
  * @param {{bounded?: boolean, signal?: AbortSignal}} [options]
@@ -111,30 +109,9 @@ function enqueueNominatim(work, { bounded = false, signal } = {}) {
   return task;
 }
 
-/** Construct the serialized Nominatim reverse adapter with a trusted endpoint. */
-export function createRegionalPlaceProvider({
-  endpoint = 'https://nominatim.openstreetmap.org/reverse',
-  requestJson = fetchRegionalJson,
-} = {}) {
-  function fetchRegionalPlace(point) {
-    return enqueueNominatim(async () => {
-      const params = new URLSearchParams({
-        format: 'jsonv2',
-        lat: point.latitude.toFixed(5),
-        lon: point.longitude.toFixed(5),
-        zoom: '10',
-        addressdetails: '1',
-        'accept-language': 'en',
-      });
-      const payload = await requestJson(`${endpoint}?${params}`, {
-        headers: NOMINATIM_HEADERS,
-        redirect: 'error',
-      });
-      return normalizeRegionalPlace(payload);
-    });
-  }
-
-  return fetchRegionalPlace;
+/** Construct the offline regional context provider from bundled Natural Earth polygons. */
+export function createRegionalPlaceProvider() {
+  return (point) => naturalRegionAtPoint(point.latitude, point.longitude);
 }
 
 export const fetchRegionalPlace = createRegionalPlaceProvider();

@@ -4,6 +4,7 @@ const CONTROL_LAYER_IDS = Object.freeze({
   militaryFlightsLayer: 'military',
   satellitesLayer: 'satellites',
   cctvLayer: 'cctv',
+  streetLevelLayer: 'street-level',
   radioLayer: 'radio',
   bikeshareLayer: 'bikeshare',
   transitLayer: 'transit',
@@ -11,6 +12,7 @@ const CONTROL_LAYER_IDS = Object.freeze({
   militaryAwarenessLayer: 'military-awareness',
   militaryInstallationsLayer: 'military-installations',
   rocketLaunchesLayer: 'rocket-launches',
+  localAdsbLayer: 'local-adsb',
 });
 
 /** Capture the ordered application instances and their serialization metadata. */

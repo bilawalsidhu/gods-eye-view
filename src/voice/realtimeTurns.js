@@ -1,14 +1,36 @@
 import { realtimeSessionEvent } from './realtimeEvents.js';
+import { t } from '../i18n/index.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
 import {
   CALL_DEDUPE_MS,
   SUPERSEDED_RESPONSE_MEMORY,
   shouldStopVoiceAfterRadioTool,
   responseInstructionForToolResult,
+  isGlobeViewRefusal,
   extractFunctionCalls,
   callDedupeKeys,
   parseArguments,
 } from './realtimeProtocol.js';
+import { narrationLabel } from './speech.js';
+
+/** Out-of-band progress responses carry this metadata tag. */
+const PROGRESS_RESPONSE_TAG = 'progress';
+
+/**
+ * Speaks one code-authored progress line out of band. The line travels as
+ * input data, never inside the instruction text.
+ */
+const PROGRESS_INSTRUCTIONS =
+  'Read the user message aloud exactly, as a brief status update in your normal voice. Say nothing else.';
+
+/** Tools never narrated: Radio owns the speaker for its own handoff. */
+const SILENT_TOOLS = new Set(['control_radio']);
+
+/** Remembered response ids for preamble and progress detection. */
+const SPEECH_RESPONSE_MEMORY = 8;
+
+/** A progress line is one short sentence; this bounds its cost. */
+export const PROGRESS_MAX_OUTPUT_TOKENS = 60;
 
 /** Own response sequencing, tool execution, deduplication and superseded intent. */
 export class RealtimeTurns {
@@ -20,6 +42,7 @@ export class RealtimeTurns {
     readRadioLayer,
     radio,
     viewport,
+    metrics = null,
     operations,
   }) {
     Object.assign(
@@ -32,6 +55,7 @@ export class RealtimeTurns {
         readRadioLayer,
         radio,
         viewport,
+        metrics,
       },
       operations,
     );
@@ -43,7 +67,20 @@ export class RealtimeTurns {
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
     this.supersededResponseIds = new Set();
+    this.globeRefusals = new Map();
+    this.globeAdmissionGates = new Map();
+    this.globeResets = new Map();
+    this.globeResponseRequests = new Map();
+    this.globeRequest = { failed: false, pending: new Set() };
     this.activeToolAbortControllers = new Set();
+    this.narration = null;
+    this.narrationSequence = 0;
+    this.assistantAudioPlaying = false;
+    this.speechResponseIds = new Set();
+    this.progressResponse = null;
+    this.progressResponseIds = new Set();
+    this.bestEffortEventIds = new Set();
+    this.bestEffortSequence = 0;
   }
   get actionExecutor() {
     return this.readActionExecutor();
@@ -91,6 +128,13 @@ export class RealtimeTurns {
     if (!cleanText) return;
     this.cancelRadioHandoff({ abortTools: true });
     this.supersedeActiveResponseForUserTurn();
+    this.metrics?.userText();
+    // New intent: stop any progress line, then start the new turn's timing.
+    this.narration?.cancel();
+    this.narration?.userTurnEnded();
+    // A typed turn gets the same pointer context as a spoken one; it lands
+    // before the text so the model reads "this" with its referent.
+    this.beginPointerTurn?.('text');
     const itemEvent = {
       type: 'conversation.item.create',
       item: {
@@ -99,7 +143,8 @@ export class RealtimeTurns {
         content: [{ type: 'input_text', text: cleanText }],
       },
     };
-    this.sendRealtimeEvent(itemEvent, 'client.user_text');
+    if (!this.sendRealtimeEvent(itemEvent, 'client.user_text')) return;
+    this.globeRequest = { failed: false, pending: new Set() };
     this.requestUserTextResponse();
   }
 
@@ -154,7 +199,11 @@ export class RealtimeTurns {
    * @returns {void}
    */
   requestUserTextResponse() {
-    if (this.responseActive || this.responseCreatePending) {
+    if (
+      this.responseActive ||
+      this.responseCreatePending ||
+      this.progressGenerating()
+    ) {
       this.pendingUserTextResponse = true;
       this.debugLog('response.create.deferred_user_text', {
         responseActive: this.responseActive,
@@ -186,14 +235,43 @@ export class RealtimeTurns {
     }
     const sessionEvent = realtimeSessionEvent(payload);
     if (sessionEvent) this.emitSessionEvent(sessionEvent);
-    this.debugLog('server.event', {
-      type: payload.type,
-      eventId: payload.event_id || null,
-      responseId: payload.response_id || payload.response?.id || null,
-      payload,
-    });
+    this.metrics?.serverEvent(payload);
+    this.observeSpeech(payload);
+    // Streaming deltas are skipped: their `.done` events carry the full text,
+    // and logging every token spent the debug sink's per-minute write budget,
+    // dropping later turns' records.
+    if (!payload.type?.endsWith?.('.delta')) {
+      this.debugLog('server.event', {
+        type: payload.type,
+        eventId: payload.event_id || null,
+        responseId: payload.response_id || payload.response?.id || null,
+        payload,
+      });
+    }
 
     if (payload.type === 'error') {
+      // Barge-in and retraction events are best effort: the response or audio
+      // they target may already have finished.
+      // The client's own event id is echoed in error.event_id; the top-level
+      // event_id is the server event's own id.
+      const echoedId = payload.error?.event_id || null;
+      if (echoedId && echoedId === this.progressResponse?.eventId) {
+        // A rejected progress line is only a missed status update: release
+        // the response slot so the real reply is not held back.
+        this.progressResponse = null;
+        this.debugLog('client.progress.rejected', {
+          code: payload.error?.code || null,
+        });
+        this.resumeInBandResponses();
+        return;
+      }
+      if (echoedId && this.bestEffortEventIds.delete(echoedId)) {
+        this.debugLog('client.best_effort.rejected', {
+          eventId: echoedId,
+          code: payload.error?.code || null,
+        });
+        return;
+      }
       if (payload.error?.code === 'conversation_already_has_active_response') {
         this.cancelRadioHandoff({ abortTools: true });
         this.responseActive = true;
@@ -207,7 +285,7 @@ export class RealtimeTurns {
           eventId: payload.event_id,
           activeResponseMessage: payload.error?.message || null,
         });
-        this.setStatus('listening', 'Ask or command');
+        this.setStatus('listening', t('Ask or command'));
         return;
       }
       // A conversation.item.delete for a stale viewport screenshot can land
@@ -241,11 +319,29 @@ export class RealtimeTurns {
       return;
     }
 
+    if (
+      payload.type ===
+        'conversation.item.input_audio_transcription.completed' &&
+      payload.usage
+    ) {
+      this.recordTranscriptionUsage?.(payload.usage);
+      if (this.isSessionEnding()) return;
+    }
+
+    if (this.isProgressEvent(payload)) {
+      this.handleProgressEvent(payload);
+      return;
+    }
+
     if (payload.type === 'input_audio_buffer.speech_started') {
       this.userTurnPending = true;
       this.pendingResponseInstructions = null;
       this.cancelRadioHandoff({ abortTools: true });
+      this.globeRequest = { failed: false, pending: new Set() };
       this.setVoiceSpeaker('user');
+      // Point-and-ask: read the pointer as speech starts (open mic), or reuse
+      // the push-to-talk keydown snapshot, before the user audio commits.
+      this.beginPointerTurn?.('speech_start');
     }
     this.updateResponseState(payload);
     // The spend cap may have just ended the session from inside the usage
@@ -296,6 +392,27 @@ export class RealtimeTurns {
     }
 
     const toolResponseId = payload.response_id || payload.response?.id || null;
+    // Follow-up responses retain reset ownership until fresh admitted input.
+    const arrivalRequest = this.globeRequest;
+    const globeRequest =
+      this.globeResponseRequests.get(toolResponseId) ?? arrivalRequest;
+    // Later siblings must wait for globe admission before they can mutate state.
+    // Other tool responses keep their existing concurrency.
+    let heldForAdmission = false;
+    while (toolResponseId && this.globeAdmissionGates.has(toolResponseId)) {
+      // Drop claimed duplicates before every wait, before their keys can expire.
+      if (
+        calls.every((call) =>
+          callDedupeKeys(call).some((key) => this.processedCalls.has(key)),
+        )
+      )
+        return;
+      heldForAdmission = true;
+      await this.globeAdmissionGates.get(toolResponseId).promise;
+      if (!this.ownsConversation(eventChannel) || this.isSessionEnding())
+        return;
+    }
+
     // A newer typed command superseded the response these calls belong to.
     // They are stale intent — dispatching one would let the old turn mutate
     // the map after the operator asked for something else.
@@ -306,7 +423,10 @@ export class RealtimeTurns {
     // hazard `callDedupeKeys` is written to avoid). So each refused call gets
     // a terminal output saying plainly that the turn moved on. No
     // `response.create` follows — the deferred typed turn is the single answer.
-    if (this.isSupersededResponse(toolResponseId)) {
+    if (
+      this.isSupersededResponse(toolResponseId) ||
+      (heldForAdmission && arrivalRequest !== this.globeRequest)
+    ) {
       this.pruneProcessedCalls();
       for (const call of calls) {
         const keys = callDedupeKeys(call);
@@ -327,7 +447,7 @@ export class RealtimeTurns {
       return;
     }
 
-    this.setStatus('executing', 'Running command');
+    this.setStatus('executing', t('Running command'));
     this.pruneProcessedCalls();
     let sentOutput = false;
     let lastResult = null;
@@ -341,15 +461,106 @@ export class RealtimeTurns {
       if (keys.some((key) => this.processedCalls.has(key))) continue;
       keys.forEach((key) => this.processedCalls.set(key, performance.now()));
 
+      if (this.globeRefusals.get(toolResponseId)?.blocking) {
+        this.sendToolOutput(call.call_id || call.id, {
+          ok: false,
+          action: call.name,
+          skipped: true,
+          error: 'Not run: this response must wait for the Globe View reply.',
+        });
+        continue;
+      }
+
       let result;
+      let globeAdmissionGate = null;
+      let globeResetGate = null;
       const resultChannel = this.dc;
       let radioHandoffEpochAtStart = this.radio.radioHandoffEpoch;
       let toolController = null;
       let radioOwnershipClaimed = false;
       let radioReservationToken = null;
       let isRadioFeatureCall = call.name === 'control_radio';
+      const toolSpan = this.metrics?.toolStart(call.name);
+      const narrationId =
+        call.call_id || call.id || `tool-${++this.narrationSequence}`;
+      if (this.speechResponseIds.has(toolResponseId))
+        this.narration?.preamble();
       try {
         const parsedArguments = parseArguments(call.arguments);
+        if (
+          toolResponseId &&
+          call.name === 'move_camera' &&
+          String(parsedArguments.motion || '').toLowerCase() === 'rotate_globe'
+        ) {
+          let resolve;
+          const promise = new Promise((settle) => {
+            resolve = settle;
+          });
+          globeAdmissionGate = { promise, resolve };
+          this.globeAdmissionGates.set(toolResponseId, globeAdmissionGate);
+          // OpenAI delivers sibling calls concurrently. A reset dispatched
+          // first must finish before rotation evaluates the camera's fit.
+          // Hold later siblings at admission while this rotation waits.
+          const resets = this.globeResets.get(toolResponseId);
+          if (
+            resets ||
+            globeRequest.failed ||
+            globeRequest.pending.size ||
+            arrivalRequest !== this.globeRequest
+          ) {
+            while (resets?.pending.size || globeRequest.pending.size)
+              await Promise.all(
+                [
+                  ...new Set([
+                    ...(resets?.pending || []),
+                    ...globeRequest.pending,
+                  ]),
+                ].map((gate) => gate.promise),
+              );
+            if (!this.ownsConversation(eventChannel) || this.isSessionEnding())
+              return;
+            keys.forEach((key) =>
+              this.processedCalls.set(key, performance.now()),
+            );
+            const superseded =
+              this.isSupersededResponse(toolResponseId) ||
+              arrivalRequest !== this.globeRequest;
+            if (superseded || resets?.failed || globeRequest.failed) {
+              result = {
+                ok: false,
+                action: call.name,
+                reason: 'globe-reset-failed',
+                skipped: true,
+                ...(superseded ? { superseded: true } : {}),
+                error: superseded
+                  ? 'Superseded by a newer command from the operator — this call was not run.'
+                  : 'Not run: the Globe View reset/rotation sequence failed or was cancelled.',
+              };
+            }
+          }
+        }
+        if (toolResponseId && call.name === 'zoom_to_globe') {
+          let resolve;
+          const promise = new Promise((settle) => {
+            resolve = settle;
+          });
+          let resets = this.globeResets.get(toolResponseId);
+          if (!resets) {
+            resets = { pending: new Set(), failed: false };
+            this.globeResets.set(toolResponseId, resets);
+            // Retain settled outcomes for later siblings, without evicting an
+            // active reset that another response still needs to await.
+            for (const [id, record] of this.globeResets) {
+              if (this.globeResets.size <= SUPERSEDED_RESPONSE_MEMORY) break;
+              if (!record.pending.size && id !== toolResponseId)
+                this.globeResets.delete(id);
+            }
+          }
+          globeResetGate = { promise, resolve, resets, request: globeRequest };
+          resets.pending.add(globeResetGate);
+          globeRequest.pending.add(globeResetGate);
+        }
+
         const isRadioControlCall = call.name === 'control_radio';
         const isRadioVisibilityCall =
           call.name === 'set_layer_visibility' &&
@@ -385,6 +596,11 @@ export class RealtimeTurns {
           });
         }
         radioHandoffEpochAtStart = this.radio.radioHandoffEpoch;
+        this.narration?.toolStarted(narrationId, {
+          name: call.name,
+          label: narrationLabel(call.name, parsedArguments),
+          narrate: !isRadioFeatureCall && !SILENT_TOOLS.has(call.name),
+        });
         this.debugLog('tool.call', {
           name: call.name,
           callId: call.call_id || call.id || null,
@@ -401,11 +617,13 @@ export class RealtimeTurns {
             authorityDomain: radioAuthorityDomain,
           });
         }
-        result = await (this.actionExecutor || this.runner)(
+        result ??= await (this.actionExecutor || this.runner)(
           call.name,
           parsedArguments,
           {
             signal: toolController.signal,
+            callId: narrationId,
+            progress: (update) => this.narration?.progress(narrationId, update),
             isCurrent: () =>
               this.activeToolAbortControllers.has(toolController) &&
               !this.userTurnPending &&
@@ -415,7 +633,28 @@ export class RealtimeTurns {
                 radioHandoffEpochAtStart === this.radio.radioHandoffEpoch),
           },
         );
+        if (
+          globeAdmissionGate &&
+          this.globeResets.has(toolResponseId) &&
+          result?.reason === 'globe-view-required'
+        )
+          result = { ...result, reason: 'globe-reset-failed' };
         if (!this.ownsConversation(eventChannel)) return;
+        if (
+          isGlobeViewRefusal(result) &&
+          toolResponseId &&
+          arrivalRequest === this.globeRequest &&
+          !this.isSupersededResponse(toolResponseId)
+        ) {
+          this.globeRefusals.set(toolResponseId, {
+            result,
+            followupQueued: false,
+            blocking: !result.skipped,
+          });
+          while (this.globeRefusals.size > SUPERSEDED_RESPONSE_MEMORY) {
+            this.globeRefusals.delete(this.globeRefusals.keys().next().value);
+          }
+        }
         if (result?.ok && result.radioPlaybackRequested) {
           const sessionIsCurrent =
             this.activeToolAbortControllers.has(toolController) &&
@@ -495,10 +734,29 @@ export class RealtimeTurns {
             : {}),
         };
       } finally {
+        if (globeResetGate) {
+          const { resets, request } = globeResetGate;
+          if (result?.ok !== true || result.cancelled) {
+            resets.failed = true;
+            request.failed = true;
+          }
+          resets.pending.delete(globeResetGate);
+          request.pending.delete(globeResetGate);
+          globeResetGate.resolve();
+        }
+        if (globeAdmissionGate) {
+          if (
+            this.globeAdmissionGates.get(toolResponseId) === globeAdmissionGate
+          )
+            this.globeAdmissionGates.delete(toolResponseId);
+          globeAdmissionGate.resolve();
+        }
         if (toolController) {
           this.activeToolAbortControllers.delete(toolController);
           this.radio.releaseTool(toolController);
         }
+        this.metrics?.toolEnd(toolSpan, result?.ok);
+        this.narration?.toolFinished(narrationId);
       }
       // Rejections also arrive after cancellation; never publish into a new session.
       if (!this.ownsConversation(eventChannel)) return;
@@ -569,15 +827,294 @@ export class RealtimeTurns {
         });
       }
       if (!this.ownsConversation(eventChannel)) return;
-      // Keep the Radio handoff wording authoritative even when another tool
-      // result follows Radio in the same multi-intent response.
-      this.queueResponseCreate(
-        responseInstructionForToolResult(
-          this.radio.pendingRadioPlaybackResult || lastResult,
-        ),
+      const refusal = this.globeRefusals.get(toolResponseId);
+      // A newer turn may arrive during admission or the viewport-image await.
+      // Preserve its reply; neither the refusal map nor lastResult may revive
+      // an old refusal follow-up after supersession.
+      if (
+        (this.isSupersededResponse(toolResponseId) ||
+          arrivalRequest !== this.globeRequest) &&
+        (refusal || isGlobeViewRefusal(lastResult) || lastResult?.superseded)
+      ) {
+        // Complete an idle turn below, but leave a newer running tool's status
+        // authoritative while suppressing this obsolete refusal follow-up.
+        if (this.activeToolAbortControllers.size) return;
+      } else if (refusal) {
+        // Even an earlier sibling finishing late cannot replace the reset instruction.
+        if (!refusal.followupQueued) {
+          refusal.followupQueued = true;
+          this.queueResponseCreate({
+            instructions: responseInstructionForToolResult(refusal.result),
+            tool_choice: 'none',
+          });
+        }
+      } else {
+        // Keep Radio handoff wording authoritative for ordinary multi-tool replies.
+        const followupResult =
+          this.radio.pendingRadioPlaybackResult || lastResult;
+        const instructions = responseInstructionForToolResult(followupResult);
+        this.queueResponseCreate(
+          isGlobeViewRefusal(followupResult)
+            ? { instructions, tool_choice: 'none' }
+            : instructions,
+        );
+      }
+    }
+    this.setStatus('listening', t('Ask or command'));
+  }
+
+  /**
+   * Track what the user can hear: assistant audio start/stop, which
+   * in-band responses spoke before a tool call (preambles), and playback of
+   * the out-of-band progress line.
+   * @param {object} payload Server event.
+   */
+  observeSpeech(payload) {
+    const type = payload?.type;
+    const responseId = payload?.response_id || payload?.response?.id || null;
+    const progress = this.progressResponse;
+    const isProgress = Boolean(
+      responseId && this.progressResponseIds.has(responseId),
+    );
+    if (type === 'input_audio_buffer.speech_started') {
+      // New intent: narration stops, including a line already playing.
+      this.narration?.cancel();
+      return;
+    }
+    if (type === 'input_audio_buffer.speech_stopped') {
+      this.narration?.userTurnEnded();
+      return;
+    }
+    if (
+      type === 'response.output_audio_transcript.delta' &&
+      responseId &&
+      !isProgress
+    ) {
+      this.speechResponseIds.add(responseId);
+      while (this.speechResponseIds.size > SPEECH_RESPONSE_MEMORY)
+        this.speechResponseIds.delete(
+          this.speechResponseIds.values().next().value,
+        );
+      return;
+    }
+    if (type === 'output_audio_buffer.started') {
+      this.assistantAudioPlaying = true;
+      if (progress && progress.id === responseId) {
+        progress.audible = true;
+        progress.playing = true;
+      }
+      this.narration?.audible();
+      return;
+    }
+    if (
+      type === 'output_audio_buffer.stopped' ||
+      type === 'output_audio_buffer.cleared'
+    ) {
+      this.assistantAudioPlaying = false;
+      // Playback ownership ends here, not at response.done: a line keeps
+      // playing after its generation completes.
+      if (progress && (progress.id === responseId || !responseId)) {
+        progress.playing = false;
+        if (!progress.generating) this.progressResponse = null;
+      }
+      this.narration?.quiet();
+    }
+  }
+
+  /** Whether an event belongs to an out-of-band progress response. */
+  isProgressEvent(payload) {
+    const responseId = payload?.response_id || payload?.response?.id || null;
+    if (payload?.response?.metadata?.gev === PROGRESS_RESPONSE_TAG) return true;
+    return Boolean(responseId && this.progressResponseIds.has(responseId));
+  }
+
+  /**
+   * Progress responses live outside the conversation's response lifecycle:
+   * they never set or clear the active in-band response, never touch Radio
+   * handoff state, and only release queued in-band replies when their
+   * generation ends. Their usage is still billed.
+   */
+  handleProgressEvent(payload) {
+    const responseId = payload.response_id || payload.response?.id || null;
+    const progress = this.progressResponse;
+    if (payload.type === 'response.created') {
+      if (responseId) {
+        this.progressResponseIds.add(responseId);
+        while (this.progressResponseIds.size > SPEECH_RESPONSE_MEMORY)
+          this.progressResponseIds.delete(
+            this.progressResponseIds.values().next().value,
+          );
+      }
+      if (progress && progress.id === null) {
+        progress.id = responseId;
+        if (progress.retracted || progress.stopped)
+          this.cancelResponse(responseId);
+      }
+      return;
+    }
+    if (payload.type !== 'response.done') return;
+    this.recordUsage(payload.response?.usage);
+    if (progress && progress.id === responseId) {
+      progress.generating = false;
+      if (!progress.playing) this.progressResponse = null;
+    }
+    this.resumeInBandResponses();
+  }
+
+  /** Whether a progress line is still being generated. */
+  progressGenerating() {
+    return Boolean(this.progressResponse?.generating);
+  }
+
+  /** Release an in-band reply that waited behind a progress line. */
+  resumeInBandResponses() {
+    if (this.progressGenerating()) return;
+    if (this.pendingUserTextResponse) this.requestUserTextResponse();
+    else this.flushPendingResponse();
+  }
+
+  /** Whether a progress line may start now without talking over anyone. */
+  canNarrate() {
+    return Boolean(
+      this.dc?.readyState === 'open' &&
+      !this.responseActive &&
+      !this.responseCreatePending &&
+      !this.userTurnPending &&
+      !this.assistantAudioPlaying &&
+      !this.progressResponse &&
+      this.radio.mayVoiceClaimSpeaker() &&
+      !this.isSessionEnding(),
+    );
+  }
+
+  /**
+   * Speak one progress line out of band: outside the conversation (so the
+   * prompt cache and history are untouched), with tools disabled and a
+   * small output bound.
+   * @param {string} line Code-authored line.
+   * @returns {boolean} Whether the request was sent.
+   */
+  speakProgressLine(line) {
+    if (!line || !this.canNarrate()) return false;
+    const eventId = `gev_progress_${++this.bestEffortSequence}`;
+    const sent = this.sendRealtimeEvent(
+      {
+        type: 'response.create',
+        event_id: eventId,
+        response: {
+          conversation: 'none',
+          output_modalities: ['audio'],
+          tool_choice: 'none',
+          max_output_tokens: PROGRESS_MAX_OUTPUT_TOKENS,
+          metadata: { gev: PROGRESS_RESPONSE_TAG },
+          instructions: PROGRESS_INSTRUCTIONS,
+          input: [
+            {
+              type: 'message',
+              role: 'user',
+              content: [{ type: 'input_text', text: line }],
+            },
+          ],
+        },
+      },
+      'client.response_create.progress',
+    );
+    if (!sent) return false;
+    this.progressResponse = {
+      id: null,
+      eventId,
+      generating: true,
+      audible: false,
+      playing: false,
+      retracted: false,
+      stopped: false,
+    };
+    return true;
+  }
+
+  /**
+   * The tool finished: drop a line nobody has heard yet, and let one that is
+   * already audible finish.
+   */
+  retractProgressLine() {
+    const progress = this.progressResponse;
+    if (!progress || progress.audible || !progress.generating) return;
+    progress.retracted = true;
+    if (progress.id) this.cancelResponse(progress.id);
+  }
+
+  /** New intent: stop the progress line, audible or not. */
+  stopProgressLine() {
+    const progress = this.progressResponse;
+    if (!progress || progress.stopped) return;
+    progress.stopped = true;
+    if (progress.generating && progress.id) this.cancelResponse(progress.id);
+    if (progress.playing) {
+      this.sendBestEffort(
+        { type: 'output_audio_buffer.clear' },
+        'client.output_audio_clear',
       );
     }
-    this.setStatus('listening', 'Ask or command');
+  }
+
+  /** Send a client event whose rejection is expected and harmless. */
+  sendBestEffort(message, logEventName) {
+    const eventId = `gev_be_${++this.bestEffortSequence}`;
+    this.bestEffortEventIds.add(eventId);
+    while (this.bestEffortEventIds.size > 16)
+      this.bestEffortEventIds.delete(
+        this.bestEffortEventIds.values().next().value,
+      );
+    return this.sendRealtimeEvent(
+      { ...message, event_id: eventId },
+      logEventName,
+    );
+  }
+
+  cancelResponse(responseId) {
+    return this.sendBestEffort(
+      {
+        type: 'response.cancel',
+        ...(responseId ? { response_id: responseId } : {}),
+      },
+      'client.response_cancel',
+    );
+  }
+
+  /**
+   * Explicit barge-in (a claimed Space hold while the assistant speaks):
+   * cancel the reply and clear queued audio, the documented WebRTC
+   * interruption; the server truncates the item to what was played. Drops
+   * narration and any queued follow-up. Tools keep running; the user's new
+   * speech supersedes them as usual. Refused while Radio holds the speaker
+   * (prepared, reserved or starting playback), so that takeover stays intact.
+   * @returns {boolean} Whether anything was interrupted.
+   */
+  bargeIn() {
+    if (!this.dc || this.dc.readyState !== 'open') return false;
+    const speaking =
+      this.assistantAudioPlaying ||
+      this.responseActive ||
+      Boolean(this.progressResponse);
+    if (!speaking) return false;
+    if (!this.radio.mayVoiceClaimSpeaker()) return false;
+    const responseId = this.activeResponseId;
+    const audioPlaying = this.assistantAudioPlaying;
+    this.narration?.cancel();
+    this.metrics?.bargeIn();
+    this.pendingResponseInstructions = null;
+    if (this.responseActive) {
+      this.supersedeActiveResponseForUserTurn();
+      this.cancelResponse(responseId);
+    }
+    if (audioPlaying) {
+      this.sendBestEffort(
+        { type: 'output_audio_buffer.clear' },
+        'client.output_audio_clear',
+      );
+    }
+    this.debugLog('voice.barge_in', { responseId, audioPlaying });
+    return true;
   }
 
   sendToolOutput(callId, result) {
@@ -610,6 +1147,22 @@ export class RealtimeTurns {
       this.userTurnPending = false;
       this.activeResponseId =
         payload.response?.id || payload.response_id || null;
+      // Late calls retain only their globe reset/request ownership. Ordinary
+      // tool admission and concurrency continue to use their existing policy.
+      if (
+        this.activeResponseId &&
+        !this.globeResponseRequests.has(this.activeResponseId)
+      ) {
+        this.globeResponseRequests.set(
+          this.activeResponseId,
+          this.globeRequest,
+        );
+        while (this.globeResponseRequests.size > SUPERSEDED_RESPONSE_MEMORY)
+          this.globeResponseRequests.delete(
+            this.globeResponseRequests.keys().next().value,
+          );
+      }
+
       this.setVoiceSpeaker('ai');
       return;
     }
@@ -642,7 +1195,7 @@ export class RealtimeTurns {
         // connection is still live. Recover to listening so the user can retry
         // (mirrors the transient-blip philosophy, H8).
         if (this.dc?.readyState === 'open') {
-          this.setStatus('listening', 'Ask or command');
+          this.setStatus('listening', t('Ask or command'));
         }
       }
       if (!this.radio.pendingRadioPlaybackResult) {
@@ -677,6 +1230,7 @@ export class RealtimeTurns {
       !this.pendingResponseInstructions ||
       this.responseActive ||
       this.responseCreatePending ||
+      this.progressGenerating() ||
       this.userTurnPending ||
       !this.dc ||
       this.dc.readyState !== 'open'
@@ -688,7 +1242,8 @@ export class RealtimeTurns {
     const sent = this.sendRealtimeEvent(
       {
         type: 'response.create',
-        response: { instructions },
+        response:
+          typeof instructions === 'string' ? { instructions } : instructions,
       },
       'client.response_create.tool_followup',
     );
@@ -700,6 +1255,20 @@ export class RealtimeTurns {
       controller.abort();
     this.activeToolAbortControllers.clear();
     this.radio.clearTools();
+    this.releaseGlobeResets();
+  }
+
+  releaseGlobeResets() {
+    for (const resets of this.globeResets.values()) {
+      if (!resets.pending.size) continue;
+      resets.failed = true;
+      for (const gate of resets.pending) {
+        gate.request.failed = true;
+        gate.request.pending.delete(gate);
+        gate.resolve();
+      }
+      resets.pending.clear();
+    }
   }
 
   reset() {
@@ -711,5 +1280,18 @@ export class RealtimeTurns {
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
     this.supersededResponseIds.clear();
+    this.globeRefusals.clear();
+    for (const gate of this.globeAdmissionGates.values()) gate.resolve();
+    this.globeAdmissionGates.clear();
+    this.releaseGlobeResets();
+    this.globeResets.clear();
+    this.globeResponseRequests.clear();
+    this.globeRequest = { failed: false, pending: new Set() };
+    this.narration?.cancel();
+    this.assistantAudioPlaying = false;
+    this.speechResponseIds.clear();
+    this.progressResponse = null;
+    this.progressResponseIds.clear();
+    this.bestEffortEventIds.clear();
   }
 }

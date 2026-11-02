@@ -16,11 +16,15 @@ import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
  * label-less) so every caption shares one consistent style.
  *
  * The hybrid surface honors add/update/remove/sync/destroy; update coordinates the
- * one route change that spans both sub-renderers.
+ * one route change that spans both sub-renderers. `screen` passes options to the
+ * screen renderer (its store, in tests).
  */
-export function createHybridAnnotationRenderer(viewer) {
+export function createHybridAnnotationRenderer(
+  viewer,
+  { screen: screenOptions } = {},
+) {
   const world = createWorldAnnotationRenderer(viewer);
-  const screen = createScreenAnnotationRenderer(viewer);
+  const screen = createScreenAnnotationRenderer(viewer, screenOptions);
   // anno.id -> { worldProxy?, screenProxy? } — proxies own the sub-renderer state.
   const routed = new Map();
 
@@ -77,7 +81,11 @@ export function createHybridAnnotationRenderer(viewer) {
       add(anno);
       return;
     }
-    if (anno.type !== 'area' || !anno.ring || anno.ring.length < 3) return;
+    if (anno.type !== 'area' || !anno.ring || anno.ring.length < 3) {
+      if (anno.outlineUnavailable && entry.screenProxy)
+        screen.update(entry.screenProxy);
+      return;
+    }
 
     if (!entry.worldProxy) {
       entry.worldProxy = liveProxy(anno, { label: null });

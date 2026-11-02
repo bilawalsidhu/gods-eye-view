@@ -8,8 +8,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
-import { Readable } from 'node:stream';
+import { Readable, Writable } from 'node:stream';
 import { cctvProxy } from '../../server/providers/cctv.js';
+import { proxyMediaResponse } from '../../server/providers/cctv/media.js';
 import { sanitizeCctvRangeHeader } from '../../server/providers/cctv/range.js';
 import { CCTV_MEDIA_MAX_BODY_BYTES as CAP } from '../../server/providers/cctv/constants.js';
 
@@ -585,4 +586,118 @@ test('two sequential seeks are served as two partial responses', async (t) => {
   assert.equal(second.headers['Content-Range'], 'bytes 100-199/4096');
   assert.equal(first.body, 'chunk-0');
   assert.equal(second.body, 'chunk-100');
+});
+
+// ---------------------------------------------------------------------------
+// The body idle deadline. proxyMediaResponse is driven directly here because
+// the deadline is only injectable through its options; the route always passes
+// the production value.
+// ---------------------------------------------------------------------------
+
+/**
+ * A response to pipe into, built on a real Writable so the backpressure the
+ * proxy reads is the stream's own rather than a flag the test sets. With
+ * `drains: false` the bytes are accepted and never flushed, which is what a
+ * viewer on a slow link looks like from the server side.
+ */
+function pipeTarget({ drains = true } = {}) {
+  const res = new Writable({
+    // One byte is enough to leave a target that never empties its buffer
+    // permanently in need of a drain.
+    highWaterMark: drains ? undefined : 1,
+    write(_chunk, _encoding, callback) {
+      if (drains) callback();
+    },
+  });
+  res.writeHead = (status, headers) => {
+    res.statusCode = status;
+    res.headers = headers || {};
+  };
+  return res;
+}
+
+/**
+ * An upstream that answers with headers, sends one chunk, and then either
+ * keeps producing every `everyMs` or goes silent. `released` reports the body's
+ * own cleanup: a cancelled fetch body lands in the web stream's cancel hook.
+ */
+function mediaUpstream({ everyMs = 0 } = {}) {
+  const state = { produced: 0, released: false };
+  let ticker = null;
+  const body = new ReadableStream({
+    start(controller) {
+      const send = () => {
+        state.produced += 1;
+        controller.enqueue(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]));
+      };
+      send();
+      if (everyMs > 0) {
+        ticker = setInterval(send, everyMs);
+        ticker.unref();
+      }
+    },
+    cancel() {
+      state.released = true;
+      if (ticker) clearInterval(ticker);
+    },
+  });
+  state.upstream = {
+    ok: true,
+    status: 200,
+    headers: {
+      get: (name) =>
+        String(name).toLowerCase() === 'content-type' ? 'video/mp4' : null,
+    },
+    body,
+    arrayBuffer: async () => Buffer.alloc(0),
+  };
+  return state;
+}
+
+test('an upstream that goes silent after its headers is released at the idle deadline', async (t) => {
+  const feed = mediaUpstream();
+  const res = pipeTarget();
+  t.after(() => res.destroy());
+  await proxyMediaResponse(res, feed.upstream, { idleTimeoutMs: 40 });
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(feed.released, false, 'released before the deadline was due');
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  // Without the deadline this stream is held open against the camera host for
+  // as long as that host will keep the socket, with no bytes ever arriving.
+  assert.equal(feed.released, true, 'the silent upstream was never released');
+  assert.equal(res.writableEnded, true, 'the client was left waiting');
+});
+
+test('a live feed that keeps producing is not cut off by the idle deadline', async (t) => {
+  const feed = mediaUpstream({ everyMs: 10 });
+  const res = pipeTarget();
+  t.after(() => res.destroy());
+  await proxyMediaResponse(res, feed.upstream, { idleTimeoutMs: 40 });
+
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal(feed.released, false, 'a healthy feed was torn down');
+  assert.equal(res.writableEnded, false, 'a healthy feed was ended early');
+  assert.ok(
+    feed.produced > 5,
+    `the feed stopped producing (${feed.produced} chunks)`,
+  );
+});
+
+test('a client that cannot keep up is not mistaken for a stalled upstream', async (t) => {
+  // Nothing arrives from upstream while the pipe is paused, which looks exactly
+  // like silence unless the response is asked whether it is still draining.
+  const feed = mediaUpstream({ everyMs: 10 });
+  const res = pipeTarget({ drains: false });
+  t.after(() => res.destroy());
+  await proxyMediaResponse(res, feed.upstream, { idleTimeoutMs: 30 });
+
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(
+    res.writableNeedDrain,
+    true,
+    'the client was not the bottleneck',
+  );
+  assert.equal(feed.released, false, 'a slow viewer tore down a healthy feed');
+  assert.equal(res.writableEnded, false, 'a slow viewer ended the response');
 });

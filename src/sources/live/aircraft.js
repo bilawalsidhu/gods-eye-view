@@ -1,3 +1,4 @@
+import { normalizeSquawk } from '../../data/aircraftEmergency.js';
 import {
   admitRecords,
   cleanText,
@@ -5,11 +6,14 @@ import {
   epoch,
   finite,
 } from './contract.js';
+import { readAdsbVerticalRateFpm } from '../adsbFields.js';
+
+const openSkyId = (row) =>
+  Array.isArray(row) ? cleanText(row[0]).toLowerCase() : '';
 
 /** Normalize the OpenSky state-vector route, including its regional fallback. */
 export function normalizeOpenSkyAircraft(row) {
-  if (!Array.isArray(row)) return null;
-  const id = cleanText(row[0]).toLowerCase();
+  const id = openSkyId(row);
   if (!id || !coordinates(row[6], row[5])) return null;
   return {
     id,
@@ -30,6 +34,9 @@ export function normalizeOpenSkyAircraft(row) {
     typeCode: null,
     registration: null,
     operator: null,
+    squawk: normalizeSquawk(row[14]),
+    // State vectors carry no ADS-B emergency field; the squawk stands alone.
+    emergency: undefined,
   };
 }
 
@@ -42,7 +49,7 @@ export function normalizeReadsbAircraft(row, snapshotTimeMs) {
   const baroFt = finite(row.alt_baro),
     geoFt = finite(row.alt_geom);
   const speedKts = finite(row.gs),
-    rateFtMin = finite(row.baro_rate);
+    rateFtMin = readAdsbVerticalRateFpm(row);
   const seen = finite(row.seen),
     seenPos = finite(row.seen_pos);
   return {
@@ -68,7 +75,19 @@ export function normalizeReadsbAircraft(row, snapshotTimeMs) {
     typeCode: cleanText(row.t),
     registration: cleanText(row.r),
     operator: cleanText(row.ownOp),
+    squawk: normalizeSquawk(row.squawk),
+    emergency: cleanText(row.emergency).toLowerCase() || null,
   };
+}
+
+/**
+ * OpenSky allows null longitude/latitude for a contact that is still
+ * broadcasting. Strict nulls also reject rows truncated before the position.
+ */
+function openSkyUnpositionedId(row) {
+  return Array.isArray(row) && row[5] === null && row[6] === null
+    ? openSkyId(row)
+    : '';
 }
 
 export function openSkySnapshot(
@@ -82,8 +101,15 @@ export function openSkySnapshot(
 ) {
   const admitted = admitRecords(
     payload?.states,
-    normalizeOpenSkyAircraft,
+    (row) => {
+      const record = normalizeOpenSkyAircraft(row);
+      const statuses = payload?.emergencyByIcao;
+      if (record && statuses && Object.hasOwn(statuses, record.id))
+        record.emergency = cleanText(statuses[record.id]).toLowerCase() || null;
+      return record;
+    },
     'OpenSky',
+    openSkyUnpositionedId,
   );
   const observedAtMs = epoch(payload?.time, 1000);
   const ageMs = observedAtMs == null ? null : Math.max(0, now - observedAtMs);

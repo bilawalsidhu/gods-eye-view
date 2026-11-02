@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { greatCircleKm } from '../../geoDistance.js';
 import { staticFrameRefreshMs } from '../../data/cctvLod.js';
 import { frameFetchDue, cardFetchPolicy } from '../../data/cctvCards.js';
 import { DEFAULT_CAMERA_CALIBRATION } from './policy.js';
@@ -97,12 +98,23 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   /**
    * Coerces a value to a finite number or returns the fallback.
+   *
+   * Absent, blank and boolean values return the fallback as well. The source
+   * list serializes an unknown number (NaN) as JSON null, and `Number(null)`
+   * is 0, so without this an unknown pose field arrived as zero and was
+   * clamped to the field's floor instead of taking its default.
    * @param {*} value
    * @param {number} [fallback=NaN]
    * @returns {number}
    */
 
   function safeNumber(value, fallback = NaN) {
+    if (
+      value == null ||
+      typeof value === 'boolean' ||
+      (typeof value === 'string' && !value.trim())
+    )
+      return fallback;
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
   }
@@ -298,12 +310,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function haversineKm(lat1, lon1, lat2, lon2) {
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
   }
 
   /**

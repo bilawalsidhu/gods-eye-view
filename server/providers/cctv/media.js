@@ -1,12 +1,22 @@
 import { Readable } from 'node:stream';
-import { hashSeed, escapeXml } from './normalize.js';
+import { hashSeed, escapeXml, pinnedCameraUrl } from './normalize.js';
 import {
+  A22_IMAGE_ORIGIN,
+  CALGARY_IMAGE_ORIGIN,
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_FRAME_MAX_BODY_BYTES,
   CCTV_MEDIA_FETCH_TIMEOUT_MS,
+  CCTV_MEDIA_IDLE_TIMEOUT_MS,
   CCTV_MEDIA_MAX_BODY_BYTES,
+  HK_IMAGE_ORIGIN,
+  KING_COUNTY_IMAGE_ORIGIN,
   NSW_IMAGE_ORIGIN,
   NSW_IMAGE_USER_AGENT,
+  TALLINN_IMAGE_ORIGIN,
+  TARKTEE_IMAGE_ORIGIN,
+  TFL_IMAGE_ORIGIN,
+  WARENDORF_IMAGE_ORIGINS,
+  WSDOT_IMAGE_ORIGIN,
 } from './constants.js';
 /**
  * Generate a synthetic SVG billboard image for a CCTV camera placeholder.
@@ -83,13 +93,80 @@ export function buildSyntheticCctvSvg({ cameraId, label, city, status }) {
  * @param {ReadableStream|NodeJS.ReadableStream|null} body
  * @returns {import('stream').Readable|null}
  */
-export function toReadable(body) {
+function toReadable(body) {
   if (!body) return null;
   if (typeof body.pipe === 'function') return body;
   if (typeof body.getReader === 'function') {
     return Readable.fromWeb(body);
   }
   return null;
+}
+
+/**
+ * Split a Content-Type value into its lower-case essence and parameters.
+ *
+ * @param {string|null|undefined} value
+ * @returns {{essence:string,params:Map<string,string>}|null} Null when the
+ *   value is missing or is not a `type/subtype` media type.
+ */
+function parseMediaType(value) {
+  const [head, ...rest] = String(value ?? '').split(';');
+  const essence = head.trim().toLowerCase();
+  if (!/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(essence)) return null;
+  const params = new Map();
+  for (const part of rest) {
+    const eq = part.indexOf('=');
+    if (eq <= 0) continue;
+    const name = part.slice(0, eq).trim().toLowerCase();
+    let paramValue = part.slice(eq + 1).trim();
+    if (/^".*"$/.test(paramValue)) paramValue = paramValue.slice(1, -1);
+    if (name && !params.has(name)) params.set(name, paramValue);
+  }
+  return { essence, params };
+}
+
+/** Still-image types a camera frame may be served as. */
+const CCTV_RASTER_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+]);
+
+/**
+ * The canonical type of a raster camera frame, or null for any other type.
+ *
+ * @param {string|null|undefined} contentType
+ * @returns {string|null}
+ */
+export function cctvRasterImageType(contentType) {
+  const essence = parseMediaType(contentType)?.essence;
+  return CCTV_RASTER_IMAGE_TYPES.has(essence) ? essence : null;
+}
+
+/**
+ * The type to relay a live feed as, or null when the upstream type does not
+ * match the feed kind. MJPEG keeps its part boundary, without which the body
+ * cannot be split into frames.
+ *
+ * @param {string} feedType - Normalized feed type (mp4, webm or mjpeg).
+ * @param {string|null|undefined} contentType
+ * @returns {string|null}
+ */
+export function cctvLiveMediaType(feedType, contentType) {
+  const parsed = parseMediaType(contentType);
+  if (!parsed) return null;
+  if (feedType === 'mp4' || feedType === 'webm')
+    return parsed.essence === `video/${feedType}` ? parsed.essence : null;
+  if (feedType !== 'mjpeg' || parsed.essence !== 'multipart/x-mixed-replace')
+    return null;
+  const boundary = parsed.params.get('boundary') || '';
+  if (!/^[0-9A-Za-z'()+_,./:=? -]{0,69}[0-9A-Za-z'()+_,./:=?-]$/.test(boundary))
+    return null;
+  return /^[0-9A-Za-z'+_.-]+$/.test(boundary)
+    ? `multipart/x-mixed-replace; boundary=${boundary}`
+    : `multipart/x-mixed-replace; boundary="${boundary}"`;
 }
 
 /**
@@ -103,14 +180,22 @@ export function toReadable(body) {
  * @param {Response} upstream - fetch() Response object.
  * @param {object} [opts]
  * @param {string} [opts.sourceHeader='upstream'] - Value for X-CCTV-Source header.
+ * @param {string} [opts.contentType] - Validated type to send instead of the
+ *   upstream's own.
+ * @param {number} [opts.idleTimeoutMs=CCTV_MEDIA_IDLE_TIMEOUT_MS] - Silence
+ *   allowed between upstream chunks before the stream is released. Injectable
+ *   only to keep the deadline unit-testable.
  */
 export async function proxyMediaResponse(
   res,
   upstream,
-  { sourceHeader = 'upstream' } = {},
+  {
+    sourceHeader = 'upstream',
+    idleTimeoutMs = CCTV_MEDIA_IDLE_TIMEOUT_MS,
+    contentType = upstream.headers.get('content-type') ||
+      'application/octet-stream',
+  } = {},
 ) {
-  const contentType =
-    upstream.headers.get('content-type') || 'application/octet-stream';
   const cacheControl = upstream.headers.get('cache-control') || 'no-store';
   const contentLength = upstream.headers.get('content-length');
   const contentRange = upstream.headers.get('content-range');
@@ -153,7 +238,20 @@ export async function proxyMediaResponse(
     return;
   }
 
+  // The header deadline only covers the wait for a response line. Past that an
+  // upstream can hold the connection open and send nothing at all, and the
+  // relay would wait on it for as long as the camera host cared to. The
+  // deadline below measures the gap between upstream chunks rather than the
+  // life of the stream, so a feed that keeps delivering keeps its connection.
+  let idleTimer = null;
+  const clearIdleDeadline = () => {
+    if (!idleTimer) return;
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  };
+
   stream.on('error', () => {
+    clearIdleDeadline();
     if (!res.writableEnded) res.end();
   });
 
@@ -164,6 +262,7 @@ export async function proxyMediaResponse(
   const releaseUpstream = () => {
     if (released) return;
     released = true;
+    clearIdleDeadline();
     stream.unpipe(res);
     // Destroying the Node stream cancels the web body it wraps; the direct
     // cancel covers a body that was never wrapped, and rejects harmlessly when
@@ -176,14 +275,37 @@ export async function proxyMediaResponse(
       /* already closed */
     }
   };
+  const armIdleDeadline = () => {
+    clearIdleDeadline();
+    idleTimer = setTimeout(onIdleDeadline, idleTimeoutMs);
+    idleTimer.unref?.();
+  };
+  const onIdleDeadline = () => {
+    // A viewer who cannot keep up pauses the pipe, and no upstream bytes arrive
+    // while it is paused. That is a slow client rather than a dead camera, so
+    // it gets the deadline again instead of a teardown.
+    if (res.writableNeedDrain) {
+      armIdleDeadline();
+      return;
+    }
+    releaseUpstream();
+    if (!res.writableEnded) res.end();
+  };
   res.once('close', () => {
+    clearIdleDeadline();
     if (!res.writableEnded) releaseUpstream();
   });
   res.once('error', releaseUpstream);
   stream.once('end', () => {
+    clearIdleDeadline();
     released = true;
   });
+  armIdleDeadline();
   stream.pipe(res);
+  // Attached after the pipe because a data listener resumes the stream, and
+  // flowing before the destination is attached would spill chunks nobody
+  // forwards. Only bytes from upstream renew the deadline.
+  stream.on('data', armIdleDeadline);
 }
 
 /**
@@ -296,7 +418,14 @@ export async function fetchCctvMediaUpstream(
   if (downstream?.aborted) controller.abort();
   else downstream?.addEventListener?.('abort', onDownstreamAbort);
   try {
-    return await fetchImpl(url, { headers, signal: controller.signal });
+    // Redirects stay on the registered origin, as for frames.
+    const upstream = await fetchWithinHost(
+      url,
+      { headers, signal: controller.signal },
+      fetchImpl,
+    );
+    if (!upstream) throw new Error('Media redirect refused');
+    return upstream;
   } finally {
     clearTimeout(timeoutId);
     downstream?.removeEventListener?.('abort', onDownstreamAbort);
@@ -385,8 +514,40 @@ export async function fetchTxdotSnapshot(
 const MAX_SAME_HOST_REDIRECTS = 2;
 
 /**
+ * Directories camera catalogs are pinned to, by host. A redirect on one of
+ * these hosts must stay inside the pinned directory too, so a same-origin
+ * redirect cannot leave it (another bucket on a shared storage host).
+ */
+const CCTV_PINNED_PREFIXES_BY_HOST = new Map();
+for (const prefix of [
+  TFL_IMAGE_ORIGIN,
+  TALLINN_IMAGE_ORIGIN,
+  TARKTEE_IMAGE_ORIGIN,
+  ...WARENDORF_IMAGE_ORIGINS,
+  NSW_IMAGE_ORIGIN,
+  CALGARY_IMAGE_ORIGIN,
+  HK_IMAGE_ORIGIN,
+  KING_COUNTY_IMAGE_ORIGIN,
+  WSDOT_IMAGE_ORIGIN,
+  A22_IMAGE_ORIGIN,
+]) {
+  const host = new URL(prefix).hostname;
+  CCTV_PINNED_PREFIXES_BY_HOST.set(host, [
+    ...(CCTV_PINNED_PREFIXES_BY_HOST.get(host) || []),
+    prefix,
+  ]);
+}
+
+/** Whether a redirect target stays inside its host's pinned directory. */
+function withinPinnedPrefix(url) {
+  const prefixes = CCTV_PINNED_PREFIXES_BY_HOST.get(url.hostname);
+  return !prefixes || prefixes.some((p) => pinnedCameraUrl(url.href, p));
+}
+
+/**
  * Fetch a registered frame URL following redirects ONLY within the original
- * origin (scheme, host and port; at most MAX_SAME_HOST_REDIRECTS hops).
+ * origin (scheme, host and port; at most MAX_SAME_HOST_REDIRECTS hops) and,
+ * on a pinned camera host, within its pinned directory.
  * Default redirect-following would let an upstream steer a host-pinned
  * request, and its host-specific headers, to any origin, another port, or a
  * plaintext downgrade.
@@ -427,7 +588,7 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
     } catch {
       return null;
     }
-    if (next.origin !== origin) return null;
+    if (next.origin !== origin || !withinPinnedPrefix(next)) return null;
     current = next;
   }
   return null;
@@ -499,9 +660,15 @@ export async function fetchCctvImageFromUpstream(
       fetchImpl,
     );
     if (!upstream) return null;
-    const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) {
-      controller.abort();
+    const contentType = cctvRasterImageType(
+      upstream.headers.get('content-type'),
+    );
+    if (!upstream.ok || !contentType) {
+      try {
+        await upstream.body?.cancel();
+      } catch {
+        /* no-op */
+      }
       return null;
     }
     const body = await readCappedResponseBytes(upstream, maxBytes);

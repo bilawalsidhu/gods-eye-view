@@ -1,5 +1,6 @@
 import { adaptFirmsRecords } from '../../data/firmsAdapt.js';
 import { fireDetectionKey } from '../../data/firmsLabels.js';
+import { msg } from '../../i18n/index.js';
 
 export function createIngestion({
   layerState,
@@ -72,7 +73,8 @@ export function createIngestion({
       )
         return;
       console.warn(`[Data:${id}] FIRMS live load failed:`, error);
-      layerState._error = 'live feed unavailable';
+      // English data (stats reach the voice tools); the panel translates it.
+      layerState._error = msg('live feed unavailable');
     } finally {
       if (layerState.request === request) {
         layerState.request = null;

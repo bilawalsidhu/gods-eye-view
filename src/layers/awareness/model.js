@@ -144,6 +144,9 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   function contactsWindowFromSnapshot(snapshot) {
     if (!snapshot?.subject) return null;
+    const aircraftCohorts = (snapshot.cohorts || []).filter((cohort) =>
+      ['flights', 'military'].includes(cohort?.id),
+    );
     const countFor = (cohortId) => {
       const cohort = Array.isArray(snapshot.cohorts)
         ? snapshot.cohorts.find((item) => item?.id === cohortId)
@@ -164,6 +167,12 @@ export function createModel({ state: layerState, services, parts, source }) {
       flights,
       military,
       vessels: countFor('ais-live-vessels'),
+      complete:
+        aircraftCohorts.length === 2 &&
+        aircraftCohorts.every(
+          (cohort) =>
+            Number.isFinite(cohort.count) && cohort.complete !== false,
+        ),
     };
   }
 
@@ -190,6 +199,8 @@ export function createModel({ state: layerState, services, parts, source }) {
         coverage: cohort.coverage || null,
         relationship: cohort.summary.relationship,
         count: cohort.summary.count,
+        complete: cohort.summary.complete !== false,
+        truncated: cohort.summary.truncated === true,
         reason: cohort.summary.reason,
         nearest: cohort.summary.nearest.slice(),
       })),

@@ -42,3 +42,76 @@ test('boundary throttle status survives empty or invalid error bodies', async ()
     assert.deepEqual(await services.boundaries.query('fixture'), { rateLimited: true, retryAfterMs: 5000 });
   }
 });
+
+/** A transport whose status probe behaves as told; queries answer with no elements. */
+function probeTransport(status) {
+  const seen = [];
+  const fetchImpl = (url, init = {}) => {
+    seen.push(`${init.method || 'GET'} ${url}`);
+    if (!String(url).endsWith('/status')) return Promise.resolve(Response.json({ elements: [] }));
+    return status(init);
+  };
+  return { seen, fetchImpl };
+}
+const stalled = (init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
+
+test('a stalled capability probe times out and queries proceed; no re-probe during backoff', async () => {
+  const { seen, fetchImpl } = probeTransport(stalled);
+  const services = createApplicationRequestServices({ fetchImpl, boundaryProbe: { timeoutMs: 20, retryMs: 60_000 } });
+  const started = Date.now();
+  assert.deepEqual(await services.boundaries.query('fixture'), []);
+  assert.ok(Date.now() - started < 1000);
+  assert.deepEqual(await services.boundaries.query('fixture'), []);
+  assert.deepEqual(seen, ['GET /api/overpass/status', 'POST /api/overpass', 'POST /api/overpass']);
+});
+
+test('a caller cancelled while the probe is pending stops waiting at once', async () => {
+  const { seen, fetchImpl } = probeTransport(stalled);
+  const services = createApplicationRequestServices({ fetchImpl, boundaryProbe: { timeoutMs: 60_000, retryMs: 60_000 } });
+  const caller = new AbortController();
+  const pending = services.boundaries.query('fixture', { signal: caller.signal });
+  setTimeout(() => caller.abort(), 10);
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.deepEqual(seen, ['GET /api/overpass/status']);
+});
+
+test('a failed probe is retried after its backoff, not on every query', async () => {
+  let failures = 1;
+  const { seen, fetchImpl } = probeTransport(async () => {
+    if (failures-- > 0) throw new TypeError('network');
+    return Response.json({ configured: false });
+  });
+  const services = createApplicationRequestServices({ fetchImpl, boundaryProbe: { timeoutMs: 1000, retryMs: 30 } });
+  assert.deepEqual(await services.boundaries.query('fixture'), []);
+  assert.deepEqual(await services.boundaries.query('fixture'), []);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal((await services.boundaries.query('fixture')).code, 'OVERPASS_NOT_CONFIGURED');
+  assert.equal((await services.boundaries.query('fixture')).code, 'OVERPASS_NOT_CONFIGURED');
+  assert.deepEqual(seen, [
+    'GET /api/overpass/status',
+    'POST /api/overpass',
+    'POST /api/overpass',
+    'GET /api/overpass/status',
+  ]);
+});
+
+test('the summary capability probe is asked once and unknown when unanswered', async () => {
+  for (const [answer, expected] of [
+    [() => Response.json({ configured: false }), false],
+    [() => Response.json({ configured: true }), true],
+    [() => new Response('missing', { status: 404 }), null],
+    [() => Response.json({ configured: 'yes' }), null],
+    [() => { throw new TypeError('offline'); }, null],
+  ]) {
+    const seen = [];
+    const services = createApplicationRequestServices({
+      fetchImpl: async (url, init) => {
+        seen.push(`${init.method || 'GET'} ${url}`);
+        return answer();
+      },
+    });
+    assert.equal(await services.summary.configured(), expected);
+    assert.equal(await services.summary.configured(), expected);
+    assert.deepEqual(seen, ['GET /api/openai/hud-summary/status']);
+  }
+});

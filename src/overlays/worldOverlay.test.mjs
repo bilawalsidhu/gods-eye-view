@@ -1,4 +1,5 @@
-import { expandApplicationHtml } from '../../build/application-html.js';
+import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
+import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,7 +21,9 @@ import {
   getOverlayPaintRect,
   getWorldOverlayDiagnostics,
   hitTestWorldOverlay,
+  activateWorldOverlayAction,
   initWorldOverlay,
+  subscribeWorldOverlayActions,
   isOverlayPointVisible,
   normalizeOverlayEntry,
   paintLaneForOverlayEntry,
@@ -446,7 +449,7 @@ test('destroying before the first init leaves pre-init buffering intact', () => 
   env.cleanup();
 });
 
-test('lifecycle is idempotent and teardown removes listeners, observers, and DOM', () => {
+test('lifecycle is idempotent and teardown removes listeners, observers, and DOM', async () => {
   const env = installMockEnvironment();
   assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
   initWorldOverlay(env.viewer);
@@ -464,7 +467,7 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   assert.deepEqual(root.children, [canvas],
     'the overlay root carries only the shared card canvas');
   assert.doesNotMatch(
-    expandApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
+    await renderApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
     /world-overlay-detection-surface/,
     'the surface is runtime host-owned, not static markup',
   );
@@ -1018,7 +1021,14 @@ test('accessible actions announce only accepted focus and expose selected state'
   const env = installMockEnvironment();
   let acceptedActivations = 0;
   let staleActivations = 0;
+  let actions = null;
+  const unsubscribe = subscribeWorldOverlayActions((view) => {
+    actions = view;
+  });
   initWorldOverlay(env.viewer);
+  assert.deepEqual(actions.items, []);
+  assert.equal(actions.status, '');
+  assert.equal(actions.announced, 0);
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     interactive: true,
     accessibilityLabel: 'Focus vessel TEST, MMSI 123',
@@ -1029,15 +1039,20 @@ test('accessible actions announce only accepted focus and expose selected state'
   })]);
   env.postRender.raise();
 
-  const list = env.document.getElementById('world-overlay-action-list');
-  const status = env.document.getElementById('world-overlay-status');
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0]['aria-pressed'], 'true');
-  list.children[0].click();
+  assert.equal(actions.items.length, 1);
+  const [item] = actions.items;
+  assert.equal(item.label, 'Focus vessel TEST, MMSI 123');
+  assert.equal(item.selected, true);
+  const owner = actions.owner;
+  activateWorldOverlayAction({}, item.key);
+  assert.equal(acceptedActivations, 0, 'a list from another host cannot activate');
+  activateWorldOverlayAction(owner, item.key);
   assert.equal(acceptedActivations, 1);
-  assert.equal(status.textContent, 'Focusing Focus vessel TEST, MMSI 123');
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123');
+  assert.equal(actions.announced, 1);
+  activateWorldOverlayAction(owner, item.key);
+  assert.equal(actions.announced, 2, 'a repeated focus is a new announcement');
 
-  status.textContent = 'Focus unchanged';
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     selected: false,
     interactive: true,
@@ -1048,12 +1063,16 @@ test('accessible actions announce only accepted focus and expose selected state'
     },
   })]);
   env.postRender.raise();
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0]['aria-pressed'], 'false');
-  list.children[0].click();
+  assert.equal(actions.items.length, 1);
+  assert.equal(actions.items[0].selected, false);
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123', 'the list keeps its last announcement');
+  activateWorldOverlayAction(owner, actions.items[0].key);
   assert.equal(staleActivations, 1);
-  assert.equal(status.textContent, 'Focus unchanged');
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123', 'a refused focus announces nothing');
+  assert.equal(actions.announced, 2);
   env.cleanup();
+  assert.equal(actions, null, 'teardown withdraws the list');
+  unsubscribe();
 });
 
 test('viewport and horizon culling obey explicit policy inputs', () => {
@@ -2222,4 +2241,77 @@ test('diagnostics facade preserves the complete binding shape', () => {
     'candidateIndexSize', 'entriesBySource', 'paintedBySource',
   ];
   assert.deepEqual(Object.keys(diagnostics).sort(), fields.sort());
+});
+
+
+test('installation titles share persistent card arbitration and retain a bounded Contacts cohort', (t) => {
+  const env = installMockEnvironment({ width: 1600, height: 1000 });
+  t.after(() => env.cleanup());
+  const scene = env.viewer.scene;
+  scene.canvas = env.viewer.canvas;
+  scene.preRender = new Cesium.Event();
+  scene.primitives = { add: (value) => value, remove() {} };
+  env.viewer.camera.changed = new Cesium.Event();
+  t.mock.method(Cesium.Cartesian3, 'fromDegrees', (lon, lat) => new Cesium.Cartesian3(lon, lat, 0));
+  t.mock.method(Cesium.EllipsoidalOccluder.prototype, 'isPointVisible', () => true);
+  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => {
+    scratch.x = scratch.y = 100; return scratch;
+  });
+  const state = { enabled: true, viewer: env.viewer, contextAnchor: {} };
+  const markers = createNamedMarkers({ state,
+    services: { render: { governorRequestRender() {} } },
+    parts: { model: { colorFor: () => Cesium.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0 } },
+    overlayHost: { setEntries: setOverlayEntries, clearSource: clearOverlaySource,
+      setVisible: setOverlaySourceVisible, getDiagnostics: getWorldOverlayDiagnostics },
+  });
+  initWorldOverlay(env.viewer);
+  markers.enable();
+  const records = Array.from({ length: 40 }, (_, i) => ({ id: `site:${i}`, name: `Base ${i}`,
+    namedArea: true, pointOnly: i % 2 === 0, areaM2: 1000 - i,
+    longitude: -0.8 + (i % 8) * 0.22, latitude: -0.7 + Math.floor(i / 8) * 0.32,
+  }));
+  // The smaller coincident title must lose to the larger installation.
+  records.push({ ...records[0], id: 'small', areaM2: 1 });
+  records[1].longitude = records[0].longitude + 0.03;
+  records[1].latitude = records[0].latitude;
+  markers.sync(records);
+  env.postRender.raise();
+  const source = 'military-installations';
+  env.advanceTime(250); env.postRender.raise();
+  assert.equal(markers.stats().labelsOnScreen, 24);
+  assert.ok(getOverlayPaintRect(source, 'site:0'));
+  assert.equal(getOverlayPaintRect(source, 'small'), null);
+  for (let i = 0; i < 30; i++) {
+    env.viewer.camera.viewMatrix[12] -= 0.003;
+    if (i > 15) env.viewer.camera.viewMatrix[0] = env.viewer.camera.viewMatrix[5] = 0.03;
+    scene.preRender.raiseEvent(); env.advanceTime(16); env.postRender.raise();
+    assert.ok(markers.stats().labelsOnScreen > 0 && markers.stats().labelsOnScreen <= 24);
+    // Incumbents persist through collisions during a pan, as for Data Centers.
+    if (i < 10) assert.ok(getOverlayPaintRect(source, 'site:0'));
+  }
+  state.enabled = false; markers.hide(); env.postRender.raise();
+  assert.equal(getWorldOverlayDiagnostics().entriesBySource[source], 0);
+  assert.equal(markers.stats().labelsOnScreen, 0);
+  state.enabled = true; markers.enable(); env.postRender.raise();
+  env.advanceTime(250); env.postRender.raise();
+  assert.ok(markers.stats().labelsOnScreen > 0);
+  markers.destroy(); env.postRender.raise();
+  assert.equal(getWorldOverlayDiagnostics().entriesBySource[source], 0);
+});
+
+
+test('promoting an ambient entry to selected paints it once with no fading duplicate', () => {
+  const env = installMockEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    const entry = { id: 'site', position: position(), title: 'One site', variant: 'card', collisionGroup: 'ambient-card', horizonCull: false, edgeFade: false };
+    const paint = () => { env.ctx.calls.length = 0; env.postRender.raise(); return env.ctx.calls.filter(([op, text]) => op === 'fillText' && text === 'One site').length; };
+    setOverlayEntries('military-installations', [entry]); paint(); env.advanceTime(200);
+    assert.equal(paint(), 1);
+    setOverlayEntries('military-installations', [{ ...entry, variant: 'selected', selected: true }]);
+    assert.equal(paint(), 1, 'no ambient exit tail in the selected paint lane');
+    env.advanceTime(100); assert.equal(paint(), 1);
+    setOverlayEntries('military-installations', [entry]); paint(); env.advanceTime(200);
+    assert.equal(paint(), 1, 'deselect restores the ambient card without re-entry cooldown');
+  } finally { env.cleanup(); }
 });

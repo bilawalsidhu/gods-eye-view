@@ -12,7 +12,7 @@
  * passed with the painter stubbed out — the number was right and nothing was
  * drawn. Every assertion here now comes from the RENDERED path instead:
  *
- *   ids/counts — `styleManager.getDetectionDiagnostics()` (src/ui.js), the
+ *   ids/counts — `styleManager.getDetectionDiagnostics()` (src/ui/shellFacade.js), the
  *     overlay's own published `visibleCount` / `labeledKeys`, so a contact only
  *     counts once the sweep, the arbiter and the placement solve have all run.
  *   plate scale — tapped off `CanvasRenderingContext2D` while the frame paints.
@@ -253,19 +253,19 @@ async function main() {
       const url = new URL(request.url());
       if (url.origin !== APP_ORIGIN) return void request.continue();
       // Silence the live feeds: the injected field is the only population.
-      if (url.pathname === '/api/ais-live') {
+      if (url.pathname === '/api/vessels') {
         return void request.respond(stubJson({
           rows: [], source: 'QA', status: 'open', error: null, refreshing: false,
           newestPositionAt: null, lastMessageAt: null,
         }));
       }
-      if (url.pathname === '/api/adsblol/mil') {
+      if (url.pathname === '/api/military') {
         return void request.respond(stubJson({ msg: 'No error', now: Date.now(), ac: [] }));
       }
-      if (url.pathname === '/api/opensky') {
+      if (url.pathname === '/api/flights') {
         return void request.respond(stubJson({ time: Math.floor(Date.now() / 1000), states: [] }));
       }
-      if (url.pathname === '/api/opensky-track') {
+      if (url.pathname === '/api/flights/track') {
         return void request.respond(stubJson({ path: [] }));
       }
       if (url.pathname === '/api/openai/hud-summary') {

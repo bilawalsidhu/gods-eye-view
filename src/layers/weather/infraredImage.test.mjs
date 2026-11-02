@@ -10,8 +10,12 @@ import {
 function canvas() {
   const output = {};
   output.getContext = () => ({
+    setTransform: (...matrix) => {
+      output.transforms = [...(output.transforms ?? []), matrix];
+    },
     drawImage: (image) => {
       output.image = image;
+      output.drawnWith = output.transforms?.at(-1) ?? null;
     },
     getImageData: () => ({ data: new Uint8ClampedArray([194, 0, 0, 200]) }),
     putImageData: (pixels) => {
@@ -29,9 +33,26 @@ test('decoded pixels are processed once on a same-sized canvas', () => {
   assert.equal(output.image, image);
   assert.deepEqual([...output.pixels], [194, 0, 0, 98]);
   assert.deepEqual(
+    [...processInfraredImage(image, 50, canvas).pixels],
+    [194, 0, 0, 149],
+    'half-strength filter retains a midpoint haze',
+  );
+  assert.deepEqual(
+    [...processInfraredImage(image, 0, canvas).pixels],
+    [194, 0, 0, 200],
+  );
+  assert.deepEqual(
     [...processInfraredImage(image, 'full', canvas).pixels],
     [194, 0, 0, 200],
   );
+});
+
+test('flipY draws a bottom-up image upright, then restores the transform', () => {
+  const image = { width: 4, height: 8 };
+  assert.equal(processInfraredImage(image, 'full', canvas).drawnWith, null);
+  const output = processInfraredImage(image, 'full', canvas, { flipY: true });
+  assert.deepEqual(output.drawnWith, [1, 0, 0, -1, 0, 8]);
+  assert.deepEqual(output.transforms.at(-1), [1, 0, 0, 1, 0, 0]);
 });
 
 test('mosaic fetch is capped at 4 MiB, forwards cancellation, and releases decoded images', async () => {
