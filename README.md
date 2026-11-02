@@ -89,7 +89,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## ⚡ Quick Start
 
-**Start without an account or API keys.** Both paths open the same app with
+**Start without an account or API keys.** Every path opens the same app with
 Esri satellite imagery and keyless terrain. OSM is the fallback if Esri is
 unreachable. Flights, military traffic, satellites, earthquakes, public
 cameras, radio, and launches are available without keys.
@@ -233,6 +233,41 @@ image also skips Puppeteer's Chromium download, which keeps it small but leaves
 the container.
 
 </details>
+
+### Path 4 — GitHub Codespaces (cloud, no local install)
+
+Runs the same dev server in a cloud workspace, so Node and the dependencies
+never touch your machine. The globe still renders in your own browser, so it
+needs the same graphics there as any other path. GitHub Free includes 120
+core-hours a month with no card on file — about 60 hours on the default 2-core
+machine. Org and Enterprise plans include no free quota; current terms and
+quotas apply.
+
+1. Fork this repository, then open **your fork** on GitHub.
+2. Click the green **Code** button, the **Codespaces** tab, then **Create codespace on main**.
+3. In the codespace terminal:
+   ```bash
+   nvm install 24 && nvm use 24
+   npm ci
+   npm run doctor
+   GEV_ALLOWED_HOSTS="$CODESPACE_NAME-4173.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN" npm run dev
+   ```
+4. Open the **Ports** tab, find `4173`, and click the globe icon to open it in
+   the browser. The port is private by default, so the URL asks for your GitHub
+   login. Keep it private: a public port lets anyone use the app and the keys
+   in your `.env`.
+
+`GEV_ALLOWED_HOSTS` there is required, not optional. The dev server answers only
+the hostnames it trusts, and a forwarded port arrives on
+`$CODESPACE_NAME-4173.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`. Without it the
+page is `Blocked request. This host is not allowed.` Leading-dot wildcards are
+ignored on purpose, so pass that exact name.
+
+⚠️ **A codespace is reachable from the internet.** Treat it as the
+wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
+Settings does not open on the forwarded URL, so put keys in the workspace
+`.env` by hand. `.env` is gitignored — never commit it. [SECURITY.md](SECURITY.md) has the
+threat model.
 
 ### Then power it up — in the app, not in a file
 
