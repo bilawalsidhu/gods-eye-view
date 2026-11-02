@@ -86,10 +86,9 @@ export function _initGlobalContextPanel() {
       !this._dataManager?.layers?.has('military-installations')
     )
       return;
-    const button = this._installationsSearchBtn;
-    if (button.getAttribute('aria-busy') === 'true') return;
-    button.setAttribute('aria-disabled', 'true');
-    button.setAttribute('aria-busy', 'true');
+    if (this._installationsSearchBusy) return;
+    this._installationsSearchBusy = true;
+    this._presentContext();
     void this._runUserFacingContextAction(async (notificationToken) => {
       const enabled = await this._dataManager.setEnabled(
         'military-installations',
@@ -118,8 +117,8 @@ export function _initGlobalContextPanel() {
     }, t('Nearby installations could not be refreshed; try again')).finally(
       () => {
         if (this.destroyed) return;
-        button.setAttribute('aria-disabled', 'false');
-        button.setAttribute('aria-busy', 'false');
+        this._installationsSearchBusy = false;
+        this._presentContext();
       },
     );
   });

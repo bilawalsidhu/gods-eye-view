@@ -2527,7 +2527,7 @@ export class GeminiSessionController {
       this.input.detachBindings();
       this.radio.detachObservers();
       this.signal?.removeEventListener('abort', this.lifetimeAbort);
-      this.ui?.root?.remove();
+      this.ui?.remove();
       this.emit({ type: 'disposed' });
     } else if (!preserveStatus) this.setStatus('idle', msg('Voice off'));
   }
