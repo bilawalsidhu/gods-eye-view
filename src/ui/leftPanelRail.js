@@ -59,6 +59,7 @@ export function layoutLeftPanelRail({
     stack.style.removeProperty('--left-stack-safe-top');
     stack.style.removeProperty('--left-stack-safe-bottom');
     stack.style.removeProperty('--left-stack-centered-height');
+    stack.style.removeProperty('--panel-rail-offset');
     stack.classList.remove('layout-exclusive');
     stack.dataset.layoutMode = 'mobile';
     settleSideAccordion({ panels, enabled: false, onCollapse });
@@ -274,6 +275,16 @@ export function layoutLeftPanelRail({
     stack.style.getPropertyValue('--left-stack-safe-bottom') !== bottomValue
   ) {
     stack.style.setProperty('--left-stack-safe-bottom', bottomValue);
+  }
+  // The rail stays where the resting stack puts it; only the panels move.
+  // A theme that pins the stack's top (Cyber) leaves nothing to offset.
+  const topPinned =
+    getComputedStyle(stack)
+      .getPropertyValue?.('--panel-stack-top-pinned')
+      ?.trim() === '1';
+  const railOffset = `${(topPinned ? 0 : safeTop - layoutTop).toFixed(1)}px`;
+  if (stack.style.getPropertyValue('--panel-rail-offset') !== railOffset) {
+    stack.style.setProperty('--panel-rail-offset', railOffset);
   }
   stack.style.removeProperty('--left-stack-centered-height');
   for (const panel of panels)

@@ -1654,6 +1654,8 @@
   }
 
   :root[data-ui-theme='cyber'] #left-panel-stack {
+    /* The stack holds still, so its rail needs no offset (leftPanelRail.js). */
+    --panel-stack-top-pinned: 1;
     top: var(--cyber-left-rail-top) !important;
     bottom: calc(2vh + 13rem);
     left: calc(54px + var(--panel-rail-clearance));

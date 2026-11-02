@@ -245,12 +245,15 @@
 }
 
 /* Panel rails (src/ui/panelNavigation.js). Each rail lives inside its stack,
-   so it shows and hides with the stack, and floats in the screen-edge gutter. */
+   so it shows and hides with the stack, and floats in the screen-edge gutter.
+   The stack's layout offsets it back to its resting top, so it holds still
+   when an opened panel moves the stack. */
 .gev-panel-rail {
   position: absolute;
-  top: 0;
+  top: var(--panel-rail-offset, 0px);
   z-index: 1;
   pointer-events: auto;
+  transition: top var(--transition-fast);
 }
 .gev-panel-rail--left {
   right: calc(100% + 6px);

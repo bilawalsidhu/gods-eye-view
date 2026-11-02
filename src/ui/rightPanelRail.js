@@ -126,8 +126,11 @@ export function layoutRightPanelRail({
     viewportHeight,
     getComputedStyle,
   );
+  // Align with the left rail's buttons, which hold still while its stack moves.
+  const leftRailOffset =
+    parseFloat(leftStack?.style.getPropertyValue('--panel-rail-offset')) || 0;
   const alignedTop = Number.isFinite(leftStackTop)
-    ? leftStackTop
+    ? leftStackTop + leftRailOffset
     : viewportHeight * 0.26;
   const obstacleRects = [];
 

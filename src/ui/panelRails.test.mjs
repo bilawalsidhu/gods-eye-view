@@ -349,6 +349,32 @@ test('right rail aligns to the current left rail and excludes hidden obstacles',
   assert.equal(f.stack.dataset.safeTop, '200.0');
 });
 
+// An opened panel moves the left stack up, but its rail buttons hold still:
+// the right rail lines up with those buttons, not with the moved stack.
+test('right rail aligns to the left rail buttons while the left stack is offset', () => {
+  const f = fixture('right');
+  f.options.leftStack.rect.top = 100;
+  f.options.leftStack.style.setProperty('--panel-rail-offset', '186.7px');
+  f.run();
+  assert.equal(f.stack.dataset.safeTop, '286.7');
+});
+
+test('left rail buttons hold still while a tall panel moves the stack', () => {
+  const f = fixture('left');
+  f.expand(f.first, 900);
+  f.run();
+  assert.equal(f.stack.dataset.layoutMode, 'focus');
+  assert.ok(
+    parseFloat(f.stack.style.getPropertyValue('--panel-rail-offset')) > 0,
+  );
+
+  // A theme that pins the stack's top (Cyber) leaves nothing to offset.
+  f.stack.computed.getPropertyValue = (name) =>
+    name === '--panel-stack-top-pinned' ? ' 1' : '';
+  f.run();
+  assert.equal(f.stack.style.getPropertyValue('--panel-rail-offset'), '0.0px');
+});
+
 // The left rail's `top` animates after the right pass runs, and nothing
 // re-runs it when the transition lands: the right rail must read the end value.
 function animatingLeftRail({ keyframes = true } = {}) {
