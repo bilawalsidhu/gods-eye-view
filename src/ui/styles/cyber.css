@@ -41,8 +41,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
 }
 
 :root[data-ui-theme='cyber'] .cctv-panel-inner > .cyber-panel-body {
@@ -68,8 +66,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
 }
 
 :root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body > * {
@@ -82,6 +78,8 @@
 
 :root[data-ui-theme='cyber'] {
   color-scheme: dark;
+  --scroll-thumb: rgba(165, 188, 199, 0.35);
+  --scroll-track: transparent;
   --cyber-red: #c45454;
   --cyber-red-bright: #e16666;
   --cyber-slate: #26343a;
@@ -247,7 +245,7 @@
     .street-level-panel-inner,
     .global-context-panel-inner
   ) {
-  padding-right: 8px;
+  padding-inline-end: 8px;
 }
 
 /* Collapsed right-rail panels otherwise inherit different legacy gutters:
@@ -794,6 +792,12 @@
 :root[data-ui-theme='cyber']
   :where(input[type='range'], input[type='checkbox'], input[type='radio']) {
   accent-color: var(--cyber-red);
+}
+
+/* Street Level's range wears Cyber's slider accent like every other range. */
+:root[data-ui-theme='cyber'] .sl-range {
+  --accent: inherit;
+  --accent-glow: inherit;
 }
 
 :root[data-ui-theme='cyber']
@@ -1650,12 +1654,27 @@
   }
 
   :root[data-ui-theme='cyber'] #left-panel-stack {
+    /* The stack holds still, so its rail needs no offset (leftPanelRail.js). */
+    --panel-stack-top-pinned: 1;
     top: var(--cyber-left-rail-top) !important;
     bottom: calc(2vh + 13rem);
-    left: 54px;
+    inset-inline-start: calc(54px + var(--panel-rail-clearance));
     width: 300px;
-    padding-left: 10px;
-    border-left: 1px solid rgba(196, 84, 84, 0.72);
+    padding-inline-start: 10px;
+    border-inline-start: 1px solid transparent;
+  }
+
+  /* An edge line marks each side's open panel, mirrored left and right. */
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    #left-panel-stack:has(> [data-panel-id]:not(.collapsed, [hidden])) {
+    border-inline-start-color: rgba(196, 84, 84, 0.72);
+  }
+
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    #right-context-rail:has(> [data-panel-id]:not(.collapsed, [hidden])) {
+    border-inline-end-color: rgba(196, 84, 84, 0.72);
   }
 
   :root[data-ui-theme='cyber']
@@ -1672,6 +1691,13 @@
     > [data-panel-id].collapsed {
     display: block;
     flex: 0 0 auto;
+  }
+
+  /* The panel rail lists the collapsed panels. */
+  :root[data-ui-theme='cyber']
+    #left-panel-stack.layout-focus.layout-exclusive
+    > [data-panel-id].collapsed {
+    display: none;
   }
 
   :root[data-ui-theme='cyber']
@@ -1727,8 +1753,11 @@
   :root[data-ui-theme='cyber'] #right-context-rail {
     --right-display-collapsed-width: var(--cyber-panel-collapsed-width);
     --right-context-collapsed-width: var(--cyber-panel-collapsed-width);
-    right: 62px;
-    width: 312px;
+    /* The edge line and its gap keep the panels where they were. */
+    right: calc(51px + var(--panel-rail-clearance));
+    width: 323px;
+    padding-inline-end: 10px;
+    border-inline-end: 1px solid transparent;
   }
 
   /* The map rails now use one visible expanded width. Keeping the rail itself
@@ -2499,15 +2528,13 @@
   );
 }
 
-:root[data-ui-theme='cyber']
-  body.cockpit-mode
-  :is(.cockpit-context-header, .cockpit-signal-header) {
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-card-header {
   border-bottom-color: rgba(105, 203, 209, 0.25);
 }
 
 :root[data-ui-theme='cyber']
   body.cockpit-mode
-  :is(.cockpit-context-kicker, .cockpit-signal-kicker, .cockpit-route-kicker) {
+  :is(.cockpit-card-kicker, .cockpit-route-kicker) {
   color: var(--cockpit-caution);
 }
 
@@ -2722,10 +2749,13 @@
 :root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack {
   top: clamp(164px, 19vh, 204px) !important;
   bottom: auto;
+  /* The cockpit keeps its physical sides in every language (rtl.css): the
+     utility controls hold the right edge. */
+  right: auto;
   left: 30px;
   width: var(--cyber-panel-width);
-  padding-left: 0;
-  border-left: 0;
+  padding-inline-start: 0;
+  border-inline-start: 0;
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack > #data-panel {

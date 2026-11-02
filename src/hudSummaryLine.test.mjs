@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
+import { hudReadouts } from './testSupport/hudReadouts.mjs';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -42,12 +43,12 @@ const PARTIAL_FLIGHTS = {
  * `reply`; ru unless `locale` says otherwise.
  */
 function createHud(t, reply, { places = ['Остин'], locale = 'ru' } = {}) {
-  const summary = { textContent: '' };
+  const { elements, publish } = hudReadouts();
   const previous = { document: globalThis.document, window: globalThis.window };
   globalThis.document = {
     hidden: false,
     visibilityState: 'visible',
-    getElementById: (id) => (id === 'hud-summary' ? summary : null),
+    getElementById: (id) => elements.get(id) ?? null,
     querySelectorAll: () => [],
     addEventListener() {},
     removeEventListener() {},
@@ -72,6 +73,7 @@ function createHud(t, reply, { places = ['Остин'], locale = 'ru' } = {}) {
   };
   const sent = [];
   const hud = new IntelHUD(viewer, {
+    publish,
     summaryService: {
       configured: async () => true,
       async summarize(context) {
@@ -95,7 +97,11 @@ function createHud(t, reply, { places = ['Остин'], locale = 'ru' } = {}) {
   hud._dataManager = { getAll: () => [PARTIAL_FLIGHTS] };
   hud._latestMetrics = { altM: 600 };
   setLocale(locale);
-  return { hud, sent, shown: () => summary.textContent };
+  return {
+    hud,
+    sent,
+    shown: () => elements.get('hud-summary').textContent,
+  };
 }
 
 test('a ru HUD request carries no English layer name', async (t) => {
