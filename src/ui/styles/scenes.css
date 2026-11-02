@@ -265,15 +265,6 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   counter-reset: scene-shot;
 }
 
-.scene-shot-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.scene-shot-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-}
-
 .scene-shot-empty {
   border: 1px dashed rgba(255, 255, 255, 0.14);
   border-radius: 8px;
