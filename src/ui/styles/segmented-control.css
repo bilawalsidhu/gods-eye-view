@@ -1,3 +1,4 @@
+@import '../navControl/navControl.css';
 /* Shared one-of-many control. Feature classes retain surrounding placement. */
 .gev-segmented {
   display: inline-flex;
