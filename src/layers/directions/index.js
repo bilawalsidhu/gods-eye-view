@@ -859,7 +859,7 @@ export function normalizeRoutePayload(payload, mode) {
  * @param {{services: object, source: {getRoute: Function}}} options
  * @returns {object} The layer module the data manager registers.
  */
-export function createDirectionsLayer({ services, source }) {
+export function createDirectionsLayer({ services, source, createNativeRenderer }) {
   if (typeof source?.getRoute !== 'function')
     throw new TypeError('Directions require a route source');
   /**
@@ -876,6 +876,9 @@ export function createDirectionsLayer({ services, source }) {
 
   // --- Module state ---
   let _viewer = null;
+  let _engine = null;
+  let _native = null;
+  let _suspendedFlight = null;
   let _enabled = false;
   let _mode = DEFAULT_DIRECTIONS_MODE;
   /** @type {null|'a'|'b'} which endpoint the next globe click places */
@@ -967,7 +970,7 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function pickGround(screenPosition) {
-    const cartesian = services.scenePick.pickGroundPosition(
+    const cartesian = _native ? _engine.picker.pickGlobe(screenPosition) : services.scenePick.pickGroundPosition(
       _viewer,
       screenPosition,
     );
@@ -981,6 +984,7 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function markerEntity(letter, point, color) {
+    if (_native) return _native.marker(letter, point, color.toCssColorString());
     return _viewer.entities.add({
       id: `directions:marker:${letter}`,
       position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, 0),
@@ -1007,12 +1011,13 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function removeEntity(entity) {
+    if (_native) { entity?.destroy(); return; }
     if (entity && _viewer && !_viewer.isDestroyed?.())
       _viewer.entities.remove(entity);
   }
 
   function placeMarker(letter, point) {
-    if (!_viewer) return;
+    if (!_viewer && !_native) return;
     if (letter === 'a') {
       removeEntity(_markerA);
       _markerA = markerEntity('A', point, MARKER_A_COLOR);
@@ -1023,7 +1028,7 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function clearRouteGraphics() {
-    services.credits?.hideOsmCredit?.(_viewer, 'directions');
+    services.credits?.hideOsmCredit?.(_viewer ?? _engine, 'directions');
     _clearStepSelection();
     stopStepAnchoring();
     removeEntity(_routeEntity);
@@ -1072,6 +1077,7 @@ export function createDirectionsLayer({ services, source }) {
       );
       point.show = true;
     }
+    _native?.steps.sync();
     // A card already open on a step that has just been anchored moves with it.
     if (_selectedStep !== null) refreshStepCard(_selectedStep);
     services.render.governorRequestRender('directions-anchor');
@@ -1092,23 +1098,26 @@ export function createDirectionsLayer({ services, source }) {
 
   function drawRoute(route) {
     clearRouteGraphics();
-    if (!_viewer) return;
-    services.annotations.ensureFlowFabricRegistered();
-    const positions = Cesium.Cartesian3.fromDegreesArray(route.geometry.flat());
-    _routeEntity = _viewer.entities.add({
-      id: 'directions:route',
-      polyline: {
-        positions,
-        width: 9,
-        material: new services.annotations.FlowMaterialProperty(
-          DIRECTIONS_ROUTE_COLOR,
-        ),
-        clampToGround: true,
-        // BOTH: drape on 3D tiles when they are up and on terrain when they are
-        // not, so the keyless globe shows the route too.
-        classificationType: Cesium.ClassificationType.BOTH,
-      },
-    });
+    if (!_viewer && !_native) return;
+    if (_native) _routeEntity = _native.route(route.geometry, DIRECTIONS_ROUTE_COLOR);
+    else {
+      services.annotations.ensureFlowFabricRegistered();
+      const positions = Cesium.Cartesian3.fromDegreesArray(route.geometry.flat());
+      _routeEntity = _viewer.entities.add({
+        id: 'directions:route',
+        polyline: {
+          positions,
+          width: 9,
+          material: new services.annotations.FlowMaterialProperty(
+            DIRECTIONS_ROUTE_COLOR,
+          ),
+          clampToGround: true,
+          // BOTH: drape on 3D tiles when they are up and on terrain when they are
+          // not, so the keyless globe shows the route too.
+          classificationType: Cesium.ClassificationType.BOTH,
+        },
+      });
+    }
     // One dot per decision; A and B already mark departure and arrival. The dots
     // start hidden and appear as anchorStepPoints resolves each ground cell.
     const cells = [];
@@ -1129,13 +1138,13 @@ export function createDirectionsLayer({ services, source }) {
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       });
     }
-    services.credits?.showOsmCredit?.(_viewer, 'directions');
+    services.credits?.showOsmCredit?.(_viewer ?? _engine, 'directions');
     services.ground.warmGroundFloor(cells);
     _anchorAttempts = 0;
     _anchorStartedAt = Date.now();
     anchorStepPoints();
     syncRenderHold();
-    services.sprites.restoreSpriteOrder(_viewer);
+    if (_viewer) services.sprites.restoreSpriteOrder(_viewer);
     services.render.governorRequestRender('directions-route');
   }
 
@@ -1338,6 +1347,7 @@ export function createDirectionsLayer({ services, source }) {
    * @returns {boolean} Whether a flight of ours was stopped.
    */
   function cancelOwnedFlight(reason) {
+    _suspendedFlight = null;
     stopFlightProgress();
     if (!_flightId) return false;
     const { wasActive } = services.camera.interruptCameraMotionIfActive(
@@ -1378,9 +1388,9 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function flyCurrentRoute() {
-    if (!_route || !_viewer) return false;
+    if (!_route || (!_viewer && !_engine)) return false;
     cancelOwnedFlight('directions-refly');
-    services.camera.initCameraVerbs(_viewer);
+    if (_viewer) services.camera.initCameraVerbs(_viewer);
     const seams = _shellSeams;
     const result = services.camera.flyRoute(
       [
@@ -1401,6 +1411,7 @@ export function createDirectionsLayer({ services, source }) {
       // runs, it just has nothing to take the camera from.
       typeof seams?.runNavigation === 'function' ? seams.runNavigation : null,
       typeof seams?.warmFn === 'function' ? seams.warmFn : null,
+      _engine,
     );
     if (result?.ok !== true) {
       console.warn('[Data:Directions] fly refused:', result?.error || result);
@@ -1418,6 +1429,7 @@ export function createDirectionsLayer({ services, source }) {
     if (_selectedStep !== null && _stepPoints) {
       const point = findStepPoint(_selectedStep);
       if (point) point.pixelSize = STEP_PIXEL_SIZE;
+      _native?.steps.sync();
     }
     _selectedStep = null;
     _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
@@ -1496,6 +1508,7 @@ export function createDirectionsLayer({ services, source }) {
     _selectedStep = index;
     const point = findStepPoint(index);
     if (point) point.pixelSize = STEP_SELECTED_PIXEL_SIZE;
+    _native?.steps.sync();
     services.render.governorRequestRender('directions-select');
     return true;
   }
@@ -1522,8 +1535,7 @@ export function createDirectionsLayer({ services, source }) {
 
   function _installClickHandler(viewer) {
     if (_clickHandler) return;
-    _clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    _clickHandler.setInputAction((click) => {
+    const handle = (click) => {
       if (!_enabled) return;
       // Placement acts only while this layer actually HOLDS the pointer, and the
       // maneuver-dot selection below is an ambient handler like any other: it
@@ -1539,7 +1551,7 @@ export function createDirectionsLayer({ services, source }) {
       if (!services.input.isPointerFree()) return;
       let picked = null;
       try {
-        picked = viewer.scene.pick(click.position);
+        picked = _native ? click.picked : viewer.scene.pick(click.position);
       } catch {
         picked = null;
       }
@@ -1549,7 +1561,14 @@ export function createDirectionsLayer({ services, source }) {
         return;
       }
       if (_selectedStep !== null) _clearStepSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    };
+    if (_native) {
+      const off = _engine.input.on('click', event => handle({ position: event.position, picked: event.picked }), { pick: true });
+      _clickHandler = { destroy: off };
+    } else {
+      _clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      _clickHandler.setInputAction(handle, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }
     if (typeof document !== 'undefined')
       document.addEventListener('keydown', _onKeyDown);
   }
@@ -1579,26 +1598,55 @@ export function createDirectionsLayer({ services, source }) {
      * Create the maneuver-dot collection. Called once at bootstrap.
      * @param {Cesium.Viewer} viewer
      */
-    init(viewer) {
+    init(viewer, options) {
+      return this.attachRenderer(viewer, options);
+    },
+    attachRenderer(viewer, { engine = null } = {}) {
       _viewer = viewer;
-      _stepPoints = new Cesium.PointPrimitiveCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(_stepPoints);
-      services.sprites.registerSpriteCollection('directions', _stepPoints);
-      _stepPoints.show = false;
-      _enabled = false;
-      _mode = DEFAULT_DIRECTIONS_MODE;
-      disarm();
-      _a = null;
-      _b = null;
-      _route = null;
-      _status = 'idle';
-      _error = null;
-      _flightStep = null;
+      _engine = engine;
+      if (engine?.kind === 'navara') {
+        _native = createNativeRenderer(engine);
+        _stepPoints = _native.steps;
+      } else {
+        _stepPoints = new Cesium.PointPrimitiveCollection({
+          blendOption: Cesium.BlendOption.TRANSLUCENT,
+        });
+        viewer.scene.primitives.add(_stepPoints);
+        services.sprites.registerSpriteCollection('directions', _stepPoints);
+        services.sprites.restoreSpriteOrder(viewer);
+      }
+      _stepPoints.show = _enabled;
+      _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, _enabled);
+      if (!_enabled) return;
+      const step = _selectedStep;
+      this.enable(viewer);
+      if (_a) placeMarker('a', _a);
+      if (_b) placeMarker('b', _b);
+      if (_route) drawRoute(_route);
+      if (step !== null) _selectStep(step);
+    },
+    suspendCamera() {
+      if (!_flightId || _suspendedFlight) return;
+      _suspendedFlight = services.camera.suspendRouteFlight?.(_flightId);
+      if (_suspendedFlight) stopFlightProgress();
+    },
+    detachRenderer() {
+      if (!_suspendedFlight) cancelOwnedFlight('directions-detach');
+      const selected = _selectedStep;
+      clearRouteGraphics();
+      _selectedStep = selected;
+      removeEntity(_markerA);
+      removeEntity(_markerB);
+      _markerA = _markerB = null;
+      _removeClickHandler();
+      services.picking.unregisterPickOwner('directions');
+      if (_native) _native.destroy();
+      else if (_stepPoints && _viewer) {
+        services.sprites.unregisterSpriteCollection('directions', _stepPoints);
+        _viewer.scene.primitives.remove(_stepPoints);
+      }
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
-      services.sprites.restoreSpriteOrder(viewer);
-      console.log('[Data:Directions] Initialized');
+      _stepPoints = _viewer = _engine = _native = null;
     },
 
     /**
@@ -1608,7 +1656,7 @@ export function createDirectionsLayer({ services, source }) {
     enable(viewer) {
       _enabled = true;
       _pointerBlocked = false;
-      _stepPoints.show = true;
+      if (_stepPoints) _stepPoints.show = true;
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
       _installClickHandler(viewer);
       services.picking.registerPickOwner(
@@ -1617,7 +1665,7 @@ export function createDirectionsLayer({ services, source }) {
           typeof pickedId === 'string' && pickedId.startsWith('directions:'),
       );
       syncRenderHold();
-      services.sprites.restoreSpriteOrder(viewer);
+      if (viewer) services.sprites.restoreSpriteOrder(viewer);
     },
 
     /**
@@ -1695,6 +1743,10 @@ export function createDirectionsLayer({ services, source }) {
      * Keep a manager handle so placement and routing can repaint the row.
      * @param {object} dataManager DataLayerManager instance.
      */
+    getFlightProgress() {
+      const motion = services.camera.getActiveCameraMotion();
+      return motion?.motionId === _flightId ? motion : null;
+    },
     attachDataManager(dataManager) {
       _dataManager = dataManager;
     },
@@ -1712,6 +1764,15 @@ export function createDirectionsLayer({ services, source }) {
     attachShellServices(services) {
       _shellSeams = services || null;
     },
+    resumeCamera() {
+      if (_shellSeams && _suspendedFlight && _engine) {
+        _suspendedFlight.floorFn = _shellSeams.floorFn;
+        _suspendedFlight.warmFn = _shellSeams.warmFn;
+        if (services.camera.resumeRouteFlight(_suspendedFlight, _engine)) trackFlightProgress();
+        else { _flightId = 0; _flightStep = null; }
+        _suspendedFlight = null;
+      }
+    },
 
     /**
      * Tear down entirely.
@@ -1728,11 +1789,7 @@ export function createDirectionsLayer({ services, source }) {
       _shellSeams = null;
       _dataManager = null;
       _rowControlsListener = null;
-      if (_stepPoints) {
-        services.sprites.unregisterSpriteCollection('directions', _stepPoints);
-        viewer.scene.primitives.remove(_stepPoints);
-        _stepPoints = null;
-      }
+      this.detachRenderer();
       _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
       _viewer = null;
     },

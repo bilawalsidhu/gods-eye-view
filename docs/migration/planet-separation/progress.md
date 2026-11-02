@@ -47,3 +47,7 @@ The forecast model owns GFS/IFS acquisition, scalar overlay, pause, units and sa
 ### Submarine cables on both globes
 
 The geographic source survives an in-flight scene change. Navara shares one route vector layer across 534 source colors, batches stems and marker tips, applies the common label ranking and flies to a clicked landing point. A keyless release round trip loaded all 712 cables and 1,917 landings, read each asset once, respected the 160-label ceiling and verified the landing flight. The full suite and package boundary checks passed.
+
+### Directions and an active route flight
+
+One layer retains A/B, a pending route, maneuver selection and the flight trajectory. Both cameras apply the same route frames and floor policy. The release test placed A and B with real Navara clicks, received the previously pending route in Cesium, restored the selected step, then switched twice during FLY. The same motion ID advanced on each globe (about 60 metres in each timed sample). CLEAR released it. The route was requested once. Full tests, boundaries, release build and keyless headless round trip passed.

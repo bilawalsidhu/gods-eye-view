@@ -120,6 +120,10 @@ export async function registerNavaraLayerRenderers() {
         return (engine, options) => createWeatherNavaraRenderer(engine, navaraViews.get(engine), options);
       },
     ])),
+    directions: async () => {
+      const { createDirectionsNavaraRenderer } = await import('../layers/directions/render/navara.js');
+      return (engine) => createDirectionsNavaraRenderer(engine, navaraViews.get(engine));
+    },
     'telegeography-submarine-cables': async () => {
       const { createNavaraCables } = await import('../layers/submarineCables/render/navara.js');
       return (engine, { overlayHost }) => createNavaraCables(engine, navaraViews.get(engine), overlayHost);

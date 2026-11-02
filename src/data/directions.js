@@ -40,8 +40,10 @@ const directionsServices = Object.freeze({
 /** Construct one Directions layer over the application scene owners. */
 export function createApplicationDirectionsLayer({
   source = createDirectionsSource(),
+  createNativeRenderer,
+  groundFloor = ground,
 } = {}) {
-  return createDirectionsLayer({ services: directionsServices, source });
+  return createDirectionsLayer({ services: { ...directionsServices, ground: groundFloor }, source, createNativeRenderer });
 }
 
 export {
