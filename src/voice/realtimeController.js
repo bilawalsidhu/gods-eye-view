@@ -157,7 +157,6 @@ export class GevRealtimeController extends RealtimeFacade {
       },
     });
 
-    this.buttonHandler = null;
     this.tierHandler = null;
     this.annotationEventUnsubscribe = null;
 
@@ -379,12 +378,8 @@ export class GevRealtimeController extends RealtimeFacade {
     this._radio.clearPendingPlayback();
     this._viewport.reset();
     this._input.resetSession();
-    if (removeUi && this.ui?.button && this.buttonHandler) {
-      this.ui.button.removeEventListener('click', this.buttonHandler);
-      this.buttonHandler = null;
-    }
-    if (removeUi && this.ui?.tierButton && this.tierHandler) {
-      this.ui.tierButton.removeEventListener('click', this.tierHandler);
+    if (removeUi && this.tierHandler) {
+      this.tierHandler();
       this.tierHandler = null;
     }
     if (removeUi) this._input.detachBindings();
@@ -395,9 +390,7 @@ export class GevRealtimeController extends RealtimeFacade {
       this.annotationEventUnsubscribe = null;
     }
     if (removeUi) this._radio.detachObservers();
-    if (removeUi && this.ui?.root) {
-      this.ui.root.remove();
-    }
+    if (removeUi) this.ui?.remove();
     if (!preserveStatus && !removeUi) {
       this.setStatus('idle', t('Voice off'));
     }
@@ -416,30 +409,34 @@ export class GevRealtimeController extends RealtimeFacade {
   setStatus(status, detail) {
     this.status = status;
     this.emitSessionEvent({ type: 'state', state: status, detail });
-    this.ui.root.dataset.status = status;
-    if (status === 'error') this.ui.root.classList.remove('error-dismissed');
+    this.ui.update('root', {
+      status,
+      ...(status === 'error' && { errorDismissed: false }),
+    });
     this.updateVoiceButtonLabel();
     const shownStatus = STATUS_STATES.has(status) ? status : 'idle';
-    this.ui.status.textContent = voiceStatusLabel(shownStatus);
-    const resolvedDetail =
-      status === 'listening' && this.pushToTalkMode
-        ? this.pushToTalkKeyHeld
+    this.ui.update('status', { text: () => voiceStatusLabel(shownStatus) });
+    // Words are given as functions, so a locale change words them again.
+    const holdToTalk = status === 'listening' && this.pushToTalkMode;
+    const held = this.pushToTalkKeyHeld;
+    const resolvedDetail = () =>
+      holdToTalk
+        ? held
           ? t('Release Space to send')
           : t('Hold Space to talk')
         : detail;
-    const primaryDetail =
+    const primaryDetail = () =>
       status === 'error'
         ? t('VOICE UNAVAILABLE')
-        : resolvedDetail ||
+        : resolvedDetail() ||
           (status === 'idle' ? t('VOICE STANDBY') : t('VOICE ACTIVE'));
-    this.ui.detail.textContent = primaryDetail;
-    this.ui.detail.title = primaryDetail;
-    if (this.ui.errorDetail) {
-      this.ui.errorDetail.textContent =
+    this.ui.update('detail', { text: primaryDetail, title: primaryDetail });
+    this.ui.update('error', {
+      text: () =>
         status === 'error'
-          ? resolvedDetail || t('Voice session could not be started.')
-          : '';
-    }
+          ? resolvedDetail() || t('Voice session could not be started.')
+          : '',
+    });
     if (status === 'idle' || status === 'connecting' || status === 'error') {
       this.setVoiceSpeaker('idle');
     }
