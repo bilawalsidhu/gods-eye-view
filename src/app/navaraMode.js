@@ -62,6 +62,7 @@ const NAVARA_CREDIT_KEYS = new Set([
   'weather-noaa',
   'weather-lightning',
   'weather-cyclones',
+  'dams',
   'firms',
   'gbfs',
   'overture-military-names',
@@ -120,6 +121,12 @@ export async function registerNavaraLayerRenderers() {
       const {createCyclonesNavaraRenderer} = await import('../layers/cyclones/render/navara.js');
       return (engine,options) => createCyclonesNavaraRenderer(engine,navaraViews.get(engine).view,options);
     },
+    ...Object.fromEntries(['local-datacenters','local-dams'].map((id) => [
+      id, async () => {
+        const {createInfrastructureNavaraRenderer} = await import('../layers/infrastructure/render/navara.js');
+        return (engine,{config,services}) => createInfrastructureNavaraRenderer(engine,navaraViews.get(engine),config,services);
+      },
+    ])),
     's2-ghostmaps': async () => {
       const { createGhostMapsNavaraRenderer } = await import('../layers/ghostMaps/render/navara.js');
       return (engine) => createGhostMapsNavaraRenderer(engine, navaraViews.get(engine).view);

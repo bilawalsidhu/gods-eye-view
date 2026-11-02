@@ -32,6 +32,7 @@ import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
+import { createInfrastructureSessionLayer } from '../layers/infrastructure/index.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
@@ -302,7 +303,11 @@ export function createApplicationCatalog({
       ],
       [
         ['local-datacenters', 'local-dams'],
-        () => createInfrastructureLayers(localGeoJsonServices),
+        () => sessionModel('local-infrastructure', () =>
+          createInfrastructureLayers(localGeoJsonServices, (config, services) =>
+            createInfrastructureSessionLayer(config, services, (engine, descriptor, ops) =>
+              rendererFor(config.id,engine,{config:descriptor,services:ops}))),
+        ),
       ],
       [
         'telegeography-submarine-cables',

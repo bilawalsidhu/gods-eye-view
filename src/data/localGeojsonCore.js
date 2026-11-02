@@ -307,6 +307,7 @@ export function createLocalGeoJsonLayer(
     icon = '📍',
     source = 'Local JSONL',
     osmDerived = false,
+    readFeatures = null,
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
@@ -584,7 +585,8 @@ export function createLocalGeoJsonLayer(
             // windows (before vs after the add settles) need different cleanup.
             let addedToScene = false;
             try {
-              let features = _cachedFeatures;
+              let features = _cachedFeatures ?? (readFeatures ? await readFeatures() : null);
+              if (_destroyed) return;
               if (!features) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
@@ -1062,6 +1064,14 @@ export function createLocalGeoJsonLayer(
       viewer.scene.requestRender?.();
     },
 
+    restoreFeatureSelection(viewer, featureId) {
+      const entity = _dataSource?.entities.values.find((item) => String(item.id) === featureId);
+      if (!entity) return false;
+      viewer.selectedEntity = entity;
+      selectEntityContext(entity);
+      return true;
+    },
+
     disable: disableLayer,
 
     destroy: (viewer) => {
@@ -1234,7 +1244,7 @@ function featureLabelFromProperties(props, layerId) {
   return clampLabel(text || layerTitle(layerId));
 }
 
-function labelPriorityFromProperties(props, layerId) {
+export function labelPriorityFromProperties(props, layerId) {
   const tags = props.tags || {};
 
   let score = 0;

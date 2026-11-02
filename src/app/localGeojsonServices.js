@@ -5,6 +5,7 @@ import {
   registerEntityContext,
   removeEntityContextsForLayer,
   selectEntityContext,
+  getSelectedEntityContext,
 } from '../data/contextStore.js';
 import {
   clearOverlaySource,
@@ -22,6 +23,7 @@ export const localGeoJsonServices = Object.freeze({
   registerEntityContext,
   removeEntityContextsForLayer,
   selectEntityContext,
+  getSelectedEntityContext,
   governorRequestRender,
   showOsmCredit,
   hideOsmCredit,
