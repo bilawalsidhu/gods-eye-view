@@ -2796,6 +2796,20 @@ isCurrent })` gates BOTH halves of the map-stack switch, which is its only
 >   name the panel (`#location-bar` / `#control-panel`) to reach (2,5,0). Adding
 >   a new tray rule means checking it against the pinned variants, not just
 >   against the base rule.
+> - **Dock wings are icon-only from 900px down to 721px (2026-10-28):** at
+>   ≤900px `--dock-side-compact` shrinks the Location and Visual Presets wings
+>   to 4.25rem, open or closed (an open tray pops out above the dock), which is
+>   too narrow for their text labels. The labels used to spill over the voice
+>   control, and the LOCATION label captured taps on the left half of the mic
+>   button. `src/ui/styles/command-dock-trays.css` now sets the
+>   labels to `font-size: 0` and drops their `›`/`‹` chevrons in that band, so
+>   each wing shows only its icon. `CommandDockView.vue` still gives the toggles
+>   their "Expand/Collapse …" `aria-label` and `title` (`trayWords`), so the
+>   browser tooltip is the only visible name on hover.
+>   The Cyber HUD layout is excluded: it sets `--dock-side-compact` to
+>   9–9.75rem, which fits its labels. The former ≤620px ellipsis clip is gone:
+>   the phone shell takes over at 720px, so it never applied to a visible
+>   dock.
 > - **LOCATION mini-status is data-only today (2026-08-20):** the collapsed
 >   readout now follows a free-text geocode search as well as preset pills
 >   (`src/locationStatus.js` owns the copy for both), and every other camera
@@ -5086,6 +5100,8 @@ repointing `OVERPASS_UPSTREAMS` refetches instead of serving another instance's
 answers; untagged entries stop serving once an instance is configured.
 
 The shared transport guards `/api/overpass` and `/api/military-installations`.
+Both query handlers refuse cross-site and forwarded browser requests through
+the shared local-request gate, before any rate-limit, cache or upstream work.
 With no configured upstream, each route serves existing cache data (including
 expired entries, marked stale with the original cache/retrieval date) without
 refresh. An annotation miss returns HTTP 503, `OVERPASS_NOT_CONFIGURED`,
@@ -6372,6 +6388,12 @@ source loads the same bundled TeleGeography files. Disabling still removes all
 three Cesium data sources; enabling rebuilds from the accepted parsed cache,
 and destroying clears it. Load ownership prevents cancelled work from adding
 entities after teardown.
+
+Every Cesium entity from multipart cable or landing-point geometry stays tied
+to its source feature, including generated IDs and IDs that collide with
+Cesium's multipart suffixes. Each segment gets its own feature's styling, click
+destination and horizon-culling reference, and each source feature has one
+reference stem. The source collections are not modified.
 
 Natural Earth regions and neighborhood polygon lookup are package exports.
 Their existing lazy loaders, retry behavior, bundled datasets and attribution
