@@ -665,6 +665,36 @@ announces the reason.
 
 Automatic Voice Preview uses output from the active mounted provider, including late replies that may answer an older request. Manual panel choices remain until genuine local input rearms automatic presentation. Preview stays off when disabled, remains hidden in Cockpit, and retires on Stop or provider replacement. Display events do not grant command authority.
 
+Typed chat sits beside voice in the dock. Chat replies are silent and never
+request microphone access. The first message connects with the selected
+provider and runs the same map actions as voice through each provider's text
+API: OpenAI uses `OPENAI_CHAT_MODEL` (default `gpt-4.1-mini`) and needs an API
+key; Gemini sends a text-only `generateContent` request with
+`GEMINI_CHAT_MODEL` (default `gemini-3.5-flash-lite`) and never starts Live.
+Only one mode runs at a time: the microphone closes chat, and opening chat
+stops voice. Enter sends, Shift+Enter adds a line, and Up or Down at the start
+of the field recall recent messages and restore the draft. Attachments are up
+to four map-layer references or UTF-8 TXT, Markdown, CSV, JSON and GeoJSON
+files, 10 KB each and bounded together, sent only with the message; a layer
+reference names the layer without exporting its records. The conversation and
+recent commands stay in memory for the page.
+
+Chat and the voice panel sit above the dock or dock into the right rail's lane,
+which hides the rail until the panel minimizes or closes, or a rail panel opens.
+Minimized panels always sit as a bar centred above the dock; restoring returns a
+docked panel to the lane. A centred panel steps down to its bar when the pointer
+reaches the Location or Visual Presets button and rests above an open tray,
+without moving keyboard focus. Expanded over an open tray, it docks into the
+lane until the trays close; a panel that stepped down expands in the centre
+again once the trays close and the pointer leaves the wings. Panel height animates when one panel replaces the
+other or the voice view changes. Minimized voice shows the last sentence from
+each side, and the empty Voice Preview suggests things to say until voice
+starts. Settings opened from chat keep chat's frame and show the shared AI
+provider and the quick-commands option, with Back to chat; voice Settings show
+Back to voice. Escape steps back from either Settings view, closes Voice
+Preview, and does nothing in chat. Closing chat ends a typed session, and the
+voice panel's close turns voice off.
+
 Contacts nearest-aircraft follow-ups retain the snapshot's distance basis even
 after the camera moves. An explicit new scope replaces that basis. Provider
 instructions require an analyst query for requested lists and use the requested

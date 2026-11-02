@@ -195,7 +195,7 @@ test('actual control default remains opt-out; panel markup has unique controlled
   );
 });
 
-test('actual binder/card has launcher toggle, idempotent tabs, focus and disabled Preview', async (t) => {
+test('actual binder/card has launcher toggle, Settings tab toggle, focus and disabled Preview', async (t) => {
   const { ui, commands, settle } = mounted(t, { view: true });
   await settle();
   $('#gev-voice-settings-button').click();
@@ -206,8 +206,9 @@ test('actual binder/card has launcher toggle, idempotent tabs, focus and disable
   $('#gev-voice-settings-tab').click();
   key($('#gev-voice-settings-tab'), 'End');
   assert.equal(commands.voicePanel.snapshot().settingsOpen, true);
+  // Preview has no visible tab, so the Settings tab toggles back to it.
   $('#gev-voice-settings-tab').click();
-  assert.equal(commands.voicePanel.snapshot().settingsOpen, true);
+  assert.equal(commands.voicePanel.snapshot().view, 'preview');
   commands.voicePanel.select('preview');
   commands.voiceCard.handle({
     type: 'transcript',
@@ -241,7 +242,7 @@ test('actual binder/card has launcher toggle, idempotent tabs, focus and disable
   $('#gev-voice-preview-tab').focus();
   key(globalThis.document.activeElement, 'Escape');
   await settle();
-  assert.equal(active(), 'gev-voice-settings-button');
+  assert.equal(active(), 'gev-chat-button');
   commands.voiceCard.handle({
     type: 'transcript',
     role: 'assistant',
@@ -721,13 +722,13 @@ test('Preview off and actual Cockpit state suppress automatic presentation witho
   window.dispatchEvent(new Event('gev:cockpit-mode-changed'));
   assert.equal(f.ui.state.voicePanel.hidden, true);
   await f.settle();
-  assert.equal(active(), 'gev-voice-settings-button');
+  assert.equal(active(), 'gev-chat-button');
   f.commands.voicePanel.select('settings', { focus: true });
   await f.settle();
   assert.equal(active(), 'gev-voice-settings-tab');
   f.commands.voicePanel.select('preview', { focus: true });
   await f.settle();
-  assert.equal(active(), 'gev-voice-settings-button');
+  assert.equal(active(), 'gev-chat-button');
   const outside = document.createElement('button');
   outside.id = 'unrelated';
   document.body.appendChild(outside);
@@ -824,5 +825,350 @@ test('Provider Settings uses its ready dialog handlers and refuses unavailable o
     f.state.visual.length,
     0,
     'provider setup never opens a visual or scene panel',
+  );
+});
+
+// Typed chat, rendered by the real VoiceControl.
+const typedChat = (f) => {
+  f.instances[0].getStartOptions = () => ({ textOnly: true });
+  f.instances[0].sendText = () => true;
+};
+const type = (text) => {
+  const input = $('#gev-chat-input');
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+test('the chat button opens, minimizes and closes chat', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, false);
+  assert.equal($('#gev-voice-control').dataset.assistantMode, 'chat');
+  assert.equal(active(), 'gev-chat-input');
+  $('#gev-chat-button').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  $('#gev-chat-restore').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  $('#gev-chat-close').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, true);
+  assert.equal($('#gev-voice-control').dataset.assistantMode, 'idle');
+});
+
+test('a typed message sends, shows the reply and is recalled with Up', async (t) => {
+  const f = mounted(t, { view: true });
+  typedChat(f);
+  const reduce = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => (globalThis.matchMedia = reduce));
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  type('Fly to Tokyo');
+  $('#gev-chat-form').dispatchEvent(new Event('submit', { cancelable: true }));
+  await f.commands.session.start({ textOnly: true });
+  for (let i = 0; i < 5; i++) await f.settle();
+  const messages = () =>
+    [...globalThis.document.querySelectorAll('.gev-chat-message')].map(
+      (row) => `${row.dataset.role}:${row.querySelector('span').textContent}`,
+    );
+  assert.deepEqual(messages(), ['user:Fly to Tokyo']);
+  assert.equal($('#gev-chat-input').value, '');
+  f.instances[0].hooks.emit({
+    type: 'transcript',
+    role: 'assistant',
+    text: 'Flying to Tokyo.',
+    final: true,
+  });
+  await f.settle();
+  assert.deepEqual(messages(), [
+    'user:Fly to Tokyo',
+    'assistant:Flying to Tokyo.',
+  ]);
+  assert.equal(f.ui.state.voicePanel.hidden, true);
+  key($('#gev-chat-input'), 'ArrowUp');
+  await f.settle();
+  assert.equal($('#gev-chat-input').value, 'Fly to Tokyo');
+});
+
+test('chat Settings keep chat context until the panel closes', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-voice-settings-button').click();
+  await f.settle();
+  assert.equal(f.ui.state.voicePanel.context, 'chat');
+  assert.equal($('#gev-chat-panel').hidden, true);
+  assert.equal($('#gev-voice-control').dataset.assistantMode, 'chat');
+  assert.equal(active(), 'gev-chat-back');
+  key($('#gev-chat-back'), 'Escape');
+  await f.settle();
+  assert.equal(f.ui.state.voicePanel.context, null);
+  assert.equal($('#gev-chat-panel').hidden, false);
+  $('#gev-voice-settings-button').click();
+  await f.settle();
+  $('#gev-chat-back').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, false);
+  assert.equal(f.ui.state.chat.backVisible, false);
+});
+
+test('chat Settings keep only the quick commands preference', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  for (const id of [
+    'typewriter',
+    'text-color',
+    'text-size',
+    'autocomplete',
+    'recent',
+  ])
+    assert.equal(exists(`#gev-chat-${id}`), false);
+  assert.equal(exists('#gev-panel-default-position'), false);
+  assert.equal(exists('#gev-chat-quick'), true);
+});
+
+test('voice Settings step back to Preview with Back and Escape', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  f.commands.voicePanel.select('settings', { focus: true });
+  await f.settle();
+  assert.equal(active(), 'gev-voice-settings-tab');
+  $('#gev-voice-back').click();
+  await f.settle();
+  assert.equal(f.commands.voicePanel.snapshot().view, 'preview');
+  f.commands.voicePanel.select('settings');
+  key($('#gev-voice-panel'), 'Escape');
+  await f.settle();
+  assert.equal(f.commands.voicePanel.snapshot().view, 'preview');
+  assert.equal(f.commands.voicePanel.snapshot().panelOpen, true);
+  key($('#gev-voice-panel'), 'Escape');
+  assert.equal(f.commands.voicePanel.snapshot().panelOpen, false);
+});
+
+test('Escape does not minimize chat', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  key($('#gev-chat-input'), 'Escape');
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  assert.equal($('#gev-chat-panel').hidden, false);
+});
+
+function dockWing(t) {
+  const doc = globalThis.document;
+  const wing = doc.createElement('div');
+  wing.id = 'control-panel';
+  wing.className = 'panel-collapsible collapsed';
+  const toggle = doc.createElement('button');
+  toggle.className = 'dock-tray-toggle';
+  const tray = doc.createElement('div');
+  tray.className = 'dock-popover-content';
+  wing.append(toggle, tray);
+  doc.body.append(wing);
+  t.after(() => wing.remove());
+  return {
+    wing,
+    toggle,
+    open: () => wing.classList.remove('collapsed'),
+    close: () => wing.classList.add('collapsed'),
+  };
+}
+
+test('reaching for a dock wing minimizes a centred chat or voice panel', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  // The dock can mount after the layouts bind; they find it on use.
+  const wing = dockWing(t);
+  $('#gev-chat-button').click();
+  await f.settle();
+  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  // Leaving the wing with no tray open ends the yield.
+  wing.wing.dispatchEvent(new PointerEvent('pointerleave'));
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, undefined);
+  wing.toggle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, 'true');
+});
+
+test('expanding a panel over an open tray docks it right without saving', async (t) => {
+  const f = mounted(t, { view: true });
+  // The view mount resets the body; the layouts bind on the next tick.
+  const wing = dockWing(t);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+  wing.open();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
+  $('#gev-chat-restore').click();
+  await f.settle();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  assert.equal($('#gev-chat-panel').dataset.placement, 'docked');
+  assert.notEqual(globalThis.localStorage.getItem('gev.panel.docked'), 'true');
+  // The dock was only for the tray; it ends once the tray closes.
+  wing.close();
+  await f.settle();
+  await f.settle();
+  assert.equal(f.ui.state.layout.docked, false);
+  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+});
+
+test('yielding to a dock tray leaves keyboard focus where it is', async (t) => {
+  const f = mounted(t, { view: true });
+  const wing = dockWing(t);
+  const field = globalThis.document.createElement('input');
+  globalThis.document.body.append(field);
+  t.after(() => field.remove());
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  for (const target of [$('#gev-chat-input'), field]) {
+    target.focus();
+    wing.toggle.dispatchEvent(
+      new PointerEvent('pointerover', { bubbles: true }),
+    );
+    await f.settle();
+    assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+    assert.equal(globalThis.document.activeElement, target);
+    wing.wing.dispatchEvent(new PointerEvent('pointerleave'));
+    await f.settle();
+    assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+    assert.equal(globalThis.document.activeElement, target);
+  }
+});
+
+test('a panel that yielded to a tray expands in the centre once it closes', async (t) => {
+  const f = mounted(t, { view: true });
+  const wing = dockWing(t);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  wing.toggle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  wing.open();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  wing.close();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
+  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
+  assert.equal(f.ui.state.layout.yielded, null);
+});
+
+test('switching to voice while chat yields to a tray starts voice as its bar', async (t) => {
+  const f = mounted(t, { view: true });
+  const wing = dockWing(t);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, 'true');
+  assert.equal(f.ui.state.layout.yielded, 'voicePanel');
+});
+
+test('undocking while a tray is open brings the panel back as its bar', async (t) => {
+  const f = mounted(t, { view: true });
+  const wing = dockWing(t);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-chat-panel [data-layout-dock]').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.placement, 'docked');
+  wing.open();
+  await f.settle();
+  $('#gev-chat-panel [data-layout-dock]').click();
+  await f.settle();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
+});
+
+test('the voice panel close turns voice off', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.commands.session.start();
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  $('#gev-voice-settings-close').click();
+  assert.equal(f.commands.session.isActive(), false);
+  assert.equal(f.commands.voicePanel.snapshot().panelOpen, false);
+});
+
+test('closing chat Settings ends a typed session', async (t) => {
+  const f = mounted(t, { view: true });
+  typedChat(f);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.commands.session.start({ textOnly: true });
+  await f.settle();
+  $('#gev-voice-settings-button').click();
+  await f.settle();
+  $('#gev-voice-settings-close').click();
+  await f.settle();
+  assert.equal(f.commands.session.isActive(), false);
+  assert.equal($('#gev-chat-panel').hidden, true);
+});
+
+test('the mic button closes chat and minimize collapses voice to a bar', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-voice-button').click();
+  await f.settle();
+  assert.equal($('#gev-chat-panel').hidden, true);
+  assert.equal(f.commands.session.isActive(), true);
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  $('#gev-voice-panel [data-layout-minimize]').click();
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, 'true');
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.minimized, undefined);
+});
+
+test('teardown inside sendText prevents appending the submitted message', async (t) => {
+  const f = mounted(t, { view: true });
+  f.instances[0].getStartOptions = () => ({ textOnly: true });
+  f.instances[0].sendText = () => {
+    f.commands.session.destroy();
+    return true;
+  };
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  type('Hello');
+  $('#gev-chat-form').dispatchEvent(new Event('submit', { cancelable: true }));
+  await f.commands.session.start({ textOnly: true });
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(
+    globalThis.document.querySelectorAll('.gev-chat-message').length,
+    0,
   );
 });

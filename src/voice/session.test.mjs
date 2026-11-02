@@ -605,3 +605,48 @@ test('actual default OpenAI adapter stop publishes one common idle', (t) => {
   assert.equal(session.state, 'idle');
   assert.equal(session.adapter.controller.status, 'idle');
 });
+
+test('OpenAI composite starts HTTP chat without Realtime and restores voice keyboard routing', async () => {
+  const events = [];
+  let starts = 0,
+    requests = 0;
+  const controller = {
+    _input: {},
+    _radio: {},
+    isActive: () => true,
+    start: async () => {
+      starts++;
+    },
+    stop: () => {},
+    sendTextCommand: () => 'voice',
+    notifyMapEvent: () => 'voice-event',
+  };
+  const adapter = createRealtimeSession({
+    emit: (e) => events.push(e),
+    runAction: async () => ({ ok: true }),
+    createController: () => controller,
+    fetchImpl: async (url) => {
+      requests++;
+      assert.equal(url, '/api/openai/chat');
+      return Response.json({
+        content: { role: 'assistant', content: 'Hello' },
+        finishReason: 'stop',
+      });
+    },
+  });
+  await adapter.start({ textOnly: true });
+  assert.equal(starts, 0);
+  assert.equal(adapter.getStartOptions().textOnly, true);
+  assert.equal(controller._radio.isActive(), false);
+  assert.equal(adapter.sendText('Hello'), true);
+  for (let i = 0; i < 5; i++)
+    await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests, 1);
+  assert.ok(events.some((e) => e.type === 'completion'));
+  adapter.stop();
+  await controller._input.start({ pushToTalk: true });
+  assert.equal(starts, 1);
+  assert.equal(adapter.getStartOptions().textOnly, undefined);
+  assert.equal(adapter.sendText('Hello'), 'voice');
+  adapter.stop();
+});

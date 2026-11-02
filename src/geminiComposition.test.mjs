@@ -52,8 +52,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     plugin[hook]({
       middlewares: {
         use(route, value) {
-          assert.equal(route, '/api/gemini/token');
-          handler = value;
+          if (route === '/api/gemini/token') handler = value;
         },
       },
     });

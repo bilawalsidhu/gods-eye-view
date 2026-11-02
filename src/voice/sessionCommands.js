@@ -1,3 +1,7 @@
+import { nextTick } from 'vue';
+import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
+import { bindChatControl } from './chatControl.js';
+import { bindVoiceMiniPreview } from './voiceMiniPreview.js';
 import { createVoiceControl, voiceStatusLabel } from './control.js';
 import { createVoiceSession } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
@@ -114,7 +118,10 @@ export function createVoiceCommands({
     ui.update('detail', {
       text: () => detail || (idle ? t('Voice off') : t('Voice active')),
     });
-    ui.update('button', { pressed: session.isActive() });
+    // A typed chat session is not the microphone.
+    ui.update('button', {
+      pressed: session.isActive() && !adapter.getStartOptions?.().textOnly,
+    });
     ui.update('error', {
       text: () =>
         event.state === 'error'
@@ -135,10 +142,17 @@ export function createVoiceCommands({
     observer: actionObserver,
     nativeProvider: nativePanelProvider,
   });
-  const updatePanel = panelMount ? session.subscribe(panelMount.handle) : null;
+  // Typed chat turns belong to the chat panel, not the voice card or panel.
+  const voicePresentation = (handle) => (event) => {
+    if (event.type !== 'state' && adapter.getStartOptions?.().textOnly) return;
+    handle(event);
+  };
+  const updatePanel = panelMount
+    ? session.subscribe(voicePresentation(panelMount.handle))
+    : null;
   const updateCard =
     card && !panelMount
-      ? session.subscribe((event) => card.handle(event))
+      ? session.subscribe(voicePresentation((event) => card.handle(event)))
       : null;
   controls.voiceCard = card;
   if (panelMount) {
@@ -170,21 +184,88 @@ export function createVoiceCommands({
     card?.outline(event);
     session.sendMapEvent({ type: 'map_annotation_outline', ...event });
   });
+  const chat = panelMount
+    ? bindChatControl({
+        ui,
+        session,
+        dataManager,
+        onOpen: () => panelMount?.panel.close(),
+      })
+    : null;
+  function minimizeVoicePanel() {
+    const panel = ui.element('voicePanel');
+    const holdsFocus = panel?.contains?.(globalThis.document?.activeElement);
+    ui.update('voicePanel', { minimized: true });
+    // Keep focus on the bar's expand button, not the mic (Space there would
+    // end voice), without a keyboard ring.
+    if (holdsFocus)
+      void nextTick(() =>
+        panel
+          ?.querySelector?.('[data-layout-minimize]')
+          ?.focus?.({ focusVisible: false }),
+      );
+  }
+  const layouts = panelMount
+    ? [
+        bindLayoutDock(ui),
+        bindAssistantPanelLayout({
+          ui,
+          name: 'chatPanel',
+          minimize: () => chat?.minimize({ focus: false }),
+          restore: () => chat?.restore({ focus: false }),
+        }),
+        bindAssistantPanelLayout({
+          ui,
+          name: 'voicePanel',
+          minimize: minimizeVoicePanel,
+          restore: () => ui.update('voicePanel', { minimized: false }),
+        }),
+        ui.on('voice-minimize', () => {
+          if (ui.state.voicePanel.minimized)
+            ui.update('voicePanel', { minimized: false });
+          else minimizeVoicePanel();
+        }),
+      ]
+    : [];
+  const unbindMiniPreview = panelMount
+    ? bindVoiceMiniPreview({ ui, session })
+    : null;
+  const startVoice = () => {
+    if (panelMount?.panel.snapshot().previewEnabled)
+      panelMount.panel.select('preview');
+    void session.start({ pushToTalk: false });
+  };
   const buttonHandler = () => {
     if (adapter.ignoreButtonClick?.()) return;
-    if (session.isActive()) {
+    chat?.close();
+    if (session.isActive() && adapter.getStartOptions?.().textOnly) {
+      session.stop();
+      startVoice();
+    } else if (session.isActive()) {
       const ticket = panelMount?.stopTicket();
       session.stop();
       panelMount?.closeAfterStop(ticket);
-    } else void session.start({ pushToTalk: false });
+    } else startVoice();
   };
   const offButton = ui.on('button', buttonHandler);
+  // The panel's close turns voice off, as chat's close ends the chat. A typed
+  // session belongs to chat, which handles its own close.
+  const offClose = ui.on('settings-close', () => {
+    if (!session.isActive() || adapter.getStartOptions?.().textOnly) return;
+    const ticket = panelMount?.stopTicket();
+    session.stop();
+    panelMount?.closeAfterStop(ticket);
+  });
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
     offButton();
+    offClose();
     offProvider?.();
+    for (const off of layouts) off();
+    unbindMiniPreview?.();
+    chat?.destroy();
     annotationUnsubscribe?.();
     updateStatus();
     updateCard?.();
