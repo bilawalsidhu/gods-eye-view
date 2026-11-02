@@ -500,7 +500,7 @@ export function createGroundFloor({ terrain, signal }) {
   }
 
   /** Test hook: clears mesh cells (never called at runtime — cells are valid all session). */
-  function _clearMeshFloorCellsForTest() {
+  function clearMeshFloorCells() {
     _meshCells.clear();
   }
 
@@ -663,7 +663,8 @@ export function createGroundFloor({ terrain, signal }) {
     meshFloorSampleWithinPrior,
     reportValidatedMeshFloorCell,
     cachedMeshFloor,
-    _clearMeshFloorCellsForTest,
+    clearMeshFloorCells,
+    _clearMeshFloorCellsForTest: clearMeshFloorCells,
     cachedGroundFloor,
     FLOOR_RESOLVE_DEADLINE_MS,
     resolveGroundFloorCellsBounded,

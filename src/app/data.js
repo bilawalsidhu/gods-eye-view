@@ -8,12 +8,13 @@ export function createApplicationData({
   controls: { styleManager },
   catalog,
   allowQaRegistration,
+  layerSession,
   onData,
   defer,
 }) {
   // Initialize data layer manager
   // The modules get { signal, engine } on every call (viewer null on Navara).
-  const dataManager = new LayerLifecycle(viewer, {
+  const dataManager = layerSession?.manager ?? new LayerLifecycle(viewer, {
     engine,
     allowQaRegistration,
     // A panel's host may report it hidden while it is on screen; its layers
@@ -21,7 +22,12 @@ export function createApplicationData({
     visibilityTarget: panelAwareVisibility(document),
     getSourceAvailability: catalog?.getSourceAvailability,
   });
+  if (layerSession) layerSession.manager = dataManager;
   defer(async () => {
+    if (layerSession && !layerSession.lifetime.signal.aborted) {
+      await dataManager.detachScene();
+      return;
+    }
     await dataManager.destroyAll();
     if (dataManager.layers.size)
       throw new Error(
@@ -35,12 +41,11 @@ export function createApplicationData({
   onData?.(dataManager);
   if (!catalog?.layers || !catalog?.metadata)
     throw new TypeError('An application layer catalog is required');
-  for (const layer of catalog.layers) dataManager.register(layer);
+  dataManager.bindCatalog(viewer, engine, catalog);
   for (const layer of catalog.layers) layer.attachDataManager?.(dataManager);
   for (const layer of catalog.layers)
     layer.attachMapStackController?.(mapStackController);
-  // Restoration starts only after the caller's complete registry is sealed.
-  dataManager.finalizeRegistrations(catalog.metadata);
+
   if (allowQaRegistration) {
     window.__gevQaRegisterLayer = (targetManager, layerModule) => {
       if (targetManager !== dataManager)

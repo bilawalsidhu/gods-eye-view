@@ -412,7 +412,7 @@ export function contextRestoreLayerIds(snapshot = {}) {
 }
 
 /**
- * Contacts mode requires both observed-flight feeds. Navara also supports
+ * Contacts mode requires both observed-flight feeds. Both globes support
  * first-person flight directly from a single selected aircraft layer.
  *
  * @param {object} input Current context and dependency visibility.

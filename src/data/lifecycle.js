@@ -121,6 +121,50 @@ export class LayerLifecycle {
     this._registerLayer(layerModule);
   }
 
+  /**
+   * Release the scene only. Models with an explicit renderer lifetime keep
+   * their entry, polling interval, visibility intents and in-flight source.
+   * Legacy modules use their ordinary teardown until they gain that contract.
+   */
+  async detachScene() {
+    for (const [id, entry] of [...this.layers]) {
+      await entry.toggleChain.catch(() => {});
+      if (entry.module.attachRenderer && entry.module.detachRenderer) {
+        if (entry.initialized) entry.module.detachRenderer(this.viewer);
+      } else if (!(await this.destroyLayer(id))) {
+        throw new Error(`Cannot detach layer ${id}`);
+      }
+    }
+    this.viewer = null;
+    this.engine = null;
+    this._registrationsFinalized = false;
+    this._registrationDispositions = null;
+  }
+
+  /** Bind the next catalog only after the preceding scene released its entries. */
+  bindCatalog(viewer, engine, catalog) {
+    if (this._registrationsFinalized) throw new Error('Scene already attached');
+    this.viewer = viewer;
+    this.engine = engine ?? engineFromViewer(viewer) ?? null;
+    this._catalogSourceAvailability = catalog.getSourceAvailability;
+    for (const layer of catalog.layers) {
+      const entry = this.layers.get(layer.id);
+      if (!entry) this.register(layer);
+      else {
+        if (entry.module !== layer) throw new Error(`Layer owner changed: ${layer.id}`);
+        if (entry.initialized) layer.attachRenderer(viewer, this._moduleContext());
+      }
+    }
+    // Retained entries may appear anywhere in the directory. Preserve both
+    // catalog order (panel/serialization) and each live entry's identity.
+    for (const { id } of catalog.layers) {
+      const entry = this.layers.get(id);
+      this.layers.delete(id);
+      this.layers.set(id, entry);
+    }
+    this.finalizeRegistrations(catalog.metadata);
+  }
+
   /** Register a synthetic layer after sealing in an explicitly dev-enabled manager. */
   registerForQa(layerModule) {
     if (!this._allowQaRegistration || !this._registrationsFinalized) {

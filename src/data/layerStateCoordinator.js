@@ -470,6 +470,36 @@ export class LayerStateCoordinator {
     return null;
   }
 
+  // On an in-page engine switch, an attached session model can already own
+  // this exact contact. Ordinary shared links must still verify the source.
+  retainedTrackingTarget() {
+    const selected = this._selectedShareTrackingTarget();
+    if (!selected || !this.dataManager.isEnabled(selected.layerId)) return null;
+    const model = this.dataManager.layers.get(selected.layerId)?.module;
+    if (
+      model?.attachRenderer &&
+      model.getParams?.()[selected.optionKey] === selected.targetId &&
+      model.hasContact?.(selected.targetId) === true
+    ) return selected;
+    return null;
+  }
+
+  resumeRetainedTracking(previous) {
+    const selected = this.retainedTrackingTarget();
+    if (
+      !selected || selected.layerId !== previous.layerId ||
+      selected.targetId !== previous.targetId
+    ) return null;
+    const model = this.dataManager.layers.get(selected.layerId).module;
+    const followed = model.trackById(selected.targetId, {
+      origin: LAYER_RESTORE_ORIGINS.share,
+    });
+    if (!followed) return null;
+    const result = { ...selected, status: 'found', classification: 'followed', cleared: false };
+    this._publishTrackingRestoreStatus(result);
+    return result;
+  }
+
   _passivelyClearTrackingSelection(selected) {
     const current =
       this._durableState.options?.[selected.optionOwner]?.[selected.optionKey];

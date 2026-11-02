@@ -67,6 +67,8 @@ try {
     await page.waitForSelector('#globe-engine', { visible: true });
     await page.evaluate(() => {
       window.__switchDocument = document;
+      window.__quakeEntry = window.__godsEyeView.dataManager.layers.get('earthquakes');
+      window.__quakeTimer = window.__quakeEntry.intervalId;
       window.__renderers ??= new Map();
       window.__renderers.set(
         window.__godsEyeView.engine.kind,
@@ -93,6 +95,8 @@ try {
         const previous = window.__renderers.get(engine.kind);
         return (
           !window.__switchSplash &&
+          window.__quakeEntry === window.__godsEyeView.dataManager.layers.get('earthquakes') &&
+          window.__quakeTimer === window.__quakeEntry.intervalId &&
           (!previous || previous === engine) &&
           !window.__outgoingEngine.isDestroyed() &&
           !window.__outgoingEngine.host.canvas.isConnected &&

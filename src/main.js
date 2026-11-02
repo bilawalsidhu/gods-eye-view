@@ -15,11 +15,14 @@ let kind = pageEngineKind();
 let application;
 let busy = false;
 const renderers = createRendererCache();
+const layerSession = { lifetime: new AbortController() };
 window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) renderers.clear();
+  if (event.persisted) return;
+  layerSession.lifetime.abort();
+  void application?.destroy().catch(report).finally(() => renderers.clear());
 });
 
-async function start(next, engineSwitch = false) {
+async function start(next, engineSwitch = false, cockpit = null) {
   kind = next;
   application = createStandaloneApplication({
     googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
@@ -27,11 +30,25 @@ async function start(next, engineSwitch = false) {
     allowQaRegistration: import.meta.env.DEV,
     engineKind: next,
     rendererCache: renderers,
+    layerSession,
     engineSwitch,
   });
   const { scene, controls } = await application.start();
   if (engineSwitch) {
-    await controls.styleManager.initialRestorePromise;
+    const style = controls.styleManager;
+    await style.initialRestorePromise;
+    // Only resume the aircraft that actually survived the handoff. A history
+    // entry may select a different subject, and a stale track may disappear.
+    const target = style.getAircraftTrackingTarget();
+    if (
+      cockpit?.active &&
+      target &&
+      target?.id === cockpit.subject?.id &&
+      target?.layerId === cockpit.subject?.layerId &&
+      style.controlCockpit('enter').ok
+    ) {
+      style.cockpitView.setVisionMode(cockpit.visionMode);
+    }
     await waitForGlobeFrame(scene.engine);
   }
 }
@@ -106,12 +123,16 @@ async function reconcile(remember = false) {
   present();
   const previous = kind;
   let cover;
+  let cockpit;
   try {
     while (pageEngineKind() !== kind) {
       cover ??= keepGlobeFrame(application.getComponents().scene.engine);
+      cockpit = application
+        .getComponents()
+        .controls.styleManager.getCockpitState();
       renderers.retain(kind);
       await application.destroy();
-      await start(pageEngineKind(), true);
+      await start(pageEngineKind(), true, cockpit);
     }
     if (remember) {
       try {
@@ -127,7 +148,7 @@ async function reconcile(remember = false) {
     history.replaceState(history.state, '', url);
     try {
       await application.destroy();
-      await start(previous, true);
+      await start(previous, true, cockpit);
       application
         .getComponents()
         .controls.styleManager._showToast(describeError(error));
