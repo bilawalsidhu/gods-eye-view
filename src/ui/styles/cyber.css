@@ -201,6 +201,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner,
     #pp-toggles:not(.collapsed),
@@ -222,6 +223,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner
   )
@@ -304,6 +306,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner
   )
@@ -320,6 +323,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner
   )
@@ -344,6 +348,7 @@
     .recent-imagery-panel-inner,
     .street-level-panel-inner,
     .scene-panel-inner,
+    .utilities-panel-inner,
     .global-context-panel-inner,
     .radio-panel-inner
   )
@@ -515,6 +520,14 @@
 :root[data-ui-theme='cyber'] .pp-mode-btn.active {
   background: var(--cyber-red);
   color: #f7f8f7;
+}
+
+:root[data-ui-theme='cyber']
+  #utilities-panel
+  .utilities-tools
+  .pp-toggle-btn:is([aria-pressed='true'], .active) {
+  background: rgba(64, 45, 46, 0.94);
+  box-shadow: 3px 0 0 var(--cyber-red) inset;
 }
 
 :root[data-ui-theme='cyber'] .pp-toggle-btn.active .pp-label {
@@ -1680,7 +1693,7 @@
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
     #left-panel-stack:has(> [data-panel-id]:not(.collapsed))
-    > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed) {
+    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(.collapsed) {
     flex: 1 1 auto;
     height: auto;
     max-height: none;
@@ -1702,21 +1715,21 @@
 
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel) {
+    > :is(#data-panel, #utilities-panel, #scene-panel) {
     --panel-expanded-width: var(--cyber-panel-width);
     width: var(--panel-expanded-width);
   }
 
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel).collapsed {
+    > :is(#data-panel, #utilities-panel, #scene-panel).collapsed {
     width: var(--cyber-panel-collapsed-width);
   }
 
   :root[data-ui-theme='cyber']
     #left-panel-stack
-    > :is(#data-panel, #scene-panel).collapsed
-    :is(.data-panel-inner, .scene-panel-inner) {
+    > :is(#data-panel, #utilities-panel, #scene-panel).collapsed
+    :is(.data-panel-inner, .utilities-panel-inner, .scene-panel-inner) {
     box-sizing: border-box;
     height: 50px;
     min-height: 50px;
@@ -1743,7 +1756,7 @@
 
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
-    :is(#data-panel, #scene-panel)
+    :is(#data-panel, #utilities-panel, #scene-panel)
     .panel-collapse-btn {
     width: var(--cyber-panel-control-size);
     min-width: var(--cyber-panel-control-size);
@@ -2758,7 +2771,10 @@
   border-inline-start: 0;
 }
 
-:root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack > #data-panel {
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  #left-panel-stack
+  > :is(#data-panel, #utilities-panel) {
   --panel-expanded-width: var(--cyber-panel-width);
   width: var(--cyber-panel-width);
   max-height: min(64vh, 610px);
@@ -2767,7 +2783,7 @@
 :root[data-ui-theme='cyber']
   body.cockpit-mode
   #left-panel-stack
-  > #data-panel.collapsed {
+  > :is(#data-panel, #utilities-panel).collapsed {
   width: var(--cyber-panel-collapsed-width);
 }
 
@@ -2800,7 +2816,7 @@
   :root[data-ui-theme='cyber']
     body.cockpit-mode
     #left-panel-stack
-    > #data-panel:not(.collapsed) {
+    > :is(#data-panel, #utilities-panel):not(.collapsed) {
     flex: 0 0 var(--cyber-cockpit-panel-height, 40vh);
     height: var(--cyber-cockpit-panel-height, 40vh);
     max-height: var(--cyber-cockpit-panel-height, 40vh);

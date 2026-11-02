@@ -390,3 +390,49 @@ test("an earlier renderer leaves a later renderer's board alone", async (t) => {
   assert.equal(groups().length, 1);
   assert.equal(groups()[0].querySelector('text').textContent, 'Kept');
 });
+
+test('a mark hidden from Draw is not drawn or placed, and comes back when shown', async (t) => {
+  // happy-dom measures every SVG box the same, so callout spreading cannot
+  // settle here; a hidden mark simply has to stay out of drawing and
+  // placement, which is what keeps it from pushing a visible callout aside.
+  const { store, svg } = board(t);
+  projectTo(t, { x: 200, y: 300 });
+  const camera = cameraOver(0, 0);
+  let project = null;
+  const renderer = createScreenAnnotationRenderer(
+    {
+      scene: sceneFor(camera, {
+        postRender: {
+          addEventListener: (listener) => (project = listener),
+          removeEventListener() {},
+        },
+      }),
+      camera,
+      trackedEntity: null,
+    },
+    { store, activeTrackedReadoutId: () => null },
+  );
+  t.after(() => renderer.destroy());
+  const camp = {
+    id: 'camp',
+    type: 'pin',
+    color: 'amber',
+    label: 'Camp',
+    alpha: 1,
+    hidden: true,
+    anchor: { lon: 0, lat: 0, height: 0 },
+  };
+  renderer.add(camp);
+  project();
+  await settle();
+  const drawn = () =>
+    [...svg().querySelectorAll('g.gev-anno')].some(
+      (group) =>
+        group.textContent.includes('Camp') && group.style.display !== 'none',
+    );
+  assert.equal(drawn(), false, 'the hidden mark is not drawn');
+  camp.hidden = false;
+  project();
+  await settle();
+  assert.equal(drawn(), true, 'shown again, it is drawn');
+});

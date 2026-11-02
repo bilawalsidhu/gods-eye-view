@@ -139,8 +139,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
       0,
       Number(preCountdownDurationSec) || 0,
     );
+    // The hold precedes the whole countdown; ending it at -hold cut T-10 to T-5.
     const preCountdownActive =
-      preCountdownDuration > 0 && realSecondsSinceStart < -preCountdownDuration;
+      preCountdownDuration > 0 &&
+      realSecondsSinceStart < -REPLAY_COUNTDOWN_DURATION_SEC;
     const countdownActive = realSecondsSinceStart < 0 && !preCountdownActive;
     const countdownSeconds = countdownActive
       ? Math.ceil(-realSecondsSinceStart)
@@ -247,7 +249,8 @@ export function createReplay({ state: layerState, services, parts, source }) {
         ? layerState._replayPausedAtMs
         : Date.now();
     for (const [launchId, startedAt] of layerState._animationStarts) {
-      if (!Number.isFinite(startedAt)) continue;
+      // A countdown runs in real time; rescaling it turned T-8 into T-32 at 0.25x.
+      if (!Number.isFinite(startedAt) || startedAt > now) continue;
       const elapsedMissionMs = (now - startedAt) * previousSpeed;
       layerState._animationStarts.set(
         launchId,

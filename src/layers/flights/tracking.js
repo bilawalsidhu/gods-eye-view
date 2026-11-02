@@ -25,6 +25,7 @@ import {
   TRAIL_COLOR,
   CYAN_TRANSPARENT,
 } from './policy.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export function createTracking({
   flightState,
@@ -127,7 +128,7 @@ export function createTracking({
           ? `${Math.round(described.velocityMps * 1.944)} kt`
           : '',
         heading: Number.isFinite(described.track)
-          ? `${Math.round(described.track)}°`
+          ? `${roundHeadingDegrees(described.track)}°`
           : '',
         route: route || '',
         icao24,
