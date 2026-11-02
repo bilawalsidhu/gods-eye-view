@@ -100,6 +100,8 @@ async function mounted(options = {}) {
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints(),
     storage: fakeStorage(),
@@ -283,6 +285,8 @@ test('nothing is fetched until the console is opened', async () => {
   const fetchImpl = stubEndpoints();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl,
     storage: fakeStorage(),
@@ -298,6 +302,8 @@ test('opening loads the providers and models and preselects a usable pair', asyn
   const fetchImpl = stubEndpoints();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl,
     storage: fakeStorage(),
@@ -328,6 +334,8 @@ test('the listing is fetched once, not again on every reopen', async () => {
   const fetchImpl = stubEndpoints();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl,
     storage: fakeStorage(),
@@ -346,6 +354,8 @@ test('the close button and Escape both close the dialog and correct the chip', a
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints(),
     storage: fakeStorage(),
@@ -373,6 +383,8 @@ test('Escape closes the console even when focus is outside it', async () => {
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints({ failModels: { error: 'Cannot reach Ollama.' } }),
     storage: fakeStorage(),
@@ -389,6 +401,8 @@ test('a destroyed console releases the Escape key it had claimed', async () => {
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints(),
     storage: fakeStorage(),
@@ -408,6 +422,8 @@ test('an unconfigured provider names its variable and refuses input', async () =
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints({
       config: {
@@ -436,6 +452,8 @@ test('a provider with no usable model says so and refuses input', async () => {
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints({ models: { models: [], defaultModel: null } }),
     storage: fakeStorage(),
@@ -452,6 +470,8 @@ test('an unreachable backend writes one error entry and stays usable', async () 
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints({ failConfig: { error: 'Unknown API route' } }),
     storage: fakeStorage(),
@@ -467,6 +487,8 @@ test('a failed model listing is reported without losing the provider picker', as
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints({
       failModels: {
@@ -488,6 +510,8 @@ test('one typed command renders the command, its tools and the answer', async ()
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async (name, args) => {
       ran.push([name, args]);
       return { ok: true, action: name };
@@ -546,6 +570,8 @@ test('a server warning appears in the transcript with its remedy', async () => {
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints({
       commands: [
@@ -587,6 +613,8 @@ test('an empty input is not a command, and no model means no send', async () => 
   });
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl,
     storage: fakeStorage(),
@@ -616,6 +644,8 @@ test('changing provider remembers the choice and starts a clean transcript', asy
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints({
       commands: [
@@ -650,6 +680,8 @@ test('changing model remembers it and refreshes the cost readout', async () => {
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints({
       models: {
@@ -678,6 +710,8 @@ test('destroying the console closes it, hides the chip and detaches its listener
   const fetchImpl = stubEndpoints();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl,
     storage: fakeStorage(),
@@ -753,6 +787,8 @@ test('a listing that lands late does not overwrite a newer provider', async () =
 
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl,
     storage: fakeStorage(),
@@ -784,6 +820,8 @@ test('a hidden console stops claiming Escape', async () => {
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl: stubEndpoints(),
     storage: fakeStorage(),
@@ -827,6 +865,8 @@ test('a failed first load is retried on the next open, not remembered', async ()
   const dom = agentConsoleDom();
   const console_ = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     runAction: async () => ({ ok: true }),
     fetchImpl,
     storage: fakeStorage(),

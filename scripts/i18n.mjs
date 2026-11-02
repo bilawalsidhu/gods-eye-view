@@ -8,7 +8,7 @@
 // lists it.
 //
 // Messages are the English literals passed to t(), tn() and msg() in src/,
-// plus the markup opted in with data-i18n* in src/ui/templates and index.html.
+// plus the markup opted in with data-i18n* in index.html and the Vue views.
 // It also lists UI text that is not marked at all (see findUnmarked).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -119,14 +119,17 @@ export function extractMessages() {
     }
   }
 
-  const markup = trackedFiles('index.html', 'src/ui/templates/*.html');
+  const markup = markupFiles();
   const TAG = /<([a-zA-Z][\w-]*)(\s[^>]*?)\/?>([^<]*)/gs;
   for (const file of markup) {
-    const html = readFileSync(path.join(ROOT, file), 'utf8');
+    const html = readMarkup(file);
     for (const [, tag, attrs, text] of html.matchAll(TAG)) {
       const where = `${file} <${tag}>`;
-      if (/\sdata-i18n(\s|=|$)/.test(attrs))
-        add(normalize(decodeHtml(text)), where);
+      if (/\sdata-i18n(\s|=|$)/.test(attrs)) {
+        const context = attrs.match(/\sdata-i18n-context="([^"]*)"/);
+        const message = normalize(decodeHtml(text));
+        add(context ? `${decodeHtml(context[1])}|${message}` : message, where);
+      }
       for (const [, name] of attrs.matchAll(
         /\sdata-i18n-(title|aria-label|placeholder)\b/g,
       )) {
@@ -153,7 +156,7 @@ const SKIP_TAGS = new Set(['script', 'style', 'svg', 'code', 'pre', 'title']);
 /**
  * User-visible markup text without data-i18n*. Skipped, with everything
  * inside: translate="no" (text that stays as is, as in HTML),
- * data-i18n-runtime (code sets this text through t()), and icons
+ * data-i18n-runtime (page markup whose text code sets through t()), and icons
  * (aria-hidden, Material Symbols).
  */
 export function unmarkedMarkup(file, html) {
@@ -401,9 +404,12 @@ export function unmarkedScript(file, original) {
  */
 export function findUnmarked() {
   const found = [];
-  for (const file of trackedFiles('index.html', 'src/ui/templates/*.html'))
+  for (const file of markupFiles()) {
+    found.push(...unmarkedMarkup(file, readMarkup(file)));
+  }
+  for (const file of trackedFiles('src/**/*.vue'))
     found.push(
-      ...unmarkedMarkup(file, readFileSync(path.join(ROOT, file), 'utf8')),
+      ...markedTemplate(file, readFileSync(path.join(ROOT, file), 'utf8')),
     );
   for (const file of sourceFiles().filter(
     (name) => !NOT_UI.some((pattern) => pattern.test(name)),
@@ -420,6 +426,57 @@ export function findUnmarked() {
   });
 }
 
+/**
+ * data-i18n* in a Vue template: views translate with t() as they render, so
+ * their text follows the locale; the attributes are for static page markup.
+ * Reads the whole single-file component, so lines are the file's own.
+ */
+export function markedTemplate(file, source) {
+  const start = source.indexOf('<template>');
+  if (start === -1) return [];
+  const end = source.lastIndexOf('</template>');
+  // Comments and attribute values are blanked, keeping every offset.
+  const blank = (text) => text.replace(/[^\n]/g, ' ');
+  const template = source
+    .slice(0, end === -1 ? undefined : end)
+    .replace(/<!--[\s\S]*?-->/g, blank);
+  const found = [];
+  const TAG = /<[a-zA-Z][\w-]*((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+  TAG.lastIndex = start + '<template>'.length;
+  for (let tag; (tag = TAG.exec(template));) {
+    const attrs = tag[1].replace(/"[^"]*"|'[^']*'/g, blank);
+    const offset = tag.index + tag[0].length - 1 - tag[1].length;
+    for (const match of attrs.matchAll(
+      /(?<=\s)(?::|v-bind:)?(data-i18n[\w-]*)(?=[\s=/]|$)/g,
+    ))
+      found.push({
+        where: `${file}:${lineAt(source, offset + match.index)}`,
+        text: `${match[1]}: use t() in a Vue template`,
+      });
+  }
+  return found;
+}
+
+/** Markup checked for unmarked text: the page and its views. */
+function markupFiles() {
+  return trackedFiles('index.html', 'src/ui/views/*.vue');
+}
+
+/**
+ * A file's markup; for a single-file component, its template block without
+ * interpolations, which are code: their t() calls are read with the sources.
+ */
+function readMarkup(file) {
+  const source = readFileSync(path.join(ROOT, file), 'utf8');
+  if (!file.endsWith('.vue')) return source;
+  const start = source.indexOf('<template>');
+  const end = source.lastIndexOf('</template>');
+  if (start === -1) return '';
+  return source
+    .slice(start + '<template>'.length, end)
+    .replace(/\{\{[\s\S]*?\}\}/g, '');
+}
+
 // Text that never reaches the page as UI: tool results and descriptions for
 // AI clients (MCP and the voice model).
 const NOT_UI = [/^src\/tools\//];
@@ -430,6 +487,7 @@ function sourceFiles() {
     'src/*.mjs',
     'src/**/*.js',
     'src/**/*.mjs',
+    'src/**/*.vue',
   ).filter(
     (file) =>
       !file.startsWith('src/i18n/') &&

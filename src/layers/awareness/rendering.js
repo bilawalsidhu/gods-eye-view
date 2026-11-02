@@ -22,55 +22,75 @@ export function createRendering({
   const { getKeyholeGeometry, celestialScreenAngle } = services.geometry;
   const { governorRequestRender } = services.render;
 
+  const CARDINALS = [
+    ['N', 0],
+    ['E', 90],
+    ['S', 180],
+    ['W', 270],
+  ];
+
+  /**
+   * The direction overlay as its view renders it: the compass ring, its
+   * cardinals and heading, and up to three contact markers inside the
+   * viewer's container. Each part keeps its last placement while hidden.
+   */
   function ensureDirectionOverlay() {
-    if (layerState.directionRoot || !layerState.viewer)
-      return layerState.directionRoot;
-    const root = document.createElement('div');
-    root.id = 'military-awareness-direction-overlay';
-    root.hidden = true;
-    root.setAttribute('aria-hidden', 'true');
-
-    const compass = document.createElement('div');
-    compass.className = 'military-awareness-compass-ring';
-    const cardinals = [
-      ['N', 0],
-      ['E', 90],
-      ['S', 180],
-      ['W', 270],
-    ];
-    layerState.compassLabels = cardinals.map(([label, bearing]) => {
-      const element = document.createElement('span');
-      element.className = `military-awareness-compass-label cardinal-${label.toLowerCase()}`;
-      element.textContent = label;
-      element.dataset.bearing = String(bearing);
-      root.appendChild(element);
-      return element;
+    if (layerState.directionView || !layerState.viewer)
+      return layerState.directionView;
+    presentDirection({
+      container: layerState.viewer.container,
+      hidden: true,
+      ring: null,
+      heading: { text: '', left: null, top: null },
+      labels: CARDINALS.map(([label, bearing]) => ({
+        label,
+        bearing,
+        left: null,
+        top: null,
+      })),
+      markers: Array.from({ length: 3 }, () => ({
+        hidden: false,
+        style: null,
+        arrow: null,
+        caption: { text: '', style: null },
+      })),
     });
-    const heading = document.createElement('span');
-    heading.className = 'military-awareness-compass-heading';
-    root.append(compass, heading);
+    return layerState.directionView;
+  }
 
-    layerState.directionMarkers = Array.from({ length: 3 }, () => {
-      const marker = document.createElement('div');
-      marker.className = 'military-awareness-direction-marker';
-      const arrow = document.createElement('span');
-      arrow.className = 'military-awareness-direction-arrow';
-      arrow.textContent = '➜';
-      const label = document.createElement('span');
-      label.className = 'military-awareness-direction-label';
-      marker.append(arrow, label);
-      marker._arrow = arrow;
-      marker._label = label;
-      marker._lastAngle = 0;
-      root.appendChild(marker);
-      return marker;
-    });
+  /** Publish a change to the overlay, skipping one that changes nothing. */
+  function presentDirection(patch) {
+    const next = patch && { ...layerState.directionView, ...patch };
+    const signature = JSON.stringify(next, (name, value) =>
+      name === 'container' ? undefined : value,
+    );
+    if (next && signature === layerState.directionSignature) return;
+    layerState.directionSignature = next ? signature : '';
+    layerState.directionView = next && Object.freeze(next);
+    for (const listener of [...layerState.directionListeners])
+      listener(layerState.directionView);
+  }
 
-    layerState.compassRing = compass;
-    layerState.compassHeading = heading;
-    layerState.viewer.container.appendChild(root);
-    layerState.directionRoot = root;
-    return root;
+  /**
+   * Receive the direction overlay now and after every change.
+   * @param {(view: ?object) => void} listener
+   * @returns {() => void} Unsubscribe.
+   */
+  function subscribeDirectionOverlay(listener) {
+    layerState.directionListeners.add(listener);
+    listener(layerState.directionView);
+    return () => layerState.directionListeners.delete(listener);
+  }
+
+  /** Hide the overlay, keeping its last placement. */
+  function hideDirectionOverlay() {
+    if (layerState.directionView) presentDirection({ hidden: true });
+  }
+
+  /** Withdraw the overlay when the layer is destroyed. */
+  function removeDirectionOverlay() {
+    if (layerState.directionView) presentDirection(null);
+    layerState.directionAngles = [0, 0, 0];
   }
 
   function scheduleDirectionOverlayUpdate(force = false) {
@@ -104,7 +124,7 @@ export function createRendering({
       !layerState.subject?.position ||
       !layerState.results
     ) {
-      if (root) root.hidden = true;
+      if (root) presentDirection({ hidden: true });
       return;
     }
 
@@ -116,41 +136,43 @@ export function createRendering({
       : null;
     const geometry = getKeyholeGeometry(width, height);
     if (!(geometry.radius > 0)) {
-      root.hidden = true;
+      presentDirection({ hidden: true });
       return;
     }
 
-    root.hidden = false;
     // Keep the compass comfortably inside the shader keyhole so its cardinals
     // remain visible around the subject instead of hiding under edge panels.
     const compassRadius = Math.max(
       120,
       Math.min(geometry.radius - 48, geometry.radius * 0.66),
     );
-    layerState.compassRing.style.left = `${geometry.centerX - compassRadius}px`;
-    layerState.compassRing.style.top = `${geometry.centerY - compassRadius}px`;
-    layerState.compassRing.style.width = `${compassRadius * 2}px`;
-    layerState.compassRing.style.height = `${compassRadius * 2}px`;
-
     const cameraHeading = layerState.viewer.camera.heading || 0;
     const headingDeg =
       (Math.round(Cesium.Math.toDegrees(cameraHeading)) + 360) % 360;
-    layerState.compassRing.style.setProperty(
-      '--compass-rotation',
-      `${-headingDeg}deg`,
-    );
-    layerState.compassHeading.textContent = t('HDG {value}°', {
-      value: String(headingDeg).padStart(3, '0'),
-    });
-    layerState.compassHeading.style.left = `${geometry.centerX}px`;
-    layerState.compassHeading.style.top = `${geometry.centerY - compassRadius + 39}px`;
-    for (const label of layerState.compassLabels) {
-      const bearing = Cesium.Math.toRadians(Number(label.dataset.bearing));
+    const ring = {
+      left: `${geometry.centerX - compassRadius}px`,
+      top: `${geometry.centerY - compassRadius}px`,
+      width: `${compassRadius * 2}px`,
+      height: `${compassRadius * 2}px`,
+      '--compass-rotation': `${-headingDeg}deg`,
+    };
+    const heading = {
+      text: t('HDG {value}°', {
+        value: String(headingDeg).padStart(3, '0'),
+      }),
+      left: `${geometry.centerX}px`,
+      top: `${geometry.centerY - compassRadius + 39}px`,
+    };
+    const labels = root.labels.map((label) => {
+      const bearing = Cesium.Math.toRadians(label.bearing);
       const angle = bearing - cameraHeading - Cesium.Math.PI_OVER_TWO;
       const labelRadius = compassRadius - 17;
-      label.style.left = `${geometry.centerX + Math.cos(angle) * labelRadius}px`;
-      label.style.top = `${geometry.centerY + Math.sin(angle) * labelRadius}px`;
-    }
+      return {
+        ...label,
+        left: `${geometry.centerX + Math.cos(angle) * labelRadius}px`,
+        top: `${geometry.centerY + Math.sin(angle) * labelRadius}px`,
+      };
+    });
 
     const directionalCohort =
       layerState.results.cohorts.find(
@@ -163,8 +185,9 @@ export function createRendering({
         page,
         page + AWARENESS_PAGE_SIZE,
       ) || [];
-    for (let index = 0; index < layerState.directionMarkers.length; index++) {
-      const marker = layerState.directionMarkers[index];
+    const markers = root.markers.map((marker) => ({ ...marker }));
+    for (let index = 0; index < markers.length; index++) {
+      const marker = markers[index];
       const item = military[index];
       if (!item?.position) {
         marker.hidden = true;
@@ -183,27 +206,32 @@ export function createRendering({
       const projection = celestialScreenAngle(
         Cesium.Cartesian3.dot(direction, layerState.viewer.camera.rightWC),
         Cesium.Cartesian3.dot(direction, layerState.viewer.camera.upWC),
-        marker._lastAngle,
+        layerState.directionAngles[index],
       );
-      if (projection.stable) marker._lastAngle = projection.angle;
+      if (projection.stable)
+        layerState.directionAngles[index] = projection.angle;
       // Every detected contact shares the compass rim. Keeping the bearing
       // markers on one radius makes them read as compass contacts rather than
       // unconstrained labels floating over the map.
       const markerRadius = compassRadius;
-      marker.style.left = `${geometry.centerX + Math.cos(projection.angle) * markerRadius}px`;
-      marker.style.top = `${geometry.centerY + Math.sin(projection.angle) * markerRadius}px`;
-      marker.style.opacity = String(projection.opacity);
+      marker.style = {
+        left: `${geometry.centerX + Math.cos(projection.angle) * markerRadius}px`,
+        top: `${geometry.centerY + Math.sin(projection.angle) * markerRadius}px`,
+        opacity: String(projection.opacity),
+      };
       const sonarFactor =
         sonar?.at(
           geometry.centerX + Math.cos(projection.angle) * markerRadius,
           geometry.centerY + Math.sin(projection.angle) * markerRadius,
         ) ?? 1;
-      marker._arrow.style.opacity = String(sonarFactor);
-      marker._label.style.opacity = String(
-        sonar ? sonar.label(sonarFactor) : 1,
-      );
-      marker._arrow.style.transform = `translate(-50%, -50%) rotate(${projection.angle}rad)`;
-      marker._label.style.transform = `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`;
+      marker.arrow = {
+        opacity: String(sonarFactor),
+        transform: `translate(-50%, -50%) rotate(${projection.angle}rad)`,
+      };
+      const labelStyle = {
+        opacity: String(sonar ? sonar.label(sonarFactor) : 1),
+        transform: `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`,
+      };
       const label = formatAwarenessLabel(item);
       const subjectCartographic = Cesium.Cartographic.fromCartesian(
         layerState.subject.position,
@@ -234,9 +262,13 @@ export function createRendering({
             value: formatAwarenessDirection(item.track),
           })}`
         : '';
-      marker._label.textContent = `${label} · ${formatAwarenessDistance(item.distanceM)}\n${bearingText}${courseText}`;
+      marker.caption = {
+        text: `${label} · ${formatAwarenessDistance(item.distanceM)}\n${bearingText}${courseText}`,
+        style: labelStyle,
+      };
       marker.hidden = false;
     }
+    presentDirection({ hidden: false, ring, heading, labels, markers });
   }
 
   function clearVisual() {
@@ -303,6 +335,9 @@ export function createRendering({
   }
   return {
     ensureDirectionOverlay,
+    subscribeDirectionOverlay,
+    hideDirectionOverlay,
+    removeDirectionOverlay,
     scheduleDirectionOverlayUpdate,
     cancelDirectionOverlayUpdate,
     updateDirectionOverlay,

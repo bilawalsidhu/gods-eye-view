@@ -9,26 +9,36 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createServer } from 'node:http';
+import { createServer } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 
 const rtlGate = process.argv.includes('--rtl');
 const before = process.argv.includes('--record-before');
 const root = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
-const template = await fs.readFile(
-  path.join(root, 'src/ui/templates/agent-console.html'),
-  'utf8',
-);
+const template = '<div class="gev-view" data-gev-view="agent-console"></div>';
 const html = `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/style.css"></head><body>${template}
 <script type="module">
+import { mountApplicationViews } from '/src/ui/views/index.js';
+mountApplicationViews(document);
 import { mountAgentConsole } from '/src/agent/agentConsole.js';
+import { useAgentConsoleStore } from '/src/ui/stores/agentConsole.js';
+import { applicationPinia } from '/src/ui/vueRuntime.js';
+import { nextTick } from 'vue';
 import { setLocale, applyDocumentTranslations } from '/src/i18n/index.js';
 import { resolveLocale, applyDocumentLanguage } from '/src/i18n/locale.js';
 const locale = resolveLocale();
 setLocale(locale);
 applyDocumentLanguage(document, locale);
 applyDocumentTranslations(document);
+window.setConsoleLocale = (locale) => { setLocale(locale); applyDocumentLanguage(document, locale); };
+window.fixtureTranscript = async () => {
+ const store = useAgentConsoleStore(applicationPinia());
+ store.publish({ ...store.view, entries: Array.from({ length: 40 }, () => ({ kind: 'agent', text: 'اختبار التمرير ABC-123' })) });
+ await nextTick();
+};
 let active = 'account-one', binding = 'binding-one';
 let pending = false;
 const accounts = [{ id: 'account-one', label: 'fixture@example.test · one', signedIn: true }, { id: 'account-two', label: 'fixture@example.test · two', signedIn: true }];
@@ -53,39 +63,28 @@ const fetchImpl = async (url, init = {}) => {
 window.consoleController = mountAgentConsole({ fetchImpl, runAction: async (name) => { window.fixture.actions.push(name); return { ok: true, coordinates: [-27.367, -55.896], code: 'HDG 68°', id: 'ABC-123' }; } });
 window.consoleController.open();
 </script></body></html>`;
-const mime = {
-  '.js': 'text/javascript',
-  '.mjs': 'text/javascript',
-  '.json': 'application/json',
-  '.css': 'text/css',
-  '.woff2': 'font/woff2',
-};
-const server = createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url, 'http://localhost');
-    if (url.pathname === '/') {
-      res.setHeader('Content-Type', 'text/html');
-      res.end(html);
-      return;
-    }
-    if (url.pathname === '/favicon.ico') {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-    const filename = path.resolve(root, '.' + decodeURIComponent(url.pathname));
-    if (!filename.startsWith(root + path.sep)) throw new Error('Invalid path');
-    res.setHeader(
-      'Content-Type',
-      mime[path.extname(filename)] || 'application/octet-stream',
-    );
-    res.end(await fs.readFile(filename));
-  } catch {
-    res.writeHead(404);
-    res.end();
-  }
+const server = await createServer({
+  configFile: false,
+  server: { host: '127.0.0.1', port: 0 },
+  plugins: [
+    vue(VUE_PLUGIN_OPTIONS),
+    {
+      name: 'command-vue-fixture',
+      configureServer(server) {
+        server.middlewares.use(async (req, res, next) => {
+          if (
+            !new URL(req.url, 'http://localhost').pathname.match(/^\/$/) ||
+            req.url.includes('html-proxy')
+          )
+            return next();
+          res.setHeader('Content-Type', 'text/html');
+          res.end(await server.transformIndexHtml('/', html));
+        });
+      },
+    },
+  ],
 });
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+await server.listen();
 let browser;
 try {
   browser = await puppeteer.launch({
@@ -126,7 +125,7 @@ try {
       await page.setViewport({ width, height });
       await page.evaluateOnNewDocument(() => localStorage.clear());
       await page.goto(
-        `http://127.0.0.1:${server.address().port}/?lang=${locale}`,
+        `http://127.0.0.1:${server.httpServer.address().port}/?lang=${locale}`,
       );
       await page.waitForFunction(
         () => document.getElementById('agent-model').value === 'fixture-model',
@@ -170,6 +169,51 @@ try {
       assert.deepEqual(await page.evaluate(() => window.fixture.actions), [
         'zoom_to_globe',
       ]);
+      // Changing the page locale re-renders labels, preserving the active
+      // control, the unsent draft, model selection and visible transcript.
+      await page.evaluate(() => {
+        window.liveInput = document.getElementById('agent-input');
+        window.liveTranscript = document.getElementById('agent-transcript');
+        window.liveText = window.liveTranscript.textContent;
+        window.liveInput.value = 'unsent draft';
+        window.liveInput.focus();
+        window.setConsoleLocale('es');
+      });
+      await page.waitForFunction(
+        () => document.getElementById('agent-send').textContent === 'ENVIAR',
+      );
+      await page.evaluate(() => window.setConsoleLocale('ar'));
+      await page.waitForFunction(
+        () =>
+          document.documentElement.dir === 'rtl' &&
+          /[\u0600-\u06ff]/.test(
+            document.getElementById('agent-send').textContent,
+          ),
+      );
+      assert.equal(
+        await page.evaluate(
+          () =>
+            document.getElementById('agent-input') === window.liveInput &&
+            document.activeElement === window.liveInput &&
+            window.liveInput.value === 'unsent draft' &&
+            document.getElementById('agent-transcript') ===
+              window.liveTranscript &&
+            window.liveTranscript.textContent === window.liveText &&
+            document.getElementById('agent-model').value === 'fixture-model',
+        ),
+        true,
+      );
+      await page.evaluate((locale) => {
+        window.setConsoleLocale(locale);
+        window.liveInput.value = '';
+      }, locale);
+      await page.waitForFunction(
+        (locale) =>
+          document.documentElement.lang ===
+          (locale === 'zh-TW' ? 'zh-Hant' : locale),
+        {},
+        locale,
+      );
       if (rtlGate) {
         const sample = await page.evaluate(() => {
           const direction = (s) =>
@@ -266,13 +310,9 @@ try {
               `rtl-content-${locale}-${width}x${height}.png`,
             ),
           });
+          await page.evaluate(() => window.fixtureTranscript());
           const scrolling = await page.evaluate(() => {
             const list = document.querySelector('#agent-transcript');
-            for (let i = 0; i < 40; i++) {
-              const li = document.createElement('li');
-              li.textContent = 'اختبار التمرير ABC-123';
-              list.append(li);
-            }
             list.scrollTop = 0;
             const first = list.scrollTop;
             list.scrollTop = list.scrollHeight;
@@ -335,7 +375,8 @@ try {
       await page.waitForFunction(
         () =>
           document.getElementById('agent-input').disabled === false &&
-          window.consoleController.session.transcript.length === 0,
+          window.consoleController.session.transcript.length === 0 &&
+          document.getElementById('agent-transcript').children.length === 0,
       );
       await page.type('#agent-input', 'second account');
       await page.click('#agent-send');
@@ -445,11 +486,10 @@ try {
       }
       await page.close();
       console.log(
-        `PASS ${locale} ${width}×${height}: tool round trip, account isolation, STOP, logout, sign-in copy, layout`,
+        `PASS ${locale} ${width}×${height}: tool round trip, live locale, account isolation, STOP, logout, sign-in copy, layout`,
       );
     }
 } finally {
   await browser?.close();
-  server.closeAllConnections();
-  await new Promise((resolve) => server.close(resolve));
+  await server.close();
 }

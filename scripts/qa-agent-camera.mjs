@@ -3,18 +3,19 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { createServer } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 import puppeteer from 'puppeteer';
 
-const template = await fs.readFile(
-  'src/ui/templates/agent-console.html',
-  'utf8',
-);
+const template = '<div class="gev-view" data-gev-view="agent-console"></div>';
 const html = `<!doctype html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="/node_modules/cesium/Build/Cesium/Widgets/widgets.css">
 <link rel="stylesheet" href="/style.css">
 <style>html,body,#map{width:100%;height:100%;margin:0;overflow:hidden}</style>
 </head><body><div id="map"></div>${template}<script type="module">
 import * as Cesium from 'cesium';
+import { mountApplicationViews } from '/src/ui/views/index.js';
+mountApplicationViews(document);
 import { mountAgentConsole } from '/src/agent/agentConsole.js';
 import { createGevActionRunner } from '/src/voice/gevActions.js';
 import { getActiveCameraMotion } from '/src/cameraVerbs.js';
@@ -78,6 +79,7 @@ const server = await createServer({
   configFile: false,
   server: { host: '127.0.0.1', port: 0 },
   plugins: [
+    vue(VUE_PLUGIN_OPTIONS),
     {
       name: 'camera-fixture',
       configureServer(server) {

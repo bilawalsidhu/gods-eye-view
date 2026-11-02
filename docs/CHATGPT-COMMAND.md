@@ -1,3 +1,8 @@
+> Vue/Pinia integration (2026-11-02): see [VUE-COMMAND.md](VUE-COMMAND.md)
+> for the current mounting/state ownership, standalone #976 attribution and
+> validation boundaries. Earlier merge-order instructions below are historical
+> for the pre-Vue stack; the new candidate carries its required typed core.
+
 # ChatGPT plan usage for typed GEV commands
 
 This provider extends the GEV COMMAND console from darrendignam's PR #976.

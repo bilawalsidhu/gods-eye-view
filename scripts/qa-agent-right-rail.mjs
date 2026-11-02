@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/** Temporary #1331 + #1425 integration: real app/console/runner, scripted inference.
- * No OAuth, microphone or paid model calls. Requires #1425 in the test tree.
+/** Vue/Pinia rail integration: real app/console/runner, scripted inference.
+ * No OAuth, microphone or paid model calls. QA_AGENT_URL can select a local production build.
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -8,10 +8,17 @@ import { createServer } from 'vite';
 import puppeteer from 'puppeteer';
 const artifacts = 'qa-artifacts/agent-right-rail';
 await fs.mkdir(artifacts, { recursive: true });
-const server = await createServer({
-  cacheDir: `${artifacts}/vite-cache`,
-  server: { host: '127.0.0.1', port: 0, hmr: false },
-});
+// A supplied local build server lets this gate exercise production assets.
+const server = process.env.QA_AGENT_URL
+  ? {
+      resolvedUrls: { local: [process.env.QA_AGENT_URL.replace(/\/?$/, '/')] },
+      listen: async () => {},
+      close: async () => {},
+    }
+  : await createServer({
+      cacheDir: `${artifacts}/vite-cache`,
+      server: { host: '127.0.0.1', port: 0, hmr: false },
+    });
 const ids = [
   'pp-toggles',
   'cctv-panel',
@@ -52,7 +59,10 @@ try {
   async function newPage() {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(90000);
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => {
+      errors.push(e.message);
+      console.error('PAGE ERROR:', e.message);
+    });
     await page.setRequestInterception(true);
     page.on('request', async (req) => {
       const url = new URL(req.url());
@@ -133,7 +143,7 @@ try {
     await page.waitForFunction(
       () =>
         window.__godsEyeView?.agentConsole &&
-        document.querySelector('#right-rail-tabs'),
+        document.querySelector('#right-context-rail .gev-panel-rail'),
       { timeout: 90000 },
     );
   }
@@ -192,129 +202,127 @@ try {
   const page = await newPage();
   await page.setViewport({ width: 1440, height: 1000 });
   await boot(page);
-  for (const layout of ['tactical', 'operator', 'minimal', 'cyber']) {
-    await page.evaluate(
-      (layout) => window.__godsEyeView.styleManager.setHudLayout(layout),
-      layout,
+  if (!process.argv.includes('--controls-only')) {
+    for (const layout of ['tactical', 'minimal', 'cyber']) {
+      await page.evaluate(
+        (layout) => window.__godsEyeView.styleManager.setHudLayout(layout),
+        layout,
+      );
+      for (let i = 0; i < ids.length; i++) {
+        const reply = await send(page, 'Open ' + labels[i]);
+        assert.deepEqual(await state(page), [ids[i]], layout);
+        assert.deepEqual(await visible(page), [ids[i]], layout);
+        assert.match(reply.content, new RegExp(labels[i] + '.*open'));
+        assert.doesNotMatch(reply.content, /All requested panels/);
+        assert.equal(reply.focus, 'agent-input');
+      }
+      for (const command of ['Open all four', 'Open CCTV then Context']) {
+        const reply = await send(page, command);
+        assert.deepEqual(await state(page), [ids[3]]);
+        assert.match(reply.content, /Context.*open/);
+      }
+      await send(page, 'Close Context');
+      assert.deepEqual(await state(page), []);
+      console.log('PASS desktop ' + layout);
+      report.push({
+        layout,
+        result:
+          'PASS: sequential opens, batches, actual visibility, explicit close, focus',
+      });
+    }
+    await send(page, 'Open Context');
+    const link = await page.evaluate(() =>
+      window.__godsEyeView.styleManager.shareLinkManager.buildLink(),
     );
-    for (let i = 0; i < ids.length; i++) {
-      const reply = await send(page, 'Open ' + labels[i]);
-      assert.deepEqual(await state(page), [ids[i]], layout);
-      assert.deepEqual(await visible(page), [ids[i]], layout);
-      assert.match(reply.content, new RegExp(labels[i] + '.*open'));
-      assert.doesNotMatch(reply.content, /All requested panels/);
-      assert.equal(reply.focus, 'agent-input');
-    }
-    for (const command of ['Open all four', 'Open CCTV then Context']) {
-      const reply = await send(page, command);
-      assert.deepEqual(await state(page), [ids[3]]);
-      assert.match(reply.content, /Context.*open/);
-    }
-    await send(page, 'Close Context');
-    assert.deepEqual(await state(page), []);
-    console.log('PASS desktop ' + layout);
+    assert.ok(link?.includes('/share/'));
+    await page.goto(server.resolvedUrls.local[0] + '?welcome=0', {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForFunction(() => window.__godsEyeView?.agentConsole, {
+      timeout: 90000,
+    });
+    await page.waitForFunction(
+      () =>
+        !document
+          .getElementById('global-context-panel')
+          .classList.contains('collapsed'),
+    );
+    assert.deepEqual(
+      await state(page),
+      [ids[3]],
+      'root reload restores Context',
+    );
+    const storage = await page.evaluate(
+      (ids) =>
+        ids.map((id) =>
+          localStorage.getItem('godsEyeView.v6.panelCollapsed.' + id),
+        ),
+      ids,
+    );
+    assert.deepEqual(storage, ['1', '1', '1', '0']);
+    // A fresh browser context has no sender preferences; restore the real link.
+    const receiverContext = await browser.createBrowserContext();
+    const receiver = await receiverContext.newPage();
+    receiver.setDefaultNavigationTimeout(90000);
+    receiver.on('pageerror', (e) => errors.push(e.message));
+    await receiver.setViewport({ width: 1440, height: 1000 });
+    await boot(receiver, link);
+    await receiver.waitForFunction(
+      () =>
+        !document
+          .getElementById('global-context-panel')
+          .classList.contains('collapsed'),
+    );
+    assert.deepEqual(
+      await state(receiver),
+      [ids[3]],
+      'shared link restores sender owner',
+    );
+    await receiverContext.close();
+    console.log('PASS preferences and shared link');
     report.push({
-      layout,
       result:
-        'PASS: sequential opens, batches, actual visibility, explicit close, focus',
+        'PASS: preferences survive reload; fresh-context share link restores Context',
     });
   }
-  await send(page, 'Open Context');
-  const link = await page.evaluate(() =>
-    window.__godsEyeView.styleManager.shareLinkManager.buildLink(),
-  );
-  assert.ok(link?.includes('/share/'));
-  await page.goto(server.resolvedUrls.local[0] + '?welcome=0', {
-    waitUntil: 'domcontentloaded',
-  });
-  await page.waitForFunction(() => window.__godsEyeView?.agentConsole, {
-    timeout: 90000,
-  });
-  await page.waitForFunction(
-    () =>
-      !document
-        .getElementById('global-context-panel')
-        .classList.contains('collapsed'),
-  );
-  assert.deepEqual(await state(page), [ids[3]], 'root reload restores Context');
-  const storage = await page.evaluate(
-    (ids) =>
-      ids.map((id) =>
-        localStorage.getItem('godsEyeView.v6.panelCollapsed.' + id),
-      ),
-    ids,
-  );
-  assert.deepEqual(storage, ['1', '1', '1', '0']);
-  // A fresh browser context has no sender preferences; restore the real link.
-  const receiverContext = await browser.createBrowserContext();
-  const receiver = await receiverContext.newPage();
-  receiver.setDefaultNavigationTimeout(90000);
-  receiver.on('pageerror', (e) => errors.push(e.message));
-  await receiver.setViewport({ width: 1440, height: 1000 });
-  await boot(receiver, link);
-  await receiver.waitForFunction(
-    () =>
-      !document
-        .getElementById('global-context-panel')
-        .classList.contains('collapsed'),
-  );
-  assert.deepEqual(
-    await state(receiver),
-    [ids[3]],
-    'shared link restores sender owner',
-  );
-  await receiverContext.close();
-  console.log('PASS preferences and shared link');
-  report.push({
-    result:
-      'PASS: preferences survive reload; fresh-context share link restores Context',
-  });
-  // Exercise #1425 keyboard behavior after a command. Close the dialog first.
+  // Vue's rails use native buttons, with aria-pressed rather than tab roles.
   await page.evaluate(() => window.__godsEyeView.agentConsole.close());
-  const tab = (id) => `[data-rail-tab="${id}"]`;
-  await page.focus(tab(ids[3]));
-  await page.keyboard.press('Home');
-  assert.equal(
-    await page.evaluate(() => document.activeElement.dataset.railTab),
-    ids[0],
-  );
-  await page.keyboard.press('ArrowUp');
-  assert.equal(
-    await page.evaluate(() => document.activeElement.dataset.railTab),
-    ids[3],
-  );
-  await page.keyboard.press('ArrowDown');
+  const item = (id) => `#right-context-rail [data-rail-item="${id}"]`;
+  await page.focus(item(ids[0]));
   await page.keyboard.press('Enter');
   assert.deepEqual(await state(page), [ids[0]]);
+  await page.waitForFunction(
+    (id) =>
+      document
+        .querySelector(`[data-rail-item="${id}"]`)
+        .getAttribute('aria-pressed') === 'true',
+    {},
+    ids[0],
+  );
   await page.keyboard.press('Tab');
-  // The compact Radio launcher occupies #1425's tool slot before panel content.
-  if (
-    await page.evaluate(
-      () => !!document.activeElement.closest('#right-rail-tools'),
-    )
-  )
-    await page.keyboard.press('Tab');
   assert.equal(
-    await page.evaluate(() =>
-      document.getElementById('pp-toggles').contains(document.activeElement),
+    await page.evaluate(
+      () => !!document.activeElement.closest('[data-rail-item]'),
     ),
     true,
   );
-  await page.keyboard.press('Escape');
-  assert.deepEqual(await state(page), []);
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('Tab');
+  await page.keyboard.up('Shift');
   assert.equal(
-    await page.evaluate(() => document.activeElement.dataset.railTab),
+    await page.evaluate(() => document.activeElement.dataset.railItem),
     ids[0],
   );
-  await page.focus(tab(ids[0]));
-  await page.keyboard.press('End');
-  assert.equal(
-    await page.evaluate(() => document.activeElement.dataset.railTab),
-    ids[3],
-  );
+  await page.keyboard.press('Enter');
+  assert.deepEqual(await state(page), []);
+  await page.keyboard.press('Space');
+  assert.deepEqual(await state(page), [ids[0]]);
+  await page.$eval('#pp-toggles button', (e) => e.focus());
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await state(page), []);
   report.push({
     result:
-      'PASS: Home/End, Up/Down wrap, Enter, Tab through tool slot into panel, Escape closes and returns focus',
+      'PASS: native rail Tab/Shift+Tab, Enter/Space, aria-pressed and panel Escape after COMMAND',
   });
   await page.screenshot({ path: `${artifacts}/desktop.png` });
   // The phone shell owns which sheet is visible; independent expansion is legal.
@@ -345,6 +353,23 @@ try {
     JSON.stringify({ report, errors, posts: posts.length }, null, 2),
   );
   console.log(JSON.stringify(report, null, 2));
+} catch (error) {
+  for (const page of (await browser?.pages()) ?? []) {
+    console.error(
+      'Rail failure state:',
+      await page
+        .evaluate(() => ({
+          ready: !!window.__godsEyeView,
+          console: !!window.__godsEyeView?.agentConsole,
+          view: !!document.getElementById('agent-console'),
+          rail: !!document.querySelector('#right-context-rail .gev-panel-rail'),
+          text: document.body.innerText.slice(-1500),
+        }))
+        .catch(() => null),
+    );
+    await page.screenshot({ path: `${artifacts}/failure.png` }).catch(() => {});
+  }
+  throw error;
 } finally {
   await browser?.close();
   await server.close();

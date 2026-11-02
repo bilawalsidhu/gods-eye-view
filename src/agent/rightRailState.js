@@ -1,3 +1,6 @@
+import { usePanelChromeStore } from '../ui/stores/panelChrome.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
+
 // Observations for COMMAND only. PanelChrome remains the sole owner of panel
 // mutations, persistence and focus; an earlier successful call is not a lease
 // on a panel after a later call opens its peer.
@@ -13,7 +16,13 @@ const PANEL_LABELS = Object.freeze({
 export function readRightRailState(documentRef = globalThis.document) {
   const rail = documentRef?.getElementById('right-context-rail');
   // Older shells do not have the exclusive tab policy. Do not infer it.
-  if (!rail?.getAttribute('data-rail-tabs')) return null;
+  if (!rail) return null;
+  const vueRail = rail.querySelector?.('.gev-panel-rail');
+  if (!vueRail && !rail.getAttribute('data-rail-tabs')) return null;
+  const chrome = vueRail ? usePanelChromeStore(applicationPinia()) : null;
+  const collapsed = (panel) =>
+    chrome?.panels[panel.id]?.collapsed ??
+    panel.classList.contains('collapsed');
   const panels = Object.keys(PANEL_LABELS)
     .map((id) => documentRef.getElementById(id))
     .filter((panel) => panel && panel.parentElement === rail && !panel.hidden);
@@ -25,12 +34,8 @@ export function readRightRailState(documentRef = globalThis.document) {
       !documentRef.body.classList.contains('cockpit-mode') &&
       (!documentRef.defaultView?.getComputedStyle ||
         documentRef.defaultView.getComputedStyle(rail).display !== 'none'),
-    openPanelIds: panels
-      .filter((p) => !p.classList.contains('collapsed'))
-      .map((p) => p.id),
-    closedPanelIds: panels
-      .filter((p) => p.classList.contains('collapsed'))
-      .map((p) => p.id),
+    openPanelIds: panels.filter((p) => !collapsed(p)).map((p) => p.id),
+    closedPanelIds: panels.filter((p) => collapsed(p)).map((p) => p.id),
   };
 }
 

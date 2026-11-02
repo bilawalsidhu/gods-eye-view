@@ -1,23 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import {
-  APPLICATION_TEMPLATES,
-  expandApplicationHtml,
-} from '../../build/application-html.js';
+import { APPLICATION_VIEWS } from '../ui/views/index.js';
+import { readApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 
-const template = readFileSync(
-  new URL('../ui/templates/agent-console.html', import.meta.url),
-  'utf8',
-);
-const html = expandApplicationHtml(
-  readFileSync(new URL('../../index.html', import.meta.url), 'utf8'),
-);
+const html = await readApplicationHtml();
+const template = html.match(
+  /data-gev-view="agent-console">([\s\S]*?)<div class="gev-view"/,
+)[1];
 const css = readStylesheet(new URL('../../style.css', import.meta.url));
 
-test('the console is a registered template and reaches the built document', () => {
-  assert.ok(APPLICATION_TEMPLATES.includes('agent-console'));
+test('the console is a registered view and reaches the built document', () => {
+  assert.ok(Object.hasOwn(APPLICATION_VIEWS, 'agent-console'));
   assert.match(html, /id="agent-console"/);
   assert.match(html, /id="agent-console-chip"/);
 });
@@ -34,7 +29,7 @@ test('the console is a dialog on the shared panel surface, opened by its chip', 
   assert.match(template, /<header data-panel-header>/);
   assert.match(
     template,
-    /id="agent-transcript" data-panel-body data-rail-scroller/,
+    /id="agent-transcript"[^>]*data-panel-body data-rail-scroller/,
   );
   assert.match(template, /id="agent-console-chip"[^>]*aria-haspopup="dialog"/);
   assert.match(
@@ -67,11 +62,11 @@ test('every control the console drives has an accessible name', () => {
   // The two selects are labelled by their visible wrapper label.
   assert.match(
     template,
-    /<label class="agent-console-field">\s*<span data-i18n>PROVIDER<\/span>/,
+    /<label class="agent-console-field">\s*<span>PROVIDER<\/span>/,
   );
   assert.match(
     template,
-    /<label class="agent-console-field">\s*<span data-i18n>MODEL<\/span>/,
+    /<label class="agent-console-field">\s*<span>MODEL<\/span>/,
   );
 });
 

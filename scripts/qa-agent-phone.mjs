@@ -26,10 +26,17 @@ const sizes = process.argv.includes('--portrait-only')
     ];
 const artifacts = 'qa-artifacts/agent-phone';
 await fs.mkdir(artifacts, { recursive: true });
-const server = await createServer({
-  cacheDir: `${artifacts}/vite-cache`,
-  server: { host: '127.0.0.1', port: 0, hmr: false },
-});
+// A supplied local build server lets this gate exercise production assets.
+const server = process.env.QA_AGENT_URL
+  ? {
+      resolvedUrls: { local: [process.env.QA_AGENT_URL.replace(/\/?$/, '/')] },
+      listen: async () => {},
+      close: async () => {},
+    }
+  : await createServer({
+      cacheDir: `${artifacts}/vite-cache`,
+      server: { host: '127.0.0.1', port: 0, hmr: false },
+    });
 let browser;
 const results = [];
 try {

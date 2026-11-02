@@ -1,13 +1,18 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAgentSession } from './agentLoop.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
-import { installPanelDom } from '../voice/panel/testDom.mjs';
+import { mountVoiceView } from '../testSupport/voiceView.mjs';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
+import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { createVoicePreferences } from '../voice/panel/preferences.js';
 import { buildAgentInstructions } from '../../server/providers/agent/instructions.js';
 
 function harness(t, { expose = true, delayed = false } = {}) {
-  const doc = installPanelDom(t);
+  const doc = globalThis.document;
+  const view = mountVoiceView(t);
   const values = new Map([['gev.agent.provider', 'chatgpt']]);
   const storage = {
     getItem: (k) => values.get(k) ?? null,
@@ -18,6 +23,8 @@ function harness(t, { expose = true, delayed = false } = {}) {
     starts = 0;
   const commands = initGevVoiceCommands({
     panel: expose,
+    createControl: (options) =>
+      createTestVoiceUi({ ...options, pinia: view.pinia }),
     panelStorage: storage,
     viewer: {
       clock: { onTick: { addEventListener: () => () => {} } },
@@ -86,6 +93,7 @@ function harness(t, { expose = true, delayed = false } = {}) {
   });
   return {
     commands,
+    settle: view.settle,
     doc,
     values,
     agent,
@@ -119,8 +127,7 @@ test('typed shared runner opens/closes voice panes while microphone is idle; pre
     await h.send('Close ' + id, [panel(id, false)]);
     assert.equal(results(h).at(-1).panelOpen, false);
   }
-  h.commands.ui.voicePreviewInput.checked = false;
-  h.commands.ui.voicePreviewInput.fire('change');
+  h.commands.ui.emit('preview-change', false);
   for (const minutes of [0, 1, 7, 60]) {
     await h.send('Set inactivity to ' + minutes, [
       call('set_voice_inactivity_timeout', { minutes }),
@@ -197,14 +204,23 @@ test('manual focus/tab choice and unmount defeat pending typed reveals', async (
   h.cockpit();
   const pending = h.send('Open Voice Settings', [panel('voice-settings')]);
   while (!h.pending()) await new Promise((resolve) => setImmediate(resolve));
-  h.commands.ui.previewTab.fire('click');
+  h.commands.ui.emit('tab', 0);
   h.release();
   assert.equal((await pending).ok, false);
   assert.equal(h.commands.voicePanel.snapshot().view, 'preview');
-  h.commands.ui.previewTab.fire('keydown', { key: 'End' });
+  await h.settle();
+  h.doc
+    .getElementById('gev-voice-preview-tab')
+    .dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
   assert.equal(h.commands.voicePanel.snapshot().settingsOpen, true);
-  h.commands.ui.voicePanel.fire('keydown', { key: 'Escape' });
-  assert.equal(h.doc.activeElement, h.commands.ui.voiceSettingsButton);
+  await h.settle();
+  h.doc
+    .getElementById('gev-voice-panel')
+    .dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+  await h.settle();
+  assert.equal(h.doc.activeElement.id, 'gev-voice-settings-button');
   h.commands.session.destroy();
   const reply = await h.send('Open Voice Settings', [panel('voice-settings')]);
   assert.equal(reply.ok, false);
@@ -234,22 +250,24 @@ test('panel refusal skips sibling tools and leaves subsequent explicit commands 
 
 test('typed Provider Settings dispatch verifies open and close independently of voice', async (t) => {
   const h = harness(t);
-  const root = h.doc.createElement('aside');
-  root.id = 'key-setup';
-  root.dataset.ready = 'true';
-  root.hidden = true;
-  const open = h.doc.createElement('button');
-  open.id = 'key-setup-chip';
-  const close = h.doc.createElement('button');
-  close.setAttribute('data-key-setup-close', '');
-  close.matches = (selector) => selector === '[data-key-setup-close]';
-  open.click = () => {
-    root.hidden = false;
-    root.classList.add('visible');
-  };
-  close.click = () => root.classList.remove('visible');
-  root.appendChild(close);
-  h.doc.body.append(root, open);
+  const settings = useProviderSettingsStore(applicationPinia());
+  settings.publish({ ready: true, dialog: { hidden: true, visible: false } });
+  settings.connect({
+    open: () =>
+      settings.publish({
+        ready: true,
+        dialog: { hidden: false, visible: true },
+      }),
+    close: () =>
+      settings.publish({
+        ready: true,
+        dialog: { hidden: false, visible: false },
+      }),
+  });
+  t.after(() => {
+    settings.connect(null);
+    settings.publish(null);
+  });
   for (const desired of [true, false]) {
     await h.send('Toggle Provider Settings', [
       panel('provider-settings', desired),

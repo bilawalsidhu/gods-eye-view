@@ -45,12 +45,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // S2 GhostMaps extends the generated layer enums.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
-    // #1467 independently retires Operator; pin BOTH explicitly reviewed payloads.
-    GEV_ACTION_SCHEMAS.find(
-      (tool) => tool.name === 'set_hud',
-    ).parameters.properties.layout.enum.includes('operator')
-      ? '01eb522d619c9a838a0e8f23b3417321867e8aedd2e0c98e942bfee565df637d'
-      : 'a76545934d063400664a2515ac7ed638dc08e7ade9a0443015e6aa778966aa82',
+    // Snow leaves the set_visual_style enum.
+    // The Operator HUD layout leaves set_hud's layout enum.
+    // COMMAND keeps the additive Street Level target from its reviewed branch.
+    '1c04da2c039cd728465730ea14624842bf2b183d022b15890c79a7c142832653',
   );
 });
 
@@ -172,14 +170,22 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Restore the historical vocabulary for the legacy digest, including Operator
-  // when #1467 is temporarily integrated. Exact live options are tested separately.
+  // Cyber adds one HUD layout and Operator was retired.
   const hud = property('set_hud').layout;
-  assert.deepEqual(
-    hud.enum.filter((layout) => layout !== 'operator'),
-    ['tactical', 'minimal', 'cyber'],
-  );
+  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
   hud.enum = ['tactical', 'operator', 'minimal'];
+  // Snow is retired from set_visual_style; restore it to keep the legacy pin.
+  const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')
+    .parameters.properties.style;
+  assert.deepEqual(visualStyle.enum, [
+    'normal',
+    'retro',
+    'surveillance',
+    'thermal',
+    'anime',
+    'noir',
+  ]);
+  visualStyle.enum = [...visualStyle.enum, 'snow'];
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
@@ -264,11 +270,4 @@ test('direct voice timeout schema accepts None and exact integers, rejects malfo
     assert.equal(validateArgs(tool.parameters, { minutes }).length, 0);
   for (const minutes of [-1, 61, 1.5, '5'])
     assert.ok(validateArgs(tool.parameters, { minutes }).length > 0);
-});
-
-test('Street Level is an addressable panel in the shared command schema', () => {
-  const panels = GEV_ACTION_SCHEMAS.find(
-    (tool) => tool.name === 'set_panel_open',
-  ).parameters.properties.panelId.enum;
-  assert.ok(panels.includes('street-level-panel'));
 });

@@ -12,6 +12,7 @@ import {
   sampleGroundHeight,
 } from './annotationResolver.js';
 import { ringCentroid } from './drawMode.js';
+import { formatDistanceText } from '../data/distanceFormat.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -1572,9 +1573,7 @@ function greatCircleM(a, b) {
 }
 
 function formatDistance(m) {
-  if (!Number.isFinite(m)) return null;
-  if (m >= 1000) return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
-  return `${Math.round(m / 10) * 10} m`;
+  return formatDistanceText(m, { metreStep: 10 });
 }
 
 function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {

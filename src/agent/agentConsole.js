@@ -1,9 +1,16 @@
+import { nextTick } from 'vue';
+import { useAgentConsoleStore } from '../ui/stores/agentConsole.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { mountChatGptControls } from './chatgptControls.js';
 import { msg, t } from '../i18n/index.js';
 import { createSurfaceKeyboard } from '../ui/surfaceKeyboard.js';
 import { attachConsoleBox } from './consoleBox.js';
 import { createAgentSession, AGENT_EVENTS } from './agentLoop.js';
-import { formatCommandCostUsd } from './cost.js';
+import {
+  consoleTextParts,
+  providerOptionLabel,
+  modelOptionLabel,
+} from './consolePresentation.js';
 
 /**
  * GEV COMMAND: the typed transport for the same agent voice drives.
@@ -37,26 +44,6 @@ const AGENT_STATUS = Object.freeze({
   RUNNING: msg('RUNNING'),
   UNAVAILABLE: msg('UNAVAILABLE'),
 });
-
-// Display-only isolation. Do not put Unicode controls into conversation data:
-// canonical IDs and coordinates must reach the runner byte-for-byte unchanged.
-export function consoleTextParts(text) {
-  const value = String(text);
-  if (!/[\p{Script=Arabic}\p{Script=Hebrew}]/u.test(value))
-    return [{ text: value, ltr: false }];
-  const technical =
-    /\(?[+-]?\d+(?:\.\d+)?\s*,\s*[+-]?\d+(?:\.\d+)?\)?|[A-Za-z][A-Za-z0-9_.:/@-]*(?:[ \t]+[+-]?\d+(?:\.\d+)?[°%]?)?/g;
-  const parts = [];
-  let end = 0;
-  for (const match of value.matchAll(technical)) {
-    if (match.index > end)
-      parts.push({ text: value.slice(end, match.index), ltr: false });
-    parts.push({ text: match[0], ltr: true });
-    end = match.index + match[0].length;
-  }
-  if (end < value.length) parts.push({ text: value.slice(end), ltr: false });
-  return parts;
-}
 
 /**
  * Render a tool call as a compact one-liner.
@@ -103,35 +90,6 @@ function describeToolResult(result) {
   }
   if (result.partial) return 'partial';
   return 'ok';
-}
-
-/**
- * Option label for a provider, marking the ones that need configuration.
- *
- * @param {{label: string, configured: boolean, apiKeyEnv: string|null}} provider
- * @returns {string}
- */
-function providerOptionLabel(provider) {
-  if (provider.authType === 'oauth') return t('ChatGPT plan');
-  if (provider.configured) return provider.label;
-  return `${provider.label} (needs ${provider.apiKeyEnv})`;
-}
-
-/**
- * Option label for a model: its identity, then the two facts that decide
- * whether it is a good choice here - what it costs and whether it can see.
- *
- * @param {{label: string, costPerCommandUsd?: number|null, supportsVision?: boolean}} model
- * @returns {string}
- */
-function modelOptionLabel(model) {
-  const parts = [model.label];
-  const cost = formatCommandCostUsd(model.costPerCommandUsd);
-  if (cost !== 'n/a') parts.push(cost);
-  if (model.supportsVision) parts.push('vision');
-  return parts.length > 1
-    ? `${parts[0]}  ·  ${parts.slice(1).join(' · ')}`
-    : parts[0];
 }
 
 /**
@@ -236,7 +194,7 @@ function pickInitialProvider(
 }
 
 /**
- * Mount the typed console against the markup in `agent-console.html`.
+ * Wire the typed console after mountApplicationViews renders AgentConsoleView.
  *
  * @param {{
  *   root?: Document,
@@ -254,6 +212,8 @@ function mountAgentConsole({
   runAction,
   fetchImpl = globalThis.fetch?.bind(globalThis),
   storage,
+  publish,
+  publishChatgpt,
 } = {}) {
   const dialog = root?.getElementById?.('agent-console');
   const chip = root?.getElementById?.('agent-console-chip');
@@ -262,14 +222,38 @@ function mountAgentConsole({
   const header = dialog.querySelector('[data-panel-header]');
   const providerSelect = root.getElementById('agent-provider');
   const modelSelect = root.getElementById('agent-model');
-  const transcript = root.getElementById('agent-transcript');
   const form = root.getElementById('agent-form');
   const input = root.getElementById('agent-input');
-  const sendButton = root.getElementById('agent-send');
   const stopButton = root.getElementById('agent-stop');
   const closeButton = root.getElementById('agent-console-close');
-  const statusEl = root.getElementById('agent-status');
-  const costEl = root.getElementById('agent-cost');
+  // Injected publishers let controller tests exercise the presentation contract
+  // without a DOM renderer. Production uses the page's shared Pinia instance.
+  const store =
+    !publish || !publishChatgpt
+      ? useAgentConsoleStore(applicationPinia())
+      : null;
+  publish ??= store.publish;
+  publishChatgpt ??= store.publishChatgpt;
+  let destroyed = false;
+  let state = {
+    available: true,
+    expanded: false,
+    providers: [],
+    models: [],
+    provider: '',
+    model: '',
+    busy: true,
+    providerDisabled: false,
+    stopDisabled: true,
+    entries: [],
+    status: AGENT_STATUS.READY,
+    detail: '',
+  };
+  function present(patch = {}) {
+    if (destroyed) return;
+    state = { ...state, ...patch };
+    publish(state);
+  }
 
   const session = createAgentSession({ runAction, fetchImpl });
   let providers = [];
@@ -284,72 +268,33 @@ function mountAgentConsole({
     root,
     view,
     readJson,
+    publish: publishChatgpt,
     onChanging: () => {
+      if (destroyed) return;
       session.abort();
       session.reset();
-      transcript.replaceChildren();
-      input.disabled = true;
-      sendButton.disabled = true;
-      modelSelect.disabled = true;
+      present({ entries: [], busy: true });
     },
     onError: (error) => append(ENTRY_KIND.ERROR, error),
     onChange: async () => {
-      if (providerSelect.value !== 'chatgpt') return;
+      if (destroyed || state.provider !== 'chatgpt') return;
       session.abort();
       session.reset();
-      transcript.replaceChildren();
+      present({ entries: [] });
       await loadModels('chatgpt');
     },
   });
 
   function append(kind, text) {
-    const entry = root.createElement('li');
-    entry.className = `agent-entry agent-entry-${kind}`;
-    entry.setAttribute('dir', kind === ENTRY_KIND.TOOL ? 'ltr' : 'auto');
-    entry.textContent = text;
-    const parts = consoleTextParts(text);
-    if (kind !== ENTRY_KIND.TOOL && parts.some((part) => part.ltr)) {
-      entry.textContent = '';
-      for (const part of parts) {
-        const span = root.createElement(part.ltr ? 'bdi' : 'span');
-        if (part.ltr) span.setAttribute('dir', 'ltr');
-        span.textContent = part.text;
-        entry.appendChild(span);
-      }
-    }
-    transcript.appendChild(entry);
-    transcript.scrollTop = transcript.scrollHeight;
-    return entry;
+    present({ entries: [...state.entries, { kind, text: String(text) }] });
   }
 
   function setStatus(status, detail = '') {
-    const label = t(status);
-    statusEl.textContent = detail ? `${label} · ${detail}` : label;
-    // The dataset keys off the untranslated status, so CSS and tests do not
-    // move with the language.
-    dialog.dataset.agentStatus = status.toLowerCase();
-  }
-
-  function currentModel() {
-    return models.find((model) => model.id === modelSelect.value) || null;
-  }
-
-  function refreshCost() {
-    costEl.title =
-      providerSelect.value === 'chatgpt'
-        ? t('ChatGPT plan limits')
-        : t('Estimated cost per command');
-    costEl.textContent =
-      providerSelect.value === 'chatgpt'
-        ? t('ChatGPT plan limits')
-        : formatCommandCostUsd(currentModel()?.costPerCommandUsd);
+    present({ status, detail });
   }
 
   function setBusy(busy) {
-    input.disabled = busy;
-    sendButton.disabled = busy;
-    modelSelect.disabled = busy;
-    providerSelect.disabled = busy;
+    present({ busy, providerDisabled: busy });
   }
 
   async function readJson(url, init) {
@@ -367,24 +312,24 @@ function mountAgentConsole({
   let latestModelsRequest = 0;
 
   async function loadModels(providerId) {
+    if (destroyed) return;
     const request = (latestModelsRequest += 1);
-    const superseded = () => request !== latestModelsRequest;
+    const superseded = () => destroyed || request !== latestModelsRequest;
 
-    modelSelect.replaceChildren();
     models = [];
+    present({ models: [], model: '' });
     binding = null;
     chatgptControls.setVisible(providerId === 'chatgpt');
-    refreshCost();
 
     // The select is empty until the listing lands, and submitting in that
     // window would send no model, so input stays disabled until there is
     // something real to send. The provider picker stays live throughout.
     setBusy(true);
-    providerSelect.disabled = false;
+    present({ providerDisabled: false });
 
     const provider = providers.find((entry) => entry.id === providerId);
     if (!provider) {
-      setStatus(AGENT_STATUS.UNAVAILABLE, t('no provider'));
+      setStatus(AGENT_STATUS.UNAVAILABLE, msg('no provider'));
       return;
     }
     if (provider.authType === 'oauth') {
@@ -402,13 +347,13 @@ function mountAgentConsole({
       setStatus(
         AGENT_STATUS.UNAVAILABLE,
         provider.authType === 'oauth'
-          ? t('Sign in to use your ChatGPT plan.')
-          : t('set {envVar}', { envVar: provider.apiKeyEnv }),
+          ? msg('Sign in to use your ChatGPT plan.')
+          : { key: msg('set {envVar}'), args: { envVar: provider.apiKeyEnv } },
       );
       return;
     }
 
-    setStatus(AGENT_STATUS.THINKING, t('loading models'));
+    setStatus(AGENT_STATUS.THINKING, msg('loading models'));
     try {
       const data = await readJson(
         `/api/agent/models?provider=${encodeURIComponent(providerId)}`,
@@ -416,50 +361,37 @@ function mountAgentConsole({
       if (superseded()) return;
       binding = data.binding || null;
       models = Array.isArray(data.models) ? data.models : [];
-      for (const model of models) {
-        const option = root.createElement('option');
-        option.value = model.id;
-        option.textContent = modelOptionLabel(model);
-        modelSelect.appendChild(option);
-      }
       const initial = pickInitialModel(models, {
         remembered: selection.model,
         configuredDefault: data.defaultModel,
       });
-      if (initial) modelSelect.value = initial.id;
-      refreshCost();
+      present({ models, model: initial?.id || '' });
       setStatus(
         models.length ? AGENT_STATUS.READY : AGENT_STATUS.UNAVAILABLE,
-        models.length ? '' : t('no usable models'),
+        models.length ? '' : msg('no usable models'),
       );
       // Only a provider with a usable model may accept input.
       setBusy(models.length === 0);
-      providerSelect.disabled = false;
+      present({ providerDisabled: false });
     } catch (error) {
       if (superseded()) return;
       setStatus(AGENT_STATUS.UNAVAILABLE);
       append(ENTRY_KIND.ERROR, error?.message || t('Could not list models'));
-      providerSelect.disabled = false;
+      present({ providerDisabled: false });
     }
   }
 
   async function loadConfig() {
     try {
       const data = await readJson('/api/agent/config');
+      if (destroyed) return;
       providers = Array.isArray(data.providers) ? data.providers : [];
-      providerSelect.replaceChildren();
-      for (const provider of providers) {
-        const option = root.createElement('option');
-        option.value = provider.id;
-        option.textContent = providerOptionLabel(provider);
-        providerSelect.appendChild(option);
-      }
       const chosen = pickInitialProvider(providers, {
         remembered: selection.provider,
         configuredDefault: data.defaultProvider,
       });
-      if (chosen) providerSelect.value = chosen;
-      await loadModels(providerSelect.value);
+      present({ providers, provider: chosen || '' });
+      await loadModels(state.provider);
     } catch (error) {
       setStatus(AGENT_STATUS.UNAVAILABLE);
       append(
@@ -483,9 +415,14 @@ function mountAgentConsole({
       setStatus(AGENT_STATUS.RUNNING, event.name);
       append(ENTRY_KIND.TOOL, describeToolCall(event.name, event.args));
     } else if (event.type === AGENT_EVENTS.TOOL_RESULT) {
-      const last = transcript.lastElementChild;
-      if (last?.classList.contains('agent-entry-tool')) {
-        last.dataset.outcome = describeToolResult(event.result);
+      const last = state.entries.at(-1);
+      if (last?.kind === ENTRY_KIND.TOOL) {
+        present({
+          entries: [
+            ...state.entries.slice(0, -1),
+            { ...last, outcome: describeToolResult(event.result) },
+          ],
+        });
       }
     } else if (event.type === AGENT_EVENTS.WARNING) {
       append(ENTRY_KIND.WARNING, describeWarning(event.warning));
@@ -499,48 +436,54 @@ function mountAgentConsole({
   async function submit(submitEvent) {
     submitEvent?.preventDefault?.();
     const text = input.value.trim();
-    if (!text || session.busy) return;
-    if (!modelSelect.value) {
+    if (destroyed || !text || session.busy) return;
+    if (!state.model) {
       append(ENTRY_KIND.ERROR, t('Select a model before sending a command.'));
       return;
     }
+    if (state.busy) return;
 
     input.value = '';
     setBusy(true);
     setStatus(AGENT_STATUS.THINKING);
     chatgptControls.setBusy(true);
-    if (stopButton) stopButton.disabled = false;
+    present({ stopDisabled: false });
     try {
       // handleEvent already renders the error entry; appending result.error
       // here as well would show every failure twice.
       await session.send(text, {
-        provider: providerSelect.value,
-        model: modelSelect.value,
+        provider: state.provider,
+        model: state.model,
         binding,
         onEvent: handleEvent,
       });
     } finally {
+      if (destroyed) return;
       chatgptControls.setBusy(false);
-      if (stopButton) stopButton.disabled = true;
+      present({ stopDisabled: true });
       setBusy(false);
       setStatus(AGENT_STATUS.READY);
-      input.focus();
+      await nextTick();
+      if (!destroyed && dialog.open) input.focus();
     }
   }
 
   async function onProviderChange() {
-    selection = { provider: providerSelect.value, model: null };
+    if (destroyed || session.busy) return;
+    present({ provider: providerSelect.value, model: '' });
+    selection = { provider: state.provider, model: null };
     writeStoredSelection(selection, storage);
     // The transcript references tools the previous model called; a new back
     // end starts clean rather than inheriting a half-finished exchange.
     session.reset();
-    await loadModels(providerSelect.value);
+    await loadModels(state.provider);
   }
 
   function onModelChange() {
-    selection = { provider: providerSelect.value, model: modelSelect.value };
+    if (destroyed || state.busy) return;
+    present({ model: modelSelect.value });
+    selection = { provider: state.provider, model: state.model };
     writeStoredSelection(selection, storage);
-    refreshCost();
   }
 
   // The window is draggable from its header and resizable from every edge,
@@ -568,13 +511,21 @@ function mountAgentConsole({
   const keyboard = createSurfaceKeyboard({
     root: dialog,
     documentRef: root,
-    isActive: () => dialog.open === true && visible(),
+    isActive: () => {
+      if (dialog.open !== true || !visible()) return false;
+      // The console is non-modal. A focused rail, voice pane or other dialog
+      // owns its own Escape/Tab; capture must let those handlers run.
+      const surface = root.activeElement?.closest?.(
+        'dialog, [role="dialog"], [data-panel-surface], [data-panel-id], #gev-voice-panel, .gev-panel-rail',
+      );
+      return !surface || surface === dialog;
+    },
     onEscape: () => close(),
     fallbackFocus: () => chip,
   });
 
   function open() {
-    if (dialog.open) return;
+    if (destroyed || dialog.open) return;
     // Placed before it is shown, so it never paints at the stylesheet's
     // corner for a frame and then jump to where the operator left it.
     windowBox.apply();
@@ -582,7 +533,7 @@ function mountAgentConsole({
     // Non-modal on purpose: a command moves the camera, and the point of
     // typing one is watching it happen.
     dialog.show();
-    chip.setAttribute('aria-expanded', 'true');
+    present({ expanded: true });
     // The listing is fetched on first open, not at startup: an install with no
     // provider configured should not spend a request to discover that.
     if (!configLoaded) configLoaded = loadConfig();
@@ -592,7 +543,7 @@ function mountAgentConsole({
   function close() {
     if (!dialog.open) return;
     dialog.close();
-    chip.setAttribute('aria-expanded', 'false');
+    present({ expanded: false });
     keyboard.deactivate({ restoreFocus: true });
   }
 
@@ -601,7 +552,7 @@ function mountAgentConsole({
     else open();
   }
 
-  chip.hidden = false;
+  present();
   windowBox.refresh();
   setStatus(AGENT_STATUS.READY);
   const stop = () => session.abort();
@@ -618,6 +569,10 @@ function mountAgentConsole({
     open,
     close,
     destroy() {
+      if (destroyed) return;
+      present({ available: false, expanded: false, entries: [] });
+      destroyed = true;
+      latestModelsRequest += 1;
       chatgptControls.destroy();
       stopButton?.removeEventListener('click', stop);
       form.removeEventListener('submit', submit);
@@ -629,13 +584,12 @@ function mountAgentConsole({
       windowBox.destroy();
       session.abort();
       if (dialog.open) dialog.close();
-      chip.hidden = true;
-      chip.setAttribute('aria-expanded', 'false');
     },
   };
 }
 
 export {
+  consoleTextParts,
   AGENT_SELECTION_STORAGE_KEY,
   AGENT_STATUS,
   ENTRY_KIND,

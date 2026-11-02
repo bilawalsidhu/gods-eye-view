@@ -19,7 +19,7 @@
   window to safe areas and keyboard visual viewports, and keep input reachable
   at the preferred minimum size. Add real-application phone/desktop browser
   regressions without merging or modifying #1429 (radianx, #1331).
-  COMMAND observes the final vertical-tab rail state after panel actions and uses
+  COMMAND observes the final side-rail state after panel actions and uses
   that state for panel-only confirmations, including independent mobile expansion.
   Street Level becomes an addressable shared panel target. Shell exclusivity,
   keyboard behavior, share links and preference ownership remain with the UI.
@@ -46,3 +46,10 @@
   validated HUD caption queries with the current UI language. Retain partial
   section coverage and share localized caption state tags with voice (radianx,
   #1331; compatibility with #1488).
+- Mount GEV COMMAND through the Vue application-view registry and publish its
+  transcript, selectors, account controls and command status to the shared Pinia
+  presentation store. Preserve the agent/session owners, account isolation and
+  STOP; follow live locale changes without losing drafts, read final panel state
+  from PanelChrome, and defer Escape/Tab to other focused surfaces. Carry the
+  attributed typed-agent core as a self-contained contribution instead of requiring
+  a future #976 merge; retain the existing draft release gates (radianx, #1331).

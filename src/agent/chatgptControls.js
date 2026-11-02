@@ -8,6 +8,7 @@ export function mountChatGptControls({
   onChanging,
   onChange,
   onError,
+  publish,
 }) {
   const panel = root.getElementById('agent-chatgpt');
   if (!panel)
@@ -20,7 +21,26 @@ export function mountChatGptControls({
   const accounts = root.getElementById('agent-chatgpt-account');
   const login = root.getElementById('agent-chatgpt-login');
   const logout = root.getElementById('agent-chatgpt-logout');
-  const status = root.getElementById('agent-chatgpt-status');
+  let visible = false;
+  let signInPath = null;
+  const present = () => {
+    if (!destroyed)
+      publish({
+        visible,
+        accounts: snapshot?.accounts || [],
+        selected: selected || '',
+        pending: Boolean(snapshot?.pending),
+        error: snapshot?.error || '',
+        connected: Boolean(
+          snapshot?.configured && selected === snapshot?.active,
+        ),
+        disabled: Boolean(busy || updating || snapshot?.pending),
+        logoutDisabled: Boolean(
+          busy || updating || (!snapshot?.configured && !snapshot?.pending),
+        ),
+        signInPath,
+      });
+  };
   let snapshot = null;
   let selected = null;
   let timer = null;
@@ -46,33 +66,13 @@ export function mountChatGptControls({
           : data.accounts?.[0]?.id) ||
         '';
     snapshot = data;
-    accounts.replaceChildren();
-    for (const account of data.accounts || []) {
-      const option = root.createElement('option');
-      option.value = account.id;
-      option.textContent = account.label;
-      accounts.appendChild(option);
-    }
-    const add = root.createElement('option');
-    add.value = '';
-    add.textContent = t('Add a ChatGPT account');
-    accounts.appendChild(add);
-    accounts.value = selected;
-    status.textContent = data.pending
-      ? t('Complete sign-in in your browser.')
-      : data.error ||
-        (data.configured && selected === data.active
-          ? t('ChatGPT account connected')
-          : t('Sign in to use your ChatGPT plan.'));
+    signInPath = null;
     setBusy(busy);
   }
 
   function setBusy(value) {
     busy = value;
-    accounts.disabled = busy || updating || snapshot?.pending;
-    login.disabled = busy || updating || snapshot?.pending;
-    logout.disabled =
-      busy || updating || (!snapshot?.configured && !snapshot?.pending);
+    present();
   }
 
   function schedulePoll() {
@@ -120,20 +120,9 @@ export function mountChatGptControls({
       if (popup) popup.location.href = data.path;
       else {
         paint({ ...snapshot, pending: true });
-        const link = root.createElement('a');
-        link.href = data.path;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = t('Continue with ChatGPT');
-        status.replaceChildren(link);
+        signInPath = data.path;
+        present();
         // Keep the usable link visible until the user opens it.
-        link.addEventListener(
-          'click',
-          () => {
-            void refresh().catch((error) => onError(error.message));
-          },
-          { once: true },
-        );
         return;
       }
       await refresh();
@@ -189,18 +178,27 @@ export function mountChatGptControls({
     }
   }
 
+  const followSignIn = (event) => {
+    if (!event.target.closest?.('[data-agent-sign-in]')) return;
+    void refresh().catch((error) => onError(error.message));
+  };
+  panel.addEventListener('click', followSignIn);
   login.addEventListener('click', signIn);
   accounts.addEventListener('change', selectAccount);
   logout.addEventListener('click', signOut);
   return {
     refresh,
     setBusy,
-    setVisible(visible) {
-      panel.hidden = !visible;
+    setVisible(value) {
+      visible = value;
+      present();
     },
     destroy() {
+      publish(null);
       destroyed = true;
+      pollGeneration += 1;
       clearTimeout(timer);
+      panel.removeEventListener('click', followSignIn);
       login.removeEventListener('click', signIn);
       accounts.removeEventListener('change', selectAccount);
       logout.removeEventListener('click', signOut);

@@ -1,3 +1,5 @@
+import { readApplicationHtml } from '../testSupport/applicationHtml.mjs';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import { readFileSync } from 'node:fs';
 import { GevRealtimeController } from '../voice/gevRealtime.js';
 import { ShareLinkManager } from '../sharelink.js';
@@ -224,16 +226,7 @@ test('Realtime function-call transport forwards the same HUD state and say line'
   const h = harness(),
     sent = [];
   const controller = new GevRealtimeController({
-    ui: {
-      root: {
-        dataset: {},
-        classList: { remove() {} },
-        querySelectorAll: () => [],
-      },
-      status: {},
-      detail: {},
-      errorDetail: {},
-    },
+    ui: createTestVoiceUi(),
     runner: h.runner,
   });
   controller.debugLog = () => {};
@@ -268,11 +261,8 @@ test('thrown HUD action cannot leak a speculative confirmation', async () => {
   assert.ok(!h.events.some((e) => /Operator/.test(e.message?.content || '')));
 });
 
-test('Display dropdown offers exactly the same layouts as typed and voice tools', () => {
-  const markup = readFileSync(
-    new URL('../ui/templates/display-controls.html', import.meta.url),
-    'utf8',
-  );
+test('Display dropdown offers exactly the same layouts as typed and voice tools', async () => {
+  const markup = await readApplicationHtml();
   const select = markup.match(
     /<select id="hud-layout-select"[\s\S]*?<\/select>/,
   )?.[0];

@@ -1,13 +1,14 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { usePanelChromeStore } from '../ui/stores/panelChrome.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
+import { followPanelState } from '../ui/rail/panelState.js';
 import { PanelChrome } from '../ui/panelChrome.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { createAgentSession } from './agentLoop.js';
 
-const integrated = existsSync(
-  new URL('../ui/rightRailTabs.js', import.meta.url),
-);
+const integrated = true;
 const names = ['Display', 'CCTV', 'Street Level', 'Context'];
 const ids = [
   'pp-toggles',
@@ -16,18 +17,15 @@ const ids = [
   'global-context-panel',
 ];
 async function harness(t, { mobile = false } = {}) {
-  const { makeDocument } = await import('../testSupport/fakeDom.mjs');
-  const doc = makeDocument();
-  const prior = globalThis.document;
-  globalThis.document = doc;
-  t.after(() => {
-    globalThis.document = prior;
-  });
-  doc.documentElement = { dataset: { uiTheme: 'tactical' } };
+  const doc = globalThis.document;
+  doc.body.replaceChildren();
+  doc.body.className = '';
   if (mobile) doc.body.classList.add('mobile-shell');
   const rail = doc.createElement('aside');
   rail.id = 'right-context-rail';
-  rail.setAttribute('data-rail-tabs', 'vertical');
+  const navigation = doc.createElement('nav');
+  navigation.className = 'gev-panel-rail';
+  rail.append(navigation);
   doc.body.append(rail);
   for (const id of ids) {
     const p = doc.createElement('section');
@@ -37,6 +35,13 @@ async function harness(t, { mobile = false } = {}) {
     p.classList.add('collapsed');
     rail.append(p);
   }
+  const store = usePanelChromeStore(applicationPinia());
+  const token = store.connect({});
+  for (const id of ids) {
+    const stop = followPanelState(store, id, doc.getElementById(id));
+    t.after(stop);
+  }
+  t.after(() => store.detach(token));
   const input = doc.createElement('input');
   doc.body.append(input);
   input.focus();
@@ -44,6 +49,10 @@ async function harness(t, { mobile = false } = {}) {
     claimed = [];
   const owner = {
     _rightPanelStack: rail,
+    _chromeStore: store,
+    _chromeToken: token,
+    _shownPanel: PanelChrome.prototype._shownPanel,
+    _presentPanel: PanelChrome.prototype._presentPanel,
     _panelLayout: {},
     _lifetime: { frame() {} },
     _syncPanelCollapseButton() {},
@@ -137,7 +146,7 @@ test(
     assert.equal(reply.ok, true);
     assert.match(reply.content, /Context.*open/);
     assert.doesNotMatch(reply.content, /All requested panels are open/);
-    assert.equal(h.doc.activeElement, h.input);
+    assert.equal(h.doc.activeElement === h.input, true);
     assert.equal(
       h.events.some(
         (e) => e.message?.content === 'All requested panels are open!',
@@ -163,7 +172,7 @@ test(
       const reply = await h.send([{ panelId: ids[i], open: true }]);
       assert.deepEqual(h.open(), [ids[i]]);
       assert.match(reply.content, new RegExp(names[i] + '.*open'));
-      assert.equal(h.doc.activeElement, h.input);
+      assert.equal(h.doc.activeElement === h.input, true);
     }
     assert.deepEqual(
       ids.map((id) => h.saved.get(id)),
@@ -195,6 +204,6 @@ test(
     assert.deepEqual(h.open(), ids);
     await h.send([{ panelId: ids[1], open: false }]);
     assert.deepEqual(h.open(), [ids[0], ids[2], ids[3]]);
-    assert.equal(h.doc.activeElement, h.input);
+    assert.equal(h.doc.activeElement === h.input, true);
   },
 );

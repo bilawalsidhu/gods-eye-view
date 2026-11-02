@@ -1,3 +1,9 @@
+import { t } from '../i18n/index.js';
+import {
+  providerOptionLabel,
+  modelOptionLabel,
+} from '../agent/agentConsole.js';
+import { formatCommandCostUsd } from '../agent/cost.js';
 import { readFileSync } from 'node:fs';
 
 /**
@@ -12,7 +18,7 @@ import { readFileSync } from 'node:fs';
 /** Element ids the shipped console template declares. */
 export function consoleTemplateIds() {
   const html = readFileSync(
-    new URL('../ui/templates/agent-console.html', import.meta.url),
+    new URL('../ui/views/AgentConsoleView.vue', import.meta.url),
     'utf8',
   );
   return [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
@@ -177,6 +183,113 @@ export function agentConsoleDom({ ids = consoleTemplateIds() } = {}) {
     return element;
   };
   return {
+    // A synchronous presentation sink for controller-only tests. The actual
+    // Vue renderer is covered separately by agentConsoleView.test.mjs/browser QA.
+    publish(state) {
+      const set = (id, key, value) => {
+        const el = elements.get(id);
+        if (el) el[key] = value;
+      };
+      set('agent-console-chip', 'hidden', !state.available);
+      elements
+        .get('agent-console-chip')
+        ?.setAttribute('aria-expanded', String(state.expanded));
+      const options = (id, items, label, value) => {
+        const el = elements.get(id);
+        if (!el) return;
+        el.replaceChildren(
+          ...items.map((item) => {
+            const opt = createElement('option');
+            opt.value = item.id;
+            opt.textContent = label(item);
+            return opt;
+          }),
+        );
+        el.value = value;
+      };
+      options(
+        'agent-provider',
+        state.providers,
+        providerOptionLabel,
+        state.provider,
+      );
+      options('agent-model', state.models, modelOptionLabel, state.model);
+      for (const id of ['agent-input', 'agent-send', 'agent-model'])
+        set(id, 'disabled', state.busy);
+      set('agent-provider', 'disabled', state.providerDisabled);
+      set('agent-stop', 'disabled', state.stopDisabled);
+      const detail =
+        typeof state.detail === 'object'
+          ? t(state.detail.key, state.detail.args)
+          : t(state.detail);
+      set(
+        'agent-status',
+        'textContent',
+        t(state.status) + (detail ? ' · ' + detail : ''),
+      );
+      elements.get('agent-console').dataset.agentStatus =
+        state.status.toLowerCase();
+      const cost =
+        state.provider === 'chatgpt'
+          ? t('ChatGPT plan limits')
+          : formatCommandCostUsd(
+              state.models.find((m) => m.id === state.model)?.costPerCommandUsd,
+            );
+      set('agent-cost', 'textContent', cost);
+      set(
+        'agent-cost',
+        'title',
+        state.provider === 'chatgpt'
+          ? t('ChatGPT plan limits')
+          : t('Estimated cost per command'),
+      );
+      elements.get('agent-transcript').replaceChildren(
+        ...state.entries.map((entry) => {
+          const el = createElement('li');
+          el.className = `agent-entry agent-entry-${entry.kind}`;
+          el.textContent = entry.text;
+          el.setAttribute('dir', entry.kind === 'tool' ? 'ltr' : 'auto');
+          if (entry.outcome) el.dataset.outcome = entry.outcome;
+          return el;
+        }),
+      );
+    },
+    publishChatgpt(state) {
+      if (!state) return;
+      const el = (id) => elements.get(id);
+      el('agent-chatgpt').hidden = !state.visible;
+      const select = el('agent-chatgpt-account');
+      select.replaceChildren(
+        ...[
+          ...state.accounts,
+          { id: '', label: t('Add a ChatGPT account') },
+        ].map((a) => {
+          const option = createElement('option');
+          option.value = a.id;
+          option.textContent = a.label;
+          return option;
+        }),
+      );
+      select.value = state.selected;
+      select.disabled = el('agent-chatgpt-login').disabled = state.disabled;
+      el('agent-chatgpt-logout').disabled = state.logoutDisabled;
+      const status = el('agent-chatgpt-status');
+      status.textContent = state.pending
+        ? t('Complete sign-in in your browser.')
+        : state.error ||
+          t(
+            state.connected
+              ? 'ChatGPT account connected'
+              : 'Sign in to use your ChatGPT plan.',
+          );
+      if (state.signInPath) {
+        const link = createElement('a');
+        link.href = state.signInPath;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        status.replaceChildren(link);
+      }
+    },
     document,
     elements,
     dialog: byId('agent-console'),

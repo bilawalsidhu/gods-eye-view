@@ -3,16 +3,16 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { createServer } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 import puppeteer from 'puppeteer';
-const template = await fs.readFile(
-  'src/ui/templates/agent-console.html',
-  'utf8',
-);
-const providers = await fs.readFile(
-  'src/ui/templates/provider-settings.html',
-  'utf8',
-);
-const html = `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/style.css"></head><body>${template}${providers}<script type="module">
+const template = '<div class="gev-view" data-gev-view="agent-console"></div>';
+const dock = '<div class="gev-view" data-gev-view="command-dock"></div>';
+const providers =
+  '<div class="gev-view" data-gev-view="provider-settings"></div>';
+const html = `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/style.css"></head><body>${template}${providers}${dock}<script type="module">
+import { mountApplicationViews } from '/src/ui/views/index.js';
+mountApplicationViews(document);
 import {mountAgentConsole} from '/src/agent/agentConsole.js';
 import {initGevVoiceCommands} from '/src/voice/gevRealtime.js';
 import {initKeySetup} from '/src/keySetup.js';
@@ -60,6 +60,7 @@ const server = await createServer({
   configFile: false,
   server: { host: '127.0.0.1', port: 0 },
   plugins: [
+    vue(VUE_PLUGIN_OPTIONS),
     {
       name: 'voice-panel-fixture',
       configureServer(server) {
@@ -108,11 +109,19 @@ try {
         window.qa && document.querySelector('#agent-model').value === 'fixture',
     );
     const send = async (text) => {
-      await page.$eval('#agent-input', (e) => (e.value = ''));
-      await page.type('#agent-input', text);
+      const before = await page.evaluate(
+        () => window.qa.consoleController.session.transcript.length,
+      );
+      // A queued typed command may exit a view that currently conceals the console.
+      // Set the fixture form value directly; real keyboard focus is checked below.
+      await page.$eval('#agent-input', (e, text) => (e.value = text), text);
       await page.$eval('#agent-form', (e) => e.requestSubmit());
       await page.waitForFunction(
-        () => !window.qa.consoleController.session.busy,
+        (n) =>
+          !window.qa.consoleController.session.busy &&
+          window.qa.consoleController.session.transcript.length > n,
+        {},
+        before,
       );
     };
     for (const name of [
@@ -216,7 +225,7 @@ try {
       window.qa.commands.voicePanel.close();
       window.qa.cockpit(true);
     });
-    await page.type('#agent-input', 'Exit then open');
+    await page.$eval('#agent-input', (e) => (e.value = 'Exit then open'));
     await page.$eval('#agent-form', (e) => e.requestSubmit());
     await page.waitForFunction(() => window.qa.pending());
     await page.$eval('#agent-stop', (e) => e.click());

@@ -81,6 +81,8 @@ function setup(t, { signedIn = true, command } = {}) {
   };
   const controller = mountAgentConsole({
     root: dom.document,
+    publish: dom.publish,
+    publishChatgpt: dom.publishChatgpt,
     view: dom.view,
     runAction: async () => ({ ok: true }),
     fetchImpl,
