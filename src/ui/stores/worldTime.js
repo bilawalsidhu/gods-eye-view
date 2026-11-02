@@ -3,7 +3,9 @@ import { onScopeDispose, shallowRef } from 'vue';
 import { worldClock } from '../../time/worldClock.js';
 
 /**
- * The world clock as the timeline shows it: `{live, playing, timeMs}`. It
+ * The world clock as the timeline shows it: `{live, playing, timeMs,
+ * supported}`, where `supported` says a layer that moves with the clock has
+ * time to show. It
  * follows the page's world clock, which tells it of every move, and of the
  * time a few times a second while it plays on its own.
  */
@@ -13,6 +15,7 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       live: state.live,
       playing: state.playing,
       timeMs: state.timeMs,
+      supported: state.supported,
     });
   const time = shallowRef(read());
   onScopeDispose(

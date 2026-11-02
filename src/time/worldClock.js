@@ -61,6 +61,25 @@ export function createWorldClock({
   const followedIds = () => [
     ...new Set([...following, ...[...holds.keys()].filter(isFollowed)]),
   ];
+  // A host's coverage that throws counts as none, so it cannot break the
+  // listeners every state reaches.
+  const spanOf = (source) => {
+    let span;
+    try {
+      span = source.coverage();
+    } catch (error) {
+      console.error(`World time coverage failed: ${source.id}`, error);
+      return null;
+    }
+    return span && span.end >= span.start ? span : null;
+  };
+  // Whether a layer that moves with the clock has time to show: only then is
+  // there anything for a timeline to play.
+  const isSupported = () => {
+    for (const { source } of sources)
+      if (isFollowed(source.id) && spanOf(source)) return true;
+    return false;
+  };
   const time = () => {
     if (live) return now();
     if (continuous()) return cursorMs + (monotonicNow() - anchorMono) * rate;
@@ -73,17 +92,20 @@ export function createWorldClock({
       playing,
       rate,
       following: followedIds(),
+      supported: isSupported(),
     });
   // Each listener hears the state as it is when called. A change made from
   // inside a listener notifies everyone afresh, and the outer round stops, so
   // nobody is left holding a state that has since changed.
+  // A round's state is read once: any change made during it starts a new one.
   const notify = () => {
     const round = ++notifying;
+    let state = null;
     for (const listener of [...listeners]) {
       if (round !== notifying) return;
       if (!listeners.has(listener)) continue;
       try {
-        listener(getState());
+        listener((state ??= getState()));
       } catch (error) {
         console.error('World clock listener failed', error);
       }
@@ -270,16 +292,23 @@ export function createWorldClock({
       // Each registration is its own, even under a shared id.
       const entry = { source };
       sources.add(entry);
-      return () => sources.delete(entry);
+      changed();
+      return () => {
+        if (sources.delete(entry)) changed();
+      };
     },
+    /** A source's coverage changed (frames loaded, the layer paused). */
+    coverageChanged: () => changed(),
+    /** Whether a followed layer has time to show; see getState().supported. */
+    isSupported,
     /** The union of the registered sources' coverage, or null with none. */
     coverage() {
       let start = Infinity;
       let end = -Infinity;
       const marks = new Set();
       for (const { source } of sources) {
-        const span = source.coverage();
-        if (!span || !(span.end >= span.start)) continue;
+        const span = spanOf(source);
+        if (!span) continue;
         start = Math.min(start, span.start);
         end = Math.max(end, span.end);
         for (const mark of span.marks ?? []) marks.add(mark);

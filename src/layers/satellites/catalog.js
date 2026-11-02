@@ -164,6 +164,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
 
       layerState._count = layerState._points.size;
       layerState._catalogRevision++;
+      layerState.coverageChanged();
       layerState._denseStatus = 'ready';
       console.log(
         `[Data:Satellites] Dense catalog: +${added} ${DENSE_GROUP_PATH} (points only)`,
@@ -231,6 +232,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
     layerState._denseCursor = 0;
     layerState._count = layerState._points.size;
     layerState._catalogRevision++;
+    layerState.coverageChanged();
   }
   return {
     _abortActiveUpdates,

@@ -162,7 +162,34 @@ export function createWeatherClock({
         throw new Error(`Duplicate weather product: ${product.id}`);
       const entry = { product, controller: null };
       registry.set(product.id, entry);
-      releases.set(product.id, world.hold(product.id));
+      // The product moves with the world clock, and its frames are time the
+      // world clock's timeline can show while it is on, suspended or not, so
+      // the way back to live stays on screen. Both calls notify the world's
+      // listeners, which may destroy this clock: the release is in place
+      // first, and anything acquired after a destroy is let go at once.
+      let unhold = null;
+      let uncover = null;
+      const release = () => {
+        uncover?.();
+        unhold?.();
+        uncover = unhold = null;
+      };
+      releases.set(product.id, release);
+      unhold = world.hold(product.id);
+      if (!destroyed)
+        uncover = world.register({
+          id: product.id,
+          coverage: () => {
+            const marks = timesFor(product).map((time) => Date.parse(time));
+            return marks.length
+              ? { start: marks[0], end: marks.at(-1), marks }
+              : null;
+          },
+        });
+      if (destroyed) {
+        release();
+        return () => {};
+      }
       void api.refresh();
       return () => {
         if (registry.get(product.id) !== entry) return;
@@ -242,6 +269,8 @@ export function createWeatherClock({
     },
     refresh() {
       if (destroyed) return Promise.resolve(false);
+      // New frames, or products added or dropped.
+      world.coverageChanged();
       if (!canPlay()) {
         stopPlaying();
         cancelTimer();
@@ -262,7 +291,6 @@ export function createWeatherClock({
       ++generation;
       cancelTimer();
       unfollowWorld();
-      uncover();
       // The last weather clock leaves the world live, as a new one expects.
       if (driver.detach() === 0) world.goLive();
       for (const release of releases.values()) release();
@@ -292,16 +320,6 @@ export function createWeatherClock({
     else notify();
   }
   const unfollowWorld = world.subscribe(followWorld);
-  // The observed frames this clock can show, for a host's timeline.
-  const uncover = world.register({
-    id: 'weather',
-    coverage: () => {
-      const marks = getTimeline().map((time) => Date.parse(time));
-      return marks.length
-        ? { start: marks[0], end: marks.at(-1), marks }
-        : null;
-    },
-  });
   driver = world.attachDriver({
     play: () => (canPlay() ? void api.play() : false),
     pause: () => api.pause(),

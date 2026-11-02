@@ -13,7 +13,8 @@ export function createLifecycle({
   // their element sets.
   let releaseCoverage = null;
   const coverWorldTime = () => {
-    releaseCoverage ??= worldClock.register({
+    if (releaseCoverage) return;
+    const release = worldClock.register({
       id: 'satellites',
       coverage: () => {
         if (!layerState._catalog.size) return null;
@@ -24,6 +25,10 @@ export function createLifecycle({
         };
       },
     });
+    // Registering tells the world's listeners, which may turn the layer off
+    // (or off and on, registering again) before this returns.
+    if (layerState._enabled && !releaseCoverage) releaseCoverage = release;
+    else release();
   };
   const uncoverWorldTime = () => {
     releaseCoverage?.();
@@ -67,6 +72,7 @@ export function createLifecycle({
       layerState._denseStatus = 'idle';
       layerState._denseError = null;
       layerState._catalogRevision++;
+      layerState.coverageChanged();
 
       // Point primitives for satellite dots
       layerState._pointCollection = new Cesium.PointPrimitiveCollection();
@@ -185,6 +191,7 @@ export function createLifecycle({
       layerState._denseStatus = 'idle';
       layerState._denseError = null;
       layerState._catalogRevision++;
+      layerState.coverageChanged();
       layerState._rowControlsListener = null;
       layerState._count = 0;
       layerState._lastUpdate = null;

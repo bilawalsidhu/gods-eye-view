@@ -252,3 +252,38 @@ test('seek refuses a time no Date can hold', () => {
   clock.seek(-8.64e15);
   assert.equal(clock.now(), -8.64e15);
 });
+
+test('only a followed layer with time to show supports the timeline', () => {
+  const clock = createWorldClock(fakeTime().options);
+  let span = null;
+  const states = [];
+  clock.subscribe((state) => states.push(state.supported));
+  const off = clock.register({ id: 'satellites', coverage: () => span });
+  span = { start: 0, end: 10 };
+  clock.coverageChanged();
+  assert.equal(clock.isSupported(), false, 'covered but not followed');
+  clock.follow('satellites');
+  assert.equal(clock.isSupported(), true);
+  assert.equal(states.at(-1), true);
+  span = null;
+  clock.coverageChanged();
+  assert.equal(states.at(-1), false);
+  span = { start: 0, end: 10 };
+  off();
+  assert.equal(clock.isSupported(), false);
+  assert.equal(states.at(-1), false);
+});
+
+test('a coverage that throws counts as none', (t) => {
+  t.mock.method(console, 'error', () => {});
+  const clock = createWorldClock(fakeTime().options);
+  clock.follow('broken');
+  clock.register({
+    id: 'broken',
+    coverage() {
+      throw new Error('no');
+    },
+  });
+  assert.equal(clock.getState().supported, false);
+  assert.equal(clock.coverage(), null);
+});

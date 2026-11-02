@@ -170,6 +170,7 @@ export function createIngestion({
         layerState._coreStale = coreStale;
         layerState._count = layerState._points.size;
         layerState._catalogRevision++;
+        layerState.coverageChanged();
         layerState._lastUpdate = Date.now();
         layerState._lastPropagation = Date.now();
         layerState._lastTrackingRefreshOutcome = {

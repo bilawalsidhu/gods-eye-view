@@ -8,7 +8,9 @@ import UiIcon from '../../kit/UiIcon.vue';
 
 // The world time while it is away from live: what is playing, or where it
 // was paused, with play and pause on the left and the way back to live on
-// the right. Live, the bar stays hidden.
+// the right. It shows only while a layer that moves with the clock (weather
+// radar, satellite or lightning, or one a host follows) is on with time to
+// show; live, or with none on, the bar stays hidden.
 const store = useWorldTimeStore();
 const { time } = storeToRefs(store);
 
@@ -25,7 +27,7 @@ const readout = computed(() =>
 </script>
 
 <template>
-  <div v-if="!time.live" id="world-timeline" role="group" :aria-label="t('World time')"
+  <div v-if="!time.live && time.supported" id="world-timeline" role="group" :aria-label="t('World time')"
     ><UiButton class="world-timeline-play" :label="time.playing ? t('Pause') : t('Play')" @click="store.togglePlay()"
       ><UiIcon :name="time.playing ? 'pause' : 'play_arrow'" :size="20" /></UiButton
     ><time class="world-timeline-time" :datetime="new Date(time.timeMs).toISOString()" aria-live="off">{{ readout }}</time

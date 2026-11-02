@@ -436,9 +436,10 @@ test('a target superseded from a listener resolves false', async (t) => {
   assert.equal(radar.shown, time(10));
 });
 
-test('the observed frames are the world clock coverage, while registered', (t) => {
+test('each product’s frames are world clock coverage, and support the timeline while shown', (t) => {
   const { clock, world } = harness(t);
   assert.equal(world.coverage(), null);
+  assert.equal(world.getState().supported, false);
   const radar = product('radar', [0, 10]);
   const unregister = clock.register(radar);
   clock.register(product('lightning', [5]));
@@ -447,7 +448,48 @@ test('the observed frames are the world clock coverage, while registered', (t) =
     end: Date.parse(time(10)),
     marks: [0, 5, 10].map((m) => Date.parse(time(m))),
   });
+  assert.equal(world.getState().supported, true);
   unregister();
+  assert.deepEqual(world.coverage().marks, [Date.parse(time(5))]);
   clock.destroy();
   assert.equal(world.coverage(), null);
+  assert.equal(world.getState().supported, false);
+});
+
+test('a suspended product keeps its coverage, so the way back to live stays', (t) => {
+  const { clock, world } = harness(t);
+  const radar = product('radar', [0, 10]);
+  clock.register(radar);
+  radar.suspended = true;
+  void clock.refresh();
+  assert.equal(world.getState().supported, true);
+  assert.deepEqual(
+    world.coverage().marks,
+    [0, 10].map((m) => Date.parse(time(m))),
+  );
+});
+
+test('new frames reach the world clock through refresh', (t) => {
+  const { clock, world } = harness(t);
+  const radar = product('radar', []);
+  clock.register(radar);
+  const supported = [];
+  world.subscribe((state) => supported.push(state.supported));
+  assert.equal(world.getState().supported, false);
+  radar.times = [time(0)];
+  void clock.refresh();
+  assert.equal(supported.at(-1), true);
+});
+
+test('a clock destroyed while it registers a product lets go of it', (t) => {
+  const { clock, world } = harness(t);
+  const off = world.subscribe(() => {
+    off();
+    clock.destroy();
+  });
+  const unregister = clock.register(product('radar', [0, 10]));
+  unregister();
+  assert.equal(world.follows('radar'), false);
+  assert.equal(world.coverage(), null);
+  assert.equal(world.getState().supported, false);
 });
