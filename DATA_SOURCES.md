@@ -29,8 +29,11 @@ See [the consumer configuration](docs/US_GROUNDWATER_CONSUMER.md) for release
 updates, CORS requirements, limits and interpretation.
 The [supplied state notices](docs/US_GROUNDWATER_SOURCE_NOTICES.md) preserve the
 publisher's state-specific attribution, disclaimers and representation estimates.
-Their scope and compliance review is still incomplete; the catalog licence is
-not a substitute for resolving those requirements before redistribution.
+Read those historical agency statements alongside the publisher's permission
+and redaction account in [the bounded reuse review](docs/US_GROUNDWATER_REUSE_REVIEW.md).
+They should not all be treated as new permission requests for each downstream
+user. The review distinguishes attribution, original-compilation conditions and
+remaining uncertainty; it is not a legal guarantee or an anonymity claim.
 
 God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the source code only — it does NOT extend to third-party data or visual assets.** Every third-party source keeps its own license and terms. This file documents the live and bundled data sources; bundled 3D-model provenance is recorded in [`public/models/README.md`](public/models/README.md).
 

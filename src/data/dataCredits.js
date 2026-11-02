@@ -156,7 +156,8 @@ export const DATA_CREDITS = [
       'Water Wells: <a href="https://rainfolk.org/" target="_blank" rel="noopener">Rainfolk</a> preparation and hosting; ' +
       '<a href="https://doi.org/10.4211/hs.8b02895f02c14dd1a749bcc5584a5c55" target="_blank" rel="noopener">USGWD — Lin, Miller, Waqar and Marston</a>, ' +
       '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> ' +
-      '(historical source records; normalized, datum-converted and spatially packaged; incomplete coverage)',
+      '(historical source records; normalized, datum-converted and spatially packaged; incomplete coverage); ' +
+      '<a href="https://www.hydroshare.org/resource/8b02895f02c14dd1a749bcc5584a5c55/data/contents/Metadata/Table_S2-Summary_table_of_when_the_data_was_collected_the_person_and_organization_that_primarily_assisted_with_the_data_collection_disclaimers_and_representation_estimations_for_each_state.xlsx" target="_blank" rel="noopener">State credits and supplied notices</a>',
   },
   {
     key: 'usgs-groundwater',

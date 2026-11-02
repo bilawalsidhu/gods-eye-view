@@ -163,4 +163,14 @@ test('Rainfolk hosting credit preserves USGWD original attribution, licence and 
     credit.html,
     /normalized, datum-converted and spatially packaged/,
   );
+  assert.match(credit.html, /State credits and supplied notices/);
+  const notices = new URL(credit.html.match(/href="([^"]*Table_S2[^"]*)"/)[1]);
+  assert.equal(notices.origin, 'https://www.hydroshare.org');
+  assert.equal(notices.username, '');
+  assert.equal(notices.search, '');
+  assert.ok(
+    notices.pathname.startsWith(
+      '/resource/8b02895f02c14dd1a749bcc5584a5c55/data/contents/Metadata/',
+    ),
+  );
 });
