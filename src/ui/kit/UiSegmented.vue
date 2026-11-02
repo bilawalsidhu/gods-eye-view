@@ -7,7 +7,8 @@ import { computed } from 'vue';
 // stop that arrows move) or `radio` (arrows plus Home and
 // End). Each option may carry `attrs` (an id, data attributes, a tip), and
 // Core's classes sit beside the kit's: `gev-segmented`, `gev-segment` and the
-// selected option's `activeClass`. Not mirrored yet: an option's icon.
+// selected option's `activeClass`. An option with an `icon` shows the glyph,
+// and its label becomes the button's accessible name and tooltip.
 const props = defineProps({
   modelValue: { type: String, default: undefined },
   /** `{value, label, icon?, disabled?, attrs?}`, labels already translated. */
@@ -117,10 +118,17 @@ function onKey(event) {
         },
       ]"
       :aria-checked="String(option.value === props.modelValue)"
+      :aria-label="option.icon ? option.label : undefined"
+      :title="option.icon ? option.label : undefined"
       :disabled="optionOff(option)"
       :tabindex="tabindex(index)"
       @click="choose(index)"
-      >{{ option.label }}</button
+      ><span
+        v-if="option.icon"
+        class="ui-segmented__icon material-symbols-outlined"
+        aria-hidden="true"
+        >{{ option.icon }}</span
+      ><template v-else>{{ option.label }}</template></button
     >
   </div>
 </template>

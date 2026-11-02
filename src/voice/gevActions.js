@@ -99,6 +99,12 @@ const PANEL_ALIASES = new Map([
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],
   ['context right panel', 'global-context-panel'],
+  ['utilities', 'utilities-panel'],
+  ['utilities panel', 'utilities-panel'],
+  ['draw', 'utilities-panel'],
+  ['drawing', 'utilities-panel'],
+  ['import', 'utilities-panel'],
+  ['import files', 'utilities-panel'],
   ['authoring', 'scene-panel'],
   ['scenes', 'scene-panel'],
   ['scene', 'scene-panel'],
@@ -122,6 +128,7 @@ const PANEL_IDS = new Set([
   'cctv-panel',
   'radio-panel',
   'global-context-panel',
+  'utilities-panel',
   'scene-panel',
   'pp-toggles',
   'weather-panel',
@@ -1053,15 +1060,18 @@ export function createGevActionRunner({
 
     if (name === 'show_data_layers_menu') {
       const layerId = normalizeLayerId(args.layerId || args.layer);
-      setPanelOpen(styleManager, 'data-panel', true);
-      const focusedLayer =
+      const row =
         layerId && dataManager.layers.has(layerId)
-          ? focusDataLayerRow(layerId)
+          ? findDataLayerRow(layerId)
           : null;
+      // Open the panel that holds the row: Directions lives in Utilities.
+      const panelId = row?.closest('[data-panel-id]')?.id || 'data-panel';
+      setPanelOpen(styleManager, panelId, true);
+      const focusedLayer = row ? focusDataLayerRow(row, layerId) : null;
       return {
         ok: true,
         action: 'show_data_layers_menu',
-        panelId: 'data-panel',
+        panelId,
         focusedLayer,
         layers: dataManager
           .getAll()
@@ -3197,11 +3207,14 @@ function normalizeCockpitAction(value) {
   return null;
 }
 
-function focusDataLayerRow(layerId) {
-  const row = document.querySelector(
-    `#data-toggles [data-layer-id="${CSS.escape(layerId)}"]`,
+function findDataLayerRow(layerId) {
+  const selector = `[data-layer-id="${CSS.escape(layerId)}"]`;
+  return document.querySelector(
+    `#data-toggles ${selector}, #utilities-toggles ${selector}`,
   );
-  if (!row) return null;
+}
+
+function focusDataLayerRow(row, layerId) {
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;

@@ -43,12 +43,13 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // S2 GhostMaps extends the generated layer enums.
+    // The Utilities panel (Directions, Draw, Import) adds one panel target.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
     // The layer alias hint leaves out aliases the layer id already spells.
-    'd4ab2db89892d2f2f9861868a177543a7cd8d38bb4d696b999759f413269c0db',
+    'fa3add0a93dd275fd6ec020bfc95c000dc07108bb1d9c88c846f1c64f03cdf69',
   );
 });
 
@@ -142,6 +143,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'voice-settings',
         'voice-preview',
         'provider-settings',
+        'utilities-panel',
       ].includes(id),
   );
   for (const tool of legacy) {

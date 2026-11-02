@@ -4,9 +4,11 @@ import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
-import { createApp, nextTick } from 'vue';
+import { createApp, h, nextTick } from 'vue';
 import { useDisplayStore } from './stores/display.js';
 import DisplayPanel from './views/panels/DisplayPanel.vue';
+import DrawControls from './views/panels/DrawControls.vue';
+import GeoImport from './views/panels/GeoImport.vue';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { VisualSettings } from './visualSettings.js';
 import { initGeoFileImport } from './geoFileImport.js';
@@ -15,11 +17,14 @@ import { CockpitDisplayPortal } from './cockpitDisplayPortal.js';
 const coreClasses = (el) =>
   [...el.classList].filter((name) => !name.startsWith('ui-')).join(' ');
 
-function fixture(t) {
+// UTILITIES' Draw and Import, as the Utilities panel holds them.
+const UtilitiesTools = { render: () => [h(DrawControls), h(GeoImport)] };
+
+function fixture(t, view = DisplayPanel) {
   document.body.replaceChildren();
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
-  const app = createApp(DisplayPanel).use(pinia);
+  const app = createApp(view).use(pinia);
   app.mount(host);
   let mounted = true;
   const unmount = () => {
@@ -354,17 +359,32 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   assert.equal(all.getAttribute('aria-checked'), 'false');
 });
 
+test('DISPLAY no longer holds Draw or Import', (t) => {
+  const { $ } = fixture(t);
+  for (const id of ['draw-toggle', 'draw-mode-row', 'geo-import-button'])
+    assert.equal($(id), null, `${id} moved to UTILITIES`);
+});
+
 test('the Draw controls render what the draw tool publishes', async (t) => {
-  const { store, $ } = fixture(t);
+  const { store, $ } = fixture(t, UtilitiesTools);
   const toggle = $('draw-toggle');
   const segment = (shape) =>
     document.querySelector(`#draw-mode-row [data-shape="${shape}"]`);
   assert.equal(toggle.getAttribute('aria-pressed'), 'false');
   assert.equal(segment('area').getAttribute('aria-checked'), 'true');
+  // Shapes are icons, named for screen readers and tooltips.
+  assert.equal(segment('area').getAttribute('aria-label'), 'Area');
+  assert.equal(segment('area').title, 'Area');
+  assert.equal(segment('area').textContent, 'pentagon');
+  const swatch = (color) => document.querySelector(`#draw-colors [data-color="${color}"]`);
+  assert.equal(swatch('primary').getAttribute('aria-checked'), 'true');
+  assert.equal(swatch('amber').getAttribute('aria-label'), 'Amber');
   assert.equal($('draw-hint').textContent, '');
 
-  store.publishDraw({ active: true, shape: 'line', hint: 'Click to add points.' });
+  store.publishDraw({ active: true, shape: 'line', color: 'amber', hint: 'Click to add points.' });
   await nextTick();
+  assert.equal(swatch('amber').getAttribute('aria-checked'), 'true');
+  assert.equal(swatch('primary').classList.contains('active'), false);
   assert.equal(coreClasses(toggle), 'pp-toggle-btn active');
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
   assert.equal($('draw-mode-row').classList.contains('visible'), true);
@@ -382,7 +402,7 @@ test('the Draw controls render what the draw tool publishes', async (t) => {
 });
 
 test('the imported files render what the file import publishes and keep focus', async (t) => {
-  const { store, $ } = fixture(t);
+  const { store, $ } = fixture(t, UtilitiesTools);
   const list = $('geo-import-list');
   assert.equal(list.className, 'geo-import-list');
   assert.equal(list.children.length, 0);
