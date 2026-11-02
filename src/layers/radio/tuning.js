@@ -66,6 +66,12 @@ export function createTuning({ state: layerState, services, parts, source }) {
     layerState._cancelledTuningPresentationStation = null;
     layerState._tuningStartStationId = layerState._selectedId;
     layerState._tuningPreviewId = layerState._selectedId;
+    // Like Previous/Next, the release plays only if a stream was active.
+    layerState._tuningResumesPlayback = [
+      'loading',
+      'buffering',
+      'playing',
+    ].includes(layerState._audioState);
     parts.tuningNoise.installTuningNoise();
     parts.playback.pauseRadioPlayback({ origin: 'user' });
     parts.tuningNoise.syncTuningNoiseGain();
@@ -179,9 +185,8 @@ export function createTuning({ state: layerState, services, parts, source }) {
       layerState._selectionGeneration += 1;
       parts.tuningNoise.clearRadioTuningNoise({ emit: false });
       layerState._tuningUnavailableStationId = stationId;
-      // The drag paused the previous stream; with no selection left, Resume
-      // could only start the nearest station, so release it. Stop publishes
-      // the state, and as the user's gesture it cancels a voice handoff.
+      // The drag paused the stream; with no selection, Resume would start the
+      // nearest station. Stop also publishes the state and cancels a voice handoff.
       parts.playback.stopRadioPlayback({ origin });
       return Object.freeze({
         ok: false,
@@ -190,9 +195,11 @@ export function createTuning({ state: layerState, services, parts, source }) {
         generation,
       });
     }
+    const autoplay = layerState._tuningResumesPlayback;
+    layerState._tuningResumesPlayback = false;
     layerState._tuningActive = false;
-    layerState._tuningStatic = true;
-    layerState._tuningAwaitingStationId = frozenStation.id;
+    layerState._tuningStatic = autoplay;
+    layerState._tuningAwaitingStationId = autoplay ? frozenStation.id : null;
     layerState._tuningPreviewId = null;
     layerState._tuningStartStationId = null;
     layerState._tuningUnavailableStationId = null;
@@ -210,7 +217,7 @@ export function createTuning({ state: layerState, services, parts, source }) {
     parts.tuningNoise.syncTuningNoiseGain();
     parts.presentation.emitState();
     const selected = parts.selection.selectRadioStation(frozenStation.id, {
-      autoplay: true,
+      autoplay,
       focus: false,
       origin,
       cameraNavigation,

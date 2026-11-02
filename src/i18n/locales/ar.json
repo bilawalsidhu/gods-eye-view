@@ -562,7 +562,7 @@
   "Radio volume": "مستوى صوت الراديو",
   "Radio off": "الراديو متوقف",
   "STATION SITE": "موقع المحطة",
-  "Audio connects directly to the broadcaster when you press play, finish tuning or choose a station on the globe. Your IP is visible to that broadcaster.": "يتصل التطبيق مباشرةً بمحطة البث عند الضغط على «تشغيل» أو إنهاء الضبط أو اختيار محطة على الكرة الأرضية، فيظهر لها عنوان IP الخاص بك.",
+  "Audio connects directly to the broadcaster when you press play, choose a station on the globe or ask voice to play. Your IP is visible to that broadcaster.": "يتصل التطبيق مباشرةً بمحطة البث عند الضغط على «تشغيل» أو اختيار محطة على الكرة الأرضية أو طلب التشغيل بالصوت، فيظهر لها عنوان IP الخاص بك.",
   "LOADING": "جارٍ التحميل",
   "DEGRADED": "متدهور",
   "STALE": "متقادم",

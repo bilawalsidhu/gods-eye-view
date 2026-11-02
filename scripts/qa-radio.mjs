@@ -3692,8 +3692,7 @@ async function main() {
       radio.stopPlayback();
       Array.from({ length: gev.viewer.dataSources.length }, (_, index) => gev.viewer.dataSources.get(index))
         .find((item) => item.name === 'Radio stations').clustering.enabled = true;
-      // Next only carries playback once a stream is active (HAL-722), so the
-      // fallback scenario starts from a playing station.
+      // Next plays only while a stream is active, so start from a playing station.
       radio.selectStation('00000000-0000-4000-8000-000000000001', { autoplay: true, focus: false });
     });
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');

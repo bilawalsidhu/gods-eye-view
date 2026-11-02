@@ -1,5 +1,4 @@
-// Radio Next/Previous that only select (autoplay: false), against the real layer
-// and the panel that renders it.
+// Radio selection, fallbacks and voice handoffs on the real layer and its published view.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { radioLayer } from './radio.js';
@@ -246,4 +245,29 @@ test('while a stream connects the transport buttons offer Pause, because a click
   assert.equal(shown.status, 'Connecting directly to broadcaster…');
   assert.equal(shown.button, 'PAUSE');
   assert.equal(shown.cockpit, 'Ⅱ');
+});
+
+test('a dial release plays only if a stream was active when the drag began', async () => {
+  await withLayer([], async ({ playUrls }) => {
+    radioLayer.selectStation(ids[0], { autoplay: false });
+    assert.equal(radioLayer.beginTuning(), true);
+    radioLayer.previewTuningStation(ids[1], { rotate: false });
+    assert.equal(radioLayer.commitTuningStation(ids[1], { origin: 'user' }).ok, true);
+    await settle();
+    let state = radioLayer.getUIState();
+    assert.deepEqual(playUrls, []);
+    assert.equal(state.selected?.id, ids[1]);
+    assert.equal(state.audioState, 'stopped');
+    assert.equal(state.tuningStatic, false);
+
+    await radioLayer.togglePlayback({ origin: 'user' });
+    assert.equal(radioLayer.beginTuning(), true);
+    radioLayer.previewTuningStation(ids[2], { rotate: false });
+    radioLayer.commitTuningStation(ids[2], { origin: 'user' });
+    await settle();
+    state = radioLayer.getUIState();
+    assert.deepEqual(playUrls, [stations[1].streamUrl, stations[2].streamUrl]);
+    assert.equal(state.audioState, 'playing');
+    assert.equal(state.playingStationId, ids[2]);
+  });
 });

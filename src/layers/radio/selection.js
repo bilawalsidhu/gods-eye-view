@@ -140,7 +140,7 @@ export function createSelection({
     if (focus) parts.navigation.focusStation(station);
     parts.presentation.emitState();
     if (autoplay) void parts.playback.playSelectedRadio({ origin, attemptId });
-    // A user step to another station overrides a playback voice prepared.
+    // A user step to another station cancels a playback voice prepared.
     else if (origin === 'user' && changed)
       parts.presentation.emitPlaybackControl('select', origin);
     return true;

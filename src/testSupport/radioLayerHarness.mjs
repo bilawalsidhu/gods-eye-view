@@ -1,7 +1,5 @@
-/** Shared Radio layer test stand-ins: a station row, fake Audio, directory fetch and viewer. */
 import { radioLayer } from '../data/radio.js';
 
-/** One accepted Radio Browser directory row. */
 export function radioStationRow(overrides = {}) {
   return {
     id: '00000000-0000-4000-8000-000000000001',

@@ -902,12 +902,15 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
     stations: stationRows,
     failingUrls: [stationRows[0].streamUrl],
   }, async ({ playUrls }) => {
-    assert.equal(radioLayer.selectStation(stationRows[0].id, { autoplay: false }), true);
+    // A playing stream, so the release plays.
+    assert.equal(radioLayer.selectStation(stationRows[1].id, { autoplay: true }), true);
+    await new Promise((resolve) => setTimeout(resolve));
     assert.equal(radioLayer.cycleStation(1, {
       stationIds: stationRows.map(({ id }) => id),
       autoplay: false,
       fallback: true,
     }), true, 'a voice-style prepared cycle creates the stale-fallback precondition');
+    playUrls.length = 0;
     assert.equal(radioLayer.beginTuning(), true);
     assert.equal(radioLayer.previewTuningStation(stationRows[0].id, { rotate: false }), true);
     assert.equal(radioLayer.commitTuningStation(stationRows[0].id, { origin: 'user' }).ok, true);
