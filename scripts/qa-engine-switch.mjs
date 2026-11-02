@@ -40,6 +40,8 @@ try {
     await page.waitForFunction(
       (kind) =>
         window.__godsEyeView?.engine?.kind === kind &&
+        document.querySelector('#globe-engine')?.value === kind &&
+        !document.querySelector('#globe-engine').disabled &&
         document.getElementById('loading-screen')?.classList.contains('hidden'),
       { timeout: 90000 },
       kind,
@@ -65,19 +67,60 @@ try {
     await page.waitForSelector('#globe-engine', { visible: true });
     await page.evaluate(() => {
       window.__switchDocument = document;
+      window.__renderers ??= new Map();
+      window.__renderers.set(
+        window.__godsEyeView.engine.kind,
+        window.__godsEyeView.engine,
+      );
+      window.__switchSplash = false;
+      window.__switchObserver = new MutationObserver(() => {
+        if (!document.querySelector('#loading-screen.hidden'))
+          window.__switchSplash = true;
+      });
+      window.__switchObserver.observe(
+        document.querySelector('#loading-screen'),
+        { attributes: true },
+      );
       window.__outgoingEngine = window.__godsEyeView.engine;
     });
     await page.select('#globe-engine', kind);
     await ready(kind);
     assert.ok(await page.evaluate(() => window.__switchDocument === document));
     assert.ok(
-      await page.evaluate(
-        () =>
-          window.__outgoingEngine.isDestroyed() &&
+      await page.evaluate(() => {
+        window.__switchObserver.disconnect();
+        const { engine } = window.__godsEyeView;
+        const previous = window.__renderers.get(engine.kind);
+        return (
+          !window.__switchSplash &&
+          (!previous || previous === engine) &&
+          !window.__outgoingEngine.isDestroyed() &&
+          !window.__outgoingEngine.host.canvas.isConnected &&
+          engine.host.canvas.isConnected &&
           window.__godsEyeView.dataManager
             .getEnabledLayerIds()
-            .has('earthquakes'),
-      ),
+            .has('earthquakes')
+        );
+      }),
+    );
+    await page.waitForFunction(
+      () => !document.querySelector('.engine-switch-frame'),
+    );
+    assert.equal(
+      await page.evaluate(async () => {
+        const parked = window.__outgoingEngine;
+        let frames = 0;
+        const remove = parked.frames.postRender.addEventListener(() => {
+          frames++;
+        });
+        parked.render.request('qa-parked');
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        );
+        remove();
+        return frames;
+      }),
+      0,
     );
     const url = new URL(page.url());
     assert.equal(url.searchParams.get('engine'), kind);
@@ -155,7 +198,7 @@ try {
   assert.equal(await stored(), 'cesium');
   assert.deepEqual(errors, []);
   console.log(
-    'PASS Cesium default, both switches, same document, outgoing engine destroyed, share pose/map/layers, Back/Forward, remembered engine, blocked preference storage',
+    'PASS Cesium default, both switches, same document, warm engine identity, parked canvas, no startup splash, share pose/map/layers, Back/Forward, remembered engine, blocked preference storage',
   );
 } finally {
   await browser.close();

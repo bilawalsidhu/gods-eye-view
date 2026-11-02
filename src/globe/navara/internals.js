@@ -9,6 +9,14 @@ import { patchCascadedLightCopy } from './cascadedLightCopy.js';
 
 export const NAVARA_INTERNALS_VERSION = '0.2.1';
 
+// Navara 0.2.1's animation=false still updates the tile tree every RAF.
+// Until ThreeView exposes suspend/resume, stop its underlying Three loop
+// while this view is parked and reinstall its normal loop when it returns.
+export function setRenderLoopEnabled(view, enabled) {
+  if (enabled) view._startMainLoop();
+  else view._renderer.setAnimationLoop(null);
+}
+
 let restoreRelease = null;
 
 /**

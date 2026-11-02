@@ -2,6 +2,7 @@ import {
   createStandaloneApplication,
   pageEngineKind,
 } from './standalone/application.js';
+import { createRendererCache } from './standalone/rendererCache.js';
 import { describeError } from './standalone/errors.js';
 import { ENGINE_STORAGE_KEY } from './app/engineChoice.js';
 import { useDisplayStore } from './ui/stores/display.js';
@@ -13,16 +14,26 @@ const loading = document.getElementById('loading-screen');
 let kind = pageEngineKind();
 let application;
 let busy = false;
+const renderers = createRendererCache();
+window.addEventListener('pagehide', (event) => {
+  if (!event.persisted) renderers.clear();
+});
 
-async function start(next) {
+async function start(next, engineSwitch = false) {
   kind = next;
   application = createStandaloneApplication({
     googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
     allowQaRegistration: import.meta.env.DEV,
     engineKind: next,
+    rendererCache: renderers,
+    engineSwitch,
   });
-  await application.start();
+  const { scene, controls } = await application.start();
+  if (engineSwitch) {
+    await controls.styleManager.initialRestorePromise;
+    await waitForGlobeFrame(scene.engine);
+  }
 }
 
 function present() {
@@ -48,6 +59,45 @@ function select(next) {
   void reconcile(true);
 }
 
+// Keep the last visible frame while the first visit initializes the other renderer.
+function keepGlobeFrame(engine) {
+  const source = engine.host.canvas;
+  const frame = document.createElement('canvas');
+  frame.width = source.width;
+  frame.height = source.height;
+  if (!frame.width || !frame.height) return null;
+  const context = frame.getContext('2d');
+  if (!context) return null;
+  context.drawImage(source, 0, 0);
+  frame.className = 'engine-switch-frame';
+  frame.setAttribute('aria-hidden', 'true');
+  document.getElementById('cesiumContainer').append(frame);
+  return frame;
+}
+
+// Hand off the visible globe only after the new camera has actually drawn.
+function waitForGlobeFrame(engine) {
+  if (document.hidden) return;
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      remove();
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', done);
+    };
+    const remove = engine.frames.postRender.addEventListener(done);
+    const timer = setTimeout(() => {
+      finish();
+      reject(new Error('The globe did not draw a frame'));
+    }, 8000);
+    function done() {
+      finish();
+      resolve();
+    }
+    document.addEventListener('visibilitychange', done, { once: true });
+    engine.render.request('engine-switch');
+  });
+}
+
 // popstate can arrive again while an engine is starting. After teardown and
 // after startup, read the actual address so the latest history entry wins.
 async function reconcile(remember = false) {
@@ -55,11 +105,13 @@ async function reconcile(remember = false) {
   busy = true;
   present();
   const previous = kind;
+  let cover;
   try {
     while (pageEngineKind() !== kind) {
-      loading.classList.remove('hidden');
+      cover ??= keepGlobeFrame(application.getComponents().scene.engine);
+      renderers.retain(kind);
       await application.destroy();
-      await start(pageEngineKind());
+      await start(pageEngineKind(), true);
     }
     if (remember) {
       try {
@@ -75,7 +127,7 @@ async function reconcile(remember = false) {
     history.replaceState(history.state, '', url);
     try {
       await application.destroy();
-      await start(previous);
+      await start(previous, true);
       application
         .getComponents()
         .controls.styleManager._showToast(describeError(error));
@@ -83,6 +135,7 @@ async function reconcile(remember = false) {
       report(recoveryError);
     }
   } finally {
+    cover?.remove();
     busy = false;
     present();
   }

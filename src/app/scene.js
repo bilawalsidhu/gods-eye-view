@@ -26,16 +26,10 @@ import { onLocaleChange, t } from '../i18n/index.js';
 export async function createApplicationScene({
   requestServices,
   googleApiKey,
-  googleTokens = null,
-  cesiumToken,
-  credits,
-  MapController = MapStackController,
-  mapOptions = {},
-  loaderStatus,
-  engineKind = 'cesium',
-  loadNavaraGlobe,
   signal,
   defer,
+  rendererCache,
+  ...options
 }) {
   const operations = createApplicationOperations({
     requests: requestServices,
@@ -51,11 +45,38 @@ export async function createApplicationScene({
       else window.__GOOGLE_MAPS_API_KEY__ = previousKey;
     });
   }
+  const build = (resources) =>
+    createRenderer({
+      ...options,
+      googleApiKey,
+      signal,
+      ...resources,
+    });
+  const { viewer, engine, tileset, mapStackController } = rendererCache
+    ? await rendererCache.acquire(options.engineKind, build, defer)
+    : await build({ defer });
+  return { viewer, engine, tileset, mapStackController, operations };
+}
+
+async function createRenderer({
+  googleApiKey,
+  googleTokens = null,
+  cesiumToken,
+  credits,
+  MapController = MapStackController,
+  mapOptions = {},
+  loaderStatus,
+  engineKind = 'cesium',
+  loadNavaraGlobe,
+  signal,
+  defer,
+  container,
+}) {
   // The Navara mode's own code loads only in that mode, with Navara itself,
   // so the Cesium-mode bundle carries none of it.
   if (engineKind === 'navara')
     return (await import('./navaraMode.js')).createNavaraScene({
-      operations,
+      container,
       cesiumToken,
       credits,
       MapController,
@@ -71,10 +92,10 @@ export async function createApplicationScene({
   // Provider attribution stays visible, including clean-view and recording.
   const creditContainer = document.createElement('div');
   creditContainer.id = 'cesium-credits';
-  document.body.appendChild(creditContainer);
+  (container ?? document.body).appendChild(creditContainer);
   defer(() => creditContainer.remove());
   const viewer = createApplicationViewer({
-    container: 'cesiumContainer',
+    container: container ?? 'cesiumContainer',
     creditContainer,
   });
   defer(() => {
@@ -160,5 +181,5 @@ export async function createApplicationScene({
   });
 
   signal.throwIfAborted();
-  return { viewer, engine, tileset, mapStackController, operations };
+  return { viewer, engine, tileset, mapStackController };
 }

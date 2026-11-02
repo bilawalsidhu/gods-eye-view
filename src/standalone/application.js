@@ -41,6 +41,8 @@ export function createStandaloneApplication({
   streetLevelProviders,
   allowQaRegistration = false,
   engineKind = pageEngineKind(),
+  rendererCache,
+  engineSwitch = false,
 }) {
   if (owner)
     throw new Error('The standalone application already owns this page');
@@ -86,6 +88,7 @@ export function createStandaloneApplication({
         cesiumToken,
         loaderStatus,
         engineKind,
+        rendererCache,
       });
       // The catalog of this engine: on Navara only the layers with a Navara
       // renderer (src/app/layers/renderers.js; none yet), the others' state
@@ -123,6 +126,7 @@ export function createStandaloneApplication({
     createControls: (context) =>
       createStandaloneControls({
         ...context,
+        engineSwitch,
         loaderStatus,
         placeSearch,
         catalog,

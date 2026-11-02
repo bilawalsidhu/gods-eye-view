@@ -104,6 +104,7 @@ export class StyleManager extends ShellFacade {
       services,
       requestServices,
       initialShareCode = null,
+      engineSwitch = false,
       localePicker = true,
     } = {},
   ) {
@@ -620,7 +621,7 @@ export class StyleManager extends ShellFacade {
     this._publishActiveStyle();
     this._updateLocationMiniStatus();
 
-    this._shareRestoration.start();
+    this._shareRestoration.start({ engineSwitch });
 
     // Keep the parameter panel from overlapping toggle controls.
     this._layoutRightPanels();

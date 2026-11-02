@@ -333,7 +333,10 @@ export class ShareLinkManager {
   /**
    * Apply a parsed state to the camera + style manager.
    */
-  async applyState(state, { applyCamera = true, navigationToken = null } = {}) {
+  async applyState(
+    state,
+    { applyCamera = true, instant = false, navigationToken = null } = {},
+  ) {
     if (this._destroyed || !state)
       return { succeeded: false, reason: 'unavailable' };
     const view = {
@@ -347,7 +350,11 @@ export class ShareLinkManager {
     let cameraPromise = Promise.resolve({
       status: applyCamera ? 'superseded' : 'skipped',
     });
-    if (applyCamera && this._isNavigationCurrent(navigationToken)) {
+    if (applyCamera && instant && this._isNavigationCurrent(navigationToken)) {
+      this.engine.camera.setView(view);
+      this.engine.render.request('engine-switch');
+      cameraPromise = Promise.resolve({ status: 'applied' });
+    } else if (applyCamera && this._isNavigationCurrent(navigationToken)) {
       const restoreGeneration = ++this._restoreGeneration;
       let settleCamera;
       cameraPromise = new Promise((resolve) => {
