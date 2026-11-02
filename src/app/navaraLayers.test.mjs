@@ -66,6 +66,8 @@ test('the Navara mode registers migrated renderers once', async () => {
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'local-datacenters',
+      'local-dams',
       'local-firms',
     ],
   );
