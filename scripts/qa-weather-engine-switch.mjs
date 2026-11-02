@@ -1,3 +1,4 @@
+import {fromDegrees} from '../src/geo/cartesian3.js';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
@@ -31,9 +32,28 @@ try {
   const ids = ['weather-radar', 'weather-satellite', 'weather-lightning'];
   const images = new Map(),
     reads = new Map();
+  let bulletin = '10', cycloneReads = 0;
+  function advisory() {
+    const forecast = bulletin === '10';
+    const storm = {
+      id:'al012026', name:'QA storm', basin:'AL', classification:'TS', position:{longitude:-79.38, latitude:43.65},
+      advisoryNumber:bulletin, issuedAt:times[1], positionAt:times[1], windKt:40, pressureHpa:1000,
+      movement:{directionDegrees:45,speedKt:10}, advisoryUrl:null,outlookUrl:null,
+      geometryStatus:forecast?'current':'pending', geometryAdvisoryNumber:forecast?bulletin:null,
+      track:forecast?{type:'LineString',coordinates:[[-79.38,43.65],[-79.31,43.68]]}:null,
+      cone:forecast?{type:'Polygon',coordinates:[[[-79.35,43.63],[-79.28,43.63],[-79.28,43.70],[-79.35,43.63]]]}:null,
+      forecastPoints:forecast?[{tauHours:24,position:{longitude:-79.31,latitude:43.68},windKt:50,gustKt:60}]:[],
+    };
+    return {schemaVersion:1,source:'QA NOAA',attribution:'NOAA fixture',coverage:'Atlantic',fetchedAt:Date.parse(times[1]),
+      stale:false,unavailable:false,reason:null,storms:[storm]};
+  }
   await p.setRequestInterception(true);
   p.on('request', async (req) => {
     const url = new URL(req.url());
+    if (url.pathname === '/api/cyclones') {
+      cycloneReads++;
+      return req.respond({status:200,contentType:'application/json',body:JSON.stringify(advisory())});
+    }
     if (!url.pathname.startsWith('/api/weather/')) return req.continue();
     const product = url.searchParams.get('product');
     if (url.pathname.endsWith('manifest')) {
@@ -240,6 +260,46 @@ try {
     'raised weather must remain visible',
   );
   await p.evaluate(() => window.qaRestoreSurface());
+  await p.evaluate(async (ids) => {
+    const manager = window.__godsEyeView.dataManager;
+    for (const id of ids) await manager.setEnabled(id, false, {origin:'user'});
+    await manager.setEnabled('weather-cyclones', true, {origin:'user'});
+    window.qaStorm = manager.layers.get('weather-cyclones').module;
+  },ids);
+  const click = async (lon,lat) => {
+    const at = await p.evaluate(position => {
+      const {engine} = window.__godsEyeView;
+      const xy = engine.projector.worldToWindow(position,{});
+      const rect = engine.host.canvas.getBoundingClientRect();
+      return [rect.left+xy.x,rect.top+xy.y];
+    },fromDegrees(lon,lat));
+    await p.mouse.click(...at);
+  };
+  const before = cycloneReads;
+  for (const kind of ['navara','cesium','navara']) {
+    if (await p.evaluate(()=>window.__godsEyeView.engine.kind) !== kind) {
+      await p.select('#globe-engine',kind);
+      await ready(kind);
+    }
+    await p.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('weather-cyclones').module === window.qaStorm &&
+      window.qaStorm.getDiagnostics().selectedId === 'al012026');
+    const d = await p.evaluate(()=>window.qaStorm.getDiagnostics());
+    assert.deepEqual([d.storms,d.tracks,d.cones,d.forecastPoints],[1,1,1,1],kind);
+    await new Promise(r => setTimeout(r,1200));
+    await click(-79.43,43.59);
+    await p.waitForFunction(()=>window.qaStorm.getDiagnostics().selectedId === null);
+    await click(-79.30,43.643);
+    await p.waitForFunction(()=>window.qaStorm.getDiagnostics().selectedId === 'al012026');
+    assert.equal(cycloneReads,before);
+    console.log('PASS',kind,'pick advisory cone and retain selected storm');
+  }
+  bulletin = '11';
+  const next = await p.evaluate(async () => {
+    await window.qaStorm.update();
+    return window.qaStorm.getDiagnostics();
+  });
+  assert.deepEqual([next.storms,next.tracks,next.cones,next.forecastPoints,next.selectedId],[1,0,0,0,'al012026']);
+  console.log('PASS advisory 11 removes expired geometry while retaining the storm');
   assert.deepEqual(errors, []);
 } finally {
   await b.close();

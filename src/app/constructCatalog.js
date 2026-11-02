@@ -295,7 +295,10 @@ export function createApplicationCatalog({
       ),
       [
         'weather-cyclones',
-        () => createCyclonesLayer({ feed: sources.cyclones }),
+        () => sessionModel('weather-cyclones', () => createCyclonesLayer({
+          feed: sources.cyclones,
+          createNativeRendering: (engine, options) => rendererFor('weather-cyclones', engine, options),
+        })),
       ],
       [
         ['local-datacenters', 'local-dams'],

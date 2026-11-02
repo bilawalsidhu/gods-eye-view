@@ -674,3 +674,29 @@ test('external cancellation and acquisition failure cannot install or retain unl
   assert.ok(h.cleared > 0);
   h.layer.destroy();
 });
+
+test('advisories delivered between scenes keep a deliberate selection without another feed read', async () => {
+  const pending = deferred();
+  let reads = 0;
+  const drawn = [];
+  const layer = createCyclonesLayer({
+    feed: { getSnapshot: () => ++reads === 1 ? snapshot([storm()]) : pending.promise },
+    createRendering: () => ({
+      setSnapshot(next) { drawn.push(next.storms.map(s=>s.advisoryNumber)); return true; },
+      setSelection() {}, clear() {}, destroy() {},
+    }),
+  });
+  layer.init({});
+  layer.enable();
+  await layer.update();
+  layer.setParams({ stormId: 'ep152026' });
+  const refresh = layer.update();
+  layer.detachRenderer();
+  pending.resolve(snapshot([{...storm(), advisoryNumber: '11'}]));
+  await refresh;
+  assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
+  await layer.attachRenderer({});
+  assert.deepEqual(drawn, [['10'],['11']]);
+  assert.equal(reads, 2);
+  layer.destroy();
+});
