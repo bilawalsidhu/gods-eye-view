@@ -37,7 +37,7 @@ const WIND_FIELD_LOG_RANGE = Math.log(
 // Snapshots own immutable decoded arrays. Compare their contents, not grid URLs
 // (which include the scalar overlay) or only cycle IDs (which can be revised).
 // This bounded scan runs on acquisition, never in the animation loop.
-function sameWind(previous, next, previousField, nextField) {
+export function sameWind(previous, next, previousField, nextField) {
   if (!previous || !next || !previousField || !nextField) return false;
   for (const key of ['model', 'level', 'units'])
     if (previous[key] !== next[key]) return false;

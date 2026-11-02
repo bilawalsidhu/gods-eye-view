@@ -62,6 +62,7 @@ test('the Navara mode registers migrated renderers once', async () => {
       'ais-live-vessels',
       'military-installations',
       'military-awareness',
+      'wind',
       'weather-radar',
       'weather-satellite',
       'weather-lightning',

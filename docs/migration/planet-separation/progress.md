@@ -39,3 +39,7 @@
 ### Local ADS-B receiver handoff
 
 The tuner, decoder poller, ICAO motion history and selected flight belong to the layer session. Only model banks, trail draws and input handlers change on switch. The receiver fixture advanced while detached. Headless release round trip kept one feed start, zero stops and zero device closes, with the selected aircraft restored on both globes. No physical USB device was opened.
+
+### Wind on both globes
+
+The forecast model owns GFS/IFS acquisition, scalar overlay, pause, units and sampled position. Navara draws a single instanced flow mesh and composes the color field below observed weather. The keyless release round trip rendered 7,200 paths per engine, sampled 10 m/s from SW and 40 °C from the same grid, and proved the temperature color in the actual viewport. The animated phase advanced after resume and froze on pause. Package boundaries and the full unit suite passed.

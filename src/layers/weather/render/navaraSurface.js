@@ -14,9 +14,9 @@ import { shellLift } from '../shellRendering.js';
 
 const KEY = 'gevObservedWeather';
 const owners = new WeakMap();
-const products = ['Satellite', 'Radar', 'Lightning'];
+const products = ['Wind', 'Satellite', 'Radar', 'Lightning'];
 const slotFor = (p) =>
-  p === 'radar' ? 'Radar' : p === 'lightning' ? 'Lightning' : 'Satellite';
+  p === 'wind' ? 'Wind' : p === 'radar' ? 'Radar' : p === 'lightning' ? 'Lightning' : 'Satellite';
 const emptyRect = [0, 0, -1, -1];
 const rectArray = (r) => (r ? [r.west, r.south, r.east, r.north] : emptyRect);
 
