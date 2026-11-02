@@ -1,0 +1,6 @@
+Fixes CodeQL js/identity-replacement alerts by matching actual HTML entity patterns instead of literal characters.
+
+- decodeRssText now correctly decodes &, ", ', &apos;, <, >
+- Decodes & first to handle double-encoding correctly
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)

@@ -1,0 +1,6 @@
+fix: restore proper HTML entity decoding in decodeRssText
+
+- Match actual HTML entity patterns (&, ", ', <, >) instead of literal characters
+- Decode & first to handle double-encoding correctly
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>

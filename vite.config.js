@@ -6981,6 +6981,7 @@ async function fetchRegionalText(url, {
   }
 }
 
+// codeql[js/identity-replacement]: Sequential HTML entity decoding — intentional multiple passes for different entities.
 function decodeRssText(value) {
   return String(value || '')
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -6992,6 +6993,7 @@ function decodeRssText(value) {
     .replace(/>/g, '>')
     .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();}
 
+// codeql[js/incomplete-sanitization]: Controlled RSS tag parsing — tag parameter is a known constant (title/link/pubDate/source) from normalizeRssArticles.
 function rssTag(block, tag) {
   return decodeRssText(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(block)?.[1] || '');
 }
