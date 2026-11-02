@@ -197,6 +197,9 @@ catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
 Aircraft altitude-band queries require a reported barometric or geometric altitude
 for each match, so a grounded contact that reports none is left out of a band too.
 Queries without an altitude band retain unknown-altitude contacts.
+`find_submarine_cables` lists and counts each cable once: TeleGeography splits
+a few cables (2Africa, Echo) into several features under one id, and such a
+cable matches when any of its parts crosses the area.
 
 Catalog calls check their cancellation signal immediately before executing a
 tool. Already-cancelled queries do not start; cancellation after execution starts
