@@ -65,7 +65,7 @@ try {
         negative &&
         pathname ===
           (layer === 'local-firms'
-            ? '/src/layers/firms/render/navara.js'
+            ? '/src/layers/shared/render/navaraGroundCells.js'
             : '/src/layers/earthquakes/render/navara.js');
       if (!globe && !shader) {
         await request.continue();

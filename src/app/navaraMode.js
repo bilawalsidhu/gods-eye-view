@@ -123,6 +123,10 @@ export async function registerNavaraLayerRenderers() {
           ...navaraViews.get(engine),
         });
     },
+    'gnss-integrity': async () => {
+      const { createGnssNavaraRenderer } = await import('../layers/gnss/render/navara.js');
+      return (engine) => createGnssNavaraRenderer(engine, navaraViews.get(engine));
+    },
     'air-quality': async () => {
       const { createAirQualityNavaraRenderer } =
         await import('../layers/airQuality/render/navara.js');

@@ -698,3 +698,24 @@ test('view anchor falls back to rectangle, then nadir, then no camera', () => {
   assert.ok(Math.abs(nadirAnchor.latitude - 41) < 1e-10);
   assert.ok(Math.abs(nadirAnchor.longitude - 21) < 1e-10);
 });
+
+test('an in-flight regional response supplies the next renderer without a new request', async () => {
+  let resolve, calls = 0;
+  const h = harness(() => { calls++; return new Promise(done => { resolve = done; }); });
+  try {
+    h.layer.enable();
+    const pending = h.layer.update();
+    h.layer.detachRenderer();
+    assert.equal(h.viewer.camera.changed.numberOfListeners, 0);
+    resolve({ rows: threeHealthy() });
+    assert.equal(await pending, true);
+    assert.equal(h.sources.length, 0);
+    assert.equal(h.layer.getStats().levels.low, 1);
+    h.layer.attachRenderer(h.viewer);
+    assert.equal(h.sources[0].length, 1);
+    assert.equal(calls, 1);
+    assert.equal(h.viewer.camera.changed.numberOfListeners, 1);
+  } finally {
+    h.layer.destroy();
+  }
+});

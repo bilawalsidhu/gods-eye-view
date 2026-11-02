@@ -1,3 +1,4 @@
+import { createGroundCellDisplay } from '../../shared/render/navaraGroundCells.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEngineEvent } from '../../../globe/contract.js';
@@ -130,6 +131,32 @@ test('ground changes are atomic, lazy and dispose replaced and destroyed GPU tex
   second.destroy();
   assert.equal(h.registered.length, 1);
 });
+test('GNSS and FIRMS share one ground pass without hiding or destroying one another', async () => {
+  const h = harness();
+  const gnss = createGroundCellDisplay(h.engine, h.options, 0);
+  const fire = h.renderer;
+  try {
+    fire.setVisible(true);
+    fire.addCell(cell);
+    await settle();
+    gnss.replace([cell, cell]);
+    gnss.setVisible(true);
+    const owner = h.effects[0].config.gevFirmsGround.owner;
+    assert.equal(h.effects.length, 1);
+    assert.equal(owner.state.count, 3);
+    gnss.setVisible(false);
+    assert.equal(owner.state.count, 1);
+    gnss.setVisible(true);
+    fire.destroy();
+    assert.equal(owner.state.count, 2);
+    assert.equal(h.effects[0].deleted, 0);
+  } finally {
+    fire.destroy();
+    gnss.destroy();
+  }
+  assert.equal(h.effects[0].deleted, 1);
+});
+
 test('FIRMS selection uses actual engine event picks and releases its dispatcher subscriptions', () => {
   const h = harness(),
     r = h.renderer;

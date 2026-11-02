@@ -45,7 +45,7 @@ const browser = await puppeteer.launch({
 });
 const images = [];
 const rendererSource = await fs.readFile(
-  new URL('../src/layers/firms/render/navara.js', import.meta.url),
+  new URL('../src/layers/shared/render/navaraGroundCells.js', import.meta.url),
   'utf8',
 );
 const coverageSource = rendererSource.slice(
@@ -217,7 +217,7 @@ try {
         page.on('request', async (request) => {
           if (
             new URL(request.url()).pathname !==
-            '/src/layers/firms/render/navara.js'
+            '/src/layers/shared/render/navaraGroundCells.js'
           )
             return request.continue();
           try {

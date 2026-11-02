@@ -36,6 +36,7 @@ const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
 const RENDERED_LAYER_DIRS = [
   'src/layers/alpr/',
   'src/layers/airQuality/',
+  'src/layers/gnss/',
   'src/layers/radio/',
   'src/layers/bikeshare/',
   'src/layers/earthquakes/',
