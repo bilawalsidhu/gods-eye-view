@@ -5,6 +5,10 @@ import {
   sinceStopIndex,
 } from './streetLevelPresentation.js';
 import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
+import {
+  COVERAGE_NOUN as VEGBILDER_NOUN,
+  LINE_CLICK_HINT as VEGBILDER_ACTION,
+} from '../layers/streetLevel/providers/vegbilder/policy.js';
 
 const provider = providerSnapshot;
 
@@ -22,6 +26,25 @@ test('an empty composition explains unavailable imagery even while disabled', ()
     assert.deepEqual(view.providers, []);
     assert.equal(view.meta, 'No street-level imagery providers configured');
   }
+});
+
+test('the Vegbilder coverage count uses a wording the panel translates', () => {
+  const view = presentStreetLevelPanel(
+    snapshot({
+      enabled: true,
+      coverage: {
+        loading: false,
+        count: 143,
+        hint: '',
+        error: null,
+        label: { noun: VEGBILDER_NOUN, action: VEGBILDER_ACTION },
+      },
+    }),
+  );
+  assert.equal(
+    view.meta,
+    '143 streets in view · click a line for its nearest photo',
+  );
 });
 
 function snapshot(overrides = {}) {

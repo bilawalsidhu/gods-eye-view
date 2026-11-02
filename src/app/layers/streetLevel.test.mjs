@@ -28,7 +28,7 @@ test('explicit providers replace the default source and an empty list removes it
   );
 });
 
-test('the defaults are Mapillary (given its source), Street View, KartaView and Panoramax, which start off and travel as provider switches', async () => {
+test('the defaults are Mapillary (given its source), Street View, KartaView, Panoramax and Vegbilder, which start off and travel as provider switches', async () => {
   const { createDefaultLayerState } = await import('../../data/layerState.js');
   const mapillary = {
     getStatus() {},
@@ -42,6 +42,7 @@ test('the defaults are Mapillary (given its source), Street View, KartaView and 
     'google',
     'kartaview',
     'panoramax',
+    'vegbilder',
   ]);
   // A fresh page and a restored default agree: Street View is billed, so off.
   layer.setParams(createDefaultLayerState().options['street-level']);
@@ -52,7 +53,7 @@ test('the defaults are Mapillary (given its source), Street View, KartaView and 
   assert.equal(layer.getParams().google, true);
   assert.equal(
     layer.getParams().providerSwitches,
-    'google-1*kartaview-0*panoramax-0',
+    'google-1*kartaview-0*panoramax-0*vegbilder-0',
   );
   // KartaView is keyless and free, but one source shows at a time.
   layer.setParams({ providerSwitches: 'kartaview-1' });
@@ -67,7 +68,16 @@ test('the defaults are Mapillary (given its source), Street View, KartaView and 
   // The form the app writes (the README and CHANGELOG quote it).
   assert.equal(
     layer.getParams().providerSwitches,
-    'google-0*kartaview-0*panoramax-1',
+    'google-0*kartaview-0*panoramax-1*vegbilder-0',
+  );
+  // And Vegbilder: lighting it puts Panoramax out.
+  layer.setParams({ providerSwitches: 'vegbilder-1' });
+  assert.equal(layer.getParams().vegbilder, true);
+  assert.equal(layer.getParams().panoramax, false);
+  assert.equal(layer.getParams().mapillary, false);
+  assert.equal(
+    layer.getParams().providerSwitches,
+    'google-0*kartaview-0*panoramax-0*vegbilder-1',
   );
   // Without the application's Street Level source there are none.
   assert.deepEqual(createApplicationStreetLevel({}).providerIds, []);
