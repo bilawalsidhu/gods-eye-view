@@ -18,7 +18,8 @@ test('palette runs ember to white-hot and starts fully transparent', () => {
   assert.equal(heatColorAt(0.01)[3], 0, 'below the floor nothing is painted');
   const low = heatColorAt(0.15);
   const high = heatColorAt(1);
-  assert.ok(low[0] > low[1] && low[1] > low[2], 'low heat is an ember red');
+  assert.ok(low[0] > low[1] && low[1] > low[2], 'low heat is red');
+  assert.ok(low[3] >= 0.5 * 255, 'low heat stays visible on any imagery');
   assert.ok(high[1] > low[1] && high[2] > low[2], 'the core is paler');
   assert.ok(high[3] > low[3], 'hotter is more opaque');
   for (let i = 1; i <= 100; i++) {

@@ -9,17 +9,20 @@
 export const HEAT_FLOOR = 0.03;
 
 /**
- * The FRP marker ramp as a continuous glow: faint ember at the edges, a
- * pale white-hot core where the most power burns.
+ * The FRP marker ramp as a continuous glow, from a red edge through orange
+ * and gold to a pale white-hot core. The edge is a bright red, not the
+ * markers' dark ember, and starts more than half opaque: most of the world
+ * sits low on a scale set by the hottest regions, and a dark translucent red
+ * vanishes into forest and savanna imagery.
  */
 export const HEAT_PALETTE = Object.freeze([
-  { at: 0.0, rgb: [158, 42, 27], alpha: 0 },
-  { at: 0.08, rgb: [158, 42, 27], alpha: 0.35 },
-  { at: 0.25, rgb: [210, 64, 31], alpha: 0.55 },
-  { at: 0.45, rgb: [240, 106, 40], alpha: 0.65 },
-  { at: 0.65, rgb: [251, 154, 46], alpha: 0.75 },
-  { at: 0.82, rgb: [253, 200, 74], alpha: 0.82 },
-  { at: 1.0, rgb: [255, 243, 176], alpha: 0.9 },
+  { at: 0.0, rgb: [232, 58, 30], alpha: 0 },
+  { at: 0.08, rgb: [232, 58, 30], alpha: 0.58 },
+  { at: 0.25, rgb: [242, 86, 34], alpha: 0.7 },
+  { at: 0.45, rgb: [248, 122, 40], alpha: 0.76 },
+  { at: 0.65, rgb: [252, 166, 52], alpha: 0.82 },
+  { at: 0.82, rgb: [254, 208, 92], alpha: 0.87 },
+  { at: 1.0, rgb: [255, 245, 190], alpha: 0.92 },
 ]);
 
 export function heatColorAt(t) {

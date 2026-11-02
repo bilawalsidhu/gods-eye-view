@@ -2189,8 +2189,9 @@ global 2048 × 1024 grid, each weighted by its FRP in megawatts (so heat is
 radiated power, and raising the FRP slider does not dim areas where strong fires
 burn), Gaussian-blurred,
 normalized on a log scale against the 99.5th percentile and mapped through the
-same colors, from a faint ember edge through red, orange and gold to a pale
-white-hot core. Nothing is painted where
+same hues, from a bright red edge through orange and gold to a pale
+white-hot core. The edge starts more than half opaque, so regions far below
+the hottest ones still read over forest and savanna imagery. Nothing is painted where
 nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
 tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
 on each data refresh or filter change (the first paint at once, later ones
