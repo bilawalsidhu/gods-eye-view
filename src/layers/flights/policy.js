@@ -1,18 +1,16 @@
-export {
-  GROUND_FLOOR_CLAMP_RADIUS_KM,
-  GROUND_FLOOR_WARM_MAX_ALT_M,
-  POSITION_HISTORY_LIMIT,
-  LANDED_MISSING_POLL_LIMIT,
-  MISSING_POLL_LIMIT,
-  ERROR_BACKOFF_INTERVAL,
-} from './recordPolicy.js';
 import * as Cesium from 'cesium';
+import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
 export const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
+
+/** Red tint for aircraft broadcasting an emergency (7500/7600/7700 or ADS-B status). */
+
+export const EMERGENCY_TINT =
+  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03: "absolutely we should see planes
 // taxiing and landing") -----------------------------------------------------------
@@ -213,8 +211,8 @@ export const COURSE_SLEW_DT_MAX_SEC = 0.25;
 // adsbdb enrichment (best-effort, fail-silent). Bounded fan-out: max 4
 // concurrent requests, dispatches dripped ≥ENRICH_DISPATCH_GAP_MS apart
 // (≤5/s — adsbdb is a free community API; the dev-server proxy additionally
-// caches per-key on disk forever, negative results included, so repeat
-// sessions never re-hit adsbdb). Each key is requested at most once per
+// caches successful and 404 responses per key for 24 hours, so later sessions
+// may refresh them). Each key is requested at most once per
 // session. Priority jobs (tracked plane, model-eligible planes) jump the
 // queue; the ambient fleet sweep (below) fills the back at poll cadence.
 // ---------------------------------------------------------------------------
@@ -237,7 +235,7 @@ export const ENRICH_DISPATCH_GAP_MS = 200;
 //     of drip, so the backlog can't outgrow a poll and re-sorts fresh), and
 //   - a ROLLING token-bucket budget (below) bounding the sustained ambient
 //     request rate (repeat sessions resolve instantly from the proxy's
-//     permanent disk cache).
+//     24-hour disk cache).
 // Fail-silent by contract: the sweep never throws into the poll loop, never
 // blocks rendering, and never touches tracking state. When a type answer
 // lands, _requestTypeEnrichment's callback swaps the billboard glyph + scale
@@ -251,7 +249,7 @@ export const ENRICH_DISPATCH_GAP_MS = 200;
 // ENRICH_AMBIENT_REFILL_TOKENS every ENRICH_AMBIENT_REFILL_WINDOW_MS, clamped
 // at the ceiling (no banking beyond one bucket). Numbers: 150 / 5 min sustains
 // 0.5 req/s worst case — an order of magnitude under the 5/s drip that (with
-// the 4-concurrent limit + the proxy's permanent disk cache) is the REAL
+// the 4-concurrent limit + the proxy's 24-hour disk cache) is the REAL
 // politeness bound on adsbdb; the 300 ceiling preserves the old first-look
 // burst so a fresh region still classifies quickly.
 /** Bucket ceiling: max ambient tokens held at once (= the initial burst). */

@@ -34,9 +34,43 @@ const AIRCRAFT_FIELDS = {
   aircraftClass: ['t'],
   military: ['f'],
   onGround: ['f'],
+  squawk: ['t'],
+  emergency: ['f'],
+  emergencyKind: ['t'],
+  emergencySource: ['t'],
+  emergencyBroadcast: ['t'],
+  lastContactAtMs: ['ms'],
 };
 
 const layers = [
+  {
+    id: 'gnss-integrity',
+    aliases: [
+      'gnss integrity',
+      'navigation integrity',
+      'low navigation accuracy',
+      'gnss interference',
+      'gps interference',
+      'gps jamming',
+      'gnss',
+    ],
+    context: false,
+    noQuery: 'navigation-integrity cells; no countable analyst records',
+  },
+  {
+    id: 's2-ghostmaps',
+    aliases: [
+      's2 ghostmaps',
+      'ghost maps',
+      'ghostmaps',
+      's2 underground',
+      's2 intel',
+      'intel picture',
+      'common intelligence picture',
+    ],
+    context: false,
+    noQuery: 'published third-party intel placemarks; not analyst records',
+  },
   {
     id: 'flights',
     track: true,
@@ -229,6 +263,24 @@ const layers = [
     aliases: ['winds', 'wind map'],
     context: false,
     noQuery: 'map overlay; no countable records',
+  },
+  {
+    id: 'air-quality',
+    aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
+    context: false,
+    query: {
+      fields: {
+        value: ['n', 'AQHI'],
+        band: ['t'],
+        scale: ['t'],
+        provider: ['t'],
+        name: ['t'],
+        zone: ['t'],
+        risk: ['t'],
+        observedMs: ['ms'],
+      },
+      timeField: 'observedMs',
+    },
   },
   {
     id: 'traffic',
@@ -473,6 +525,8 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  // The brand is already the layer id; all spoken aliases remain accepted.
+  's2-ghostmaps',
 ]);
 
 /**
@@ -487,7 +541,7 @@ export function voiceLayerAliasHint() {
       entry.toggle && entry.aliases.length && !SELF_EVIDENT_IDS.has(entry.id),
   )
     .map((entry) => `${entry.aliases.slice(0, 2).join('/')}→${entry.id}`)
-    .join('; ');
+    .join(';');
 }
 
 /** Field names that already carry their unit (altitudeM, speedKts, …). */

@@ -1023,7 +1023,7 @@ async function runDeixisBehavior(page, run, settle) {
   };
   const beginAt = (x, y, said = null) =>
     page.evaluate(
-      (px, py, text) => {
+      async (px, py, text) => {
         const voice = window.__gevVoiceCommands;
         if (text) {
           // What the session emits for a spoken turn: a new turn, then the caption.
@@ -1043,6 +1043,8 @@ async function runDeixisBehavior(page, run, settle) {
         voice.pointer.hold('keydown');
         const snapshot = voice.beginPointerTurn('keydown');
         voice.pointer.releaseHold();
+        // The voice card and the reticle render on Vue's next flush.
+        await Promise.resolve();
         const chip = document.getElementById('gev-voice-card-pointer');
         const reticle = document.querySelector('.gev-pointer-reticle');
         return {
@@ -1745,8 +1747,9 @@ async function runBehaviorLayer() {
       'behavior: analyst follow-up re-filters the remembered set',
       `count=${r?.count} followUp=${r?.coverage?.followUp}`,
     );
-    // A marine region resolves from the bundled Natural Earth pack in the page,
-    // without the slower geocode fallback.
+    // Require the bundled boundary source and the existing whole-query limit.
+    // This elapsed time includes record acquisition and filtering; the region
+    // resolver has its own separate fallback budget.
     const gulfStarted = Date.now();
     r = await run('analyst_query', {
       layers: ['flights'],
@@ -1757,9 +1760,10 @@ async function runBehaviorLayer() {
     report(
       r?.ok === true &&
         String(r?.coverage?.scope || '').includes('Gulf of Mexico') &&
+        r?.coverage?.scopeSource === 'natural-earth' &&
         gulfMs < 3000,
       'behavior: analyst resolves the Gulf of Mexico from the bundled pack',
-      `scope=${r?.coverage?.scope} ms=${gulfMs} err=${r?.error || ''}`,
+      `scope=${r?.coverage?.scope} source=${r?.coverage?.scopeSource} ms=${gulfMs} err=${r?.error || ''}`,
     );
 
     // (5) zoom_to_globe is ABSOLUTE full-earth (>12,000 km band)

@@ -1884,7 +1884,7 @@ async function runBrowserGroup(record) {
 
   await step('C15', async () => {
     // CRT/NVG/FLIR are DISPLAY LABELS; the real style ids are retro /
-    // surveillance / thermal (src/ui.js STYLE_STATUS_LABELS). Passing the
+    // surveillance / thermal (src/ui/visualPresets.js STYLE_STATUS_LABELS). Passing the
     // labels made every call a silent no-op that still "passed" — so assert
     // the returned visual state actually changed to the requested style.
     const wanted = [['retro', 'CRT'], ['surveillance', 'NVG'], ['thermal', 'FLIR'], ['normal', 'Normal']];
@@ -2006,8 +2006,9 @@ async function runBrowserGroup(record) {
       for (let i = 0; i < 20; i += 1) {
         // eslint-disable-next-line no-await-in-loop
         await new Promise((r) => setTimeout(r, 500));
-        const status = document.getElementById('gev-voice-status')?.textContent?.trim() || '';
-        if (status && status !== 'CONNECTING') break;
+        // The label is translated; the machine state is on the control.
+        const status = document.getElementById('gev-voice-control')?.dataset.status || '';
+        if (status && status !== 'connecting') break;
       }
       let diag = null;
       try { diag = vc.getDiagnostics?.(); } catch { /* not started */ }

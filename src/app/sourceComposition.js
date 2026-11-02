@@ -46,12 +46,15 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
   cyclones: contract(['weather-cyclones'], ['getSnapshot']),
   earthquakes: contract(['earthquakes'], ['getSnapshot']),
   'fire-perimeters': contract(['fire-perimeters'], ['getSnapshot']),
+  'air-quality': contract(['air-quality'], ['getSnapshot']),
+  'gnss-integrity': contract(['gnss-integrity'], ['getSnapshot']),
+  's2-ghostmaps': contract(['s2-ghostmaps'], ['getCatalog', 'getFile']),
   cables: contract(['telegeography-submarine-cables'], ['fetch']),
   transit: contract(['transit'], ['requestSnapshot', 'getHistory']),
 });
 
 /** An omitted provider is unavailable, never an authoritative empty dataset. */
-export class SourceUnavailableError extends Error {
+class SourceUnavailableError extends Error {
   constructor(name) {
     super(`Data source not configured: ${name}`);
     this.name = 'SourceUnavailableError';

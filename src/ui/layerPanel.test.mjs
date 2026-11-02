@@ -1,3 +1,4 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -13,7 +14,9 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
     source.indexOf('const PANEL_POSITIONS ='),
   );
   const order = JSON.parse(
-    runInNewContext(`${declarations}\nJSON.stringify(PANEL_ORDER)`),
+    runInNewContext(
+      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_ORDER)`,
+    ),
   );
   assert.deepEqual(
     order.filter(({ label }) => label === 'Movement').map(({ id }) => id),
@@ -32,14 +35,8 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
 });
 
 test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
-  const { LayerPanel, layerFeedState } = await import('./layerPanel.js');
-  const classes = new Map();
-  const attrs = new Map();
-  const button = {
-    classList: { toggle: (key, value) => classes.set(key, value) },
-    dataset: {},
-    setAttribute: (key, value) => attrs.set(key, value),
-  };
+  const { LayerPanel, layerFeedState, presentLayerToggle } =
+    await import('./layerPanel.js');
   const layer = {
     id: 'ais-live-vessels',
     name: 'Live Vessels',
@@ -55,12 +52,12 @@ test('partial feed controls distinguish incomplete records from stale data and o
     },
   };
   const panel = LayerPanel.prototype;
-  panel._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'PARTIAL');
-  assert.equal(button.dataset.feedState, 'partial');
-  assert.equal(classes.get('feed-partial'), true);
-  assert.equal(classes.get('feed-stale'), false);
-  assert.match(attrs.get('aria-label'), /PARTIAL/);
+  let toggle = presentLayerToggle(layer);
+  assert.equal(toggle.text, 'PARTIAL');
+  assert.equal(toggle.feedState, 'partial');
+  assert.equal(toggle.classes['feed-partial'], true);
+  assert.equal(toggle.classes['feed-stale'], false);
+  assert.match(toggle.ariaLabel, /PARTIAL/);
   assert.match(
     panel._buildMetaText(layer),
     /^PARTIAL · AISStream · 2 of 3 records accepted · /,
@@ -83,20 +80,39 @@ test('partial feed controls distinguish incomplete records from stale data and o
   );
   assert.equal(layerFeedState({ ...layer.stats, loading: true }), 'loading');
   layer.stats = { ...layer.stats, partial: false };
-  panel._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'ON');
-  assert.equal(classes.get('feed-partial'), false);
+  toggle = presentLayerToggle(layer);
+  assert.equal(toggle.text, 'ON');
+  assert.equal(toggle.classes['feed-partial'], false);
   layer.enabled = false;
-  panel._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'OFF');
+  assert.equal(presentLayerToggle(layer).text, 'OFF');
+});
+
+test('a stale row dates cached data by its oldest tile, not the last load', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const panel = LayerPanel.prototype;
+  const layer = {
+    id: 'traffic',
+    name: 'Street Traffic',
+    source: 'TomTom',
+    enabled: true,
+    stats: {
+      mode: 'live',
+      stale: true,
+      count: 4,
+      lastUpdate: Date.now(),
+      oldestTileAt: Date.now() - 3 * 3600_000,
+    },
+  };
+  assert.match(panel._buildMetaText(layer), /^STALE · TomTom · 3h ago$/);
+  delete layer.stats.oldestTileAt;
+  assert.match(panel._buildMetaText(layer), /^STALE · TomTom · just now$/);
 });
 
 test('readout rows contain only toggles and metadata; ordinary rows retain controls', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
-  const { railFixture } = await import('./railTestFixture.mjs');
-  const f = railFixture();
-  const previousDocument = globalThis.document;
-  globalThis.document = f.document;
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const find = (id) => container.querySelector(`[data-layer-id="${id}"]`);
   const ids = [
     'wind',
     'weather-radar',
@@ -137,9 +153,9 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
     }),
   });
   try {
-    panel.mount(f.container);
+    panel.mount(container);
     for (const id of ids.slice(0, -1)) {
-      const row = f.find((n) => n.dataset.layerId === id);
+      const row = find(id);
       assert.equal(row.children.length, 2);
       assert.ok(row.querySelector('.data-name'));
       assert.ok(row.querySelector('.data-toggle-meta'));
@@ -150,14 +166,14 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
         'data-toggle-controls-status',
         'data-row-list',
       ])
-        assert.equal(row.querySelector(`.${cls}`), null);
+        assert.ok(!row.querySelector(`.${cls}`), cls);
       row.querySelector('.data-toggle-btn').click();
     }
     assert.deepEqual(
       calls.map(([id]) => id),
       ids.slice(0, -1),
     );
-    const ordinary = f.find((n) => n.dataset.layerId === 'other');
+    const ordinary = find('other');
     assert.equal(
       ordinary.querySelector('.data-toggle-controls-info').textContent,
       'Detailed time',
@@ -172,19 +188,16 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
     assert.equal(typeof refresh, 'function');
   } finally {
     panel.destroy();
-    globalThis.document = previousDocument;
+    document.body.replaceChildren();
   }
 });
 
 test('the Recent Imagery readout mounts in its rail body like the weather readout and is rebuilt or released with the panel', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
-  const { railFixture } = await import('./railTestFixture.mjs');
-  const f = railFixture();
-  const body = f.document.createElement('div');
-  f.document.getElementById = (id) =>
-    id === 'recent-imagery-panel-body' ? body : null;
-  const previousDocument = globalThis.document;
-  globalThis.document = f.document;
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const body = document.body.appendChild(document.createElement('div'));
+  body.id = 'recent-imagery-panel-body';
   const mounted = [];
   const factory = (container) => {
     const readout = {
@@ -209,10 +222,10 @@ test('the Recent Imagery readout mounts in its rail body like the weather readou
   try {
     panel.attachRecentImagery(factory);
     assert.equal(mounted.length, 0, 'no body before the panel mounts');
-    panel.mount(f.container);
+    panel.mount(container);
     assert.equal(mounted.length, 1);
-    assert.equal(mounted[0].container, body);
-    panel.mount(f.container);
+    assert.ok(mounted[0].container === body);
+    panel.mount(container);
     assert.equal(mounted[0].destroyed, true, 'a remount rebuilds it');
     assert.equal(mounted.length, 2);
     panel.attachRecentImagery(null);
@@ -225,18 +238,12 @@ test('the Recent Imagery readout mounts in its rail body like the weather readou
     assert.equal(mounted.length, 3, 'a destroyed panel mounts nothing');
   } finally {
     panel.destroy();
-    globalThis.document = previousDocument;
+    document.body.replaceChildren();
   }
 });
 
 test('an omitted source is visibly unavailable and cannot be toggled on', async () => {
-  const { LayerPanel } = await import('./layerPanel.js');
-  const attrs = new Map();
-  const button = {
-    classList: { toggle() {} },
-    dataset: {},
-    setAttribute: (key, value) => attrs.set(key, value),
-  };
+  const { presentLayerToggle } = await import('./layerPanel.js');
   const layer = {
     id: 'flights',
     name: 'Flights',
@@ -247,14 +254,89 @@ test('an omitted source is visibly unavailable and cannot be toggled on', async 
       error: 'Data source not configured: flights',
     },
   };
-  LayerPanel.prototype._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'UNAVAILABLE');
-  assert.equal(attrs.get('aria-disabled'), 'true');
-  assert.match(button.title, /not configured/);
-  LayerPanel.prototype._syncToggleButton(button, { ...layer, enabled: true });
+  const toggle = presentLayerToggle(layer);
+  assert.equal(toggle.text, 'UNAVAILABLE');
+  assert.equal(toggle.ariaDisabled, true);
+  assert.match(toggle.title, /not configured/);
   assert.equal(
-    attrs.get('aria-disabled'),
-    'false',
+    presentLayerToggle({ ...layer, enabled: true }).ariaDisabled,
+    false,
     'an active layer can always be switched off',
+  );
+});
+
+test('row text keeps a hyphenated code whole and never starts a line with the separator', async () => {
+  const { rowTextRuns } = await import('./layerRowText.js');
+  const text = (runs) => runs.map((run) => run.text).join('');
+  const kept = (runs) => runs.filter((run) => run.keep).map((run) => run.text);
+
+  const name = rowTextRuns('Локальный ADS-B');
+  assert.equal(text(name), 'Локальный ADS-B');
+  assert.deepEqual(kept(name), ['ADS-B']);
+
+  const meta = rowTextRuns('UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED');
+  assert.equal(text(meta), 'UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED');
+  assert.deepEqual(kept(meta), [' ·', ' ·', ' ·']);
+  assert.ok(
+    meta.every((run) => !run.text.startsWith('·')),
+    'the space before each dot is held to the piece it closes',
+  );
+
+  assert.equal(rowTextRuns('Satellites'), null, 'plain text needs no runs');
+
+  const compound = rowTextRuns('Kartierte ALPR-Kameras · ADS-B-Flüge');
+  assert.equal(text(compound), 'Kartierte ALPR-Kameras · ADS-B-Flüge');
+  assert.deepEqual(
+    kept(compound),
+    [' ·', 'ADS-B'],
+    'a compound may break at its hyphen; the code inside it stays whole',
+  );
+
+  const long = rowTextRuns('see https-proxy-endpoint-config-x');
+  assert.deepEqual(
+    kept(long || []),
+    [],
+    'a long hyphenated run may still wrap',
+  );
+});
+
+test('the unavailable chip may abbreviate, but its accessible name keeps the full state', async () => {
+  const { presentLayerToggle } = await import('./layerPanel.js');
+  const toggle = presentLayerToggle({
+    id: 'local-firms',
+    name: 'FIRMS Active Fires',
+    enabled: false,
+    stats: { sourceUnavailable: true, error: 'KEY REQUIRED' },
+  });
+  assert.equal(toggle.text, 'UNAVAILABLE');
+  assert.equal(toggle.feedState, 'unavailable');
+  assert.match(toggle.ariaLabel, /^Active Fires: UNAVAILABLE\./);
+});
+
+test('the Weather readout receives enabled air-quality alongside weather layers', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const layers = ['wind', 'air-quality', 'other'].map((id) => ({
+    id,
+    icon: '*',
+    enabled: true,
+  }));
+  layers.push({ id: 'weather-radar', icon: '*', enabled: false });
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    getRowControls: (id) => ({ readout: true, summary: { label: id } }),
+  });
+  let entries = null;
+  panel._weatherPanel = {
+    update: (next) => {
+      entries = next;
+    },
+  };
+  panel._refreshWeatherPanel();
+  assert.deepEqual(
+    entries.map(({ id, summary }) => [id, summary.label]),
+    [
+      ['wind', 'wind'],
+      ['air-quality', 'air-quality'],
+    ],
   );
 });

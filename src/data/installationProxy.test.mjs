@@ -26,6 +26,7 @@ import {
   validMilitaryInstallationBox,
   writeMilitaryInstallationDisk,
 } from '../../vite.config.js';
+import { resolveOverpassUpstreamTag } from '../../server/providers/overpass/constants.js';
 
 const DAY_MS = 86_400_000;
 test('installation failure reasons disclose no raw upstream error and do not guess overload', () => {
@@ -272,5 +273,32 @@ test('an unwritable cache directory degrades to a miss instead of throwing', asy
     assert.equal(await readMilitaryInstallationDisk('key', TTL_MS, blocked), null);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('an installation entry is not served after OVERPASS_UPSTREAMS is repointed', async (t) => {
+  const prior = process.env.OVERPASS_UPSTREAMS;
+  t.after(() => {
+    if (prior === undefined) delete process.env.OVERPASS_UPSTREAMS;
+    else process.env.OVERPASS_UPSTREAMS = prior;
+  });
+  const dir = tempCacheDir();
+  const key = '30.250,-97.750,30.300,-97.700';
+  try {
+    process.env.OVERPASS_UPSTREAMS = 'https://a.example/api/interpreter,https://b.example/api/interpreter';
+    const tag = resolveOverpassUpstreamTag();
+    await writeMilitaryInstallationDisk(key, { ...entry(Date.now()), upstreams: tag }, dir);
+    assert.ok(await readMilitaryInstallationDisk(key, TTL_MS, dir), 'its own entry is a hit');
+    process.env.OVERPASS_UPSTREAMS = 'https://b.example/api/interpreter,https://a.example/api/interpreter';
+    assert.equal(resolveOverpassUpstreamTag(), tag, 'reordering the same instances keeps the tag');
+    process.env.OVERPASS_UPSTREAMS = 'https://c.example/api/interpreter';
+    assert.equal(await readMilitaryInstallationDisk(key, TTL_MS, dir), null, 'fresh read refused');
+    assert.equal(await readMilitaryInstallationDisk(key, Infinity, dir), null, 'stale read refused');
+    await writeMilitaryInstallationDisk('legacy', entry(Date.now()), dir);
+    assert.equal(await readMilitaryInstallationDisk('legacy', Infinity, dir), null, 'untagged entry refused');
+    delete process.env.OVERPASS_UPSTREAMS;
+    assert.ok(await readMilitaryInstallationDisk(key, Infinity, dir), 'nothing configured accepts any entry');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });

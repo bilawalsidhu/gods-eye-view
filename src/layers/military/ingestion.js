@@ -1,5 +1,9 @@
 import { ERROR_BACKOFF_INTERVAL } from './recordPolicy.js';
 
+// Marks English the Layers panel translates when it shows the error. Kept
+// local: this module stays free of browser globals (package boundaries).
+const msg = (text) => text;
+
 /** Own military source acquisition, cancellation, freshness and error backoff. */
 export function createIngestion({
   feed,
@@ -42,7 +46,7 @@ export function createIngestion({
         feed._lastError =
           snapshot.reason ||
           (snapshot.freshness === 'unknown'
-            ? 'Source snapshot time unavailable'
+            ? msg('Source snapshot time unavailable')
             : null);
         const accepted = applySnapshot(snapshot, viewer);
         feed._count = accepted.count;
@@ -69,7 +73,9 @@ export function createIngestion({
           setSourceLabel(feed._lastSource);
         }
         feed._lastError =
-          e?.name === 'LiveSourceError' ? e.message : 'Live data unavailable';
+          e?.name === 'LiveSourceError'
+            ? e.message
+            : msg('Live data unavailable');
       } finally {
         feed._activeUpdateControllers.delete(resourceController);
       }

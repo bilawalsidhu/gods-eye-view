@@ -13,6 +13,7 @@ import {
   npmProcessSpec,
   readDoctorDotenvValue,
   resolveOpenSkyAuthMode,
+  resolveOpenSkyCredentialsFile,
   resolveCredential,
 } from '../scripts/setup-doctor.mjs';
 
@@ -69,12 +70,22 @@ test('placeholder values are never counted as configured credentials', () => {
 });
 
 test('doctor selects a Windows-safe npm process without changing Unix behavior', () => {
-  assert.deepEqual(npmProcessSpec('win32'), {
-    command: 'npm.cmd',
+  // Windows passes no argument array with shell: true (Node DEP0190).
+  assert.deepEqual(npmProcessSpec(['ci'], 'win32'), {
+    command: 'npm.cmd ci',
+    args: [],
     shell: true,
   });
-  assert.deepEqual(npmProcessSpec('darwin'), { command: 'npm', shell: false });
-  assert.deepEqual(npmProcessSpec('linux'), { command: 'npm', shell: false });
+  assert.deepEqual(npmProcessSpec(['--version'], 'darwin'), {
+    command: 'npm',
+    args: ['--version'],
+    shell: false,
+  });
+  assert.deepEqual(npmProcessSpec(['ci'], 'linux'), {
+    command: 'npm',
+    args: ['ci'],
+    shell: false,
+  });
 });
 
 test('doctor recognizes every OpenSky OAuth keychain alias used by dev-fresh', () => {
@@ -227,7 +238,7 @@ test('doctor retains OAuth capability wording for a complete client pair', () =>
   );
 });
 
-test('doctor reports Basic mode without inferring runtime auth from OAuth credentials', () => {
+test('doctor reports retired Basic mode as anonymous, whatever OAuth credentials exist', () => {
   const oauthCredentials = {
     OPENSKY_CLIENT_ID: { configured: true },
     OPENSKY_CLIENT_SECRET: { configured: true },
@@ -235,7 +246,7 @@ test('doctor reports Basic mode without inferring runtime auth from OAuth creden
   for (const credentials of [{}, oauthCredentials]) {
     assert.equal(
       buildCapabilitySummary(credentials, { openSkyAuthMode: 'basic' }).flights,
-      'OpenSky Basic mode selected (credential presence and validity not verified)',
+      'OpenSky Basic mode selected: OpenSky retired username/password sign-in, so flights load anonymously (rate-limited)',
     );
   }
 });
@@ -382,4 +393,40 @@ test('doctor never calls a dependency-missing setup ready', () => {
   assert.match(output, /dependencies missing; run npm install/);
   assert.match(output, /Setup needs attention/);
   assert.doesNotMatch(output, /Ready\. Run/);
+});
+
+test('doctor counts OPENSKY_CREDENTIALS_FILE as OAuth credentials, from the environment or .env', () => {
+  assert.equal(
+    buildCapabilitySummary({}, { openSkyCredentialsFile: true }).flights,
+    'OpenSky OAuth credentials file set (OPENSKY_CREDENTIALS_FILE; file contents and validity not verified)',
+  );
+  assert.equal(
+    buildCapabilitySummary({}, { openSkyCredentialsFile: false }).flights,
+    'OpenSky keyless anonymous access (rate-limited)',
+  );
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-opensky-file-'));
+  try {
+    assert.equal(
+      resolveOpenSkyCredentialsFile({ environment: {}, rootDir: root }),
+      false,
+    );
+    writeFileSync(
+      path.join(root, '.env'),
+      'OPENSKY_CREDENTIALS_FILE=~/Downloads/credentials.json\n',
+    );
+    assert.equal(
+      resolveOpenSkyCredentialsFile({ environment: {}, rootDir: root }),
+      true,
+    );
+    assert.equal(
+      resolveOpenSkyCredentialsFile({
+        authoritativeEnvironment: true,
+        environment: { OPENSKY_CREDENTIALS_FILE: '' },
+        rootDir: root,
+      }),
+      false,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

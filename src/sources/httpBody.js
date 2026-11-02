@@ -1,13 +1,18 @@
+// Imported by the server: the catalog-free marker, not src/i18n/index.js. The
+// text stays English data; layers show it translated (translateKnown).
+import { msg } from '../i18n/marker.js';
+
+const tooLarge = () =>
+  Object.assign(new Error(msg('Upstream response too large')), {
+    code: 'RESPONSE_TOO_LARGE',
+  });
+
 /**
  * Read a fetch() Response body as text with a hard byte cap. Rejects early on an
  * oversized Content-Length, then streams with a running cap so a chunked or
  * length-omitted response cannot blow past the limit. Throws { code:'RESPONSE_TOO_LARGE' }.
  */
 export async function readResponseTextCapped(response, maxBytes, signal) {
-  const tooLarge = () =>
-    Object.assign(new Error('Upstream response too large'), {
-      code: 'RESPONSE_TOO_LARGE',
-    });
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
     void response.body?.cancel().catch(() => {});
@@ -55,14 +60,12 @@ export async function readResponseJsonCapped(response, maxBytes, signal) {
 
 /**
  * Read a fetch() Response body as bytes with the same hard cap as
- * readResponseTextCapped — for protobuf upstreams (GTFS-Realtime).
+ * readResponseTextCapped — for protobuf and tile upstreams (GTFS-Realtime,
+ * TomTom flow). Same early Content-Length rejection, running cap while
+ * streaming and cancellation on abort, so callers can treat the two alike.
  * Throws { code:'RESPONSE_TOO_LARGE' }.
  */
 export async function readResponseBytesCapped(response, maxBytes, signal) {
-  const tooLarge = () =>
-    Object.assign(new Error('Upstream response too large'), {
-      code: 'RESPONSE_TOO_LARGE',
-    });
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
     await response.body?.cancel().catch(() => {});

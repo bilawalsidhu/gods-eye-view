@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  parseTerrainPoints,
   fetchTerrainChunkWithRetry,
   resolveTerrainHeightRequest,
   terrainPointKey,
@@ -88,6 +89,36 @@ test('429 retry honors Retry-After before the next attempt', async () => {
   assert.equal(attempts, 2);
   assert.deepEqual(sleeps, [3000]);
   assert.equal(results[0].id, 'recovered');
+});
+
+test('a Retry-After longer than the retry budget ends the retries without sleeping', async () => {
+  let clock = 3_000_000;
+  let attempts = 0;
+  const sleeps = [];
+  await assert.rejects(
+    fetchTerrainChunkWithRetry([[1, 1]], {
+      now: () => clock,
+      random: () => 0.5,
+      makeSignal: () => undefined,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        clock += ms;
+      },
+      fetchImpl: async () => {
+        attempts += 1;
+        return {
+          ok: false,
+          status: 429,
+          headers: {
+            get: (name) => (name.toLowerCase() === 'retry-after' ? '30' : null),
+          },
+        };
+      },
+    }),
+    (error) => error.status === 429 && error.retryAfter === '30',
+  );
+  assert.equal(attempts, 1);
+  assert.deepEqual(sleeps, [], 'no sleep that cannot reach the Retry-After');
 });
 
 test('permanently failing upstream exhausts retries and returns 502 without fake results', async () => {
@@ -226,4 +257,14 @@ test('malformed height objects remain refresh failures, not absent readings', as
     assert.equal(response.absentPoints, 0);
     assert.equal(response.cacheChanged, false);
   }
+});
+
+test('terrain parser rejects out-of-range WGS84 points and accepts inclusive bounds', () => {
+  for (const value of ['181,0', '-181,0', '0,91', '0,-91', '1,2;0,91'])
+    assert.equal(parseTerrainPoints(value), null, value);
+  assert.deepEqual(parseTerrainPoints('-180,-90;180,90;0,0'), [
+    [-180, -90],
+    [180, 90],
+    [0, 0],
+  ]);
 });

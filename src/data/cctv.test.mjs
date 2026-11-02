@@ -25,9 +25,6 @@ function componentFunctionSource(fn) {
     .replace(/\(\s+/g, '(');
 }
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as Cesium from 'cesium';
 import cctvLayer, {
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
@@ -77,16 +74,11 @@ import {
   CCTV_FOCUS_REQUEST_EVENT,
   activateCctvCameraFromWorldClick,
 } from '../cctvFocusRequest.js';
-
-const CCTV_PRESENTATION_SOURCE = fs.readFileSync(
-  path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '..',
-    'ui',
-    'cctvPresentation.js',
-  ),
-  'utf8',
-);
+import {
+  ACTIVE_CAMERA_COLOR,
+  IDLE_CAMERA_COLOR,
+  LIVE_CAMERA_COLOR,
+} from '../layers/cctv/policy.js';
 
 const ASPECT = 16 / 9;
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -355,6 +347,37 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
       projectionOnly.coverageEntities.every((entity) => entity.show),
       'COVERAGE OFF keeps the active projection frustum materialized and visible',
     );
+  } finally {
+    _setCctvCoverageStateForTest({ enabled: false });
+  }
+});
+
+test('camera icons are violet for video feeds, cyan for stills, amber when active', () => {
+  const record = (id, feedType) => ({
+    camera: { ...UNCLAMPED_CAMERA, id, feedType, groundElevationM: 0 },
+    billboard: {},
+    coverageEntities: [],
+    projection: null,
+  });
+  const idleVideo = record('idle-hls', 'hls');
+  const idleStill = record('idle-image', 'image');
+  const activeVideo = record('active-hls', 'hls');
+  const viewer = { entities: { add: (entity) => entity } };
+
+  try {
+    // Disabled keeps the active video camera from opening a real projection;
+    // icon colors are assigned either way.
+    _setCctvCoverageStateForTest({
+      viewer,
+      records: [idleVideo, idleStill, activeVideo],
+      activeCameraId: activeVideo.camera.id,
+      enabled: false,
+      coverageMode: 'off',
+    });
+    refreshCoverageStyles();
+    assert.equal(idleVideo.billboard.color, LIVE_CAMERA_COLOR);
+    assert.equal(idleStill.billboard.color, IDLE_CAMERA_COLOR);
+    assert.equal(activeVideo.billboard.color, ACTIVE_CAMERA_COLOR);
   } finally {
     _setCctvCoverageStateForTest({ enabled: false });
   }
@@ -1266,19 +1289,6 @@ test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay hones
     assert.equal(cctvCycleIndex(-1, -1, records.length), records.length - 1);
     assert.equal(cctvCycleIndex(2, 1, records.length), 0);
     assert.equal(cctvCycleIndex(0, -1, records.length), records.length - 1);
-
-    const renderer = CCTV_PRESENTATION_SOURCE.match(
-      /_renderCctvState\(state\) \{[\s\S]*?\n\}\n/,
-    );
-    assert.ok(renderer, '_renderCctvState is missing');
-    assert.match(
-      renderer[0],
-      /else if \(!activeId\)[\s\S]*?selectedIndex = -1/,
-    );
-    assert.match(
-      renderer[0],
-      /_cctvFocusBtn\.disabled\s*=\s*!enabled\s*\|\|\s*cameras\.length === 0\s*\|\|\s*!activeId/,
-    );
   } finally {
     cctvLayer.setParams({ autoHop: false });
     _setCctvOverlayHostForTest();

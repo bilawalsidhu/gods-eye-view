@@ -4,7 +4,7 @@ import { cameraPoseKey } from './pointerContext.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 
 /** "Around here" radius as a share of camera height, clamped to sane bounds. */
-export function pointerRadiusKm(cameraHeightM) {
+function pointerRadiusKm(cameraHeightM) {
   const heightKm = Number(cameraHeightM) / 1000;
   if (!Number.isFinite(heightKm) || heightKm <= 0) return 50;
   return Math.round(Math.min(400, Math.max(5, heightKm * 0.75)));

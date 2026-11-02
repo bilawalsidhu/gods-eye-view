@@ -313,7 +313,9 @@ test('retry: a plain HTTP 500 still exhausts the existing 8s/25s transient ladde
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 100_000 });
   globalThis.window = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
   const requestTimes = [];
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/status'))
+      return Response.json({ configured: true });
     requestTimes.push(Date.now());
     return httpFailure(500);
   };
@@ -402,7 +404,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
   };
   let overpassCall = 0;
   globalThis.fetch = async (url) => {
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       return { json: async () => ({
         status: 'OK',
         results: [{
@@ -726,5 +728,20 @@ test('only an explicit navigation request permits resolving distant annotation t
   await engine.annotate([{ type: 'point', target: 'Remote landmark' }]);
   await engine.annotate([{ type: 'point', target: 'Remote landmark' }], { flyTo: true });
   assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
+  engine.destroy();
+});
+
+test('a drawn line that rounds up to the next unit is labelled in it, not as 1000 m or 10.0 km', async (t) => {
+  installAnimationFrameStubs(t);
+  const labels = [];
+  const renderer = { add(anno) { labels.push(anno.label); }, update() {}, remove() {}, sync() {}, destroy() {} };
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const metresPerDegree = (6371.0088 * 1000 * Math.PI) / 180;
+  for (const metres of [994, 996, 9940, 9960]) {
+    await engine.annotate([
+      { type: 'route', manual: true, path: [[0, 0], [0, metres / metresPerDegree]] },
+    ]);
+  }
+  assert.deepEqual(labels, ['990 m', '1.0 km', '9.9 km', '10 km']);
   engine.destroy();
 });

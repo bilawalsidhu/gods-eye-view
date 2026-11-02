@@ -4,44 +4,109 @@
  * moves, whatever the state: box actions, a notice line, the strip of day
  * cards and its hint line, the selection bar (mode, the two slot rows),
  * opacity, SWAP and export, then a collapsed DETAILS card for every note and
- * hedge. Box actions, export and DETAILS are rail-card blocks and cards; the
- * strip and selection bar are this adapter's own keyed DOM. Source toggles
- * live on the data-panel row.
+ * hedge. The adapter computes the view from the layer's snapshot and renders
+ * the RecentImageryReadout component; box actions, export and DETAILS are
+ * rail-card blocks and cards. Source toggles live on the data-panel row.
  */
-import { createRailCardBlocks } from './railCardBlocks.js';
-import { createRailCards } from './railCards.js';
+import { h, render as renderVue } from 'vue';
+import {
+  formatNumber,
+  msg,
+  onLocaleChange,
+  t,
+  tn,
+  translateKnown,
+} from '../i18n/index.js';
 import { createImagerySplit } from './imagerySplit.js';
+import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
   hhmm,
-  shortDay,
   wvsSnapshotUrl,
 } from '../layers/recentImagery/model.js';
+import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
+import { formatQuantity } from './unitLabels.js';
+import { pointerOwnerName } from '../data/pointerOwnerNames.js';
 
 const PANEL_ID = 'recent-imagery-panel';
 const OVERVIEW_MIN_BOX_KM = 25;
-const ESRI_NOTE = 'Imagery on Esri · Google 3D returns when cleared';
+const ESRI_NOTE = msg('Imagery on Esri · Google 3D returns when cleared');
+
+// The layer keeps its notices and box refusals in English (AI tools read the
+// same snapshot); translate the ones we write, show anything else as it came.
+const LAYER_NOTICES = new Set([
+  ESRI_NOTE,
+  msg('Box and images cleared'),
+  msg('Esri map unavailable · no swipe'),
+  msg('Swipe needs a globe map'),
+  msg('Imagery stays on Esri · CLEAR to use Google 3D'),
+  // Box refusals the layer writes itself (layers/recentImagery/index.js).
+  msg('Point the camera at the ground to use the view'),
+  msg('That point cannot anchor a box'),
+]);
+// Refusals with a value in them (layers/recentImagery/model.js and
+// imageryBoxTool.js); fixed refusals there are msg() text for translateKnown.
+const TOO_LARGE = /^(Box|View) is ([\d,]+) km wide · limit ([\d,]+) km$/;
+const POLAR = /^Imagery stops at ±([\d.]+)° latitude$/;
+const POINTER_BUSY = /^(.+) is using the pointer — close it first$/;
+
+/**
+ * The notice line in the UI language: notices and box refusals arrive in
+ * English. Exported for tests.
+ * @param {string} text
+ * @returns {string}
+ */
+export function localizeNotice(text) {
+  if (!text) return '';
+  if (LAYER_NOTICES.has(text)) return t(text);
+  const polar = POLAR.exec(text);
+  if (polar)
+    return t('Imagery stops at ±{limit}° latitude', {
+      limit: formatNumber(Number(polar[1]), {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    });
+  const busy = POINTER_BUSY.exec(text);
+  if (busy)
+    return t('{owner} is using the pointer — close it first', {
+      owner: translateKnown(pointerOwnerName(busy[1])),
+    });
+  const tooLarge = TOO_LARGE.exec(text);
+  if (!tooLarge) return translateKnown(text);
+  const values = {
+    size: formatQuantity(Number(tooLarge[2].replace(/,/g, '')), 'km', {
+      useGrouping: true,
+    }),
+    limit: formatQuantity(Number(tooLarge[3].replace(/,/g, '')), 'km', {
+      useGrouping: true,
+    }),
+  };
+  return tooLarge[1] === 'Box'
+    ? t('Box is {size} wide · limit {limit}', values)
+    : t('View is {size} wide · limit {limit}', values);
+}
 const MODE_LABELS = [
-  ['image', 'IMAGE'],
-  ['basemap', 'VS BASEMAP'],
-  ['ab', 'A / B'],
+  ['image', msg('IMAGE')],
+  ['basemap', msg('VS BASEMAP')],
+  ['ab', msg('A / B')],
 ];
 const START_HERE_TITLES = {
-  clear: 'Newest low-cloud day for this box · scene cloud, not box cloud',
-  cloudy: 'Newest day covering this box · cloudier than 20%',
-  partial: 'Newest day with imagery for this box · partial coverage',
-  overview: 'Newest daily overview for this box',
+  clear: msg('Newest low-cloud day for this box · scene cloud, not box cloud'),
+  cloudy: msg('Newest day covering this box · cloudier than 20%'),
+  partial: msg('Newest day with imagery for this box · partial coverage'),
+  overview: msg('Newest daily overview for this box'),
 };
 const START_HERE_REASONS = {
-  clear: 'newest clear day',
-  cloudy: 'newest day (cloudy)',
-  partial: 'newest day (partial coverage)',
-  overview: 'newest overview',
+  clear: msg('newest clear day'),
+  cloudy: msg('newest day (cloudy)'),
+  partial: msg('newest day (partial coverage)'),
+  overview: msg('newest overview'),
 };
 const PLACEHOLDERS = {
-  empty: 'No imagery',
-  error: 'Unavailable',
-  present: 'Loading',
+  empty: msg('No imagery'),
+  error: msg('Unavailable'),
+  present: msg('Loading'),
 };
 const KEY_STEPS = {
   ArrowLeft: (index) => index - 1,
@@ -55,48 +120,57 @@ const appearedDocuments = new WeakSet();
 
 const sensorLine = (product) =>
   PRODUCTS[product]
-    ? `${PRODUCTS[product].name} · ${PRODUCTS[product].resolutionM} m`
+    ? `${t(PRODUCTS[product].name)} · ${displayMetres(PRODUCTS[product].resolutionM)}`
     : product || '';
 const utcTime = (iso) => (hhmm(iso) ? `${hhmm(iso)}Z` : '');
 const longerSideKm = (size) =>
   Math.max(Number(size?.width) || 0, Number(size?.height) || 0);
-const kmText = (km) =>
-  !Number.isFinite(km)
-    ? '?'
-    : km >= 100
-      ? Math.round(km).toLocaleString('en-US')
-      : km.toFixed(1);
+const kmText = (km) => {
+  if (!Number.isFinite(km)) return '?';
+  const digits = km >= 100 ? 0 : 1;
+  return formatNumber(km, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+};
+
+function coverageText(coverage) {
+  if (coverage === 'full') return t('full', { context: 'coverage' });
+  if (coverage === 'partial') return t('partial', { context: 'coverage' });
+  return t('unknown');
+}
 
 function cloudText(candidate) {
-  if (candidate.thumbnail?.status === 'empty') return 'no imagery';
-  if (!candidate.cloud) return 'cloud unknown';
+  if (candidate.thumbnail?.status === 'empty') return t('no imagery');
+  if (!candidate.cloud) return t('cloud unknown');
   const min = Math.round(candidate.cloud.min);
   const max = Math.round(candidate.cloud.max);
-  return min === max ? `${min}% cloud` : `${min}–${max}% cloud`;
+  return min === max
+    ? t('{percent}% cloud', { percent: min })
+    : t('{min}–{max}% cloud', { min, max });
 }
 
 function countText(snapshot) {
-  if (!snapshot.box) return 'NO BOX';
-  if (snapshot.searching) return 'SEARCHING';
-  const count = snapshot.candidates.length;
-  return `${count} DAY${count === 1 ? '' : 'S'}`;
+  if (!snapshot.box) return t('NO BOX');
+  if (snapshot.searching) return t('SEARCHING');
+  return tn(snapshot.candidates.length, '{count} DAY', '{count} DAYS');
 }
 
 /** The one-line hint under the strip: the next thing to do, per state. */
 function hintText(snapshot) {
-  if (snapshot.zoomToFit) return 'Zoom in or draw a smaller box';
-  if (!snapshot.box) return 'Select a box or use the view';
-  if (snapshot.searching) return 'Searching the last 30 days';
-  if (!snapshot.candidates.length) return 'No days to show for this box';
+  if (snapshot.zoomToFit) return t('Zoom in or draw a smaller box');
+  if (!snapshot.box) return t('Select a box or use the view');
+  if (snapshot.searching) return t('Searching the last 30 days');
+  if (!snapshot.candidates.length) return t('No days to show for this box');
   const { mode, pins, shown } = snapshot;
-  if (shown.swipe !== 'none') return 'Drag the divider · SWAP trades sides';
+  if (shown.swipe !== 'none') return t('Drag the divider · SWAP trades sides');
   if (mode === 'ab') {
     if (!pins.a.key && !pins.b.key)
-      return '← → preview · A or B pins the focused day';
-    return '← → preview the other side · A or B pins it';
+      return t('← → preview · A or B pins the focused day');
+    return t('← → preview the other side · A or B pins it');
   }
-  if (pins.a.key) return 'S on another day replaces it · × unpins';
-  return '← → preview · S shows the focused day';
+  if (pins.a.key) return t('S on another day replaces it · × unpins');
+  return t('← → preview · S shows the focused day');
 }
 
 /**
@@ -115,16 +189,6 @@ function revealCard(scroller, card) {
       ? top
       : Math.max(0, top + box.height - height);
   if (delta) scroller.scrollTop = (scroller.scrollTop || 0) + delta;
-}
-
-/** Depth-first search over `children`, for nodes the blocks module owns. */
-function findIn(root, predicate) {
-  for (const child of root?.children || []) {
-    if (predicate(child)) return child;
-    const inner = findIn(child, predicate);
-    if (inner) return inner;
-  }
-  return null;
 }
 
 /**
@@ -153,147 +217,41 @@ export function createRecentImageryPanel({
     target.addEventListener(type, handler, options);
     listeners.push([target, type, handler, options]);
   };
-  const el = (tag, className, parent, text) => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text != null) node.textContent = text;
-    parent?.appendChild(node);
-    return node;
-  };
   const set = (node, key, value) => {
     if (node[key] !== value) node[key] = value;
   };
-  const attribute = (node, key, value) => {
-    if (node.getAttribute(key) !== value) node.setAttribute(key, value);
-  };
-  const toggle = (node, name, on) => {
-    if (node.classList.contains(name) !== Boolean(on))
-      node.classList.toggle(name, Boolean(on));
-  };
-
-  // ---- build: every block exists from the start, in its final order ----
-  const root = el('section', 'recent-imagery-readout');
-  root.setAttribute('aria-label', 'Recent imagery');
-
-  const actionsHost = el('div', 'ri-block ri-actions-row', root);
-  actionsHost.id = 'ri-actions';
-  const actions = createRailCardBlocks({
-    container: actionsHost,
-    cardId: 'recent-imagery',
-    onParams: () => {},
-  });
-
-  // The notice line: the text, and ZOOM IN in a fixed slot at its right end
-  // (reserved, never removed, whenever there is nothing to fit).
-  const notice = el('div', 'ri-block ri-line ri-notice', root);
-  notice.id = 'ri-notice';
-  const noticeText = el('span', 'ri-notice-text', notice);
-  noticeText.id = 'ri-notice-text';
-  noticeText.setAttribute('role', 'status');
-  noticeText.setAttribute('aria-live', 'polite');
-  const zoomIn = el('button', 'data-toggle-chip ri-zoom-in', notice, 'ZOOM IN');
-  zoomIn.id = 'ri-zoom-in';
-  zoomIn.type = 'button';
-  zoomIn.title = 'Fly in until the view fits the 1,000 km limit';
-
-  const strip = el('div', 'ri-block ri-strip', root);
-  strip.id = 'ri-strip';
-  strip.tabIndex = 0;
-  strip.setAttribute('role', 'listbox');
-  strip.setAttribute('aria-orientation', 'horizontal');
-  strip.setAttribute(
-    'aria-label',
-    'Imagery days, newest first · arrows move, S or A and B pin',
-  );
-  strip.setAttribute('aria-keyshortcuts', 'A B S');
-  const stripEmpty = el('div', 'ri-strip-empty', strip);
-
-  const hint = el('div', 'ri-block ri-line ri-hint', root);
-  hint.id = 'ri-hint';
-
-  const selection = el('section', 'ri-block ri-selection', root);
-  selection.id = 'ri-selection';
-  selection.setAttribute('aria-label', 'On the map');
-  const modeGroup = el('div', 'ri-mode', selection);
-  modeGroup.id = 'ri-mode';
-  modeGroup.setAttribute('role', 'radiogroup');
-  modeGroup.setAttribute('aria-label', 'Mode');
-  const modeButtons = new Map(
-    MODE_LABELS.map(([mode, label]) => {
-      const node = el('button', 'data-toggle-chip ri-mode-btn', modeGroup);
-      node.type = 'button';
-      node.textContent = label;
-      node.dataset.mode = mode;
-      node.setAttribute('role', 'radio');
-      return [mode, node];
-    }),
-  );
-  const slotRows = {};
-  for (const slotId of ['a', 'b']) {
-    const row = el('div', 'ri-slot', selection);
-    row.id = `ri-slot-${slotId}`;
-    const tag = el('span', 'ri-slot-tag', row);
-    const value = el('span', 'ri-slot-value', row);
-    const unpin = el('button', 'data-toggle-chip ri-unpin', row, '×');
-    unpin.type = 'button';
-    unpin.id = `ri-unpin-${slotId}`;
-    unpin.dataset.unpin = slotId;
-    slotRows[slotId] = { row, tag, value, unpin };
-  }
-
-  const controls = el('div', 'ri-block ri-controls', root);
-  controls.id = 'ri-controls';
-  const opacityLabel = el('label', 'ri-opacity-label', controls);
-  el('span', '', opacityLabel, 'OPACITY');
-  const opacityValue = el('span', 'ri-opacity-value', opacityLabel, '100%');
-  const opacity = el('input', 'ri-opacity', controls);
-  opacity.id = 'ri-opacity';
-  Object.assign(opacity, {
-    type: 'range',
-    min: '0',
-    max: '100',
-    step: '1',
-    value: '100',
-  });
-  opacity.setAttribute('aria-label', 'Imagery opacity');
-  opacityLabel.htmlFor = 'ri-opacity';
-  // Its slot is always there; it is only usable while a swipe is live.
-  const swap = el('button', 'data-toggle-chip ri-swap', controls, 'SWAP');
-  swap.id = 'ri-swap';
-  swap.type = 'button';
-  swap.title = 'Trade the two sides of the divider';
-  const exportHost = el('div', 'ri-exports', controls);
-  const exports = createRailCardBlocks({
-    container: exportHost,
-    cardId: 'recent-imagery',
-    onParams: () => {},
-  });
-
-  const detailsHost = el('div', 'ri-details', root);
-  detailsHost.id = 'ri-details';
-  let detailsOpen = false;
-  let detailsShownOpen = false;
-  const details = createRailCards({
-    container: detailsHost,
-    document,
-    cardClassName: 'ri-details-card',
-    onOpen: () => {
-      detailsOpen = !detailsOpen;
-      render();
-    },
-  });
-
-  container.appendChild(root);
 
   // ---- state ------------------------------------------------------------
-  const cards = new Map();
-  let stripKeys = '';
   let snapshot = layer.getSnapshot();
   let split = null;
   let splitSignature = '';
   let exportError = null;
   const exporting = new Set();
   let destroyed = false;
+  let detailsOpen = false;
+  let stripKeys = '';
+  // Days whose thumbnail has been shown: their image stays, hidden when gone.
+  const imaged = new Set();
+
+  // The readout patches synchronously, so it can be measured at once. Once
+  // destroyed nothing paints: a late export would mount it again.
+  const paint = () =>
+    !destroyed &&
+    renderVue(
+      h(RecentImageryReadout, {
+        view: buildView(),
+        modes: MODE_LABELS,
+        onOpenDetails,
+        onSetMode: (mode) => layer.setMode(mode),
+      }),
+      container,
+    );
+  paint();
+  const root = container.lastElementChild;
+  const strip = root.querySelector('#ri-strip');
+  const zoomIn = root.querySelector('#ri-zoom-in');
+  const swap = root.querySelector('#ri-swap');
+  const opacity = root.querySelector('#ri-opacity');
 
   /**
    * The body is the scroll container and no render may move it: a
@@ -310,16 +268,17 @@ export function createRecentImageryPanel({
   }
 
   // ---- box actions ------------------------------------------------------
-  function renderActions() {
-    actions.update([
+  function actionsView() {
+    return [
       {
         id: 'box',
         type: 'actions',
         actions: [
           {
             id: 'select-box',
-            label: 'SELECT BOX',
-            title: 'Drag a box on the map (Esc cancels)',
+            label: t('SELECT BOX'),
+            title: t('Drag a box on the map (Esc cancels)'),
+            pressed: Boolean(snapshot.toolActive),
             onClick: () => {
               exportError = null;
               if (tool?.isActive()) tool.cancel('toggle');
@@ -328,8 +287,8 @@ export function createRecentImageryPanel({
           },
           {
             id: 'use-view',
-            label: 'USE VIEW',
-            title: 'Use the current view as the box',
+            label: t('USE VIEW'),
+            title: t('Use the current view as the box'),
             onClick: () => {
               exportError = null;
               layer.useCurrentView(viewer);
@@ -337,8 +296,8 @@ export function createRecentImageryPanel({
           },
           {
             id: 'clear',
-            label: 'CLEAR',
-            title: 'Forget the box and its images',
+            label: t('CLEAR', { context: 'action' }),
+            title: t('Forget the box and its images'),
             disabled: !snapshot.box && !snapshot.boxError,
             onClick: () => {
               exportError = null;
@@ -347,192 +306,128 @@ export function createRecentImageryPanel({
           },
         ],
       },
-    ]);
-    const selectBox = findIn(
-      actionsHost,
-      (node) => node.dataset?.actionId === 'select-box',
-    );
-    if (selectBox) {
-      attribute(
-        selectBox,
-        'aria-pressed',
-        String(Boolean(snapshot.toolActive)),
-      );
-      toggle(selectBox, 'active', snapshot.toolActive);
-    }
+    ];
   }
 
   // ---- notice -----------------------------------------------------------
-  function renderNotice() {
+  function noticeView() {
     const warning = snapshot.boxError || snapshot.error || exportError;
-    const text =
-      warning || snapshot.notice || (snapshot.borrowedEsri ? ESRI_NOTE : '');
-    set(noticeText, 'textContent', text);
-    attribute(noticeText, 'title', text);
-    toggle(notice, 'warn', Boolean(warning));
-    toggle(notice, 'info', !warning && Boolean(text));
-    // ZOOM IN only for the oversized box or view the notice is showing.
-    const fit = Boolean(snapshot.zoomToFit);
-    toggle(notice, 'has-action', fit);
-    toggle(zoomIn, 'is-reserved', !fit);
-    set(zoomIn, 'disabled', !fit);
-    attribute(zoomIn, 'aria-hidden', String(!fit));
+    const text = localizeNotice(
+      warning || snapshot.notice || (snapshot.borrowedEsri ? ESRI_NOTE : ''),
+    );
+    return {
+      text,
+      warn: Boolean(warning),
+      info: !warning && Boolean(text),
+      // ZOOM IN only for the oversized box or view the notice is showing.
+      fit: Boolean(snapshot.zoomToFit),
+    };
   }
 
   // ---- strip ------------------------------------------------------------
-  function buildCard(candidate) {
-    const card = el('div', 'ri-card');
-    card.dataset.key = candidate.key;
-    card.setAttribute('role', 'option');
-    const entry = { card, image: null, imageUrl: null };
-    entry.thumb = el('div', 'ri-thumb', card);
-    entry.placeholder = el('span', 'ri-thumb-text', entry.thumb);
-    entry.flag = el('span', 'ri-card-flag', entry.thumb);
-    entry.start = el('span', 'ri-card-start', entry.thumb, 'START HERE');
-    entry.date = el('div', 'ri-card-date', card);
-    entry.sensor = el('div', 'ri-card-sensor', card);
-    entry.cloud = el('div', 'ri-card-cloud', card);
-    const chips = el('div', 'ri-card-chips', card);
-    entry.chips = {};
-    for (const slotId of ['a', 'b']) {
-      const chip = el('button', 'data-toggle-chip ri-chip', chips);
-      chip.type = 'button';
-      chip.tabIndex = -1;
-      chip.dataset.slot = slotId;
-      entry.chips[slotId] = chip;
-    }
-    cards.set(candidate.key, entry);
-    return card;
-  }
-
-  function updateCard(candidate, index) {
-    const entry = cards.get(candidate.key);
-    if (!entry) return;
-    const { card } = entry;
-    const day = shortDay(candidate.day);
+  function cardView(candidate, index) {
+    const day = displayDay(candidate.day);
     const ab = snapshot.mode === 'ab';
-    set(card, 'id', `ri-card-${index}`);
     const focused = index === snapshot.focusIndex;
-    toggle(card, 'focused', focused);
-    attribute(card, 'aria-selected', String(focused));
-    toggle(card, 'pinned', Boolean(candidate.pinned));
-    toggle(card, 'preview', Boolean(candidate.preview));
     const status = candidate.thumbnail?.status || 'unknown';
     const objectUrl = candidate.thumbnail?.objectUrl || null;
     const shown = status === 'present' && Boolean(objectUrl);
-    if (shown && !entry.image) {
-      entry.image = el('img', 'ri-thumb-img');
-      entry.image.alt = '';
-      entry.image.decoding = 'async';
-      entry.thumb.insertBefore(entry.image, entry.thumb.children[0] || null);
-    }
-    if (entry.image && entry.imageUrl !== (shown ? objectUrl : null)) {
-      entry.imageUrl = shown ? objectUrl : null;
-      entry.image.src = entry.imageUrl || '';
-    }
-    if (entry.image) set(entry.image, 'hidden', !shown);
-    set(entry.placeholder, 'hidden', shown);
-    set(entry.placeholder, 'textContent', PLACEHOLDERS[status] || 'Checking');
-    if (entry.thumb.dataset.status !== status)
-      entry.thumb.dataset.status = status;
+    if (shown) imaged.add(candidate.key);
     const flag = candidate.preview
-      ? 'PREVIEW'
+      ? t('PREVIEW')
       : candidate.pending
-        ? 'LOADING'
+        ? t('LOADING')
         : '';
-    set(entry.flag, 'textContent', flag);
-    set(entry.flag, 'hidden', !flag);
     const recommended = snapshot.recommended?.key === candidate.key;
-    set(entry.start, 'hidden', !recommended);
-    if (recommended)
-      set(
-        entry.start,
-        'title',
-        START_HERE_TITLES[snapshot.recommended.reason] ||
-          'Newest day with imagery for this box',
-      );
-    set(entry.date, 'textContent', day);
-    set(entry.sensor, 'textContent', sensorLine(candidate.product));
-    set(entry.cloud, 'textContent', cloudText(candidate));
     const empty = status === 'empty';
-    for (const slotId of ['a', 'b']) {
-      const chip = entry.chips[slotId];
+    const chips = ['a', 'b'].map((slotId) => {
       const live = slotId === 'a' || ab;
-      const on = candidate.pinned === slotId && live;
-      const label = slotId === 'a' ? (ab ? 'A' : 'SHOW') : 'B';
-      set(chip, 'textContent', label);
-      set(chip, 'disabled', empty || !live);
-      toggle(chip, 'active', on);
-      toggle(chip, 'is-reserved', !live);
-      attribute(chip, 'aria-pressed', String(on));
-      attribute(chip, 'aria-hidden', String(!live));
-      attribute(
-        chip,
-        'aria-label',
-        ab ? `Pin ${day} as ${slotId.toUpperCase()}` : `Show ${day}`,
-      );
-    }
+      return {
+        slot: slotId,
+        label: slotId === 'a' ? (ab ? 'A' : t('SHOW')) : 'B',
+        disabled: empty || !live,
+        active: candidate.pinned === slotId && live,
+        reserved: !live,
+        ariaLabel: ab
+          ? t('Pin {day} as {slot}', { day, slot: slotId.toUpperCase() })
+          : t('Show {day}', { day }),
+      };
+    });
     const state = candidate.pinned
       ? ab
-        ? ` · pinned ${candidate.pinned.toUpperCase()}`
+        ? t('pinned {slot}', { slot: candidate.pinned.toUpperCase() })
         : candidate.pinned === 'a'
-          ? ' · shown'
+          ? t('shown')
           : ''
       : candidate.preview
-        ? ' · preview'
+        ? t('preview')
         : '';
-    attribute(
-      card,
-      'aria-label',
-      `${day} · ${sensorLine(candidate.product)} · ${cloudText(candidate)}${recommended ? ' · start here' : ''}${state}`,
-    );
+    return {
+      key: candidate.key,
+      id: `ri-card-${index}`,
+      focused,
+      pinned: Boolean(candidate.pinned),
+      preview: Boolean(candidate.preview),
+      status,
+      image: imaged.has(candidate.key)
+        ? { src: shown ? objectUrl : '', hidden: !shown }
+        : null,
+      placeholder: PLACEHOLDERS[status]
+        ? t(PLACEHOLDERS[status])
+        : t('Checking'),
+      flag,
+      start: recommended
+        ? t(
+            START_HERE_TITLES[snapshot.recommended.reason] ||
+              msg('Newest day with imagery for this box'),
+          )
+        : '',
+      date: day,
+      sensor: sensorLine(candidate.product),
+      cloud: cloudText(candidate),
+      chips,
+      ariaLabel: [
+        day,
+        sensorLine(candidate.product),
+        cloudText(candidate),
+        ...[recommended ? t('start here') : '', state].filter(Boolean),
+      ].join(' · '),
+    };
   }
 
-  function renderStrip() {
+  function stripView() {
     const candidates = snapshot.candidates;
-    const keys = candidates.map((candidate) => candidate.key).join('|');
-    if (keys !== stripKeys) {
-      stripKeys = keys;
-      const wanted = new Set(candidates.map((candidate) => candidate.key));
-      for (const [key, entry] of [...cards]) {
-        if (wanted.has(key)) continue;
-        entry.card.remove();
-        cards.delete(key);
-      }
-      candidates.forEach((candidate, index) => {
-        const node = cards.get(candidate.key)?.card || buildCard(candidate);
-        if (strip.children[index] !== node)
-          strip.insertBefore(node, strip.children[index] || null);
-      });
-    }
-    candidates.forEach(updateCard);
-    set(
-      stripEmpty,
-      'textContent',
-      candidates.length
+    // A day that leaves the strip loses its image with its card.
+    const keys = new Set(candidates.map((candidate) => candidate.key));
+    for (const key of imaged) if (!keys.has(key)) imaged.delete(key);
+    return {
+      cards: candidates.map(cardView),
+      empty: candidates.length
         ? ''
         : !snapshot.box
-          ? 'No box'
+          ? t('No box')
           : snapshot.searching
-            ? 'Searching'
+            ? t('Searching')
             : snapshot.hiddenCount
-              ? 'Every day is empty here'
+              ? t('Every day is empty here')
               : !snapshot.sources.hls && !snapshot.sources.viirs
-                ? 'Sources off'
-                : 'No imagery',
-    );
-    set(stripEmpty, 'hidden', candidates.length > 0);
-    if (candidates[snapshot.focusIndex])
-      attribute(
-        strip,
-        'aria-activedescendant',
-        `ri-card-${snapshot.focusIndex}`,
-      );
-    else strip.removeAttribute('aria-activedescendant');
-    toggle(strip, 'searching', snapshot.searching);
-    set(hint, 'textContent', hintText(snapshot));
-    attribute(hint, 'title', hint.textContent);
+                ? t('Sources off')
+                : t('No imagery'),
+      activeDescendant: candidates[snapshot.focusIndex]
+        ? `ri-card-${snapshot.focusIndex}`
+        : null,
+      searching: Boolean(snapshot.searching),
+    };
   }
+
+  /** The strip's day cards by key. */
+  const cardNodes = () =>
+    new Map(
+      [...strip.querySelectorAll('.ri-card')].map((node) => [
+        node.dataset.key,
+        node,
+      ]),
+    );
 
   /**
    * Keyboard only: slide the strip until the focused card is in view. Only
@@ -540,7 +435,7 @@ export function createRecentImageryPanel({
    */
   function scrollFocusedIntoView() {
     const focus = snapshot.candidates[snapshot.focusIndex];
-    const card = focus ? cards.get(focus.key)?.card : null;
+    const card = focus ? cardNodes().get(focus.key) : null;
     const left = Number(card?.offsetLeft) || 0;
     const width = Number(card?.offsetWidth) || 0;
     const viewLeft = Number(strip.scrollLeft) || 0;
@@ -557,8 +452,9 @@ export function createRecentImageryPanel({
     const left = Number(strip.scrollLeft) || 0;
     let first = null;
     let last = null;
+    const nodes = cardNodes();
     snapshot.candidates.forEach((candidate, index) => {
-      const card = cards.get(candidate.key)?.card;
+      const card = nodes.get(candidate.key);
       const start = Number(card?.offsetLeft) || 0;
       const end = start + (Number(card?.offsetWidth) || 0);
       if (!card || end < left || start > left + width) return;
@@ -578,57 +474,41 @@ export function createRecentImageryPanel({
     return null;
   }
 
-  function renderSelection() {
+  function slotsView() {
     const { mode } = snapshot;
-    set(selection.dataset, 'mode', mode);
-    for (const [id, node] of modeButtons) {
-      const on = id === mode;
-      attribute(node, 'aria-checked', String(on));
-      toggle(node, 'active', on);
-      set(node, 'tabIndex', on ? 0 : -1);
-    }
     const ab = mode === 'ab';
-    for (const slotId of ['a', 'b']) {
-      const { row, tag, value, unpin } = slotRows[slotId];
+    return ['a', 'b'].map((slotId) => {
       const basemapRow = slotId === 'b' && !ab;
       const image = basemapRow ? null : slotImage(slotId);
       const pinned = Boolean(image && !image.preview);
-      set(
-        tag,
-        'textContent',
-        ab ? slotId.toUpperCase() : slotId === 'a' ? 'IMAGE' : 'VS',
-      );
-      let text = 'Not set';
-      if (basemapRow) text = 'Basemap';
+      let text = t('Not set');
+      if (basemapRow) text = t('Basemap');
       else if (image?.label)
-        text = `${image.sourceOff ? 'Source off · ' : ''}${image.label}${
+        text = [
+          image.sourceOff ? t('Source off') : '',
+          image.label,
           image.preview
-            ? ' · preview'
+            ? t('preview')
             : image.candidate && !image.drapable && !image.sourceOff
-              ? ' · loading'
-              : ''
-        }`;
-      set(value, 'textContent', text);
-      attribute(value, 'title', text);
-      const lit = basemapRow
-        ? mode === 'basemap'
-        : Boolean(image) && !image.sourceOff;
-      set(
-        row.dataset,
-        'state',
-        pinned ? 'pinned' : image ? 'preview' : 'empty',
-      );
-      toggle(row, 'lit', lit);
-      set(unpin, 'disabled', !pinned);
-      toggle(unpin, 'is-reserved', !pinned);
-      attribute(unpin, 'aria-hidden', String(!pinned));
-      attribute(
-        unpin,
-        'aria-label',
-        ab ? `Unpin ${slotId.toUpperCase()}` : 'Unpin the image',
-      );
-      set(unpin, 'title', unpin.getAttribute('aria-label'));
-    }
+              ? t('loading')
+              : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
+      return {
+        id: slotId,
+        tag: ab ? slotId.toUpperCase() : slotId === 'a' ? t('IMAGE') : t('VS'),
+        text,
+        lit: basemapRow
+          ? mode === 'basemap'
+          : Boolean(image) && !image.sourceOff,
+        state: pinned ? 'pinned' : image ? 'preview' : 'empty',
+        pinned,
+        unpinLabel: ab
+          ? t('Unpin {slot}', { slot: slotId.toUpperCase() })
+          : t('Unpin the image'),
+      };
+    });
   }
 
   // ---- opacity and export -----------------------------------------------
@@ -639,40 +519,26 @@ export function createRecentImageryPanel({
     return image?.candidate && !image.sourceOff ? image.candidate : null;
   }
 
-  function renderControls() {
-    const anything = Boolean(snapshot.shown.a || snapshot.shown.b);
-    set(opacity, 'disabled', !anything);
-    const alphaValue = String(Math.round(snapshot.alpha * 100));
-    if (opacity.value !== alphaValue) opacity.value = alphaValue;
-    set(opacityValue, 'textContent', `${alphaValue}%`);
-    const swipe = snapshot.comparison.active;
-    toggle(swap, 'is-reserved', !swipe);
-    set(swap, 'disabled', !swipe);
-    attribute(swap, 'aria-hidden', String(!swipe));
-    toggle(swap, 'active', swipe && snapshot.swapped);
-    attribute(swap, 'aria-pressed', String(swipe && snapshot.swapped));
+  function exportsView() {
     const ab = snapshot.mode === 'ab';
-    exports.update([
+    return [
       {
         id: 'export',
         type: 'actions',
         actions: ['a', 'b'].map((slotId) => ({
           id: `export-${slotId}`,
-          label: ab ? `EXPORT ${slotId.toUpperCase()}` : 'EXPORT',
-          title: `Download ${ab ? slotId.toUpperCase() : 'the image'} as a PNG`,
+          label: ab
+            ? t('EXPORT {slot}', { slot: slotId.toUpperCase() })
+            : t('EXPORT'),
+          title: ab
+            ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
+            : t('Download the image as a PNG'),
           disabled: !exportTarget(slotId) || exporting.has(slotId),
+          reserved: slotId === 'b' ? !ab : undefined,
           onClick: () => void exportImage(slotId),
         })),
       },
-    ]);
-    const exportB = findIn(
-      exportHost,
-      (node) => node.dataset?.actionId === 'export-b',
-    );
-    if (exportB) {
-      toggle(exportB, 'is-reserved', !ab);
-      attribute(exportB, 'aria-hidden', String(!ab));
-    }
+    ];
   }
 
   // ---- details ----------------------------------------------------------
@@ -682,7 +548,10 @@ export function createRecentImageryPanel({
     if (snapshot.box)
       lines.push({
         id: 'box',
-        text: `Box ${kmText(snapshot.boxSizeKm?.width)} × ${kmText(snapshot.boxSizeKm?.height)} km`,
+        text: t('Box {width} × {height} km', {
+          width: kmText(snapshot.boxSizeKm?.width),
+          height: kmText(snapshot.boxSizeKm?.height),
+        }),
       });
     if (focus) {
       lines.push({ id: 'readout', text: snapshot.readout || '' });
@@ -690,14 +559,24 @@ export function createRecentImageryPanel({
       if (focus.timeRange?.start) {
         const start = utcTime(focus.timeRange.start);
         const end = utcTime(focus.timeRange.end || focus.timeRange.start);
-        times.push(`Acquired ${start === end ? start : `${start}–${end}`}`);
+        times.push(
+          t('Acquired {time}', {
+            time: start === end ? start : `${start}–${end}`,
+          }),
+        );
       } else if (focus.thumbnail?.acquisitionTime)
-        times.push(`Acquired ${utcTime(focus.thumbnail.acquisitionTime)}`);
-      times.push(`Coverage ${focus.coverage || 'unknown'}`);
+        times.push(
+          t('Acquired {time}', {
+            time: utcTime(focus.thumbnail.acquisitionTime),
+          }),
+        );
+      times.push(
+        t('Coverage {coverage}', { coverage: coverageText(focus.coverage) }),
+      );
       lines.push({ id: 'acquired', text: times.join(' · ') });
       (focus.granules || []).forEach((granule, index) => {
         const cloud = Number.isFinite(granule.cloud)
-          ? ` · ${Math.round(granule.cloud)}% cloud`
+          ? ` · ${t('{percent}% cloud', { percent: Math.round(granule.cloud) })}`
           : '';
         lines.push({
           id: `granule-${index}`,
@@ -707,7 +586,11 @@ export function createRecentImageryPanel({
       });
     }
     const reason = START_HERE_REASONS[snapshot.recommended?.reason];
-    if (reason) lines.push({ id: 'start', text: `START HERE · ${reason}` });
+    if (reason)
+      lines.push({
+        id: 'start',
+        text: t('START HERE · {reason}', { reason: t(reason) }),
+      });
     for (const [index, note] of snapshot.notes.entries())
       lines.push({ id: `note-${index}`, text: note, muted: true });
     if (
@@ -718,26 +601,30 @@ export function createRecentImageryPanel({
     )
       lines.push({
         id: 'overview-scale',
-        text: 'Daily overview shows little detail in a box this small',
+        text: t('Daily overview shows little detail in a box this small'),
         muted: true,
       });
     lines.push({
       id: 'credit',
-      text: 'Imagery: NASA GIBS and Worldview · HLS (Sentinel-2, Landsat 8/9) and VIIRS',
+      text: t(
+        'Imagery: NASA GIBS and Worldview · HLS (Sentinel-2, Landsat 8/9) and VIIRS',
+      ),
       muted: true,
     });
     return lines;
   }
 
-  function renderDetails() {
+  function detailsView() {
     const hidden = snapshot.hiddenCount;
     const showing = snapshot.showUnavailable;
-    details.update([
+    return [
       {
         id: 'details',
-        title: 'Details',
+        title: t('Details'),
         open: detailsOpen,
-        compact: snapshot.focus ? snapshot.readout : 'Times, coverage, sources',
+        compact: snapshot.focus
+          ? snapshot.readout
+          : t('Times, coverage, sources'),
         blocks: [
           { id: 'lines', type: 'lines', lines: detailLines() },
           {
@@ -747,9 +634,9 @@ export function createRecentImageryPanel({
               {
                 id: 'toggle-empty',
                 label: showing
-                  ? 'HIDE EMPTY DAYS'
-                  : `SHOW EMPTY DAYS · ${hidden}`,
-                title: 'Days the probe found empty in this box',
+                  ? t('HIDE EMPTY DAYS')
+                  : t('SHOW EMPTY DAYS · {count}', { count: hidden }),
+                title: t('Days the probe found empty in this box'),
                 disabled: !showing && !hidden,
                 onClick: () => layer.setShowUnavailable(!showing),
               },
@@ -757,10 +644,35 @@ export function createRecentImageryPanel({
           },
         ],
       },
-    ]);
-    if (detailsOpen && !detailsShownOpen)
-      revealCard(container, detailsHost.children[0]);
-    detailsShownOpen = detailsOpen;
+    ];
+  }
+
+  function onOpenDetails() {
+    detailsOpen = !detailsOpen;
+    render();
+    // After the render: preserveScroll() puts the old position back.
+    if (detailsOpen)
+      revealCard(container, root.querySelector('#ri-details > [data-card-id]'));
+  }
+
+  function buildView() {
+    return {
+      hidden: !snapshot.enabled,
+      mode: snapshot.mode,
+      actions: actionsView(),
+      notice: noticeView(),
+      strip: stripView(),
+      hint: hintText(snapshot),
+      slots: slotsView(),
+      alpha: String(Math.round(snapshot.alpha * 100)),
+      opacityEnabled: Boolean(snapshot.shown.a || snapshot.shown.b),
+      swap: {
+        live: Boolean(snapshot.comparison.active),
+        pressed: Boolean(snapshot.comparison.active && snapshot.swapped),
+      },
+      exports: exportsView(),
+      details: detailsView(),
+    };
   }
 
   // ---- divider ----------------------------------------------------------
@@ -773,8 +685,10 @@ export function createRecentImageryPanel({
     const describe = (c) => (c ? `${sensorLine(c.product)} · ${c.day}` : '');
     // The two sides as [label, title, spoken name]; SWAP trades them.
     const sides = [
-      basemap ? ['IMAGE', describe(a), 'image'] : ['A', describe(a), 'A'],
-      basemap ? ['BASEMAP', 'The basemap', 'basemap'] : ['B', describe(b), 'B'],
+      basemap ? [t('IMAGE'), describe(a), t('image')] : ['A', describe(a), 'A'],
+      basemap
+        ? [t('BASEMAP'), t('The basemap'), t('basemap')]
+        : ['B', describe(b), 'B'],
     ];
     const [before, after] = swapped ? [sides[1], sides[0]] : sides;
     const signature = live
@@ -788,7 +702,6 @@ export function createRecentImageryPanel({
     if (!live || split || destroyed) return;
     split = createSplit({
       scene: viewer?.scene,
-      parent: document.body,
       initialValue: snapshot.split,
       id: 'recent-imagery-split-line',
       handleClass: 'recent-imagery-split-handle',
@@ -799,10 +712,15 @@ export function createRecentImageryPanel({
       beforeTitle: before[1],
       afterTitle: after[1],
       ariaLabel: basemap
-        ? 'Recent imagery against the basemap divider'
-        : 'Recent imagery A and B divider',
+        ? t('Recent imagery against the basemap divider')
+        : t('Recent imagery A and B divider'),
       formatValueText: (leftPercent, rightPercent) =>
-        `${before[2][0].toUpperCase()}${before[2].slice(1)} ${leftPercent} percent, ${after[2]} ${rightPercent} percent`,
+        t('{before} {left} percent, {after} {right} percent', {
+          before: `${before[2][0].toUpperCase()}${before[2].slice(1)}`,
+          left: leftPercent,
+          after: after[2],
+          right: rightPercent,
+        }),
       getViewportWidth: () =>
         Number(viewer?.scene?.canvas?.clientWidth) ||
         Number(document.documentElement?.clientWidth) ||
@@ -817,7 +735,6 @@ export function createRecentImageryPanel({
   function renderPanel() {
     const hidden = !snapshot.enabled;
     if (panel) set(panel, 'hidden', hidden);
-    set(root, 'hidden', hidden);
     if (count) set(count, 'textContent', hidden ? '' : countText(snapshot));
     if (hidden || !panel || appearedDocuments.has(document)) return;
     appearedDocuments.add(document);
@@ -833,15 +750,11 @@ export function createRecentImageryPanel({
 
   function render() {
     if (destroyed) return;
+    // The strip a full render showed: thumbnails for it take the short path.
+    stripKeys = snapshot.candidates.map((candidate) => candidate.key).join('|');
     preserveScroll(() => {
-      set(root.dataset, 'mode', snapshot.mode);
       renderPanel();
-      renderActions();
-      renderNotice();
-      renderStrip();
-      renderSelection();
-      renderControls();
-      renderDetails();
+      paint();
       renderSplit();
       reportVisibleRange();
     });
@@ -850,10 +763,11 @@ export function createRecentImageryPanel({
   // ---- export -----------------------------------------------------------
   async function exportImage(slotId = 'a') {
     const candidate = exportTarget(slotId);
-    if (!candidate || !snapshot.box || exporting.has(slotId)) return false;
+    if (destroyed || !candidate || !snapshot.box || exporting.has(slotId))
+      return false;
     exporting.add(slotId);
     exportError = null;
-    preserveScroll(renderControls);
+    preserveScroll(paint);
     // The snapshot is plate carrée: keep the box's degree aspect, with the
     // longer side at the size limit.
     const size = longerSideKm(snapshot.boxSizeKm) > 25 ? 2048 : 1024;
@@ -895,15 +809,13 @@ export function createRecentImageryPanel({
       return true;
     } catch (error) {
       if (!destroyed)
-        exportError = `Export failed · ${error?.message || error}`;
+        exportError = t('Export failed · {error}', {
+          error: error?.message || error,
+        });
       return false;
     } finally {
       exporting.delete(slotId);
-      if (!destroyed)
-        preserveScroll(() => {
-          renderControls();
-          renderNotice();
-        });
+      if (!destroyed) preserveScroll(paint);
     }
   }
 
@@ -941,11 +853,6 @@ export function createRecentImageryPanel({
       strip.focus({ preventScroll: true });
       return;
     }
-    const mode = target?.closest?.('.ri-mode-btn');
-    if (mode) {
-      layer.setMode(mode.dataset.mode);
-      return;
-    }
     if (target?.closest?.('.ri-swap') && !swap.disabled) {
       layer.swapSides?.();
       return;
@@ -960,21 +867,6 @@ export function createRecentImageryPanel({
 
   listen(root, 'input', (event) => {
     if (event.target === opacity) layer.setAlpha(Number(opacity.value) / 100);
-  });
-
-  listen(modeGroup, 'keydown', (event) => {
-    const order = MODE_LABELS.map(([mode]) => mode);
-    const step =
-      { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key] ||
-      0;
-    if (!step) return;
-    event.preventDefault();
-    const next =
-      order[
-        (order.indexOf(snapshot.mode) + step + order.length) % order.length
-      ];
-    layer.setMode(next);
-    modeButtons.get(next)?.focus?.();
   });
 
   listen(strip, 'keydown', (event) => {
@@ -1038,22 +930,21 @@ export function createRecentImageryPanel({
     if (reason === 'split') {
       split?.setValue(snapshot.split);
     } else if (reason === 'alpha') {
-      preserveScroll(renderControls);
+      preserveScroll(paint);
     } else if (
       reason === 'thumbnail' &&
       snapshot.candidates.map((candidate) => candidate.key).join('|') ===
         stripKeys
     ) {
       // A probe that emptied a day hides its card; only an unchanged strip
-      // takes this in-place path.
-      preserveScroll(() => {
-        snapshot.candidates.forEach(updateCard);
-        renderDetails();
-      });
+      // takes this in-place path, without the divider or visible range.
+      preserveScroll(paint);
     } else {
       render();
     }
   });
+  // The readout's text is translated here; show it again in a new locale.
+  const offLocale = onLocaleChange(render);
   render();
 
   return {
@@ -1063,19 +954,16 @@ export function createRecentImageryPanel({
       if (destroyed) return;
       destroyed = true;
       unsubscribe();
+      offLocale();
       layer.setToolHandler?.(null);
       split?.destroy();
       split = null;
       for (const [target, type, handler, options] of listeners.splice(0))
         target.removeEventListener(type, handler, options);
-      for (const entry of cards.values()) {
-        if (entry.image) entry.image.src = '';
-      }
-      cards.clear();
-      actions.destroy();
-      exports.destroy();
-      details.destroy();
-      root.remove();
+      for (const image of root.querySelectorAll('.ri-thumb-img'))
+        image.src = '';
+      imaged.clear();
+      renderVue(null, container);
       if (count) count.textContent = '';
       if (panel) panel.hidden = true;
     },

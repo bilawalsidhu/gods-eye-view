@@ -1,6 +1,6 @@
 import { encodeParams, decodeParams } from '../layers/streetLevel/params.js';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../../build/application-html.js';
+import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -202,8 +202,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 29);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 29);
+  assert.equal(REGISTERED_LAYER_IDS.length, 32);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 32);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -242,19 +242,19 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '3');
+  assert.equal(nextLayerStateToken(), '6');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '3',
-      bravo: '4',
+      alpha: '6',
+      bravo: '7',
     }),
-    '5',
+    '8',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
     ...Object.fromEntries(
-      [...'3456789'].map((digit) => [`prior-${digit}`, digit]),
+      [...'6789'].map((digit) => [`prior-${digit}`, digit]),
     ),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
@@ -307,8 +307,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '3',
-      next: '4',
+      future: '6',
+      next: '7',
     }),
     true,
   );
@@ -318,7 +318,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
         ...LAYER_STATE_TOKEN_RESERVATIONS,
         future: '00',
       }),
-    /next free token 3/,
+    /next free token 6/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
@@ -341,10 +341,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '3' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '3', competing: '3' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '6' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '6', competing: '6' },
       ),
-    /next free token 4/,
+    /next free token 7/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -734,18 +734,27 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     /this\.(?:flightState\.)?_models3dMode = 'proximity';/,
     'ui.js: and believes the mode is proximity',
   );
-  const html = expandApplicationHtml(
+  const html = await renderApplicationHtml(
     await readFile(new URL('../../index.html', import.meta.url), 'utf8'),
   );
   assert.match(
     html,
-    /class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true"/,
+    /<button(?=[^>]*\sid="models3d-toggle")(?=[^>]*\sclass="(?=[^"]*\bpp-toggle-btn\b)(?=[^"]*\bactive\b))(?=[^>]*\saria-pressed="true")/,
     'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so',
   );
   assert.match(
     ui,
-    /this\._models3dBtn\?\.setAttribute\(\s*'aria-pressed',\s*String\(this\.(?:flightState\.)?_models3dEnabled\),?\s*\)/,
-    'ui.js: and keeps aria-pressed synchronized, so the lit state is not colour-only',
+    /this\._models3dPressedShown = this\._models3dEnabled;/,
+    'ui.js: and keeps the pressed state synchronized, so the lit state is not colour-only',
+  );
+  const panel = await readFile(
+    new URL('../ui/views/panels/DisplayPanel.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    panel,
+    /:pressed="models3dOn" pressed-class="active" id="models3d-toggle"/,
+    'DisplayPanel.vue: the view renders aria-pressed with the lit state',
   );
   assert.match(
     html,
@@ -2422,23 +2431,74 @@ test('wind appearance shares round trip while old links retain weather defaults'
   assert.deepEqual(invalid.options.wind, defaults);
 });
 
-test('observed weather round trips product and opacity without persisting historical playback', () => {
+test('observed weather round trips product and presets without persisting historical playback', () => {
   const state = normalizeLayerState({
     enabledLayerIds: ['weather-radar', 'weather-satellite'],
     options: {
       'weather-radar': { opacity: 'light', play: true },
-      'weather-satellite': { product: 'clouds', opacity: 'light', step: -1 },
+      'weather-satellite': {
+        product: 'clouds',
+        opacity: 'light',
+        infrared: 'filtered',
+        step: -1,
+      },
     },
   });
   const params = new URLSearchParams(encode(state));
   const decoded = decodeLayerStateParams(params);
   assert.deepEqual(decoded, state);
   assert.equal(state.options['weather-satellite'].product, 'clouds');
+  assert.equal(state.options['weather-satellite'].opacity, 'light');
+  assert.equal(state.options['weather-satellite'].infrared, 100);
   assert.equal(Object.hasOwn(state.options['weather-radar'], 'play'), false);
 });
 
-test('satellite infrared display mode round trips and invalid or absent values use filtered', () => {
-  for (const infrared of ['full', 'filtered', undefined, 'invalid']) {
+test('satellite filter strength percentages round-trip and legacy mode codes remain readable', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['weather-satellite'],
+    options: { 'weather-satellite': { infrared: 53, opacity: 'light' } },
+  });
+  const params = encodeLayerStateParams(
+    new URLSearchParams([['v', '2']]),
+    state,
+  );
+  assert.deepEqual(decodeLayerStateParams(params), state);
+  assert.equal(state.options['weather-satellite'].infrared, 53);
+  assert.equal(state.options['weather-satellite'].opacity, 'light');
+  for (const [legacy, expected] of [
+    ['f', 100],
+    ['a', 0],
+  ]) {
+    const decoded = decodeLayerStateParams(
+      new URLSearchParams(`v=2&l=o&lo=o.i.${legacy}`),
+    );
+    assert.equal(decoded.options['weather-satellite'].infrared, expected);
+  }
+  for (const [legacy, expected] of [
+    ['filtered', 100],
+    ['full', 0],
+  ]) {
+    const normalized = normalizeLayerState({
+      enabledLayerIds: ['weather-satellite'],
+      options: { 'weather-satellite': { infrared: legacy } },
+    });
+    assert.equal(normalized.options['weather-satellite'].infrared, expected);
+  }
+  const invalid = normalizeLayerState({
+    enabledLayerIds: ['weather-satellite'],
+    options: { 'weather-satellite': { infrared: 101 } },
+  });
+  assert.equal(invalid.options['weather-satellite'].infrared, 100);
+});
+
+test('satellite cloud filter round trips and invalid or absent values default to Clouds only', () => {
+  for (const [infrared, expected] of [
+    ['full', 0],
+    ['filtered', 100],
+    [53, 53],
+    [undefined, 100],
+    ['invalid', 100],
+  ]) {
     const state = normalizeLayerState({
       enabledLayerIds: ['weather-satellite'],
       options: {
@@ -2454,10 +2514,7 @@ test('satellite infrared display mode round trips and invalid or absent values u
       decodeLayerStateParams(new URLSearchParams(encode(state))),
       state,
     );
-    assert.equal(
-      state.options['weather-satellite'].infrared,
-      infrared === 'full' ? 'full' : 'filtered',
-    );
+    assert.equal(state.options['weather-satellite'].infrared, expected);
     assert.equal(
       Object.hasOwn(state.options['weather-satellite'], 'step'),
       false,
@@ -2639,6 +2696,23 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
   );
 });
 
+test('GNSS interference uses digit 3 without colliding with other digit tokens', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=3.2.1'));
+  assert.deepEqual(decoded.enabledLayerIds, [
+    'fire-perimeters',
+    'gnss-integrity',
+    'recent-imagery',
+  ]);
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'gnss-integrity').token,
+    '3',
+  );
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
+  );
+});
+
 test('fire perimeters uses digit 2 without colliding with wind or recent imagery', () => {
   const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=2.k.1'));
   assert.deepEqual(decoded.enabledLayerIds, [
@@ -2703,13 +2777,19 @@ test('Street Level: the link codec accepts exactly the windows the filter keeps'
   assert.equal(streetLevelOptions('0.s.3652').sinceDays, 3652);
 });
 
-test('Street Level: a link without the provider switch keeps Mapillary on', () => {
+test('Street Level: a link without the provider switches keeps Mapillary on and Street View off', () => {
   assert.deepEqual(streetLevelOptions(''), {
     mapillary: true,
     providerSwitches: '',
     pano: 'all',
     sinceDays: 0,
   });
+  // Street View rides the shared provider-switch field, off unless lit.
+  assert.equal(streetLevelOptions('0.r.google-1').providerSwitches, 'google-1');
+  assert.equal(
+    createDefaultLayerState().options['street-level'].providerSwitches,
+    '',
+  );
   assert.equal(streetLevelOptions('0.p.f').mapillary, true);
   assert.equal(streetLevelOptions('0.m.0').mapillary, false);
   assert.equal(
@@ -2786,4 +2866,136 @@ test('explicit provider switches reach durable state without adopting unrelated 
   } finally {
     coordinator.destroy();
   }
+});
+
+function enabledLayerParam(sink) {
+  return new URLSearchParams(encode(sink.provider())).get('l');
+}
+
+test('Clear All drops a saved layer a context mode had already switched off', async () => {
+  const manager = productionManager();
+  const storage = memoryStorage();
+  const sink = shareSink();
+  const coordinator = new LayerStateCoordinator(manager, sink, { storage });
+  await coordinator.start();
+  await manager.setEnabled('earthquakes', true, { origin: 'user' });
+  await manager.setEnabled('flights', true, { origin: 'user' });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'earthquakes',
+    'flights',
+  ]);
+  // Context isolation is a temporary, passive takeover: the saved choice stays.
+  await manager.setEnabled('earthquakes', false, { origin: 'programmatic' });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'earthquakes',
+    'flights',
+  ]);
+
+  const updatesBefore = sink.updates;
+  const result = await manager.clearSelectedLayers({ origin: 'user' });
+  assert.deepEqual(result.targetIds, ['flights']);
+  assert.ok(sink.updates > updatesBefore, 'the URL is told to refresh');
+  assert.deepEqual([...manager.getEnabledLayerIds()], []);
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, []);
+  assert.equal(enabledLayerParam(sink), '', 'the URL carries no layers');
+  assert.deepEqual(
+    parseStoredLayerState(storage.getItem(LAYER_STATE_STORAGE_KEY))
+      .enabledLayerIds,
+    [],
+    'a reload restores nothing',
+  );
+  coordinator.destroy();
+});
+
+test('Clear All drops a saved layer a dependency release superseded mid-batch', async () => {
+  let manager;
+  manager = productionManager({
+    // Contacts-style owner: its own teardown releases a borrowed dependency
+    // without awaiting it, which supersedes Clear All's turn for that layer.
+    'military-awareness': {
+      disable() {
+        void manager.setEnabled('flights', false, { origin: 'programmatic' });
+        return true;
+      },
+    },
+  });
+  const storage = memoryStorage();
+  const sink = shareSink();
+  const coordinator = new LayerStateCoordinator(manager, sink, { storage });
+  await coordinator.start();
+  await manager.setEnabled('earthquakes', true, { origin: 'user' });
+  await manager.setEnabled('flights', true, { origin: 'user' });
+  await manager.setEnabled('military-awareness', true, { origin: 'user' });
+
+  const result = await manager.clearSelectedLayers({ origin: 'user' });
+  assert.equal(
+    result.items.find((item) => item.id === 'flights')?.superseded,
+    true,
+    'the fixture reproduces the superseded flights turn',
+  );
+  assert.deepEqual([...manager.getEnabledLayerIds()], []);
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, []);
+  assert.equal(enabledLayerParam(sink), '');
+  coordinator.destroy();
+});
+
+test('Clear All keeps a layer a newer explicit request turned back on', async () => {
+  const manager = productionManager();
+  const sink = shareSink();
+  const coordinator = new LayerStateCoordinator(manager, sink, {
+    storage: memoryStorage(),
+  });
+  await coordinator.start();
+  await manager.setEnabled('earthquakes', true, { origin: 'user' });
+  await manager.setEnabled('flights', true, { origin: 'user' });
+  const clearing = manager.clearSelectedLayers({ origin: 'user' });
+  // A direct request issued during the batch owns its layer.
+  const reenable = manager.setEnabled('earthquakes', true, { origin: 'user' });
+  await Promise.all([clearing, reenable]);
+  assert.deepEqual([...manager.getEnabledLayerIds()], ['earthquakes']);
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'earthquakes',
+  ]);
+  assert.equal(enabledLayerParam(sink), 'e');
+  coordinator.destroy();
+});
+
+test('a passive clear never rewrites saved layers', async () => {
+  const manager = productionManager();
+  const storage = memoryStorage();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage,
+  });
+  await coordinator.start();
+  await manager.setEnabled('flights', true, { origin: 'user' });
+  await manager.setEnabled('flights', false, { origin: 'programmatic' });
+  const writes = storage.writes.length;
+  await manager.clearSelectedLayers({ origin: 'programmatic' });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['flights']);
+  assert.equal(storage.writes.length, writes);
+  coordinator.destroy();
+});
+
+test('Clear All cancels a saved restore still waiting to start', async () => {
+  const gate = deferred();
+  const manager = productionManager();
+  const sink = shareSink();
+  const coordinator = new LayerStateCoordinator(manager, sink, {
+    storage: memoryStorage(),
+    restoreGate: gate.promise,
+  });
+  const params = new URLSearchParams('v=2&l=e.f');
+  const restore = coordinator.start({
+    shareLayerState: decodeLayerStateParams(params),
+  });
+  await manager.clearSelectedLayers({ origin: 'user' });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, []);
+  gate.resolve();
+  const results = await restore;
+  for (const id of ['earthquakes', 'flights']) {
+    assert.equal(results.find((result) => result.layerId === id).succeeded, false);
+  }
+  assert.deepEqual([...manager.getEnabledLayerIds()], []);
+  assert.equal(enabledLayerParam(sink), '');
+  coordinator.destroy();
 });

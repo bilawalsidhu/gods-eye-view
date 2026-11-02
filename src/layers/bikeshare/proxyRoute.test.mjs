@@ -17,6 +17,7 @@ import { createModel } from './model.js';
 import { CITY_BY_ID } from './registry.js';
 
 const AUSTIN = CITY_BY_ID.get('austin-capmetro');
+const OSLO = CITY_BY_ID.get('oslo-bysykkel');
 
 const STATION_INFORMATION = {
   data: {
@@ -204,6 +205,101 @@ test('the proxy relays its cache policy and upstream host through the mounted ro
   );
 });
 
+test('the Norwegian city-bike systems are served through the mounted route', async () => {
+  for (const [id, systemId] of [
+    ['oslo-bysykkel', 'oslobysykkel.no'],
+    ['bergen-bysykkel', 'bergenbysykkel.no'],
+    ['trondheim-bysykkel', 'trondheimbysykkel.no'],
+  ]) {
+    const system = CITY_BY_ID.get(id);
+    assert.ok(system, `${id} is registered`);
+    assert.deepEqual(system.hosts, ['gbfs.urbansharing.com']);
+    assert.equal(
+      system.stationStatusUrl,
+      `https://gbfs.urbansharing.com/${systemId}/station_status.json`,
+    );
+  }
+
+  await withUpstream(
+    {
+      [OSLO.stationInformationUrl]: STATION_INFORMATION,
+      [OSLO.stationStatusUrl]: STATION_STATUS,
+    },
+    async (requested) => {
+      const source = createBikeshareSource({ fetchImpl: mountGbfsProxy() });
+      const info = await source.getStations(OSLO.stationInformationUrl);
+      const status = await source.getStations(OSLO.stationStatusUrl);
+      assert.deepEqual(requested, [
+        OSLO.stationInformationUrl,
+        OSLO.stationStatusUrl,
+      ]);
+      assert.equal(info.data.stations.length, 1);
+      assert.equal(status.data.stations.length, 1);
+
+      const response = await mountGbfsProxy()(
+        '/api/gbfs/' + encodeURIComponent(OSLO.stationStatusUrl),
+      );
+      assert.equal(response.status, 200);
+      assert.equal(
+        response.headers.get('x-gbfs-upstream'),
+        'gbfs.urbansharing.com',
+      );
+    },
+  );
+});
+
+test('every Norwegian city-bike system is registered and reachable through the mounted route', async () => {
+  const expected = {
+    'stavanger-kolumbus':
+      'https://api.entur.io/mobility/v2/gbfs/v2/kolumbusbysykkel/station_status',
+    'skien-farte':
+      'https://api.entur.io/mobility/v2/gbfs/v2/fartebysykkel/station_status',
+    'lillestrom-bysykkel':
+      'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_status.json',
+  };
+  const upstream = {};
+  for (const [id, statusUrl] of Object.entries(expected)) {
+    const system = CITY_BY_ID.get(id);
+    assert.ok(system, `${id} is registered`);
+    assert.equal(system.stationStatusUrl, statusUrl);
+    upstream[system.stationInformationUrl] = STATION_INFORMATION;
+    upstream[system.stationStatusUrl] = STATION_STATUS;
+  }
+
+  await withUpstream(upstream, async (requested) => {
+    const source = createBikeshareSource({ fetchImpl: mountGbfsProxy() });
+    for (const id of Object.keys(expected)) {
+      const system = CITY_BY_ID.get(id);
+      const info = await source.getStations(system.stationInformationUrl);
+      const status = await source.getStations(system.stationStatusUrl);
+      assert.equal(info.data.stations.length, 1, `${id} information`);
+      assert.equal(status.data.stations.length, 1, `${id} status`);
+    }
+    assert.equal(requested.length, 6);
+
+    // Entur's extensionless station_information keeps its 5-minute cache.
+    const kolumbus = CITY_BY_ID.get('stavanger-kolumbus');
+    const response = await mountGbfsProxy()(
+      '/api/gbfs/' + encodeURIComponent(kolumbus.stationInformationUrl),
+    );
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=300');
+  });
+});
+
+test('the mounted route keeps multi-API hosts to their GBFS tree', async () => {
+  await withUpstream({}, async (requested) => {
+    const mounted = mountGbfsProxy();
+    for (const target of [
+      'https://api.entur.io/journey-planner/v3/station_status',
+      'https://api.cyclocity.fr/other/station_status.json',
+    ]) {
+      const response = await mounted('/api/gbfs/' + encodeURIComponent(target));
+      assert.equal(response.status, 400, target);
+    }
+    assert.deepEqual(requested, []);
+  });
+});
+
 test('the query-string shape the client used to send is refused by the mounted route', async () => {
   await withUpstream(
     { [AUSTIN.stationStatusUrl]: STATION_STATUS },
@@ -298,3 +394,114 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     );
   });
 }
+
+test('unknown GBFS counts stay unknown through the source, model and station color', async () => {
+  const { createRendering } = await import('./rendering.js');
+  const { COLOR_NEUTRAL, COLOR_RED } = await import('./policy.js');
+  for (const missing of [null, '']) {
+    const source = createBikeshareSource({
+      fetchImpl: async () =>
+        Response.json({
+          data: {
+            stations: [
+              {
+                station_id: '2537',
+                num_bikes_available: missing,
+                num_docks_available: 4,
+                is_installed: true,
+                is_renting: true,
+                is_returning: true,
+              },
+            ],
+          },
+        }),
+    });
+    const model = createModel({});
+    const status = model
+      .parseStationStatus(await source.getStations(AUSTIN.stationStatusUrl))
+      .get('2537');
+    const rendering = createRendering({
+      state: {},
+      services: { render: {} },
+      parts: { model },
+    });
+    assert.equal(status.bikesAvailable, null);
+    assert.equal(
+      model.toNonNegativeInteger(status.bikesAvailable),
+      null,
+      'render-map normalization preserves unknown',
+    );
+    assert.equal(rendering.statusToColor(status, 12), COLOR_NEUTRAL);
+    assert.equal(rendering.resolveCapacity(missing, status), 4);
+    assert.equal(
+      rendering.statusToColor({ ...status, bikesAvailable: 0 }, 12),
+      COLOR_RED,
+      'reported zero is still empty',
+    );
+    assert.equal(
+      model.toNonNegativeInteger(missing, 7),
+      7,
+      'caller fallback is preserved',
+    );
+    assert.equal(model.toNonNegativeInteger('3'), 3);
+  }
+});
+
+test('a station without a published capacity re-derives it from every status poll', async () => {
+  const { createRendering } = await import('./rendering.js');
+  const { COLOR_YELLOW } = await import('./policy.js');
+  const model = createModel({});
+  const state = {
+    _cityRuntime: new Map(),
+    _stationRenderMap: new Map(),
+    _pointCollection: { add: (options) => ({ ...options }) },
+  };
+  const rendering = createRendering({
+    state,
+    services: { render: { governorRequestRender() {} } },
+    parts: { model },
+  });
+  const info = model.parseStationInformation({
+    data: {
+      stations: [
+        { station_id: 'open', name: 'Open', lat: 30.26, lon: -97.74 },
+        {
+          station_id: 'fixed',
+          name: 'Fixed',
+          lat: 30.27,
+          lon: -97.75,
+          capacity: 13,
+        },
+      ],
+    },
+  });
+  rendering.ensureCityPoints('austin', info);
+  const poll = (stations) =>
+    rendering.applyStatusToPoints(
+      'austin',
+      model.parseStationStatus({ data: { stations } }),
+    );
+  const open = state._stationRenderMap.get('austin:open');
+  const fixed = state._stationRenderMap.get('austin:fixed');
+
+  // The first poll has no row for the station: capacity is a placeholder.
+  poll([
+    {
+      station_id: 'fixed',
+      num_bikes_available: 4,
+      num_docks_available: 9,
+    },
+  ]);
+  poll([
+    { station_id: 'open', num_bikes_available: 10, num_docks_available: 20 },
+    { station_id: 'fixed', num_bikes_available: 2, num_docks_available: 3 },
+  ]);
+  assert.equal(open.capacity, 30, 'the first poll fixed the capacity');
+  assert.equal(open.point.color, COLOR_YELLOW, '10 of 30 is not plenty');
+  assert.equal(fixed.capacity, 13, 'a published capacity is kept');
+
+  poll([
+    { station_id: 'open', num_bikes_available: 4, num_docks_available: 2 },
+  ]);
+  assert.equal(open.capacity, 6);
+});

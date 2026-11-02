@@ -59,16 +59,20 @@ export class RoadRequestError extends Error {
   }
 }
 
+// AI tool services import this module, so it marks its English with a local
+// msg(); the traffic panel translates the message (controls.js).
+const msg = (text) => text;
+
 /** Name the road upstream without exposing raw transport errors or missing codes. */
 export function roadRequestError(status, cause) {
   const code = Number.isFinite(status) ? status : null;
   const message =
     code === 429
-      ? 'OpenFreeMap tiles rate-limited'
+      ? msg('OpenFreeMap tiles rate-limited')
       : code === 504 || cause?.name === 'TimeoutError'
-        ? 'OpenFreeMap tiles timed out'
+        ? msg('OpenFreeMap tiles timed out')
         : code === null
-          ? 'OpenFreeMap tiles unavailable'
+          ? msg('OpenFreeMap tiles unavailable')
           : `OpenFreeMap tiles unavailable (HTTP ${code})`;
   return Object.assign(new RoadRequestError(message, { status: code, cause }), {
     retryable: cause?.retryable !== false,
