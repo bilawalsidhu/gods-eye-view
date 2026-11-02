@@ -4,6 +4,10 @@ export const RADAR_MAX_GAP_MS = 30 * 60_000;
 export const REGIONAL_INFRARED_MAX_GAP_MS = 30 * 60_000;
 export const GLOBAL_INFRARED_MAX_GAP_MS = 3 * 60 * 60_000;
 export const LIGHTNING_MAX_GAP_MS = 30 * 60_000;
+/** The longest play waits on a frame before it goes on without it. */
+export const PLAY_WAIT_MS = 8_000;
+
+let clocks = 0;
 
 /**
  * Transient observed time. Products must honor the signal before installing a
@@ -33,6 +37,30 @@ export function createWeatherClock({
   let generation = 0;
   let timer = null;
   let pending = null;
+  // This clock's name on the world, for its holds and its gate.
+  const holdId = `weather:${++clocks}`;
+  // While the world plays, the hold on it as frames for its time load, and
+  // the timer that lets play go on should a frame never come.
+  let waiting = null;
+  let waitTimer = null;
+  const stopWaiting = () => {
+    const release = waiting;
+    waiting = null;
+    if (waitTimer !== null) clearTimeout(waitTimer);
+    waitTimer = null;
+    release?.();
+  };
+  const startWaiting = () => {
+    if (waiting || destroyed || !registry.size) return;
+    waiting = world.wait(holdId);
+    waitTimer = setTimeout(() => {
+      waitTimer = null;
+      stopWaiting();
+    }, PLAY_WAIT_MS);
+  };
+  // Playing on its own, the world waits for frames as they load.
+  const worldPlaysOn = (state = world.getState()) =>
+    state.playing && !state.live && !state.stepping;
   let destroyed = false;
   const timesFor = (product) =>
     [...new Set(product.getTimes())]
@@ -130,7 +158,13 @@ export function createWeatherClock({
     cancelTimer();
     const owner = ++generation;
     if (!canPlay()) stopPlaying();
+    // Playing, the world waits for new frames; a later move takes over the
+    // wait, and a scrub (not playing) drops what loads and moves on. A refresh
+    // that shows the same frames does not hold play.
+    const framesChange = selections() !== applied;
     applied = selections();
+    stopWaiting();
+    if (framesChange && worldPlaysOn()) startWaiting();
     for (const entry of registry.values()) entry.controller?.abort();
     // Start all products together; a rejection must not skip the settle barrier.
     const tasks = [...registry.values()].map((entry) => {
@@ -144,6 +178,7 @@ export function createWeatherClock({
     });
     const result = Promise.allSettled(tasks).then(() => {
       if (destroyed || owner !== generation) return false;
+      stopWaiting();
       pending = null;
       if (!canPlay()) stopPlaying();
       notify();
@@ -269,8 +304,10 @@ export function createWeatherClock({
     },
     refresh() {
       if (destroyed) return Promise.resolve(false);
-      // New frames, or products added or dropped.
+      // New frames, or products added or dropped, and with them the next.
       world.coverageChanged();
+      gated = undefined;
+      gateNext(world.getState());
       if (!canPlay()) {
         stopPlaying();
         cancelTimer();
@@ -289,6 +326,8 @@ export function createWeatherClock({
       stopPlaying();
       destroyed = true;
       ++generation;
+      stopWaiting();
+      world.gate(holdId, null);
       cancelTimer();
       unfollowWorld();
       // The last weather clock leaves the world live, as a new one expects.
@@ -306,6 +345,11 @@ export function createWeatherClock({
   // changes the mode or a product's frame.
   function followWorld(state) {
     if (destroyed) return;
+    gateNext(state);
+    // Play pressed while a frame still loads waits for it too.
+    const playsOn = worldPlaysOn(state);
+    if (playsOn && !playedOn && pending) startWaiting();
+    playedOn = playsOn;
     const nextMode = state.live ? 'latest' : 'history';
     const nextTarget = state.live
       ? null
@@ -318,6 +362,20 @@ export function createWeatherClock({
     target = nextTarget;
     if (moving || modeChanged || selections() !== applied) void transition();
     else notify();
+  }
+  // Playing on its own, the world stops at each next frame to load it rather
+  // than run past frames between its ticks.
+  let gated = null;
+  let playedOn = false;
+  function gateNext(state) {
+    const next = worldPlaysOn(state)
+      ? (getTimeline()
+          .map((time) => Date.parse(time))
+          .find((time) => time > Math.floor(state.timeMs)) ?? null)
+      : null;
+    if (next === gated) return;
+    gated = next;
+    world.gate(holdId, next);
   }
   const unfollowWorld = world.subscribe(followWorld);
   driver = world.attachDriver({

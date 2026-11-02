@@ -18,7 +18,7 @@ export const WORLD_TIME_SPEEDS = Object.freeze({
 
 /**
  * The world clock as the timeline shows it: `{live, playing, stepping,
- * timeMs, supported, span}`, where `supported` says a layer that moves with the clock
+ * buffering, timeMs, supported, span}`, where `supported` says a layer that moves with the clock
  * has time to show and `span` is the stretch the timeline runs over: the
  * time those layers cover, reaching to now and to the world time, with their
  * marks. It follows the page's world clock, which tells it of every move, and
@@ -81,12 +81,13 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       live: state.live,
       playing: state.playing,
       stepping: state.stepping,
+      buffering: state.buffering,
       timeMs: state.timeMs,
       supported: state.supported,
       span: spanOf(state),
     });
   const time = shallowRef(read());
-  const speed = shallowRef('day');
+  const speed = shallowRef('real');
   const rate = () => WORLD_TIME_SPEEDS[speed.value];
   let ticker = null;
   const syncTicker = () => {

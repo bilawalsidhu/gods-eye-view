@@ -60,8 +60,13 @@ export function createWorldClock({
   let active = null;
   let ticker = null;
   let notifying = 0;
+  // Layers loading what the cursor needs; continuous play holds while any is.
+  const waits = new Map();
+  // Times continuous play may not pass yet, by layer: each one's next frame.
+  const gates = new Map();
 
   const continuous = () => playing && !active;
+  const buffering = () => waits.size > 0;
   const isFollowed = (id) => following.has(id) || (holds.get(id) ?? 0) > 0;
   const followedIds = () => [
     ...new Set([...following, ...[...holds.keys()].filter(isFollowed)]),
@@ -87,8 +92,11 @@ export function createWorldClock({
   };
   const time = () => {
     if (live) return now();
-    if (continuous()) return cursorMs + (monotonicNow() - anchorMono) * rate;
-    return cursorMs;
+    if (!continuous() || buffering()) return cursorMs;
+    let at = cursorMs + (monotonicNow() - anchorMono) * rate;
+    for (const gate of gates.values())
+      if (gate >= cursorMs) at = Math.min(at, gate);
+    return at;
   };
   const getState = () =>
     Object.freeze({
@@ -98,6 +106,8 @@ export function createWorldClock({
       rate,
       // A driver steps the clock, at its own pace rather than the rate.
       stepping: Boolean(active),
+      // Playing, but held while a layer loads what the cursor needs.
+      buffering: continuous() && buffering(),
       following: followedIds(),
       supported: isSupported(),
     });
@@ -197,6 +207,40 @@ export function createWorldClock({
     },
     togglePlay() {
       return playing ? api.pause() : api.play();
+    },
+    /**
+     * Hold continuous play where it is while layer `id` loads what the cursor
+     * needs, as a video waits on its buffer; play goes on once every hold is
+     * released. A seek still moves the cursor. Returns the release. Neither
+     * tells listeners (play's own ticks do), so a layer can take and release a
+     * hold mid-change without anyone moving the clock under it.
+     */
+    wait(id) {
+      settle();
+      waits.set(id, (waits.get(id) ?? 0) + 1);
+      let held = true;
+      return () => {
+        if (!held) return;
+        held = false;
+        const count = waits.get(id) - 1;
+        if (count > 0) {
+          waits.set(id, count);
+          return;
+        }
+        waits.delete(id);
+        // Play goes on from where it held, not from where it would have been.
+        if (!buffering()) anchorMono = monotonicNow();
+      };
+    },
+    /**
+     * Keep continuous play from passing `ms` (null lifts it): the time layer
+     * `id` shows next, which it has yet to load. Play stops there, to wait on
+     * the load as it starts, rather than rush past frames between ticks.
+     */
+    gate(id, ms) {
+      settle();
+      if (ms === null || ms === undefined) gates.delete(id);
+      else if (isWorldTime(ms)) gates.set(id, ms);
     },
     /** Simulated ms per real ms for continuous playback. */
     setRate(nextRate) {

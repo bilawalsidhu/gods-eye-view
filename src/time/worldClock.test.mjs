@@ -319,3 +319,37 @@ test('continuous play runs past every driver, and live resets the rate', () => {
   clock.goLive();
   assert.equal(clock.getRate(), 1);
 });
+
+test('continuous play holds while a layer waits, and goes on from there', () => {
+  const t = fakeTime();
+  const clock = createWorldClock(t.options);
+  const start = t.wall - 600_000;
+  clock.seek(start);
+  clock.play({ rate: 60, continuous: true });
+  t.advance(1_000);
+  assert.equal(clock.now(), start + 60_000);
+  const release = clock.wait('radar');
+  const other = clock.wait('clouds');
+  assert.equal(clock.getState().buffering, true);
+  t.advance(5_000);
+  assert.equal(clock.now(), start + 60_000, 'held while loading');
+  release();
+  release();
+  t.advance(1_000);
+  assert.equal(clock.now(), start + 60_000, 'held until every layer is ready');
+  other();
+  assert.equal(clock.getState().buffering, false);
+  t.advance(1_000);
+  assert.equal(clock.now(), start + 120_000, 'on from where it held');
+});
+
+test('a seek still moves a waiting clock', () => {
+  const t = fakeTime();
+  const clock = createWorldClock(t.options);
+  clock.seek(t.wall - 600_000);
+  clock.play({ continuous: true });
+  const release = clock.wait('radar');
+  clock.seek(t.wall - 60_000);
+  assert.equal(clock.now(), t.wall - 60_000);
+  release();
+});

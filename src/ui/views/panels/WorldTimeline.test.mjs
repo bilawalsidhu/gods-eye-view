@@ -149,7 +149,7 @@ test('the track runs over the time the layers show, to now, and scrubs', async (
   assert.equal(worldClock.now(), ahead);
 });
 
-test('play runs a day a second, from the start of the track when at live', async (t) => {
+test('play runs in real time, from the start of the track when at live', async (t) => {
   const bar = mount(t);
   const now = Date.now();
   const start = now - 10 * 86_400_000;
@@ -176,7 +176,7 @@ test('play runs a day a second, from the start of the track when at live', async
   assert.deepEqual(stepped, []);
   const rate = worldClock.getRate();
   assert.ok(worldClock.now() - start < rate * 1_000, 'from the start of the track');
-  assert.equal(rate, 86_400, 'a day a second');
+  assert.equal(rate, 1, 'real time to start with');
   worldClock.play({ continuous: true });
 
   // Playing on to now goes live.
@@ -231,7 +231,7 @@ test('the speed chosen sets how fast play runs, at once while playing', async (t
   });
   await nextTick();
   const select = bar().querySelector('select.world-timeline-speed');
-  assert.equal(select.value, 'day');
+  assert.equal(select.value, 'real');
   select.value = 'week';
   select.dispatchEvent(new Event('change'));
   await nextTick();

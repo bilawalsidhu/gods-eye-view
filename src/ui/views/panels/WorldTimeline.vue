@@ -7,9 +7,10 @@ import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
 import UiSelect from '../../kit/UiSelect.js';
 
-// The world timeline: play and pause on the left, the time, a track across
-// the stretch the layers on can show (each launch or frame a tick) with a
-// handle to scrub, and the way back to live on the right, lit while live. It
+// The world timeline: play and pause and the speed on the left, a track
+// across the stretch the layers on can show (each launch or frame a tick)
+// with a handle to scrub and the time in a bubble over it, and the way back
+// to live on the right, lit while live. It
 // shows while a layer with a time of its own (weather, satellites, launches,
 // or one a host follows) is on with time to show; with only live feeds such
 // as flights on, the bar stays hidden.
@@ -27,9 +28,16 @@ const DATE_TIME = Object.freeze({
   timeStyle: 'medium',
   timeZone: 'UTC',
 });
-const EDGE_DATE = Object.freeze({
+// The bubble over the handle: the date and the minute, kept short.
+const BUBBLE_DATE = Object.freeze({
   month: 'short',
   day: 'numeric',
+  timeZone: 'UTC',
+});
+const BUBBLE_TIME = Object.freeze({
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
   timeZone: 'UTC',
 });
 // The keyboard's fallback step, as a share of the track, with no mark to go to.
@@ -39,6 +47,11 @@ const PAGE_STEP = 0.1;
 const readout = computed(() =>
   Number.isFinite(time.value.timeMs)
     ? `${formatDate(time.value.timeMs, DATE_TIME)} UTC`
+    : '',
+);
+const bubble = computed(() =>
+  Number.isFinite(time.value.timeMs)
+    ? `${formatDate(time.value.timeMs, BUBBLE_DATE)} · ${formatDate(time.value.timeMs, BUBBLE_TIME)} UTC`
     : '',
 );
 const span = computed(() => time.value.span);
@@ -80,9 +93,8 @@ const onKey = (event) => {
     ><UiButton class="world-timeline-play" :label="time.playing ? t('Pause') : t('Play')" @click="store.togglePlay()"
       ><UiIcon :name="time.playing ? 'pause' : 'play_arrow'" :size="20" /></UiButton
     ><UiSelect class="gev-field gev-field--compact world-timeline-speed" :aria-label="t('Play speed')" :title="t('Play speed')" :options="speeds" :model-value="speed" @update:model-value="store.setSpeed($event)"
-    /><time class="world-timeline-time" :datetime="new Date(time.timeMs).toISOString()" aria-live="off">{{ readout }}</time
-    ><span class="world-timeline-edge">{{ formatDate(span.start, EDGE_DATE) }}</span
-    ><div class="world-timeline-track"
+    /><div class="world-timeline-track"
+      ><time class="world-timeline-time" :class="{ 'is-buffering': time.buffering }" :style="{ '--at': place(at) / 100 }" :datetime="new Date(time.timeMs).toISOString()" aria-live="off">{{ bubble }}</time
       ><span v-for="(left, index) in ticks" :key="index" class="world-timeline-tick" :style="{ left }" aria-hidden="true"></span
       ><span class="world-timeline-fill" :style="{ width: `${place(at)}%` }" aria-hidden="true"></span
       ><input
@@ -97,7 +109,6 @@ const onKey = (event) => {
         @input="scrub"
         @keydown="onKey"
     /></div
-    ><span class="world-timeline-edge">{{ formatDate(span.end, EDGE_DATE) }}</span
     ><UiButton class="world-timeline-live" :label="time.live ? t('Live') : t('Back to live')" :pressed="time.live" pressed-class="is-live" :disabled="time.live" @click="store.goLive()">{{ t('Live') }}</UiButton
   ></div>
 </template>
