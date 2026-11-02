@@ -155,14 +155,14 @@ export const DATA_CREDITS = [
     html:
       'Sea marks overlay: ' +
       '<a href="https://www.openseamap.org" target="_blank" rel="noopener">© OpenSeaMap contributors</a> (CC BY-SA 2.0) · ' +
-      'Data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL)',
+      'Data © OpenStreetMap contributors (ODbL)',
   },
   {
     key: 'opensnowmap',
     html:
       'Ski pistes overlay: ' +
       '<a href="https://www.opensnowmap.org" target="_blank" rel="noopener">© www.opensnowmap.org</a> (CC BY-SA) · ' +
-      'Data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL)',
+      'Data © OpenStreetMap contributors (ODbL)',
   },
   {
     key: 'nasa-gibs',
