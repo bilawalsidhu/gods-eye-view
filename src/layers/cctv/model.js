@@ -447,7 +447,13 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   function projectionLoopIsNeeded() {
     if (!layerState._enabled || !layerState._viewer) return false;
-    if (layerState._showProjection && parts.selection.getActiveRecord())
+    const active = parts.selection.getActiveRecord();
+    if (
+      layerState._showProjection &&
+      active &&
+      active.camera?.feedType !== 'embed' &&
+      active.camera?.feedType !== 'none'
+    )
       return true;
     return focusPassIsNeeded(
       getFocusTarget(),
@@ -482,7 +488,12 @@ export function createModel({ state: layerState, services, parts, source }) {
     let coldFill = false;
     const consider = (id) => {
       const record = layerState._recordById.get(id);
-      if (!record) return;
+      if (
+        !record ||
+        record.camera?.feedType === 'embed' ||
+        record.camera?.feedType === 'none'
+      )
+        return;
       const slot = parts.cards.ensureCardFrameSlot(id);
       if (layerState._cardFetchPendingIds.has(id)) {
         // An in-flight first-frame fetch keeps cold-fill mode active without

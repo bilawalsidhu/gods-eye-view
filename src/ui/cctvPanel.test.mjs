@@ -513,3 +513,22 @@ test('the panel meta line reads a bearing that rounds to north as HDG 0°', () =
   assert.match(meta(359.4), /· HDG 359° ·/);
   assert.match(meta(359.6), /· HDG 0° ·/);
 });
+
+test('Vue presents external players without a full camera snapshot or calibration controls', async (t) => {
+  const { controls, byId } = panel(t);
+  const embedded = { ...camera, feedType: 'embed', embedUrl: 'https://www.youtube-nocookie.com/embed/r8Busmkpsh8', sourcePageUrl: 'https://www.youtube.com/watch?v=r8Busmkpsh8' };
+  const state = { enabled: true, count: 10000, cameraIndex: [embedded], activeCamera: embedded, activeCameraId: embedded.id };
+  Object.defineProperty(state, 'cameras', { get() { throw new Error('must use light cameraIndex'); } });
+  controls._renderCctvState(state);
+  await nextTick();
+  assert.equal(byId('cctv-frame').hidden, true);
+  assert.equal(byId('cctv-projection-btn').disabled, true);
+  assert.equal(byId('cctv-adjust-btn').disabled, true);
+  assert.equal(byId('cctv-calib-save-btn').disabled, true);
+  assert.equal(byId('cctv-quality-chip').textContent, 'LOCATION · APPROXIMATE');
+  assert.equal(byId('cctv-source-badge').textContent, 'PUBLIC PLAYER · EXTERNAL');
+  assert.ok(byId('cctv-embed-host'));
+  controls._renderCctvState({ enabled: false, cameraIndex: [] });
+  await nextTick();
+  assert.equal(byId('cctv-embed-host').children.length, 0);
+});

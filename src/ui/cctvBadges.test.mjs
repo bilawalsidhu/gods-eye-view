@@ -81,3 +81,16 @@ test('localization changes badge copy while preserving machine state ids', (test
     calBadge: 'edited',
   });
 });
+
+for (const camera of [{ feedType: 'none' }, { noFeed: true }]) {
+  test(
+    'a mapped camera without public imagery is not shown as a healthy snapshot: ' +
+      JSON.stringify(camera),
+    () => {
+      assert.deepEqual(presentCctvSourceBadge(camera, true, IDLE), {
+        label: 'NO PUBLIC FEED',
+        state: 'no-feed',
+      });
+    },
+  );
+}

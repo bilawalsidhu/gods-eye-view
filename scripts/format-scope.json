@@ -1184,5 +1184,15 @@
   "src/firstRunCopy.js",
   "src/data/headingDegrees.test.mjs",
   "src/data/distanceFormat.test.mjs",
-  "src/sources/adsbFields.test.mjs"
+  "src/sources/adsbFields.test.mjs",
+  "scripts/qa-camera-embeds.mjs",
+  "src/data/cctvFmp4.test.mjs",
+  "src/data/cctvFmp4Routes.test.mjs",
+  "src/data/cctvFmp4Recovery.test.mjs",
+  "src/data/cctvHlsAdmission.test.mjs",
+  "src/data/cctvArgentinaCatalog.test.mjs",
+  "src/sources/youtube.test.mjs",
+  "src/data/cctvYouTube.test.mjs",
+  "src/ui/cctvEmbed.test.mjs",
+  "config/cctv_sources.youtube.json"
 ]

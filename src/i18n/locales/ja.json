@@ -2868,5 +2868,13 @@
   "Left panels": "左パネル",
   "Right panels": "右パネル",
   "CONFIRMED": "確認済み",
-  "PAD / RTLS": "射場 / RTLS"
+  "PAD / RTLS": "射場 / RTLS",
+  "Approximate location; coverage not calibrated.": "位置は概算です。撮影範囲は未校正です。",
+  "LOCATION · APPROXIMATE": "位置 · 概算",
+  "Open official camera page ↗": "カメラの公式ページを開く ↗",
+  "PLAYER IN PANEL": "パネル内プレーヤー",
+  "PUBLIC PLAYER · EXTERNAL": "公開プレーヤー · 外部",
+  "{camera} — public player": "{camera} — 公開プレーヤー",
+  "{city} CCTV · {name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED": "{city} CCTV · {name} · 公開プレーヤー · 概算位置 · 撮影範囲は未校正",
+  "NO PUBLIC FEED": "公開映像なし"
 }

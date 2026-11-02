@@ -1,0 +1,285 @@
+{
+  "checkedAt": "2026-10-17T00:20:27.672Z",
+  "results": [
+    {
+      "id": "ar-bayo-copitos",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=copitos",
+          "status": 302,
+          "location": "https://s132.ipcamlive.com/streams/84wzmjgqdfouxlizp/snapshot.jpg"
+        },
+        {
+          "url": "https://s132.ipcamlive.com/streams/84wzmjgqdfouxlizp/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:20:09 GMT",
+      "bytes": 26752,
+      "jpeg": true
+    },
+    {
+      "id": "ar-bayo-principiantes1500",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=principiantes1500",
+          "status": 302,
+          "location": "https://s136.ipcamlive.com/streams/88s07z3avlb1xjj84/snapshot.jpg"
+        },
+        {
+          "url": "https://s136.ipcamlive.com/streams/88s07z3avlb1xjj84/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:19:42 GMT",
+      "bytes": 36276,
+      "jpeg": true
+    },
+    {
+      "id": "ar-bayo-telecabina1500",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=telecabina1500",
+          "status": 302,
+          "location": "https://s143.ipcamlive.com/streams/8fv2wrcmiuqhcoqs0/snapshot.jpg"
+        },
+        {
+          "url": "https://s143.ipcamlive.com/streams/8fv2wrcmiuqhcoqs0/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:20:06 GMT",
+      "bytes": 20099,
+      "jpeg": true
+    },
+    {
+      "id": "ar-bayo-lagos2",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=lagos2",
+          "status": 302,
+          "location": "https://s40.ipcamlive.com/streams/28hmkxnhrqbdos8fx/snapshot.jpg"
+        },
+        {
+          "url": "https://s40.ipcamlive.com/streams/28hmkxnhrqbdos8fx/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:19:46 GMT",
+      "bytes": 80325,
+      "jpeg": true
+    },
+    {
+      "id": "ar-bayo-principiantes2",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=principiantes2",
+          "status": 302,
+          "location": "https://s81.ipcamlive.com/streams/516jzu3lsn05khp8r/snapshot.jpg"
+        },
+        {
+          "url": "https://s81.ipcamlive.com/streams/516jzu3lsn05khp8r/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:20:19 GMT",
+      "bytes": 11414,
+      "jpeg": true
+    },
+    {
+      "id": "ar-comodoro-en-vivo-comodoro-rivadavia-centro-iii",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=6a453248a4517",
+          "status": 302,
+          "location": "https://s144.ipcamlive.com/streams/90kamhc0nevkul7ri/snapshot.jpg"
+        },
+        {
+          "url": "https://s144.ipcamlive.com/streams/90kamhc0nevkul7ri/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:20:03 GMT",
+      "bytes": 116596,
+      "jpeg": true
+    },
+    {
+      "id": "ar-comodoro-en-vivo-comodoro-rivadavia-nautico-centro",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=685894ca09cce",
+          "status": 302,
+          "location": "https://s144.ipcamlive.com/streams/90uhc4vaj0nd9mwzj/snapshot.jpg"
+        },
+        {
+          "url": "https://s144.ipcamlive.com/streams/90uhc4vaj0nd9mwzj/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:19:38 GMT",
+      "bytes": 95231,
+      "jpeg": true
+    },
+    {
+      "id": "ar-comodoro-en-vivo-comodoro-rivadavia-nautico-centro-ii",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=685895e75b3d6",
+          "status": 302,
+          "location": "https://s144.ipcamlive.com/streams/90rqhm7w8zedkn1t3/snapshot.jpg"
+        },
+        {
+          "url": "https://s144.ipcamlive.com/streams/90rqhm7w8zedkn1t3/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:20:08 GMT",
+      "bytes": 81303,
+      "jpeg": true
+    },
+    {
+      "id": "ar-comodoro-en-vivo-nautico-km3",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=68588baa5ac13",
+          "status": 302,
+          "location": "https://s144.ipcamlive.com/streams/90u1mxrb0slw8dvqx/snapshot.jpg"
+        },
+        {
+          "url": "https://s144.ipcamlive.com/streams/90u1mxrb0slw8dvqx/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:20:05 GMT",
+      "bytes": 40762,
+      "jpeg": true
+    },
+    {
+      "id": "ar-las-heras-1",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7d75eee34",
+          "status": 302,
+          "location": "https://s144.ipcamlive.com/streams/90k14apgwrcixojfp/snapshot.jpg"
+        },
+        {
+          "url": "https://s144.ipcamlive.com/streams/90k14apgwrcixojfp/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:19:27 GMT",
+      "bytes": 42724,
+      "jpeg": true
+    },
+    {
+      "id": "ar-las-heras-2",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7de18c9bf",
+          "status": 302,
+          "location": "https://s143.ipcamlive.com/streams/8fczxlbuehtr6j38z/snapshot.jpg"
+        },
+        {
+          "url": "https://s143.ipcamlive.com/streams/8fczxlbuehtr6j38z/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:19:31 GMT",
+      "bytes": 62266,
+      "jpeg": true
+    },
+    {
+      "id": "ar-las-heras-3",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7e58dcd02",
+          "status": 302,
+          "location": "https://s62.ipcamlive.com/streams/3efyhxipt9auozd0c/snapshot.jpg"
+        },
+        {
+          "url": "https://s62.ipcamlive.com/streams/3efyhxipt9auozd0c/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:19:32 GMT",
+      "bytes": 140533,
+      "jpeg": true
+    },
+    {
+      "id": "ar-las-heras-4",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7ee2c96a3",
+          "status": 302,
+          "location": "https://s144.ipcamlive.com/streams/90n7upkjus0xkwmfd/snapshot.jpg"
+        },
+        {
+          "url": "https://s144.ipcamlive.com/streams/90n7upkjus0xkwmfd/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:19:42 GMT",
+      "bytes": 113061,
+      "jpeg": true
+    },
+    {
+      "id": "ar-las-heras-5",
+      "redirects": [
+        {
+          "url": "https://ipcamlive.com/player/snapshot.php?alias=6aad7eb800990",
+          "status": 302,
+          "location": "https://s144.ipcamlive.com/streams/90xj5zszi4i6pkv3l/snapshot.jpg"
+        },
+        {
+          "url": "https://s144.ipcamlive.com/streams/90xj5zszi4i6pkv3l/snapshot.jpg",
+          "status": 200,
+          "location": null
+        }
+      ],
+      "status": 200,
+      "type": "image/jpeg",
+      "lastModified": "Sat, 17 Oct 2026 00:19:53 GMT",
+      "bytes": 153131,
+      "jpeg": true
+    }
+  ]
+}
