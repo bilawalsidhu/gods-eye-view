@@ -243,20 +243,20 @@ html:not([lang='en']) #global-loading-detail {
 
 /* ── Split-flap chip text ─────────────────────────────────────────
    Per-character departure-board flip when a chip label changes.
-   Driven entirely by src/splitFlap.js, which rebuilds the label as
-   one span per character on the change and strips them again once
-   the cascade lands.
+   Planned by src/splitFlap.js and rendered by SplitFlapText.vue, which
+   lays out one cell per character on the change and strips them again
+   once the cascade lands.
 
    The DOM text is the truth and its node never moves. A chip label is
-   upgraded once into a permanent shell — a .gev-flap-text span holding
-   one long-lived Text node, plus an aria-hidden .gev-flap-cells
-   sibling — and from then on a label change is only `node.data = next`.
+   a .gev-flap-text span holding one long-lived Text node, plus an
+   aria-hidden .gev-flap-cells sibling, and a label change is only
+   `node.data = next`.
    During a cascade the host takes .gev-flap-active, which clips the
    real text out of view and lets the cells stand in for it. The cells
    carry no text at all: both glyphs are generated content (::before =
    outgoing, ::after = incoming), and generated content never reaches
-   textContent. That is what keeps QA pins and the traffic chip's own
-   `textContent !==` guard honest, and it lets the cells be rebuilt
+   textContent. That is what keeps QA pins honest, and it lets the
+   cells be rebuilt
    freely while the aria-live region sees only one characterData
    change per label update.
 

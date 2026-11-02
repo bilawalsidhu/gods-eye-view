@@ -1583,7 +1583,7 @@ try {
     manager._setCockpitDisclosure('radio', false);
   });
 
-  const dmhLocalInfo = await page.evaluate(() => {
+  const dmhLocalInfo = await page.evaluate(async () => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
     const previous = cockpit.regionalBrief;
     const previousPage = cockpit.briefPageIndex;
@@ -1601,6 +1601,7 @@ try {
       cockpit.regionalBrief = fixture;
       cockpit.renderRegionalBrief(fixture, info);
       cockpit.showBriefPage(2);
+      await new Promise(requestAnimationFrame);
       const station = document.getElementById('cockpit-local-observation');
       const observed = !station.hidden
         && station.textContent.includes('DMH / DINAC')
@@ -1612,21 +1613,24 @@ try {
         ...fixture.stationObservation,
         observedAt: new Date(Date.now() - 91 * 60000).toISOString(),
       } }, info);
+      await new Promise(requestAnimationFrame);
       const expired = station.hidden && !station.textContent;
       cockpit.renderRegionalBrief(fixture, info);
       cockpit.renderRegionalBriefStatus('loading', info);
+      await new Promise(requestAnimationFrame);
       return { observed, expired, cleared: station.hidden && !station.textContent };
     } finally {
       cockpit.regionalBrief = previous;
       if (previous) cockpit.renderRegionalBrief(previous, previous.coordinates || info);
       else cockpit.renderRegionalBriefStatus('loading', info);
       cockpit.showBriefPage(previousPage);
+      await new Promise(requestAnimationFrame);
     }
   });
   check('Local Info separates DMH observations and clears expired or previous-subject readings',
     dmhLocalInfo.observed && dmhLocalInfo.expired && dmhLocalInfo.cleared, dmhLocalInfo);
 
-  const smnLocalInfo = await page.evaluate(() => {
+  const smnLocalInfo = await page.evaluate(async () => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
     const previous = cockpit.regionalBrief;
     const previousPage = cockpit.briefPageIndex;
@@ -1648,6 +1652,7 @@ try {
       cockpit.regionalBrief = fixture;
       cockpit.renderRegionalBrief(fixture, info);
       cockpit.showBriefPage(2);
+      await new Promise(requestAnimationFrame);
       const station = document.getElementById('cockpit-local-weather-station');
       const observed = station && !station.hidden
         && station.textContent.includes('POSADAS AERO · 6.7 KM FROM QUERY')
@@ -1660,11 +1665,13 @@ try {
         && text('cockpit-local-observation').includes('ENCARNACION QA')
         && text('cockpit-local-observation').includes('0.0°C');
       cockpit.renderRegionalBrief({ ...fixture, weather: { temperatureC: 20, weatherCode: 0 } }, info);
+      await new Promise(requestAnimationFrame);
       const fallback = station.hidden && !station.textContent
         && text('cockpit-local-weather-source') === 'OPEN-METEO'
         && !document.getElementById('cockpit-local-observation').hidden
         && text('cockpit-local-observation').includes('ENCARNACION QA');
       cockpit.renderRegionalBriefStatus('loading', info);
+      await new Promise(requestAnimationFrame);
       return { observed, fallback, cleared: text('cockpit-local-temperature') === '—'
         && document.getElementById('cockpit-local-observation').hidden
         && !text('cockpit-local-observation') };
@@ -1673,6 +1680,7 @@ try {
       if (previous) cockpit.renderRegionalBrief(previous, previous.coordinates || info);
       else cockpit.renderRegionalBriefStatus('loading', info);
       cockpit.showBriefPage(previousPage);
+      await new Promise(requestAnimationFrame);
     }
   });
   check('Local Info keeps SMN and DMH independent through model fallback and subject change',
@@ -1831,6 +1839,9 @@ try {
     const priorSignalMaxHeight = signal.style.maxHeight;
     signal.style.maxHeight = '150px';
     manager._setCockpitDisclosure(kind, true);
+    // Let Vue render the disclosure, but not the scheduled layout frame: the
+    // first syncSignalLayout below must be the first pass.
+    await Promise.resolve();
     // One pass must be enough. Record the result of the FIRST layout call, then
     // confirm a second changes nothing, so a convergence regression cannot hide
     // behind a repeated call.
@@ -1907,7 +1918,7 @@ try {
     manager._setCockpitDisplayPortalActive(false);
     document.body.classList.remove('cockpit-mode');
     await waitFrames();
-    standard.classList.remove('collapsed');
+    manager._presentPanel(standard, { collapsed: false });
     standard.style.height = '120px';
     standard.style.maxHeight = '120px';
     standard.style.overflowY = 'auto';
@@ -1942,7 +1953,7 @@ try {
     cockpit.style.height = priorCockpitHeight;
     cockpit.style.maxHeight = priorCockpitMaxHeight;
     cockpit.style.overflowY = priorCockpitOverflow;
-    standard.classList.toggle('collapsed', standardWasCollapsed);
+    manager._presentPanel(standard, { collapsed: standardWasCollapsed });
     return {
       standardBefore,
       standardAfter,
@@ -1962,7 +1973,7 @@ try {
     JSON.stringify(portalScroll),
   );
 
-  const boundary = await page.evaluate(() => {
+  const boundary = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const hud = document.getElementById('cockpit-hud');
     const signal = document.getElementById('cockpit-signal-stream');
@@ -1977,6 +1988,7 @@ try {
     signal.hidden = false;
     manager._setCockpitDisclosure('radio', false);
     manager._setCockpitDisclosure('display', true);
+    await new Promise(requestAnimationFrame);
     const priorSignalMaxHeight = signal.style.maxHeight;
     const priorSignalHeight = signal.style.height;
     // The strip is pinned to the viewport ceiling once the briefing card grows
@@ -2203,7 +2215,7 @@ try {
   }
   await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('tactical'));
 
-  const signalTransition = await page.evaluate(() => {
+  const signalTransition = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
     const signalToggle = document.getElementById('cockpit-signal-toggle');
@@ -2230,6 +2242,8 @@ try {
       manager._setCockpitDisclosure('radio', true);
       manager._setCockpitDisclosure('radio', false);
       const manualCollapseRetained = cockpit.signalCollapsed && cockpit.signalUserCollapsed;
+      // The toggle renders the published collapse on Vue's next flush.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       return {
         afterExpansion,
         afterRepeatedExpansion,
@@ -2256,7 +2270,7 @@ try {
       && signalTransition.signalAriaExpanded === 'false',
     JSON.stringify(signalTransition),
   );
-  const contextTransition = await page.evaluate(() => {
+  const contextTransition = await page.evaluate(async () => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
     const priorCollapsed = cockpit.contextCollapsed;
     const contextToggle = document.getElementById('cockpit-context-toggle');
@@ -2268,6 +2282,8 @@ try {
       cockpit.setContextCollapsed(false);
       const afterExpansion = expandedEvents;
       cockpit.setContextCollapsed(false);
+      // The toggle renders the published collapse on Vue's next flush.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       return {
         afterExpansion,
         afterRepeatedExpansion: expandedEvents,
@@ -2288,33 +2304,34 @@ try {
     JSON.stringify(contextTransition),
   );
   // Use the real connected DOM to catch focus loss caused by moving live rows.
-  const signalFocus = await page.evaluate(() => {
+  const signalFocus = await page.evaluate(async () => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    // The rows render on Vue's next update; a frame is past it.
+    const show = async (items) => {
+      cockpit.signalItems = items;
+      cockpit.publishCockpitSignals();
+      await new Promise(requestAnimationFrame);
+    };
     const originalItems = cockpit.signalItems;
     const wasCollapsed = cockpit.signalCollapsed;
     cockpit.setSignalCollapsed(false);
     const item = (id) => ({ key: `qa-${id}`, tone: 'info', timestamp: Date.now(),
       title: `QA ${id}`, detail: 'Keyboard refresh fixture', target: { layerId: 'flights', id } });
     try {
-      cockpit.signalItems = [item('focus-a'), item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-a'), item('focus-b')]);
       const button = cockpit.signalList.querySelector('[data-signal-id="focus-a"]');
       button.focus();
       const acquired = document.activeElement === button;
-      cockpit.signalItems = [item('focus-c'), item('focus-b'), item('focus-a')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-c'), item('focus-b'), item('focus-a')]);
       const retained = document.activeElement === button && button.isConnected;
       const order = [...cockpit.signalList.querySelectorAll('[data-signal-id]')].map((node) => node.dataset.signalId);
-      cockpit.signalItems = [item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-b')]);
       const continuation = cockpit.briefTabs[cockpit.briefPageIndex] || cockpit.signalToggle;
       const continued = document.activeElement === continuation;
-      cockpit.signalItems = [item('focus-a'), item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-a'), item('focus-b')]);
       return { acquired, retained, order, continued, notReclaimed: document.activeElement === continuation };
     } finally {
-      cockpit.signalItems = originalItems;
-      cockpit.renderCockpitSignals();
+      await show(originalItems);
       cockpit.setSignalCollapsed(wasCollapsed);
     }
   });
@@ -2380,12 +2397,14 @@ try {
     signal.hidden = false;
     manager._setCockpitDisclosure('display', false);
     manager._setCockpitDisclosure('radio', false);
+    await new Promise(requestAnimationFrame);
     manager.cockpitView.syncSignalLayout();
     const collapsed = {
       display: displayControl.getBoundingClientRect().toJSON(),
       radio: radioControl.getBoundingClientRect().toJSON(),
     };
     display.click();
+    await new Promise(requestAnimationFrame);
     manager.cockpitView.syncSignalLayout();
     return {
       collapsed,

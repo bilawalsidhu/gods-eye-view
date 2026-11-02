@@ -32,7 +32,7 @@ export function createVoicePanelHost({
     return observer;
   }
   function mount({ ui, card, session, observer, nativeProvider }) {
-    if (disposed || !ui.voicePanel || !card?.setEnabled || !card?.setPresented)
+    if (disposed || !ui.panel || !card?.setEnabled || !card?.setPresented)
       return null;
     current?.destroy();
     let dead = false;
@@ -67,11 +67,12 @@ export function createVoicePanelHost({
       }
     };
     const renderActivity = () => {
-      if (ui.voiceTimeoutStatus)
-        ui.voiceTimeoutStatus.textContent =
+      ui.update('preferences', {
+        timeoutStatus: () =>
           nativeProvider === 'openai' || nativeProvider === 'gemini'
             ? ''
-            : t('Automatic stop is unavailable for this voice connection.');
+            : t('Automatic stop is unavailable for this voice connection.'),
+      });
     };
     const changed = () => {
       if (!owns()) return;
@@ -233,9 +234,14 @@ export function createVoicePanelHost({
       card,
       getPreviewEnabled: () => preferences.snapshot().previewEnabled,
       getCockpitActive: () => readCockpitState()?.active === true,
+      // Getters, so the panel words them in the current locale.
       copy: {
-        previewEmpty: t('Voice replies appear here.'),
-        previewDisabled: t('Preview is off.'),
+        get previewEmpty() {
+          return t('Voice replies appear here.');
+        },
+        get previewDisabled() {
+          return t('Preview is off.');
+        },
       },
       onPresentationIntent: remember,
     });
@@ -244,8 +250,12 @@ export function createVoicePanelHost({
       preferences,
       copy: {
         previewNote: '',
-        timeoutNote: t('These preferences stay in this browser.'),
-        notSaved: t('Your choice applies now, but could not be saved.'),
+        get timeoutNote() {
+          return t('These preferences stay in this browser.');
+        },
+        get notSaved() {
+          return t('Your choice applies now, but could not be saved.');
+        },
       },
       onChange: (state) => {
         if (!owns()) return;
@@ -262,14 +272,14 @@ export function createVoicePanelHost({
       },
       { signal: presentationLifetime.signal },
     );
-    ui.root?.querySelector('#gev-voice-card-dismiss')?.addEventListener(
-      'click',
-      () => {
-        remember();
-        if (panel.snapshot().panelOpen) ui.previewTab?.focus();
-      },
-      { signal: presentationLifetime.signal },
-    );
+    const offDismiss = ui.on('card-dismiss', () => {
+      remember();
+      if (panel.snapshot().panelOpen)
+        void ui.focus(['previewTab'], { anyVisibility: true });
+    });
+    presentationLifetime.signal.addEventListener('abort', offDismiss, {
+      once: true,
+    });
     card.setEnabled(preferences.snapshot().previewEnabled);
     panel.sync();
     idle = createVoiceInactivity({
