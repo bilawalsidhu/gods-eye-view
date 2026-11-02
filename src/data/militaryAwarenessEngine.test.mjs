@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLocale, translateKnown } from '../i18n/index.js';
 import {
   AWARENESS_RELATIONSHIP,
   findByDoublingRadius,
@@ -45,6 +46,25 @@ test('unavailable and stale feeds remain unknown', () => {
   assert.equal(AWARENESS_RELATIONSHIP.OUTSIDE_RANGE, 'OUTSIDE_RANGE');
   assert.equal(summarizeAwarenessCohort([], { available: false }).reason, 'feed unavailable');
   assert.equal(summarizeAwarenessCohort([], { stale: true }).reason, 'feed stale');
+});
+
+test('cohort reasons stay English in data and translate where the panel shows them', (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('ru');
+  const reasons = [
+    summarizeAwarenessCohort([], { available: false }).reason,
+    summarizeAwarenessCohort([], { stale: true }).reason,
+    summarizeAwarenessCohort([{ id: 'near', distanceM: 10 }]).reason,
+    summarizeAwarenessCohort([]).reason,
+  ];
+  assert.deepEqual(reasons, [
+    'feed unavailable',
+    'feed stale',
+    'observed or mapped nearby context',
+    'no observed or mapped objects in current feeds',
+  ]);
+  // The awareness panel shows a reason through translateKnown().
+  for (const reason of reasons) assert.notEqual(translateKnown(reason), reason);
 });
 
 test('navigation prioritizes nearby targets from the selected cohort', () => {
