@@ -3953,5 +3953,10 @@
   "Confirm: remove every added entry from Data Layers": "تأكيد: إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Remove every added entry from Data Layers": "إزالة كل الإدخالات المُضافة من طبقات البيانات",
   "Showing {shown} of {total}": "عرض {shown} من {total}",
-  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات"
+  "BROWSE DATA LIBRARY": "تصفّح مكتبة البيانات",
+  "USGS Springs": "USGS: الينابيع",
+  "Water": "المياه",
+  "USGS Lakes & Reservoirs": "USGS: البحيرات والخزانات",
+  "Zoom in to a region to load river gauges": "قرّب إلى منطقة لتحميل محطات قياس الأنهار",
+  "USGS Rivers & Streams": "USGS: الأنهار والجداول"
 }
