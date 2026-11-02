@@ -59,6 +59,8 @@ const NAVARA_CREDIT_KEYS = new Set([
   'eccc-aqhi',
   'wfigs',
   's2-ghostmaps',
+  'weather-noaa',
+  'weather-lightning',
   'firms',
   'gbfs',
   'overture-military-names',
@@ -107,6 +109,12 @@ export async function registerNavaraLayerRenderers() {
     bikeshare: async () =>
       (await import('../layers/bikeshare/render/navara.js'))
         .createBikeshareNavaraRenderer,
+    ...Object.fromEntries(['weather-radar', 'weather-satellite', 'weather-lightning'].map((id) => [
+      id, async () => {
+        const { createWeatherNavaraRenderer } = await import('../layers/weather/render/navara.js');
+        return (engine, options) => createWeatherNavaraRenderer(engine, navaraViews.get(engine), options);
+      },
+    ])),
     's2-ghostmaps': async () => {
       const { createGhostMapsNavaraRenderer } = await import('../layers/ghostMaps/render/navara.js');
       return (engine) => createGhostMapsNavaraRenderer(engine, navaraViews.get(engine).view);
