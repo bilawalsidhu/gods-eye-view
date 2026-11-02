@@ -29,6 +29,8 @@
   "src/data/localGeojsonCore.js",
   "src/data/localGeojsonLod.js",
   "src/data/inputOwnership.js",
+  "src/annotations/drawMarks.js",
+  "src/annotations/drawMarks.test.mjs",
   "src/annotations/drawMode.js",
   "src/annotations/drawMode.test.mjs",
   "src/annotations/drawTool.js",

@@ -84,8 +84,9 @@ export function syncContextLayout() {
     return;
   }
   const defaultTop = Math.max(255, Math.min(300, window.innerHeight * 0.28));
+  // An open left panel Cockpit keeps (Data Layers or Utilities).
   const dataPanel = document.querySelector(
-    '#left-panel-stack > #data-panel:not(.collapsed)',
+    '#left-panel-stack > :is(#data-panel, #utilities-panel):not(.collapsed)',
   );
   let desiredTop = defaultTop;
   if (this.contextCollapsed && dataPanel) {
