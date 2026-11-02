@@ -28,6 +28,11 @@ const FEED_ERRORS = new Set([
   msg('OpenSky auth failed'),
 ]);
 const FEED_ERROR_PATTERNS = [
+  [
+    /^PARTIAL · (.+) unavailable$/,
+    ([, sources]) => t('PARTIAL · {sources} unavailable', { sources }),
+  ],
+
   // Street Level provider errors (providers/{kartaview,panoramax}/source.js),
   // ahead of the generic "<source> HTTP <status>".
   [

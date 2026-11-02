@@ -14,6 +14,13 @@ import {
   LABEL_MIN_SEP_PX,
 } from './policy.js';
 
+// Unknown intensity is outside the measured FRP ramp, including measured zero.
+const UNKNOWN_FRP_STOP = Object.freeze({
+  name: 'unknown',
+  color: Cesium.Color.fromCssColorString('#94a3b8'),
+});
+const UNKNOWN_FRP_ACCENT = '148, 163, 184';
+
 export function createModel({
   layerState,
   services,
@@ -32,7 +39,7 @@ export function createModel({
    * @param {Object|null|undefined} fire - Internal fire record.
    * @returns {{id: string, lat: number|null, lon: number|null, frp: number|null,
    *   confidence: number|null, satellite: string|null, sensor: string|null,
-   *   acqTime: number|null}}
+   *   acqTime: number|null, source: string}}
    */
 
   function mapAnalystRecord(fire) {
@@ -48,7 +55,8 @@ export function createModel({
       frp: num(fire?.frp),
       confidence: num(fire?.confidence), // normalized 0..1 (firmsAdapt.normalizeConfidence)
       satellite: text(fire?.satellite) || text(fire?.sensor),
-      sensor: text(fire?.sensor), // VIIRS or MODIS
+      sensor: text(fire?.sensor), // VIIRS, MODIS or GOES
+      source: fireSource(fire),
       acqTime:
         Number.isFinite(fire?.acqMs) && fire.acqMs > 0 ? fire.acqMs : null, // epoch ms; 0 = unparseable → null
     };
@@ -120,6 +128,7 @@ export function createModel({
   }
 
   function heatColor(value, alpha) {
+    if (!Number.isFinite(value)) return UNKNOWN_FRP_STOP.color.withAlpha(alpha);
     if (value > 0.72) return Cesium.Color.RED.withAlpha(alpha);
     if (value > 0.42) return Cesium.Color.ORANGE.withAlpha(alpha);
     return Cesium.Color.YELLOW.withAlpha(alpha);
@@ -133,6 +142,7 @@ export function createModel({
    */
 
   function detectionColorStop(fire) {
+    if (!Number.isFinite(fire?.frp)) return UNKNOWN_FRP_STOP;
     const heat = Math.min(
       1,
       Math.sqrt(Math.max(0, fire.frp) / 150) * 0.85 + fire.confidence * 0.15,
@@ -332,9 +342,11 @@ export function createModel({
 
   function buildSelectedFireCard(fire, nowMs) {
     const meta = [
-      t('{value} conf', {
-        value: confidenceLabel(confidenceBucket(fire.confidence)),
-      }),
+      Number.isFinite(fire.confidence)
+        ? t('{value} conf', {
+            value: confidenceLabel(confidenceBucket(fire.confidence)),
+          })
+        : t('confidence not published'),
     ];
     if (fire.acqMs > 0) {
       const age = formatAgeLabel(nowMs - fire.acqMs);
@@ -351,12 +363,20 @@ export function createModel({
       // Host-side horizon test uses this instead of the render anchor.
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
-      accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      accent: Number.isFinite(fire.frp)
+        ? accentForSeverity(detectionColorStop(fire).name)
+        : UNKNOWN_FRP_ACCENT,
+      title:
+        fire.provider === 'conae-goes'
+          ? t('THERMAL DETECTION · {frp}', { frp: frpLabel(fire.frp) })
+          : t('FIRE · {frp}', { frp: frpLabel(fire.frp) }),
       details: [
         meta.join(' · '),
         formatLatLonLabel(fire.lat, fire.lon) +
           (fire.night ? ` · ${t('NIGHT')}` : ''),
+        ...(fire.provider === 'conae-goes'
+          ? [t('CONAE GOES · thermal anomaly, not a confirmed wildfire')]
+          : []),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -375,21 +395,28 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceLabel(confidenceBucket(fire.confidence))];
+    const meta = [
+      Number.isFinite(fire.confidence)
+        ? confidenceLabel(confidenceBucket(fire.confidence))
+        : t('confidence n/a'),
+    ];
     if (fire.acqMs > 0) {
       const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(age);
     }
     const sat = satelliteShortName(fire.satellite) || fire.sensor;
     if (sat) meta.push(sat);
+    if (fire.provider === 'conae-goes') meta.push('CONAE');
     return {
       id: `fire:${fireDetectionKey(fire)}`,
       actionable: true,
       position: candidate.position,
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
-      accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      accent: Number.isFinite(fire.frp)
+        ? accentForSeverity(detectionColorStop(fire).name)
+        : UNKNOWN_FRP_ACCENT,
+      title: t('▲ {frp}', { frp: frpLabel(fire.frp) }),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -407,7 +434,18 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
+    const title = cell.hasConae
+      ? tn(cell.count, '{count} DETECTION', '{count} DETECTIONS', {
+          count: formatNumber(cell.count),
+        })
+      : tn(cell.count, '{n} fire', '{n} fires', {
+          n: cell.count,
+        }).toLocaleUpperCase(getLocale());
+    const parts = [
+      Number.isFinite(cell.maxFrp)
+        ? t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })
+        : t('FRP n/a'),
+    ];
     if (cell.newestAcqMs > 0) {
       const age = formatAgeLabel(nowMs - cell.newestAcqMs);
       if (age) parts.push(t('new {value}', { value: age }));
@@ -418,12 +456,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: 10,
       accent: candidate.accent || accentForSeverity('yellow'),
-      // The count picks the plural form of the language ("حريقان (2)",
-      // "14 حريقًا", "14 ПОЖАРОВ"); the card shows it in capitals like the
-      // other card titles.
-      title: tn(cell.count, '{n} fire', '{n} fires', {
-        n: cell.count,
-      }).toLocaleUpperCase(getLocale()),
+      title,
       details: [parts.join(' · ')],
       selected: false,
       priority: Number(cell.maxFrp) || 0,
@@ -471,6 +504,7 @@ export function createModel({
    */
 
   function cellAccent(normalized) {
+    if (!Number.isFinite(normalized)) return UNKNOWN_FRP_ACCENT;
     if (normalized > 0.72) return accentForSeverity('red');
     if (normalized > 0.42) return accentForSeverity('orange');
     return accentForSeverity('yellow');
@@ -486,6 +520,26 @@ export function createModel({
 
   function formatFrp(frp) {
     return formatFrpMw(frp);
+  }
+
+  function frpLabel(frp) {
+    return Number.isFinite(frp)
+      ? t('{value} MW', { value: formatFrpLabel(frp) })
+      : t('FRP n/a');
+  }
+
+  function fireSource(fire) {
+    return fire?.provider === 'conae-goes' ? 'CONAE GOES' : 'NASA FIRMS';
+  }
+
+  function detectionLabel(fire) {
+    // FIRMS context/tool labels are English data; speech.js translates at paint.
+    if (fire.provider !== 'conae-goes')
+      return `Fire · FRP ${formatFrpMw(fire.frp)} MW`;
+    const frp = Number.isFinite(fire.frp)
+      ? t('FRP {value}', { value: frpLabel(fire.frp) })
+      : frpLabel(fire.frp);
+    return t('Thermal detection · {frp}', { frp });
   }
 
   /** formatFrp for a card, with the locale's decimal separator ("4,9"). */
@@ -550,6 +604,8 @@ export function createModel({
         return t('nominal', { context: 'fire confidence' });
       case 'low':
         return t('low', { context: 'fire confidence' });
+      case 'not published':
+        return t('confidence not published');
       default:
         return bucket;
     }
@@ -569,12 +625,15 @@ export function createModel({
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */
 
   function confidenceBucket(confidence) {
+    if (!Number.isFinite(confidence)) return 'not published';
     if (confidence >= 0.75) return 'high';
     if (confidence >= 0.45) return 'nominal';
     return 'low';
   }
   return {
     mapAnalystRecord,
+    fireSource,
+    detectionLabel,
     paddedDegreeBounds,
     boundsContainPoint,
     cellIntersectsBounds,

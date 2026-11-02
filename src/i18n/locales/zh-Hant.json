@@ -686,9 +686,7 @@
   "{value} conf": "置信度 {value}",
   "{value} ago": "{value}前",
   "sensor n/a": "傳感器 n/a",
-  "FIRE · {frp} MW": "火點 · {frp} MW",
   "NIGHT": "夜間",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "火點",
   "max {value} MW": "最大 {value} MW",
   "new {value}": "最新（{value}前）",
@@ -2868,5 +2866,20 @@
   "Edit anchors, data packs and shot details": "編輯錨點、數據包和鏡頭詳情",
   "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包",
   "Left panels": "左側面板",
-  "Right panels": "右側面板"
+  "Right panels": "右側面板",
+  "THERMAL DETECTION · {frp}": "熱異常偵測 · {frp}",
+  "confidence n/a": "信心度不詳",
+  "Thermal detection · {frp}": "熱異常偵測 · {frp}",
+  "PARTIAL · {sources} unavailable": "部分資料 · {sources} 無法使用",
+  "FIRE · {frp}": "火災 · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · 熱異常，非已確認的野火",
+  "confidence not published": "未公布信心度",
+  "THERMAL DETECTION": "熱異常偵測",
+  "FRP n/a": "FRP 不詳",
+  "{count} DETECTIONS": {
+    "other": "{count} 次偵測"
+  },
+  "{value} MW": "{value} MW",
+  "▲ {frp}": "▲ {frp}",
+  "FRP {value}": "FRP {value}"
 }

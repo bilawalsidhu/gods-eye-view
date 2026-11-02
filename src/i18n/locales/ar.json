@@ -798,8 +798,6 @@
   "STALE · cached {age}": "متقادم · مخزّن {age}",
   "LIVE · updated {age}": "مباشر · حُدّث {age}",
   "<1m ago": "قبل أقل من دقيقة",
-  "FIRE · {frp} MW": "حريق · {frp} MW",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "حريق",
   "{value} conf": "ثقة {value}",
   "{value} ago": "قبل {value}",
@@ -3218,5 +3216,25 @@
   "Load scenes from an exported JSON file": "تحميل المشاهد من ملف JSON مُصدَّر",
   "Download the timing log of the last play": "تنزيل سجل توقيت آخر تشغيل",
   "Edit anchors, data packs and shot details": "تعديل نقاط الارتكاز وحزم البيانات وتفاصيل اللقطة",
-  "Download this scene as JSON or an asset bundle": "تنزيل هذا المشهد بصيغة JSON أو حزمة موارد"
+  "Download this scene as JSON or an asset bundle": "تنزيل هذا المشهد بصيغة JSON أو حزمة موارد",
+  "THERMAL DETECTION · {frp}": "رصد حراري · {frp}",
+  "confidence n/a": "الثقة غير متاحة",
+  "Thermal detection · {frp}": "رصد حراري · {frp}",
+  "PARTIAL · {sources} unavailable": "جزئي · {sources} غير متاح",
+  "FIRE · {frp}": "حريق · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · شذوذ حراري، وليس حريق غابات مؤكّدًا",
+  "confidence not published": "درجة الثقة غير منشورة",
+  "THERMAL DETECTION": "رصد حراري",
+  "FRP n/a": "FRP غير متاح",
+  "{count} DETECTIONS": {
+    "other": "عمليات الرصد: {count}",
+    "zero": "عمليات الرصد: {count}",
+    "one": "عمليات الرصد: {count}",
+    "two": "عمليات الرصد: {count}",
+    "few": "عمليات الرصد: {count}",
+    "many": "عمليات الرصد: {count}"
+  },
+  "{value} MW": "{value} MW",
+  "▲ {frp}": "▲ {frp}",
+  "FRP {value}": "FRP {value}"
 }

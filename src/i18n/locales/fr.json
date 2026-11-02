@@ -710,9 +710,7 @@
   "{value} conf": "conf. {value}",
   "{value} ago": "il y a {value}",
   "sensor n/a": "capteur n/d",
-  "FIRE · {frp} MW": "FEU · {frp} MW",
   "NIGHT": "NUIT",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "FEU",
   "max {value} MW": "max {value} MW",
   "new {value}": "dernier il y a {value}",
@@ -3008,5 +3006,22 @@
   "Left panels": "Panneaux de gauche",
   "Right panels": "Panneaux de droite",
   "CONFIRMED": "CONFIRMÉE",
-  "PAD / RTLS": "PAS DE TIR / RTLS"
+  "PAD / RTLS": "PAS DE TIR / RTLS",
+  "THERMAL DETECTION · {frp}": "DÉTECTION THERMIQUE · {frp}",
+  "confidence n/a": "confiance n/d",
+  "Thermal detection · {frp}": "Détection thermique · {frp}",
+  "PARTIAL · {sources} unavailable": "PARTIEL · {sources} indisponible",
+  "FIRE · {frp}": "FEU · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · anomalie thermique, pas un feu de forêt confirmé",
+  "confidence not published": "confiance non publiée",
+  "THERMAL DETECTION": "DÉTECTION THERMIQUE",
+  "FRP n/a": "FRP n/d",
+  "{count} DETECTIONS": {
+    "one": "{count} DÉTECTION",
+    "other": "{count} DÉTECTIONS",
+    "many": "{count} DÉTECTIONS"
+  },
+  "{value} MW": "{value} MW",
+  "▲ {frp}": "▲ {frp}",
+  "FRP {value}": "FRP {value}"
 }

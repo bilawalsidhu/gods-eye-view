@@ -718,9 +718,7 @@
   "{value} conf": "достов.: {value}",
   "{value} ago": "{value} тому",
   "sensor n/a": "датчик н/д",
-  "FIRE · {frp} MW": "ПОЖЕЖА · {frp} МВт",
   "NIGHT": "НІЧ",
-  "▲ {frp} MW": "▲ {frp} МВт",
   "FIRE": "ПОЖЕЖА",
   "max {value} MW": "макс. {value} МВт",
   "new {value}": "останнє: {value} тому",
@@ -3078,5 +3076,23 @@
   "Left panels": "Ліві панелі",
   "Right panels": "Праві панелі",
   "CONFIRMED": "ПІДТВЕРДЖЕНО",
-  "PAD / RTLS": "МІСЦЕ ЗАПУСКУ / RTLS"
+  "PAD / RTLS": "МІСЦЕ ЗАПУСКУ / RTLS",
+  "THERMAL DETECTION · {frp}": "ТЕПЛОВЕ ВИЯВЛЕННЯ · {frp}",
+  "confidence n/a": "достовірність невідома",
+  "Thermal detection · {frp}": "Теплове виявлення · {frp}",
+  "PARTIAL · {sources} unavailable": "ЧАСТКОВО · {sources} недоступно",
+  "FIRE · {frp}": "ПОЖЕЖА · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · теплова аномалія, а не підтверджена лісова пожежа",
+  "confidence not published": "достовірність не опублікована",
+  "THERMAL DETECTION": "ТЕПЛОВЕ ВИЯВЛЕННЯ",
+  "FRP n/a": "FRP невідомо",
+  "{count} DETECTIONS": {
+    "one": "{count} ВИЯВЛЕННЯ",
+    "few": "{count} ВИЯВЛЕННЯ",
+    "many": "{count} ВИЯВЛЕНЬ",
+    "other": "{count} ВИЯВЛЕННЯ"
+  },
+  "{value} MW": "{value} MW",
+  "▲ {frp}": "▲ {frp}",
+  "FRP {value}": "FRP {value}"
 }

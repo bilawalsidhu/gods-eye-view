@@ -1,5 +1,16 @@
 # God's Eye View Current State
 
+Active Fires optionally includes CONAE’s `FocosGOES_24hs` WFS product when
+`CONAE_GOES_ENABLED=1`. It uses the existing `/api/firms` snapshot and map layer,
+with an independent 10-minute memory cache, fixed upstream URL, bounded reads,
+single-flight refresh and failure backoff. FIRMS retains its key, quota and
+30-minute memory/disk cache. Either provider can run alone; partial failures
+and stale data remain visible. CONAE acquisition dates explicitly identify
+UTC-3 and are converted to UTC. Missing GOES confidence remains null in cards,
+selection context and analyst records. These are thermal observations, not
+confirmed wildfire incidents. See [CONAE-GOES.md](CONAE-GOES.md) for the source
+contract, implementation rationale and live-source verification limits.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
@@ -6533,6 +6544,23 @@ when their footprints touch or contain one another, never across a seam toleranc
 - `scripts/qa-form-fields.mjs` exercises native selections, number validity,
   calibration commit/cancel and stale-camera/disposal guards against an installed
   controller with fixture ports, plus default/Cyber and narrow translated layouts.
+
+The CONAE GOES thermal detections, mixed-source counts and partial-source warnings support English, Spanish, Russian and Simplified Chinese (`zh-CN`). Provider and station names remain unchanged; numbers and dates follow the selected UI locale.
+
+CONAE observations with unpublished FRP use a neutral gray sprite/card/cell
+accent, outside the measured intensity scale (including measured zero). An
+empty snapshot clears existing sprites, heat cells, overlay cards, pick indexes
+and context registrations. FIRMS context labels retain the English data contract
+used by voice tools; the presentation layer translates them.
+
+The optional joint gates `scripts/qa-conae-intensity.mjs` and
+`scripts/qa-conae-intensity-browser.mjs` require a **temporary integration** of
+PR #1426 with this CONAE branch. They are not baseline unit tests and do not
+publish #1426's unmerged features. The joint policy retains unknown CONAE FRP
+and confidence as null: default 0 MW / All includes them; a positive FRP floor
+excludes unpublished FRP, and Nominal+/High excludes unpublished confidence.
+Unknown confidence is not a low rating, nor is unknown FRP a zero measurement.
+These satellite observations do not establish confirmed wildfire incidents.
 
 ## Docker health reporting
 

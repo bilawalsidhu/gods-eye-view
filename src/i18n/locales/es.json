@@ -659,8 +659,6 @@
   "STALE · cached {age}": "DESACTUALIZADO · en caché hace {age}",
   "LIVE · updated {age}": "EN VIVO · actualizado {age}",
   "<1m ago": "hace <1 min",
-  "FIRE · {frp} MW": "INCENDIO · {frp} MW",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "INCENDIO",
   "{value} conf": "confianza {value}",
   "{value} ago": "hace {value}",
@@ -3008,5 +3006,22 @@
   "Edit anchors, data packs and shot details": "Edita anclas, paquetes de datos y detalles de los planos",
   "Download this scene as JSON or an asset bundle": "Descarga esta escena como JSON o como paquete de recursos",
   "Left panels": "Paneles izquierdos",
-  "Right panels": "Paneles derechos"
+  "Right panels": "Paneles derechos",
+  "THERMAL DETECTION · {frp}": "DETECCIÓN TÉRMICA · {frp}",
+  "{value} MW": "{value} MW",
+  "confidence n/a": "confianza n/d",
+  "▲ {frp}": "▲ {frp}",
+  "Thermal detection · {frp}": "Detección térmica · {frp}",
+  "PARTIAL · {sources} unavailable": "PARCIAL · {sources} no disponible",
+  "FIRE · {frp}": "INCENDIO · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · anomalía térmica, incendio forestal no confirmado",
+  "FRP {value}": "FRP {value}",
+  "{count} DETECTIONS": {
+    "one": "{count} DETECCIÓN",
+    "many": "{count} DE DETECCIONES",
+    "other": "{count} DETECCIONES"
+  },
+  "confidence not published": "confianza no publicada",
+  "THERMAL DETECTION": "DETECCIÓN TÉRMICA",
+  "FRP n/a": "FRP n/d"
 }

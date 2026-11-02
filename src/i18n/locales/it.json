@@ -710,9 +710,7 @@
   "{value} conf": "{value} conf",
   "{value} ago": "{value} fa",
   "sensor n/a": "sensore n/d",
-  "FIRE · {frp} MW": "INCENDIO · {frp} MW",
   "NIGHT": "NOTTE",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "INCENDIO",
   "max {value} MW": "max {value} MW",
   "new {value}": "ultimo: {value} fa",
@@ -3008,5 +3006,22 @@
   "Left panels": "Pannelli a sinistra",
   "Right panels": "Pannelli a destra",
   "CONFIRMED": "CONFERMATA",
-  "PAD / RTLS": "SITO DI LANCIO / RTLS"
+  "PAD / RTLS": "SITO DI LANCIO / RTLS",
+  "THERMAL DETECTION · {frp}": "RILEVAMENTO TERMICO · {frp}",
+  "confidence n/a": "confidenza n/d",
+  "Thermal detection · {frp}": "Rilevamento termico · {frp}",
+  "PARTIAL · {sources} unavailable": "PARZIALE · {sources} non disponibile",
+  "FIRE · {frp}": "INCENDIO · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · anomalia termica, non un incendio boschivo confermato",
+  "confidence not published": "confidenza non pubblicata",
+  "THERMAL DETECTION": "RILEVAMENTO TERMICO",
+  "FRP n/a": "FRP n/d",
+  "{count} DETECTIONS": {
+    "one": "{count} RILEVAMENTO",
+    "other": "{count} RILEVAMENTI",
+    "many": "{count} RILEVAMENTI"
+  },
+  "{value} MW": "{value} MW",
+  "▲ {frp}": "▲ {frp}",
+  "FRP {value}": "FRP {value}"
 }

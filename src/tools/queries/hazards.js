@@ -86,8 +86,9 @@ export const getActiveFires = defineTool({
   name: 'get_active_fires',
   title: 'Active fires',
   description:
-    'Satellite fire detections from NASA FIRMS in the last 24 hours within an ' +
-    'area, most intense (fire radiative power) first.',
+    'Satellite thermal detections from configured NASA FIRMS and CONAE GOES sources ' +
+    'in the last 24 hours within an area, most intense (fire radiative power) first. ' +
+    'Observations are not confirmed wildfire incidents.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA, limit: LIMIT_SCHEMA },
@@ -101,7 +102,7 @@ export const getActiveFires = defineTool({
     if (snapshot.keyRequired)
       throw new ToolError(
         'unavailable',
-        'Fire detections need a NASA FIRMS key configured for this server',
+        'Fire detections need a NASA FIRMS key or CONAE GOES enabled on this server',
       );
     const fires = snapshot.fires
       .filter((fire) => areaContains(area, fire))
@@ -132,9 +133,13 @@ export const getActiveFires = defineTool({
           lon: fire.lon,
           frp_mw: fire.frp ?? null,
           confidence: fire.confidence ?? null,
-          acquired: isoTime(acquiredMsUtc(fire.acqDate, fire.acqTime)),
+          acquired:
+            fire.provider === 'conae-goes'
+              ? isoTime(fire.acqMs)
+              : isoTime(acquiredMsUtc(fire.acqDate, fire.acqTime)),
+          source: fire.provider === 'conae-goes' ? 'CONAE GOES' : 'NASA FIRMS',
           satellite: fire.satellite ?? null,
-          day_night: fire.daynight ?? null,
+          day_night: fire.daynight || null,
         })),
       },
     };

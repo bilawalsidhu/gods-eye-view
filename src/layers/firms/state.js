@@ -39,6 +39,10 @@ export function createFirmsState({ services, config }) {
 
   layerState._error = null;
 
+  layerState._sources = [];
+
+  layerState._sourceLabel = config.source;
+
   layerState._fires = [];
 
   layerState._firesByFrp = [];

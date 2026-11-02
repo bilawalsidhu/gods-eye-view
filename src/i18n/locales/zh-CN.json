@@ -691,9 +691,7 @@
   "{value} conf": "置信度 {value}",
   "{value} ago": "{value}前",
   "sensor n/a": "传感器 n/a",
-  "FIRE · {frp} MW": "火点 · {frp} MW",
   "NIGHT": "夜间",
-  "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "火点",
   "max {value} MW": "最大 {value} MW",
   "new {value}": "最新（{value}前）",
@@ -2868,5 +2866,20 @@
   "Edit anchors, data packs and shot details": "编辑锚点、数据包和镜头详情",
   "Download this scene as JSON or an asset bundle": "将此场景下载为 JSON 或资源包",
   "Left panels": "左侧面板",
-  "Right panels": "右侧面板"
+  "Right panels": "右侧面板",
+  "confidence not published": "置信度未公布",
+  "THERMAL DETECTION · {frp}": "热异常探测 · {frp}",
+  "FIRE · {frp}": "火点 · {frp}",
+  "CONAE GOES · thermal anomaly, not a confirmed wildfire": "CONAE GOES · 热异常，非已确认的野火",
+  "confidence n/a": "置信度不可用",
+  "▲ {frp}": "▲ {frp}",
+  "{count} DETECTIONS": {
+    "other": "{count} 次探测"
+  },
+  "FRP n/a": "FRP 不可用",
+  "{value} MW": "{value} MW",
+  "FRP {value}": "FRP {value}",
+  "Thermal detection · {frp}": "热异常探测 · {frp}",
+  "THERMAL DETECTION": "热异常探测",
+  "PARTIAL · {sources} unavailable": "部分可用 · {sources} 不可用"
 }

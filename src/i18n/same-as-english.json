@@ -14,6 +14,7 @@
     "FLIR",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "GEO",
     "GOOGLE STREET VIEW",
     "Google Street View",
@@ -31,6 +32,8 @@
     "dB",
     "hPa",
     "{source} HTTP {status}",
+    "{value} MW",
+    "▲ {frp}",
     "▲ {frp} MW"
   ],
   "de": [
@@ -68,6 +71,7 @@
     "FLIR",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "Folk",
     "Funk",
@@ -196,8 +200,10 @@
     "{value} KM DOWNRANGE",
     "{value} KM/H",
     "{value} KM/S",
+    "{value} MW",
     "ΔN",
     "Ⅱ PAUSE",
+    "▲ {frp}",
     "▲ {frp} MW"
   ],
   "es": [
@@ -233,6 +239,7 @@
     "FM MHZ",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "Folk",
     "Funk",
@@ -323,6 +330,7 @@
     "{value} KM",
     "{value} KM/H",
     "{value} KM/S",
+    "{value} MW",
     "ΔE",
     "ΔN",
     "▲ {frp} MW"
@@ -380,6 +388,7 @@
     "FM MHZ",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "Ferry",
     "Folk",
@@ -502,9 +511,11 @@
     "{value} KM",
     "{value} KM/H",
     "{value} KM/S",
+    "{value} MW",
     "ΔE",
     "ΔN",
     "Ⅱ PAUSE",
+    "▲ {frp}",
     "▲ {frp} MW"
   ],
   "it": [
@@ -554,6 +565,7 @@
     "FOCUS",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "Folk",
     "Funk",
@@ -672,9 +684,11 @@
     "{value} KM DOWNRANGE",
     "{value} KM/H",
     "{value} KM/S",
+    "{value} MW",
     "{value} conf",
     "ΔE",
     "ΔN",
+    "▲ {frp}",
     "▲ {frp} MW"
   ],
   "ja": [
@@ -695,6 +709,7 @@
     "FM MHZ",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "GEO",
     "HDG",
@@ -722,8 +737,10 @@
     "{source} HTTP {status}",
     "{speed} kn",
     "{type}  SPD: {speed}  HDG: {heading}",
+    "{value} MW",
     "ΔE",
     "ΔN",
+    "▲ {frp}",
     "▲ {frp} MW"
   ],
   "pt": [
@@ -762,6 +779,7 @@
     "FM MHZ",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "Folk",
     "Funk",
@@ -852,7 +870,9 @@
     "{value} KM",
     "{value} KM/H",
     "{value} KM/S",
+    "{value} MW",
     "ΔN",
+    "▲ {frp}",
     "▲ {frp} MW"
   ],
   "ru": [
@@ -861,6 +881,7 @@
     "CCTV",
     "CRT",
     "FLIR",
+    "FRP {value}",
     "GEO",
     "Ironbow",
     "Landsat 8/9",
@@ -879,12 +900,15 @@
     "CCTV",
     "CRT",
     "FLIR",
+    "FRP {value}",
     "Ironbow",
     "Landsat 8/9",
     "NVG",
     "REC",
     "S2 GhostMaps",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "{value} MW",
+    "▲ {frp}"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -901,6 +925,7 @@
     "FLIR",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "GEO",
     "HDG",
@@ -912,9 +937,9 @@
     "MM",
     "NVG",
     "REC",
-    "SRC {value}",
     "S2 GhostMaps",
     "S2 · {name}",
+    "SRC {value}",
     "Sentinel-2",
     "Techno",
     "Trance",
@@ -939,6 +964,7 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
     "{value} KM/S",
+    "{value} MW",
     "ΔE",
     "ΔN",
     "▲ {frp} MW"
@@ -958,6 +984,7 @@
     "FLIR",
     "FOV",
     "FOV {value}°",
+    "FRP {value}",
     "FT",
     "GEO",
     "HDG",
@@ -969,9 +996,9 @@
     "MM",
     "NVG",
     "REC",
-    "SRC {value}",
     "S2 GhostMaps",
     "S2 · {name}",
+    "SRC {value}",
     "Sentinel-2",
     "Techno",
     "Trance",
@@ -996,8 +1023,10 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
     "{value} KM/S",
+    "{value} MW",
     "ΔE",
     "ΔN",
+    "▲ {frp}",
     "▲ {frp} MW"
   ]
 }
