@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import { rm } from 'node:fs/promises';
 import { localProviderPlugins } from '../server/providers/local.js';
 import { standaloneVoiceTools } from '../server/standalone/voiceTools.js';
 import {
@@ -10,14 +11,20 @@ import {
   validateKeySetupUpdates,
   upsertDotenvValues,
 } from './keySetupCore.mjs';
+import { makeFixtureRoot } from './tooling/fixtureRoot.mjs';
+
+const nominatimStorageDir = await makeFixtureRoot('gev-gemini-composition-');
+test.after(() => rm(nominatimStorageDir, { recursive: true, force: true }));
 
 test('local hosts opt into Gemini explicitly and retain the default plugin order', (t) => {
   t.mock.method(globalThis, 'fetch', () => {
     throw Error('construction must not fetch');
   });
-  const defaults = localProviderPlugins().map((plugin) => plugin.name);
+  const defaults = localProviderPlugins({ nominatimStorageDir }).map(
+    (plugin) => plugin.name,
+  );
   assert.ok(!defaults.includes('gemini-live-proxy'));
-  const enabled = localProviderPlugins({ gemini: {} }).map(
+  const enabled = localProviderPlugins({ gemini: {}, nominatimStorageDir }).map(
     (plugin) => plugin.name,
   );
   assert.equal(
@@ -35,6 +42,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     const tools = standaloneVoiceTools();
     const calls = [];
     const plugin = localProviderPlugins({
+      nominatimStorageDir,
       gemini: {
         tools,
         resolveApiKey: () => 'fixture-key',

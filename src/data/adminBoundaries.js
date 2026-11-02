@@ -123,7 +123,7 @@ export function decodeRing(encoded, decimals) {
 }
 
 /** Even-odd point-in-ring test; ring is [[lon, lat], …], open or closed. */
-function pointInRing(ring, lat, lon) {
+export function pointInRing(ring, lat, lon) {
   if (!Array.isArray(ring) || ring.length < 3) return false;
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
@@ -151,16 +151,59 @@ export function polygonsContain(polygons, lat, lon) {
 }
 
 /**
+ * Whether polygons contain a point. A part whose outer ring crosses the
+ * antimeridian ([179.99, …], [-179.99, …]) is read contiguously in its own
+ * longitude frame, with the point moved into that frame; every other part,
+ * including one genuinely wider than 180°, is tested as stored. Crossing is
+ * read from an edge jumping more than 180°, which assumes densely noded rings
+ * (OSM, Nominatim, tiles); a ring that is both wider than 180° and crossing, or
+ * a non-crossing ring with a single edge over 180°, is not supported.
+ */
+export function containsAnchor(polygons, lat, lon) {
+  if (!Number.isFinite(lon)) return false;
+  for (const part of polygons || []) {
+    const outer = part?.[0];
+    if (!Array.isArray(outer) || !outer.length) continue;
+    const reference = outer[0][0];
+    const shift = (x) => x - 360 * Math.round((x - reference) / 360);
+    const span = (ring, f) => {
+      let west = Infinity;
+      let east = -Infinity;
+      for (const [x] of ring) {
+        west = Math.min(west, f(x));
+        east = Math.max(east, f(x));
+      }
+      return east - west;
+    };
+    // An edge jumping more than 180° wraps the line; a polar ring whose
+    // edges run along ±180 collapses when reframed and is read as stored.
+    const jumps = outer.some(
+      ([x], i) => i > 0 && Math.abs(x - outer[i - 1][0]) > 180,
+    );
+    const framedSpan = jumps ? span(outer, shift) : 0;
+    const crosses = framedSpan > 0 && framedSpan < 180;
+    const framed = crosses
+      ? part.map((ring) => ring.map(([x, y]) => [shift(x), y]))
+      : part;
+    if (polygonsContain([framed], lat, crosses ? shift(lon) : lon)) return true;
+  }
+  return false;
+}
+
+/**
  * A unit's geometry, decoded on first use. Longitudes are unwrapped around
  * the largest part for the box so units cut at the antimeridian (Alaska,
- * Chukotka) get a box on the right side of the globe.
+ * Chukotka) get a box on the right side of the globe. An entry from another
+ * encoding supplies `decode()` returning the same `[outer, ...holes][]`.
  */
-function geometryOf(entry) {
+export function geometryOf(entry) {
   if (entry.geometry) return entry.geometry;
   const decimals = entry.feature.d ?? entry.decimals;
-  const polygons = entry.feature.polygons.map((poly) =>
-    poly.map((ring) => decodeRing(ring, decimals)),
-  );
+  const polygons = entry.decode
+    ? entry.decode()
+    : entry.feature.polygons.map((poly) =>
+        poly.map((ring) => decodeRing(ring, decimals)),
+      );
   const ref = polygons[0]?.[0]?.[0]?.[0] ?? 0;
   let west = Infinity;
   let south = Infinity;
@@ -178,7 +221,7 @@ function geometryOf(entry) {
       if (lat > north) north = lat;
     }
   }
-  const label = entry.feature.label
+  const label = Array.isArray(entry.feature.label)
     ? { lon: entry.feature.label[0], lat: entry.feature.label[1] }
     : ringCentroid(polygons[0][0]);
   entry.geometry = {
@@ -208,7 +251,7 @@ function ringCentroid(ring) {
 }
 
 /** Km from a point to a unit's box (0 inside it). */
-function boxDistanceKm(bbox, lat, lon) {
+export function boxDistanceKm(bbox, lat, lon) {
   const [west, south, east, north] = bbox;
   const mid = (west + east) / 2;
   const x = lon - 360 * Math.round((lon - mid) / 360);
@@ -399,8 +442,8 @@ const COUNTY_WORDS = [
 ];
 const COUNTY_WORD_RE = new RegExp(`\\b(${COUNTY_WORDS.join('|')})\\b`);
 const STATE_PREFIX_RE =
-  /^(?:free state|state|commonwealth|province|territory|prefecture|region|land|canton|department) of (.+)$/;
-const STATE_SUFFIX_RE = /^(.+) (?:state|province|prefecture|territory)$/;
+  /^(free state|state|commonwealth|province|territory|prefecture|region|land|canton|department) of (.+)$/;
+const STATE_SUFFIX_RE = /^(.+) (state|province|prefecture|territory)$/;
 
 /**
  * Split an ask into what it names and how.
@@ -461,14 +504,17 @@ export function parseAdminQuery(text) {
   if (prefix)
     return {
       kind: 'state',
-      name: prefix[1],
+      name: prefix[2],
       qualifiers,
       postal: null,
       countyWord: null,
       full: head,
       form: 'prefix',
+      adminType: prefix[1],
     };
-  const suffix = STATE_SUFFIX_RE.exec(head);
+  // South Africa's canonical province name is literally "Free State"; do not
+  // strip its final word as though the ask explicitly named an admin type.
+  const suffix = head === 'free state' ? null : STATE_SUFFIX_RE.exec(head);
   if (suffix)
     return {
       kind: 'state',
@@ -478,6 +524,7 @@ export function parseAdminQuery(text) {
       countyWord: null,
       full: head,
       form: 'suffix',
+      adminType: suffix[2],
     };
   return {
     kind: 'any',
@@ -487,6 +534,30 @@ export function parseAdminQuery(text) {
     abbreviation,
     countyWord: null,
   };
+}
+
+/** Explicit wording is stronger than a stale same-name geometry. */
+function explicitStateTypeFits(entry, parsed) {
+  if (!parsed.adminType) return true;
+  const words = new Set(
+    normalizeAdminName(entry.feature?.type)
+      .split(/[^a-z]+/)
+      .filter(Boolean),
+  );
+  const accepted =
+    {
+      'free state': ['state'],
+      state: ['state'],
+      commonwealth: ['state'],
+      province: ['province'],
+      territory: ['territory'],
+      prefecture: ['prefecture'],
+      region: ['region'],
+      land: ['state'],
+      canton: ['canton'],
+      department: ['department', 'departamento'],
+    }[parsed.adminType] || [];
+  return accepted.some((word) => words.has(word));
 }
 
 /** A qualifier names the unit's country ("Bavaria, Germany") or the unit
@@ -505,7 +576,7 @@ function qualifierMatches(entry, qualifier) {
  * Rank candidates: a unit containing `near` first, then the match tier,
  * then distance from `near`, then larger area. Returns the ranked list.
  */
-function rank(candidates, near) {
+export function rank(candidates, near) {
   const hasNear = Number.isFinite(near?.lat) && Number.isFinite(near?.lon);
   const scored = candidates.map(({ entry, tier }) => {
     const geometry = geometryOf(entry);
@@ -626,6 +697,10 @@ async function stateCandidates(parsed, { allowAmbiguous = false } = {}) {
     list = list.filter((i) =>
       parsed.qualifiers.every((q) => qualifierMatches(i.entry, q)),
     );
+  // Preserve explicit identity at the selector seam. In particular,
+  // "Bagmati Province" must not select Natural Earth's historical NP-BA
+  // Bagmati Zone merely because the point and normalized name overlap.
+  list = list.filter((i) => explicitStateTypeFits(i.entry, parsed));
   if (allowAmbiguous) return list;
   // A bare name answers alone only for a prominent unit — a US state, a
   // Canadian province, Bavaria — never a French département, an English
@@ -738,6 +813,12 @@ export async function findAdminAreaAt(names, lat, lon, scope) {
     .map(parseAdminQuery)
     .filter((p) => p?.name);
   if (!parsedList.length) return null;
+  // If the ask explicitly names an admin type, do not let the geocoder's
+  // untyped alias reopen an incompatible historical same-name boundary.
+  const explicitStates = parsedList.filter(
+    (parsed) => parsed.kind === 'state' && parsed.adminType,
+  );
+  const stateParses = explicitStates.length ? explicitStates : parsedList;
   const containing = (items) => {
     const out = [];
     for (const item of items)
@@ -782,7 +863,7 @@ export async function findAdminAreaAt(names, lat, lon, scope) {
       return toResult(rank(found, { lat, lon })[0], found.length);
   }
   const states = [];
-  for (const parsed of parsedList)
+  for (const parsed of stateParses)
     states.push(
       ...(await stateCandidates(
         { ...parsed, qualifiers: [] },
