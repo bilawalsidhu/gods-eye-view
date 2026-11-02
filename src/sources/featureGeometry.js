@@ -250,10 +250,13 @@ export function approximateAreaM2(coords) {
   return Math.abs(area) / 2;
 }
 
+/** Local equirectangular distance in metres, the short way round 180°. */
 export function approximateDistanceM(latA, lonA, latB, lonB) {
   const latScale = 111_320;
   const lonScale = latScale * Math.cos(((latA + latB) / 2) * (Math.PI / 180));
-  return Math.hypot((latB - latA) * latScale, (lonB - lonA) * lonScale);
+  let dLon = lonB - lonA;
+  dLon -= 360 * Math.round(dLon / 360);
+  return Math.hypot((latB - latA) * latScale, dLon * lonScale);
 }
 
 export function pointInPolygon(lon, lat, coords) {
