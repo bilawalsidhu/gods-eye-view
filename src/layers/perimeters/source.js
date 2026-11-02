@@ -8,6 +8,7 @@ const msg = (text) => text;
 export function createWfigsPerimeterSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
+  let status = null;
   /**
    * The rows with how fresh they are: the proxy answers from its last
    * snapshot, marked stale, while WFIGS is unreachable.
@@ -25,6 +26,7 @@ export function createWfigsPerimeterSource({
     signal?.throwIfAborted();
     if (!Array.isArray(payload?.rows))
       throw new Error(msg('Malformed perimeter snapshot'));
+    status = payload.sources ?? null;
     return {
       rows: payload.rows,
       stale: payload.stale === true,
@@ -33,6 +35,7 @@ export function createWfigsPerimeterSource({
   }
 
   return {
+    getStatus: () => status,
     /** The perimeter rows (see getSnapshotDetail for staleness). */
     async getSnapshot(options = {}) {
       return (await getSnapshotDetail(options)).rows;

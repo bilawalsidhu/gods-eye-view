@@ -1627,7 +1627,6 @@
   "Under 50% contained": "الاحتواء: أقل من 50%",
   "50–99% contained": "الاحتواء: 50–99%",
   "Fully contained": "احتواء كامل",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "يبيّن اللون نسبة الاحتواء المُبلَّغ عنها. المحيطات مبسّطة إلى نحو 100 م.",
   "Malformed perimeter snapshot": "لقطة المحيطات مشوّهة",
   "radio tag|All": "الكل",
   "Directory refresh degraded; showing the previous station catalog.": "تحديث الدليل متدهور؛ يُعرض فهرس المحطات السابق.",
@@ -3218,5 +3217,16 @@
   "Load scenes from an exported JSON file": "تحميل المشاهد من ملف JSON مُصدَّر",
   "Download the timing log of the last play": "تنزيل سجل توقيت آخر تشغيل",
   "Edit anchors, data packs and shot details": "تعديل نقاط الارتكاز وحزم البيانات وتفاصيل اللقطة",
-  "Download this scene as JSON or an asset bundle": "تنزيل هذا المشهد بصيغة JSON أو حزمة موارد"
+  "Download this scene as JSON or an asset bundle": "تنزيل هذا المشهد بصيغة JSON أو حزمة موارد",
+  "FIRE ESTIMATE · {name}": "تقدير حريق · {name}",
+  "Estimated area unknown": "المساحة المقدّرة غير معروفة",
+  "{source}: unavailable": "{source}: غير متاح",
+  "INFONA · grouped thermal detections": "INFONA · أرصاد حرارية مجمّعة",
+  "{source}: stale": "{source}: قديم",
+  "{area} ha estimated": "مساحة مقدّرة {area} هكتار",
+  "Report date: {date}": "تاريخ التقرير: {date}",
+  "{source}: truncated": "{source}: بيانات مبتورة",
+  "Report date unavailable": "تاريخ التقرير غير متاح",
+  "Estimated fire area (INFONA)": "مساحة حريق مقدّرة (INFONA)",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "تُظهر ألوان الولايات المتحدة نسبة الاحتواء المبلّغ عنها. البنفسجي: مساحات مقدّرة من أرصاد حرارية مجمّعة في باراغواي (INFONA)، دون قياس للاحتواء. الحدود مبسّطة إلى نحو 100 متر."
 }

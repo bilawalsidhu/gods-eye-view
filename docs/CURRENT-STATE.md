@@ -3978,6 +3978,8 @@ its criteria cannot be silently ignored.
 | Street Level 📷 | Mapillary street-level imagery (vector tiles, Graph API, MapillaryJS) | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js` | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`) | camera-driven (320 ms debounce, ≤9 tiles, server memory cache 24 h) |
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL) | `src/layers/gnss/` via `src/app/layers/gnss.js` | `/api/gnss-integrity` | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window) |
+| Fire Perimeters 🔥 | NIFC WFIGS current US incident perimeters and INFONA daily estimated fire areas in Paraguay (keyless, paginated); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+
 | S2 GhostMaps 👻 (`s2-ghostmaps`) | S2 Underground's public GhostMaps repository on GitHub (KMZ intel products, keyless, CC BY-NC-SA 4.0) | `src/layers/ghostMaps/` via `src/app/layers/ghostMaps.js` | `/api/ghostmaps/catalog`, `/api/ghostmaps/events` (server-sent events), `/api/ghostmaps/file/{product}` | branch head checked every 15 s; new commits pushed to the page; 5 min catalog backstop |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 
@@ -4004,6 +4006,11 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 `scripts/qa-gnss.mjs` covers live freshness, bands, built primitives, camera/globe
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
+
+
+Fire Perimeters fetches WFIGS and INFONA independently with fixed origins, a per-client limit, at most five pages of 8 MiB per source, a 5-minute cache and stale fallback limited to 30 minutes. Partial, stale and truncated source status reaches the layer warning and analyst query. Purple INFONA polygons represent grouped thermal detections from `Fuegos_hoy`, not surveyed incident boundaries; their cards show hectares, department/district, attribution and the source report date without invented containment, discovery time or InciWeb links. The acquisition strings have no documented timezone and are not interpreted as UTC. US legend colours still show reported containment. Unchanged snapshots retain geometry, while coordinate changes rebuild it even when the report date and incident facts are unchanged; link checks cancel on disable or selection change.
+
+`scripts/qa-fire-perimeters.mjs --url <dev-or-preview-url> --headful` checks live source health and then synthetic INFONA/WFIGS polygon clicks, painted card text, separate legend counts, empty-ground deselection and disable. Headful uses native GPU rendering; headless uses SwiftShader. It saves screenshots, the renderer and source status under `qa-artifacts/fire-perimeters/`, including the expected preview-only 404 for the development-only `/api/setup/status` route; all other console errors fail the gate. An empty live INFONA snapshot is valid; the synthetic cases prove interaction, not current fire activity.
 
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
@@ -6533,6 +6540,8 @@ when their footprints touch or contain one another, never across a seam toleranc
 - `scripts/qa-form-fields.mjs` exercises native selections, number validity,
   calibration commit/cancel and stale-camera/disposal guards against an installed
   controller with fixture ports, plus default/Cyber and narrow translated layouts.
+
+The INFONA estimated fire areas, legend and per-source warnings support English, Spanish, Russian and Simplified Chinese (`zh-CN`). Provider and station names remain unchanged; numbers and dates follow the selected UI locale.
 
 ## Docker health reporting
 

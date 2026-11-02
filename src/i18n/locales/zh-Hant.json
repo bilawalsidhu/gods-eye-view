@@ -884,7 +884,6 @@
   "Under 50% contained": "控制低於 50%",
   "50–99% contained": "控制 50–99%",
   "Fully contained": "已全部控制",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "顏色表示報告的控制比例。周界簡化至約 100 m。",
   "Malformed perimeter snapshot": "周界快照格式錯誤",
   "radio tag|All": "全部",
   "News": "新聞",
@@ -2868,5 +2867,16 @@
   "Edit anchors, data packs and shot details": "編輯錨點、數據包和鏡頭詳情",
   "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包",
   "Left panels": "左側面板",
-  "Right panels": "右側面板"
+  "Right panels": "右側面板",
+  "FIRE ESTIMATE · {name}": "火災估計 · {name}",
+  "Estimated area unknown": "估計面積不詳",
+  "{source}: unavailable": "{source}：無法使用",
+  "INFONA · grouped thermal detections": "INFONA · 分組熱異常偵測",
+  "{source}: stale": "{source}：資料過時",
+  "{area} ha estimated": "估計 {area} 公頃",
+  "Report date: {date}": "報告日期：{date}",
+  "{source}: truncated": "{source}：資料截斷",
+  "Report date unavailable": "報告日期不詳",
+  "Estimated fire area (INFONA)": "估計火災面積（INFONA）",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "美國色彩表示已報告的控制程度。紫色為巴拉圭（INFONA）分組熱異常偵測的估計面積，沒有控制程度測量值。邊界簡化至約 100 公尺。"
 }

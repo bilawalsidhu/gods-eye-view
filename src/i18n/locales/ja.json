@@ -910,7 +910,6 @@
   "Under 50% contained": "封じ込め率50%未満",
   "50–99% contained": "封じ込め率50–99%",
   "Fully contained": "封じ込め率100%",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "色は報告された封じ込め率を示します。延焼範囲の輪郭は約100 mの精度で簡略化されています。",
   "Malformed perimeter snapshot": "延焼範囲スナップショットの形式が不正です",
   "radio tag|All": "すべて",
   "News": "ニュース",
@@ -2868,5 +2867,16 @@
   "Left panels": "左パネル",
   "Right panels": "右パネル",
   "CONFIRMED": "確認済み",
-  "PAD / RTLS": "射場 / RTLS"
+  "PAD / RTLS": "射場 / RTLS",
+  "FIRE ESTIMATE · {name}": "火災の推定 · {name}",
+  "Estimated area unknown": "推定面積は不明",
+  "{source}: unavailable": "{source}：利用不可",
+  "INFONA · grouped thermal detections": "INFONA · グループ化された熱検出",
+  "{source}: stale": "{source}：古いデータ",
+  "{area} ha estimated": "推定 {area} ha",
+  "Report date: {date}": "報告日：{date}",
+  "{source}: truncated": "{source}：一部省略",
+  "Report date unavailable": "報告日は不明",
+  "Estimated fire area (INFONA)": "推定火災面積（INFONA）",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "米国の色は報告された封じ込め率を示します。紫はパラグアイ（INFONA）の熱検出をグループ化した推定面積で、封じ込め率の測定値はありません。境界は約100 mに簡略化されています。"
 }

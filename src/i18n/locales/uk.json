@@ -957,7 +957,6 @@
   "Under 50% contained": "Локалізовано менш ніж на 50%",
   "50–99% contained": "Локалізовано на 50–99%",
   "Fully contained": "Повністю локалізовано",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Колір показує заявлений ступінь локалізації. Контури спрощено приблизно до 100 м.",
   "Malformed perimeter snapshot": "Некоректний знімок контурів пожеж",
   "radio tag|All": "Усі",
   "News": "Новини",
@@ -3078,5 +3077,16 @@
   "Left panels": "Ліві панелі",
   "Right panels": "Праві панелі",
   "CONFIRMED": "ПІДТВЕРДЖЕНО",
-  "PAD / RTLS": "МІСЦЕ ЗАПУСКУ / RTLS"
+  "PAD / RTLS": "МІСЦЕ ЗАПУСКУ / RTLS",
+  "FIRE ESTIMATE · {name}": "ОЦІНКА ПОЖЕЖІ · {name}",
+  "Estimated area unknown": "Оцінена площа невідома",
+  "{source}: unavailable": "{source}: недоступно",
+  "INFONA · grouped thermal detections": "INFONA · згруповані теплові виявлення",
+  "{source}: stale": "{source}: застаріло",
+  "{area} ha estimated": "оцінено {area} га",
+  "Report date: {date}": "Дата звіту: {date}",
+  "{source}: truncated": "{source}: обрізано",
+  "Report date unavailable": "Дата звіту недоступна",
+  "Estimated fire area (INFONA)": "Оцінена площа пожежі (INFONA)",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "Кольори США показують повідомлений рівень локалізації. Фіолетовий: оцінені площі за згрупованими тепловими виявленнями в Парагваї (INFONA), без вимірювання локалізації. Межі спрощено приблизно до 100 м."
 }

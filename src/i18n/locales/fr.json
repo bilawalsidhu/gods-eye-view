@@ -942,7 +942,6 @@
   "Under 50% contained": "Circonscrit à moins de 50 %",
   "50–99% contained": "Circonscrit à 50–99 %",
   "Fully contained": "Entièrement circonscrit",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "La couleur indique la part du périmètre déclarée circonscrite. Les périmètres sont simplifiés à environ 100 m.",
   "Malformed perimeter snapshot": "Instantané des périmètres mal formé",
   "radio tag|All": "Toutes",
   "News": "Actualités",
@@ -3008,5 +3007,16 @@
   "Left panels": "Panneaux de gauche",
   "Right panels": "Panneaux de droite",
   "CONFIRMED": "CONFIRMÉE",
-  "PAD / RTLS": "PAS DE TIR / RTLS"
+  "PAD / RTLS": "PAS DE TIR / RTLS",
+  "FIRE ESTIMATE · {name}": "ESTIMATION D’INCENDIE · {name}",
+  "Estimated area unknown": "Surface estimée inconnue",
+  "{source}: unavailable": "{source} : indisponible",
+  "INFONA · grouped thermal detections": "INFONA · détections thermiques regroupées",
+  "{source}: stale": "{source} : ancien",
+  "{area} ha estimated": "{area} ha estimés",
+  "Report date: {date}": "Date du rapport : {date}",
+  "{source}: truncated": "{source} : tronqué",
+  "Report date unavailable": "Date du rapport indisponible",
+  "Estimated fire area (INFONA)": "Surface d’incendie estimée (INFONA)",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "Les couleurs américaines indiquent le confinement déclaré. Violet : surfaces estimées à partir de détections thermiques regroupées au Paraguay (INFONA), sans mesure de confinement. Les limites sont simplifiées à environ 100 m."
 }

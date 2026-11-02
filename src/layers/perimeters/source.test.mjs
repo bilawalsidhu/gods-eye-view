@@ -46,6 +46,8 @@ test('a truncated response pages until the feed is complete', async () => {
   let handler;
   const plugin = firePerimetersProxy({
     fetchImpl: async (url) => {
+      if (new URL(url).hostname === 'visor.infona.gov.py')
+        return Response.json({ features: [] });
       requests.push(new URL(String(url)).searchParams.get('resultOffset'));
       const page = requests.length;
       return Response.json({
@@ -116,6 +118,18 @@ test('response-body completion honors cancellation without replacing records', a
   });
 });
 
+test('partial source coverage remains visible to consumers of the row snapshot', async () => {
+  const status = {
+    infona: { status: 'ok', truncated: false },
+    wfigs: { status: 'unavailable', truncated: false },
+  };
+  const source = createWfigsPerimeterSource({
+    fetchImpl: async () => Response.json({ rows: [], sources: status }),
+  });
+  await source.getSnapshot();
+  assert.deepEqual(source.getStatus(), status);
+});
+
 test('a failed refresh serves the last snapshot marked stale for a day, then refuses', async () => {
   let clock = 1_000_000_000;
   let up = true;
@@ -148,7 +162,7 @@ test('a failed refresh serves the last snapshot marked stale for a day, then ref
   };
   const fresh = await ask();
   assert.equal(fresh.status, 200);
-  assert.equal(fresh.body.stale, undefined);
+  assert.equal(fresh.body.stale, false);
   up = false;
   clock += 23 * 60 * 60 * 1000;
   const stale = await ask();

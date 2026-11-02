@@ -47,8 +47,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
-    // The layer alias hint leaves out aliases the layer id already spells.
-    'e65812db60a2702cebb496fca257cb04a28f1bbbf250cb9ab65a3db33005e0c8',
+    'b67e6c1b9b4109ceba962e3ee609db1207a7eaaa17ab84ab2f9d86e71440776f',
   );
 });
 

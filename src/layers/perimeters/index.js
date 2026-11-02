@@ -4,6 +4,7 @@ import {
   perimeterAnchorDegrees,
   buildIncidentCard,
   containmentAccent,
+  perimeterAccent,
 } from './cards.js';
 import {
   findInciwebLink,
@@ -150,7 +151,8 @@ export function createFirePerimetersLayer({
       );
       return;
     }
-    const candidate = findInciwebLink(_inciwebIndex, row);
+    const candidate =
+      row.source === 'INFONA' ? null : findInciwebLink(_inciwebIndex, row);
     if (candidate && !_linkVerdicts.has(candidate)) verifyLink(candidate, row);
     _selectedLink =
       candidate && _linkVerdicts.get(candidate) === true ? candidate : null;
@@ -249,7 +251,7 @@ export function createFirePerimetersLayer({
     id: 'fire-perimeters',
     name: 'Fire Perimeters',
     icon: '🔥',
-    source: 'NIFC WFIGS',
+    source: 'NIFC WFIGS / INFONA',
     updateInterval: 300000,
 
     init(viewer) {
@@ -306,23 +308,30 @@ export function createFirePerimetersLayer({
             ? snapshot.fetchedAt
             : Date.now();
 
-        // Incident facts may change independently of the polygon's source clock.
+        const warning =
+          Object.entries(source.getStatus?.() || {})
+            .filter(([, status]) => status.status !== 'ok' || status.truncated)
+            .map(
+              ([id, status]) =>
+                `${id.toUpperCase()}: ${status.status === 'ok' ? 'truncated' : status.status}`,
+            )
+            .join(' · ') || null;
+
+        // Geometry can change without a new report date or incident facts.
         const signature = JSON.stringify(
-          rows
-            .map(({ polygons, ...facts }) => facts)
-            .sort((a, b) => a.stableId.localeCompare(b.stableId)),
+          [...rows].sort((a, b) => a.stableId.localeCompare(b.stableId)),
         );
         if (signature === _snapshotSignature) {
           if (_selectedId) publishSelectedCard();
           _lastUpdate = updatedAt;
-          _lastError = null;
+          _lastError = warning;
           return true;
         }
         abortLinkVerification();
         const nextEntities = [];
         _rowById.clear();
         for (const row of rows) {
-          const color = containmentColor(row.containedPct);
+          const color = Cesium.Color.fromCssColorString(perimeterAccent(row));
           for (const [index, rings] of row.polygons.entries()) {
             const [outer, ...holes] = rings;
             const outerPositions = ringPositions(outer);
@@ -371,7 +380,7 @@ export function createFirePerimetersLayer({
         if (_selectedId) publishSelectedCard();
         _count = rows.length;
         _lastUpdate = updatedAt;
-        _lastError = null;
+        _lastError = warning;
         console.log(
           `[Data:FirePerimeters] Updated: ${_count} incidents, ${nextEntities.length} polygons`,
         );
@@ -437,18 +446,19 @@ export function createFirePerimetersLayer({
         { label: t('Under 50% contained'), color: containmentAccent(1) },
         { label: t('50–99% contained'), color: containmentAccent(50) },
         { label: t('Fully contained'), color: containmentAccent(100) },
+        { label: t('Estimated fire area (INFONA)'), color: '#b388ff' },
       ];
       return {
         chips: [],
         legend: bands.map((band, index) => ({
           ...band,
           count: [..._rowById.values()].filter(
-            (row) => containmentAccent(row.containedPct) === band.color,
+            (row) => perimeterAccent(row) === band.color,
           ).length,
           ...(index === 0
             ? {
                 blurb: t(
-                  'Colour shows reported containment. Perimeters are simplified to about 100 m.',
+                  'US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.',
                 ),
               }
             : {}),

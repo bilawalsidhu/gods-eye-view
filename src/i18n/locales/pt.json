@@ -940,7 +940,6 @@
   "Under 50% contained": "Menos de 50% contido",
   "50–99% contained": "50–99% contido",
   "Fully contained": "Totalmente contido",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "A cor indica a contenção informada. Os perímetros são simplificados para cerca de 100 m.",
   "Malformed perimeter snapshot": "Snapshot de perímetros malformado",
   "radio tag|All": "Todas",
   "News": "Notícias",
@@ -3008,5 +3007,16 @@
   "Left panels": "Painéis à esquerda",
   "Right panels": "Painéis à direita",
   "CONFIRMED": "CONFIRMADA",
-  "PAD / RTLS": "PLATAFORMA / RTLS"
+  "PAD / RTLS": "PLATAFORMA / RTLS",
+  "FIRE ESTIMATE · {name}": "ESTIMATIVA DE INCÊNDIO · {name}",
+  "Estimated area unknown": "Área estimada desconhecida",
+  "{source}: unavailable": "{source}: indisponível",
+  "INFONA · grouped thermal detections": "INFONA · detecções térmicas agrupadas",
+  "{source}: stale": "{source}: desatualizado",
+  "{area} ha estimated": "{area} ha estimados",
+  "Report date: {date}": "Data do relatório: {date}",
+  "{source}: truncated": "{source}: truncado",
+  "Report date unavailable": "Data do relatório indisponível",
+  "Estimated fire area (INFONA)": "Área de incêndio estimada (INFONA)",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "As cores dos EUA mostram a contenção informada. Roxo: áreas estimadas a partir de detecções térmicas agrupadas no Paraguai (INFONA), sem medição de contenção. Os limites são simplificados para cerca de 100 m."
 }

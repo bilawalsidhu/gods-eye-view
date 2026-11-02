@@ -1550,7 +1550,6 @@
   "Under 50% contained": "Unter 50 % eingedämmt",
   "50–99% contained": "50–99 % eingedämmt",
   "Fully contained": "Vollständig eingedämmt",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Die Farbe zeigt die gemeldete Eindämmung. Brandgrenzen sind auf etwa 100 m vereinfacht.",
   "Malformed perimeter snapshot": "Fehlerhafter Brandgrenzen-Snapshot",
   "radio tag|All": "Alle",
   "Directory refresh degraded; showing the previous station catalog.": "Verzeichnisaktualisierung eingeschränkt; der vorherige Senderkatalog wird gezeigt.",
@@ -2938,5 +2937,16 @@
   "Left panels": "Linke Panels",
   "Right panels": "Rechte Panels",
   "CONFIRMED": "BESTÄTIGT",
-  "PAD / RTLS": "STARTPLATZ / RTLS"
+  "PAD / RTLS": "STARTPLATZ / RTLS",
+  "FIRE ESTIMATE · {name}": "BRANDSCHÄTZUNG · {name}",
+  "Estimated area unknown": "Geschätzte Fläche unbekannt",
+  "{source}: unavailable": "{source}: nicht verfügbar",
+  "INFONA · grouped thermal detections": "INFONA · gruppierte thermische Erkennungen",
+  "{source}: stale": "{source}: veraltet",
+  "{area} ha estimated": "geschätzt {area} ha",
+  "Report date: {date}": "Berichtsdatum: {date}",
+  "{source}: truncated": "{source}: gekürzt",
+  "Report date unavailable": "Berichtsdatum nicht verfügbar",
+  "Estimated fire area (INFONA)": "Geschätzte Brandfläche (INFONA)",
+  "US colours show reported containment. Purple: estimated areas from grouped thermal detections in Paraguay (INFONA), with no containment measurement. Boundaries are simplified to about 100 m.": "Die US-Farben zeigen die gemeldete Eindämmung. Violett: geschätzte Flächen aus gruppierten thermischen Erkennungen in Paraguay (INFONA), ohne Messung der Eindämmung. Grenzen sind auf etwa 100 m vereinfacht."
 }
