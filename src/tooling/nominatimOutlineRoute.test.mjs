@@ -1370,6 +1370,19 @@ test('a landmark ask is not answered by the place around it', () => {
       .outline,
     null,
   );
+  // Nor on a campus or district whose name merely starts the ask.
+  for (const [query, name, category, type] of [
+    ['Duke University Chapel', 'Duke University', 'amenity', 'university'],
+    ['Old Town Hall', 'Old Town', 'historic', 'district'],
+  ])
+    assert.equal(
+      selectOutlineResult(
+        [at(name, `${name}, Somewhere`, { category, type })],
+        landmark(query),
+      ).outline,
+      null,
+      query,
+    );
 });
 
 test('a worse name never wins the anchor by containment alone', () => {

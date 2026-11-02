@@ -279,13 +279,6 @@ const BUILDING_WORDS = [
   'hall',
   'library',
 ];
-const BUILDING_LIKE_CLASSES = new Set([
-  'building',
-  'amenity',
-  'man_made',
-  'tourism',
-  'historic',
-]);
 
 /** How well a result's names answer the ask. */
 const NAME_MISS = 0;
@@ -322,7 +315,7 @@ function outlineNameMatch(row, query, kind) {
   // The last word usually names the feature ("Zoo", "Arch"): a name without
   // it is the place around the feature ("Central Park"), unless the word is
   // where the result is ("Space Needle Seattle"), what it is ("… Bridge"), or
-  // a building word on a building-like result ("Burj Khalifa Tower").
+  // a building word on a single-structure result ("Burj Khalifa Tower").
   const context = new Set(
     normalizePlaceName(
       [
@@ -337,7 +330,9 @@ function outlineNameMatch(row, query, kind) {
         .replace(/_/g, ' '),
     ).split(' '),
   );
-  if (BUILDING_LIKE_CLASSES.has(String(row?.category || row?.class)))
+  // Only a single structure, as a building ask would accept: never a campus,
+  // zoo or district whose name merely starts the ask ("Duke University").
+  if (acceptsOutlineClass('building', row?.category || row?.class, row?.type))
     for (const word of BUILDING_WORDS) context.add(word);
   let match = NAME_MISS;
   for (const name of names) {
