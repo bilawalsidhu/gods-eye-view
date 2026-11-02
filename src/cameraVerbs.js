@@ -960,6 +960,57 @@ let _active = null; // { kind, motion, direction, speed, mode, motionId, ...stat
 let _tickRemover = null;
 let _trackingRemover = null;
 let _inputRemovers = [];
+// A Directions dolly can move between engine instances. Geometry and flight time
+// stay with the motion. Input and frame listeners belong only to the active canvas.
+let routeEngine = null;
+let removeRouteFrame = null;
+function unbindRouteEngine() {
+  removeRouteFrame?.();
+  removeRouteFrame = null;
+  routeEngine = null;
+}
+function bindRouteEngine(engine) {
+  unbindRouteEngine();
+  routeEngine = engine;
+  const canvas = engine.host.canvas;
+  const cancel = () => interruptCameraMotion('manual-input');
+  const events = ['pointerdown', 'touchstart', 'wheel'];
+  for (const event of events) canvas.addEventListener(event, cancel, { passive: true });
+  let last = performance.now();
+  const remove = engine.frames.preRender.addEventListener(() => {
+    if (_active?.kind !== 'route') return;
+    const now = performance.now();
+    const frame = advanceRouteFlight(_active, (now - last) / 1000);
+    last = now;
+    if (!frame.arming) engine.camera.setView({
+      destination: frame.eye, orientation: { direction: frame.direction, up: frame.up },
+    });
+    if (frame.finished) interruptCameraMotion('route-complete');
+    else engine.render.request('route-flight');
+  });
+  removeRouteFrame = () => {
+    remove();
+    for (const event of events) canvas.removeEventListener(event, cancel);
+  };
+  engine.render.request('route-flight');
+}
+
+export function suspendRouteFlight(id) {
+  if (!id || _active?.motionId !== id || !routeEngine) return null;
+  const state = _active;
+  _active = null;
+  unbindRouteEngine();
+  releaseContinuousRender('camera-verb');
+  return state;
+}
+
+export function resumeRouteFlight(state, engine) {
+  if (!state || !engine || _active) return false;
+  _active = state;
+  bindRouteEngine(engine);
+  holdContinuousRender('camera-verb');
+  return true;
+}
 /** Monotonic id for the motion currently running; 0 means "no motion". */
 let _motionSeq = 0;
 
@@ -1048,12 +1099,21 @@ export function interruptCameraMotion(reason = 'interrupt') {
   if (
     wasActive &&
     !tracking &&
+    !routeEngine &&
     (_active.kind === 'orbit' || _active.kind === 'route')
   )
     clearLookAt();
   // Instant, not eased: the user grabbed the camera, or the flight is over.
   // Either way the next thing they hold must be a level horizon.
-  const leveled = wasRoute && !tracking ? levelCameraRoll() : false;
+  let leveled = false;
+  if (wasRoute && routeEngine) {
+    const p = routeEngine.camera.pose();
+    if (Math.abs(geo.math.negativePiToPi(p.roll)) > 1e-5) {
+      routeEngine.camera.setView({ destination: p.position, orientation: { heading: p.heading, pitch: p.pitch, roll: 0 } });
+      leveled = true;
+    }
+    unbindRouteEngine();
+  } else if (wasRoute && !tracking) leveled = levelCameraRoll();
   _active = null;
   releaseContinuousRender('camera-verb');
   return { wasActive, reason, leveled };
@@ -1084,7 +1144,7 @@ export function getActiveCameraMotion() {
 }
 
 function onTick() {
-  if (!_active || !_viewer) return;
+  if (!_active || !_viewer || routeEngine) return;
   // Wall-clock dt: clock.currentTime FREEZES when the app clock isn't
   // animating, which starved motion to the 1 ms floor (harness catch).
   const nowMs = performance.now();
@@ -1750,6 +1810,7 @@ export function flyRoute(
   floorFn = null,
   runNavigation = null,
   warmFn = null,
+  engine = null,
 ) {
   const speed = ROUTE_M_S[String(args.speed || 'normal').toLowerCase()]
     ? String(args.speed || 'normal').toLowerCase()
@@ -1816,6 +1877,7 @@ export function flyRoute(
   }
   const start = () => {
     interruptCameraMotion('replaced');
+    if (engine) bindRouteEngine(engine);
     setActiveMotion(
       createRouteFlight({
         pts,
@@ -1823,8 +1885,8 @@ export function flyRoute(
         speed,
         floorFn,
         warmFn,
-        probeFn: (cells) => probeMeshFloorM(_viewer?.scene, cells),
-        cameraHeightM: _viewer?.camera?.positionCartographic?.height,
+        probeFn: (cells) => probeMeshFloorM(engine ? routeEngine?.surface : _viewer?.scene, cells),
+        cameraHeightM: engine?.camera.pose().cartographic.height ?? _viewer?.camera?.positionCartographic?.height,
         reducedMotion: prefersReducedMotion(),
       }),
     );

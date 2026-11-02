@@ -255,7 +255,7 @@ export function createApplicationCatalog({
       ],
       [
         'directions',
-        () => createApplicationDirections({ source: sources.directions }),
+        () => sessionModel('directions', () => createApplicationDirections({ source: sources.directions, surface })),
       ],
       [
         'recent-imagery',

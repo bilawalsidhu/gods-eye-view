@@ -231,7 +231,7 @@ test('validated voice camera destinations share the UI navigation authority faca
 
   const route = body(
     cameraVerbs,
-    /export function flyRoute\(\s*annoList,\s*args = \{\},\s*floorFn = null,\s*runNavigation = null,\s*warmFn = null,?\s*\) \{([\s\S]*?)\n\}/,
+    /export function flyRoute\(\s*annoList,\s*args = \{\},\s*floorFn = null,\s*runNavigation = null,\s*warmFn = null,\s*engine = null,?\s*\) \{([\s\S]*?)\n\}/,
     'fly route',
   );
   ordered(route, [

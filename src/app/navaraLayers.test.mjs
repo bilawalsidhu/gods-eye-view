@@ -58,6 +58,7 @@ test('the Navara mode registers migrated renderers once', async () => {
       'radio',
       'transit',
       'bikeshare',
+      'directions',
       'recent-imagery',
       'ais-live-vessels',
       'military-installations',
