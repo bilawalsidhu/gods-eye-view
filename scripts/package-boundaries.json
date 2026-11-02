@@ -477,6 +477,7 @@
       "src/data/retryableLoad.js",
       "server/providers/common/same-site.js",
       "server/providers/common/source-root.js",
+      "server/providers/common/data-dir.js",
       "server/providers/regional/nominatimGate.js",
       "server/providers/regional/nominatimCache.js",
       "server/providers/regional/outlineSelect.js",
