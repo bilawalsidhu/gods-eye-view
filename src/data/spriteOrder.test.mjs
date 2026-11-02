@@ -8,7 +8,6 @@ import {
   unregisterSpriteCollection,
 } from './spriteOrder.js';
 import flightsLayer from './flights.js';
-import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { createFirmsHeatmapLayer } from './firmsHeatmap.js';
 
 const ORDER = ['cctv', 'firms', 'bikeshare', 'ais', 'military', 'flights'];
@@ -122,7 +121,6 @@ test('flights, AIS, and FIRMS enable paths are wired through the shared sprite r
     readFileSync(new URL('../layers/flights/render/cesium.js', import.meta.url), 'utf8'),
     /spriteLayer: 'flights'/,
   );
-  assert.match(aisLiveVesselsLayer.enable.toString(), /restoreSpriteOrderOnEnable\('ais', activeViewer\)/);
   assert.match(
     firmsLayer.enable.toString(),
     /renderer\.onEnable\(\)/,

@@ -88,6 +88,16 @@ export function createTracking({
     state.trailPositions = [];
     const current = vesselTrailPosition(record);
     if (current) state.trailPositions.push(current);
+    attachSelectedVesselTrail();
+    backfillVesselTrail(
+      record.mmsi,
+      state.trailBackfillToken,
+      record.reference,
+    );
+  }
+
+  function attachSelectedVesselTrail() {
+    if (!state.trailMmsi) return;
     if (!state.trail && state.renderer) {
       state.trail = state.renderer.trails.create({
         color: TRAIL_COLOR,
@@ -95,11 +105,11 @@ export function createTracking({
       });
     }
     if (state.trail) state.trail.setPositions(state.trailPositions);
-    backfillVesselTrail(
-      record.mmsi,
-      state.trailBackfillToken,
-      record.reference,
-    );
+  }
+
+  function detachSelectedVesselTrail() {
+    state.trail?.destroy();
+    state.trail = null;
   }
 
   /**
@@ -165,7 +175,7 @@ export function createTracking({
    */
 
   function appendSelectedVesselTrailFix(record) {
-    if (!state.trail) return;
+    if (state.trailMmsi !== record.mmsi) return;
     const next = vesselTrailPosition(record);
     if (!next) return;
     const last = state.trailPositions[state.trailPositions.length - 1];
@@ -173,7 +183,7 @@ export function createTracking({
     state.trailPositions.push(next);
     if (state.trailPositions.length > TRAIL_MAX_POINTS)
       state.trailPositions.shift();
-    state.trail.setPositions(state.trailPositions);
+    state.trail?.setPositions(state.trailPositions);
   }
 
   /**
@@ -195,16 +205,15 @@ export function createTracking({
 
   function destroySelectedVesselTrail() {
     clearSelectedVesselTrail();
-    if (state.trail) {
-      state.trail.destroy();
-      state.trail = null;
-    }
+    detachSelectedVesselTrail();
   }
   return {
     currentGeoidN,
     vesselTrailPosition,
     refloorVesselRecords,
     startSelectedVesselTrail,
+    attachSelectedVesselTrail,
+    detachSelectedVesselTrail,
     backfillVesselTrail,
     appendSelectedVesselTrailFix,
     clearSelectedVesselTrail,

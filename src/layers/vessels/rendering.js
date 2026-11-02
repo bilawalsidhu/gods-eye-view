@@ -119,6 +119,8 @@ export function createRendering({
    */
 
   function addRecordPrimitives(record, occluder) {
+    if (!state.renderer) return;
+    const selected = record === state.selectedRecord;
     const visible =
       state.feed.enabled &&
       isVisible(getVisual(record).surfacePosition, occluder);
@@ -126,8 +128,8 @@ export function createRendering({
     getVisual(record).billboard = state.renderer.fleet.add({
       position: getVisual(record).position,
       show: visible,
-      image: shipIcon(record, false),
-      scale: shipScale(record),
+      image: shipIcon(record, selected),
+      scale: shipScale(record) * (selected ? 1.2 : 1),
       // Screen-projected rotation lands on the next visibility/rotation pass.
       rotation: 0,
       id: record,
@@ -225,7 +227,7 @@ export function createRendering({
   }
 
   function updateVisibility(force = false) {
-    if (!state.feed.enabled) return;
+    if (!state.feed.enabled || (!state.renderer && !state.viewer)) return;
     if (force) governorRequestRender('ais-vessels-update');
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
