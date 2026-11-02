@@ -154,7 +154,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
         sat.satrec,
         layerState._trackedFrameNowForTest
           ? new Date(layerState._trackedFrameNowForTest())
-          : new Date(),
+          : new Date(layerState.now()),
       );
       if (!pos) return layerState._trackedFrameGeo; // propagation hiccup — keep last good sample
       layerState._trackedFrameGeo = pos;
@@ -434,7 +434,10 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // Comfortable tracking landing: ~726 km back for LEO (user-validated
     // "slightly zoomed out" framing — no stutter, label reads cleanly), scaled
     // up for MEO/GEO so the camera doesn't land on top of a high-orbit dot.
-    const initialPos = parts.orbits.propagatePosition(sat.satrec, new Date());
+    const initialPos = parts.orbits.propagatePosition(
+      sat.satrec,
+      new Date(layerState.now()),
+    );
     const viewScale =
       initialPos && initialPos.altitude > HIGH_ORBIT_ALTITUDE_M
         ? TRACK_VIEW_FROM_HIGH_SCALE

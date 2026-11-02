@@ -18,6 +18,11 @@ import * as Cesium from 'cesium';
 import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
+import { worldTimeFor } from './time/worldClock.js';
+
+// The HUD stamps its readouts with the world time; its sun is the sky's.
+const hudTime = worldTimeFor('hud');
+const skyTime = worldTimeFor('sky');
 import { composeLocalityTag } from './hudLocality.js';
 import { hudQuantity, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
 import {
@@ -385,11 +390,11 @@ export class IntelHUD {
   }
 
   /**
-   * Format the current wall-clock time as a UTC Zulu string.
+   * Format the HUD's world time as a UTC Zulu string.
    * @returns {string} Timestamp in `YYYY-MM-DD HH:MM:SSZ` format.
    */
   _formatUTC() {
-    const now = new Date();
+    const now = new Date(hudTime());
     const y = now.getUTCFullYear();
     const mo = String(now.getUTCMonth() + 1).padStart(2, '0');
     const d = String(now.getUTCDate()).padStart(2, '0');
@@ -491,7 +496,7 @@ export class IntelHUD {
     readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
 
     // Collection timestamp
-    const now = new Date();
+    const now = new Date(hudTime());
     const h = String(now.getUTCHours()).padStart(2, '0');
     const m = String(now.getUTCMinutes()).padStart(2, '0');
     const s = String(now.getUTCSeconds()).padStart(2, '0');
@@ -598,7 +603,7 @@ export class IntelHUD {
    * @returns {number} Estimated sun elevation in degrees (negative = below horizon).
    */
   _estimateSunElevation(lat, lon) {
-    const now = new Date();
+    const now = new Date(skyTime());
     // Approximate local solar time by shifting UTC hours by longitude offset
     const hours = now.getUTCHours() + now.getUTCMinutes() / 60 + lon / 15;
     const solarNoon = 12;

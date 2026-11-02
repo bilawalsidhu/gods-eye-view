@@ -1,5 +1,6 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
+import { worldClock } from '../time/worldClock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
@@ -72,7 +73,7 @@ export function createApplicationCatalog({
   const sourceComposition = resolveCatalogSources(sources);
   sources = sourceComposition.sources;
   const militaryRegistry = createMilitaryRegistry();
-  const weatherClock = createWeatherClock();
+  const weatherClock = createWeatherClock({ world: worldClock });
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
     militaryRegistry.dispose();

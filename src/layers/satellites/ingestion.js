@@ -103,7 +103,7 @@ export function createIngestion({
         layerState._denseLoadToken++; // cancel any in-flight dense load against the old catalog
         parts.labels._syncIssOverlay();
 
-        const now = new Date();
+        const now = new Date(layerState.now());
 
         // Process all TLE entries in CATALOG_GROUPS order
         const allEntries = [];

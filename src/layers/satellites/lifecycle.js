@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
-import { ISS_OVERLAY_SOURCE_ID } from './policy.js';
+import { ISS_OVERLAY_SOURCE_ID, SATELLITE_COVERAGE_MS } from './policy.js';
+import { worldClock } from '../../time/worldClock.js';
 
 export function createLifecycle({
   state: layerState,
@@ -8,6 +9,26 @@ export function createLifecycle({
   source,
 }) {
   const { clearFocusTarget } = services.focus;
+  // While on with a catalog, satellites can be shown at any time in reach of
+  // their element sets.
+  let releaseCoverage = null;
+  const coverWorldTime = () => {
+    releaseCoverage ??= worldClock.register({
+      id: 'satellites',
+      coverage: () => {
+        if (!layerState._catalog.size) return null;
+        const now = worldClock.wallNow();
+        return {
+          start: now - SATELLITE_COVERAGE_MS,
+          end: now + SATELLITE_COVERAGE_MS,
+        };
+      },
+    });
+  };
+  const uncoverWorldTime = () => {
+    releaseCoverage?.();
+    releaseCoverage = null;
+  };
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
@@ -64,6 +85,7 @@ export function createLifecycle({
 
     enable(viewer) {
       layerState._enabled = true;
+      coverWorldTime();
       holdContinuousRender('satellites'); // per-frame animator (perf wave 2)
       if (layerState._pointCollection)
         layerState._pointCollection.show =
@@ -98,6 +120,7 @@ export function createLifecycle({
       parts.catalog._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       layerState._enabled = false;
+      uncoverWorldTime();
       releaseContinuousRender('satellites');
       if (layerState._pointCollection) layerState._pointCollection.show = false;
       for (const path of layerState._orbitPaths.values())
@@ -125,6 +148,7 @@ export function createLifecycle({
       parts.catalog._abortActiveUpdates();
       releaseContinuousRender('satellites'); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
+      uncoverWorldTime();
       parts.tracking._clearTracking();
       parts.tracking._cancelPendingTrackingRestore();
       if (layerState._clickHandler) {

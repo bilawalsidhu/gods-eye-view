@@ -1,19 +1,35 @@
+import { createWorldClock } from '../../time/worldClock.js';
+
 export const RADAR_MAX_GAP_MS = 30 * 60_000;
 export const REGIONAL_INFRARED_MAX_GAP_MS = 30 * 60_000;
 export const GLOBAL_INFRARED_MAX_GAP_MS = 3 * 60 * 60_000;
 export const LIGHTNING_MAX_GAP_MS = 30 * 60_000;
 
-/** Transient observed time. Products must honor the signal before installing a frame. */
+/**
+ * Transient observed time. Products must honor the signal before installing a
+ * frame. Its time is the world clock's: latest while the world is live,
+ * history at the world's time otherwise. Replay steps the observed frames and
+ * moves the world clock as it goes, as the world clock's driver.
+ */
 export function createWeatherClock({
   now = Date.now,
   setTimeout = globalThis.setTimeout,
   clearTimeout = globalThis.clearTimeout,
+  world = createWorldClock({ now }),
 } = {}) {
   const registry = new Map();
   const listeners = new Set();
   let mode = 'latest';
   let target = null;
   let playing = false;
+  // The world time last applied; while this clock moves the world, the
+  // transition its move started.
+  let seen = 'latest';
+  let moving = false;
+  let moved = null;
+  const releases = new Map();
+  // Attached at the end, once the API exists.
+  let driver = null;
   let generation = 0;
   let timer = null;
   let pending = null;
@@ -65,11 +81,32 @@ export function createWeatherClock({
     timer = null;
   };
   const canPlay = () => getTimeline().length >= 2;
+  const stopPlaying = () => {
+    if (!playing) return;
+    playing = false;
+    driver?.driven(false);
+  };
+  // Move the world clock; the change comes back through followWorld. Returns
+  // the transition the move started, if it started one.
+  const move = (fn) => {
+    const outer = [moving, moved];
+    moving = true;
+    moved = null;
+    try {
+      fn();
+      return moved;
+    } finally {
+      [moving, moved] = outer;
+    }
+  };
+  const selections = () =>
+    [...registry.values()].map(({ product }) => selectedFor(product)).join();
+  let applied = null;
   function schedule() {
     cancelTimer();
     if (!playing || destroyed || pending) return;
     if (!canPlay()) {
-      playing = false;
+      stopPlaying();
       notify();
       return;
     }
@@ -92,7 +129,8 @@ export function createWeatherClock({
     if (destroyed) return Promise.resolve(false);
     cancelTimer();
     const owner = ++generation;
-    if (!canPlay()) playing = false;
+    if (!canPlay()) stopPlaying();
+    applied = selections();
     for (const entry of registry.values()) entry.controller?.abort();
     // Start all products together; a rejection must not skip the settle barrier.
     const tasks = [...registry.values()].map((entry) => {
@@ -107,12 +145,13 @@ export function createWeatherClock({
     const result = Promise.allSettled(tasks).then(() => {
       if (destroyed || owner !== generation) return false;
       pending = null;
-      if (!canPlay()) playing = false;
+      if (!canPlay()) stopPlaying();
       notify();
       schedule();
       return true;
     });
     pending = result;
+    if (moving) moved ??= result;
     notify();
     return result;
   }
@@ -123,11 +162,14 @@ export function createWeatherClock({
         throw new Error(`Duplicate weather product: ${product.id}`);
       const entry = { product, controller: null };
       registry.set(product.id, entry);
+      releases.set(product.id, world.hold(product.id));
       void api.refresh();
       return () => {
         if (registry.get(product.id) !== entry) return;
         entry.controller?.abort();
         registry.delete(product.id);
+        releases.get(product.id)?.();
+        releases.delete(product.id);
         void api.refresh();
       };
     },
@@ -140,9 +182,11 @@ export function createWeatherClock({
       const normalized = new Date(time).toISOString();
       if (mode === 'history' && target === normalized)
         return pending ?? Promise.resolve(true);
-      mode = 'history';
-      target = normalized;
-      return transition();
+      return (
+        move(() => world.seek(Date.parse(normalized))) ??
+        pending ??
+        Promise.resolve(true)
+      );
     },
     step(direction) {
       if (destroyed || ![-1, 1].includes(direction))
@@ -159,10 +203,9 @@ export function createWeatherClock({
     },
     latest() {
       if (destroyed) return Promise.resolve(false);
-      mode = 'latest';
-      target = null;
-      playing = false;
-      return transition();
+      stopPlaying();
+      if (mode === 'latest') return transition();
+      return move(() => world.goLive()) ?? pending ?? Promise.resolve(true);
     },
     play() {
       if (destroyed || playing || !canPlay())
@@ -170,18 +213,28 @@ export function createWeatherClock({
       playing = true;
       if (mode === 'latest') {
         const timeline = getTimeline();
-        return api.setTarget(
-          timeline.findLast((time) => Date.parse(time) <= now()) ?? timeline[0],
+        const start =
+          timeline.findLast((time) => Date.parse(time) <= now()) ?? timeline[0];
+        // Playing and at the first frame in one move of the world.
+        return (
+          move(() => driver.driven(true, Date.parse(start))) ??
+          pending ??
+          Promise.resolve(true)
         );
       }
+      driver.driven(true);
       notify();
       schedule();
       return pending ?? Promise.resolve(true);
     },
     pause() {
       cancelTimer();
-      if (!playing) return;
-      playing = false;
+      if (!playing) {
+        // The world may be playing on its own; a pause or step here holds it.
+        if (world.isPlaying()) world.pause();
+        return;
+      }
+      stopPlaying();
       notify();
     },
     togglePlay() {
@@ -190,7 +243,7 @@ export function createWeatherClock({
     refresh() {
       if (destroyed) return Promise.resolve(false);
       if (!canPlay()) {
-        playing = false;
+        stopPlaying();
         cancelTimer();
       }
       if (mode === 'history') return transition();
@@ -204,15 +257,55 @@ export function createWeatherClock({
     },
     destroy() {
       if (destroyed) return;
+      stopPlaying();
       destroyed = true;
       ++generation;
-      playing = false;
       cancelTimer();
+      unfollowWorld();
+      uncover();
+      // The last weather clock leaves the world live, as a new one expects.
+      if (driver.detach() === 0) world.goLive();
+      for (const release of releases.values()) release();
+      releases.clear();
       for (const entry of registry.values()) entry.controller?.abort();
       registry.clear();
       listeners.clear();
       pending = null;
     },
   };
+  // Follow the world clock. A move of this clock's own always applies; one
+  // from elsewhere (a host's seek, continuous play) applies only when it
+  // changes the mode or a product's frame.
+  function followWorld(state) {
+    if (destroyed) return;
+    const nextMode = state.live ? 'latest' : 'history';
+    const nextTarget = state.live
+      ? null
+      : new Date(Math.floor(state.timeMs)).toISOString();
+    const key = nextTarget ?? 'latest';
+    if (key === seen) return;
+    seen = key;
+    const modeChanged = nextMode !== mode;
+    mode = nextMode;
+    target = nextTarget;
+    if (moving || modeChanged || selections() !== applied) void transition();
+    else notify();
+  }
+  const unfollowWorld = world.subscribe(followWorld);
+  // The observed frames this clock can show, for a host's timeline.
+  const uncover = world.register({
+    id: 'weather',
+    coverage: () => {
+      const marks = getTimeline().map((time) => Date.parse(time));
+      return marks.length
+        ? { start: marks[0], end: marks.at(-1), marks }
+        : null;
+    },
+  });
+  driver = world.attachDriver({
+    play: () => (canPlay() ? void api.play() : false),
+    pause: () => api.pause(),
+  });
+  followWorld(world.getState());
   return api;
 }

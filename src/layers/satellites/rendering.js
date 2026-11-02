@@ -42,7 +42,7 @@ export function createRendering({
     const sat = layerState._catalog.get(noradId);
     if (!sat || !layerState._viewer) return;
 
-    const bakeDate = new Date();
+    const bakeDate = new Date(layerState.now());
     const basePositions = parts.orbits.computeOrbitPath(sat.satrec, bakeDate);
     if (basePositions.length < 2) return;
 
@@ -143,7 +143,7 @@ export function createRendering({
    */
 
   function _propagateAll() {
-    const now = new Date();
+    const now = new Date(layerState.now());
     let updated = 0;
 
     for (const [noradId, sat] of layerState._catalog) {
@@ -211,7 +211,7 @@ export function createRendering({
       layerState._params.showOrbits &&
       now - layerState._lastRingRotation >= RING_ROTATION_MS
     ) {
-      _updateOrbitPathRotations(new Date(now));
+      _updateOrbitPathRotations(new Date(layerState.now()));
       layerState._lastRingRotation = now;
     }
   }

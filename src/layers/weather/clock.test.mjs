@@ -7,6 +7,7 @@ import {
   GLOBAL_INFRARED_MAX_GAP_MS,
   LIGHTNING_MAX_GAP_MS,
 } from './clock.js';
+import { createWorldClock } from '../../time/worldClock.js';
 
 const time = (minutes) =>
   new Date(Date.UTC(2026, 8, 21, 12, minutes)).toISOString();
@@ -37,7 +38,15 @@ function harness(t) {
   let at = Date.parse(time(20));
   const timers = new Map();
   let id = 0;
+  let mono = 0;
+  const world = createWorldClock({
+    now: () => at,
+    monotonicNow: () => mono,
+    setInterval: () => 0,
+    clearInterval() {},
+  });
   const clock = createWeatherClock({
+    world,
     now: () => at,
     setTimeout(fn, delay) {
       timers.set(++id, { fn, due: at + delay });
@@ -50,9 +59,11 @@ function harness(t) {
   t.after(() => clock.destroy());
   return {
     clock,
+    world,
     timers,
     tick(ms) {
       at += ms;
+      mono += ms;
       for (const [id, timer] of [...timers]) {
         if (timer.due > at) continue;
         timers.delete(id);
@@ -274,4 +285,169 @@ test('registration joins history; unregister and destroy abort work and release 
   assert.equal(clock.getState().playing, false);
   assert.deepEqual(clock.getTimeline(), []);
   assert.equal(await clock.setTarget(time(5)), false);
+});
+
+test('the weather time is the world time, both ways', async (t) => {
+  const { clock, world } = harness(t);
+  const radar = product('radar', [0, 10, 20]);
+  clock.register(radar);
+  assert.equal(world.follows('radar'), true);
+  await clock.setTarget(time(10));
+  assert.equal(world.isLive(), false);
+  assert.equal(world.now(), Date.parse(time(10)));
+  world.seek(Date.parse(time(3)));
+  await flush();
+  assert.equal(clock.getState().target, time(3));
+  assert.equal(radar.shown, time(0));
+  world.goLive();
+  await flush();
+  assert.equal(clock.getState().mode, 'latest');
+  assert.equal(radar.shown, time(20));
+});
+
+test('world play and pause drive the weather replay', async (t) => {
+  const { clock, world, tick } = harness(t);
+  const radar = product('radar', [0, 10, 20]);
+  clock.register(radar);
+  world.seek(Date.parse(time(0)));
+  await flush();
+  world.play();
+  assert.equal(clock.getState().playing, true);
+  assert.equal(world.isPlaying(), true);
+  tick(2000);
+  await flush();
+  assert.equal(radar.shown, time(10));
+  assert.equal(world.now(), Date.parse(time(10)));
+  world.pause();
+  assert.equal(clock.getState().playing, false);
+  clock.play();
+  assert.equal(world.isPlaying(), true);
+  clock.pause();
+  assert.equal(world.isPlaying(), false);
+  clock.play();
+  world.goLive();
+  await flush();
+  assert.equal(clock.getState().playing, false);
+  assert.equal(clock.getState().mode, 'latest');
+});
+
+test('a moving world re-applies frames only when a product changes frame', async (t) => {
+  const { clock, world } = harness(t);
+  const radar = product('radar', [0, 10, 20]);
+  clock.register(radar);
+  world.seek(Date.parse(time(0)));
+  await flush();
+  const applied = radar.calls.length;
+  world.seek(Date.parse(time(0)) + 60_000);
+  await flush();
+  assert.equal(radar.calls.length, applied);
+  assert.equal(
+    clock.getState().target,
+    new Date(Date.parse(time(1))).toISOString(),
+  );
+  world.seek(Date.parse(time(11)));
+  await flush();
+  assert.equal(radar.calls.length, applied + 1);
+  assert.equal(radar.shown, time(10));
+});
+
+test('a world without frames to step plays on its own', async (t) => {
+  const { clock, world, tick } = harness(t);
+  world.seek(Date.parse(time(0)));
+  world.play();
+  assert.equal(clock.getState().playing, false);
+  tick(1000);
+  assert.equal(world.now(), Date.parse(time(0)) + 1000);
+});
+
+function worldAt(at) {
+  return createWorldClock({
+    now: () => at,
+    monotonicNow: () => 0,
+    setInterval: () => 0,
+    clearInterval() {},
+  });
+}
+
+test('weather clocks sharing a world hand play over, and the last leaves it live', async () => {
+  const world = worldAt(Date.parse(time(20)));
+  const a = createWeatherClock({ world, now: () => Date.parse(time(20)) });
+  const b = createWeatherClock({ world, now: () => Date.parse(time(20)) });
+  const radarA = product('radar', [0, 10, 20]);
+  const radarB = product('radar', [0, 10, 20]);
+  a.register(radarA);
+  b.register(radarB);
+  await a.play();
+  assert.equal(world.isPlaying(), true);
+  world.pause();
+  assert.equal(a.getState().playing, false);
+  assert.equal(world.isPlaying(), false);
+  await a.play();
+  world.goLive();
+  assert.equal(a.getState().playing, false);
+  b.destroy();
+  assert.equal(world.follows('radar'), true);
+  world.seek(Date.parse(time(0)));
+  world.play();
+  assert.equal(a.getState().playing, true);
+  a.destroy();
+  assert.equal(world.follows('radar'), false);
+  assert.equal(world.isLive(), true);
+  assert.equal(world.isPlaying(), false);
+});
+
+test('pausing from inside the first playing notice stops the world too', async (t) => {
+  const { clock, world } = harness(t);
+  clock.register(product('radar', [0, 10, 20]));
+  const off = clock.subscribe((state) => {
+    if (state.playing) {
+      off();
+      clock.pause();
+    }
+  });
+  await clock.play();
+  assert.equal(clock.getState().playing, false);
+  assert.equal(world.isPlaying(), false);
+});
+
+test('a step holds a world that was playing on its own', async (t) => {
+  const { clock, world } = harness(t);
+  world.seek(Date.parse(time(0)));
+  world.play();
+  clock.register(product('radar', [0, 10, 20]));
+  await clock.step(1);
+  assert.equal(world.isPlaying(), false);
+  assert.equal(world.now(), Date.parse(time(10)));
+});
+
+test('a target superseded from a listener resolves false', async (t) => {
+  const { clock } = harness(t);
+  const radar = product('radar', [0, 10, 20]);
+  clock.register(radar);
+  await flush();
+  let redirected = false;
+  clock.subscribe((state) => {
+    if (state.target === time(0) && !redirected) {
+      redirected = true;
+      void clock.setTarget(time(10));
+    }
+  });
+  assert.equal(await clock.setTarget(time(0)), false);
+  assert.equal(radar.shown, time(10));
+});
+
+test('the observed frames are the world clock coverage, while registered', (t) => {
+  const { clock, world } = harness(t);
+  assert.equal(world.coverage(), null);
+  const radar = product('radar', [0, 10]);
+  const unregister = clock.register(radar);
+  clock.register(product('lightning', [5]));
+  assert.deepEqual(world.coverage(), {
+    start: Date.parse(time(0)),
+    end: Date.parse(time(10)),
+    marks: [0, 5, 10].map((m) => Date.parse(time(m))),
+  });
+  unregister();
+  clock.destroy();
+  assert.equal(world.coverage(), null);
 });
