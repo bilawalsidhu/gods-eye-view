@@ -5100,6 +5100,8 @@ repointing `OVERPASS_UPSTREAMS` refetches instead of serving another instance's
 answers; untagged entries stop serving once an instance is configured.
 
 The shared transport guards `/api/overpass` and `/api/military-installations`.
+Both query handlers refuse cross-site and forwarded browser requests through
+the shared local-request gate, before any rate-limit, cache or upstream work.
 With no configured upstream, each route serves existing cache data (including
 expired entries, marked stale with the original cache/retrieval date) without
 refresh. An annotation miss returns HTTP 503, `OVERPASS_NOT_CONFIGURED`,
@@ -6386,6 +6388,12 @@ source loads the same bundled TeleGeography files. Disabling still removes all
 three Cesium data sources; enabling rebuilds from the accepted parsed cache,
 and destroying clears it. Load ownership prevents cancelled work from adding
 entities after teardown.
+
+Every Cesium entity from multipart cable or landing-point geometry stays tied
+to its source feature, including generated IDs and IDs that collide with
+Cesium's multipart suffixes. Each segment gets its own feature's styling, click
+destination and horizon-culling reference, and each source feature has one
+reference stem. The source collections are not modified.
 
 Natural Earth regions and neighborhood polygon lookup are package exports.
 Their existing lazy loaders, retry behavior, bundled datasets and attribution
