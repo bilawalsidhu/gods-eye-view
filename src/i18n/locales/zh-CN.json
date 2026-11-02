@@ -2868,5 +2868,8 @@
   "Edit anchors, data packs and shot details": "编辑锚点、数据包和镜头详情",
   "Download this scene as JSON or an asset bundle": "将此场景下载为 JSON 或资源包",
   "Left panels": "左侧面板",
-  "Right panels": "右侧面板"
+  "Right panels": "右侧面板",
+  "World time": "世界时间",
+  "Back to live": "返回实时",
+  "Live": "实时"
 }

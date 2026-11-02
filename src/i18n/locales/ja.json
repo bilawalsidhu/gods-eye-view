@@ -2868,5 +2868,8 @@
   "Left panels": "左パネル",
   "Right panels": "右パネル",
   "CONFIRMED": "確認済み",
-  "PAD / RTLS": "射場 / RTLS"
+  "PAD / RTLS": "射場 / RTLS",
+  "World time": "世界時刻",
+  "Back to live": "ライブに戻る",
+  "Live": "ライブ"
 }

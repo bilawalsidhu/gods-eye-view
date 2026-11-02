@@ -1,0 +1,62 @@
+/* ── World timeline ─────────────────────────── */
+/* Shown while the world time is away from live, centred above the dock. */
+#world-timeline {
+  position: fixed;
+  bottom: calc(2vh + 7rem);
+  left: 50%;
+  z-index: 146;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%);
+}
+
+body.ui-clean-view #world-timeline,
+body.recording-mode #world-timeline {
+  bottom: 2vh;
+}
+
+#world-timeline .world-timeline-play,
+#world-timeline .world-timeline-live {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(123, 189, 211, 0.28);
+  border-radius: 8px;
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+#world-timeline .world-timeline-play:hover,
+#world-timeline .world-timeline-live:hover {
+  background: rgba(0, 212, 255, 0.18);
+}
+
+#world-timeline .world-timeline-live {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#world-timeline .world-timeline-time {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
