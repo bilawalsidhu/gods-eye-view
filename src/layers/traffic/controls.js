@@ -259,7 +259,8 @@ export function createControls({ state: layerState, services, parts, source }) {
      * `error` carries this instant's health, so a live-configured layer whose
      * flow feed went down reads DEGRADED with the reason instead of a stale
      * LIVE coverage number. `flowCoveragePct` is shown dots on matched roads /
-     * all shown dots (0–100 int), excluding closures; `tilesFetched` counts flow-tile requests
+     * all shown dots (0–100 int, kept within 1–99 while both kinds are shown),
+     * excluding closures; `tilesFetched` counts flow-tile requests
      * issued to the proxy this session (decode-cache hits excluded).
      * @returns {{count:number, lastUpdate:number|null, loading:boolean,
      *   mode:'live'|'sim', error:string|null, flowCoveragePct:number,
@@ -304,12 +305,23 @@ export function createControls({ state: layerState, services, parts, source }) {
         Boolean(layerState._heightPending);
       const { free, slow, jam, sim } = layerState._bucketCounts;
       const matched = free + slow + jam;
+      // The label reads 0 as "no matches" and 100 as nothing simulated, so
+      // rounding must not reach either while both kinds of dot are shown.
       const flowCoveragePct =
-        matched + sim > 0 ? Math.round((100 * matched) / (matched + sim)) : 0;
+        matched + sim > 0
+          ? Math.min(
+              sim > 0 ? 99 : 100,
+              Math.max(
+                matched > 0 ? 1 : 0,
+                Math.round((100 * matched) / (matched + sim)),
+              ),
+            )
+          : 0;
       const feed = parts.model.trafficFeedPresentation({
         liveMode: layerState._liveMode,
         fetching: loading,
         flowError: layerState._flowError,
+        stale: layerState._flowStale,
         coveragePct: flowCoveragePct,
         statusUnavailable: layerState._flowStatusUnavailable,
         roadSource: layerState._roadSource,
@@ -321,6 +333,20 @@ export function createControls({ state: layerState, services, parts, source }) {
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
+        // Cached proxy tiles (TomTom budget spent or upstream failing): the
+        // manager reads this as STALE. Any error (flow, roads, detail) reads
+        // DEGRADED instead.
+        stale: Boolean(
+          layerState._liveMode &&
+          layerState._flowStale &&
+          !(
+            layerState._roadError ||
+            layerState._roadWarning ||
+            layerState._detailError ||
+            feed.error
+          ),
+        ),
+        oldestTileAt: layerState._flowOldestTileAt ?? null,
         error:
           layerState._roadError ||
           layerState._roadWarning ||

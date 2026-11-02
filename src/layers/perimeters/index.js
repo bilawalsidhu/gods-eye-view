@@ -55,6 +55,8 @@ export function createFirePerimetersLayer({
   let _dataSource = null;
   let _count = 0;
   let _lastUpdate = null;
+  // The proxy's last snapshot, served while WFIGS is unreachable.
+  let _stale = false;
   let _lastError = null;
   let _enabled = false;
   let _clickHandler = null;
@@ -260,6 +262,7 @@ export function createFirePerimetersLayer({
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _stale = false;
       _enabled = false;
       console.log('[Data:FirePerimeters] Initialized');
     },
@@ -287,9 +290,21 @@ export function createFirePerimetersLayer({
       _request = request;
       refreshInciwebIndex(request.signal);
       try {
-        const rows = await source.getSnapshot({ signal: request.signal });
+        // The source contract is getSnapshot; a source that can also say how
+        // fresh its rows are (the WFIGS proxy) offers getSnapshotDetail.
+        const snapshot =
+          typeof source.getSnapshotDetail === 'function'
+            ? await source.getSnapshotDetail({ signal: request.signal })
+            : { rows: await source.getSnapshot({ signal: request.signal }) };
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
+        const { rows } = snapshot;
+        _stale = snapshot.stale === true;
+        // A stale snapshot is as old as its fetch, not this poll.
+        const updatedAt =
+          _stale && Number.isFinite(snapshot.fetchedAt)
+            ? snapshot.fetchedAt
+            : Date.now();
 
         // Incident facts may change independently of the polygon's source clock.
         const signature = JSON.stringify(
@@ -299,7 +314,7 @@ export function createFirePerimetersLayer({
         );
         if (signature === _snapshotSignature) {
           if (_selectedId) publishSelectedCard();
-          _lastUpdate = Date.now();
+          _lastUpdate = updatedAt;
           _lastError = null;
           return true;
         }
@@ -355,7 +370,7 @@ export function createFirePerimetersLayer({
         // Refresh (or drop) the selected incident's card against the new feed.
         if (_selectedId) publishSelectedCard();
         _count = rows.length;
-        _lastUpdate = Date.now();
+        _lastUpdate = updatedAt;
         _lastError = null;
         console.log(
           `[Data:FirePerimeters] Updated: ${_count} incidents, ${nextEntities.length} polygons`,
@@ -366,6 +381,8 @@ export function createFirePerimetersLayer({
           return false;
         console.warn('[Data:FirePerimeters] Fetch error:', e);
         _lastError = e?.message || msg('Perimeter source unavailable');
+        // A failure now outranks the stale snapshot still drawn.
+        _stale = false;
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -391,6 +408,7 @@ export function createFirePerimetersLayer({
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _stale = false;
     },
 
     /** Snapshot incident facts (with card-anchor coordinates) for the analyst query engine. */
@@ -443,6 +461,7 @@ export function createFirePerimetersLayer({
         count: _count,
         lastUpdate: _lastUpdate,
         error: _lastError,
+        stale: _stale,
       };
     },
   };

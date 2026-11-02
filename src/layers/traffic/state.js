@@ -1,6 +1,6 @@
 import { normalizeRoadMode } from './roadModes.js';
 import * as Cesium from 'cesium';
-import { FLOW_BUCKET_COLORS, TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { FLOW_BUCKET_COLORS } from './policy.js';
 
 export function createState({ services }) {
   const layerState = {};
@@ -107,6 +107,16 @@ export function createState({ services }) {
    */
 
   layerState._flowError = null;
+
+  /**
+   * True while the drawn flow came from cached proxy tiles (TomTom budget
+   * spent or upstream failing); `_flowOldestTileAt` is the oldest tile's
+   * fetch time in ms, or null.
+   * @type {boolean}
+   */
+
+  layerState._flowStale = false;
+  layerState._flowOldestTileAt = null;
 
   /**
    * True when `/api/tomtom/status` itself could not be reached, so the layer is

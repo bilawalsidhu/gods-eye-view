@@ -86,14 +86,6 @@ function percentile(values, pct) {
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * pct) - 1)];
 }
 
-function parseJson(value, fallback) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
 function analyzeMembership(samples) {
   let replacements = 0;
   let exposure = 0;

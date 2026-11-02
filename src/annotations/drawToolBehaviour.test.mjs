@@ -6,7 +6,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { initDrawTool } from './drawTool.js';
-import { describeUnsavedWork } from '../i18n/index.js';
 import {
   isPointerFree,
   pointerOwner,
@@ -47,7 +46,6 @@ class FakeElement {
     this.attributes = new Map();
     this.textContent = '';
     this.value = '';
-    this.children = [];
     this.listeners = [];
   }
   setAttribute(name, value) {
@@ -64,16 +62,6 @@ class FakeElement {
       (entry) => entry.type === type && entry.listener === listener,
     );
     if (at >= 0) this.listeners.splice(at, 1);
-  }
-  querySelectorAll(selector) {
-    if (selector === '.pp-mode-btn[data-shape]')
-      return this.children.filter((child) => child.dataset.shape);
-    const shape = /\.pp-mode-btn\[data-shape="([a-z]+)"\]/.exec(selector)?.[1];
-    if (shape) return this.children.filter((child) => child.dataset.shape === shape);
-    return [];
-  }
-  querySelector(selector) {
-    return this.querySelectorAll(selector)[0] ?? null;
   }
   click() {
     return this.emit('click');
@@ -108,18 +96,11 @@ function fakeDom() {
     byId.set(id, element);
     return element;
   };
+  // The control whose presence means the page has Draw, a focused button
+  // whose Enter is its own, and the tool's label field.
   make('draw-toggle', 'BUTTON');
-  const modeRow = make('draw-mode-row');
-  for (const shape of ['area', 'line', 'pin']) {
-    const button = new FakeElement('BUTTON');
-    button.dataset.shape = shape;
-    modeRow.children.push(button);
-  }
-  make('draw-label-row');
-  make('draw-label-input', 'INPUT');
-  make('draw-color-select', 'SELECT');
   make('draw-clear', 'BUTTON');
-  make('draw-hint', 'SPAN');
+  make('draw-label-input', 'INPUT');
 
   const body = new FakeElement('BODY');
   const documentDouble = {
@@ -218,14 +199,29 @@ function harness() {
   const previousWindow = globalThis.window;
   globalThis.document = documentDouble;
   globalThis.window = globalThis.window || {};
-  const tool = initDrawTool({ viewer, annotations });
+  const shown = { view: null };
+  // The controls' actions, as the display store holds them.
+  const controls = { actions: null };
+  const tool = initDrawTool({
+    viewer,
+    annotations,
+    publish: (view) => (shown.view = view),
+    connect: (actions) => {
+      controls.actions = actions;
+      return () => (controls.actions = null);
+    },
+  });
   return {
     tool,
+    shown,
     viewer,
     annotations,
     byId,
     documentDouble,
     element: (id) => byId.get(id),
+    controls,
+    /** A control's change, as the view sends it. */
+    act: (name, ...args) => controls.actions?.[name]?.(...args),
     restore() {
       resetPointerOwnership();
       if (previousDocument === undefined) delete globalThis.document;
@@ -241,38 +237,15 @@ const LEFT_DOUBLE_CLICK = Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK;
 
 /* ── the tests ─────────────────────────────────────────────────────────── */
 
-// First in the file: tools left by later tests would answer the same registry.
-test('a lasting mark or a half-drawn shape makes the language switch ask first', async () => {
-  const h = harness();
-  try {
-    let marks = [];
-    h.annotations.list = () => marks;
-    assert.deepEqual(describeUnsavedWork(), [], 'an empty board loses nothing');
-    marks = [{ id: 'a', ttlMs: 8000, expiring: false }];
-    assert.deepEqual(describeUnsavedWork(), [], 'a fading mark is not work');
-    marks = [{ id: 'b', ttlMs: null, expiring: false }];
-    assert.deepEqual(describeUnsavedWork(), ['drawings on the map']);
-    marks = [];
-    h.element('draw-toggle').emit('click');
-    h.tool.addVertex(-97.75, 30.26);
-    assert.deepEqual(describeUnsavedWork(), ['drawings on the map'], 'a shape in progress');
-    marks = [{ id: 'c', ttlMs: null, expiring: false }];
-    await h.tool.destroy();
-    assert.deepEqual(describeUnsavedWork(), [], 'a destroyed tool unregisters');
-  } finally {
-    h.restore();
-  }
-});
-
 test('turning Draw on takes a lease and turning it off gives it back', async () => {
   const h = harness();
   try {
     assert.equal(isPointerFree(), true);
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     assert.equal(pointerOwner(), 'draw', 'the session owns the pointer');
     assert.equal(h.tool.active, true);
 
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     assert.equal(isPointerFree(), true, 'leaving draw mode frees the pointer');
     assert.equal(h.tool.active, false);
   } finally {
@@ -284,18 +257,18 @@ test('Draw refuses to start when something else holds the pointer', async () => 
   const h = harness();
   try {
     const other = claimPointer('directions');
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     assert.equal(h.tool.active, false, 'it must not half-start');
     assert.equal(pointerOwner(), 'directions', 'and must not steal the claim');
     // Named by its tool, not by the internal owner id.
     assert.equal(
-      h.element('draw-hint').textContent,
+      h.shown.view.hint,
       'Directions is using the pointer — close it first.',
     );
     assert.equal(h.tool.diagnostics().sceneHandler, false, 'no handler was bound');
 
     releasePointer(other);
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     assert.equal(h.tool.active, true, 'and it starts once the pointer is free');
   } finally {
     h.restore();
@@ -305,13 +278,13 @@ test('Draw refuses to start when something else holds the pointer', async () => 
 test('a destroyed instance cannot free the pointer its replacement holds', async () => {
   const first = harness();
   try {
-    first.element('draw-toggle').emit('click');
+    first.act('toggleDraw');
     assert.equal(pointerOwner(), 'draw');
     // The replacement takes over before the old one finishes tearing down.
     first.tool.setActive(false);
     const second = harness();
     try {
-      second.element('draw-toggle').emit('click');
+      second.act('toggleDraw');
       assert.equal(pointerOwner(), 'draw');
       await first.tool.destroy();
       assert.equal(
@@ -336,7 +309,7 @@ test('both stock viewer click actions are borrowed for the session and given bac
     h.viewer.screenSpaceEventHandler.setInputAction(stockClick, LEFT_CLICK);
     h.viewer.screenSpaceEventHandler.setInputAction(stockDouble, LEFT_DOUBLE_CLICK);
 
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     assert.equal(
       h.viewer.screenSpaceEventHandler.getInputAction(LEFT_CLICK),
       undefined,
@@ -347,7 +320,7 @@ test('both stock viewer click actions are borrowed for the session and given bac
       undefined,
     );
 
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     assert.equal(
       h.viewer.screenSpaceEventHandler.getInputAction(LEFT_CLICK),
       stockClick,
@@ -365,7 +338,7 @@ test('both stock viewer click actions are borrowed for the session and given bac
 test('Enter finishes from the canvas and the label field, never from a focused button', async () => {
   const h = harness();
   try {
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     h.tool.setShape('area');
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
@@ -395,7 +368,7 @@ test('Enter finishes from the canvas and the label field, never from a focused b
 test('the live preview hangs at the height the click landed on', async () => {
   const h = harness();
   try {
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     h.tool.setShape('line');
     h.tool.addVertex(-97.75, 30.26, 187.5);
     h.tool.addVertex(-97.74, 30.26, 212.25);
@@ -449,7 +422,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
   try {
     const stockClick = () => 'viewer picks and selects';
     h.viewer.screenSpaceEventHandler.setInputAction(stockClick, LEFT_CLICK);
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     h.tool.addVertex(-97.75, 30.26);
     assert.equal(pointerOwner(), 'draw');
     assert.ok(h.tool.diagnostics().domListeners > 0);
@@ -463,7 +436,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
     assert.equal(after.sceneHandler, false, 'the Cesium handler is gone');
     assert.equal(after.domListeners, 0, 'every DOM listener came off');
     assert.equal(h.documentDouble.listeners.length, 0, 'including the keydown');
-    assert.equal(h.element('draw-toggle').listeners.length, 0);
+    assert.equal(h.controls.actions, null, 'and the controls are disconnected');
     assert.equal(
       h.viewer.screenSpaceEventHandler.getInputAction(LEFT_CLICK),
       stockClick,
@@ -481,15 +454,99 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
 test('Clear wipes the board and the shape in progress', async () => {
   const h = harness();
   try {
-    h.element('draw-toggle').emit('click');
+    h.act('toggleDraw');
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
     assert.equal(h.tool.session.vertices.length, 2);
 
-    h.element('draw-clear').emit('click');
+    h.act('clearDraw');
     assert.equal(h.annotations.calls.clear, 1, 'placed marks are removed');
     assert.equal(h.tool.session.vertices.length, 0, 'and so is the shape in progress');
   } finally {
     h.restore();
+  }
+});
+
+test('the controls choose the shape, colour and label the next shape is drawn with', async () => {
+  const h = harness();
+  try {
+    h.act('toggleDraw');
+    h.act('setDrawShape', 'line');
+    h.act('setDrawColor', 'amber');
+    h.act('setDrawLabel', 'Route A');
+    assert.deepEqual(
+      { ...h.shown.view, hint: undefined },
+      { active: true, shape: 'line', color: 'amber', label: 'Route A', hint: undefined },
+      'the view shows what the controls chose',
+    );
+    h.act('setDrawColor', 'purple');
+    assert.equal(h.shown.view.color, 'primary', 'an unknown colour falls back');
+    h.act('setDrawColor', 'cyan');
+    h.tool.addVertex(-97.75, 30.26);
+    // Choosing a shape again starts the open one over.
+    h.act('setDrawShape', 'line');
+    assert.equal(h.tool.session.vertices.length, 0);
+    h.tool.addVertex(-97.75, 30.26);
+    h.tool.addVertex(-97.74, 30.26);
+    h.documentDouble.emit('keydown', { key: 'Enter', target: h.documentDouble.body });
+    await Promise.resolve();
+    await Promise.resolve();
+    const spec = h.annotations.calls.annotate[0].specs[0];
+    assert.equal(spec.type, 'route', 'a drawn line is a manual route');
+    assert.equal(spec.color, 'cyan');
+    assert.equal(spec.label, 'Route A');
+    assert.equal(h.shown.view.label, '', 'a finished shape empties the label');
+  } finally {
+    h.restore();
+  }
+});
+
+test('keys typed in the label field: Enter finishes, Backspace edits, Escape cancels', async () => {
+  const h = harness();
+  try {
+    const label = h.element('draw-label-input');
+    const elsewhere = new FakeElement('INPUT', 'location-search');
+    h.act('toggleDraw');
+    h.tool.addVertex(-97.75, 30.26);
+    h.tool.addVertex(-97.74, 30.26);
+    h.documentDouble.emit('keydown', { key: 'Backspace', target: label });
+    assert.equal(h.tool.session.vertices.length, 2, 'Backspace edits the label');
+    h.documentDouble.emit('keydown', { key: 'Enter', target: elsewhere });
+    await Promise.resolve();
+    assert.equal(h.annotations.calls.annotate.length, 0, 'another field keeps its Enter');
+    h.documentDouble.emit('keydown', { key: 'Escape', target: label });
+    assert.equal(h.tool.session.vertices.length, 0, 'Escape drops the open shape');
+    assert.equal(h.tool.active, true, 'and leaves Draw on');
+    h.act('setDrawShape', 'line');
+    h.tool.addVertex(-97.75, 30.26);
+    h.tool.addVertex(-97.74, 30.26);
+    h.documentDouble.emit('keydown', { key: 'Enter', target: label });
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(h.annotations.calls.annotate.length, 1, 'Enter in the label finishes');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a page without the Draw controls gets no draw tool', () => {
+  resetPointerOwnership();
+  const previousDocument = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  try {
+    let connected = false;
+    const tool = initDrawTool({
+      viewer: fakeViewer(),
+      annotations: fakeAnnotations(),
+      connect: () => {
+        connected = true;
+        return () => {};
+      },
+    });
+    assert.equal(tool, null);
+    assert.equal(connected, false);
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
   }
 });

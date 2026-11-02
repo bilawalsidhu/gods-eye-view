@@ -5,17 +5,17 @@ import {
 import { cameraPoseKey } from './pointerContext.js';
 
 /** The live viewer's camera pose identity (Cesium-free read). */
-export function readViewerCameraKey() {
+function readViewerCameraKey() {
   return cameraPoseKey(globalThis.window?.__godsEyeView?.viewer);
 }
 // Viewport-screenshot size guards (M13). The old code clamped WIDTH only, so a
 // tall portrait window produced an oversized capture whose dc.send could throw.
 // Cap total pixels (clamps both dimensions) and drop the image entirely if the
 // encoded data URL is still too big for the data channel.
-export const VIEWPORT_MAX_PIXELS = 1200 * 900;
+const VIEWPORT_MAX_PIXELS = 1200 * 900;
 
 // ~1.08 MP, matches the old 1200px-wide landscape budget
-export const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024;
+const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024;
 
 export async function captureViewportImage() {
   const viewer = window.__godsEyeView?.viewer;
@@ -66,11 +66,11 @@ export async function captureViewportImage() {
 }
 
 /** Side of the point-and-ask crop, in CSS pixels, and its output size. */
-export const POINTER_CROP_SIZE = 512;
+const POINTER_CROP_SIZE = 512;
 /** A pointer snapshot older than this no longer matches the frame. */
-export const POINTER_CROP_MAX_AGE_MS = 20000;
+const POINTER_CROP_MAX_AGE_MS = 20000;
 /** View scales where a crop shows buildings and terrain, not a smear. */
-export const POINTER_CROP_SCALES = new Set(['local', 'city']);
+const POINTER_CROP_SCALES = new Set(['local', 'city']);
 
 /**
  * Square source rectangle around a canvas point, clamped inside the canvas,
@@ -128,7 +128,7 @@ export function pointerCropRect({
  * @returns {Promise<{dataUrl: string, rect: object}|null>} JPEG data URL and
  *   the crop's normalized bounds in the full canvas, or null.
  */
-export async function capturePointerCrop(screenPx) {
+async function capturePointerCrop(screenPx) {
   const viewer = window.__godsEyeView?.viewer;
   const source = viewer?.scene?.canvas;
   if (!source?.width || !source?.height || !screenPx) return null;
@@ -259,7 +259,7 @@ export async function renderFreshCesiumFrame(viewer) {
   }
 }
 
-export function isNearlyBlackFrame(ctx, width, height) {
+function isNearlyBlackFrame(ctx, width, height) {
   const sampleWidth = Math.min(48, width);
   const sampleHeight = Math.min(32, height);
   if (!sampleWidth || !sampleHeight) return true;

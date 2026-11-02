@@ -30,7 +30,6 @@ import {
 import {
   answerKartaViewRequest,
   describeKartaViewCall,
-  KV_LINE,
   KV_SEQUENCE_ID,
   kartaViewPhotos,
   resetKartaViewFixture,
@@ -661,6 +660,32 @@ async function main() {
         },
       );
 
+      await step(
+        'FIT/FILL keeps native selection, keyboard focus and persistence with a photo open',
+        async () => {
+          await page.click('[data-sl-render="fill"]');
+          await uiUntil(page, (u) => u.street.renderMode === 'fill');
+          assert.equal(
+            await page.evaluate(() =>
+              localStorage.getItem('gev:street-level:render-mode'),
+            ),
+            'fill',
+          );
+          await page.keyboard.press('Home');
+          await uiUntil(page, (u) => u.street.renderMode === 'letterbox');
+          assert.deepEqual(
+            await page.$eval('[data-sl-render="letterbox"]', (node) => ({
+              selected: node.getAttribute('aria-checked'),
+              tabIndex: node.tabIndex,
+              focused: document.activeElement === node,
+            })),
+            { selected: 'true', tabIndex: 0, focused: true },
+          );
+          await page.keyboard.press('End');
+          await uiUntil(page, (u) => u.street.renderMode === 'fill');
+        },
+      );
+
       await step('× closes the photo and deselects its sequence', async () => {
         await press(page, '#sl-viewer-close');
         await uiUntil(
@@ -672,6 +697,21 @@ async function main() {
           true,
         );
       });
+
+      await step(
+        'panorama segments keep native arrow and Home navigation',
+        async () => {
+          await page.click('[data-sl-pano="flat"]');
+          await uiUntil(page, (u) => u.filter.pano === 'flat');
+          await page.keyboard.press('ArrowRight');
+          await uiUntil(page, (u) => u.filter.pano === 'all');
+          await page.keyboard.press('End');
+          await uiUntil(page, (u) => u.filter.pano === 'flat');
+          await page.keyboard.press('Home');
+          await uiUntil(page, (u) => u.filter.pano === 'all');
+          await waitForCoverage(page);
+        },
+      );
 
       await keylessProviderStep({
         id: 'kartaview',

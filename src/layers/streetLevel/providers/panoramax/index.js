@@ -41,8 +41,6 @@ import {
   normalizeItem,
 } from './policy.js';
 
-export { PANORAMAX_PROVIDER_ID } from './policy.js';
-
 /**
  * A tile's bytes decoded by `decode`; a body that is not a vector tile
  * (an HTML error page, a cut-off answer) reads as such, not as a parser's

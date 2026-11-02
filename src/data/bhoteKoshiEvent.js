@@ -25,7 +25,9 @@ import {
 } from './bhoteKoshiEmbeddedMedia.js';
 import { acquireImageryComparison } from '../maps/imageryComparison.js';
 import { createImagerySplit } from '../ui/imagerySplit.js';
-import { formatDate, t, tn, msg } from '../i18n/index.js';
+import { formatDate, t, tn, msg, onLocaleChange } from '../i18n/index.js';
+import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 
 export const BHOTE_KOSHI_LAYER_ID = 'bhote-koshi-2026';
 export const BHOTE_KOSHI_OVERLAY_SOURCE_ID = 'bhote-koshi-witnesses';
@@ -412,14 +414,18 @@ const IMAGERY_LABEL_NAMES = Object.freeze([
   [/^(\d{4}) POST-EVENT$/, msg('{year} POST-EVENT')],
 ]);
 
-/** Day, short month and year in the active language: 16 OCT 2021, 16 ОКТ. 2021. */
+/** Day, short month and year in the active language: 16 OCT 2021, 16 ОКТ. 2021, 2021年10月16日. */
 function imageryDateText(observedAt) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(observedAt || ''));
   if (!match) return '';
   const date = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3]));
   if (Number.isNaN(date.getTime())) return '';
   const part = (options) => formatDate(date, { timeZone: 'UTC', ...options });
-  return `${part({ day: 'numeric' })} ${part({ month: 'short' })} ${part({ year: 'numeric' })}`.toUpperCase();
+  const year = part({ year: 'numeric' });
+  // Year-first languages (2021年10月16日) keep their own order and units.
+  const whole = part({ day: 'numeric', month: 'short', year: 'numeric' });
+  if (whole.startsWith(year)) return whole;
+  return `${part({ day: 'numeric' })} ${part({ month: 'short' })} ${year}`.toUpperCase();
 }
 
 /**
@@ -443,18 +449,6 @@ export function imageryEndpointLabel(entry) {
 function imageryEndpointText(entry) {
   const { name, date } = imageryEndpointLabel(entry);
   return [name, date].filter(Boolean).join(' · ');
-}
-
-/** Name, then the date kept on one line so the year never wraps alone. */
-function renderImageryEndpoint(element, entry) {
-  if (!element) return;
-  const { name, date } = imageryEndpointLabel(entry);
-  element.textContent = date ? `${name} · ` : name;
-  if (!date) return;
-  const dateElement = document.createElement('span');
-  dateElement.className = 'bhote-event-date';
-  dateElement.textContent = date;
-  element.appendChild(dateElement);
 }
 
 /** Compact, source-bounded disclosure for multi-source geolocation beats. */
@@ -925,183 +919,68 @@ function setElementProperty(element, property, value) {
 }
 
 function setElementAttribute(element, attribute, value) {
-  if (!element || element.getAttribute?.(attribute) === value) return false;
-  element.setAttribute(attribute, value);
+  if (!element || element.attributes[attribute] === value) return false;
+  element.attributes[attribute] = value;
   return true;
 }
 
-function collectPanelReferences(panel) {
+/** One panel control's state, as the panel view renders it. */
+function panelRecord(initial = {}) {
+  return {
+    textContent: '',
+    hidden: false,
+    disabled: false,
+    value: '',
+    ...initial,
+    attributes: { ...initial.attributes },
+  };
+}
+
+/**
+ * The panel's controls as the layer writes them, starting from the panel's
+ * markup. The panel view renders what the layer publishes from them.
+ */
+function createPanelRecords(event) {
   return Object.freeze({
-    imagerySection: panel.querySelector('[data-role="imagery-comparison"]'),
-    observedStatus: panel.querySelector('.bhote-event-status.observed'),
-    beforeDate: panel.querySelector('[data-role="before-date"]'),
-    afterDate: panel.querySelector('[data-role="after-date"]'),
-    time: panel.querySelector('[data-role="time"]'),
-    caveat: panel.querySelector('[data-role="caveat"]'),
-    imageryCloudNote: panel.querySelector('[data-role="imagery-cloud-note"]'),
-    reportList: panel.querySelector('.bhote-event-report-list'),
-    playButton: panel.querySelector('[data-action="play"]'),
-    playSceneButton: panel.querySelector('[data-action="play-scene"]'),
-    cinematicButton: panel.querySelector('[data-action="cinematic"]'),
-    storyReplayButton: panel.querySelector('[data-action="story-replay"]'),
-    corridorButton: panel.querySelector('[data-action="corridor"]'),
-    previousButton: panel.querySelector('[data-action="previous-beat"]'),
-    nextButton: panel.querySelector('[data-action="next-beat"]'),
-    openSourceButton: panel.querySelector('[data-action="open-source"]'),
-    progressInput: panel.querySelector('[data-role="progress"]'),
-    splitInput: panel.querySelector('[data-role="split"]'),
-    splitReadout: panel.querySelector('[data-role="split-readout"]'),
-    timelineLabel: panel.querySelector('[data-role="timeline-label"]'),
-    beatIndex: panel.querySelector('[data-role="beat-index"]'),
-    beatTitle: panel.querySelector('[data-role="beat-title"]'),
-    beatMeta: panel.querySelector('[data-role="beat-meta"]'),
+    root: { sceneBeat: false },
+    imagerySection: panelRecord(),
+    observedStatus: panelRecord(),
+    time: panelRecord({
+      textContent: `~0:00 / ${elapsedLabel(1, event.reconstruction.elapsedSeconds)}`,
+    }),
+    caveat: panelRecord({
+      textContent: bhoteEventText(event.reconstruction.caveat),
+    }),
+    imageryCloudNote: panelRecord(),
+    playButton: panelRecord({ textContent: t('▶ PLAY') }),
+    playSceneButton: panelRecord({
+      textContent: t('▶ PLAY SCENE'),
+      hidden: true,
+    }),
+    cinematicButton: panelRecord({
+      textContent: t('◉ CINEMATIC'),
+      attributes: { 'aria-pressed': 'false' },
+    }),
+    storyReplayButton: panelRecord({ textContent: t('↺ FULL STORY') }),
+    corridorButton: panelRecord(),
+    previousButton: panelRecord({
+      attributes: { 'aria-label': t('Previous story beat') },
+    }),
+    nextButton: panelRecord({
+      attributes: { 'aria-label': t('Next story beat') },
+    }),
+    openSourceButton: panelRecord(),
+    progressInput: panelRecord({
+      value: '0',
+      attributes: { 'aria-label': t('Schematic downstream progression') },
+    }),
+    splitInput: panelRecord({ value: '50' }),
+    splitReadout: panelRecord({ textContent: '50 / 50' }),
+    timelineLabel: panelRecord({ textContent: t('RECONSTRUCTION CLOCK') }),
+    beatIndex: panelRecord({ textContent: '01 / 06' }),
+    beatTitle: panelRecord({ textContent: t('CAUSE') }),
+    beatMeta: panelRecord({ textContent: t('CAPTURE TIME UNVERIFIED') }),
   });
-}
-
-/** Escape translated text for the panel markup template. */
-function escapeMarkup(text) {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function createPanel(event, handlers) {
-  const panel = document.createElement('aside');
-  panel.id = 'bhote-koshi-event-panel';
-  panel.setAttribute(
-    'aria-label',
-    t('Bhote Koshi flood reconstruction controls'),
-  );
-  panel.innerHTML = `
-    <div class="bhote-event-header">
-      <div>
-        <div class="bhote-event-kicker">${escapeMarkup(t('EVENT RECONSTRUCTION · 26 AUG 2026'))}</div>
-        <div class="bhote-event-title">${escapeMarkup(t('BHOTE KOSHI OUTBURST FLOOD'))}</div>
-      </div>
-      <button class="bhote-event-icon-btn" type="button" data-action="close" title="${escapeMarkup(t('Close event layer'))}" aria-label="${escapeMarkup(t('Close event layer'))}">×</button>
-    </div>
-    <div class="bhote-event-status-row">
-      <span class="bhote-event-status observed">${escapeMarkup(t('OBSERVED IMAGERY'))}</span>
-      <span class="bhote-event-status reconstructed">${escapeMarkup(t('SCHEMATIC CORRIDOR'))}</span>
-    </div>
-    <section class="bhote-event-section" data-role="imagery-comparison">
-      <div class="bhote-event-section-head">
-        <span>${escapeMarkup(t('2021 HISTORICAL REFERENCE / 2026 POST-EVENT'))}</span>
-        <span data-role="split-readout">50 / 50</span>
-      </div>
-      <input class="bhote-event-range" data-role="split" type="range" min="0" max="100" value="50" aria-label="${escapeMarkup(t('Historical reference and post-event image split'))}" />
-      <div class="bhote-event-dates">
-        <span data-role="before-date"></span>
-        <span data-role="after-date"></span>
-      </div>
-    </section>
-    <section class="bhote-event-section">
-      <div class="bhote-event-section-head">
-        <span data-role="timeline-label">${escapeMarkup(t('RECONSTRUCTION CLOCK'))}</span>
-        <span data-role="time"></span>
-      </div>
-      <input class="bhote-event-range flood" data-role="progress" type="range" min="0" max="1000" value="0" aria-label="${escapeMarkup(t('Schematic downstream progression'))}" />
-      <div class="bhote-event-story-nav" aria-label="${escapeMarkup(t('Story beat navigation'))}">
-        <button type="button" data-action="previous-beat" title="${escapeMarkup(t('Previous story beat'))}" aria-label="${escapeMarkup(t('Previous story beat'))}">‹</button>
-        <div class="bhote-event-story-current">
-          <span data-role="beat-index">01 / 06</span>
-          <strong data-role="beat-title" aria-live="polite">${escapeMarkup(t('CAUSE'))}</strong>
-          <small data-role="beat-meta">${escapeMarkup(t('CAPTURE TIME UNVERIFIED'))}</small>
-        </div>
-        <button type="button" data-action="next-beat" title="${escapeMarkup(t('Next story beat'))}" aria-label="${escapeMarkup(t('Next story beat'))}">›</button>
-      </div>
-      <div class="bhote-event-actions">
-        <button type="button" data-action="play">${escapeMarkup(t('▶ PLAY'))}</button>
-        <button type="button" data-action="play-scene" hidden title="${escapeMarkup(t('Play the next shot and continue through this scene'))}">${escapeMarkup(t('▶ PLAY SCENE'))}</button>
-        <button type="button" data-action="cinematic" aria-pressed="false">${escapeMarkup(t('◉ CINEMATIC'))}</button>
-        <button type="button" data-action="story-replay">${escapeMarkup(t('↺ FULL STORY'))}</button>
-        <button type="button" data-action="open-source">${escapeMarkup(t('↗ OPEN ORIGINAL'))}</button>
-        <button type="button" data-action="corridor">${escapeMarkup(t('⌖ LOWER GORGE'))}</button>
-      </div>
-    </section>
-    <details class="bhote-event-evidence">
-      <summary>${escapeMarkup(t('FIELD REPORTS · {count}', { count: event.fieldReports.length }))}</summary>
-      <div class="bhote-event-report-list"></div>
-    </details>
-    <div class="bhote-event-credit">
-      <span>${escapeMarkup(t('GEOLOCATIONS · {credit}', { credit: 'GEO GEORGE SHADRACH' }))}</span>
-      <button type="button" data-action="geolocation-map">${escapeMarkup(t('↗ OPEN PUBLIC MAP'))}</button>
-    </div>
-    <p class="bhote-event-caveat"><span data-role="caveat"></span><span data-role="imagery-cloud-note"> ${escapeMarkup(t('Clouds are preserved from the source imagery.'))}</span></p>
-  `;
-
-  const refs = collectPanelReferences(panel);
-  renderImageryEndpoint(refs.beforeDate, event.imagery.before);
-  renderImageryEndpoint(refs.afterDate, event.imagery.after);
-  refs.time.textContent = `~0:00 / ${elapsedLabel(1, event.reconstruction.elapsedSeconds)}`;
-  refs.caveat.textContent = bhoteEventText(event.reconstruction.caveat);
-
-  for (const report of event.fieldReports) {
-    const button = document.createElement('button');
-    const label = document.createElement('span');
-    const status = document.createElement('small');
-    button.type = 'button';
-    button.className = 'bhote-event-report';
-    label.textContent = bhoteEventText(report.label);
-    status.textContent = bhoteEventText(report.status);
-    button.append(label, status);
-    button.addEventListener('click', () => openExternal(report.url));
-    refs.reportList.appendChild(button);
-  }
-
-  panel
-    .querySelector('[data-action="close"]')
-    .addEventListener('click', handlers.close);
-  panel
-    .querySelector('[data-action="play"]')
-    .addEventListener('click', handlers.play);
-  panel
-    .querySelector('[data-action="play-scene"]')
-    .addEventListener('click', handlers.playScene);
-  panel
-    .querySelector('[data-action="cinematic"]')
-    .addEventListener('click', handlers.toggleCinematic);
-  panel
-    .querySelector('[data-action="previous-beat"]')
-    .addEventListener('click', handlers.previousBeat);
-  panel
-    .querySelector('[data-action="next-beat"]')
-    .addEventListener('click', handlers.nextBeat);
-  panel
-    .querySelector('[data-action="story-replay"]')
-    .addEventListener('click', handlers.replayCinematic);
-  panel
-    .querySelector('[data-action="open-source"]')
-    .addEventListener('click', handlers.openActiveSource);
-  panel
-    .querySelector('[data-action="geolocation-map"]')
-    .addEventListener('click', handlers.openGeolocationMap);
-  panel
-    .querySelector('[data-action="corridor"]')
-    .addEventListener('click', handlers.focusCorridor);
-  panel
-    .querySelector('[data-role="split"]')
-    .addEventListener('input', (inputEvent) => {
-      handlers.setSplit(Number(inputEvent.target.value) / 100);
-    });
-  panel
-    .querySelector('[data-role="progress"]')
-    .addEventListener('input', (inputEvent) => {
-      handlers.previewProgress(Number(inputEvent.target.value) / 1000);
-    });
-  panel
-    .querySelector('[data-role="progress"]')
-    .addEventListener('change', (inputEvent) => {
-      handlers.commitProgress(Number(inputEvent.target.value) / 1000, {
-        final: true,
-      });
-    });
-  const rightRail = document.getElementById?.('right-context-rail');
-  rightRail?.classList.add('bhote-event-active');
-  (rightRail || document.body).appendChild(panel);
-  return { panel, refs };
 }
 
 export function createBhoteKoshiEventLayer({
@@ -1115,14 +994,22 @@ export function createBhoteKoshiEventLayer({
   evidenceFrameUpdater = updateEvidenceFrame,
   videoFactory = DEFAULT_VIDEO_FACTORY,
   embeddedMediaFactory = createBhoteKoshiEmbeddedMedia,
+  panelStore = useBhoteKoshiPanelStore(applicationPinia()),
 } = {}) {
   let _viewer = null;
   let _dataManager = null;
   let _mapStackController = null;
   let _event = null;
   let _enabled = false;
-  let _panel = null;
+  // The panel's controls; null while the layer is off. Their state is
+  // published to the panel store, which the context rail renders.
   let _panelRefs = null;
+  let _panelOwner = null;
+  let _panelPublished = '';
+  // The dates and field reports, which stay as they were when the panel
+  // opened, until a locale change words them again.
+  let _panelFixed = null;
+  let _offPanelLocale = null;
   let _splitControl = null;
   let _beforeLayer = null;
   let _afterLayer = null;
@@ -2719,9 +2606,9 @@ export function createBhoteKoshiEventLayer({
       id: 'bhote-koshi-split-line',
       handleClass: 'bhote-koshi-split-handle',
       cssProperty: '--bhote-koshi-split',
-      beforeTitle: imageryEndpointText(event.imagery.before),
-      afterTitle: imageryEndpointText(event.imagery.after),
-      ariaLabel: t('Historical reference and post-event image divider'),
+      beforeTitle: () => imageryEndpointText(event.imagery.before),
+      afterTitle: () => imageryEndpointText(event.imagery.after),
+      ariaLabel: () => t('Historical reference and post-event image divider'),
       formatValueText: (beforePercent, afterPercent) =>
         t(
           'A historical reference {before} percent, B post-event {after} percent',
@@ -2752,15 +2639,63 @@ export function createBhoteKoshiEventLayer({
     _lastCinematicProgress = _progress;
   }
 
+  /** Present the panel's controls as they stand; an unchanged panel is not sent again. */
+  function publishPanel() {
+    if (!_panelRefs) return;
+    const { root, ...controls } = _panelRefs;
+    const refs = Object.fromEntries(
+      Object.entries(controls).map(([key, record]) => [
+        key,
+        { ...record, attributes: { ...record.attributes } },
+      ]),
+    );
+    const signature = JSON.stringify([root.sceneBeat, refs]);
+    if (signature === _panelPublished) return;
+    _panelPublished = signature;
+    _panelFixed ??= {
+      beforeDate: imageryEndpointLabel(_event.imagery.before),
+      afterDate: imageryEndpointLabel(_event.imagery.after),
+      reports: _event.fieldReports.map((report) => ({
+        label: bhoteEventText(report.label),
+        status: bhoteEventText(report.status),
+      })),
+    };
+    panelStore.publish({
+      owner: _panelOwner,
+      sceneBeat: root.sceneBeat,
+      refs,
+      ..._panelFixed,
+    });
+  }
+
+  /**
+   * Word the panel again in the current locale: fresh records, written by
+   * the same syncs that keep them current.
+   */
+  function relocalizePanel() {
+    if (!_panelRefs || !_event) return;
+    _panelRefs = createPanelRecords(_event);
+    _panelFixed = null;
+    writeCinematicButton();
+    syncPanel();
+    syncPresentationMode();
+  }
+
   function syncCinematicButton() {
+    if (writeCinematicButton()) publishPanel();
+  }
+
+  /** Write the cinematic button's label and state; false without a panel. */
+  function writeCinematicButton() {
     const button = _panelRefs?.cinematicButton;
-    if (!button) return;
+    if (!button) return false;
     setElementProperty(
       button,
       'textContent',
       _cinematicActive ? t('■ RELEASE CAMERA') : t('◉ CINEMATIC'),
     );
     setElementAttribute(button, 'aria-pressed', String(_cinematicActive));
+    return true;
   }
 
   function claimCinematicCamera() {
@@ -3025,6 +2960,7 @@ export function createBhoteKoshiEventLayer({
       'textContent',
       `~${elapsedLabel(_sceneScrubProgress, sceneDurationSec)} / ${elapsedLabel(1, sceneDurationSec)}`,
     );
+    publishPanel();
     if (_sceneSeekFrame != null) return;
     const schedule =
       globalThis.requestAnimationFrame ||
@@ -3298,7 +3234,7 @@ export function createBhoteKoshiEventLayer({
       'disabled',
       !observation?.media?.sourceUrl,
     );
-    syncCinematicButton();
+    writeCinematicButton();
     setElementProperty(
       _panelRefs.splitInput,
       'value',
@@ -3310,6 +3246,7 @@ export function createBhoteKoshiEventLayer({
       'textContent',
       `${beforePercent} / ${100 - beforePercent}`,
     );
+    publishPanel();
   }
 
   function syncPresentationMode() {
@@ -3326,7 +3263,7 @@ export function createBhoteKoshiEventLayer({
     const evidenceAvailable =
       !sceneDirected ||
       (_sceneSurface === BHOTE_KOSHI_SCENE_EVIDENCE_BEAT && knownSceneBeat);
-    _panel?.classList?.toggle('bhote-event-scene-beat', sceneDirected);
+    if (_panelRefs) _panelRefs.root.sceneBeat = sceneDirected;
     if (_panelRefs?.playSceneButton)
       _panelRefs.playSceneButton.hidden = !sceneDirected;
     if (_panelRefs?.imagerySection)
@@ -3360,6 +3297,7 @@ export function createBhoteKoshiEventLayer({
     }
     if (_panelRefs?.openSourceButton)
       _panelRefs.openSourceButton.hidden = !evidenceAvailable;
+    publishPanel();
     overlayHost.setVisible(BHOTE_KOSHI_OVERLAY_SOURCE_ID, evidenceAvailable);
   }
 
@@ -3557,7 +3495,12 @@ export function createBhoteKoshiEventLayer({
       throwIfEnableCancelled(signal, _enabled);
       createFloodDataSource();
       createSplitControl(event);
-      const panelView = createPanel(event, {
+      _panelRefs = createPanelRecords(event);
+      _panelOwner = {};
+      _panelPublished = '';
+      _panelFixed = null;
+      const owner = _panelOwner;
+      const controls = {
         close: () =>
           _dataManager?.setEnabled(BHOTE_KOSHI_LAYER_ID, false, {
             origin: 'user',
@@ -3574,9 +3517,23 @@ export function createBhoteKoshiEventLayer({
         commitProgress,
         setSplit,
         focusCorridor,
-      });
-      _panel = panelView.panel;
-      _panelRefs = panelView.refs;
+        openReport: (index) => {
+          const url = event.fieldReports[index]?.url;
+          if (url) openExternal(url);
+        },
+      };
+      // Only the panel this enable published may act.
+      panelStore.connect(
+        Object.fromEntries(
+          Object.entries(controls).map(([name, control]) => [
+            name,
+            (...args) => (_panelOwner === owner ? control(...args) : undefined),
+          ]),
+        ),
+      );
+      publishPanel();
+      _offPanelLocale?.();
+      _offPanelLocale = onLocaleChange(relocalizePanel);
       syncPresentationMode();
       overlayHost.setVisible(
         BHOTE_KOSHI_OVERLAY_SOURCE_ID,
@@ -3669,12 +3626,16 @@ export function createBhoteKoshiEventLayer({
     _surgePoint = null;
     _lastSurgePosition = null;
     _lastSurgeVisible = null;
-    _panel?.remove();
-    document
-      .getElementById?.('right-context-rail')
-      ?.classList.remove('bhote-event-active');
-    _panel = null;
+    if (_panelOwner && panelStore.panel?.owner === _panelOwner) {
+      panelStore.connect(null);
+      panelStore.publish(null);
+    }
+    _offPanelLocale?.();
+    _offPanelLocale = null;
+    _panelOwner = null;
     _panelRefs = null;
+    _panelPublished = '';
+    _panelFixed = null;
     _splitControl?.destroy();
     _splitControl = null;
     _progress = 0;
