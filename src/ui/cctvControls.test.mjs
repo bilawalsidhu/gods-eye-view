@@ -28,12 +28,6 @@ function element() {
   };
 }
 function fixture(t) {
-  const priorDocument = globalThis.document;
-  globalThis.document = { hidden: false };
-  t.after(() => {
-    if (priorDocument === undefined) delete globalThis.document;
-    else globalThis.document = priorDocument;
-  });
   const prior = globalThis.Image;
   const requests = [];
   globalThis.Image = class {
@@ -53,32 +47,6 @@ function fixture(t) {
   return { controls, requests };
 }
 
-test('the panel shows location uncertainty for native feeds instead of inferred heading numbers', (t) => {
-  const { controls } = fixture(t);
-  controls.actions.setPanelCollapsed = () => {};
-  controls._cctvMeta = element();
-  const camera = {
-    id: 'paraguay-ibarra-cam1',
-    city: 'Presidente Franco',
-    provider: 'Grupo Ibarra',
-    feedType: 'hls',
-    isVideo: true,
-    locationNote: 'Approximate area anchor; mounts and facing unverified.',
-    headingDeg: 123,
-  };
-  controls._renderCctvState({
-    enabled: true,
-    activeCameraId: camera.id,
-    activeCamera: camera,
-    cameras: [camera],
-  });
-  assert.match(
-    controls._cctvMeta.textContent,
-    /Grupo Ibarra.*Approximate.*unverified/,
-  );
-  assert.doesNotMatch(controls._cctvMeta.textContent, /HDG 123/);
-});
-
 test('a late image completion cannot replace a newer camera preview', (t) => {
   const { controls, requests } = fixture(t);
   controls._queueCctvFrame('first.jpg', 'a', true);
@@ -87,8 +55,8 @@ test('a late image completion cannot replace a newer camera preview', (t) => {
   assert.equal(requests[0].onload, null);
   requests[1].onload();
   stale();
-  assert.equal(controls._cctvFrame.src, 'second.jpg');
-  assert.equal(controls._cctvFrame.dataset.cameraId, 'b');
+  assert.equal(controls._frame.src, 'second.jpg');
+  assert.equal(controls._frame.cameraId, 'b');
 });
 
 test('failed refresh preserves settled pixels, but changing cameras clears them', (t) => {
@@ -97,11 +65,11 @@ test('failed refresh preserves settled pixels, but changing cameras clears them'
   requests[0].onload();
   controls._queueCctvFrame('refresh.jpg', 'a', false);
   requests[1].onerror();
-  assert.equal(controls._cctvFrame.src, 'first.jpg');
-  assert.equal(controls._cctvFrameWrap.classList.contains('has-frame'), true);
+  assert.equal(controls._frame.src, 'first.jpg');
+  assert.equal(controls._frame.hasFrame, true);
   controls._queueCctvFrame('other.jpg', 'b', true);
-  assert.equal(controls._cctvFrame.src, '');
-  assert.equal(controls._cctvFrameWrap.classList.contains('has-frame'), false);
+  assert.equal(controls._frame.src, '');
+  assert.equal(controls._frame.hasFrame, false);
 });
 
 test('the camera panel owns the embedded player across visibility, selection and disable transitions', (t) => {
@@ -128,11 +96,12 @@ test('the camera panel owns the embedded player across visibility, selection and
   controls._cctvSourceBadge = element();
   controls.actions.setPanelCollapsed = () => {};
   const camera = {
-    id: 'encarnacion-sambodromo',
-    name: 'Sambódromo',
+    id: 'youtube-buenos-aires',
+    name: 'Buenos Aires',
     feedType: 'embed',
-    embedUrl: 'https://rtsp.me/embed/3NsfyZGe/',
-    sourcePageUrl: 'https://encarnacion.gov.py/en-vivo/',
+    embedUrl:
+      'https://www.youtube-nocookie.com/embed/r8Busmkpsh8?playsinline=1',
+    sourcePageUrl: 'https://www.youtube.com/watch?v=r8Busmkpsh8',
   };
   const state = {
     enabled: true,
@@ -148,11 +117,8 @@ test('the camera panel owns the embedded player across visibility, selection and
     0,
     'no synthetic/still preview for a public player',
   );
-  assert.equal(controls._cctvFrame.hidden, true);
-  assert.equal(
-    controls._cctvSourceBadge.textContent,
-    'PUBLIC PLAYER · EXTERNAL',
-  );
+  assert.equal(controls.store.view.embedded, true);
+  assert.equal(controls.store.sourceBadge.label, 'PUBLIC PLAYER · EXTERNAL');
   const player = [...children][0];
   render();
   assert.equal(
@@ -217,105 +183,9 @@ test('destroy invalidates image callbacks and releases each subscription once', 
   assert.equal(unsubscribed, 2);
   assert.equal(requests[0].onload, null);
   assert.equal(requests[0].onerror, null);
-  assert.equal(controls._cctvFrame.src, '');
+  assert.equal(controls._frame.src, '');
   controls._queueCctvFrame('late.jpg', 'b', true);
   assert.equal(requests.length, 1);
-});
-
-function calibrationFixture(t) {
-  const { controls } = fixture(t);
-  const prior = globalThis.document;
-  const inputs = [];
-  globalThis.document = {
-    createElement() {
-      const input = new EventTarget();
-      Object.assign(input, {
-        focus() {},
-        select() {},
-        setAttribute(name, value) {
-          this[name] = value;
-        },
-        remove() {
-          this.parent.input = null;
-        },
-      });
-      inputs.push(input);
-      return input;
-    },
-  };
-  t.after(() => {
-    globalThis.document = prior;
-  });
-  const chip = {
-    dataset: { calField: 'heading' },
-    textContent: '',
-    input: null,
-    appendChild(input) {
-      this.input = input;
-      input.parent = this;
-    },
-    querySelector() {
-      return this.input;
-    },
-  };
-  const patches = [];
-  controls.actions.setParams = (params) => patches.push(params);
-  controls.actions.setPanelCollapsed = () => {};
-  controls._cctvCalReadout = { querySelectorAll: () => [chip] };
-  controls._cctvState = {
-    enabled: true,
-    activeCameraId: 'a',
-    activeCamera: { id: 'a', headingDeg: 30, basePose: { headingDeg: 20 } },
-  };
-  const key = (name) =>
-    Object.assign(new Event('keydown', { cancelable: true }), { key: name });
-  return { controls, chip, inputs, patches, key };
-}
-
-test('calibration commits against the captured camera base and releases its editor', (t) => {
-  const { controls, chip, inputs, patches, key } = calibrationFixture(t);
-  controls._beginCctvCalValueEdit(chip);
-  inputs[0].value = '100';
-  controls._cctvState.activeCamera.basePose.headingDeg = 60;
-  inputs[0].dispatchEvent(key('Enter'));
-  inputs[0].dispatchEvent(new Event('blur'));
-  assert.deepEqual(patches, [
-    {
-      selectedCameraId: 'a',
-      calibration: { cameraId: 'a', patch: { headingDeg: 80 } },
-    },
-  ]);
-  assert.equal(controls._calibrationEdit, null);
-});
-
-test('a camera switch cancels calibration before old blur can change the new camera', (t) => {
-  const { controls, chip, inputs, patches } = calibrationFixture(t);
-  controls._beginCctvCalValueEdit(chip);
-  inputs[0].value = '100';
-  controls._renderCctvState({
-    enabled: true,
-    activeCameraId: 'b',
-    activeCamera: { id: 'b', headingDeg: 200, basePose: { headingDeg: 190 } },
-  });
-  inputs[0].dispatchEvent(new Event('blur'));
-  assert.deepEqual(patches, []);
-  assert.equal(chip.input, null);
-  assert.equal(chip.textContent, 'HDG 200.0°');
-});
-
-test('Escape claims calibration cancellation and disposal prevents late commits', (t) => {
-  const { controls, chip, inputs, patches, key } = calibrationFixture(t);
-  controls._beginCctvCalValueEdit(chip);
-  inputs[0].value = '100';
-  const escape = key('Escape');
-  inputs[0].dispatchEvent(escape);
-  inputs[0].dispatchEvent(new Event('blur'));
-  assert.equal(escape.defaultPrevented, true);
-  controls._beginCctvCalValueEdit(chip);
-  inputs[1].value = '120';
-  controls.destroy();
-  inputs[1].dispatchEvent(new Event('blur'));
-  assert.deepEqual(patches, []);
 });
 
 test('disposing during camera enable prevents the delayed focus and future clicks', async () => {

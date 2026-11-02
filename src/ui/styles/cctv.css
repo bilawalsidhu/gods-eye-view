@@ -35,33 +35,12 @@
   gap: 8px;
   max-height: calc(100vh - 24px);
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
-}
-
-.cctv-panel-inner::-webkit-scrollbar {
-  width: 8px;
-}
-
-.cctv-panel-inner::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 999px;
-}
-
-.cctv-panel-inner::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 212, 255, 0.6),
-    rgba(0, 212, 255, 0.28)
-  );
-  border: 1px solid rgba(0, 212, 255, 0.4);
-  border-radius: 999px;
 }
 
 .cctv-controls {

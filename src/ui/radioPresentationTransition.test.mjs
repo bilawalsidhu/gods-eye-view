@@ -22,11 +22,11 @@ for (const lifecycleState of ['enabling', 'disabling']) {
     const prior = globalThis.document;
     globalThis.document = { getElementById: () => null };
     try {
-      const enable = el();
+      let shown = null;
       const ctx = {
         destroyed: false,
         _radioPanel: el(),
-        _radioEnableBtn: enable,
+        store: { publish: (view) => (shown = view), publishTuner() {} },
         actions: {
           getLifecycle: () => ({
             lifecycleState,
@@ -55,8 +55,8 @@ for (const lifecycleState of ['enabling', 'disabling']) {
           `render threw: ${error.message}`,
         );
       }
-      assert.equal(enable.attrs.get('aria-busy'), 'true');
-      assert.equal(enable.textContent, lifecycleState.toUpperCase());
+      assert.equal(shown.enable.busy, true);
+      assert.equal(shown.enable.text, lifecycleState.toUpperCase());
     } finally {
       globalThis.document = prior;
     }
