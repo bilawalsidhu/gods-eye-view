@@ -29,6 +29,25 @@ through Pinokio; the terminal path above remains the contributor path.
 
 Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
 
+### Test prerequisites
+
+- **`npm test`** — unit tests. Runs standalone; no dev server or credentials
+  required. Exit code is the gate.
+- **`npm run test:track`** — the 3D flight-tracking regression harness. It
+  drives the **real app** in headless Chromium, so it **requires a running
+  dev server** (default `http://localhost:4173`). To target another instance,
+  run `npm run test:track -- --url <app-url>` (or
+  `node scripts/track-regression.mjs --url <app-url>`). It does not depend on
+  live OpenSky / adsb.lol / AISStream (those are optional or rate-limited
+  locally); it installs a persistent `fetch` shim that returns synthetic
+  aircraft in the exact upstream payload shapes the layers parse.
+- **`npm run build`** — production Vite build. No server or credentials
+  required; it validates that the client bundle compiles cleanly.
+
+Each feature also has its own headless gate; see
+[Feature regression gates](#feature-regression-gates) below. Docs and changelog
+rules are under [Pull requests](#pull-requests).
+
 ## Checking a built app locally
 
 Run `npm run build` followed by `npm run preview`. Preview serves the built
