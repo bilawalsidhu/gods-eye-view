@@ -7,6 +7,7 @@ import {
   translateKnown,
 } from '../i18n/index.js';
 import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
+import { roundHeadingDegrees } from '../data/headingDegrees.js';
 
 // Street Level UI state to panel strings and flags. Pure, so it is testable.
 
@@ -175,9 +176,8 @@ function presentViewer(state) {
   const { street } = state;
   const right = [];
   if (street.isPano) right.push('360°');
-  // 359.5° and above rounds to north; modulo keeps it from printing 360°.
   if (Number.isFinite(street.bearing))
-    right.push(`${Math.round(street.bearing) % 360}°`);
+    right.push(`${roundHeadingDegrees(street.bearing)}°`);
   if (street.capturedAt)
     right.push(formatDate(street.capturedAt, street.capturedAtPrecision));
   const left = [];

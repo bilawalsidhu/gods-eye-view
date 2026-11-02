@@ -490,3 +490,26 @@ test('the scene summary types in, then holds the whole text', async (t) => {
   await nextTick();
   assert.equal(byId('cctv-summary').textContent, text);
 });
+
+test('the panel meta line reads a bearing that rounds to north as HDG 0°', () => {
+  const meta = (headingDeg) => {
+    const camera = {
+      id: 'a',
+      city: 'Austin',
+      headingDeg,
+      fovDeg: 74,
+      rangeM: 700,
+    };
+    return presentCctvPanel(
+      {
+        enabled: true,
+        activeCameraId: camera.id,
+        activeCamera: camera,
+        cameras: [camera],
+      },
+      true,
+    ).meta;
+  };
+  assert.match(meta(359.4), /· HDG 359° ·/);
+  assert.match(meta(359.6), /· HDG 0° ·/);
+});
