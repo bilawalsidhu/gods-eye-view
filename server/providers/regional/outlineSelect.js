@@ -234,8 +234,6 @@ function adminLevelFits(kind, row) {
 /** Largest footprint (m²) a non-`building` result may have for a building ask. */
 const BUILDING_MAX_AREA_M2 = 150_000;
 
-/** Approximate area (m²) of a [lon, lat] ring. */
-
 /** Whether a result's class/type suits the ask kind. */
 export function acceptsOutlineClass(kind, osmClass, osmType) {
   const rules = OUTLINE_ACCEPT[kind];
@@ -258,6 +256,36 @@ function queryWords(query) {
     .split(' ')
     .filter((word) => word && !STOP_WORDS.has(word));
 }
+
+/**
+ * Words naming what a building is, which OSM rarely carries in the name or
+ * type ("Burj Khalifa", building=yes). Enclosures (zoo, garden, arch,
+ * conservatory) are left out: those name a feature inside a park.
+ */
+const BUILDING_WORDS = [
+  'building',
+  'tower',
+  'church',
+  'cathedral',
+  'basilica',
+  'chapel',
+  'temple',
+  'mosque',
+  'synagogue',
+  'shrine',
+  'museum',
+  'palace',
+  'castle',
+  'hall',
+  'library',
+];
+const BUILDING_LIKE_CLASSES = new Set([
+  'building',
+  'amenity',
+  'man_made',
+  'tourism',
+  'historic',
+]);
 
 /** How well a result's names answer the ask. */
 const NAME_MISS = 0;
@@ -293,7 +321,8 @@ function outlineNameMatch(row, query, kind) {
   const unspaced = UNSPACED_SCRIPT_RE.test(whole);
   // The last word usually names the feature ("Zoo", "Arch"): a name without
   // it is the place around the feature ("Central Park"), unless the word is
-  // where the result is ("Space Needle Seattle") or what it is ("… Bridge").
+  // where the result is ("Space Needle Seattle"), what it is ("… Bridge"), or
+  // a building word on a building-like result ("Burj Khalifa Tower").
   const context = new Set(
     normalizePlaceName(
       [
@@ -308,6 +337,8 @@ function outlineNameMatch(row, query, kind) {
         .replace(/_/g, ' '),
     ).split(' '),
   );
+  if (BUILDING_LIKE_CLASSES.has(String(row?.category || row?.class)))
+    for (const word of BUILDING_WORDS) context.add(word);
   let match = NAME_MISS;
   for (const name of names) {
     if (
@@ -355,8 +386,6 @@ function cleanRing(ring) {
   if (first[0] !== last[0] || first[1] !== last[1]) out.push([...first]);
   return out;
 }
-
-/** Planar ring area in squared degrees (only used to rank parts). */
 
 /** Polygon/MultiPolygon GeoJSON → `[[outer, ...holes], …]`, largest first. */
 function polygonsFromGeoJson(geometry) {
@@ -565,21 +594,29 @@ export function selectOutlineResult(rows, { kind, query }) {
     });
   }
   // Stable: equal matches keep upstream order.
-  const outlines = found
-    .sort((a, b) => b.nameMatch - a.nameMatch)
-    .map((entry) => entry.outline);
-  return { outline: outlines[0] || null, outlines, skipped };
+  found.sort((a, b) => b.nameMatch - a.nameMatch);
+  const outlines = found.map((entry) => entry.outline);
+  const ranks = found.map((entry) => entry.nameMatch);
+  return { outline: outlines[0] || null, outlines, ranks, skipped };
 }
 
 /**
- * The outline holding `lat, lon` (the resolved anchor), else the first.
+ * Among the best-named outlines (`ranks` from selectOutlineResult; all of
+ * them without), the one holding `lat, lon` (the resolved anchor), else the
+ * first. A worse name never wins by containment alone: an exact building
+ * that misses a pin by metres is not replaced by the plaza around it.
  * Without an anchor the first answers, as before.
  */
-export function outlineAt(outlines, lat, lon) {
+export function outlineAt(outlines, lat, lon, ranks = null) {
   const list = Array.isArray(outlines) ? outlines : [];
   if (!finiteLat(lat) || !finiteLon(lon)) return list[0] || null;
+  const best = Array.isArray(ranks) ? ranks[0] : undefined;
   return (
-    list.find((outline) => containsAnchor(outline.polygons, lat, lon)) ||
+    list.find(
+      (outline, index) =>
+        (best === undefined || ranks[index] === best) &&
+        containsAnchor(outline.polygons, lat, lon),
+    ) ||
     list[0] ||
     null
   );

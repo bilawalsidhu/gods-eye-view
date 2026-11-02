@@ -242,7 +242,7 @@ export function createNominatimOutlineProvider({
 
   const answer = (payload, anchorLat, anchorLon, cached) => ({
     status: payload.status,
-    outline: outlineAt(payload.outlines, anchorLat, anchorLon),
+    outline: outlineAt(payload.outlines, anchorLat, anchorLon, payload.ranks),
     ...(payload.skipped ? { skipped: payload.skipped } : {}),
     ...(cached ? { cached: true } : {}),
   });
@@ -277,12 +277,12 @@ export function createNominatimOutlineProvider({
           { signal: sharedSignal, maxBytes: OUTLINE_MAX_RESPONSE_BYTES },
         );
         if (!Array.isArray(rows)) throw malformed();
-        const { outlines, skipped } = selectOutlineResult(rows, {
+        const { outlines, ranks, skipped } = selectOutlineResult(rows, {
           kind,
           query: sent,
         });
         const found = outlines.length
-          ? { status: 'OK', outlines }
+          ? { status: 'OK', outlines, ranks }
           : { status: 'ZERO_RESULTS', outlines: [], skipped };
         await cache.set(
           cacheKey,

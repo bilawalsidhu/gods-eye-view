@@ -84,6 +84,36 @@ test('a lone letter is a direction only beside a name; quadrants may go unsaid',
   assert.ok(!streetNameMatches('E St NE', 'E Street Northwest'));
   assert.ok(!streetNameMatches('E Street', 'E Street Northwest'));
   assert.ok(!streetNameMatches('F Street Northwest', 'E Street'));
+  // A leading quadrant may go unsaid too (Portland's "SE Main St").
+  assert.ok(streetNameMatches('SE Main St', 'Main Street'));
+  assert.ok(!streetNameMatches('SE Main St', 'NE Main Street'));
+});
+
+test('an ask without a quadrant takes the quadrant beside the point', () => {
+  const street = (name, lat) => ({
+    name,
+    coordinates: [
+      [-77.03, lat],
+      [-77.02, lat],
+    ],
+  });
+  const tiles = [
+    {
+      streets: [
+        street('E Street Northwest', 38.8962),
+        street('E Street Northeast', 38.8972),
+        street('E Street Southeast', 38.8822),
+      ],
+    },
+  ];
+  const near = streetFromTiles(tiles, {
+    name: 'E Street',
+    lat: 38.8963,
+    lon: -77.025,
+  });
+  assert.equal(near.name, 'E Street Northwest');
+  assert.equal(near.lines.length, 1, 'one quadrant, not three streets');
+  assert.ok(near.lines[0].every(([, lat]) => lat === 38.8962));
 });
 
 test('same-name segments merge into polylines around the point (Congress Avenue)', () => {

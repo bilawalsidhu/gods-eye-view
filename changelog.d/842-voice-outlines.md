@@ -42,9 +42,10 @@
   pick the same-name Nominatim outline that holds the resolved place, and keep
   a new outline when an identical older mark fails to clean up
   (samehkhamis, #842).
-- Tighten the remaining voice outline review items: one place-name key for
-  server and tiles ("St. Paul" = "Saint Paul"), "E Street" no longer matching
-  "East Street" while "E St NW" answers "E Street", no neighbour standing in
+- Tighten the remaining voice outline review items: Nominatim name checks use
+  the bundled packs' place-name key ("St. Paul" = "Saint Paul"), "E Street" no
+  longer matches "East Street" while "E St NW" answers "E Street" near it,
+  "Burj Khalifa Tower" still finds the tower, no neighbour standing in
   for a building cut at the tile edge, no cut area answering grounds, https-only
   PHOTON_URL, an interrupted Nominatim dispatch reclaimed after ten minutes,
   no node:sqlite startup warning, and lazily decoded shared OpenFreeMap layers

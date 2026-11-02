@@ -217,6 +217,17 @@ test('grounds touching an unbuffered tile edge are cut, not complete', () => {
   const inside = decode([square(-179.999, 0, 0.01)]);
   assert.equal(inside.areas[0].clipped, false);
   assert.ok(enclosingAreaFromTiles([inside], ask));
+  // A whole shape that only touches the edge at one corner is not cut.
+  const tangent = decode([
+    [
+      [-180, 0.005],
+      [-179.995, 0],
+      [-179.99, 0.005],
+      [-179.995, 0.01],
+      [-180, 0.005],
+    ],
+  ]);
+  assert.equal(tangent.areas[0].clipped, false);
 });
 
 test('a point in a courtyard is not inside the building', () => {

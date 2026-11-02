@@ -1347,6 +1347,40 @@ test('a landmark ask is not answered by the place around it', () => {
     landmark('Royal Botanic Park'),
   );
   assert.equal(every.outline.name, 'Royal Botanic Historic Park');
+  // A building word passes on a building-like result, not on a park.
+  for (const [query, result] of [
+    [
+      'Burj Khalifa Tower',
+      at('Burj Khalifa', 'Burj Khalifa, Downtown Dubai, Dubai', {
+        category: 'building',
+        type: 'yes',
+      }),
+    ],
+    [
+      'Sagrada Familia Church',
+      at('Basílica de la Sagrada Família', 'Basílica, Barcelona, Spain', {
+        category: 'amenity',
+        type: 'place_of_worship',
+      }),
+    ],
+  ])
+    assert.ok(selectOutlineResult([result], landmark(query)).outline, query);
+  assert.equal(
+    selectOutlineResult([park('Central Park')], landmark('Central Park Tower'))
+      .outline,
+    null,
+  );
+});
+
+test('a worse name never wins the anchor by containment alone', () => {
+  const building = {
+    osm: 'way/1',
+    polygons: [square(0, 0, 0.0001)],
+  };
+  const plaza = { osm: 'way/2', polygons: [square(-0.001, -0.001, 0.003)] };
+  const anchor = [0.0002, 0.0002];
+  assert.equal(outlineAt([building, plaza], ...anchor, [3, 2]).osm, 'way/1');
+  assert.equal(outlineAt([building, plaza], ...anchor, [3, 3]).osm, 'way/2');
 });
 
 test('outlineAt reads a ring crossing the antimeridian in its own frame', () => {

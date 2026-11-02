@@ -204,14 +204,28 @@ function decodePolygons(
       }
   const [westCut, northCut] = pixelToLonLat(minX, minY, extent, z, x, y);
   const [eastCut, southCut] = pixelToLonLat(maxX, maxY, extent, z, x, y);
-  // A side with no buffer was cut at the tile edge itself, so a polygon that
-  // touches it is a fragment too.
+  // Past a buffer, any vertex on the cut line marks a fragment. A side with
+  // no buffer was cut at the tile edge itself, where a whole building may
+  // also just touch the edge: there a fragment shows as an edge running
+  // along the boundary, not a single vertex on it.
   const eps = 1e-9;
-  const onCut = ([lon, lat]) =>
-    Math.abs(lon - westCut) < eps ||
-    Math.abs(lon - eastCut) < eps ||
-    Math.abs(lat - northCut) < eps ||
-    Math.abs(lat - southCut) < eps;
+  const near = (a, b) => Math.abs(a - b) < eps;
+  const onBufferedCut = ([lon, lat]) =>
+    (minX < 0 && near(lon, westCut)) ||
+    (maxX > extent && near(lon, eastCut)) ||
+    (minY < 0 && near(lat, northCut)) ||
+    (maxY > extent && near(lat, southCut));
+  const alongEdge = ([lonA, latA], [lonB, latB]) =>
+    (minX === 0 && near(lonA, westCut) && near(lonB, westCut)) ||
+    (maxX === extent && near(lonA, eastCut) && near(lonB, eastCut)) ||
+    (minY === 0 && near(latA, northCut) && near(latB, northCut)) ||
+    (maxY === extent && near(latA, southCut) && near(latB, southCut));
+  const isCut = (ring) =>
+    ring.some(
+      (point, index) =>
+        onBufferedCut(point) ||
+        (index > 0 && alongEdge(ring[index - 1], point)),
+    );
   const out = [];
   for (let i = 0; i < layer.length; i++) {
     const feature = layer.feature(i);
@@ -245,7 +259,7 @@ function decodePolygons(
         ),
     );
     const clippedParts = polygons.map(
-      (rings, part) => incompleteParts[part] || rings[0].some(onCut),
+      (rings, part) => incompleteParts[part] || isCut(rings[0]),
     );
     for (let part = 0; part < polygons.length; part++) {
       const rings = polygons[part];
@@ -364,12 +378,22 @@ export function streetNameMatches(candidate, asked) {
   };
   const have = normalizeStreetName(candidate);
   if (answers(have)) return true;
+  const quadrant = streetQuadrant(have);
+  if (!quadrant || streetQuadrant(want)) return false;
   const words = have.split(' ');
-  return (
-    QUADRANTS.has(words.at(-1)) &&
-    !QUADRANTS.has(want.split(' ').at(-1)) &&
-    answers(words.slice(0, -1).join(' '))
+  return answers(
+    (quadrant.leading ? words.slice(1) : words.slice(0, -1)).join(' '),
   );
+}
+
+/** A normalized street name's quadrant ("e street northwest", "southeast main street"). */
+function streetQuadrant(name) {
+  const words = name.split(' ');
+  if (words.length < 2) return null;
+  if (QUADRANTS.has(words.at(-1)))
+    return { name: words.at(-1), leading: false };
+  if (QUADRANTS.has(words[0])) return { name: words[0], leading: true };
+  return null;
 }
 
 const lengthM = (line) => {
@@ -399,22 +423,37 @@ export function streetFromTiles(
   const pieces = [];
   let matchedName = null;
   const extent = boxAround(lat, lon, radiusM);
+  const matches = [];
   for (const tile of tiles || []) {
     for (const street of tile?.streets || []) {
-      if (
-        !streetNameMatches(street.name, name) &&
-        !(street.nameEn && streetNameMatches(street.nameEn, name))
-      )
-        continue;
+      const spelled = streetNameMatches(street.name, name)
+        ? street.name
+        : street.nameEn && streetNameMatches(street.nameEn, name)
+          ? street.nameEn
+          : null;
+      if (!spelled) continue;
       // Segment distance, not vertex distance: a long straight piece through
       // the point has no vertex near it.
-      if (distanceToLineM(lon, lat, street.coordinates) > radiusM) continue;
-      // Only what lies within the search extent is drawn.
-      const clipped = clipTileLine(street.coordinates, extent);
-      if (!clipped.length) continue;
-      matchedName ||= street.name;
-      pieces.push(...clipped);
+      const distanceM = distanceToLineM(lon, lat, street.coordinates);
+      if (distanceM > radiusM) continue;
+      const quadrant =
+        streetQuadrant(normalizeStreetName(spelled))?.name || null;
+      matches.push({ street, distanceM, quadrant });
     }
+  }
+  // An ask without a quadrant ("E Street" where E St NW and E St NE both
+  // run) means the one beside the point, not every quadrant's street.
+  const nearest = matches.reduce(
+    (best, match) => (!best || match.distanceM < best.distanceM ? match : best),
+    null,
+  );
+  for (const { street, quadrant } of matches) {
+    if (quadrant !== nearest.quadrant) continue;
+    // Only what lies within the search extent is drawn.
+    const clipped = clipTileLine(street.coordinates, extent);
+    if (!clipped.length) continue;
+    matchedName ||= street.name;
+    pieces.push(...clipped);
   }
   if (!pieces.length) return null;
   const chains = stitchLines(
