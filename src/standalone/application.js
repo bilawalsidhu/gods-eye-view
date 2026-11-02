@@ -7,7 +7,13 @@ import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
 import { resolveLocale, applyDocumentLanguage } from '../i18n/locale.js';
-import { applyDocumentTranslations, setLocale } from '../i18n/index.js';
+import {
+  applyDocumentTranslations,
+  getLocale,
+  onLocaleChange,
+  setLocale,
+} from '../i18n/index.js';
+import { mountApplicationViews } from '../ui/views/index.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
 
 // The existing controls and layer catalog contain page-scoped state.
@@ -28,11 +34,14 @@ export function createStandaloneApplication({
   constructed = true;
   // Locale is resolved before any UI initialization so <html lang>/<html dir>
   // and every catalog lookup agree from the first painted frame. Module
-  // scripts execute after parsing, so the DOM is ready here and every
-  // data-i18n* element honors the resolved locale without a reload.
+  // scripts execute after parsing, so the DOM is ready here: the views
+  // translate as they render, and the page's static data-i18n* markup (the
+  // loading screen) is translated here and after every language switch.
   const activeLocale = resolveLocale();
   setLocale(activeLocale);
   applyDocumentLanguage(document, activeLocale);
+  // Views render the page's markup; wiring reads it.
+  mountApplicationViews(document);
   applyDocumentTranslations(document);
   const loadingScreen = document.getElementById('loading-screen');
   const loaderStatus = loadingScreen.querySelector('.loader-status');
@@ -40,6 +49,13 @@ export function createStandaloneApplication({
   let catalog;
   return createApplication({
     createScene: async (context) => {
+      // A language switch applies in place; the page's own markup follows.
+      context.defer(
+        onLocaleChange(() => {
+          applyDocumentLanguage(document, getLocale());
+          applyDocumentTranslations(document);
+        }),
+      );
       placeSearch = createStandalonePlaceSearch({
         // The bundled city and landmark data the offline name provider reads.
         // The search package takes it as plain data rather than importing it,
