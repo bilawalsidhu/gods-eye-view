@@ -106,21 +106,32 @@ body.cockpit-mode #world-timeline {
   pointer-events: none;
 }
 
-/* Playing, held while a layer loads the time's data. */
-#world-timeline .world-timeline-time.is-buffering {
-  animation: world-timeline-buffering 1s ease-in-out infinite alternate;
+/* Playing, held while a layer loads the time's data: a spinner by the time. */
+#world-timeline .world-timeline-time.is-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-@keyframes world-timeline-buffering {
+#world-timeline .world-timeline-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: world-timeline-spin 0.9s linear infinite;
+}
+
+@keyframes world-timeline-spin {
   to {
-    opacity: 0.45;
+    transform: rotate(360deg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #world-timeline .world-timeline-time.is-buffering {
+  #world-timeline .world-timeline-spinner {
     animation: none;
-    opacity: 0.6;
+    border-color: var(--accent);
   }
 }
 

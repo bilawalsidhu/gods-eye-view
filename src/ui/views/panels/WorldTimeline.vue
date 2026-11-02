@@ -1,5 +1,5 @@
 <script setup>
-import { computed, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { formatDate, t } from '../../../i18n/index.js';
 import { useWorldTimeStore } from '../../stores/worldTime.js';
@@ -62,6 +62,29 @@ const bubble = computed(() =>
     ? `${formatDate(time.value.timeMs, BUBBLE_DATE)} · ${formatDate(time.value.timeMs, BUBBLE_TIME)} UTC`
     : '',
 );
+// Play held while a layer loads the time's data shows a spinner by the time,
+// once the hold lasts long enough to notice, so a quick frame does not flash
+// it, and until play has run a while, so a run of slow frames keeps it still.
+const WAIT_SHOWN_MS = 300;
+const WAIT_HIDDEN_MS = 500;
+const waiting = shallowRef(false);
+let waitTimer = null;
+watch(
+  () => time.value.buffering,
+  (buffering) => {
+    clearTimeout(waitTimer);
+    waitTimer = null;
+    if (buffering === waiting.value) return;
+    waitTimer = setTimeout(
+      () => {
+        waitTimer = null;
+        waiting.value = buffering;
+      },
+      buffering ? WAIT_SHOWN_MS : WAIT_HIDDEN_MS,
+    );
+  },
+);
+onBeforeUnmount(() => clearTimeout(waitTimer));
 const span = computed(() => time.value.span);
 // Where the handle is, or null with no track.
 const at = computed(() => {
@@ -222,7 +245,8 @@ const onKey = (event) => {
       ><UiIcon :name="time.playing ? 'pause' : 'play_arrow'" :size="20" /></UiButton
     ><UiSelect class="gev-field gev-field--compact world-timeline-speed" :aria-label="t('Play speed')" :title="t('Play speed')" :options="speeds" :model-value="speed" @update:model-value="store.setSpeed($event)"
     /><div class="world-timeline-track" :class="{ 'is-zoomed': zoomed }" :title="t('Scroll or pinch to zoom · double-click to see it all')" @wheel="onWheel" @mousedown="onPress" @dblclick="showAll" @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchEnd"
-      ><time class="world-timeline-time" :class="{ 'is-buffering': time.buffering }" :style="{ '--at': place(shown) / 100 }" :datetime="new Date(time.timeMs).toISOString()" aria-live="off">{{ bubble }}</time
+      ><time class="world-timeline-time" :class="{ 'is-waiting': waiting }" :style="{ '--at': place(shown) / 100 }" :datetime="new Date(time.timeMs).toISOString()" aria-live="off"
+        ><span v-if="waiting" class="world-timeline-spinner" aria-hidden="true"></span>{{ bubble }}</time
       ><span v-for="(left, index) in ticks" :key="index" class="world-timeline-tick" :style="{ left }" aria-hidden="true"></span
       ><span class="world-timeline-fill" :style="{ width: `${place(shown)}%` }" aria-hidden="true"></span
       ><input

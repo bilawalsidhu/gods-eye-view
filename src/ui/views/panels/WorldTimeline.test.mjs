@@ -411,3 +411,32 @@ test('zoomed, a scrub near now stays off live, and the view keeps a still handle
   assert.equal(track.classList.contains('is-zoomed'), false);
   assert.ok(Math.abs(worldClock.now() - at) < 1_000, 'time as it was');
 });
+
+test('play held for a layer to load shows a spinner once the hold lasts', async (t) => {
+  const bar = mount(t);
+  const at = Date.UTC(2026, 9, 30, 6, 15, 42);
+  supportingLayer(t, at);
+  worldClock.seek(at - 1_800_000);
+  worldClock.play({ continuous: true });
+  await nextTick();
+  const bubble = () => bar().querySelector('.world-timeline-time');
+  const release = worldClock.wait('test-radar');
+  t.after(release);
+  // A clock tick (a quarter second) tells of the hold; the spinner waits on.
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  await nextTick();
+  assert.equal(bubble().querySelector('.world-timeline-spinner'), null, 'not for a quick frame');
+  // The clock tells of the hold on its next tick, and the bar shows it after.
+  const until = async (shown) => {
+    for (let waited = 0; waited < 3_000; waited += 50) {
+      if (Boolean(bubble().querySelector('.world-timeline-spinner')) === shown) return true;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await nextTick();
+    }
+    return false;
+  };
+  assert.ok(await until(true), 'spinner once the hold lasts');
+  assert.match(bubble().textContent, /UTC$/, 'the time stays');
+  release();
+  assert.ok(await until(false), 'gone once play goes on');
+});
