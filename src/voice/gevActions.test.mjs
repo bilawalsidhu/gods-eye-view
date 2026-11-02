@@ -3931,3 +3931,26 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   assert.equal(plane.ok, true);
   assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
 });
+
+test('set_panel_open accepts the Authoring name for the scene panel', async () => {
+  const calls = [];
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      },
+    },
+    styleManager: {
+      setPanelCollapsed: (...args) => calls.push(args),
+    },
+    dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+  });
+  for (const panel of ['authoring', 'Authoring', 'scenes']) {
+    const result = await runner('set_panel_open', { panelId: panel, open: true });
+    assert.equal(result.panelId, 'scene-panel');
+  }
+  assert.deepEqual(calls.at(-1), ['scene-panel', false, { explicit: true }]);
+});

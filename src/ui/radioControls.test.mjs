@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RadioControls } from './radioControls.js';
+import { createOwners } from './stores/owners.js';
 
 class Element extends EventTarget {
   constructor() {
@@ -39,8 +40,12 @@ function fixture() {
   globalThis.window = new EventTarget();
   const panel = new Element();
   const enable = new Element();
-  const next = new Element();
-  const prev = new Element();
+  const store = {
+    ...createOwners(),
+    publish() {},
+    publishUtility() {},
+    publishTuner() {},
+  };
   const calls = [];
   const cycleOptions = [];
   const subscribers = [];
@@ -77,18 +82,16 @@ function fixture() {
     elements: {
       _radioPanel: panel,
       _radioEnableBtn: enable,
-      _radioNextBtn: next,
-      _radioPrevBtn: prev,
     },
     radio,
     actions,
     canvas: new Element(),
+    store,
   });
   return {
     controls,
     enable,
-    next,
-    prev,
+    store,
     actions,
     calls,
     cycleOptions,
@@ -102,17 +105,17 @@ function fixture() {
   };
 }
 
-test('Radio listeners and subscriptions are revoked once before tuning teardown', () => {
+test('Radio listeners, actions and subscriptions are revoked once before tuning teardown', () => {
   const f = fixture();
   try {
     f.controls.connect();
-    f.next.dispatchEvent(new Event('click'));
+    f.store.act('cycleRadio', 1);
     assert.deepEqual(f.calls, ['subscribe', ['cycle', 1]]);
     f.controls.destroy();
     f.controls.destroy();
     const snapshot = structuredClone(f.calls);
     f.controls._setCockpitDisclosure('display', true);
-    f.next.dispatchEvent(new Event('click'));
+    f.store.act('cycleRadio', 1);
     f.document.dispatchEvent(new Event('gev:radio-selected'));
     f.subscribers[0]({ enabled: true });
     f.controls.connect();
@@ -142,7 +145,7 @@ test('a delayed Radio enable cannot reveal or refocus controls after destruction
   });
   try {
     f.actions.setEnabled = () => pending;
-    f.enable.dispatchEvent(new Event('click'));
+    f.store.act('toggleRadio', 'panel');
     assert.equal(f.enable.getAttribute('aria-busy'), 'true');
     f.controls.destroy();
     const attrs = new Map(f.enable.attrs);
@@ -187,8 +190,8 @@ test('Next and Previous play only while a stream is active', () => {
     f.controls.connect();
     for (const audioState of ['stopped', 'paused', 'error']) {
       f.uiState.audioState = audioState;
-      f.next.dispatchEvent(new Event('click'));
-      f.prev.dispatchEvent(new Event('click'));
+      f.store.act('cycleRadio', 1);
+      f.store.act('cycleRadio', -1);
     }
     assert.deepEqual(
       f.cycleOptions.map((options) => options.autoplay),
@@ -197,8 +200,8 @@ test('Next and Previous play only while a stream is active', () => {
     f.cycleOptions.length = 0;
     for (const audioState of ['loading', 'buffering', 'playing']) {
       f.uiState.audioState = audioState;
-      f.next.dispatchEvent(new Event('click'));
-      f.prev.dispatchEvent(new Event('click'));
+      f.store.act('cycleRadio', 1);
+      f.store.act('cycleRadio', -1);
     }
     assert.deepEqual(
       f.cycleOptions.map((options) => options.autoplay),

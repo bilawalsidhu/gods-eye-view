@@ -21,28 +21,14 @@ const settle = () => new Promise((resolve) => setTimeout(resolve));
 
 // What the Radio panel and the Cockpit player show for a state.
 function render(state) {
-  const el = () => {
-    const classes = new Set();
-    return {
-      textContent: '',
-      disabled: false,
-      title: '',
-      setAttribute() {},
-      getAttribute: () => null,
-      classList: { toggle(name, on) { on ? classes.add(name) : classes.delete(name); }, contains: (name) => classes.has(name) },
-    };
-  };
   const previousDocument = globalThis.document;
   globalThis.document = { getElementById: () => null, activeElement: null };
   try {
+    let view = null;
     const host = {
       destroyed: false,
-      _radioPanel: el(),
-      _radioPlaybackState: el(),
-      _radioPlayBtn: el(),
-      _radioStopBtn: el(),
-      _cockpitRadioPlayBtn: el(),
-      _syncContextRadioLauncherState() {},
+      _radioPanel: {},
+      store: { publish: (published) => (view = published), publishTuner() {} },
       actions: {
         getLifecycle: () => null,
         preservePanelStateDuringClear: () => false,
@@ -52,11 +38,11 @@ function render(state) {
     };
     renderRadioState.call(host, state);
     return {
-      status: host._radioPlaybackState.textContent,
-      error: host._radioPlaybackState.classList.contains('error'),
-      button: host._radioPlayBtn.textContent,
-      stopDisabled: host._radioStopBtn.disabled,
-      cockpit: host._cockpitRadioPlayBtn.textContent,
+      status: view.playback.text,
+      error: Boolean(view.playback.error),
+      button: view.transport.play.text,
+      stopDisabled: view.transport.stopDisabled,
+      cockpit: view.cockpit.play.glyph,
     };
   } finally {
     if (previousDocument === undefined) delete globalThis.document;

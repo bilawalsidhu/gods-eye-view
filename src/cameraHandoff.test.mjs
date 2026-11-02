@@ -353,7 +353,7 @@ test('teardown refuses deferred location work before geocoding begins', () => {
     'if (!query || this.destroyed) return;',
     'const authority = this.begin();',
     'if (authority === false)',
-    'this.input.blur();',
+    'this.input?.blur();',
     'this.onStart?.(authority);',
     'await this.search(query',
   ], 'disposed search refusal');
