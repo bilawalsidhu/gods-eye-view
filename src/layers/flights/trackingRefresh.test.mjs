@@ -5,7 +5,7 @@ import { createTracking } from './tracking.js';
 function handoff(update) {
   return createTracking({
     flightState: {
-      _renderer: { fleet: { attached: () => true, visible: () => true } },
+      enabled: true,
     },
     services: Object.fromEntries(
       [

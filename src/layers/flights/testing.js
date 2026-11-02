@@ -70,6 +70,7 @@ export function createTesting({
       viewer,
       adopt: { billboardCollection, modelCollection },
     });
+    flightState.enabled = flightState._renderer.fleet.visible();
     flightState._billboards = new Map([[icao24, billboard]]);
     flightState._cullPositions.clear();
     flightState._models.clear();

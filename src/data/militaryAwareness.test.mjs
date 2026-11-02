@@ -1660,7 +1660,7 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
   for (const [name, source, guard] of [
     // Flights asks its renderer whether the fleet is shown (phase 3).
     ['flights', readLayerSource(new URL('./flights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_renderer\?\.fleet\.visible\(\)\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*if\s*\(\s*!flightState\.enabled\s*\|\|\s*flightState\.records\.data\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
     // Military asks its renderer too (phase 3).
     ['militaryFlights', readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
       /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_renderer\?\.fleet\.visible\(\)\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/],
