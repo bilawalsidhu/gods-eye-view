@@ -103,6 +103,35 @@ try {
       started: Date.now(),
     };
   });
+  // Refuse the first Cesium canvas. The application must roll back with the
+  // original aircraft still in the cockpit, then allow an ordinary retry.
+  await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+      if (String(type).includes('webgl')) {
+        window.__refusedContext = true;
+        throw new Error('QA renderer startup failure');
+      }
+      return original.call(this, type, ...args);
+    };
+    window.__restoreContext = () => {
+      HTMLCanvasElement.prototype.getContext = original;
+    };
+  });
+  await page.select('#globe-engine', 'cesium');
+  await page.waitForFunction(() => window.__refusedContext === true);
+  await ready('navara');
+  assert.ok(await page.evaluate(() => {
+    window.__restoreContext();
+    const {dataManager, styleManager} = window.__godsEyeView;
+    return new URL(location.href).searchParams.get('engine') === 'navara' &&
+      dataManager === window.__handoff.dataManager &&
+      dataManager.layers.get('flights') === window.__handoff.entry &&
+      styleManager.getCockpitState().active &&
+      styleManager.getAircraftTrackingTarget()?.id === '71be26';
+  }), 'a failed scene must leave the live session usable');
+  console.log('PASS failed renderer rolled back to the same flight and cockpit');
+
   for (const kind of ['cesium', 'navara']) {
     await page.select('#globe-engine', kind);
     await ready(kind);
