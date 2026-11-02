@@ -175,7 +175,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @returns {Array<object>}
    */
 
-  function normalizeRocketLaunches(payload, now = new Date(layerState.now())) {
+  function normalizeRocketLaunches(payload, now = new Date()) {
     const launches = Array.isArray(payload) ? payload : payload?.results;
     if (!Array.isArray(launches)) return [];
     const cutoff = now.getTime() - WINDOW_DAYS * 86400000;

@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { worldTimeFor } from '../../time/worldClock.js';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -155,6 +155,10 @@ export function createState({ services }) {
   /** A launched mission's satellite flies on the satellites layer's time. */
 
   state.orbitNow = worldTimeFor('satellites');
+
+  /** The launches loaded changed, and with them the time they cover. */
+
+  state.coverageChanged = () => worldClock.coverageChanged();
 
   state._missionOrbitPatternRegistered = false;
 

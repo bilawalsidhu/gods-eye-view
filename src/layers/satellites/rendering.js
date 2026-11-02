@@ -1,6 +1,11 @@
 import * as Cesium from 'cesium';
 import { gstime } from 'satellite.js';
-import { ISS_NORAD, POSITION_UPDATE_MS, RING_ROTATION_MS } from './policy.js';
+import {
+  ISS_NORAD,
+  ORBIT_REBAKE_MS,
+  POSITION_UPDATE_MS,
+  RING_ROTATION_MS,
+} from './policy.js';
 
 export function createRendering({
   state: layerState,
@@ -75,6 +80,8 @@ export function createRendering({
 
     layerState._orbitPaths.set(noradId, {
       primitive,
+      color: pathColor,
+      bakeMs: bakeDate.getTime(),
       // Same Date object as computeOrbitPath's internal fixedGmst → identical
       // GMST value (gstime is pure), so delta starts at exactly 0 and the
       // initial identity modelMatrix is correct until the first ring tick.
@@ -113,8 +120,15 @@ export function createRendering({
   function _updateOrbitPathRotations(nowDate) {
     if (layerState._orbitPaths.size === 0) return;
 
-    for (const path of layerState._orbitPaths.values()) {
+    for (const [noradId, path] of [...layerState._orbitPaths]) {
       if (!path.primitive) continue;
+      // The rotation keeps the ring under the dot for minutes; the plane
+      // itself precesses, so a world time moved far from the bake re-bakes.
+      if (Math.abs(nowDate.getTime() - path.bakeMs) > ORBIT_REBAKE_MS) {
+        _hideOrbitPath(noradId);
+        _showOrbitPath(noradId, path.color);
+        continue;
+      }
       parts.orbits.orbitFrameModelMatrix(
         path.gmstAtBake,
         nowDate,

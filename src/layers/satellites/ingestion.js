@@ -170,7 +170,6 @@ export function createIngestion({
         layerState._coreStale = coreStale;
         layerState._count = layerState._points.size;
         layerState._catalogRevision++;
-        layerState.coverageChanged();
         layerState._lastUpdate = Date.now();
         layerState._lastPropagation = Date.now();
         layerState._lastTrackingRefreshOutcome = {
@@ -194,6 +193,7 @@ export function createIngestion({
         // the rebuild must not block on that.
         void parts.tracking._reconcileTrackedSubjectContext();
         parts.tracking._applyPendingTrackingRestore();
+        layerState.coverageChanged();
       } catch (e) {
         if (updateSignal.aborted || e?.name === 'AbortError') {
           throw new DOMException('Satellite update aborted', 'AbortError');

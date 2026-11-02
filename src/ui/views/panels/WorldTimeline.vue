@@ -8,9 +8,9 @@ import UiIcon from '../../kit/UiIcon.vue';
 
 // The world time while it is away from live: what is playing, or where it
 // was paused, with play and pause on the left and the way back to live on
-// the right. It shows only while a layer that moves with the clock (weather
-// radar, satellite or lightning, or one a host follows) is on with time to
-// show; live, or with none on, the bar stays hidden.
+// the right. It shows only while a layer with a time of its own (weather,
+// satellites, launches, or one a host follows) is on with time to show; live,
+// or with only live feeds such as flights on, the bar stays hidden.
 const store = useWorldTimeStore();
 const { time } = storeToRefs(store);
 

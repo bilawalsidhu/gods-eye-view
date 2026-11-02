@@ -30,6 +30,13 @@ export const ORBIT_PATH_STEPS = 180;
 export const POSITION_UPDATE_MS = 1000;
 /** How far either side of now SGP4 on current element sets stays meaningful. */
 export const SATELLITE_COVERAGE_MS = 14 * 24 * 3_600_000;
+
+/**
+ * How far the world time may move from when an orbit ring was drawn before it
+ * is drawn again: the Earth's turn is followed exactly, but the orbit's plane
+ * drifts a few degrees a day.
+ */
+export const ORBIT_REBAKE_MS = 30 * 60_000;
 // re-propagate every 1s (SGP4 is smooth at this rate)
 
 export const RING_ROTATION_MS = 1000;

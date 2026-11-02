@@ -10,30 +10,19 @@ export function createLifecycle({
 }) {
   const { clearFocusTarget } = services.focus;
   // While on with a catalog, satellites can be shown at any time in reach of
-  // their element sets.
-  let releaseCoverage = null;
-  const coverWorldTime = () => {
-    if (releaseCoverage) return;
-    const release = worldClock.register({
-      id: 'satellites',
-      coverage: () => {
-        if (!layerState._catalog.size) return null;
-        const now = worldClock.wallNow();
-        return {
-          start: now - SATELLITE_COVERAGE_MS,
-          end: now + SATELLITE_COVERAGE_MS,
-        };
-      },
-    });
-    // Registering tells the world's listeners, which may turn the layer off
-    // (or off and on, registering again) before this returns.
-    if (layerState._enabled && !releaseCoverage) releaseCoverage = release;
-    else release();
-  };
-  const uncoverWorldTime = () => {
-    releaseCoverage?.();
-    releaseCoverage = null;
-  };
+  // their element sets. Registered once; off, the layer has no time to show,
+  // and each step tells the clock once it has settled.
+  worldClock.register({
+    id: 'satellites',
+    coverage: () => {
+      if (!layerState._enabled || !layerState._catalog.size) return null;
+      const now = worldClock.wallNow();
+      return {
+        start: now - SATELLITE_COVERAGE_MS,
+        end: now + SATELLITE_COVERAGE_MS,
+      };
+    },
+  });
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
@@ -91,7 +80,6 @@ export function createLifecycle({
 
     enable(viewer) {
       layerState._enabled = true;
-      coverWorldTime();
       holdContinuousRender('satellites'); // per-frame animator (perf wave 2)
       if (layerState._pointCollection)
         layerState._pointCollection.show =
@@ -120,13 +108,13 @@ export function createLifecycle({
         );
       }
       parts.tracking._applyPendingTrackingRestore();
+      layerState.coverageChanged();
     },
 
     disable(viewer) {
       parts.catalog._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       layerState._enabled = false;
-      uncoverWorldTime();
       releaseContinuousRender('satellites');
       if (layerState._pointCollection) layerState._pointCollection.show = false;
       for (const path of layerState._orbitPaths.values())
@@ -148,13 +136,13 @@ export function createLifecycle({
         layerState._preRenderListener();
         layerState._preRenderListener = null;
       }
+      layerState.coverageChanged();
     },
 
     destroy(viewer) {
       parts.catalog._abortActiveUpdates();
       releaseContinuousRender('satellites'); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
-      uncoverWorldTime();
       parts.tracking._clearTracking();
       parts.tracking._cancelPendingTrackingRestore();
       if (layerState._clickHandler) {
@@ -191,7 +179,6 @@ export function createLifecycle({
       layerState._denseStatus = 'idle';
       layerState._denseError = null;
       layerState._catalogRevision++;
-      layerState.coverageChanged();
       layerState._rowControlsListener = null;
       layerState._count = 0;
       layerState._lastUpdate = null;
@@ -207,6 +194,7 @@ export function createLifecycle({
         failedGroups: [],
       };
       layerState._viewer = null;
+      layerState.coverageChanged();
     },
   };
 

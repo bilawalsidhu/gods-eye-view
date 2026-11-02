@@ -55,6 +55,24 @@ test('away from live only following layers move with the cursor', () => {
   assert.equal(satellites(), t.wall);
 });
 
+test('layers named at creation follow from the start', () => {
+  const t = fakeTime();
+  const clock = createWorldClock({ ...t.options, follow: ['satellites'] });
+  clock.seek(t.wall - 1_000);
+  assert.equal(clock.timeFor('satellites')(), t.wall - 1_000);
+  assert.equal(clock.timeFor('flights')(), t.wall);
+  clock.follow('satellites', false);
+  assert.equal(clock.follows('satellites'), false);
+});
+
+test('the page clock moves the layers with a time of their own', async () => {
+  const { worldClock } = await import('./worldClock.js');
+  for (const id of ['sky', 'satellites', 'rocket-launches'])
+    assert.equal(worldClock.follows(id), true, id);
+  for (const id of ['flights', 'military', 'vessels', 'transit'])
+    assert.equal(worldClock.follows(id), false, id);
+});
+
 test('continuous play advances the cursor at the rate and pause holds it', () => {
   const t = fakeTime();
   const clock = createWorldClock(t.options);

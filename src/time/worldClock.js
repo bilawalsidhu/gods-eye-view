@@ -6,8 +6,10 @@
  * Live is a mode, not a timestamp: while live the clock is the wall clock and
  * every layer behaves as it would reading `Date.now()`. Away from live the
  * clock holds a cursor, fixed or playing. Only the layers that follow the clock
- * (`follow(id)`) move with the cursor; the rest keep reading the live edge
- * through `timeFor(id)`, so a host opts layers in one at a time.
+ * move with the cursor; the rest keep reading the live edge through
+ * `timeFor(id)`. On the page's clock the layers whose data has a time of its
+ * own (the sky, satellites, launches and weather) follow it; live feeds such
+ * as flights and vessels have no time to move to and stay live.
  *
  * Playback is continuous (`cursor + elapsed × rate`) unless a driver takes
  * it: weather replay steps its observed frames itself and moves the clock as
@@ -28,7 +30,9 @@ export const WORLD_CLOCK_TICK_MS = 250;
 /**
  * @param {{now?: () => number, monotonicNow?: () => number,
  *   setInterval?: typeof globalThis.setInterval,
- *   clearInterval?: typeof globalThis.clearInterval}} [options]
+ *   clearInterval?: typeof globalThis.clearInterval,
+ *   follow?: Iterable<string>}} [options] `follow` lists the layers that
+ *   move with the cursor from the start.
  */
 export function createWorldClock({
   // Read at each call, so a stand-in for Date.now (a test's, a harness's)
@@ -37,10 +41,11 @@ export function createWorldClock({
   monotonicNow = () => globalThis.performance.now(),
   setInterval = globalThis.setInterval,
   clearInterval = globalThis.clearInterval,
+  follow = [],
 } = {}) {
   const listeners = new Set();
   // Layers a host follows, and layers a part of the app holds following.
-  const following = new Set();
+  const following = new Set(follow);
   const holds = new Map();
   const readers = new Map();
   const sources = new Set();
@@ -330,8 +335,15 @@ export function createWorldClock({
   return api;
 }
 
-/** The page's world clock. Layers, the sky and a host all read this one. */
-export const worldClock = createWorldClock();
+/**
+ * The page's world clock. Layers, the sky and a host all read this one. The
+ * sky, satellites (and the launched missions flying on their time) and
+ * launches have a time of their own and move with it; weather holds each
+ * product it shows.
+ */
+export const worldClock = createWorldClock({
+  follow: ['sky', 'satellites', 'rocket-launches'],
+});
 
 /** The time layer `id` draws at on the page's clock. */
 export const worldTimeFor = (id) => worldClock.timeFor(id);
