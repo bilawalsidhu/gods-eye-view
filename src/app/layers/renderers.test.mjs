@@ -60,6 +60,7 @@ test('the aircraft, vessels, satellites, launches and earthquakes have extracted
   assert.deepEqual(Object.keys(CESIUM_LAYER_RENDERERS), [
     'earthquakes',
     'air-quality',
+    'gnss-integrity',
     'local-firms',
     'rocket-launches',
     'satellites',

@@ -6,7 +6,7 @@ import {
   rectangleBoundaries,
   rectangleDistances,
   rectangleFrame,
-} from './navaraGeometry.js';
+} from '../../shared/render/navaraCellGeometry.js';
 const cases = [];
 for (const lat of [-90, -80, -45, 0, 45, 80, 88])
   for (const west of [-180, -123, 0, 178])

@@ -196,10 +196,10 @@ export function createApplicationCatalog({
       [
         'gnss-integrity',
         () =>
-          createApplicationGnssIntegrity({
+          sessionModel('gnss-integrity', () => createApplicationGnssIntegrity({
             source: sources['gnss-integrity'],
             windowMs: sources['gnss-integrity'].windowMs,
-          }),
+          })),
       ],
       [
         's2-ghostmaps',

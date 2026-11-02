@@ -31,6 +31,10 @@ try {
     const fetch = window.fetch.bind(window);
     window.fetch = (input, o) => {
       const url = new URL(input.url ?? input, document.baseURI);
+      if (url.pathname === '/api/gnss-integrity') {
+        return Promise.resolve(Response.json({ageMs: 0, rows: ['a1','a2','a3'].map(hex =>
+          ({hex, lat: 43.65, lon: -79.38, nic: 0, nacp: 0, degraded: true, gpsLost: false}))}));
+      }
       if (url.hostname === 'api.weather.gc.ca') {
         const records = url.pathname.includes('aqhi-stations')
           ? [
@@ -76,12 +80,12 @@ try {
       () => window.__godsEyeView.styleManager.initialRestorePromise,
     );
   };
-  const capture = async (visible) => {
-    await p.evaluate(async (show) => {
+  const capture = async (visible, layerId = 'air-quality') => {
+    await p.evaluate(async (show, id) => {
       const d = window.__godsEyeView;
-      await d.dataManager.setEnabled('air-quality', show, { origin: 'user' });
+      await d.dataManager.setEnabled(id, show, { origin: 'user' });
       d.engine.render.request('qa-air-quality');
-    }, visible);
+    }, visible, layerId);
     await new Promise((r) => setTimeout(r, 3900));
     const shot = await p.screenshot();
     return sharp(shot)
@@ -97,6 +101,7 @@ try {
     if (d.tileset || window.__GOOGLE_MAPS_API_KEY__)
       throw Error('Keyless required');
     window.qaAir = d.dataManager.layers.get('air-quality').module;
+    window.qaGnss = d.dataManager.layers.get('gnss-integrity').module;
   });
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
@@ -105,10 +110,12 @@ try {
       const same = await p.evaluate(
         () =>
           window.__godsEyeView.dataManager.layers.get('air-quality').module ===
-          window.qaAir,
+          window.qaAir &&
+          window.__godsEyeView.dataManager.layers.get('gnss-integrity').module === window.qaGnss,
       );
       assert.ok(same);
     }
+    await p.evaluate(() => window.__godsEyeView.dataManager.setEnabled('gnss-integrity', false));
     const off = await capture(false),
       on = await capture(true);
     const values = await p.evaluate(() => ({
@@ -131,6 +138,14 @@ try {
     assert.equal(values.records[0].name, 'QA Toronto');
     assert.equal(values.records[0].value, 9);
     assert.equal(values.card.length, 1);
+    await capture(false);
+    const cellOff = await capture(false, 'gnss-integrity');
+    const cellOn = await capture(true, 'gnss-integrity');
+    assert.ok(orange(cellOn) > orange(cellOff) + 5, kind + ' must draw GNSS high cell');
+    const gnss = await p.evaluate(() => window.qaGnss.getStats());
+    assert.equal(gnss.levels.high, 1);
+    console.log('PASS', kind, 'GNSS high cell, view anchor', gnss.coverage.latitude, gnss.coverage.longitude);
+    await p.evaluate(() => window.__godsEyeView.dataManager.setEnabled('air-quality', true));
   }
   assert.deepEqual(errors, []);
 } finally {

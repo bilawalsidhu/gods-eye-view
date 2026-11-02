@@ -8,7 +8,7 @@ import fs from 'node:fs/promises';
 const declarations = [
   ['gevRecentImagery', '../../recentImagery/render/navaraGround.js'],
   ['gevEarthquakeGround', '../../earthquakes/render/navara.js'],
-  ['gevFirmsGround', '../../firms/render/navara.js'],
+  ['gevFirmsGround', './navaraGroundCells.js'],
   ['gevPreSharpenOverlay', '../../../globe/navara/overlay.js'],
 ];
 const specs = await Promise.all(

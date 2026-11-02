@@ -1,3 +1,4 @@
+import { createGnssCesiumRenderer } from '../../layers/gnss/render/cesium.js';
 import { createAirQualityCesiumRenderer } from '../../layers/airQuality/render/cesium.js';
 import { createFirmsCesiumRenderer } from '../../layers/firms/render/cesium.js';
 import { createEarthquakesCesiumRenderer } from '../../layers/earthquakes/render/cesium.js';
@@ -94,6 +95,7 @@ export const layerAvailableOn = (layerId, engineKind) =>
 export const CESIUM_LAYER_RENDERERS = Object.freeze({
   earthquakes: createEarthquakesCesiumRenderer,
   'air-quality': (_engine, options) => createAirQualityCesiumRenderer(options),
+  'gnss-integrity': (_engine, options) => createGnssCesiumRenderer(options),
   'local-firms': createFirmsCesiumRenderer,
   'rocket-launches': createLaunchesCesiumRenderer,
   satellites: createSatellitesCesiumRenderer,
