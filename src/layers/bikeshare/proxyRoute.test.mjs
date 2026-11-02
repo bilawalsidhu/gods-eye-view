@@ -446,3 +446,62 @@ test('unknown GBFS counts stay unknown through the source, model and station col
     assert.equal(model.toNonNegativeInteger('3'), 3);
   }
 });
+
+test('a station without a published capacity re-derives it from every status poll', async () => {
+  const { createRendering } = await import('./rendering.js');
+  const { COLOR_YELLOW } = await import('./policy.js');
+  const model = createModel({});
+  const state = {
+    _cityRuntime: new Map(),
+    _stationRenderMap: new Map(),
+    _pointCollection: { add: (options) => ({ ...options }) },
+  };
+  const rendering = createRendering({
+    state,
+    services: { render: { governorRequestRender() {} } },
+    parts: { model },
+  });
+  const info = model.parseStationInformation({
+    data: {
+      stations: [
+        { station_id: 'open', name: 'Open', lat: 30.26, lon: -97.74 },
+        {
+          station_id: 'fixed',
+          name: 'Fixed',
+          lat: 30.27,
+          lon: -97.75,
+          capacity: 13,
+        },
+      ],
+    },
+  });
+  rendering.ensureCityPoints('austin', info);
+  const poll = (stations) =>
+    rendering.applyStatusToPoints(
+      'austin',
+      model.parseStationStatus({ data: { stations } }),
+    );
+  const open = state._stationRenderMap.get('austin:open');
+  const fixed = state._stationRenderMap.get('austin:fixed');
+
+  // The first poll has no row for the station: capacity is a placeholder.
+  poll([
+    {
+      station_id: 'fixed',
+      num_bikes_available: 4,
+      num_docks_available: 9,
+    },
+  ]);
+  poll([
+    { station_id: 'open', num_bikes_available: 10, num_docks_available: 20 },
+    { station_id: 'fixed', num_bikes_available: 2, num_docks_available: 3 },
+  ]);
+  assert.equal(open.capacity, 30, 'the first poll fixed the capacity');
+  assert.equal(open.point.color, COLOR_YELLOW, '10 of 30 is not plenty');
+  assert.equal(fixed.capacity, 13, 'a published capacity is kept');
+
+  poll([
+    { station_id: 'open', num_bikes_available: 4, num_docks_available: 2 },
+  ]);
+  assert.equal(open.capacity, 6);
+});
