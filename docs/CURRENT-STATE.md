@@ -475,6 +475,33 @@ not worldwide detections; units are strikes/km²/min ×10³. It is neither raw G
 flashes nor a live strike counter. Weather imagery orders scalar context below
 satellite, radar and lightning consistently across enable and history order.
 
+A weather source can describe its own products (credit, units, coverage,
+legend) through an optional `display` object in each product manifest:
+`source` (≤60 characters, the row's source name), `credit` (≤200, the imagery
+credit in Data attribution, shown as plain text and updated when a refreshed
+manifest changes it), `units` (≤40), `coverage` (≤48, the coverage badge and
+info line), `info` (≤600, the info tooltip), `legend` (2–16 `{ label, color }`
+stops; label a plain decimal number or text, at most 16 characters either way,
+a number reading back exactly as the legend shows it: within ±2^53−1, with
+no leading zeros and no digits lost to rounding; color `#rrggbb`) and `extent`
+(`{ west, south, east, north }` degrees, non-empty; west greater than east
+crosses the antimeridian; used for coverage navigation and the
+outside-coverage status). `units` and `legend` describe one scale and
+apply only together: if either is absent or invalid, both keep the built-in
+values, and the radar info heading names the units in use. Text must be
+single-line, without control characters (U+0000–U+001F, U+007F–U+009F), line
+or paragraph separators, or invisible and format characters: soft hyphen
+(U+00AD), combining grapheme joiner (U+034F), Arabic letter mark (U+061C),
+Mongolian vowel separator (U+180E), zero-width and direction marks
+(U+200B–U+200F), bidi embedding and override (U+202A–U+202E), word joiner,
+invisible operators and bidi isolates (U+2060–U+2069), variation selectors
+(U+FE00–U+FE0F), byte-order mark (U+FEFF) and tag characters
+(U+E0000–U+E007F). Each other field is validated on its own; an absent or
+invalid field keeps the built-in value, so the bundled nowCOAST manifests,
+which carry no `display`, look exactly as before. Accepted source
+and units text is source data and is shown untranslated. The static Data
+attribution entries remain the application's `credits` list.
+
 Cyclones combine fixed NHC/CPHC status and summary GIS endpoints through a bounded
 same-origin provider. The status endpoint lacks browser CORS; each installation
 fetches keyless public sources at runtime, with no centralized ingestion service.
@@ -5457,6 +5484,7 @@ request viewbox and continues searching without that geographic preference.
 - Drawn-line distance labels select metres or kilometres after rounding to the nearest metre, so a 999.5-metre line displays as `1.0 km` rather than `1000 m`.
 - **Measurements and centres are computed on unwrapped longitudes** (`unwrapLongitudes` / `wrapLongitude` in `drawMode.js`, used by `ringAreaM2`, `ringCentroid` and the engine's manual-area anchor). A ~50,000 m² rectangle straddling the antimeridian reads its 0.002° width as 359.998° under raw arithmetic: it measured thousands of square kilometres and anchored on the Greenwich meridian, half a world from the shape. Path length was already safe — haversine is periodic in the longitude delta — and a test pins that so a "fix" cannot break it.
 - **Bounds.** One shape holds at most `MAX_VERTICES` = 512 points; two clicks within 0.5 m are one vertex (that is what makes a double-click finish without leaving a stray point); a vertex that is not a finite on-globe coordinate is refused. A shape that encloses nothing is refused rather than placed: three collinear points are not an area and a line under a metre long is not a line, and the hint says which.
+- Drawn-area measures round before choosing m², ha or km², so 9,999.6 m² displays as `1.0 ha`, not `10000 m²`, and 999,960 m² as `1.00 km²`, not `100.0 ha`.
 - Pointer ownership: while a session is open the tool holds the single pointer claim (`claimPointer('draw')`, `src/data/inputOwnership.js`) and **every** ambient scene selection handler — the shared tracking click gesture behind flights, military and CCTV, plus vessels, satellites, launches, fires, installations, bikeshare, radio, submarine cables, the bundled GeoJSON layers and the CCTV calibration gizmo — returns before picking. A vertex over an aircraft is a vertex, not a selection.
 - **The claim is a LEASE.** `claimPointer(owner)` returns an opaque token or `null`; `releasePointer(lease)` takes that token. A second claim fails even under the same owner name, because two live instances of one tool — an old one mid-teardown and its replacement — are two owners; releasing by name let the old instance free the claim its successor was holding, and every layer started selecting through the live session's vertices. A superseded lease now releases nothing.
 - **Cesium's own click actions are borrowed too.** The Viewer binds a selecting LEFT_CLICK and a tracking LEFT_DOUBLE_CLICK on its own handler, outside every layer and therefore outside the shared claim — guarding the layers alone still left a drawn vertex selecting the entity under it. Both are removed for the session and restored, as the same function objects, when it ends or the tool is destroyed.

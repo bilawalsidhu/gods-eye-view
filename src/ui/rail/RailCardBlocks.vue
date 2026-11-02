@@ -31,9 +31,10 @@ const rootTag = (block) =>
   block.type === 'list' ? 'ol' : block.type === 'actions' ? 'footer' : 'div';
 const lines = (block) => block.lines || [{ id: block.id, text: block.text }];
 
-// "960 — 1050+ гПа": the unit stays with the last number.
-function scaleText(low, high, units) {
-  const unit = unitLabel(units);
+// "960 — 1050+ гПа": the unit stays with the last number. Units a source
+// supplied as data are shown as given.
+function scaleText(low, high, units, verbatim) {
+  const unit = verbatim ? units || '' : unitLabel(units);
   const range = `${formatScaleLabel(low)} — ${formatScaleLabel(high)}`;
   return unit ? `${range} ${unit}` : range;
 }
@@ -63,7 +64,12 @@ function legendView(legend) {
       ? `left: ${(legend.zeroIndex / (colors.length - 1)) * 100}%`
       : undefined,
     scale: visible
-      ? scaleText(legend.labels[0], legend.labels.at(-1), legend.units)
+      ? scaleText(
+          legend.labels[0],
+          legend.labels.at(-1),
+          legend.units,
+          legend.unitsVerbatim === true,
+        )
       : '',
     labels: legend?.labels || [],
   };

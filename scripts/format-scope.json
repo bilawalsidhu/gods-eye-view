@@ -901,6 +901,7 @@
   "scripts/qa-weather-swap.mjs",
   "scripts/qa-weather-teardown.mjs",
   "src/layers/weather/imageryHost.test.mjs",
+  "src/layers/weather/display.test.mjs",
   "src/sdr/adsbDecoder.test.mjs",
   "src/sdr/controller.test.mjs",
   "src/sdr/decoderDiagnostics.test.mjs",
