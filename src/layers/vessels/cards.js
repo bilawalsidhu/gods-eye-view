@@ -4,6 +4,7 @@ import {
   normalizeVesselType,
 } from '../../data/vesselLabels.js';
 import { formatNumber, t } from '../../i18n/index.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export function createCards({
   vesselState,
@@ -55,10 +56,8 @@ export function createCards({
     if (record.speed !== null && record.speed !== undefined)
       parts.push(formatSpeed(record.speed));
     const direction = record.heading ?? record.course;
-    // A course of 359.5° and above rounds to north; modulo keeps it from
-    // printing 360°. The selected card and the HUD wrap the same way.
     if (Number.isFinite(direction))
-      parts.push(`${Math.round(direction) % 360}°`);
+      parts.push(`${roundHeadingDegrees(direction)}°`);
     return {
       id: vesselOverlayEntryId(record),
       actionable: Boolean(record?.mmsi),
@@ -89,7 +88,9 @@ export function createCards({
       [
         vesselTypeShort(record) || t('VESSEL'),
         formatSpeed(record.speed),
-        Number.isFinite(direction) ? `${Math.round(direction) % 360}°` : '--°',
+        Number.isFinite(direction)
+          ? `${roundHeadingDegrees(direction)}°`
+          : '--°',
       ].join(' · '),
     ];
     const destination = String(record.destination || '').trim();
@@ -179,7 +180,7 @@ export function createCards({
 
   function formatHeading(heading) {
     return t('{heading}DEG', {
-      heading: Number.isFinite(heading) ? Math.round(heading) % 360 : '--',
+      heading: roundHeadingDegrees(heading) ?? '--',
     });
   }
 
