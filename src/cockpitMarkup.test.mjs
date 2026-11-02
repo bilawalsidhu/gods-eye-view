@@ -633,16 +633,21 @@ test('Cockpit side surfaces behave as two single-expanded accordions', () => {
   );
   assert.match(
     radioBindings,
-    /'gev:cockpit-context-expanded'[\s\S]*?setPanelCollapsed\('data-panel', true\);/,
+    /'gev:cockpit-context-expanded'[\s\S]*?setPanelCollapsed\('data-panel', true\);\s*this\.actions\.setPanelCollapsed\('utilities-panel', true\);/,
   );
   assert.match(
     ui,
-    /!nextCollapsed\s*&&\s*this\.cockpitView\?\.active\s*&&\s*panelId === 'data-panel'[\s\S]*?_cockpitContextCollapsedForDataPanel =\s*!this\.cockpitView\.contextCollapsed[\s\S]*?this\.cockpitView\.setContextCollapsed\(true\);/,
+    /!nextCollapsed\s*&&\s*this\.cockpitView\?\.active\s*&&\s*COCKPIT_LEFT_PANEL_IDS\.has\(panelId\)[\s\S]*?_cockpitContextCollapsedForDataPanel =\s*!this\.cockpitView\.contextCollapsed[\s\S]*?this\.cockpitView\.setContextCollapsed\(true\);/,
   );
   assert.match(
     ui,
-    /nextCollapsed\s*&&\s*this\.cockpitView\?\.active\s*&&\s*panelId === 'data-panel'[\s\S]*?_cockpitContextCollapsedForDataPanel[\s\S]*?this\.cockpitView\.setContextCollapsed\(false\);/,
+    /nextCollapsed\s*&&\s*this\.cockpitView\?\.active\s*&&\s*COCKPIT_LEFT_PANEL_IDS\.has\(panelId\)[\s\S]*?_cockpitContextCollapsedForDataPanel[\s\S]*?this\.cockpitView\.setContextCollapsed\(false\);/,
     'closing Data Layers must restore Contact only after an automatic collapse',
+  );
+  assert.match(
+    ui,
+    /const COCKPIT_LEFT_PANEL_IDS = new Set\(\['data-panel', 'utilities-panel'\]\);/,
+    'Utilities folds Contact away in Cockpit as Data Layers does',
   );
   assert.match(
     setContextCollapsed.toString(),
@@ -678,6 +683,7 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
   for (const panelId of [
     'data-panel',
     'cctv-panel',
+    'utilities-panel',
     'scene-panel',
     'pp-toggles',
     'global-context-panel',
@@ -1378,4 +1384,28 @@ test('cockpit state cannot report entryAllowed while already active', () => {
   assert.match(state, /'contacts-starting'/);
   assert.match(state, /'contacts-inactive'/);
   assert.match(state, /'no-tracked-aircraft'/);
+});
+
+test('Contact folded for one Cockpit left panel comes back only once neither is open', async () => {
+  assert.match(
+    ui,
+    /if \(!this\._cockpitContextCollapsedForDataPanel\)\s*this\._cockpitContextCollapsedForDataPanel =\s*!this\.cockpitView\.contextCollapsed;/,
+    'opening the second left panel keeps the fold the first recorded',
+  );
+  const { PanelChrome } = await import('./ui/panelChrome.js');
+  const previous = globalThis.document;
+  const panels = {};
+  globalThis.document = { getElementById: (id) => panels[id] ?? null };
+  const panel = (...classes) => ({ classList: { contains: (name) => classes.includes(name) } });
+  try {
+    const otherOpen = (id) => PanelChrome.prototype._otherCockpitLeftPanelOpen(id);
+    panels['data-panel'] = panel('collapsed');
+    assert.equal(otherOpen('utilities-panel'), false, 'Data Layers closed: restore');
+    panels['data-panel'] = panel('collapsed', 'layout-auto-collapsed');
+    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers comes back: keep Contact folded');
+    panels['data-panel'] = panel();
+    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers open: keep it folded');
+  } finally {
+    globalThis.document = previous;
+  }
 });
