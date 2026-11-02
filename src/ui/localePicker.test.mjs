@@ -31,6 +31,9 @@ const MANY = Object.keys(NAMES);
 
 const codes = (rows) => rows.map((row) => row.code);
 
+// Few enough languages that the picker has no search field.
+const UNSEARCHED = ['en', 'es', 'ru', 'uk', 'zh-CN', 'zh-Hant'];
+
 test('the current language comes first, the rest by their own names', () => {
   assert.deepEqual(
     codes(
@@ -40,7 +43,20 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['ru', 'en', 'es', 'zh-CN', 'zh-Hant'],
+    [
+      'ru',
+      'uk',
+      'de',
+      'en',
+      'es',
+      'fr',
+      'it',
+      'pt',
+      'ar',
+      'zh-CN',
+      'zh-Hant',
+      'ja',
+    ],
   );
   assert.deepEqual(
     codes(
@@ -50,7 +66,20 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['es', 'en', 'ru', 'zh-CN', 'zh-Hant'],
+    [
+      'es',
+      'de',
+      'en',
+      'fr',
+      'it',
+      'pt',
+      'ru',
+      'uk',
+      'ar',
+      'zh-CN',
+      'zh-Hant',
+      'ja',
+    ],
   );
   assert.deepEqual(
     codes(
@@ -60,7 +89,43 @@ test('the current language comes first, the rest by their own names', () => {
         nativeNames: LOCALE_NAMES,
       }),
     ),
-    ['en', 'es', 'ru', 'zh-CN', 'zh-Hant'],
+    [
+      'en',
+      'de',
+      'es',
+      'fr',
+      'it',
+      'pt',
+      'ru',
+      'uk',
+      'ar',
+      'zh-CN',
+      'zh-Hant',
+      'ja',
+    ],
+  );
+  assert.deepEqual(
+    codes(
+      buildLocaleOptions({
+        locales: LOCALES,
+        current: 'ar',
+        nativeNames: LOCALE_NAMES,
+      }),
+    ),
+    [
+      'ar',
+      'de',
+      'en',
+      'es',
+      'fr',
+      'it',
+      'pt',
+      'ru',
+      'uk',
+      'zh-CN',
+      'zh-Hant',
+      'ja',
+    ],
   );
   const rows = buildLocaleOptions({
     locales: MANY,
@@ -95,6 +160,8 @@ test('each row gets the interface-language name for search, unless it only repea
   const byCode = Object.fromEntries(rows.map((row) => [row.code, row]));
   assert.equal(byCode.en.localName, 'английский');
   assert.equal(byCode.es.localName, 'испанский');
+  assert.equal(byCode.de.localName, 'немецкий');
+  assert.equal(byCode.fr.localName, 'французский');
   assert.equal(byCode.ru.localName, '', 'русский only repeats Русский');
   const english = buildLocaleOptions({
     locales: LOCALES,
@@ -103,6 +170,7 @@ test('each row gets the interface-language name for search, unless it only repea
     localName: createLocalNameReader('en'),
   });
   assert.equal(english.find((row) => row.code === 'es').localName, 'Spanish');
+  assert.equal(english.find((row) => row.code === 'fr').localName, 'French');
 });
 
 test('without Intl.DisplayNames the interface-language name is simply left out', () => {
@@ -165,7 +233,10 @@ test('search folds case and diacritics, and matches either name or the code', ()
 
 test('the search field appears only above the threshold', () => {
   assert.equal(LOCALE_SEARCH_THRESHOLD, 8);
-  assert.equal(createLocalePickerModel({ current: 'en' }).searchable, false);
+  assert.equal(
+    createLocalePickerModel({ current: 'en' }).searchable,
+    LOCALES.length > LOCALE_SEARCH_THRESHOLD,
+  );
   const eight = MANY.slice(0, 8);
   assert.equal(
     createLocalePickerModel({
@@ -185,22 +256,16 @@ test('the search field appears only above the threshold', () => {
   );
 });
 
-test('choosing the current language changes nothing; another asks, then switches', () => {
+test('choosing the current language changes nothing; another switches', () => {
   const calls = [];
-  const actions = (answer) => ({
+  const actions = {
     current: 'ru',
-    confirmSwitch: () => {
-      calls.push('confirm');
-      return answer;
-    },
     switchLocale: (locale) => calls.push(`switch:${locale}`),
-  });
-  assert.equal(applyLocaleChoice('ru', actions(true)), 'unchanged');
-  assert.deepEqual(calls, [], 'no prompt, no reload');
-  assert.equal(applyLocaleChoice('es', actions(false)), 'declined');
-  assert.deepEqual(calls, ['confirm']);
-  assert.equal(applyLocaleChoice('es', actions(true)), 'switched');
-  assert.deepEqual(calls, ['confirm', 'confirm', 'switch:es']);
+  };
+  assert.equal(applyLocaleChoice('ru', actions), 'unchanged');
+  assert.deepEqual(calls, []);
+  assert.equal(applyLocaleChoice('es', actions), 'switched');
+  assert.deepEqual(calls, ['switch:es']);
 });
 
 test('navigation keys move without wrapping', () => {
@@ -250,6 +315,7 @@ test('type-ahead cycles by first letter and refines with more letters', () => {
 
 test('keyboard model: open on the current language, move, choose, close', () => {
   const model = createLocalePickerModel({
+    locales: UNSEARCHED,
     current: 'ru',
     localName: createLocalNameReader('ru'),
   });
@@ -261,7 +327,8 @@ test('keyboard model: open on the current language, move, choose, close', () => 
   model.openList();
   assert.equal(model.activeOption.code, 'ru');
   assert.deepEqual(model.keydown({ key: 'ArrowDown' }), { handled: true });
-  assert.equal(model.activeOption.code, 'en');
+  // Russian collation puts the other Cyrillic name next.
+  assert.equal(model.activeOption.code, 'uk');
   model.keydown({ key: 'End' });
   assert.equal(model.activeOption.code, 'zh-Hant');
   model.keydown({ key: 'Home' });
@@ -275,7 +342,7 @@ test('keyboard model: open on the current language, move, choose, close', () => 
   model.keydown({ key: 'ArrowDown' });
   assert.deepEqual(model.keydown({ key: ' ' }), {
     handled: true,
-    choose: 'en',
+    choose: 'uk',
   });
   assert.deepEqual(model.keydown({ key: 'Escape' }), {
     handled: true,
@@ -292,7 +359,11 @@ test('keyboard model: open on the current language, move, choose, close', () => 
 
 test('keyboard model: type-ahead resets after a pause and ignores shortcuts', () => {
   let clock = 0;
-  const model = createLocalePickerModel({ current: 'en', now: () => clock });
+  const model = createLocalePickerModel({
+    locales: UNSEARCHED,
+    current: 'en',
+    now: () => clock,
+  });
   model.openList();
   assert.deepEqual(model.keydown({ key: 'e' }), { handled: true });
   assert.equal(model.activeOption.code, 'es');

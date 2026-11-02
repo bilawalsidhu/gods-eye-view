@@ -3,12 +3,16 @@
  * live so the user sees what was understood before the answer.
  *
  * It is a fixed-position overlay (pointer-events: none) placed from the
- * snapshot's canvas pixels, so it never touches the Cesium scene. The reticle
- * marks where the user pointed, not a tracked world position: it leaves as
- * soon as a tool moves the camera, when the reply completes, when the session
- * ends, and after {@link RETICLE_MAX_MS} at most. Clean-UI and recording mode
- * hide it through CSS.
+ * snapshot's canvas pixels, so it never touches the Cesium scene. It is
+ * presented to the pointer reticle store, which the command dock renders.
+ * The reticle marks where the user pointed, not a tracked world position: it
+ * leaves as soon as a tool moves the camera, when the reply completes, when
+ * the session ends, and after {@link RETICLE_MAX_MS} at most. Clean-UI and
+ * recording mode hide it through CSS.
  */
+
+import { usePointerReticleStore } from '../ui/stores/pointerReticle.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 
 export const RETICLE_MAX_MS = 10000;
 export const RETICLE_LINGER_MS = 1500;
@@ -26,39 +30,33 @@ const CAMERA_TOOLS = new Set([
   'control_cockpit',
 ]);
 
+// Keys each reticle's element in the view.
+let reticleKeys = 0;
+
 export class PointerReticle {
   /**
    * @param {object} options
-   * @param {Document} options.doc Document that owns the overlay.
    * @param {() => {left: number, top: number}|null} options.rectOf Canvas
    *   client rect, read at show time.
+   * @param {object} [options.store] The pointer reticle store.
    * @param {Function} [options.setTimer]
    * @param {Function} [options.clearTimer]
    */
   constructor({
-    doc,
     rectOf,
+    store = usePointerReticleStore(applicationPinia()),
     setTimer = (fn, ms) => setTimeout(fn, ms),
     clearTimer = (id) => clearTimeout(id),
   }) {
-    Object.assign(this, { doc, rectOf, setTimer, clearTimer });
-    this.node = null;
+    Object.assign(this, { rectOf, store, setTimer, clearTimer });
+    this.key = ++reticleKeys;
+    // What this reticle last presented; null until it first shows.
+    this.view = null;
     this.timer = null;
     // Tools running in this turn, keyed by call id (name when absent).
     this.running = new Set();
     this.visible = false;
     this.destroyed = false;
-  }
-
-  ensureNode() {
-    if (this.node || !this.doc?.createElement) return this.node;
-    const node = this.doc.createElement('div');
-    node.className = 'gev-pointer-reticle';
-    node.setAttribute?.('aria-hidden', 'true');
-    node.hidden = true;
-    this.doc.body?.appendChild?.(node);
-    this.node = node;
-    return node;
   }
 
   schedule(ms) {
@@ -79,12 +77,14 @@ export class PointerReticle {
   show(pointer) {
     if (this.destroyed || !pointer?.screenPx) return;
     const rect = this.rectOf?.();
-    const node = this.ensureNode();
-    if (!rect || !node) return;
-    node.style.left = `${Math.round(rect.left + pointer.screenPx.x)}px`;
-    node.style.top = `${Math.round(rect.top + pointer.screenPx.y)}px`;
-    node.dataset.target = pointer.kind === 'this' ? 'entity' : 'ground';
-    node.hidden = false;
+    if (!rect) return;
+    this.view = {
+      visible: true,
+      left: Math.round(rect.left + pointer.screenPx.x),
+      top: Math.round(rect.top + pointer.screenPx.y),
+      target: pointer.kind === 'this' ? 'entity' : 'ground',
+    };
+    this.store.publish(this, this.view);
     this.visible = true;
     this.running.clear();
     this.schedule(RETICLE_MAX_MS);
@@ -95,7 +95,8 @@ export class PointerReticle {
     this.running.clear();
     if (!this.visible) return;
     this.visible = false;
-    if (this.node) this.node.hidden = true;
+    this.view = { ...this.view, visible: false };
+    this.store.publish(this, this.view);
   }
 
   /** Follow provider-neutral session events. */
@@ -129,7 +130,7 @@ export class PointerReticle {
     if (this.destroyed) return;
     this.hide();
     this.destroyed = true;
-    this.node?.remove?.();
-    this.node = null;
+    if (this.view) this.store.publish(this, null);
+    this.view = null;
   }
 }

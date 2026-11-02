@@ -1,37 +1,47 @@
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
-import { syncChipGroup } from './chipGroup.js';
-import {
-  createSegmentedControl,
-  syncSegmentedControl,
-} from './segmentedControl.js';
 import {
   presentStreetLevelPanel,
   SINCE_STOPS,
 } from './streetLevelPresentation.js';
-import { t, translateKnown } from '../i18n/index.js';
+import { useStreetLevelStore } from './stores/streetLevel.js';
+import { applicationPinia } from './vueRuntime.js';
+import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
 
 const RENDER_MODE_KEY = 'gev:street-level:render-mode';
 /** <body> classes of the modes that hide every panel; an expanded photo leaves with them. */
 const PANEL_HIDING_MODES = ['ui-clean-view', 'recording-mode', 'cockpit-mode'];
 
-// Renders run on every layer notification, and the rail's MutationObserver
-// relays out on each attribute write: write only what changed.
-const setProp = (node, key, value) => {
-  if (node && node[key] !== value) node[key] = value;
-};
-const setAttr = (node, key, value) => {
-  if (node && node.getAttribute(key) !== value) node.setAttribute(key, value);
-};
-
 /**
- * Fills the Street Level panel body: provider chips, filters and viewer. The
+ * Drives the Street Level panel body: provider chips, filters and viewer.
+ * The panel view renders what this presents (`gev-street-level` store); the
  * panel chrome itself belongs to the application shell.
  */
 export class StreetLevelControls {
-  constructor({ root, layer, actions }) {
+  constructor({
+    root,
+    layer,
+    actions,
+    store = useStreetLevelStore(applicationPinia()),
+  }) {
     this.root = root;
     this.layer = layer;
     this.actions = actions;
+    this.store = store;
+    this._storeToken = store.attach({
+      // The readout follows the thumb; coverage is rebuilt once, on release.
+      setSinceStop: (stop) =>
+        this._setParams({ sinceDays: SINCE_STOPS[stop]?.days ?? 0 }),
+      describeSinceStop: (stop) => t(SINCE_STOPS[stop]?.label ?? ''),
+      setPano: (pano) => this._setParams({ pano }),
+      setRenderMode: (mode) => {
+        this.layer.setViewerRenderMode?.(mode);
+        try {
+          localStorage.setItem(RENDER_MODE_KEY, mode);
+        } catch {
+          /* storage unavailable */
+        }
+      },
+    });
     this.destroyed = false;
     this.listeners = new AbortController();
     this._unsubscribe = null;
@@ -45,36 +55,22 @@ export class StreetLevelControls {
     this._resizeQueued = false;
     this._elements = this._collect();
     this._bind();
+    // The presentation holds translated text; present it again in a new locale.
+    this._offLocale = onLocaleChange(() => {
+      if (this._state) this.render(this._state);
+    });
   }
 
   _collect() {
     const byId = (id) => this.root?.querySelector(`#${id}`) || null;
-    const all = (selector) => [
-      ...(this.root?.querySelectorAll(selector) || []),
-    ];
     return {
       status: byId('sl-status'),
       providerChips: byId('sl-provider-chips'),
       nearestBtn: byId('sl-nearest-btn'),
-      controls: byId('sl-controls'),
-      error: byId('sl-error'),
-      errorText: byId('sl-error-text'),
-      panoRow: byId('sl-pano-row'),
-      sinceRow: byId('sl-since-row'),
-      sinceRange: byId('sl-since'),
-      sinceLabel: byId('sl-since-label'),
-      sinceNote: byId('sl-since-note'),
       viewerWrap: byId('sl-viewer-wrap'),
       viewerExpand: byId('sl-viewer-expand'),
       viewerClose: byId('sl-viewer-close'),
-      viewerPlaceholder: byId('sl-viewer-placeholder'),
       viewer: byId('sl-viewer'),
-      imageBy: byId('sl-image-by'),
-      imageWhen: byId('sl-image-when'),
-      imageLink: byId('sl-image-link'),
-      coverageMeta: byId('sl-coverage-meta'),
-      panoButtons: all('[data-sl-pano]'),
-      renderButtons: all('[data-sl-render]'),
     };
   }
 
@@ -104,24 +100,6 @@ export class StreetLevelControls {
       }
       this._toggleProvider(button.dataset.chipId);
     });
-    createSegmentedControl({
-      buttons: el.panoButtons,
-      valueOf: (button) => button.dataset.slPano,
-      onChange: (pano) => this._setParams({ pano }),
-      keyboard: 'radio',
-      listen: (target, type, handler) => this.listen(target, type, handler),
-    });
-    // The readout follows the thumb; coverage is rebuilt once, on release.
-    const sinceDays = () =>
-      SINCE_STOPS[Number(el.sinceRange?.value) || 0]?.days ?? 0;
-    this.listen(el.sinceRange, 'input', () => {
-      const label = t(SINCE_STOPS[Number(el.sinceRange.value) || 0].label);
-      if (el.sinceLabel) el.sinceLabel.textContent = label;
-      el.sinceRange.setAttribute('aria-valuetext', label);
-    });
-    this.listen(el.sinceRange, 'change', () =>
-      this._setParams({ sinceDays: sinceDays() }),
-    );
     this.listen(el.nearestBtn, 'click', () => {
       const nearest = this._view?.nearest;
       if (!nearest?.visible || nearest.disabled) return;
@@ -157,21 +135,8 @@ export class StreetLevelControls {
         event.stopPropagation();
         this._exitExpanded();
       });
-    } else setProp(el.viewerExpand, 'hidden', true);
-    createSegmentedControl({
-      buttons: el.renderButtons,
-      valueOf: (button) => button.dataset.slRender,
-      keyboard: 'radio',
-      listen: (target, type, handler) => this.listen(target, type, handler),
-      onChange: (mode) => {
-        this.layer.setViewerRenderMode?.(mode);
-        try {
-          localStorage.setItem(RENDER_MODE_KEY, mode);
-        } catch {
-          /* storage unavailable */
-        }
-      },
-    });
+    }
+    this.store.setExpandAvailable(Boolean(this._expandMode));
     try {
       const stored = localStorage.getItem(RENDER_MODE_KEY);
       if (stored === 'fill' || stored === 'letterbox')
@@ -324,21 +289,7 @@ export class StreetLevelControls {
   _syncExpanded() {
     const on = this.isViewerExpanded();
     this._watchPanelHidingModes(on);
-    const button = this._elements.viewerExpand;
-    if (button) {
-      setProp(
-        button.querySelector('.sl-btn-icon'),
-        'textContent',
-        on ? '⤡' : '⤢',
-      );
-      setProp(
-        button.querySelector('.sl-btn-text'),
-        'textContent',
-        on ? t('SHRINK') : t('EXPAND'),
-      );
-      setAttr(button, 'aria-pressed', String(on));
-      setAttr(button, 'aria-label', on ? t('Shrink') : t('Expand'));
-    }
+    this.store.setExpanded(on);
     this._requestResize();
   }
 
@@ -366,110 +317,20 @@ export class StreetLevelControls {
     this._state = state;
     const view = presentStreetLevelPanel(state);
     this._view = view;
-    this._renderHeader(view);
-    setProp(this._elements.controls, 'disabled', view.controlsDisabled);
-    syncChipGroup(this._elements.providerChips, view.providers);
-    this._renderError(view);
-    this._renderFilters(view);
-    this._renderViewer(view);
-    setProp(this._elements.coverageMeta, 'textContent', view.meta);
-    this._renderNearest(view);
+    this._leaveClosedViewer(view);
+    this.store.publish(view);
     this._reactToTransitions(view);
   }
 
-  _renderHeader(view) {
-    const el = this._elements;
-    setProp(this.root.dataset, 'slEnabled', String(view.enabled));
-    if (el.status) {
-      setProp(el.status, 'textContent', view.status.text);
-      setProp(
-        el.status,
-        'className',
-        `sl-status${view.status.tone ? ` is-${view.status.tone}` : ''}`,
-      );
-      setAttr(el.status, 'aria-pressed', String(view.status.pressed));
-      setProp(el.status, 'title', view.status.title);
-    }
-  }
-
-  _renderError(view) {
-    const el = this._elements;
-    if (!el.error) return;
-    setProp(el.error, 'hidden', !view.error);
-    setProp(el.errorText, 'textContent', view.error || '');
-  }
-
-  _renderFilters(view) {
-    const el = this._elements;
-    const shows = view.filterControls || { pano: true, since: true };
-    setProp(el.panoRow, 'hidden', !shows.pano);
-    setProp(el.sinceRow, 'hidden', !shows.since);
-    // A lit source that dates by upload says so under the slider.
-    setProp(el.sinceNote, 'textContent', view.sinceNote || '');
-    setProp(el.sinceNote, 'hidden', !view.sinceNote);
-    setProp(el.controls, 'hidden', !shows.pano && !shows.since);
-    syncSegmentedControl(el.panoButtons, view.filter.pano, {
-      valueOf: (button) => button.dataset.slPano,
-      activeClass: 'is-active',
-      rovingFocus: true,
-    });
-    if (el.sinceRange) {
-      // Never move the thumb under the user's hand; once the committed value
-      // matches the thumb, show the full readout with its cut-off date.
-      const index = String(view.since.index);
-      if (
-        document.activeElement !== el.sinceRange &&
-        el.sinceRange.value !== index
-      )
-        el.sinceRange.value = index;
-      if (el.sinceRange.value === index) {
-        setProp(el.sinceLabel, 'textContent', view.since.label);
-        setAttr(el.sinceRange, 'aria-valuetext', view.since.label);
-      }
-    }
-  }
-
-  _renderViewer(view) {
-    const el = this._elements;
-    const { viewer } = view;
-    const wrap = el.viewerWrap;
-    if (!viewer.open) this._exitExpanded();
-    if (wrap) {
-      // Closing the image (its × button) hides the wrap: move focus out
-      // first, or it drops to <body>.
-      if (!viewer.open && !wrap.hidden && wrap.contains(document.activeElement))
-        el.status?.focus?.({ preventScroll: true });
-      setProp(wrap, 'hidden', !viewer.open);
-    }
-    setProp(el.viewerPlaceholder, 'hidden', !viewer.loading);
-    syncSegmentedControl(el.renderButtons, viewer.renderMode, {
-      valueOf: (button) => button.dataset.slRender,
-      activeClass: 'is-active',
-      rovingFocus: true,
-    });
-    // Google's viewer always fills its frame: no FIT/FILL to offer.
-    const renderGroup = el.renderButtons[0]?.parentElement;
-    if (renderGroup) setProp(renderGroup, 'hidden', !viewer.renderModes);
-    if (!viewer.open) return;
-    setProp(el.imageBy, 'textContent', viewer.captionLeft);
-    setProp(el.imageWhen, 'textContent', viewer.captionRight);
-    if (el.imageLink) {
-      setProp(el.imageLink, 'hidden', !viewer.link);
-      if (viewer.link) setAttr(el.imageLink, 'href', viewer.link);
-      if (viewer.linkLabel)
-        setProp(el.imageLink, 'textContent', viewer.linkLabel);
-    }
-  }
-
-  _renderNearest(view) {
-    const button = this._elements.nearestBtn;
-    if (!button) return;
-    const { nearest } = view;
-    setProp(button, 'hidden', !nearest.visible);
-    if (!nearest.visible) return;
-    setProp(button, 'textContent', nearest.label);
-    setProp(button, 'title', nearest.title);
-    setProp(button, 'disabled', nearest.disabled);
+  /** A closed image leaves EXPAND, and focus stays in the panel. */
+  _leaveClosedViewer(view) {
+    if (view.viewer.open) return;
+    this._exitExpanded();
+    // Closing the image (its × button) hides the wrap: move focus out
+    // first, or it drops to <body>.
+    const wrap = this._elements.viewerWrap;
+    if (wrap && !wrap.hidden && wrap.contains(document.activeElement))
+      this._elements.status?.focus?.({ preventScroll: true });
   }
 
   /**
@@ -494,6 +355,7 @@ export class StreetLevelControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._offLocale();
     this._exitExpanded();
     // Its `toggle` is not heard once destroyed: a popover left on the wrap
     // would hide the viewer even inside the panel.
@@ -508,5 +370,6 @@ export class StreetLevelControls {
     this._unsubscribeEnableRequests?.();
     this._unsubscribeEnableRequests = null;
     this.layer.attachViewerHost?.(null);
+    this.store.detach(this._storeToken);
   }
 }
