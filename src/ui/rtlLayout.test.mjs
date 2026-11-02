@@ -66,13 +66,19 @@ test('the Cyber cockpit keeps Data Layers on the left edge in every language', (
 
 test('the panel rails stay on the outer side of their stacks in right-to-left', () => {
   const layers = sheet('layers.css');
-  // Each rail is placed against its stack's outer edge; a physical side
-  // would put it over the panels once the stacks swap sides.
+  // Each rail is placed by its screen-side edge; a physical side would put
+  // it over the panels once the stacks swap sides.
   const left = ruleBody(layers, '.gev-panel-rail--left');
-  assert.match(left, /inset-inline-end: calc\(100% \+ 6px\);/);
+  assert.match(
+    left,
+    /inset-inline-start: calc\(-1 \* var\(--panel-rail-clearance\)\);/,
+  );
   assert.doesNotMatch(left, /(?:^|\s)(?:left|right):/);
   const right = ruleBody(layers, '.gev-panel-rail--right');
-  assert.match(right, /inset-inline-start: calc\(100% \+ 6px\);/);
+  assert.match(
+    right,
+    /inset-inline-end: calc\(-1 \* var\(--panel-rail-clearance\)\);/,
+  );
   assert.doesNotMatch(right, /(?:^|\s)(?:left|right):/);
   // Their tips open toward the middle of the screen.
   const kit = sheet('kit.css');

@@ -71,3 +71,75 @@ test('tips open toward the screen, and not for the open panel', async () => {
   await other.trigger('focusout');
   assert.equal(wrapper.find('[role="tooltip"]').exists(), false);
 });
+
+test('a collapsible rail shows labelled pills until a panel opens', async () => {
+  const wrapper = mountRail({ collapsible: true });
+  const nav = wrapper.get('nav');
+  assert.ok(nav.classes().includes('ui-rail--collapsible'));
+  assert.ok(nav.classes().includes('ui-rail--expanded'));
+  assert.deepEqual(
+    wrapper.findAll('.ui-rail__label').map((label) => label.text()),
+    ['DATA LAYERS', 'AUTHORING', 'CCTV'],
+  );
+  // The label is on screen, so its tip would only repeat it.
+  await wrapper.findAll('.ui-tooltip')[0].trigger('focusin');
+  assert.equal(wrapper.find('[role="tooltip"]').exists(), false);
+  // The button keeps its own accessible name; the visible label is hidden
+  // from assistive technology so the name is not read twice.
+  const button = wrapper.get('[data-rail-item="layers"]');
+  assert.equal(button.attributes('aria-label'), 'DATA LAYERS');
+  assert.equal(button.get('.ui-rail__label').attributes('aria-hidden'), 'true');
+
+  await wrapper.setProps({ active: 'layers', panelOpen: true });
+  assert.ok(nav.classes().includes('ui-rail--collapsible'));
+  assert.equal(nav.classes().includes('ui-rail--expanded'), false);
+  // Collapsed, the other items' tips come back.
+  await wrapper.findAll('.ui-tooltip')[1].trigger('focusin');
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  assert.equal(wrapper.get('[role="tooltip"]').text(), 'AUTHORING');
+});
+
+test('a label cut short by the pill keeps its tip', async (t) => {
+  const observers = [];
+  const original = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class {
+    constructor(callback) {
+      this.callback = callback;
+      this.targets = [];
+      observers.push(this);
+    }
+    observe(target) {
+      this.targets.push(target);
+    }
+    unobserve() {}
+    disconnect() {}
+  };
+  t.after(() => (globalThis.ResizeObserver = original));
+  const wrapper = mountRail({ collapsible: true });
+  const [observer] = observers;
+  const [layers, scenes] = observer.targets;
+  Object.defineProperties(layers, {
+    scrollWidth: { value: 260 },
+    clientWidth: { value: 220 },
+  });
+  Object.defineProperties(scenes, {
+    scrollWidth: { value: 90 },
+    clientWidth: { value: 90 },
+  });
+  observer.callback([{ target: layers }, { target: scenes }]);
+  await wrapper.vm.$nextTick();
+  await wrapper.findAll('.ui-tooltip')[0].trigger('focusin');
+  assert.equal(wrapper.get('[role="tooltip"]').text(), 'DATA LAYERS');
+  await wrapper.findAll('.ui-tooltip')[0].trigger('focusout');
+  await wrapper.findAll('.ui-tooltip')[1].trigger('focusin');
+  assert.equal(wrapper.find('[role="tooltip"]').exists(), false);
+});
+
+test('a plain rail has no labels', () => {
+  const wrapper = mountRail();
+  assert.equal(wrapper.find('.ui-rail__label').exists(), false);
+  assert.equal(
+    wrapper.get('nav').classes().includes('ui-rail--expanded'),
+    false,
+  );
+});
