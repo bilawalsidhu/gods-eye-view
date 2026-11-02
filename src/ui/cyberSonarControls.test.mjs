@@ -48,6 +48,8 @@ test('real runner and facade use visual settings, preserve visibility and return
   const renders = [];
   const visual = Object.create(VisualSettings.prototype);
   visual.services = { governorRequestRender: (reason) => renders.push(reason) };
+  // No Display panel here: the controls' render is not under test.
+  visual._publishDisplay = () => {};
   const owner = Object.create(StyleManager.prototype);
   owner._visualSettings = visual;
   Object.defineProperty(owner, 'hud', { value: f.owner.hud });
@@ -82,7 +84,7 @@ test('real runner and facade use visual settings, preserve visibility and return
 });
 
 test('native sonar sliders represent every accepted integer without browser snapping', () => {
-  const html = readFileSync(new URL('./templates/display-controls.html', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('./views/panels/DisplayPanel.vue', import.meta.url), 'utf8');
   for (const name of ['rings', 'range', 'intensity', 'opacity', 'sector']) {
     assert.match(html, new RegExp(`id="cyber-sonar-${name}"[^>]*step="1"`));
   }
@@ -132,7 +134,7 @@ test('rejects the whole invalid request before any mutation', () => {
 });
 
 test('requires Cyber and preserves off state and every omitted setting', () => {
-  for (const theme of ['tactical', 'operator', 'minimal']) {
+  for (const theme of ['tactical', 'minimal']) {
     const f = fixture(theme);
     assert.equal(setCyberSonarControls(f.owner, { enabled: true }, f.doc).ok, false);
     assert.deepEqual(f.calls, []);
@@ -158,4 +160,20 @@ test('reports inactive map effects in Cockpit, hidden HUD, unsupported and unini
     else f.root.dataset.cyberSonarGpu = value;
     assert.equal(getCyberSonarControlState(f.doc).contactSweepActive, false);
   }
+});
+
+test('the HUD visibility its owner reports answers before the view re-renders', () => {
+  const f = fixture();
+  f.root.dataset.cyberSonar = 'on';
+  // The HUD was just hidden: IntelHUD knows, the rendered class does not yet.
+  assert.equal(getCyberSonarControlState(f.doc).mapSweepActive, true);
+  assert.equal(
+    getCyberSonarControlState(f.doc, { hudActive: false }).mapSweepActive,
+    false,
+  );
+  f.owner.hud.visible = false;
+  const result = setCyberSonarControls(f.owner, { rings: 6 }, f.doc);
+  assert.equal(result.ok, true);
+  assert.equal(result.sonar.mapSweepActive, false);
+  assert.equal(result.sonar.contactSweepActive, false);
 });

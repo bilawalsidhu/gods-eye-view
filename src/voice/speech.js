@@ -74,9 +74,9 @@ function listPhrase(items) {
 }
 
 function feetRounded(meters) {
-  const value = Number(meters);
-  return Number.isFinite(value)
-    ? Math.round((value * 3.28084) / 100) * 100
+  // A missing altitude is unknown, not sea level: Number(null) is 0.
+  return Number.isFinite(meters)
+    ? Math.round((meters * 3.28084) / 100) * 100
     : null;
 }
 
@@ -963,7 +963,10 @@ export function progressStepLabel(step, label) {
     : step
       ? spokenLabel(step, 24)
       : t('Working');
-  return label ? `${base}: ${spokenLabel(label, 32)}` : base;
+  // The join is a catalog string so each language spaces its colon.
+  return label
+    ? t('{name}: {state}', { name: base, state: spokenLabel(label, 32) })
+    : base;
 }
 
 /**
