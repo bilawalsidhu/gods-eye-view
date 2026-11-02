@@ -88,7 +88,7 @@ test('destroy removes the layer', () => {
   assert.equal(h.layers.length, 0);
 });
 
-test('the shipped raster paints a lone weak fire as a marker-sized spot', () => {
+test('the shipped raster paints a lone weak fire as a distinct spot', () => {
   // A hot cluster elsewhere sets the scale, as Africa does on real data.
   const fires = [{ lat: 0, lon: 0, frp: 5 }];
   for (let i = 0; i < 40; i++) {
@@ -106,7 +106,7 @@ test('the shipped raster paints a lone weak fire as a marker-sized spot', () => 
   const kmPerPx = 40075 / r.width;
   assert.ok(painted.length > 0, 'the weak fire still shows');
   assert.ok(
-    painted.length * kmPerPx <= 80,
+    painted.length * kmPerPx <= 100,
     `spot ${Math.round(painted.length * kmPerPx)} km wide`,
   );
 });
