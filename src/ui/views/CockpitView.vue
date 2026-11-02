@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { t } from '../../i18n/index.js';
 import {
   createInstrumentState,
@@ -9,6 +9,7 @@ import {
 } from '../cockpitInstrumentState.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
+import { useRadioStore } from '../stores/radio.js';
 import { useGlobeActionsStore } from '../stores/globeActions.js';
 import CockpitBriefing from './panels/CockpitBriefing.vue';
 import CockpitContext from './panels/CockpitContext.vue';
@@ -23,6 +24,12 @@ import CockpitUtilityControls from './panels/CockpitUtilityControls.vue';
 const { presence, instruments, route, vision, utilityLayout } =
   storeToRefs(useCockpitStore());
 const active = computed(() => Boolean(presence.value?.active));
+const panelsOpen = ref(false);
+const radio = useRadioStore();
+watch(active, () => { panelsOpen.value = false; });
+watch(() => radio.utility?.display || radio.utility?.radio, (open) => {
+  if (active.value && open) panelsOpen.value = true;
+});
 const globe = useGlobeActionsStore();
 const { resetBusy } = storeToRefs(globe);
 const initialInstruments = createInstrumentState();
@@ -200,6 +207,9 @@ const tickStyle = (tick) =>
   </section>
 
   <nav id="view-switcher" :aria-label="t('View switcher')">
+    <button v-if="active" id="cockpit-panels-toggle" type="button" :aria-pressed="panelsOpen" @click="panelsOpen = !panelsOpen">
+      <span>{{ t('Panels') }}</span>
+    </button>
     <button id="cockpit-reset-globe" type="button" :aria-label="resetBusy ? t('Resetting cockpit to full globe view') : t('Reset cockpit to full globe view')" :title="t('Exit cockpit and return to full globe view')" :hidden="!active" @click="globe.act('reset')">
       <span class="material-symbols-outlined" aria-hidden="true">public</span>
       <span>{{ t('RESET') }}</span>
