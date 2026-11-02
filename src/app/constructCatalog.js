@@ -4,7 +4,7 @@ import { createWeatherLayer } from '../layers/weather/index.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
-import { createLayerAvailability } from './layers/renderers.js';
+import { createLayerAvailability, rendererFor } from './layers/renderers.js';
 import { APPLICATION_LAYER_DIRECTORY } from './layers/directory.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
@@ -82,11 +82,15 @@ export function createApplicationCatalog({
   sources = sourceComposition.sources;
   const militaryRegistry =
     layerSession?.militaryRegistry ?? createMilitaryRegistry();
-  const weatherClock = createWeatherClock();
+  const weatherClock = layerSession?.weatherClock ?? createWeatherClock();
+  if (layerSession && !layerSession.weatherClock) {
+    layerSession.weatherClock = weatherClock;
+    layerSession.lifetime.signal.addEventListener('abort', weatherClock.destroy, { once: true });
+  }
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
     if (!layerSession) militaryRegistry.dispose();
-    weatherClock.destroy();
+    if (!layerSession) weatherClock.destroy();
   };
   signal.addEventListener('abort', dispose, { once: true });
   try {
@@ -279,12 +283,14 @@ export function createApplicationCatalog({
       ...['weather-radar', 'weather-satellite', 'weather-lightning'].map(
         (id) => [
           id,
-          () =>
+          () => sessionModel(id, () =>
             createWeatherLayer({
               feed: sources.weather,
               id,
               clock: weatherClock,
+              createNativeRendering: (engine, options) => rendererFor(id, engine, options),
             }),
+          ),
         ],
       ),
       [

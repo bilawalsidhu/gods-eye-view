@@ -3672,6 +3672,8 @@
       "src/layers/earthquakes/render/navaraGrid.js",
       "src/layers/installations/render/navara.js",
       "src/layers/awareness/render/navara.js",
+      "src/layers/weather/render/navara.js",
+      "src/layers/weather/render/navaraSurface.js",
       "src/layers/ghostMaps/render/navara.js",
       "src/layers/ghostMaps/render/navaraPick.js",
       "src/layers/shared/render/groundRing.js",
