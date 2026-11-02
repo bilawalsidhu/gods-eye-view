@@ -525,8 +525,6 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
-  // The brand is already the layer id; all spoken aliases remain accepted.
-  's2-ghostmaps',
 ]);
 
 /** Lower case with spaces and hyphens removed: "Data centers" → "datacenters". */
@@ -535,9 +533,9 @@ const spelled = (text) => text.toLowerCase().replace(/[\s-]+/g, '');
 /**
  * Compact model-facing alias hint: "alias/alias→id; …" for toggleable layers
  * whose id is not already the spoken word. At most two aliases per layer keep
- * the tool JSON small; the runner accepts the full alias list. An alias the id
- * already spells ("dams"→local-dams, "weather radar"→weather-radar) is left
- * out, and so is a layer with no other alias.
+ * the tool JSON small; the runner accepts the full alias list. Of those two,
+ * an alias the id already spells ("dams"→local-dams, "weather radar"→
+ * weather-radar) is left out, and a layer with neither left gets no hint.
  * @returns {string} One line for the layerId description.
  */
 export function voiceLayerAliasHint() {
