@@ -245,7 +245,7 @@
     .street-level-panel-inner,
     .global-context-panel-inner
   ) {
-  padding-right: 8px;
+  padding-inline-end: 8px;
 }
 
 /* Collapsed right-rail panels otherwise inherit different legacy gutters:
@@ -1658,23 +1658,23 @@
     --panel-stack-top-pinned: 1;
     top: var(--cyber-left-rail-top) !important;
     bottom: calc(2vh + 13rem);
-    left: calc(54px + var(--panel-rail-clearance));
+    inset-inline-start: calc(54px + var(--panel-rail-clearance));
     width: 300px;
-    padding-left: 10px;
-    border-left: 1px solid transparent;
+    padding-inline-start: 10px;
+    border-inline-start: 1px solid transparent;
   }
 
   /* An edge line marks each side's open panel, mirrored left and right. */
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
     #left-panel-stack:has(> [data-panel-id]:not(.collapsed, [hidden])) {
-    border-left-color: rgba(196, 84, 84, 0.72);
+    border-inline-start-color: rgba(196, 84, 84, 0.72);
   }
 
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
     #right-context-rail:has(> [data-panel-id]:not(.collapsed, [hidden])) {
-    border-right-color: rgba(196, 84, 84, 0.72);
+    border-inline-end-color: rgba(196, 84, 84, 0.72);
   }
 
   :root[data-ui-theme='cyber']
@@ -1756,8 +1756,8 @@
     /* The edge line and its gap keep the panels where they were. */
     right: calc(51px + var(--panel-rail-clearance));
     width: 323px;
-    padding-right: 10px;
-    border-right: 1px solid transparent;
+    padding-inline-end: 10px;
+    border-inline-end: 1px solid transparent;
   }
 
   /* The map rails now use one visible expanded width. Keeping the rail itself
@@ -2749,10 +2749,13 @@
 :root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack {
   top: clamp(164px, 19vh, 204px) !important;
   bottom: auto;
+  /* The cockpit keeps its physical sides in every language (rtl.css): the
+     utility controls hold the right edge. */
+  right: auto;
   left: 30px;
   width: var(--cyber-panel-width);
-  padding-left: 0;
-  border-left: 0;
+  padding-inline-start: 0;
+  border-inline-start: 0;
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack > #data-panel {

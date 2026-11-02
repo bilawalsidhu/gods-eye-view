@@ -3,7 +3,7 @@
   position: fixed;
   top: var(--left-stack-safe-top, var(--left-stack-top));
   bottom: var(--left-stack-safe-bottom, 4vh);
-  left: var(--left-stack-x);
+  inset-inline-start: var(--left-stack-x);
   z-index: 100;
   width: 360px;
   display: flex;
@@ -177,11 +177,11 @@
 #right-context-rail #weather-panel.collapsed,
 #right-context-rail #recent-imagery-panel.collapsed {
   width: var(--right-display-collapsed-width);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail > #pp-toggles.collapsed {
   width: var(--right-display-collapsed-width);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row {
   width: 100%;
@@ -220,7 +220,7 @@
   width: var(--right-context-collapsed-width);
   /* Keep the compact Context tab on the rail edge rather than leaving it
      stranded at the rail's expanded-width origin. */
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail
   #global-context-panel.collapsed
@@ -256,10 +256,10 @@
   transition: top var(--transition-fast);
 }
 .gev-panel-rail--left {
-  right: calc(100% + 6px);
+  inset-inline-end: calc(100% + 6px);
 }
 .gev-panel-rail--right {
-  left: calc(100% + 6px);
+  inset-inline-start: calc(100% + 6px);
 }
 body.mobile-shell #left-panel-stack > .gev-panel-rail,
 body.mobile-shell #right-context-rail > .gev-panel-rail,
@@ -396,7 +396,7 @@ body.recording-mode .gev-panel-rail {
   gap: 10px;
   padding: 1px 3px 7px;
   border-bottom: 1px solid rgba(34, 230, 230, 0.14);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 #space-mission-panel-host .space-mission-roster-header > div {
   display: grid;
@@ -440,7 +440,7 @@ body.recording-mode .gev-panel-rail {
   border-radius: 4px;
   color: #d8ffff;
   background: rgba(42, 113, 171, 0.045);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   text-align: left;
   cursor: pointer;
   transition:

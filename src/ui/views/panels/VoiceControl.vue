@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { t } from '../../../i18n/index.js';
+import { formatNumber, t } from '../../../i18n/index.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { useVoiceStore } from '../../stores/voice.js';
 import VoiceCard from './VoiceCard.vue';
@@ -36,6 +36,9 @@ const vOwnedValue = {
       el.value = value.text;
   },
 };
+// "5 minutes" in the UI language, with the count's plural form ("15 دقيقة").
+const minutesLabel = (count) =>
+  formatNumber(count, { style: 'unit', unit: 'minute', unitDisplay: 'long' });
 const optional = (value) => (value == null ? undefined : String(value));
 // The root's machine-state attributes, which the dock and theme CSS select on.
 const rootData = (root) => ({
@@ -98,7 +101,7 @@ const rootData = (root) => ({
             <label class="gev-voice-preference gev-voice-setting-title" for="gev-voice-timeout-select">{{ t('Voice inactivity timeout') }}</label>
             <div class="gev-voice-timeout-controls">
             <UiSelect id="gev-voice-timeout-select" class="gev-field" aria-describedby="gev-voice-timeout-note gev-voice-timeout-status" :model-value="view.preferences.timeoutChoice" @update:model-value="emit('timeout-select', $event)">
-              <option value="3">3 {{ t('Minutes') }}</option><option value="5">5 {{ t('Minutes') }}</option><option value="10">10 {{ t('Minutes') }}</option><option value="15">15 {{ t('Minutes') }}</option>
+              <option value="3">{{ minutesLabel(3) }}</option><option value="5">{{ minutesLabel(5) }}</option><option value="10">{{ minutesLabel(10) }}</option><option value="15">{{ minutesLabel(15) }}</option>
               <option value="custom">{{ t('Custom') }}</option><option value="0">{{ t('None') }}</option>
             </UiSelect>
             <label class="gev-voice-timeout-unit" for="gev-voice-timeout-input">{{ t('Minutes') }}</label>

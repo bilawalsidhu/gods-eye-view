@@ -712,7 +712,6 @@
   "NIGHT": "NOITE",
   "▲ {frp} MW": "▲ {frp} MW",
   "FIRE": "INCÊNDIO",
-  "FIRES": "INCÊNDIOS",
   "max {value} MW": "máx {value} MW",
   "new {value}": "mais recente há {value}",
   "{value}°N": "{value}°N",
@@ -3007,5 +3006,7 @@
   "Edit anchors, data packs and shot details": "Editar âncoras, pacotes de dados e detalhes dos planos",
   "Download this scene as JSON or an asset bundle": "Baixar esta cena como JSON ou pacote de recursos",
   "Left panels": "Painéis à esquerda",
-  "Right panels": "Painéis à direita"
+  "Right panels": "Painéis à direita",
+  "CONFIRMED": "CONFIRMADA",
+  "PAD / RTLS": "PLATAFORMA / RTLS"
 }

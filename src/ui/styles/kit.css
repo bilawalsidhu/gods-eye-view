@@ -60,11 +60,13 @@
   pointer-events: none;
   transform: translateY(-50%);
 }
+/* Sides are for left-to-right; a right-to-left page mirrors them with the
+   rails, so a tip still opens toward the middle of the screen. */
 .ui-tooltip__tip--right {
-  left: calc(100% + 10px);
+  inset-inline-start: calc(100% + 10px);
 }
 .ui-tooltip__tip--left {
-  right: calc(100% + 10px);
+  inset-inline-end: calc(100% + 10px);
 }
 
 .ui-rail {
@@ -117,7 +119,7 @@
 .ui-rail__badge {
   position: absolute;
   top: 1px;
-  right: 1px;
+  inset-inline-end: 1px;
   min-width: 14px;
   padding: 0 3px;
   border-radius: 7px;

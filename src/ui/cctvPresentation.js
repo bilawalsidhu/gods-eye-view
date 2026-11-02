@@ -1,4 +1,4 @@
-import { getLocale, msg, t, tn } from '../i18n/index.js';
+import { getLocale, keepCodesWithValues, msg, t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
@@ -102,18 +102,20 @@ function metaText(state, enabled, activeCamera, catalogCount) {
       ? _calBadgeLabel(activeCamera.calBadge)
       : '';
     const projLabel = state?.showProjection !== false ? t('MONITOR') : t('OFF');
-    return t(
-      '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
-      {
-        city: activeCamera.city,
-        heading: `${Math.round(activeCamera.headingDeg)}°`,
-        fov: `${Math.round(activeCamera.fovDeg)}°`,
-        range: Math.round(activeCamera.rangeM),
-        projection: projLabel,
-        calBadge: calBadge ? ` · ${calBadge}` : '',
-        provider,
-        status: `${credit}${statusMsg}`,
-      },
+    return keepCodesWithValues(
+      t(
+        '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
+        {
+          city: activeCamera.city,
+          heading: `${Math.round(activeCamera.headingDeg)}°`,
+          fov: `${Math.round(activeCamera.fovDeg)}°`,
+          range: Math.round(activeCamera.rangeM),
+          projection: projLabel,
+          calBadge: calBadge ? ` · ${calBadge}` : '',
+          provider,
+          status: `${credit}${statusMsg}`,
+        },
+      ),
     );
   }
   if (catalogCount > 0)

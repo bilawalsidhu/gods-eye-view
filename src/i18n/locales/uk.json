@@ -722,7 +722,6 @@
   "NIGHT": "НІЧ",
   "▲ {frp} MW": "▲ {frp} МВт",
   "FIRE": "ПОЖЕЖА",
-  "FIRES": "ПОЖ.",
   "max {value} MW": "макс. {value} МВт",
   "new {value}": "останнє: {value} тому",
   "{value}°N": "{value}° пн. ш.",
@@ -3077,5 +3076,7 @@
   "Edit anchors, data packs and shot details": "Змінити якорі, пакети даних і параметри кадрів",
   "Download this scene as JSON or an asset bundle": "Завантажити цю сцену у форматі JSON або архівом ресурсів",
   "Left panels": "Ліві панелі",
-  "Right panels": "Праві панелі"
+  "Right panels": "Праві панелі",
+  "CONFIRMED": "ПІДТВЕРДЖЕНО",
+  "PAD / RTLS": "МІСЦЕ ЗАПУСКУ / RTLS"
 }
