@@ -46,28 +46,8 @@ export const AIS_WATCHDOG_DEFAULTS = Object.freeze({
   authProbeMs: 3_600_000,
 });
 
-/**
- * Statuses reported to the browser. 'missing-key' and 'unsupported' keep their
- * pre-watchdog meaning so a keyless install still reads as "feature off".
- */
-export const AIS_WATCHDOG_STATUSES = Object.freeze([
-  'idle',
-  'missing-key',
-  'unsupported',
-  'connecting',
-  'live',
-  'stale',
-  'reconnecting',
-  'down',
-  'auth-failed',
-]);
-
 /** Failure classes. Only 'transport' is allowed to walk the fast ladder. */
-export const AIS_FAILURE_KINDS = Object.freeze([
-  'transport',
-  'auth',
-  'rate-limit',
-]);
+const AIS_FAILURE_KINDS = Object.freeze(['transport', 'auth', 'rate-limit']);
 
 /** Statuses that must not flip back to a hopeful 'connecting' on a retry. */
 const QUIET_TERMINAL = new Set(['down', 'auth-failed']);
@@ -249,6 +229,7 @@ export function createAisWatchdog(options = {}) {
     if (!env.hasKey) {
       const actions = terminateOwned('key-absent');
       status = 'missing-key';
+      // i18n-ignore: server detail; layers/vessels/queries.js shows a translated reason
       error = 'AISSTREAM_API_KEY is not set';
       reconnectAttempt = 0;
       keyFingerprint = null;
@@ -257,6 +238,7 @@ export function createAisWatchdog(options = {}) {
     if (env.hasTransport === false) {
       const actions = terminateOwned('no-transport');
       status = 'unsupported';
+      // i18n-ignore: server detail; layers/vessels/queries.js shows a translated reason
       error = 'Node WebSocket transport is unavailable';
       return actions;
     }
@@ -329,6 +311,7 @@ export function createAisWatchdog(options = {}) {
       if (!silenceWatchArmed) return [];
       const silentFor = monoNow - silenceSinceMono;
       if (silentFor >= recycleAfterMs) {
+        // i18n-ignore: server detail; layers/vessels/queries.js shows a translated reason
         error = `AISStream delivered no data for ${Math.round(silentFor / 1000)}s`;
         const actions = terminateOwned('silent');
         scheduleRetry('transport');
@@ -401,6 +384,7 @@ export function createAisWatchdog(options = {}) {
   function onClose(eventGeneration) {
     if (!ownsGeneration(eventGeneration)) return [];
     release();
+    // i18n-ignore: server detail; layers/vessels/queries.js shows a translated reason
     if (!error) error = 'AISStream websocket closed';
     scheduleRetry('transport');
     return [];

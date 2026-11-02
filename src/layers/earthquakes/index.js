@@ -1,3 +1,5 @@
+// Source errors stay English until the layer panel presents them.
+const msg = (text) => text;
 import * as geo from '../../geo/index.js';
 import {
   EARTHQUAKE_OVERLAY_SOURCE_ID,
@@ -148,7 +150,7 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:Earthquakes] Fetch error:', e);
-        _lastError = e?.message || 'Earthquake source unavailable';
+        _lastError = e?.message || msg('Earthquake source unavailable');
         return false;
       } finally {
         if (_request === request) _request = null;

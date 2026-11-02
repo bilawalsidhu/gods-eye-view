@@ -2,6 +2,7 @@ import * as geo from '../geo/index.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { isGlobeEngine } from '../globe/contract.js';
 import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+import { t } from '../i18n/index.js';
 
 // The camera is the globe engine's, and so is the follow: the followed
 // entity is engine.camera.following().native (on Cesium also an entity the
@@ -204,7 +205,7 @@ export function setCameraTargetFrame(target, frame, tracker) {
  *
  * @param {{pitch: number}|null} frame From {@link readCameraTargetFrame}.
  */
-export function frameIsTilted(frame) {
+function frameIsTilted(frame) {
   const pitch = Number(frame?.pitch);
   return Number.isFinite(pitch) ? pitch > OBLIQUE_THRESHOLD : false;
 }
@@ -315,16 +316,13 @@ export function createCameraOrientationAnimator(
 export function bindCameraOrientationControls({
   viewer = null,
   engine = engineOf(viewer),
-  elements,
+  publish,
   runNavigation,
   showToast,
   animationMs,
 }) {
-  const tiltButton = elements?.tiltButton;
-  const northButton = elements?.northButton;
   const removers = [];
   let destroyed = false;
-  let applied = null;
   // The tilt state is the one thing here that costs a depth read of the middle
   // of the screen: 4 ms median and up to 12 ms, measured on this machine. It is
   // therefore held between refreshes rather than recomputed per frame.
@@ -343,12 +341,14 @@ export function bindCameraOrientationControls({
   };
 
   /**
-   * Write the two controls' state, but only what actually changed.
+   * Publish the two controls' state.
    *
    * The compass needle reads the camera's own bearing, which costs nothing, so
    * this can run on every rendered frame: measured at 1.4 ms across 120 frames
    * of a continuously dragged map (0.012 ms per frame, 0.1 ms worst case),
    * against the 4 ms per frame the depth read it replaced would have cost.
+   * That measured the controls' own work; what a publish renders is the
+   * view's (the globe actions compass alone renders the heading).
    */
   function sync() {
     if (destroyed) return;
@@ -356,38 +356,11 @@ export function bindCameraOrientationControls({
       tilted,
       heading: Math.round(headingDegrees(engine)) % 360,
     };
-    if (
-      applied &&
-      applied.tilted === next.tilted &&
-      applied.heading === next.heading
-    )
-      return;
-    if (!applied || applied.tilted !== next.tilted) {
-      tiltButton?.setAttribute('aria-pressed', String(next.tilted));
-      tiltButton?.setAttribute(
-        'aria-label',
-        next.tilted
-          ? 'Return map to straight-down view'
-          : 'Tilt map to oblique view',
-      );
-    }
-    if (!applied || applied.heading !== next.heading) {
-      northButton?.setAttribute('data-north-up', String(next.heading === 0));
-      northButton?.style?.setProperty('--camera-heading', `${next.heading}deg`);
-      northButton?.setAttribute(
-        'aria-label',
-        `Reset map to north up. Current heading ${next.heading} degrees`,
-      );
-    }
-    applied = next;
+    publish?.(next);
   }
 
-  const listen = (element, handler) => {
-    if (!element) return;
-    element.addEventListener('click', handler);
-    removers.push(() => element.removeEventListener('click', handler));
-  };
-  listen(tiltButton, () => {
+  function tilt() {
+    if (destroyed) return;
     const pending = animator.destination;
     const result = runNavigation('camera', () => {
       const frame = readFrame();
@@ -402,14 +375,16 @@ export function bindCameraOrientationControls({
         : false;
     });
     if (result) {
-      showToast?.(result.tilted ? 'Tilted view' : 'Straight-down view');
+      showToast?.(result.tilted ? t('Tilted view') : t('Straight-down view'));
       // The action reports the state it just commanded, so the button can
       // follow it without a second pick.
       tilted = result.tilted;
     }
     sync();
-  });
-  listen(northButton, () => {
+  }
+
+  function northUp() {
+    if (destroyed) return;
     const pending = animator.destination;
     const result = runNavigation('camera', () => {
       const frame = readFrame();
@@ -421,9 +396,9 @@ export function bindCameraOrientationControls({
         })
       );
     });
-    if (result) showToast?.('North up');
+    if (result) showToast?.(t('North up'));
     sync();
-  });
+  }
 
   const subscribe = (event, handler) => {
     const remove = event?.addEventListener?.(handler);
@@ -446,6 +421,8 @@ export function bindCameraOrientationControls({
   refreshTilt();
 
   return {
+    tilt,
+    northUp,
     sync,
     refreshTilt,
     cancel: animator.cancel,

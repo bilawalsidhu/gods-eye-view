@@ -30,10 +30,13 @@ function services() {
       forgetSpriteFocus: noop,
     },
     worldFocus: {},
-    render: { releaseContinuousRender: noop },
-    // The renderer service as the application's without an engine (Cesium).
     renderer: {
       create: (options) => createVesselsCesiumRenderer(null, options),
+    },
+    render: {
+      holdContinuousRender: noop,
+      releaseContinuousRender: noop,
+      governorRequestRender: noop,
     },
   };
 }

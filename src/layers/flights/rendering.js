@@ -1,9 +1,11 @@
+import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import { WHITE, CYAN, nearFarScale } from '../shared/color.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
 import { civilAircraftModelSpec } from './modelSpec.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { isEmergency } from '../../data/aircraftEmergency.js';
 import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import {
@@ -13,6 +15,7 @@ import {
 import { limitCourseStep, courseSlewCapDps } from '../../data/motionModel.js';
 import {
   MIL_TINT,
+  EMERGENCY_TINT,
   GROUND_SCALE,
   COCKPIT_CONTACT_SIZE_PX,
   COCKPIT_CIVILIAN_COLOR,
@@ -29,6 +32,7 @@ import {
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
+  RENDER_DELAY_SEC,
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
@@ -53,11 +57,32 @@ export function createRendering({
   const { applyAircraftBillboardTreatment, applyAircraftModelTreatment } =
     services.recession;
 
-  /** Fleet (untracked) billboard tint: amber for known-military, white otherwise.
+  /** True while this contact's latest poll broadcast an emergency code. */
+
+  function _isEmergency(icao24, info = flightState.records.data.get(icao24)) {
+    return isEmergency(info?.emergency);
+  }
+
+  /** Fleet (untracked) billboard tint: red while broadcasting an emergency,
+   *  amber for known-military, white otherwise.
    *  Ground traffic gets NO special tint (owner verdict 2026-07-03 field test). */
 
-  function _fleetBillboardColor(icao24) {
+  function _fleetBillboardColor(
+    icao24,
+    info = flightState.records.data.get(icao24),
+  ) {
+    if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
     return isMilitaryIcao(icao24) ? MIL_TINT : WHITE;
+  }
+
+  /** Cockpit far-contact dot tint: the emergency red outranks the category tint. */
+
+  function _cockpitContactColor(
+    icao24,
+    info = flightState.records.data.get(icao24),
+  ) {
+    if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
+    return isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR;
   }
 
   /** Fleet billboard scale: per-class scale, ×GROUND_SCALE while grounded. */
@@ -128,9 +153,7 @@ export function createRendering({
       bb.height = COCKPIT_CONTACT_SIZE_PX;
       bb.scale = limbScale;
       bb.scaleByDistance = _cockpitBillboardScaleByDistance();
-      bb.color = (
-        isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR
-      ).withAlpha(freshnessAlpha);
+      bb.color = _cockpitContactColor(icao24).withAlpha(freshnessAlpha);
       bb.rotation = 0;
       return;
     }
@@ -161,7 +184,7 @@ export function createRendering({
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return CYAN;
-    return isMilitaryIcao(icao24) ? MIL_TINT : WHITE;
+    return _fleetBillboardColor(icao24);
   }
 
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
@@ -344,17 +367,20 @@ export function createRendering({
    *    null or still-loading tracked model from claiming a visual it is not
    *    drawing yet.
    * @param {string} icao24
+   * @param {Cesium.Model|null} [model] Resolved fleet model; null means absent.
    * @returns {boolean}
    */
 
-  function _modelOwnsVisual(icao24) {
+  function _modelOwnsVisual(icao24, model) {
     if (icao24 === flightState._trackedIcao) {
       return (
         parts.tracking._trackedModelRegimeActive() &&
         _modelIsRendering(flightState._trackedModel)
       );
     }
-    return _modelIsRendering(flightState._models.get(icao24));
+    return _modelIsRendering(
+      model === undefined ? flightState._models.get(icao24) : model,
+    );
   }
 
   /** A model is the visual only once it actually draws — loaded AND shown.
@@ -760,6 +786,8 @@ export function createRendering({
         )
       : 0.08;
     flightState._lastFleetTickMs = nowMs;
+    // Every contact in this pass shares the same delayed display instant.
+    const renderTime = appClock.now() - RENDER_DELAY_SEC * 1000;
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)
@@ -850,7 +878,11 @@ export function createRendering({
 
       const info = flightState.records.data.get(icao24);
 
-      const dr = parts.motion._deadReckon(icao24, flightState._scratchFleetPos);
+      const dr = parts.motion._deadReckon(
+        icao24,
+        flightState._scratchFleetPos,
+        renderTime,
+      );
       // The dead-reckoned point drifts away from the fix whose cell supplied the
       // height, so a grounded contact's sprite ends up under the mesh it taxied
       // (or coasted) over. Re-floor at the DISPLAYED coordinate — read-only, and
@@ -923,10 +955,8 @@ export function createRendering({
         flightState._cockpitNearContacts.has(icao24);
       const layerBaseColor =
         flightState._cockpitContactMode && !isCockpitNear
-          ? isMilitaryIcao(icao24)
-            ? MIL_TINT
-            : COCKPIT_CIVILIAN_COLOR
-          : _fleetBillboardColor(icao24);
+          ? _cockpitContactColor(icao24, info)
+          : _fleetBillboardColor(icao24, info);
       const baseColor = layerBaseColor;
       const treatment = applyAircraftBillboardTreatment({
         billboard: bb,

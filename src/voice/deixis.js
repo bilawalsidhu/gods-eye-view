@@ -18,7 +18,7 @@
 
 import { finiteOrNull } from './pointerContext.js';
 
-export const POINTER_SENTINEL = 'pointer';
+const POINTER_SENTINEL = 'pointer';
 
 const TRACKABLE_LAYERS = new Set([
   'flights',

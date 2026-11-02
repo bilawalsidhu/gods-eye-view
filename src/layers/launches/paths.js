@@ -1,4 +1,5 @@
 import * as geo from '../../geo/index.js';
+import { t } from '../../i18n/index.js';
 import {
   EARTH_ROTATION_RAD_PER_SEC,
   PROJECTED_ASCENT_ROTATION_SEC,
@@ -507,7 +508,7 @@ export function createPaths({ state: layerState, services, parts, source }) {
     return {
       lat: geo.math.toDegrees(lat),
       lon: geo.math.toDegrees(geo.math.negativePiToPi(lon)),
-      accuracy: 'EST. DOWNRANGE',
+      accuracy: t('EST. DOWNRANGE'),
     };
   }
 

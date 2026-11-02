@@ -1,3 +1,5 @@
+import { greatCircleMeters } from '../geoDistance.js';
+
 const MAX_ARTICLES = 5;
 
 function cleanText(value, maxLength = 180) {
@@ -67,11 +69,20 @@ export function normalizeRegionalArticles(payload, limit = MAX_ARTICLES) {
     seen.add(signature);
     const rawDate = cleanText(row?.seendate, 32);
     const compactDate = /^(\d{8})T(\d{6})Z$/.exec(rawDate);
-    const publishedAt = compactDate
+    const candidateDate = compactDate
       ? `${compactDate[1].slice(0, 4)}-${compactDate[1].slice(4, 6)}-${compactDate[1].slice(6, 8)}T${compactDate[2].slice(0, 2)}:${compactDate[2].slice(2, 4)}:${compactDate[2].slice(4, 6)}Z`
-      : Number.isNaN(Date.parse(rawDate))
-        ? null
-        : new Date(rawDate).toISOString();
+      : rawDate;
+    const parsedMs = Date.parse(candidateDate);
+    const validDate =
+      Number.isFinite(parsedMs) &&
+      (!compactDate ||
+        new Date(parsedMs).toISOString().slice(0, 19) ===
+          candidateDate.slice(0, 19));
+    const publishedAt = validDate
+      ? compactDate
+        ? candidateDate
+        : new Date(parsedMs).toISOString()
+      : null;
     articles.push({
       title,
       url,
@@ -87,14 +98,22 @@ export function normalizeRegionalArticles(payload, limit = MAX_ARTICLES) {
   return articles;
 }
 
+/** A reported number, or null when the observation is missing or not numeric. */
+function observedNumber(value) {
+  if (
+    value == null ||
+    typeof value === 'boolean' ||
+    (typeof value === 'string' && !value.trim())
+  )
+    return null;
+  return Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
 /** Normalize Open-Meteo current conditions into a small source-stamped record. */
 export function normalizeRegionalWeather(payload) {
   const current = payload?.current;
-  if (!current || !Number.isFinite(Number(current.temperature_2m))) return null;
-  const numberOrNull = (value) => {
-    if (value === null || value === undefined || value === '') return null;
-    return Number.isFinite(Number(value)) ? Number(value) : null;
-  };
+  if (!current || observedNumber(current.temperature_2m) == null) return null;
+  const numberOrNull = observedNumber;
   // Open-Meteo reports zone-naive timestamps ("2026-08-17T00:15") that are UTC,
   // but JS parses zoneless date-times as LOCAL — pin them to UTC explicitly.
   const observedRaw =
@@ -119,8 +138,8 @@ export function normalizeRegionalWeather(payload) {
 
 /** Translate the WMO weather code used by Open-Meteo into concise cockpit copy. */
 export function weatherCodeLabel(code) {
-  const value = Number(code);
-  if (!Number.isFinite(value)) return 'CONDITIONS UNKNOWN';
+  const value = observedNumber(code);
+  if (value == null) return 'CONDITIONS UNKNOWN';
   if (value === 0) return 'CLEAR';
   if ([1, 2].includes(value)) return 'PARTLY CLOUDY';
   if (value === 3) return 'OVERCAST';
@@ -136,19 +155,8 @@ export function weatherCodeLabel(code) {
 
 /** Great-circle distance used to avoid refetching a regional brief every animation frame. */
 export function regionalDistanceM(from, to) {
-  if (
-    ![from?.latitude, from?.longitude, to?.latitude, to?.longitude].every(
-      Number.isFinite,
-    )
-  ) {
-    return Infinity;
-  }
-  const phi1 = (from.latitude * Math.PI) / 180;
-  const phi2 = (to.latitude * Math.PI) / 180;
-  const deltaPhi = ((to.latitude - from.latitude) * Math.PI) / 180;
-  const deltaLambda = ((to.longitude - from.longitude) * Math.PI) / 180;
-  const a =
-    Math.sin(deltaPhi / 2) ** 2 +
-    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return greatCircleMeters(
+    { lat: from?.latitude, lon: from?.longitude },
+    { lat: to?.latitude, lon: to?.longitude },
+  );
 }

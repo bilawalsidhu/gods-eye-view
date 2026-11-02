@@ -49,7 +49,8 @@ failure elsewhere. These questions guide review, not a mandatory questionnaire.
   regressions? Prefer fixes whose tests fail on the base. Test-only PRs should
   close a real coverage gap with deterministic fixtures and useful assertions.
   Inspect removed/skipped tests, weakened assertions, mocks, snapshots, and runner
-  changes. Update `CURRENT-STATE.md` and `CHANGELOG.md` for runtime changes, and
+  changes. Update `CURRENT-STATE.md` and add a `changelog.d/<pr-number>-<slug>.md`
+  fragment (not an edit to `CHANGELOG.md`) for runtime changes, and
   `DATA_SOURCES.md` for source changes.
 
 ## 3. Choose execution proportionate to risk
@@ -123,6 +124,15 @@ integration authorization is missing, present the candidate and evidence first.
 Condition the merge on the reviewed head where supported; if revisions change,
 return to validation. Verify the merged tree matches the validated candidate and
 record the merge commit/PR URL; stop on mismatch.
+
+Pending release notes live in `changelog.d/`, one file per PR, so integration never
+resolves the top of `CHANGELOG.md`. At release, `npm run changelog:check` previews
+the batch and its order; `npm run changelog` splices it into `CHANGELOG.md` and
+empties the directory. The assembler refuses a malformed filename or two fragments
+claiming one PR number before writing, and copies text through unchanged so the
+contributor's wording and credit ship. The write is staged in
+`changelog.d/.assembling/`, so if it fails part-way, rerunning `npm run changelog`
+finishes or rolls back the batch. It never duplicates or drops an entry.
 
 Return this concise record privately unless posting is authorized. Keep sensitive
 security evidence in the private report:

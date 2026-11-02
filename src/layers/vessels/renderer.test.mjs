@@ -107,7 +107,11 @@ function services(renderer) {
       forgetSpriteFocus: noop,
     },
     worldFocus: { requestWorldFocus: noop },
-    render: { holdContinuousRender: noop, releaseContinuousRender: noop },
+    render: {
+      holdContinuousRender: noop,
+      releaseContinuousRender: noop,
+      governorRequestRender: noop,
+    },
     selection,
     renderer: { create: () => renderer },
   };

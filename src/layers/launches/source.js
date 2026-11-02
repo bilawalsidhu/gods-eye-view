@@ -1,3 +1,7 @@
+// A portable export (package.json): no i18n here. Failures stay English data;
+// the Layers panel shows them translated.
+const msg = (text) => text;
+
 /** Read launch records and their optional active-orbit catalog with explicit cancellation. */
 export function createLaunchSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -10,7 +14,7 @@ export function createLaunchSource({
     const payload = await response.json();
     signal?.throwIfAborted();
     if (!Array.isArray(payload) && !Array.isArray(payload?.results))
-      throw new Error('Malformed launch snapshot');
+      throw new Error(msg('Malformed launch snapshot'));
     return {
       payload,
       stale: response.headers?.get?.('x-gev-cache') === 'STALE-ERROR',

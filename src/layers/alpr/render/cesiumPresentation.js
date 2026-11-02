@@ -15,6 +15,7 @@ import {
 import { boxContains } from '../model.js';
 import { createAlprFloorResolver } from '../floors.js';
 import { createAlprOverlay } from './cesiumOverlay.js';
+import { msg } from '../../../i18n/index.js';
 import {
   MARKER_IMAGE,
   SELECTED_IMAGE,
@@ -452,7 +453,7 @@ export function createAlprPresentation({ state, native, services, source }) {
         layerName: 'ALPR Cameras',
         source:
           source.attribution?.description || source.label || 'Camera source',
-        label: 'ALPR camera',
+        label: msg('ALPR camera'),
         latitude: record.latitude,
         longitude: record.longitude,
         properties: {

@@ -7,7 +7,44 @@
  * flying.
  */
 
+import { t, msg } from './i18n/index.js';
+
 export const NAVIGATION_AUTHORITY_EVENT = 'gev:navigation-authority-taken';
+
+// The Cockpit refusal per destination noun. Nouns are English identifiers
+// from the callers ('camera', 'location', 'photo'…);
+// navigationPolicyFrame.test.mjs collects every noun the callers pass and
+// fails when one has no sentence here.
+const COCKPIT_REFUSALS = Object.freeze({
+  camera: msg('Exit cockpit to fly to a camera'),
+  location: msg('Exit cockpit to fly to a location'),
+  photo: msg('Exit cockpit to fly to a photo'),
+  'shared view': msg('Exit cockpit to fly to a shared view'),
+  target: msg('Exit cockpit to fly to a target'),
+  vessel: msg('Exit cockpit to fly to a vessel'),
+  fire: msg('Exit cockpit to fly to a fire'),
+  route: msg('Exit cockpit to fly to a route'),
+  file: msg('Exit cockpit to fly to a file'),
+  scene: msg('Exit cockpit to fly to a scene'),
+  // Radar, satellite and lightning fly to the layer's coverage area (their
+  // «View coverage» button); the cyclone layer flies to the selected storm.
+  weather: msg('Exit cockpit to view weather coverage'),
+  cyclone: msg('Exit cockpit to fly to a cyclone'),
+  // Voice track_entity (TRACKABLE_FAMILIES kinds in gevActions.js) and
+  // frame_overhead, which frames the contacts around the current view.
+  aircraft: msg('Exit cockpit to fly to an aircraft'),
+  satellite: msg('Exit cockpit to fly to a satellite'),
+  frame: msg('Exit cockpit to frame contacts'),
+});
+
+/** The destination nouns with their own Cockpit refusal (for tests). */
+export const COCKPIT_REFUSAL_NOUNS = Object.freeze(
+  Object.keys(COCKPIT_REFUSALS),
+);
+
+function cockpitRefusal(noun) {
+  return t(COCKPIT_REFUSALS[noun]);
+}
 
 /**
  * Announce that a layer-owned camera flight is taking navigation authority.
@@ -90,7 +127,7 @@ export function runExplicitNavigation({
 } = {}) {
   if (disposed) return false;
   if (cockpitActive) {
-    showToast?.(`Exit cockpit to fly to a ${noun}`);
+    showToast?.(cockpitRefusal(noun));
     return false;
   }
   const generation = stamp?.();
@@ -112,7 +149,7 @@ export function beginDeferredNavigation({
 } = {}) {
   if (disposed) return false;
   if (cockpitActive) {
-    showToast?.(`Exit cockpit to fly to a ${noun}`);
+    showToast?.(cockpitRefusal(noun));
     return false;
   }
   return stamp?.();
@@ -133,7 +170,7 @@ export function reassertNavigationHandoff({
 } = {}) {
   if (disposed || generation !== currentGeneration) return false;
   if (cockpitActive) {
-    showToast?.('Exit cockpit to fly to a location');
+    showToast?.(cockpitRefusal('location'));
     return false;
   }
   release?.();

@@ -57,6 +57,9 @@ export class LayerBindings {
   get _radioControls() {
     return this.readControls()._radioControls;
   }
+  get _streetLevelControls() {
+    return this.readControls()._streetLevelControls;
+  }
   observeCamera() {
     this._cctvRequestFocusHandler = (event) =>
       routeCctvFocusRequest(
@@ -134,9 +137,10 @@ export class LayerBindings {
     ]) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
+      const noun = id === 'weather-cyclones' ? 'cyclone' : 'weather';
       layer.attachShellServices({
         runNavigation: (navigate) =>
-          this.runImmediateNavigation('weather', navigate),
+          this.runImmediateNavigation(noun, navigate),
         imageryHost: this.services.imageryHost,
       });
       this._weatherShellModules.push(layer);
@@ -238,6 +242,8 @@ export class LayerBindings {
     this._syncContextModeButtons();
     this._cctvControls.connect();
     this._radioControls.connect();
+    // Its switch-on requests come from the manager, which arrives after it.
+    this._streetLevelControls?.connect();
     this._connectDirectionsCamera();
     this._connectWeatherCamera();
     if (!this._awarenessSelectedHandler) {

@@ -6,6 +6,7 @@ export {
   ERROR_BACKOFF_INTERVAL,
 } from './recordPolicy.js';
 import { constantRgba, nearFarScale, rgbaFromCss } from '../shared/color.js';
+import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 /**
  * @module militaryFlights
@@ -39,6 +40,10 @@ export const MIL_ICON_COLOR = Object.freeze(rgbaFromCss('#FFB800'));
 /** @constant {import('../shared/color.js').Rgba} Lighter amber tint applied to the actively tracked aircraft */
 
 export const TRACKED_ICON_COLOR = Object.freeze(rgbaFromCss('#FFD166'));
+
+/** @constant {Cesium.Color} Red tint for aircraft broadcasting an emergency (mirror of flights) */
+
+export const EMERGENCY_ICON_COLOR = rgbaFromCss(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03; mirror of flights.js) ---------------
 // adsb.lol/readsb flags ground traffic with alt_baro === "ground" (no separate

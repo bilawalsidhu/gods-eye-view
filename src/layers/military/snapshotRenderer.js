@@ -1,4 +1,5 @@
 import * as geo from '../../geo/index.js';
+import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   turnRateFromFixHistory,
@@ -10,8 +11,8 @@ import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
 import {
   BILLBOARD_SCALE,
   GROUND_SCALE,
-  TRACKED_ICON_COLOR,
   MIL_ICON_COLOR,
+  TRACKED_ICON_COLOR,
 } from './policy.js';
 
 /** Apply military record changes to the renderer's fleet and existing follow operations. */
@@ -129,6 +130,11 @@ export function createMilitarySnapshotRenderer({
 
       if (flightState._billboards.has(icao24)) {
         const bb = flightState._billboards.get(icao24);
+        if (!isTracked) {
+          bb.color = rendering
+            ._fleetBillboardColor(icao24, meta)
+            .withAlpha(cyberSonarBaseAlpha(bb));
+        }
         // Position AND rotation are owned by the fleet pass (_fleetTick);
         // course changes land on the next rotation pass (forced below).
         // Ground flips (landing/takeoff) restyle this SAME billboard in
@@ -188,7 +194,6 @@ export function createMilitarySnapshotRenderer({
       // If this is the tracked aircraft, update label text
       // (position updates automatically via dead-reckoning CallbackProperty)
       if (isTracked && flightState._trackedEntity) {
-        const info = flightState.records.data.get(icao24);
         tracking._updateTrackedLabelModel(icao24);
       }
     }

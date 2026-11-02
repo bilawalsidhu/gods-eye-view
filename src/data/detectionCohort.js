@@ -18,7 +18,7 @@ export function stableIdentityHash(layerId, sourceId) {
 }
 
 /** Negative means a is a better deterministic contender than b. */
-export function compareCohortContenders(a, b) {
+function compareCohortContenders(a, b) {
   const priorityDelta =
     (Number(b?._cohortPriority) || 0) - (Number(a?._cohortPriority) || 0);
   if (priorityDelta) return priorityDelta;

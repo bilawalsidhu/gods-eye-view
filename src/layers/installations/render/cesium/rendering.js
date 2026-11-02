@@ -1,5 +1,7 @@
+import { installationClassLabel, installationTitle } from '../../classLabel.js';
 import * as Cesium from 'cesium';
 import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from '../../policy.js';
+import { t } from '../../../../i18n/index.js';
 
 export function createRendering({
   state: layerState,
@@ -281,11 +283,9 @@ export function createRendering({
       entity.gevTrackedId = `installations:${record.id}`;
       entity.gevDisplayPosition = () => displayPosition;
       entity.gevLabelModel = {
-        title: record.name || 'MAPPED INSTALLATION',
+        title: installationTitle(record.name) || t('MAPPED INSTALLATION'),
         details: [
-          String(record.class || 'installation')
-            .replaceAll('_', ' ')
-            .toUpperCase(),
+          installationClassLabel(record.class),
           ...(record.memberNames || []).slice(0, 3),
         ],
         accent: COLOR_BY_CLASS[record.class] || '#9ca6b0',

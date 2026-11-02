@@ -5,6 +5,7 @@
 // Run with: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import {
   initialVoiceCardState,
   reduceVoiceCard,
@@ -124,7 +125,8 @@ test('a partial answer names the layers it could not read', async () => {
   assert.match(result.say, /Partial; earthquakes not answered/);
   assert.deepEqual(result.unanswered, ['earthquakes']);
   assert.ok(view.chips.includes('partial'));
-  assert.ok(view.notes.includes('Not answered: earthquakes'));
+  // The card names the layer; the result keeps its key for the model.
+  assert.ok(view.notes.includes('Not answered: Earthquakes (24h)'));
 });
 
 test('"the second one" is the second row the card lists', async () => {
@@ -205,14 +207,7 @@ test('the voice controls reset the runner on stop and dispose it on removal', as
   globalThis.window = {};
   try {
     const h = harness();
-    const button = new EventTarget();
-    button.setAttribute = () => {};
-    const ui = {
-      button,
-      root: { dataset: {}, remove() {} },
-      status: {},
-      detail: {},
-    };
+    const ui = createTestVoiceUi();
     const lifetime = new AbortController();
     let emitState;
     const controls = createVoiceCommands({

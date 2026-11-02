@@ -9,6 +9,7 @@ import {
   imageDateMs,
   streetViewUrl,
 } from './policy.js';
+import { msg } from '../../../../i18n/index.js';
 
 const PANORAMA_OPTIONS = Object.freeze({
   visible: false,
@@ -96,6 +97,8 @@ export function createGoogleViewer({ loader, getService, render } = {}) {
           service ||= getService
             ? await getService()
             : new (await ensureLibrary()).StreetViewService();
+          if (!current())
+            throw new Error('Street View details lookup was released');
           return service.getPanorama({ pano: panoId });
         })().then(resolve, reject);
       });
@@ -204,7 +207,7 @@ export function createGoogleViewer({ loader, getService, render } = {}) {
         else if (status)
           finish(
             reject,
-            new Error('Street View has no imagery for this place'),
+            new Error(msg('Street View has no imagery for this place')),
           );
       };
       const onPosition = () => {
@@ -235,6 +238,7 @@ export function createGoogleViewer({ loader, getService, render } = {}) {
       const panoId = String(imageId);
       if (!host) throw new Error('Street View is not mounted');
       if (loader.authFailed()) throw new Error(KEY_REJECTED_MESSAGE);
+      cancelShown?.();
       pendingOpen = panoId;
       const instance = await ensurePanorama(host);
       if (pendingOpen !== panoId) return;

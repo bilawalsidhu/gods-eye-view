@@ -2,6 +2,11 @@ import { phaseTiming } from './phaseTiming.js';
 import { tilesForBounds } from '../data/tomtomTiles.js';
 import { readResponseBytesCapped, readResponseJsonCapped } from './httpBody.js';
 
+// Marks text for i18n extraction; the UI translates these failures where it
+// shows them (layer row, loading chip). Kept local because AI tool services
+// import this module outside the browser.
+const msg = (text) => text;
+
 /** Validate a non-dateline geographic viewport before selecting a bounded grid. */
 export function validTileBounds(box) {
   return (
@@ -70,7 +75,10 @@ export function createVectorTileSource({
     const timer = setTimeout(
       () =>
         controller.abort(
-          new DOMException('Vector tile request timed out', 'TimeoutError'),
+          new DOMException(
+            msg('Vector tile request timed out'),
+            'TimeoutError',
+          ),
         ),
       12_000,
     );
@@ -87,8 +95,9 @@ export function createVectorTileSource({
         throw Object.assign(
           new Error(
             status === null
-              ? 'Vector tiles unavailable'
-              : `Vector tiles unavailable (HTTP ${status})`,
+              ? msg('Vector tiles unavailable')
+              : // Shown through the 'Vector tiles unavailable (HTTP {status})' key.
+                `Vector tiles unavailable (HTTP ${status})`,
           ),
           { status },
         );
@@ -172,7 +181,9 @@ export function createVectorTileSource({
           if (flight.controller.signal.aborted || error.name === 'AbortError')
             throw error;
           metadataError = Object.assign(
-            new Error('Vector tile metadata unavailable', { cause: error }),
+            new Error(msg('Vector tile metadata unavailable'), {
+              cause: error,
+            }),
             {
               status: error.status ?? null,
               name: error.name === 'TimeoutError' ? 'TimeoutError' : 'Error',
@@ -364,10 +375,13 @@ export function createVectorTileSource({
       const limited = candidates.length > maxTiles;
       // Refuse over-wide views instead of silently sampling a northwest strip.
       if (limited)
-        throw Object.assign(new Error('Zoom in for vector tile coverage'), {
-          retryable: false,
-          code: 'TILE_VIEW_TOO_WIDE',
-        });
+        throw Object.assign(
+          new Error(msg('Zoom in for vector tile coverage')),
+          {
+            retryable: false,
+            code: 'TILE_VIEW_TOO_WIDE',
+          },
+        );
       let index = 0;
       const results = new Array(candidates.length);
       await Promise.all(

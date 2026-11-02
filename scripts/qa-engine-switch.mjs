@@ -13,7 +13,8 @@ if (
   throw new Error('Supply an unreserved local preview URL');
 }
 base.search = '?welcome=0&look=cinematic';
-base.hash = 'v=2&lat=42.3554&lon=-71.0605&alt=6000&heading=0&pitch=-90&map=osm';
+base.hash =
+  'v=2&lat=42.3554&lon=-71.0605&alt=6000&heading=0&pitch=-90&map=osm&l=e';
 const browser = await puppeteer.launch({
   headless: true,
   args: ['--use-angle=metal', '--enable-gpu'],
@@ -24,6 +25,13 @@ try {
   await installTileCache(page);
   await page.evaluateOnNewDocument(() => {
     localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+    const fetch = window.fetch.bind(window);
+    window.fetch = (url, options) =>
+      String(url).startsWith('https://earthquake.usgs.gov/earthquakes/feed/')
+        ? Promise.resolve(
+            Response.json({ type: 'FeatureCollection', features: [] }),
+          )
+        : fetch(url, options);
   });
   await page.setViewport({ width: 1280, height: 800 });
   const errors = [];
@@ -55,11 +63,22 @@ try {
       await page.keyboard.press('Enter');
     }
     await page.waitForSelector('#globe-engine', { visible: true });
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-      page.select('#globe-engine', kind),
-    ]);
+    await page.evaluate(() => {
+      window.__switchDocument = document;
+      window.__outgoingEngine = window.__godsEyeView.engine;
+    });
+    await page.select('#globe-engine', kind);
     await ready(kind);
+    assert.ok(await page.evaluate(() => window.__switchDocument === document));
+    assert.ok(
+      await page.evaluate(
+        () =>
+          window.__outgoingEngine.isDestroyed() &&
+          window.__godsEyeView.dataManager
+            .getEnabledLayerIds()
+            .has('earthquakes'),
+      ),
+    );
     const url = new URL(page.url());
     assert.equal(url.searchParams.get('engine'), kind);
     assert.equal(url.searchParams.get('look'), 'cinematic');
@@ -89,6 +108,10 @@ try {
   assert.equal(await stored(), 'navara');
   await page.goBack({ waitUntil: 'domcontentloaded' });
   await ready('cesium');
+  await page.goForward();
+  await ready('navara');
+  await switchTo('cesium');
+  await switchTo('navara');
   await page.goto(base.href, { waitUntil: 'domcontentloaded' });
   await ready('navara');
   await switchTo('cesium');
@@ -105,7 +128,7 @@ try {
   assert.equal(await stored(), 'cesium');
   assert.deepEqual(errors, []);
   console.log(
-    'PASS Cesium default, both switches, share pose/map, Back, remembered engine, blocked preference storage',
+    'PASS Cesium default, both switches, same document, outgoing engine destroyed, share pose/map/layers, Back/Forward, remembered engine, blocked preference storage',
   );
 } finally {
   await browser.close();

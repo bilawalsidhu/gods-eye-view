@@ -105,7 +105,17 @@ export function parseFirmsCsv(text) {
     if (parts.length < header.length) continue; // malformed row — skip
     const lat = Number(parts[iLat]);
     const lon = Number(parts[iLon]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    // Blank or out-of-range positions are dropped, never read as 0 (see
+    // hasCoordinateValue in firmsAdapt.js for the proxy-record side).
+    if (
+      !parts[iLat].trim() ||
+      !parts[iLon].trim() ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180
+    )
+      continue;
 
     records.push({
       lat,
@@ -153,7 +163,13 @@ export function acquisitionMsUtc(acqDate, acqTime) {
     minutes > 59
   )
     return NaN;
-  return Date.UTC(year, month - 1, day, hours, minutes);
+  const ms = Date.UTC(year, month - 1, day, hours, minutes);
+  const parsed = new Date(ms);
+  return parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+    ? ms
+    : NaN;
 }
 
 /**

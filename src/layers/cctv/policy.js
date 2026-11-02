@@ -1,7 +1,5 @@
 export {
   FRAME_ENDPOINT,
-  SOURCE_ENDPOINT,
-  HEALTH_ENDPOINT,
   MEDIA_ENDPOINT,
   ACTIVE_FRAME_REFRESH_MS,
 } from './sourcePolicy.js';
@@ -35,6 +33,9 @@ export const PROJECTION_CANVAS_WIDTH = 1920;
 
 export const PROJECTION_CANVAS_HEIGHT = 1080;
 
+/** Matte behind fitted stills; the placeholder gradient's dark end. */
+export const PROJECTION_MATTE_COLOR = '#01070c';
+
 // Downsample grid for the unchanged-frame signature (drawProjectionFrame).
 // 64x36 keeps the 16:9 aspect and reads ~9 KB per check versus the 8.3 MB a
 // full-resolution compare would touch.
@@ -63,6 +64,45 @@ export const GEO_PROGRESS_NOTIFY_INTERVAL_MS = 300;
 
 export const GEO_PROGRESS_NOTIFY_BATCH_LIMIT = 10;
 
+// View thinning: camera icons show only on or near the screen, and each
+// camera competes for a world-anchored grid cell sized to about VIEW_CELL_PX
+// at its distance from the viewer (in power-of-two metre steps, so a pan
+// keeps the same winners until a camera's distance crosses a step). Cells
+// smaller than VIEW_MIN_CELL_M do not thin:
+// close up every camera shows, co-located ones included.
+
+export const VIEW_CELL_PX = 40;
+
+export const VIEW_MIN_CELL_M = 60;
+
+// Icons this far past the screen edge (fraction of its size) still show, so
+// a pan does not reveal empty ground before the next view pass.
+
+export const VIEW_ICON_MARGIN = 0.5;
+
+// While the camera moves, the view pass reruns at most this often.
+
+export const VIEW_MOTION_REFRESH_MS = 250;
+// A motion tick is skipped unless the camera moved this fraction of its
+// ellipsoid height, or turned this many degrees, since the last pass.
+
+export const VIEW_MOTION_MIN_MOVE_FRACTION = 0.01;
+
+export const VIEW_MOTION_MIN_TURN_DEG = 0.5;
+
+// Motion passes are spaced at least this many times the last pass's cost, so
+// a large catalog spends at most about a tenth of a long move on them.
+
+export const VIEW_MOTION_COST_FACTOR = 10;
+
+// A view camera's geometry is attempted at most this many times per surface
+// regime (a cold elevation cell can leave the first attempt unresolved); the
+// retry runs this long after the drain that left it unresolved.
+
+export const VIEW_GEOMETRY_ATTEMPTS = 2;
+
+export const VIEW_GEOMETRY_RETRY_MS = 1500;
+
 // Throttle for placeholder repaints — the projection RAF loop must not
 // re-fill a 1080p canvas on every frame while a feed image is still loading.
 
@@ -86,9 +126,6 @@ export const CCTV_CALIBRATION_STORAGE_KEY_V2 =
 // object reference).
 
 export const PROJECTION_TEXTURE_SWAP_MS = 1000;
-
-export const PROJECTION_VERT_ASPECT =
-  PROJECTION_CANVAS_WIDTH / PROJECTION_CANVAS_HEIGHT;
 
 // V2 frustum geometry (design §2a/§6): the far-cap center + corners never sink
 // below groundAlt + this clearance, so a fabricated pitch (-24°) cannot bury
@@ -179,7 +216,7 @@ export const CAMERA_SEEDS = [
     id: 'nyc-midtown-w',
     cityId: 'nyc',
     poiIndex: 1,
-    label: 'Midtown West @ 34th',
+    label: 'Midtown West @ 34th', // i18n-ignore: camera name
     offsetNorthM: 120,
     offsetEastM: -70,
     headingDeg: 206,
@@ -191,7 +228,7 @@ export const CAMERA_SEEDS = [
     id: 'nyc-wtc-n',
     cityId: 'nyc',
     poiIndex: 2,
-    label: 'WTC North Plaza',
+    label: 'WTC North Plaza', // i18n-ignore: camera name
     offsetNorthM: 95,
     offsetEastM: 34,
     headingDeg: 164,
@@ -203,7 +240,7 @@ export const CAMERA_SEEDS = [
     id: 'nyc-times-square-ne',
     cityId: 'nyc',
     poiIndex: 1,
-    label: 'Times Sq Northeast',
+    label: 'Times Sq Northeast', // i18n-ignore: camera name
     offsetNorthM: 230,
     offsetEastM: 120,
     headingDeg: 218,
@@ -216,7 +253,7 @@ export const CAMERA_SEEDS = [
     id: 'sf-market-5th',
     cityId: 'sf',
     poiIndex: 2,
-    label: 'Market & 5th',
+    label: 'Market & 5th', // i18n-ignore: camera name
     offsetNorthM: -160,
     offsetEastM: 80,
     headingDeg: 320,
@@ -228,7 +265,7 @@ export const CAMERA_SEEDS = [
     id: 'sf-financial-district',
     cityId: 'sf',
     poiIndex: 1,
-    label: 'SF Financial Core',
+    label: 'SF Financial Core', // i18n-ignore: camera name
     offsetNorthM: 110,
     offsetEastM: 52,
     headingDeg: 205,
@@ -241,7 +278,7 @@ export const CAMERA_SEEDS = [
     id: 'tokyo-shibuya-scramble',
     cityId: 'tokyo',
     poiIndex: 4,
-    label: 'Shibuya Crossing',
+    label: 'Shibuya Crossing', // i18n-ignore: camera name
     offsetNorthM: 180,
     offsetEastM: 46,
     headingDeg: 18,
@@ -253,7 +290,7 @@ export const CAMERA_SEEDS = [
     id: 'tokyo-ginza-core',
     cityId: 'tokyo',
     poiIndex: 0,
-    label: 'Ginza Core',
+    label: 'Ginza Core', // i18n-ignore: camera name
     offsetNorthM: -180,
     offsetEastM: 150,
     headingDeg: 245,
@@ -265,7 +302,7 @@ export const CAMERA_SEEDS = [
     id: 'tokyo-asakusa-n',
     cityId: 'tokyo',
     poiIndex: 3,
-    label: 'Asakusa North Gate',
+    label: 'Asakusa North Gate', // i18n-ignore: camera name
     offsetNorthM: 110,
     offsetEastM: -65,
     headingDeg: 192,
@@ -278,7 +315,7 @@ export const CAMERA_SEEDS = [
     id: 'london-city-a1',
     cityId: 'london',
     poiIndex: 4,
-    label: 'City Cluster A1',
+    label: 'City Cluster A1', // i18n-ignore: camera name
     offsetNorthM: 80,
     offsetEastM: 65,
     headingDeg: 220,
@@ -290,7 +327,7 @@ export const CAMERA_SEEDS = [
     id: 'london-soho-core',
     cityId: 'london',
     poiIndex: 2,
-    label: 'Soho Core',
+    label: 'Soho Core', // i18n-ignore: camera name
     offsetNorthM: 210,
     offsetEastM: 120,
     headingDeg: 206,
@@ -303,7 +340,7 @@ export const CAMERA_SEEDS = [
     id: 'paris-rivoli',
     cityId: 'paris',
     poiIndex: 4,
-    label: 'Rue de Rivoli',
+    label: 'Rue de Rivoli', // i18n-ignore: camera name
     offsetNorthM: 55,
     offsetEastM: 85,
     headingDeg: 248,
@@ -315,7 +352,7 @@ export const CAMERA_SEEDS = [
     id: 'paris-champs-n',
     cityId: 'paris',
     poiIndex: 1,
-    label: 'Champs-Élysées North',
+    label: 'Champs-Élysées North', // i18n-ignore: camera name
     offsetNorthM: 130,
     offsetEastM: -38,
     headingDeg: 175,
@@ -328,7 +365,7 @@ export const CAMERA_SEEDS = [
     id: 'dc-mall-center',
     cityId: 'dc',
     poiIndex: 1,
-    label: 'National Mall Center',
+    label: 'National Mall Center', // i18n-ignore: camera name
     offsetNorthM: 120,
     offsetEastM: 20,
     headingDeg: 258,
@@ -340,7 +377,7 @@ export const CAMERA_SEEDS = [
     id: 'dc-pentagon-s',
     cityId: 'dc',
     poiIndex: 3,
-    label: 'Pentagon South',
+    label: 'Pentagon South', // i18n-ignore: camera name
     offsetNorthM: -100,
     offsetEastM: 92,
     headingDeg: 14,
@@ -353,7 +390,7 @@ export const CAMERA_SEEDS = [
     id: 'dubai-difc-loop',
     cityId: 'dubai',
     poiIndex: 4,
-    label: 'DIFC Loop',
+    label: 'DIFC Loop', // i18n-ignore: camera name
     offsetNorthM: 92,
     offsetEastM: -45,
     headingDeg: 196,
@@ -365,7 +402,7 @@ export const CAMERA_SEEDS = [
     id: 'dubai-downtown-east',
     cityId: 'dubai',
     poiIndex: 0,
-    label: 'Downtown East',
+    label: 'Downtown East', // i18n-ignore: camera name
     offsetNorthM: -130,
     offsetEastM: 190,
     headingDeg: 322,
@@ -378,7 +415,7 @@ export const CAMERA_SEEDS = [
     id: 'austin-congress-s',
     cityId: 'austin',
     poiIndex: 0,
-    label: 'Congress Southbound',
+    label: 'Congress Southbound', // i18n-ignore: camera name
     offsetNorthM: -165,
     offsetEastM: 40,
     headingDeg: 12,
@@ -390,7 +427,7 @@ export const CAMERA_SEEDS = [
     id: 'austin-downtown-west',
     cityId: 'austin',
     poiIndex: 1,
-    label: 'Downtown West',
+    label: 'Downtown West', // i18n-ignore: camera name
     offsetNorthM: -120,
     offsetEastM: -160,
     headingDeg: 120,
@@ -411,6 +448,8 @@ export const IDLE_CAMERA_COLOR =
 // prettier-ignore
 export const ACTIVE_CAMERA_COLOR =
   rgbaFromCss('#ffd97a').withAlpha(0.95);
+
+export const LIVE_CAMERA_COLOR = rgbaFromCss('#b48cff').withAlpha(0.88);
 
 // prettier-ignore
 export const IDLE_COVERAGE_COLOR =

@@ -1,14 +1,29 @@
+import * as geo from '../../geo/index.js';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
   IDLE_CAMERA_COLOR,
+  LIVE_CAMERA_COLOR,
   ACTIVE_COVERAGE_CENTER,
   IDLE_COVERAGE_CENTER_MUTED,
   ACTIVE_COVERAGE_CENTER_DEPTHFAIL,
   ACTIVE_COVERAGE_EDGE,
   IDLE_COVERAGE_EDGE_MUTED,
   ACTIVE_COVERAGE_EDGE_DEPTHFAIL,
+  VIEW_CELL_PX,
+  VIEW_ICON_MARGIN,
+  VIEW_MIN_CELL_M,
 } from './policy.js';
+
+/** FNV-1a over a camera id: a stable, well-spread order for crowded cells. */
+function idHash(id) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
 
 export function createRendering({
   state: layerState,
@@ -16,6 +31,15 @@ export function createRendering({
   parts,
   source,
 }) {
+  /** Icon color: active wins, then live-capable video feeds, then idle stills. */
+  function cameraColorFor(record) {
+    if (record.camera.id === layerState._activeCameraId)
+      return ACTIVE_CAMERA_COLOR;
+    if (parts.model.isVideoFeedType(record.camera.feedType))
+      return LIVE_CAMERA_COLOR;
+    return IDLE_CAMERA_COLOR;
+  }
+
   const {
     focusNowMs,
     getFocusTarget,
@@ -55,10 +79,7 @@ export function createRendering({
       // prettier-ignore
       cameraDistanceFor: (position) =>
         parts.renderer.distance(position),
-      baseColorFor: (record) =>
-        record.camera.id === layerState._activeCameraId
-          ? ACTIVE_CAMERA_COLOR
-          : IDLE_CAMERA_COLOR,
+      baseColorFor: cameraColorFor,
     });
     layerState._activeFocusStyleCount = result.activeCount;
   }
@@ -128,24 +149,123 @@ export function createRendering({
    * (Google-3D regime) nothing writes far-side depth, and the billboards are now
    * always-on-top (`disableDepthTestDistance: INFINITY` — the far-zoom submerge
    * fix), so without this pass London's cluster would shine through the planet
-   * from a US viewpoint. Pure math over ≤ catalog-size points; runs on
-   * camera.moveEnd + init only (event-driven — no steady-state work).
+   * from a US viewpoint.
+   *
+   * The same pass thins the view so a large catalog stays readable and cheap:
+   * icons well off screen hide, and each camera competes for a world-anchored
+   * cell sized to VIEW_CELL_PX at its distance (healthiest first, then a stable
+   * id order). The active camera shows whenever it is above the horizon
+   * and near the screen, even in a crowded cell. The shown records become
+   * `_viewRecords`, the working set for geometry, cards and the camera picker;
+   * the array keeps its identity while the shown set is unchanged.
+   *
+   * Runs on camera settle, throttled during motion, on resize, enable and
+   * activation changes — never per frame.
+   * @returns {boolean} Whether the shown set changed.
    */
 
   function refreshHorizonCulling() {
-    // prettier-ignore
     if (
+      !layerState._enabled ||
       !parts.renderer?.ready ||
       !layerState._records.length
     )
-      return;
+      return false;
+    const { width, height } = parts.renderer.viewport();
+    const minX = -width * VIEW_ICON_MARGIN;
+    const maxX = width * (1 + VIEW_ICON_MARGIN);
+    const minY = -height * VIEW_ICON_MARGIN;
+    const maxY = height * (1 + VIEW_ICON_MARGIN);
+    // Ground metres one pixel covers per metre of distance from the viewer.
+    const fovy = layerState._viewer?.camera?.frustum?.fovy || Math.PI / 3;
+    const metresPerPixelPerMetre =
+      (2 * Math.tan(fovy / 2)) / Math.max(1, height);
+    const activeId = layerState._activeCameraId;
     const horizonVisible = parts.renderer.horizonTest();
+    const pass = (layerState._viewPassId = (layerState._viewPassId || 0) + 1);
+    const shown = [];
+    const cells = new Map();
+    for (const record of layerState._records) {
+      const position = record.billboard?.position;
+      if (!position) continue;
+      if (!horizonVisible(position)) continue;
+      const screen = parts.renderer.project(
+        position,
+        layerState._scratchViewScreen,
+      );
+      if (
+        !screen ||
+        !(screen.x >= minX && screen.x <= maxX) ||
+        !(screen.y >= minY && screen.y <= maxY)
+      )
+        continue;
+      const cellM =
+        VIEW_CELL_PX *
+        metresPerPixelPerMetre *
+        parts.renderer.distance(position);
+      if (record.camera.id === activeId || !(cellM >= VIEW_MIN_CELL_M)) {
+        record.viewPass = pass;
+        shown.push(record);
+        continue;
+      }
+      const key = worldCellKey(record, cellM);
+      const rank = viewRank(record);
+      const holder = cells.get(key);
+      if (!holder || rank < holder.rank) cells.set(key, { record, rank });
+    }
+    for (const { record } of cells.values()) {
+      record.viewPass = pass;
+      shown.push(record);
+    }
     for (const record of layerState._records) {
       const bb = record.billboard;
       if (!bb) continue;
-      const visible = horizonVisible(bb.position);
+      const visible = record.viewPass === pass;
       if (bb.show !== visible) bb.show = visible;
     }
+    const previous = layerState._viewRecords;
+    const changed =
+      previous.length !== shown.length ||
+      previous.some((record) => record.viewPass !== pass);
+    if (changed) layerState._viewRecords = shown;
+    return changed;
+  }
+
+  function worldCellKey(record, cellM) {
+    const level = Math.ceil(Math.log2(cellM));
+    const { lat, lon } = record.camera;
+    // A camera's key changes only with the level (or an edited position), so
+    // it is kept per level.
+    if (
+      record.viewCellLevel === level &&
+      record.viewCellLat === lat &&
+      record.viewCellLon === lon
+    )
+      return record.viewCellKey;
+    const latStep = 2 ** level / 111_320;
+    const row = Math.floor(lat / latStep);
+    const rowLat = geo.math.toRadians((row + 0.5) * latStep);
+    const lonStep = latStep / Math.max(0.05, Math.cos(rowLat));
+    record.viewCellLevel = level;
+    record.viewCellLat = lat;
+    record.viewCellLon = lon;
+    record.viewCellKey = `${level}:${row}:${Math.floor(lon / lonStep)}`;
+    return record.viewCellKey;
+  }
+
+  /** Lower ranks win a crowded cell: healthy feeds first, then a stable id order. */
+  function viewRank(record) {
+    const status = layerState._healthById.get(record.camera.id)?.status;
+    const tier =
+      status === 'ok'
+        ? 0
+        : status === 'degraded'
+          ? 1
+          : status === 'offline'
+            ? 3
+            : 2;
+    record.viewHash ??= idHash(record.camera.id);
+    return tier * 2 ** 32 + record.viewHash;
   }
 
   /**
@@ -196,6 +316,8 @@ export function createRendering({
     const activeId = activeRecord?.camera.id || null;
     const coverageVisible =
       parts.geometry.buildCoverageVisibleSet(activeRecord);
+    // Drawn coverage needs geometry too (geometryQueue's working set).
+    layerState._coverageVisibleIds = coverageVisible;
     const coverageOn = layerState._coverageMode !== 'off';
     const viewshedOn = layerState._coverageMode === 'viewshed';
     if (coverageOn) {
@@ -207,10 +329,13 @@ export function createRendering({
     for (const record of layerState._records) {
       const isActive = record.camera.id === activeId;
       if (record.billboard) {
-        record.billboard.color = isActive
-          ? ACTIVE_CAMERA_COLOR
-          : IDLE_CAMERA_COLOR;
-        record.billboard.scale = isActive ? 1.25 : 1.0;
+        // Unchanged writes still dirty the collection, which then rewrites
+        // every icon's vertices: across a large catalog, write only changes.
+        const color = cameraColorFor(record);
+        if (!color.equals(record.billboard.color))
+          record.billboard.color = color;
+        const scale = isActive ? 1.25 : 1.0;
+        if (record.billboard.scale !== scale) record.billboard.scale = scale;
         // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
         // (set at creation) — see the field-test far-zoom submerge fix there.
       }

@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { transitQaBase } from './qa-transit-browser.mjs';
+import { chromeExecutablePath } from './qa-chrome.mjs';
 
 /** Prove parked and moving headings in the real scene, without live feeds. */
 export async function runTransitHeadingRegression(base, check) {

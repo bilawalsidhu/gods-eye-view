@@ -3,6 +3,12 @@ import {
   FRAME_ENDPOINT,
   MEDIA_ENDPOINT,
 } from './sourcePolicy.js';
+const FRAME_SOURCE_KINDS = new Set([
+  'upstream-image',
+  'hls-pull',
+  'streetview',
+  'synthetic',
+]);
 function safeNumber(value, fallback = NaN) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -51,7 +57,7 @@ export function createCctvSource({
     },
     getFrameUrl: frameUrlFor,
     getMediaUrl: mediaUrlFor,
-    /** Read one current frame through the registered frame endpoint. */
+    /** Read a registered frame and its provenance, including fallback frames. */
     async getFrame(camera, { signal } = {}) {
       signal?.throwIfAborted();
       const response = await fetchImpl(frameUrlFor(camera), {
@@ -62,7 +68,12 @@ export function createCctvSource({
       const bytes = new Uint8Array(await response.arrayBuffer());
       signal?.throwIfAborted();
       const type = response.headers.get('content-type') || '';
-      return { contentType: type.split(';')[0].trim().toLowerCase(), bytes };
+      const sourceKind = response.headers.get('x-cctv-source');
+      return {
+        contentType: type.split(';')[0].trim().toLowerCase(),
+        bytes,
+        sourceKind: FRAME_SOURCE_KINDS.has(sourceKind) ? sourceKind : null,
+      };
     },
   };
 }

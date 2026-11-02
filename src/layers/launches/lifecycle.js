@@ -19,6 +19,7 @@ export function createLifecycle({
       layerState._dataSource = getRenderer().createDataSource();
       layerState._count = 0;
       layerState._lastUpdate = null;
+      layerState._stale = false;
       layerState._lastError = null;
       layerState._orbitMatches = 0;
       parts.overlays.clearMissionOverlaySources();
@@ -83,7 +84,6 @@ export function createLifecycle({
       // Snapshot the existing follow before the mission flight releases it.
       await parts.ingestion.captureSatelliteDependency();
       parts.selection.focusFullGlobe(layerState._viewer);
-      document.getElementById('cockpit-context')?.setAttribute('hidden', '');
       if (layerState._selectedLaunchId)
         parts.selection.setSelectedMission(
           layerState._selectedLaunchId,
@@ -93,6 +93,7 @@ export function createLifecycle({
     },
 
     async disable() {
+      layerState._moveHandler?.reset?.();
       layerState._sourceController.abort();
       layerState._enabled = false;
       releaseContinuousRender('rocket-launches');
@@ -140,19 +141,14 @@ export function createLifecycle({
       layerState._animationStarts.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
-      layerState._missionPanel?.remove();
-      layerState._missionPanel = null;
-      if (layerState._missionRoster) {
-        layerState._missionRoster.onclick = null;
-      }
-      layerState._missionRosterPreviewOwnership = null;
-      layerState._missionRoster = null;
+      parts.panel.clearMissionPanel();
       if (layerState._dataSource)
         getRenderer().removeDataSource(layerState._dataSource);
       layerState._dataSource = null;
       layerState._count = 0;
       layerState._orbitMatches = 0;
       layerState._lastUpdate = null;
+      layerState._stale = false;
       layerState._activeTleText = null;
       layerState._activeTlePromise = null;
       layerState._activeTlePromiseToken = 0;

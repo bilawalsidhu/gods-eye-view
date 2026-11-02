@@ -60,8 +60,7 @@ test('military:synthetic answers with the military source’s shape, some shared
   );
   const shared = military.records.filter(({ id }) => civil.has(id));
   assert.equal(shared.length, 25);
-  const track = await sources.military.getTrack('ae1100');
-  assert.deepEqual(track.records, []);
+  assert.equal(sources.military.getTrack, undefined);
 });
 
 test('local-adsb:fixture answers as the local receivers do (1090 MHz and UAT)', async () => {

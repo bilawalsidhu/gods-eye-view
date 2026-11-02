@@ -27,6 +27,7 @@
 import { feedProvenanceEnvelope } from './layerSnapshot.js';
 import { pointInRing } from './naturalEarthRegions.js';
 import { VOICE_LAYER_MANIFEST, voiceLayer } from '../voice/layerManifest.js';
+import { greatCircleKm } from '../geoDistance.js';
 
 /**
  * Layers the engine understands, with the fields queries may reference,
@@ -61,7 +62,7 @@ const COMMON_FIELDS = Object.freeze(['id', 'lat', 'lon']);
 /** Derived per-record field for layers with a time field (hours before now). */
 const AGE_FIELD = 'ageHours';
 /** Spatial scope kinds `query()` accepts. */
-export const ANALYST_SCOPE_KINDS = Object.freeze([
+const ANALYST_SCOPE_KINDS = Object.freeze([
   'view',
   'region',
   'radius',
@@ -73,7 +74,7 @@ export const ANALYST_SCOPE_KINDS = Object.freeze([
  * @param {string[]} layerKeys Queried layer ids.
  * @returns {string[]} Field names, common fields first.
  */
-export function analystFieldsFor(layerKeys) {
+function analystFieldsFor(layerKeys) {
   const fields = new Set(COMMON_FIELDS);
   for (const key of layerKeys) {
     const layer = ANALYST_LAYERS[key];
@@ -98,55 +99,9 @@ function toEpochMs(value) {
   return Date.parse(text);
 }
 
-const EARTH_R_KM = 6371;
-
-/** Great-circle distance in km. */
+/** @deprecated Use geoDistance.greatCircleKm with `{ lat, lon }` points. */
 export function haversineKm(lat1, lon1, lat2, lon2) {
-  const d2r = Math.PI / 180;
-  const dLat = (lat2 - lat1) * d2r;
-  const dLon = (lon2 - lon1) * d2r;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * d2r) * Math.cos(lat2 * d2r) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_R_KM * Math.asin(Math.min(1, Math.sqrt(a)));
-}
-
-/**
- * One filter: {field, op:'gt'|'lt'|'gte'|'lte'|'eq'|'neq'|'contains', value}.
- * With `time: true`, both sides compare as epoch ms (ISO strings accepted).
- */
-export function applyFilter(records, filter, { time = false } = {}) {
-  const { field, op } = filter || {};
-  if (!field || !op) return records;
-  const value = time ? toEpochMs(filter.value) : filter.value;
-  return records.filter((r) => {
-    const got = time ? toEpochMs(r[field]) : r[field];
-    if (got === null || got === undefined || (time && !Number.isFinite(got)))
-      return false;
-    if (time && (op === 'eq' || op === 'neq'))
-      return (got === value) === (op === 'eq');
-    switch (op) {
-      case 'gt':
-        return Number(got) > Number(value);
-      case 'gte':
-        return Number(got) >= Number(value);
-      case 'lt':
-        return Number(got) < Number(value);
-      case 'lte':
-        return Number(got) <= Number(value);
-      case 'eq': {
-        if (typeof got === 'boolean' || typeof value === 'boolean')
-          return Boolean(got) === Boolean(value);
-        return String(got).toLowerCase() === String(value).toLowerCase();
-      }
-      case 'neq':
-        return String(got).toLowerCase() !== String(value).toLowerCase();
-      case 'contains':
-        return String(got).toLowerCase().includes(String(value).toLowerCase());
-      default:
-        return false;
-    }
-  });
+  return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
 }
 
 /** Scope records spatially. scope: {kind:'view'|'region'|'radius'|'anywhere', …}. */
@@ -174,28 +129,6 @@ export function applyScope(records, scope, resolved) {
   return records;
 }
 
-/** Numeric summary for the narration layer. */
-function summarize(items, sortField) {
-  const summary = { count: items.length };
-  if (sortField && items.length) {
-    // A loop, not Math.min(...vals): a full FIRMS day is ~160k values, past
-    // the engine's argument limit.
-    let min = Infinity;
-    let max = -Infinity;
-    for (const item of items) {
-      const value = Number(item[sortField]);
-      if (!Number.isFinite(value)) continue;
-      if (value < min) min = value;
-      if (value > max) max = value;
-    }
-    if (Number.isFinite(min)) {
-      summary[`${sortField}Min`] = min;
-      summary[`${sortField}Max`] = max;
-    }
-  }
-  return summary;
-}
-
 const OPS_BY_TYPE = Object.freeze({
   number: ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'],
   time: ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'],
@@ -220,7 +153,7 @@ const COMMON_UNITS = Object.freeze({
  * @param {string} field Field name.
  * @returns {'number'|'text'|'flag'|'time'|null} Field type.
  */
-export function analystFieldType(layerKeys, field) {
+function analystFieldType(layerKeys, field) {
   if (!analystFieldsFor(layerKeys).includes(field)) return null;
   if (COMMON_TYPES[field]) return COMMON_TYPES[field];
   for (const key of layerKeys) {
@@ -888,6 +821,7 @@ export function createAnalystEngine(providers) {
       followUp && !spec.scope ? lastResult.distanceOf || null : null;
     let resolvedScope = null;
     let scopeNote = rememberedScope?.coverage || 'anywhere';
+    let scopeSource = rememberedScope?.source || null;
     // Human phrasing for the same scope, so every spoken count can name what it
     // measured ("8 in view", "about 30 within 250 km of Austin") instead of
     // arriving as a bare number that contradicts the panel.
@@ -897,8 +831,16 @@ export function createAnalystEngine(providers) {
     // further when a new scope is given.
     const scope = spec.scope || { kind: followUp ? 'anywhere' : 'view' };
     if (scope.kind === 'region') {
-      const region = await providers.resolveRegionRing(scope.name, signal);
-      if (!isCurrent()) return cancelled();
+      let region;
+      try {
+        region = await providers.resolveRegionRing(scope.name, signal);
+      } catch (error) {
+        // Cancellation belongs to the query owner, not an error's name: a
+        // resource-local AbortError from a current lookup still propagates.
+        if (signal?.aborted || !isCurrent()) return cancelled();
+        throw error;
+      }
+      if (signal?.aborted || !isCurrent()) return cancelled();
       if (region?.error === 'region-timeout') {
         return {
           ok: false,
@@ -917,6 +859,7 @@ export function createAnalystEngine(providers) {
       }
       resolvedScope = region;
       scopeNote = `region:${region.name}`;
+      scopeSource = region.source || null;
       scopeLabel = `over ${region.name}`;
       scopeDetail = scopeLabel;
     } else if (scope.kind === 'radius') {
@@ -1056,6 +999,7 @@ export function createAnalystEngine(providers) {
         layersQueried,
         records: totals,
         scope: scopeNote,
+        ...(scopeSource ? { scopeSource } : {}),
         ...(rememberedScope?.note ? { note: rememberedScope.note } : {}),
         ...(queriedSnapshots.length
           ? { feedProvenance: feedProvenanceEnvelope(queriedSnapshots) }
@@ -1088,6 +1032,7 @@ export function createAnalystEngine(providers) {
         label: memoryOverride?.scopeLabel || result.scopeLabel,
         detail: memoryOverride?.scopeDetail || result.display.scope,
         coverage: committedCoverage.scope,
+        source: committedCoverage.scopeSource || null,
         note: committedCoverage.note || null,
       },
     };

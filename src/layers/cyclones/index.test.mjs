@@ -513,12 +513,13 @@ test('only the latest queued focus runs and an unchanged selection survives refr
 });
 test('classification display expands known codes without altering the source or guessing unknown meanings', async () => {
   for (const [code, label] of [
-    ['PTC', 'Potential tropical cyclone'],
+    ['PC', 'Potential tropical cyclone'],
+    ['PTC', 'Post-tropical cyclone'],
     ['HU', 'Hurricane'],
     ['TS', 'Tropical storm'],
     ['TD', 'Tropical depression'],
-    ['SS', 'Subtropical storm'],
-    ['SD', 'Subtropical depression'],
+    ['STS', 'Subtropical storm'],
+    ['STD', 'Subtropical depression'],
     ['EX', 'EX'],
     ['UNKNOWN', 'UNKNOWN'],
   ]) {
@@ -565,7 +566,9 @@ test('advisory selection uses accessible row descriptors and shared camera hando
     1,
   );
   assert.equal(controls.summary.status, 'Track/cone awaiting advisory 10');
-  assert.match(controls.info, /09-16 03:00 UTC/);
+  // No line break inside the date: a word joiner holds the hyphen.
+  assert.match(controls.info, /issued 09-\u206016\u00a003:00\u00a0UTC/);
+  assert.match(controls.info, /: 25\u00a0kt · .*: 1006\u00a0hPa/);
   assert.match(controls.infoTitle, /not storm size/);
   assert.match(controls.infoTitle, /follows the surface/);
   assert.equal(controls.list.items[1].params.focus, true);

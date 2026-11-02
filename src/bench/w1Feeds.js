@@ -214,7 +214,9 @@ export function syntheticLocalReceivers({
     configured: true,
     generatedAt: nowMs,
     feeds: [
+      // i18n-ignore: synthetic provider data
       { band: '1090', label: '1090 MHz', status: 'live', aircraft: 30 },
+      // i18n-ignore: synthetic provider data
       { band: '978', label: '978 MHz UAT', status: 'live', aircraft: 10 },
     ],
     records,

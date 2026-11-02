@@ -26,7 +26,10 @@ import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
+import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
+import { createApplicationGnssIntegrity } from './layers/gnss.js';
+import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -158,11 +161,27 @@ export function createApplicationCatalog({
         () => createApplicationEarthquakes({ source: sources.earthquakes }),
       ],
       [
+        'air-quality',
+        () => createApplicationAirQuality({ source: sources['air-quality'] }),
+      ],
+      [
         'fire-perimeters',
         () =>
           createApplicationFirePerimeters({
             source: sources['fire-perimeters'],
           }),
+      ],
+      [
+        'gnss-integrity',
+        () =>
+          createApplicationGnssIntegrity({
+            source: sources['gnss-integrity'],
+            windowMs: sources['gnss-integrity'].windowMs,
+          }),
+      ],
+      [
+        's2-ghostmaps',
+        () => createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
       ],
       [
         'alpr-cameras',
