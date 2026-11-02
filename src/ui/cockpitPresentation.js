@@ -1,6 +1,11 @@
 /** Pure formatting and fixed presentation constants used by Cockpit components. */
 import { formatNumber, getLocale, isolate, t, msg } from '../i18n/index.js';
 import { formatQuantity } from './unitLabels.js';
+import {
+  normalizeHeading,
+  roundHeadingDegrees,
+} from '../data/headingDegrees.js';
+import { kilometreDigits } from '../data/distanceFormat.js';
 
 export const COCKPIT_HEADING_SLEW_DPS = 28;
 
@@ -116,7 +121,7 @@ export function formatCockpitCoordinate(value, positive, negative) {
  * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond.
  */
 export function formatCockpitDistance(distanceM) {
-  const digits = distanceM < 10000 ? 1 : 0;
+  const digits = kilometreDigits(distanceM);
   const distance = formatQuantity(distanceM / 1000, 'km', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -135,8 +140,7 @@ export function cockpitUnitCase(text) {
 export function formatCockpitWindDirection(value) {
   if (!Number.isFinite(value)) return t('DIR UNKNOWN');
   const labels = Object.keys(COMPASS_POINT_LABELS);
-  const normalized = ((value % 360) + 360) % 360;
-  // 359.5° and above is north. Modulo keeps that from printing 360°.
-  const degrees = Math.round(normalized) % 360;
+  const normalized = normalizeHeading(value);
+  const degrees = roundHeadingDegrees(value);
   return `${compassPointLabel(labels[Math.round(normalized / 45) % labels.length])} · ${degrees}°`;
 }

@@ -1198,5 +1198,8 @@
   "src/standalone/layerSources.test.mjs",
   "src/tooling/nominatimGuardLifecycle.test.mjs",
   "src/tooling/nominatimLockOwnership.test.mjs",
-  "src/tooling/nominatimOutlineRoute.test.mjs"
+  "src/tooling/nominatimOutlineRoute.test.mjs",
+  "src/data/headingDegrees.test.mjs",
+  "src/data/distanceFormat.test.mjs",
+  "src/sources/adsbFields.test.mjs"
 ]

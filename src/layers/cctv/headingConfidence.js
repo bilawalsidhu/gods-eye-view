@@ -1,4 +1,5 @@
 import { t } from '../../i18n/index.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 /**
  * @module headingConfidence
@@ -44,8 +45,7 @@ export function isHeadingEstimated(camera) {
  * @returns {string}
  */
 export function headingHudToken(camera) {
-  // 359.5° and above rounds to north; modulo keeps it from printing 360°.
-  const hdg = Math.round(Number(camera?.headingDeg) || 0) % 360;
+  const hdg = roundHeadingDegrees(Number(camera?.headingDeg)) ?? 0;
   return isHeadingEstimated(camera)
     ? t('HDG {value}° (ESTIMATED)', { value: hdg })
     : t('HDG {value}°', { value: hdg });

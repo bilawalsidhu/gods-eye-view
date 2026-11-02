@@ -120,7 +120,7 @@ export function updateHud(
     (tick) => formatAltitudeRulerTick(tick.valueFt),
   );
   view.heading = {
-    text: String(Math.round(heading) % 360).padStart(3, '0'),
+    text: formatHeadingReadout(heading),
     value: heading,
     immediate: forceContext,
   };

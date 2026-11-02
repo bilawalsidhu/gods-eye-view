@@ -1230,7 +1230,6 @@ test('only an explicit navigation request permits resolving distant annotation t
   engine.destroy();
 });
 
-
 test('recaption inherits outline credit from borrowed geometry rather than its new anchor', async (t) => {
   installAnimationFrameStubs(t);
   const { renderer } = fakeRenderer();
@@ -1301,4 +1300,19 @@ test('plain recaption keeps the old mark addressable when its removal throws', a
     'the old route is retried on the next clear',
   );
   assert.equal(engine.count(), 0);
+});
+
+test('a drawn line that rounds up to the next unit is labelled in it, not as 1000 m or 10.0 km', async (t) => {
+  installAnimationFrameStubs(t);
+  const labels = [];
+  const renderer = { add(anno) { labels.push(anno.label); }, update() {}, remove() {}, sync() {}, destroy() {} };
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const metresPerDegree = (6371.0088 * 1000 * Math.PI) / 180;
+  for (const metres of [994, 996, 9940, 9960]) {
+    await engine.annotate([
+      { type: 'route', manual: true, path: [[0, 0], [0, metres / metresPerDegree]] },
+    ]);
+  }
+  assert.deepEqual(labels, ['990 m', '1.0 km', '9.9 km', '10 km']);
+  engine.destroy();
 });

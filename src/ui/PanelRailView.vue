@@ -42,6 +42,7 @@ const label = computed(() =>
     :side="side"
     :label="label"
     :panel-open="active !== null"
+    collapsible
     @select="onSelect"
   />
 </template>

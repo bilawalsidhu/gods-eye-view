@@ -307,6 +307,15 @@ the retrieval date (2026-07-30), exact download URL, license evidence, and the
 deterministic transform (`scripts/build-sf-neighborhoods.mjs`: `nhood` → `name`, ~2 m
 Douglas-Peucker simplification, 6-decimal rounding).
 
+### Local CCTV source packs (`config/`)
+
+The server can read a local camera list from `CCTV_SOURCES_FILE` (default
+`config/cctv_sources.austin.json`, which ships empty) and inline JSON from
+`CCTV_SOURCES_JSON`; the two are merged, and inline entries win on a duplicate
+id. A non-empty local pack replaces the live open-data camera packs unless
+`CCTV_FORCE_AUSTIN=1` is set. The packs under `config/` show the schema, and a
+pack's cameras keep their own source's license and attribution.
+
 ---
 
 ## Weather sources

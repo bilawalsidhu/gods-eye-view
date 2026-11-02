@@ -9,6 +9,7 @@ import {
   transitRouteLabel,
 } from '../../data/transitFeeds.js';
 import { displayMotion, playbackPosition } from './movement.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_ID = 'transit-selected';
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -405,11 +406,10 @@ export function buildTransitSelectionCopy(
     reportedMotion.push(
       t('reported {speed} km/h', { speed: Math.round(record.speedMps * 3.6) }),
     );
-  // 359.5° and above rounds to north; modulo keeps it from printing 360°.
   if (Number.isFinite(record.bearing))
     reportedMotion.push(
       t('reported hdg {heading}°', {
-        heading: Math.round(record.bearing) % 360,
+        heading: roundHeadingDegrees(record.bearing),
       }),
     );
   // The operator's own claim, kept as a REPORT rather than as the live state.

@@ -255,11 +255,14 @@
   pointer-events: auto;
   transition: top var(--transition-fast);
 }
+/* Each rail keeps its outer edge at the screen-side clearance, so a rail that
+   widens (labelled pills while its side has no open panel) grows toward the
+   middle of the screen. Collapsed, it sits 6px outside its stack. */
 .gev-panel-rail--left {
-  inset-inline-end: calc(100% + 6px);
+  inset-inline-start: calc(-1 * var(--panel-rail-clearance));
 }
 .gev-panel-rail--right {
-  inset-inline-start: calc(100% + 6px);
+  inset-inline-end: calc(-1 * var(--panel-rail-clearance));
 }
 body.mobile-shell #left-panel-stack > .gev-panel-rail,
 body.mobile-shell #right-context-rail > .gev-panel-rail,
