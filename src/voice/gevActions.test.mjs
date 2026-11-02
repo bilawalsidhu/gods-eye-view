@@ -754,9 +754,17 @@ test('showing a layer opens the panel that holds its row: Directions lives in Ut
     closest: (selector) => (selector === '[data-panel-id]' ? { id: panelId } : null),
   });
   const rows = { directions: rowIn('utilities-panel'), flights: rowIn('data-panel') };
+  // Each row is found only inside the list that really holds it.
+  const lists = { directions: '#utilities-toggles', flights: '#data-toggles' };
   globalThis.CSS = { escape: (value) => value };
   globalThis.document = {
-    querySelector: (selector) => rows[/data-layer-id="([^"]+)"/.exec(selector)?.[1]] || null,
+    querySelector: (selector) => {
+      for (const part of selector.split(',')) {
+        const [, list, id] = /^\s*(#[\w-]+) \[data-layer-id="([^"]+)"\]\s*$/.exec(part) || [];
+        if (id && lists[id] === list) return rows[id];
+      }
+      return null;
+    },
   };
   try {
     const opened = [];
@@ -4000,4 +4008,27 @@ test('set_panel_open accepts the Authoring name for the scene panel', async () =
     assert.equal(result.panelId, 'scene-panel');
   }
   assert.deepEqual(calls.at(-1), ['scene-panel', false, { explicit: true }]);
+});
+
+test('set_panel_open reaches the Utilities panel by its name, Draw or Import', async () => {
+  const calls = [];
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      },
+    },
+    styleManager: {
+      setPanelCollapsed: (...args) => calls.push(args),
+    },
+    dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+  });
+  for (const panel of ['utilities-panel', 'utilities', 'drawing', 'import']) {
+    const result = await runner('set_panel_open', { panelId: panel, open: true });
+    assert.equal(result.panelId, 'utilities-panel', panel);
+  }
+  assert.deepEqual(calls.at(-1), ['utilities-panel', false, { explicit: true }]);
 });
