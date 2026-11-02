@@ -142,7 +142,7 @@ export function createLifecycle({
     /** Configure the source before initialization; an active layer keeps its owner. */
     setSource(source) {
       // Initialized: a viewer, or an engine's renderer without one.
-      if (state.viewer || state.renderer?.engine)
+      if (state.viewer || state.renderer?.engine || state.feed.enabled)
         throw new Error('Configure the source before layer initialization');
       if (typeof source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
@@ -160,19 +160,49 @@ export function createLifecycle({
     init(viewer, { engine = null } = {}) {
       if (typeof vesselState._source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
+      if (viewer || engine) this.attachRenderer(viewer, { engine });
+    },
+
+    attachRenderer(viewer, { engine = null } = {}) {
       state.viewer = viewer;
       state.renderer ??= createRenderer(viewer, engine);
-      // The scene the layer draws in: the viewer, or the renderer's view on
-      // an engine without one.
       const scene = viewer || state.renderer?.view || null;
       components.rendering.ensureCollections(scene);
-      vesselState._vesselOverlayHost.setVisible(
-        VESSEL_OVERLAY_SOURCE_ID,
-        false,
-      );
       components.selection.installInteraction(scene);
       components.rendering.installRuntime(scene);
       restoreSpriteOrder(viewer);
+      components.rendering.setVisible(state.feed.enabled);
+      if (!state.feed.enabled) return;
+      bindVisibleScene(viewer, scene);
+      const horizon = components.rendering.makeOccluder();
+      for (const record of state.records.all)
+        components.rendering.addRecordPrimitives(record, horizon);
+      components.tracking.attachSelectedVesselTrail();
+      components.rendering.updateVisibility(true);
+      if (state.selectedRecord)
+        components.cards.updateSelectedVesselHud(state.selectedRecord);
+    },
+
+    detachRenderer() {
+      removeViewListener();
+      components.selection.removeVesselInteraction();
+      state.preRenderRemover?.();
+      state.preRenderRemover = null;
+      components.rendering.cancelTrailingVisibilityPass();
+      releaseContinuousRender('ais-vessels');
+      unregisterPickOwner('ais-live-vessels');
+      components.tracking.detachSelectedVesselTrail();
+      for (const record of state.records.all)
+        components.rendering.removeRecordPrimitives(record);
+      components.rendering.setVisible(false);
+      vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
+      components.cards.resetSelectedVesselHud();
+      detachFleet();
+      state.renderer?.destroy();
+      state.renderer = null;
+      state.viewer = null;
+      state.activeFocusCount = 0;
+      state.activeLabelCount = 0;
     },
 
     enable(viewer) {
@@ -204,27 +234,7 @@ export function createLifecycle({
             /* grid failed to load — anchors stay at ellipsoid 0 */
           });
       }
-      // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;
-      // the registry resolver reduces it to the record's mmsi (a string key).
-      registerPickOwner('ais-live-vessels', (pickedId) =>
-        state.records.byMmsi.has(pickedId),
-      );
-      restoreSpriteOrderOnEnable('ais', activeViewer);
-      // Vessels are asked for by view, so ask again when the view moves away.
-      removeViewListener();
-      const onMoveEnd = () => {
-        components.ingestion.refreshIfMoved(scene);
-      };
-      if (state.renderer)
-        state.feed.removeViewListener = state.renderer.view.on(
-          'moveEnd',
-          onMoveEnd,
-        );
-      else {
-        const moveEnd = activeViewer?.camera?.moveEnd;
-        if (typeof moveEnd?.addEventListener === 'function')
-          state.feed.removeViewListener = moveEnd.addEventListener(onMoveEnd);
-      }
+      bindVisibleScene(activeViewer, scene);
       return components.ingestion.loadLivePositions(scene);
     },
 
@@ -257,7 +267,7 @@ export function createLifecycle({
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();
-      state.renderer?.fleet.detach();
+      detachFleet();
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
       vesselState._vesselOverlayHost.setVisible(
         VESSEL_OVERLAY_SOURCE_ID,
@@ -280,6 +290,37 @@ export function createLifecycle({
         createTrail: services.trails?.createTrail ?? null,
       }) ?? null
     );
+  }
+
+  function bindVisibleScene(activeViewer, scene) {
+    // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;
+    // the registry resolver reduces it to the record's mmsi (a string key).
+    registerPickOwner('ais-live-vessels', (pickedId) =>
+      state.records.byMmsi.has(pickedId),
+    );
+    restoreSpriteOrderOnEnable('ais', activeViewer);
+    // Vessels are asked for by view, so ask again when the view moves away.
+    removeViewListener();
+    const onMoveEnd = () => {
+      components.ingestion.refreshIfMoved(scene);
+    };
+    if (state.renderer)
+      state.feed.removeViewListener = state.renderer.view.on(
+        'moveEnd',
+        onMoveEnd,
+      );
+    else {
+      const moveEnd = activeViewer?.camera?.moveEnd;
+      if (typeof moveEnd?.addEventListener === 'function')
+        state.feed.removeViewListener = moveEnd.addEventListener(onMoveEnd);
+    }
+  }
+
+  function detachFleet() {
+    const fleet = state.renderer?.fleet;
+    if (fleet?.collection)
+      services.sprites.unregisterSpriteCollection?.('ais', fleet.collection);
+    fleet?.detach();
   }
 
   function removeViewListener() {

@@ -32,6 +32,16 @@ try {
     const fetch = window.fetch.bind(window);
     window.fetch = (input, o) => {
       const url = new URL(input.url ?? input, document.baseURI);
+      if (url.pathname === '/api/vessels/track') {
+        window.qaVesselHistories = (window.qaVesselHistories ?? 0) + 1;
+        return Promise.resolve(Response.json({ samples: [{lat: 43.63, lon: -79.38}] }));
+      }
+      if (url.pathname === '/api/vessels') {
+        return Promise.resolve(Response.json({status: 'live', rows: [{
+          mmsi: '123456789', name: 'Toronto QA', lat: 43.65, lon: -79.38,
+          last_position_epoch: Date.now() / 1000,
+        }]}));
+      }
       if (url.pathname.startsWith('/api/fire-perimeters/inciweb')) {
         return Promise.resolve(Response.json({ rows: [] }));
       }
@@ -200,6 +210,39 @@ try {
     await click(-79.435, 43.65);
     await card(true);
     console.log('PASS', kind, 'select fire under GNSS, exclude hole, retain incident card');
+  }
+  await p.evaluate(async () => {
+    const { dataManager } = window.__godsEyeView;
+    for (const id of ['gnss-integrity', 'fire-perimeters', 'air-quality'])
+      await dataManager.setEnabled(id, false);
+    await dataManager.setEnabled('ais-live-vessels', true, { origin: 'user' });
+    window.qaVesselEntry = dataManager.layers.get('ais-live-vessels');
+  });
+  await p.waitForFunction(() => window.qaVesselEntry.module.qaDrawn()?.chevrons[0]?.show);
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  await click(-79.38, 43.65);
+  await p.waitForFunction(() => window.qaVesselEntry.module.getSelectedInfo()?.mmsi === '123456789');
+  for (const kind of ['navara', 'cesium', 'navara']) {
+    if (await p.evaluate(() => window.__godsEyeView.engine.kind) !== kind) {
+      await p.select('#globe-engine', kind);
+      await ready(kind);
+    }
+    const sample = await p.evaluate(() => {
+      const entry = window.__godsEyeView.dataManager.layers.get('ais-live-vessels');
+      const drawn = entry.module.qaDrawn();
+      return {
+        retained: entry === window.qaVesselEntry,
+        selected: entry.module.getSelectedInfo()?.mmsi,
+        chevron: drawn.chevrons.find((c) => c.selected && c.show)?.id,
+        card: drawn.cards.find((c) => c.selected)?.id,
+        histories: window.qaVesselHistories,
+      };
+    });
+    assert.deepEqual(sample, {
+      retained: true, selected: '123456789', chevron: '123456789',
+      card: 'vessel:123456789', histories: 1,
+    }, kind);
+    console.log('PASS', kind, 'retained selected AIS vessel, chevron, card and single track request');
   }
   assert.deepEqual(errors, []);
 } finally {

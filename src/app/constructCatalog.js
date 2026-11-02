@@ -132,10 +132,12 @@ export function createApplicationCatalog({
       })),
     );
     const vessels = once(() =>
-      createApplicationVessels({
-        source: sources.vessels,
-        options: vesselOptions,
-      }),
+      sessionModel('ais-live-vessels', () =>
+        createApplicationVessels({
+          source: sources.vessels,
+          options: vesselOptions,
+        }),
+      ),
     );
     const installations = once(() =>
       createApplicationInstallations({

@@ -291,6 +291,66 @@ test('vessels on the Navara renderer: one always-on-top chevron bank, MMSI picks
   }
 });
 
+test('a pending AIS poll and selected trail survive replacement of the planet', async (t) => {
+  const engines = [createFakeEngine(), createFakeEngine()];
+  const recorders = engines.map(recordingRenderer);
+  const output = recorders.map(() => []);
+  for (const [i, { renderer }] of recorders.entries())
+    renderer.trails.create = () => ({
+      setPositions: (positions) => output[i].push(positions.slice()),
+      clear: noop,
+      destroy: noop,
+    });
+  const injected = services(recorders[0].renderer);
+  const restored = [];
+  injected.sprites.restoreSpriteOrderOnEnable = (id) => restored.push(id);
+  injected.renderer.create = ({ engine }) => recorders[engines.indexOf(engine)].renderer;
+  const previousDocument = globalThis.document;
+  globalThis.document = Object.assign(new EventTarget(), { getElementById: () => null });
+  t.after(() => { globalThis.document = previousDocument; });
+  let polls = 0, histories = 0, deliver;
+  const snapshot = (records) => ({
+    records, source: 'AIS fixture', complete: true, transportStatus: 'live',
+    rawRowCount: records.length, observedAtMs: 500, freshness: 'current',
+  });
+  const layer = createVesselLayer({
+    services: injected,
+    source: {
+      getSnapshot: () => ++polls === 1
+        ? snapshot([row('111', 40.6, -73.9)])
+        : new Promise((resolve) => { deliver = resolve; }),
+      getTrack: async () => {
+        histories++;
+        return { records: [{ latitude: 40.59, longitude: -73.92 }] };
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  layer.init(null, { engine: engines[0] });
+  await layer.enable();
+  const record = [...recorders[0].sprites][0].id;
+  layer.selectById('111');
+  const session = layer.testing._getVesselFeedStateForTest().sessionId;
+  const pending = layer.update();
+  layer.detachRenderer();
+  assert.equal(recorders[0].sprites.size, 0);
+  deliver(snapshot([row('111', 40.61, -73.91), row('222', 40.62, -73.92)]));
+  await pending;
+  assert.equal(layer.getSelectedInfo()?.mmsi, '111');
+  assert.ok(layer.findByQuery('222').position);
+  assert.equal(layer.testing._getVesselStateForTest().trailPositionCount, 3);
+  layer.attachRenderer(null, { engine: engines[1] });
+  assert.equal(recorders[1].sprites.size, 2);
+  const selected = [...recorders[1].sprites].find(({ id }) => id === record);
+  assert.equal(selected.image, vesselChevronIcon('#ffffff', true));
+  assert.equal(selected.scale, 0.72);
+  assert.equal(output[1].at(-1).length, 3);
+  assert.equal(layer.testing._getVesselFeedStateForTest().sessionId, session);
+  assert.equal(polls, 2);
+  assert.equal(histories, 1);
+  assert.deepEqual(restored, ['ais', 'ais']);
+});
+
 test('a vessel bank commits rows arriving after its empty visibility commit and after growth', async () => {
   const { createMoverBank } = await import('../aircraft/render/navara.js');
   let commits = 0;
