@@ -25,6 +25,7 @@ import {
   AMBER_TRANSPARENT,
   TRACKED_ICON_COLOR,
 } from './policy.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export function createTracking({
   flightState,
@@ -119,9 +120,8 @@ export function createTracking({
         speed: Number.isFinite(described.velocityMps)
           ? `${Math.round(described.velocityMps * 1.944)} kt`
           : '',
-        // 359.5° and above rounds to north; modulo keeps it from reading 360°.
         heading: Number.isFinite(described.track)
-          ? `${Math.round(described.track) % 360}°`
+          ? `${roundHeadingDegrees(described.track)}°`
           : '',
         icao24,
         // Honesty cue: the contact is coasting on dead reckoning, so the
