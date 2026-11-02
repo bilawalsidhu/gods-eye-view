@@ -1119,6 +1119,7 @@
   "src/voice/panel/manualPanel.test.mjs",
   "src/voice/voiceMiniPreview.js",
   "src/voice/voiceMiniPreview.test.mjs",
+  "src/voice/chatPreferences.test.mjs",
   "src/voice/panel/nativeActivity.test.mjs",
   "src/voice/panel/inactivity.test.mjs",
   "src/voice/panel/actionObserver.test.mjs",
