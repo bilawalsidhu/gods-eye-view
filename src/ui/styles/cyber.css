@@ -2771,7 +2771,10 @@
   border-inline-start: 0;
 }
 
-:root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack > #data-panel {
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  #left-panel-stack
+  > :is(#data-panel, #utilities-panel) {
   --panel-expanded-width: var(--cyber-panel-width);
   width: var(--cyber-panel-width);
   max-height: min(64vh, 610px);
@@ -2780,7 +2783,7 @@
 :root[data-ui-theme='cyber']
   body.cockpit-mode
   #left-panel-stack
-  > #data-panel.collapsed {
+  > :is(#data-panel, #utilities-panel).collapsed {
   width: var(--cyber-panel-collapsed-width);
 }
 
@@ -2813,7 +2816,7 @@
   :root[data-ui-theme='cyber']
     body.cockpit-mode
     #left-panel-stack
-    > #data-panel:not(.collapsed) {
+    > :is(#data-panel, #utilities-panel):not(.collapsed) {
     flex: 0 0 var(--cyber-cockpit-panel-height, 40vh);
     height: var(--cyber-cockpit-panel-height, 40vh);
     max-height: var(--cyber-cockpit-panel-height, 40vh);

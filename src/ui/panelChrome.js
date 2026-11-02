@@ -25,6 +25,11 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
 ]);
+/**
+ * The left panels Cockpit keeps (Data Layers, and Utilities for Directions):
+ * opening one there folds the Cockpit context rail away until it closes.
+ */
+const COCKPIT_LEFT_PANEL_IDS = new Set(['data-panel', 'utilities-panel']);
 /** The command dock trays with a pin button. */
 const PINNABLE_PANEL_IDS = new Set(
   SHARE_PANEL_STATE_SPECS.filter((spec) => spec.pinnable).map(
@@ -497,7 +502,7 @@ export class PanelChrome {
     if (
       !nextCollapsed &&
       this.cockpitView?.active &&
-      panelId === 'data-panel'
+      COCKPIT_LEFT_PANEL_IDS.has(panelId)
     ) {
       this._cockpitContextCollapsedForDataPanel =
         !this.cockpitView.contextCollapsed;
@@ -528,7 +533,7 @@ export class PanelChrome {
     if (
       nextCollapsed &&
       this.cockpitView?.active &&
-      panelId === 'data-panel' &&
+      COCKPIT_LEFT_PANEL_IDS.has(panelId) &&
       this._cockpitContextCollapsedForDataPanel
     ) {
       this._cockpitContextCollapsedForDataPanel = false;

@@ -633,16 +633,21 @@ test('Cockpit side surfaces behave as two single-expanded accordions', () => {
   );
   assert.match(
     radioBindings,
-    /'gev:cockpit-context-expanded'[\s\S]*?setPanelCollapsed\('data-panel', true\);/,
+    /'gev:cockpit-context-expanded'[\s\S]*?setPanelCollapsed\('data-panel', true\);\s*this\.actions\.setPanelCollapsed\('utilities-panel', true\);/,
   );
   assert.match(
     ui,
-    /!nextCollapsed\s*&&\s*this\.cockpitView\?\.active\s*&&\s*panelId === 'data-panel'[\s\S]*?_cockpitContextCollapsedForDataPanel =\s*!this\.cockpitView\.contextCollapsed[\s\S]*?this\.cockpitView\.setContextCollapsed\(true\);/,
+    /!nextCollapsed\s*&&\s*this\.cockpitView\?\.active\s*&&\s*COCKPIT_LEFT_PANEL_IDS\.has\(panelId\)[\s\S]*?_cockpitContextCollapsedForDataPanel =\s*!this\.cockpitView\.contextCollapsed[\s\S]*?this\.cockpitView\.setContextCollapsed\(true\);/,
   );
   assert.match(
     ui,
-    /nextCollapsed\s*&&\s*this\.cockpitView\?\.active\s*&&\s*panelId === 'data-panel'[\s\S]*?_cockpitContextCollapsedForDataPanel[\s\S]*?this\.cockpitView\.setContextCollapsed\(false\);/,
+    /nextCollapsed\s*&&\s*this\.cockpitView\?\.active\s*&&\s*COCKPIT_LEFT_PANEL_IDS\.has\(panelId\)[\s\S]*?_cockpitContextCollapsedForDataPanel[\s\S]*?this\.cockpitView\.setContextCollapsed\(false\);/,
     'closing Data Layers must restore Contact only after an automatic collapse',
+  );
+  assert.match(
+    ui,
+    /const COCKPIT_LEFT_PANEL_IDS = new Set\(\['data-panel', 'utilities-panel'\]\);/,
+    'Utilities folds Contact away in Cockpit as Data Layers does',
   );
   assert.match(
     setContextCollapsed.toString(),

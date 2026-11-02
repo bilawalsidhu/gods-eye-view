@@ -854,7 +854,7 @@ test('Cyber Cockpit keeps Data Layers inside its bounded rail', () => {
   );
   assert.match(
     cyberStyles,
-    /body\.cockpit-mode #left-panel-stack > #data-panel \{[\s\S]*?max-height: min\(64vh, 610px\);/,
+    /body\.cockpit-mode\s+#left-panel-stack\s+> :is\(#data-panel, #utilities-panel\) \{[\s\S]*?max-height: min\(64vh, 610px\);/,
   );
 });
 
