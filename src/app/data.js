@@ -34,10 +34,14 @@ export function createApplicationData({
         `Data layers could not be destroyed: ${[...dataManager.layers.keys()].join(', ')}`,
       );
   });
-  const presentation = new LayerPresentation(dataManager, {
+  const presentation = layerSession?.presentation ?? new LayerPresentation(dataManager, {
     weatherClock: catalog?.weatherClock,
   });
-  defer(() => presentation.destroy());
+  if (layerSession) layerSession.presentation = presentation;
+  defer(() => {
+    if (layerSession && !layerSession.lifetime.signal.aborted) presentation.suspend();
+    else presentation.destroy();
+  });
   onData?.(dataManager);
   if (!catalog?.layers || !catalog?.metadata)
     throw new TypeError('An application layer catalog is required');
@@ -66,7 +70,7 @@ export function createApplicationData({
         delete window.__gevQaUnregisterLayer;
     });
   }
-  presentation.mount(document.getElementById('data-toggles'));
+  presentation.mount(document.getElementById('data-toggles'), catalog.weatherClock);
   styleManager.attachDataManager(dataManager);
   // The sonar scene draws on the viewer; the Navara engine has none.
   if (viewer) defer(createCyberSonarScene(viewer, dataManager));

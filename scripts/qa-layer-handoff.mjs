@@ -96,6 +96,7 @@ try {
     window.__handoff = {
       dataManager,
       entry,
+      row: document.querySelector('[data-layer-id="flights"] .data-toggle-btn'),
       timer: entry.intervalId,
       model: entry.module,
       pollCount: window.__flightPolls,
@@ -145,6 +146,8 @@ try {
           before.dataManager === dataManager &&
           before.entry === entry &&
           before.model === entry.module,
+        sameRow: Boolean(before.row) &&
+          before.row === document.querySelector('[data-layer-id="flights"] .data-toggle-btn'),
         sameTimer:
           before.timer === entry.intervalId && entry.intervalId != null,
         sourcePolls: window.__flightPolls - before.pollCount,
@@ -162,6 +165,7 @@ try {
     assert.ok(
       result.sameOwner &&
         result.sameTimer &&
+        result.sameRow &&
         result.active &&
         result.hud &&
         result.drawn,

@@ -273,6 +273,7 @@ export class LayerPanel {
   }
   mount(container) {
     if (this._destroyed) return;
+    this._suspended = false;
     this._releaseBindings();
     if (this._toggleContainer && this._toggleContainer !== container)
       renderVue(null, this._toggleContainer);
@@ -314,6 +315,15 @@ export class LayerPanel {
     this._cancelRowControlsRefresh?.();
     this._cancelRowControlsRefresh = null;
     for (const remove of this._removers.splice(0)) remove();
+  }
+  // During a globe switch the keyed Vue rows stay mounted. Their event
+  // generation expires here, before any legacy scene-owned modules are freed.
+  suspend() {
+    this._suspended = true;
+    this._releaseBindings();
+    this._weatherPanel?.destroy();
+    this._weatherPanel = null;
+    this.attachRecentImagery(null);
   }
   destroy() {
     if (this._destroyed) return;
@@ -383,7 +393,7 @@ export class LayerPanel {
 
   /** Present every row from the layers' current state and render them. */
   _paint() {
-    if (this._destroyed || !this._toggleContainer) return;
+    if (this._destroyed || this._suspended || !this._toggleContainer) return;
     const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
     const items = this._rows.map((row) => {
       if (row.heading) return { key: row.key, heading: t(row.heading) };
