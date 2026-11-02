@@ -960,7 +960,9 @@ change. Once the camera is still and tiles have settled, each overlay anchor is
 replaced once by the rendered surface under it (two depth samples per paint,
 accepted only within -30/+40 m of the floor cell), so badges do not float or
 sink on slopes; wedge corners follow their own floor cells instead of staying
-level with the apex. Unknown bearings never acquire a wedge. The row reads
+level with the apex. Unknown bearings never acquire a wedge. The selected
+card's `DIRECTION` wraps after rounding to whole degrees, so a mapped bearing
+of 359.5° or more reads `0°` rather than `360°`. The row reads
 `N nearby · M on screen`; when every loaded camera is outside the view it adds
 "None on screen — nearby cameras are outside the view" instead of looking
 unloaded. `scripts/qa-alpr-journey.mjs` drives an Austin journey with ALPR off,
@@ -4490,7 +4492,9 @@ to 0.45 at two minutes, 0.20 at ten minutes and 0.08 at fifteen minutes.
 display delay and newest-report age, reported speed/stop, vehicle ID, and
 available trail duration. Report age is rounded to whole seconds and stays in seconds while that rounded
 count is below 90; otherwise it shows completed minutes calculated from the
-rounded second count. Its anchor follows the rendered marker; text is
+rounded second count. The reported heading wraps after rounding to whole
+degrees, so a bearing of 359.5° or more reads `hdg 0°` rather than `hdg 360°`.
+Its anchor follows the rendered marker; text is
 checked at 4 Hz and published when it changes. DETECT labels retain route,
 mode and motion, with the selected label suppressed beside its fuller card.
 Candidate membership changes on revisions, coalesced at 4 Hz; paints read
