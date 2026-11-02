@@ -143,6 +143,8 @@ test('cumulus rises over mountain terrain and leaves the orbital view clear', ()
   assert.deepEqual(clouds.updates, [{ visible: false }]);
   look.frame(900, false, 0);
   assert.deepEqual(clouds.updates.at(-1), { visible: true });
+  look.frame(6500, true, 0);
+  assert.deepEqual(clouds.updates.at(-1), { visible: true }, 'above the deck');
 });
 
 test('globe lighting switches on only at rest, and off even in motion', () => {

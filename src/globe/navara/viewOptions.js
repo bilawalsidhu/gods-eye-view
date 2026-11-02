@@ -83,7 +83,7 @@ export function globeLightingAt(height, current = false) {
 // Navara cloud layers use ellipsoid heights. Over uplands raise the two
 // cumulus layers together; at world scale a single ground sample no longer
 // represents the whole view. Quantize the offset to avoid tiny layer updates.
-export const LOCAL_CLOUD_COVERAGE = 0.22;
+export const LOCAL_CLOUD_COVERAGE = 0.36;
 export const CUMULUS_BASES = Object.freeze([1500, 1800]);
 export function cloudTerrainOffset(height, ground) {
   if (!Number.isFinite(ground) || height >= STARS_SPACE_ENTER_M) return 0;

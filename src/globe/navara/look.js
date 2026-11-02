@@ -164,7 +164,7 @@ export function buildNavaraLook(
       }
     }
     // Terrain-relative layers keep distant cumulus above mountain ridges.
-    // Keep a downward view clear once the camera rises above the cloud deck.
+    // Keep the deck visible from aircraft altitude, then clear it for regional views.
     if (clouds) {
       const offset = cloudTerrainOffset(height, ground);
       const pass = clouds.ref?.raw;
@@ -179,7 +179,7 @@ export function buildNavaraLook(
         }
       }
       cloudsSunlit = cloudsSunlitAt(elevation, cloudsSunlit);
-      const ceiling = CUMULUS_BASES[0] + offset + (cloudsShown ? 800 : 500);
+      const ceiling = offset + (cloudsShown ? 12_000 : 11_000);
       const next = cloudsSunlit && height <= ceiling;
       if (next !== cloudsShown) {
         cloudsShown = next;
