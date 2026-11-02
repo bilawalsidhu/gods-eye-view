@@ -4,13 +4,15 @@ Thanks for being here. God's Eye View is an open foundation for live spatial int
 
 ## Getting set up
 
-Use Node.js 24.14.x or 26.x (also enforced by `package.json`).
+Use Node.js 24 (24.14.0 or later) or 26.x (also enforced by `package.json`).
+Prefer 24.22.1 or later: earlier releases lack the October 21, 2026 security
+fixes, including CVE-2026-111497 (a Brotli decoder flaw).
 
 ```bash
 git clone https://github.com/bilawalsidhu/gods-eye-view.git
 cd gods-eye-view
-nvm install 24.14.0
-nvm use 24.14.0
+nvm install 24.22.2
+nvm use 24.22.2
 npm install
 npm run doctor
 ./scripts/dev-fresh.sh        # or: npm run dev (keys are optional)
