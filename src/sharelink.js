@@ -12,6 +12,7 @@ import {
   decodeLayerStateParams,
   encodeLayerStateParams,
 } from './data/layerState.js';
+import { ENGINE_SHARPEN_DEFAULT } from './ui/visualPresets.js';
 import { STYLE_URL_NAMES } from './view/index.js';
 import {
   SHARE_VIEW_PANELS,
@@ -223,7 +224,10 @@ export class ShareLinkManager {
       sharpen: params.get('sharpen') === '1',
       bloomIntensity: parseOr(params.get('bi'), LEGACY_BLOOM_FALLBACK),
       bloomVersion: parseOr(params.get('bv'), 1),
-      sharpenIntensity: parseOr(params.get('si'), 49),
+      sharpenIntensity:
+        params.get('siAuto') === '1'
+          ? ENGINE_SHARPEN_DEFAULT
+          : parseOr(params.get('si'), 49),
       hudVariant: params.get('hud') || 'tactical',
       hudVisible: params.get('hv') === '1',
       detectionMode: restoredDetection.enabled
@@ -540,8 +544,10 @@ export class ShareLinkManager {
       this._bloomIntensity = extras.bloomIntensity;
     if (typeof extras.bloomVersion === 'number')
       this._bloomVersion = extras.bloomVersion;
-    if (typeof extras.sharpenIntensity === 'number')
+    if (typeof extras.sharpenIntensity === 'number') {
       this._sharpenIntensity = extras.sharpenIntensity;
+      this._sharpenFollowsEngine = extras.sharpenFollowsEngine === true;
+    }
     if (typeof extras.hudVariant === 'string')
       this._hudVariant = extras.hudVariant;
     if (typeof extras.hudVisible === 'boolean')
@@ -646,6 +652,9 @@ export class ShareLinkManager {
     const url = parseSharePath(new URL(window.location.href).pathname)
       ? appRootUrl(window.location.href)
       : new URL(window.location.href);
+    // The live URL follows the active engine's preset. Copied shares keep
+    // the rendered numeric value from _buildHashParams.
+    if (this._sharpenFollowsEngine) params.set('siAuto', '1');
     url.hash = params.toString();
     this._knownHash = url.hash.slice(1);
     history.replaceState(null, '', url.href);

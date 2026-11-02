@@ -104,14 +104,41 @@ try {
   }
   await page.goto(base.href, { waitUntil: 'domcontentloaded' });
   await ready('cesium');
+  const sharpen = () =>
+    page.evaluate(
+      () => window.__godsEyeView.styleManager.getControlState().sharpen,
+    );
+  await page.evaluate(() => {
+    const style = window.__godsEyeView.styleManager;
+    style.setStyle('retro');
+    style.setStyle('normal');
+  });
+  assert.deepEqual(await sharpen(), { enabled: true, intensityPct: 49 });
   await switchTo('navara');
+  assert.deepEqual(await sharpen(), { enabled: true, intensityPct: 80 });
+  assert.ok(
+    await page.evaluate(
+      () =>
+        Math.abs(window.__godsEyeView.engine.render.sharpen().amount - 1.7) <
+        1e-6,
+    ),
+  );
   assert.equal(await stored(), 'navara');
   await page.goBack({ waitUntil: 'domcontentloaded' });
   await ready('cesium');
+  assert.equal((await sharpen()).intensityPct, 49);
   await page.goForward();
   await ready('navara');
+  assert.equal((await sharpen()).intensityPct, 80);
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setSharpen({
+      enabled: false,
+      intensityPct: 49,
+    }),
+  );
   await switchTo('cesium');
   await switchTo('navara');
+  assert.deepEqual(await sharpen(), { enabled: false, intensityPct: 49 });
   await page.goto(base.href, { waitUntil: 'domcontentloaded' });
   await ready('navara');
   await switchTo('cesium');
