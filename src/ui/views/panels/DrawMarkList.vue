@@ -42,15 +42,16 @@ function onNameKey(row, event) {
   const input = event.currentTarget;
   if (event.key === 'Enter') {
     event.preventDefault();
+    // Saved, and focus stays here: blurring would drop it to the page.
     commit(row, input);
-    input.blur();
+    input.select();
   } else if (event.key === 'Escape') {
     // Escape drops the draft before anything else, an open colour picker
     // included, and stays in the list: it must not leave Draw.
     event.preventDefault();
     event.stopPropagation();
     input.value = rowOf(row.id)?.name ?? row.name;
-    input.blur();
+    input.select();
   }
 }
 

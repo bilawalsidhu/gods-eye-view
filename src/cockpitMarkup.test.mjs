@@ -1385,3 +1385,27 @@ test('cockpit state cannot report entryAllowed while already active', () => {
   assert.match(state, /'contacts-inactive'/);
   assert.match(state, /'no-tracked-aircraft'/);
 });
+
+test('Contact folded for one Cockpit left panel comes back only once neither is open', async () => {
+  assert.match(
+    ui,
+    /if \(!this\._cockpitContextCollapsedForDataPanel\)\s*this\._cockpitContextCollapsedForDataPanel =\s*!this\.cockpitView\.contextCollapsed;/,
+    'opening the second left panel keeps the fold the first recorded',
+  );
+  const { PanelChrome } = await import('./ui/panelChrome.js');
+  const previous = globalThis.document;
+  const panels = {};
+  globalThis.document = { getElementById: (id) => panels[id] ?? null };
+  const panel = (...classes) => ({ classList: { contains: (name) => classes.includes(name) } });
+  try {
+    const otherOpen = (id) => PanelChrome.prototype._otherCockpitLeftPanelOpen(id);
+    panels['data-panel'] = panel('collapsed');
+    assert.equal(otherOpen('utilities-panel'), false, 'Data Layers closed: restore');
+    panels['data-panel'] = panel('collapsed', 'layout-auto-collapsed');
+    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers comes back: keep Contact folded');
+    panels['data-panel'] = panel();
+    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers open: keep it folded');
+  } finally {
+    globalThis.document = previous;
+  }
+});

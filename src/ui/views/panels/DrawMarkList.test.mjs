@@ -101,6 +101,9 @@ test('a name is saved on Enter or leaving the field; an unchanged one costs noth
   name.value = '  Ridge walk ';
   key(name, 'Enter');
   assert.deepEqual(calls, [['renameDrawMark', 'a1', 'Ridge walk']]);
+  assert.equal(document.activeElement, name, 'Enter keeps focus in the field');
+  name.blur();
+  assert.equal(calls.length, 1, 'the blur after Enter saves nothing more');
   const pinName = control('a2', 'name');
   pinName.focus();
   pinName.blur();
@@ -122,6 +125,7 @@ test('Escape drops the draft and stays in the list, even with the row\'s colours
   const event = key(name, 'Escape');
   assert.equal(event.defaultPrevented, true);
   assert.equal(name.value, 'Camp', 'the saved name comes back');
+  assert.equal(document.activeElement, name, 'focus stays in the field');
   await nextTick();
   assert.deepEqual(calls, [], 'the draft is not saved');
   // Escape in the open colours closes them and gives focus to the swatch.

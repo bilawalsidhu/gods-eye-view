@@ -52,6 +52,23 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
 
 /** Own panel disclosure, docking, persistence and Cockpit rail restoration. */
 export class PanelChrome {
+  /**
+   * Whether another left panel Cockpit keeps is open, or only folded aside
+   * for this one and coming back when it closes.
+   * @param {string} panelId The panel closing.
+   */
+  _otherCockpitLeftPanelOpen(panelId) {
+    return [...COCKPIT_LEFT_PANEL_IDS].some((id) => {
+      if (id === panelId) return false;
+      const panel = document.getElementById(id);
+      return (
+        !!panel &&
+        (!panel.classList.contains('collapsed') ||
+          panel.classList.contains('layout-auto-collapsed'))
+      );
+    });
+  }
+
   constructor({
     elements,
     operations,
@@ -504,8 +521,11 @@ export class PanelChrome {
       this.cockpitView?.active &&
       COCKPIT_LEFT_PANEL_IDS.has(panelId)
     ) {
-      this._cockpitContextCollapsedForDataPanel =
-        !this.cockpitView.contextCollapsed;
+      // Record the fold once: opening the other left panel after the first
+      // must not forget that Contact was folded for them.
+      if (!this._cockpitContextCollapsedForDataPanel)
+        this._cockpitContextCollapsedForDataPanel =
+          !this.cockpitView.contextCollapsed;
       if (this._cockpitContextCollapsedForDataPanel) {
         this.cockpitView.setContextCollapsed(true);
       }
@@ -534,7 +554,8 @@ export class PanelChrome {
       nextCollapsed &&
       this.cockpitView?.active &&
       COCKPIT_LEFT_PANEL_IDS.has(panelId) &&
-      this._cockpitContextCollapsedForDataPanel
+      this._cockpitContextCollapsedForDataPanel &&
+      !this._otherCockpitLeftPanelOpen(panelId)
     ) {
       this._cockpitContextCollapsedForDataPanel = false;
       this.cockpitView.setContextCollapsed(false);

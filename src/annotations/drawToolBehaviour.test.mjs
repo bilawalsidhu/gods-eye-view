@@ -183,6 +183,7 @@ function fakeAnnotations() {
   return {
     calls,
     marks,
+    listeners,
     changed,
     async annotate(specs, options) {
       calls.annotate.push({ specs, options });
@@ -459,6 +460,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
     h.tool.addVertex(-97.75, 30.26);
     assert.equal(pointerOwner(), 'draw');
     assert.ok(h.tool.diagnostics().domListeners > 0);
+    assert.equal(h.annotations.listeners.size, 1, 'the rows follow the board');
 
     await h.tool.destroy();
     await Promise.resolve();
@@ -476,6 +478,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
       'the viewer got its selecting click back',
     );
     assert.equal(h.viewer._attached.length, 0, 'the preview data source is detached');
+    assert.equal(h.annotations.listeners.size, 0, 'and it no longer follows the board');
 
     // Idempotent: a second destroy is harmless.
     await h.tool.destroy();

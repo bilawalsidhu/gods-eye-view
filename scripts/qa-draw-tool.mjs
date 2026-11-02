@@ -58,18 +58,10 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** A clip of the globe canvas, clear of the panels on every side. */
 const CANVAS_CLIP = { x: 340, y: 200, width: 560, height: 380 };
 
-/**
- * How many amber pixels the clip contains. The drawn area's stroke and fill are
- * the only amber in this scene, so the count going UP after a shape is finished
- * is the shape actually painting — which is what CESIUM_3D_TILE-only
- * classification failed to do on a keyless boot while still reporting a mark on
- * the board. Decoding happens in the page because Node here has no image
- * decoder.
- */
-/** The canvas clip as a PNG, for comparing two moments of the same view. */
 // Clear of the open UTILITIES panel (x 100–380), whose own amber swatch
 // dims when its row's shape is hidden.
 const LINE_CLIP = { x: 390, y: 200, width: 510, height: 380 };
+/** The canvas clip as a PNG, for comparing two moments of the same view. */
 const canvasShot = () =>
   page.screenshot({ clip: LINE_CLIP, type: 'png', encoding: 'base64' });
 
@@ -107,6 +99,14 @@ function amberOnlyIn(shotA, shotB) {
   );
 }
 
+/**
+ * How many amber pixels the clip contains. The drawn area's stroke and fill are
+ * the only amber in this scene, so the count going UP after a shape is finished
+ * is the shape actually painting — which is what CESIUM_3D_TILE-only
+ * classification failed to do on a keyless boot while still reporting a mark on
+ * the board. Decoding happens in the page because Node here has no image
+ * decoder.
+ */
 async function amberPixels() {
   const shot64 = await page.screenshot({
     clip: CANVAS_CLIP,
