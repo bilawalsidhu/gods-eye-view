@@ -205,6 +205,7 @@
     "runtime": "node",
     "exports": ["./server/providers/places"],
     "modules": [
+      "src/data/distanceFormat.js",
       "server/providers/places.js",
       "server/providers/places/google.js",
       "server/providers/places/google-key.js",
@@ -391,6 +392,7 @@
     "runtime": "node",
     "exports": ["./server/providers/overpass"],
     "modules": [
+      "src/data/distanceFormat.js",
       "server/providers/common/geo.js",
       "server/providers/common/http.js",
       "server/providers/common/rate-limit.js",
@@ -816,6 +818,7 @@
     ],
     "modules": [
       "src/data/headingDegrees.js",
+      "src/data/distanceFormat.js",
       "src/ui/cockpit.js",
       "src/ui/cockpitBriefing.js",
       "src/ui/cockpitBriefPages.js",
@@ -886,6 +889,7 @@
     "exports": ["./ui/shell"],
     "modules": [
       "src/data/headingDegrees.js",
+      "src/data/distanceFormat.js",
       "src/i18n/marker.js",
       "src/ui/mobileShell.js",
       "src/exclusiveSurfaces.js",
@@ -1652,6 +1656,7 @@
     "exports": ["./layers/awareness"],
     "modules": [
       "src/data/headingDegrees.js",
+      "src/data/distanceFormat.js",
       "src/i18n/marker.js",
       "src/cyberSonar.js",
       "src/cockpitMath.js",
@@ -2199,6 +2204,7 @@
     ],
     "modules": [
       "src/data/headingDegrees.js",
+      "src/data/distanceFormat.js",
       "src/ui/placeNames.js",
       "src/cyberSonarScene.js",
       "src/cyberSonar.js",
@@ -3174,6 +3180,7 @@
     "exports": ["./application/layers"],
     "modules": [
       "src/data/headingDegrees.js",
+      "src/data/distanceFormat.js",
       "src/cyberSonar.js",
       "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",
@@ -4054,6 +4061,7 @@
   "directions-layer": {
     "exports": ["./layers/directions"],
     "modules": [
+      "src/data/distanceFormat.js",
       "src/i18n/marker.js",
       "src/layers/directions/index.js",
       "src/data/pointerOwnerNames.js",

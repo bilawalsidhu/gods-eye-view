@@ -10,6 +10,7 @@ import {
 } from '../../i18n/index.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
+import { distanceParts } from '../../data/distanceFormat.js';
 
 /** Format a cohort total without presenting a retained cap as exact. */
 export function formatAwarenessCount(summary = {}) {
@@ -31,13 +32,11 @@ function presentAwarenessCount(summary = {}) {
 
 /** A distance as the panel shows it: 850 m, 4.6 km, 120 km, in the UI language. */
 export function presentAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
-  const wholeMeters = Math.round(meters);
-  if (wholeMeters < 1000) return formatQuantity(wholeMeters, 'm');
-  const digits = meters < 10000 ? 1 : 0;
-  return formatQuantity(meters / 1000, 'km', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
+  const parts = distanceParts(meters);
+  if (!parts) return '—';
+  return formatQuantity(parts.value, parts.unit, {
+    minimumFractionDigits: parts.digits,
+    maximumFractionDigits: parts.digits,
   });
 }
 

@@ -79,6 +79,9 @@ test('Contacts moves a distance that rounds to 1,000 m into kilometres', () => {
   assert.equal(presentAwarenessDistance(999.4), '999\u00a0m');
   assert.equal(presentAwarenessDistance(999.6), '1.0\u00a0km');
   assert.equal(presentAwarenessDistance(4600), '4.6\u00a0km');
+  assert.equal(presentAwarenessDistance(9949), '9.9\u00a0km');
+  assert.equal(presentAwarenessDistance(9950), '10\u00a0km');
+  assert.equal(presentAwarenessDistance(9960), '10\u00a0km');
 });
 
 function installAwarenessRuntime({

@@ -5,6 +5,7 @@ import {
   normalizeHeading,
   roundHeadingDegrees,
 } from '../data/headingDegrees.js';
+import { kilometreDigits } from '../data/distanceFormat.js';
 
 export const COCKPIT_HEADING_SLEW_DPS = 28;
 
@@ -120,7 +121,7 @@ export function formatCockpitCoordinate(value, positive, negative) {
  * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond.
  */
 export function formatCockpitDistance(distanceM) {
-  const digits = distanceM < 10000 ? 1 : 0;
+  const digits = kilometreDigits(distanceM);
   const distance = formatQuantity(distanceM / 1000, 'km', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,

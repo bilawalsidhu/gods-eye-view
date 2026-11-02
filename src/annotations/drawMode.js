@@ -21,6 +21,7 @@ import { t, tn } from '../i18n/index.js';
  */
 
 import { greatCircleMeters } from '../geoDistance.js';
+import { formatDistanceText } from '../data/distanceFormat.js';
 
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
@@ -207,11 +208,7 @@ export function ringCentroid(vertices) {
 export function formatMeasure(session) {
   if (!session) return '';
   if (session.shape === 'line') {
-    const m = pathLengthM(session.vertices);
-    // Round before the kilometre cut. 999.6 m was printed as "1000 m".
-    const whole = Math.round(m);
-    if (whole < 1000) return `${whole} m`;
-    return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
+    return formatDistanceText(pathLengthM(session.vertices)) ?? '';
   }
   if (session.shape === 'area') {
     const m2 = ringAreaM2(session.vertices);
