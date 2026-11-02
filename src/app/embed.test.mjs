@@ -146,6 +146,12 @@ test('an embedded page takes views only from its parent and answers it', async (
     id: 3,
     view: { camera: { lat: 1, lon: 2 }, layers: ['flights'] },
   });
+  // A view kept from before Snow was retired still applies, on Normal.
+  send(parent, {
+    type: 'gev:view',
+    id: 4,
+    view: { camera: { lat: 1, lon: 2 }, style: 'snow' },
+  });
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.deepEqual(posted[1], {
     type: 'gev:view-applied',
@@ -161,11 +167,19 @@ test('an embedded page takes views only from its parent and answers it', async (
         name === 'set_layer_visibility' && args.layerId === 'flights',
     ),
   );
+  assert.equal(posted[3].id, 4);
+  assert.equal(posted[3].ok, true);
+  assert.ok(
+    calls.some(
+      ([name, args]) => name === 'set_visual_style' && args.style === 'normal',
+    ),
+  );
   assert.equal(posted.filter((message) => message.id === 1).length, 0);
   // Ready names no data and goes to any parent; answers go only to the
   // origin that asked.
   assert.deepEqual(targets, [
     '*',
+    'https://host.example',
     'https://host.example',
     'https://host.example',
   ]);

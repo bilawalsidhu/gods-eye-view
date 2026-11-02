@@ -71,8 +71,14 @@ export function allocationTestArgs(file) {
   return ['--expose-gc', '--test', '--test-concurrency=1', file];
 }
 
+/** Node flags every unit-test process receives. */
+export const UNIT_TEST_NODE_FLAGS = Object.freeze([
+  // Single-file components compile on import.
+  '--import=./build/registerVue.js',
+]);
+
 function runTests(args) {
-  const result = spawnSync(process.execPath, args, {
+  const result = spawnSync(process.execPath, [...UNIT_TEST_NODE_FLAGS, ...args], {
     cwd: process.cwd(),
     stdio: 'inherit',
     env: process.env,

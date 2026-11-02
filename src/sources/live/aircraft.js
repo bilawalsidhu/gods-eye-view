@@ -6,6 +6,7 @@ import {
   epoch,
   finite,
 } from './contract.js';
+import { readAdsbVerticalRateFpm } from '../adsbFields.js';
 
 const openSkyId = (row) =>
   Array.isArray(row) ? cleanText(row[0]).toLowerCase() : '';
@@ -48,7 +49,7 @@ export function normalizeReadsbAircraft(row, snapshotTimeMs) {
   const baroFt = finite(row.alt_baro),
     geoFt = finite(row.alt_geom);
   const speedKts = finite(row.gs),
-    rateFtMin = finite(row.baro_rate);
+    rateFtMin = readAdsbVerticalRateFpm(row);
   const seen = finite(row.seen),
     seenPos = finite(row.seen_pos);
   return {
