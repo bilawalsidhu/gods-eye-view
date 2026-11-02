@@ -89,7 +89,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## ⚡ Quick Start
 
-**Start without an account or API keys.** Both paths open the same app with
+**Start without an account or API keys.** Every path opens the same app with
 Esri satellite imagery and keyless terrain. OSM is the fallback if Esri is
 unreachable. Flights, military traffic, satellites, earthquakes, public
 cameras, radio, and launches are available without keys.
@@ -253,7 +253,8 @@ quotas apply.
    ```
 4. Open the **Ports** tab, find `4173`, and click the globe icon to open it in
    the browser. The port is private by default, so the URL asks for your GitHub
-   login.
+   login. Keep it private: a public port lets anyone use the app and the keys
+   in your `.env`.
 
 `GEV_ALLOWED_HOSTS` there is required, not optional. The dev server answers only
 the hostnames it trusts, and a forwarded port arrives on
@@ -262,9 +263,9 @@ page is `Blocked request. This host is not allowed.` Leading-dot wildcards are
 ignored on purpose, so pass that exact name.
 
 ⚠️ **A codespace is reachable from the internet.** Treat it as the
-wider-publish case in [Sharing an instance](#-sharing-an-instance): leave
-Provider Settings closed to strangers, and put keys in the workspace `.env` by
-hand. `.env` is gitignored — never commit it. [SECURITY.md](SECURITY.md) has the
+wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
+Settings does not open on the forwarded URL, so put keys in the workspace
+`.env` by hand. `.env` is gitignored — never commit it. [SECURITY.md](SECURITY.md) has the
 threat model.
 
 ### Then power it up — in the app, not in a file
