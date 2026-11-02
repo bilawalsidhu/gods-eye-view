@@ -18,40 +18,54 @@ import {
   sliderPositionForFrp,
 } from './firmsIntensity.js';
 
-test('the ramp has six cold → hot stops at 0 · 5 · 20 · 50 · 100 · 300 MW in Portolan hue order', () => {
+test('the ramp has six ember → white-hot stops at 0 · 5 · 20 · 50 · 100 · 300 MW', () => {
   assert.deepEqual(
     FRP_RAMP.map((stop) => [stop.name, stop.minFrp, stop.hex]),
     [
-      ['blue', 0, '#4a5bd4'],
-      ['teal', 5, '#39a0a8'],
-      ['lime', 20, '#c9cf4a'],
-      ['amber', 50, '#f2b134'],
-      ['orange', 100, '#e8722c'],
-      ['red', 300, '#d1382a'],
+      ['ember', 0, '#9e2a1b'],
+      ['red', 5, '#d2401f'],
+      ['flame', 20, '#f06a28'],
+      ['orange', 50, '#fb9a2e'],
+      ['gold', 100, '#fdc84a'],
+      ['white-hot', 300, '#fff3b0'],
     ],
   );
   assert.deepEqual([...FRP_SLIDER_TICKS], [0, 5, 20, 50, 100, 300]);
   assert.ok(Object.isFrozen(FRP_RAMP));
 });
 
+test('every stop is warm and each is lighter than the one below', () => {
+  const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  let previous = -1;
+  for (const stop of FRP_RAMP) {
+    const rgb = hexToRgb(stop.hex);
+    assert.ok(rgb[0] >= rgb[2], `${stop.name} has no cold hue`);
+    assert.ok(
+      luma(rgb) > previous,
+      `${stop.name} is lighter than the stop below`,
+    );
+    previous = luma(rgb);
+  }
+});
+
 test('a detection takes the last stop it reaches; garbage reads as 0 MW', () => {
-  assert.equal(frpRampStop(0).name, 'blue');
-  assert.equal(frpRampStop(4.99).name, 'blue');
-  assert.equal(frpRampStop(5).name, 'teal');
-  assert.equal(frpRampStop(19.9).name, 'teal');
-  assert.equal(frpRampStop(20).name, 'lime');
-  assert.equal(frpRampStop(50).name, 'amber');
-  assert.equal(frpRampStop(100).name, 'orange');
-  assert.equal(frpRampStop(299.9).name, 'orange');
-  assert.equal(frpRampStop(300).name, 'red');
-  assert.equal(frpRampStop(1246).name, 'red');
-  assert.equal(frpRampStop(NaN).name, 'blue');
-  assert.equal(frpRampStop(-3).name, 'blue');
-  assert.equal(frpRampStop(undefined).name, 'blue');
+  assert.equal(frpRampStop(0).name, 'ember');
+  assert.equal(frpRampStop(4.99).name, 'ember');
+  assert.equal(frpRampStop(5).name, 'red');
+  assert.equal(frpRampStop(19.9).name, 'red');
+  assert.equal(frpRampStop(20).name, 'flame');
+  assert.equal(frpRampStop(50).name, 'orange');
+  assert.equal(frpRampStop(100).name, 'gold');
+  assert.equal(frpRampStop(299.9).name, 'gold');
+  assert.equal(frpRampStop(300).name, 'white-hot');
+  assert.equal(frpRampStop(1246).name, 'white-hot');
+  assert.equal(frpRampStop(NaN).name, 'ember');
+  assert.equal(frpRampStop(-3).name, 'ember');
+  assert.equal(frpRampStop(undefined).name, 'ember');
 });
 
 test('hex stops convert to the "r, g, b" accents the cards paint', () => {
-  assert.deepEqual(hexToRgb('#4a5bd4'), [74, 91, 212]);
+  assert.deepEqual(hexToRgb('#9e2a1b'), [158, 42, 27]);
   assert.deepEqual(hexToRgb('d1382a'), [209, 56, 42]);
 });
 
@@ -84,9 +98,9 @@ test('the log slider pins 0 MW at the left and runs 1 → 1000 MW; values round-
 test('the track gradient is the stepped ramp on the log axis, so it doubles as the legend', () => {
   const gradient = rampTrackGradient();
   assert.match(gradient, /^linear-gradient\(90deg, /);
-  assert.match(gradient, /#4a5bd4 0\.00% 23\.3\d%/);
-  assert.match(gradient, /#39a0a8 23\.3\d% 43\.3\d%/);
-  assert.match(gradient, /#d1382a 82\.5\d% 100\.00%\)$/);
+  assert.match(gradient, /#9e2a1b 0\.00% 23\.3\d%/);
+  assert.match(gradient, /#d2401f 23\.3\d% 43\.3\d%/);
+  assert.match(gradient, /#fff3b0 82\.5\d% 100\.00%\)$/);
   assert.equal(gradient.match(/#/g).length, FRP_RAMP.length);
 });
 

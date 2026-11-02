@@ -121,7 +121,7 @@ export function createModel({
   }
 
   /**
-   * The ramp stop for a fire radiative power (stepped, coldest first).
+   * The ramp stop for a fire radiative power (stepped, weakest first).
    * Intensity alone drives the color: confidence feeds the card text and the
    * switch, brightness is unreliable (saturates at 367 K) — see HAL-675.
    * @param {number} frp - Megawatts.

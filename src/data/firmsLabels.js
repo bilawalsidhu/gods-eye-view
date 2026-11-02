@@ -36,8 +36,8 @@ const ACCENT_RGB = Object.freeze(
 );
 
 /**
- * Severity stop name → "r, g, b" accent string (defaults to the coldest stop).
- * @param {string} stopName - A FRP_RAMP stop name ('blue' … 'red').
+ * Severity stop name → "r, g, b" accent string (defaults to the weakest stop).
+ * @param {string} stopName - A FRP_RAMP stop name ('ember' … 'white-hot').
  * @returns {string}
  */
 export function accentForSeverity(stopName) {

@@ -2175,19 +2175,22 @@ accessible name remains "Don't show this again". Control behavior is unchanged.
 
 ## Active Fires intensity filter and color ramp
 
-Every FIRMS detection is colored by fire radiative power on a six-stop cold →
-hot ramp: blue from 0 MW, teal from 5, lime from 20, amber from 50, orange from
-100 and red from 300 MW (`FRP_RAMP` in `src/data/firmsIntensity.js`). Glow
-sprites and fire-card accents read that ramp; confidence and brightness do
-not affect the color.
+Every FIRMS detection is colored by fire radiative power on a six-stop ember →
+white-hot ramp: dark ember from 0 MW, red from 5, flame from 20, orange from
+50, gold from 100 and pale white-hot from 300 MW (`FRP_RAMP` in
+`src/data/firmsIntensity.js`). Each stop is lighter than the one below and
+none is a cold hue, so the brightest marks are the strongest fires; ~90% of
+detections are under 20 MW and stay dim red. Glow sprites and fire-card
+accents read that ramp; confidence and brightness do not affect the color.
 
 At far zoom (camera above ~3,000 km) the layer drapes a Snap Map–style
 heatmap instead of individual markers: the shown detections are binned on a
 global 2048 × 1024 grid, each weighted by its FRP in megawatts (so heat is
 radiated power, and raising the FRP slider does not dim areas where strong fires
 burn), Gaussian-blurred,
-normalized on a log scale against the 99.5th percentile and mapped from blue
-through cyan, green, yellow and orange to red. Nothing is painted where
+normalized on a log scale against the 99.5th percentile and mapped through the
+same colors, from a faint ember edge through red, orange and gold to a pale
+white-hot core. Nothing is painted where
 nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
 tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
 on each data refresh or filter change (the first paint at once, later ones

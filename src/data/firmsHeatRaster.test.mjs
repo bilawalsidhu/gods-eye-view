@@ -11,16 +11,20 @@ import {
 
 const fire = (lat, lon, frp = 10) => ({ lat, lon, frp });
 
-test('palette runs cold to hot and starts fully transparent', () => {
+test('palette runs ember to white-hot and starts fully transparent', () => {
   assert.equal(HEAT_PALETTE[0].at, 0);
   assert.equal(HEAT_PALETTE.at(-1).at, 1);
   assert.deepEqual(heatColorAt(0), [0, 0, 0, 0]);
   assert.equal(heatColorAt(0.01)[3], 0, 'below the floor nothing is painted');
   const low = heatColorAt(0.15);
   const high = heatColorAt(1);
-  assert.ok(low[2] > low[0], 'low heat is blue');
-  assert.ok(high[0] > high[2], 'the core is red');
+  assert.ok(low[0] > low[1] && low[1] > low[2], 'low heat is an ember red');
+  assert.ok(high[1] > low[1] && high[2] > low[2], 'the core is paler');
   assert.ok(high[3] > low[3], 'hotter is more opaque');
+  for (let i = 1; i <= 100; i++) {
+    const [r, , b] = heatColorAt(i / 100);
+    assert.ok(r >= b, `no cold hue at ${i}%`);
+  }
 });
 
 test('binFires drops each detection into its equirectangular pixel', () => {

@@ -1,28 +1,31 @@
 /**
  * @module firmsIntensity
  * @description Fire intensity policy shared by the Active Fires layer and the
- * agent fire tool: the six-stop cold → hot FRP color ramp, the log-scale
+ * agent fire tool: the six-stop ember → white-hot FRP color ramp, the log-scale
  * slider that doubles as its legend, and the one filter every consumer
  * (markers, cards, heat cells, the top-fires query, `get_active_fires`) runs
  * before anything is rendered or selected. Pure — no Cesium, no DOM.
  *
- * Hue order follows the Portolan FIRMS explorer (`FRP_RAMP`, stepped, not
- * interpolated). The thresholds are GEV's own, set on a real week's
- * percentiles so every color appears: Portolan's 0/10/50/200/500/1000 MW
- * leaves one red fire a week (HAL-675).
+ * The ramp (`FRP_RAMP`, stepped, not interpolated) runs like a fire cooling
+ * down: a dim ember for weak fires through red, orange and gold to a pale
+ * white-hot core, lightness rising with power, so the brightest marks are the
+ * strongest fires. No cold hues: ~90% of detections are under 20 MW and a
+ * blue start painted most of the map blue. The thresholds are GEV's own, set
+ * on a real week's percentiles so every color appears: Portolan's
+ * 0/10/50/200/500/1000 MW leaves one hottest fire a week (HAL-675).
  */
 
 /**
- * Stepped FRP ramp, coldest first. A detection takes the LAST stop whose
+ * Stepped FRP ramp, weakest first. A detection takes the LAST stop whose
  * `minFrp` it reaches. Names key the glow-sprite cache and the card accents.
  */
 export const FRP_RAMP = Object.freeze([
-  Object.freeze({ name: 'blue', minFrp: 0, hex: '#4a5bd4' }),
-  Object.freeze({ name: 'teal', minFrp: 5, hex: '#39a0a8' }),
-  Object.freeze({ name: 'lime', minFrp: 20, hex: '#c9cf4a' }),
-  Object.freeze({ name: 'amber', minFrp: 50, hex: '#f2b134' }),
-  Object.freeze({ name: 'orange', minFrp: 100, hex: '#e8722c' }),
-  Object.freeze({ name: 'red', minFrp: 300, hex: '#d1382a' }),
+  Object.freeze({ name: 'ember', minFrp: 0, hex: '#9e2a1b' }),
+  Object.freeze({ name: 'red', minFrp: 5, hex: '#d2401f' }),
+  Object.freeze({ name: 'flame', minFrp: 20, hex: '#f06a28' }),
+  Object.freeze({ name: 'orange', minFrp: 50, hex: '#fb9a2e' }),
+  Object.freeze({ name: 'gold', minFrp: 100, hex: '#fdc84a' }),
+  Object.freeze({ name: 'white-hot', minFrp: 300, hex: '#fff3b0' }),
 ]);
 
 /** Slider ticks: the ramp thresholds, so slider, legend and markers agree. */

@@ -9,16 +9,16 @@ import {
   formatFrpMw,
 } from './firmsLabels.js';
 
-test('FIRMS card accents are the six FRP ramp stops, coldest as the fallback', () => {
-  // Portolan hue order; blue #4a5bd4 … red #d1382a (HAL-675).
-  assert.equal(accentForSeverity('blue'), '74, 91, 212');
-  assert.equal(accentForSeverity('teal'), '57, 160, 168');
-  assert.equal(accentForSeverity('lime'), '201, 207, 74');
-  assert.equal(accentForSeverity('amber'), '242, 177, 52');
-  assert.equal(accentForSeverity('orange'), '232, 114, 44');
-  assert.equal(accentForSeverity('red'), '209, 56, 42');
-  assert.equal(accentForSeverity('yellow'), accentForSeverity('blue'));
-  assert.equal(accentForSeverity('chartreuse'), accentForSeverity('blue'));
+test('FIRMS card accents are the six FRP ramp stops, weakest as the fallback', () => {
+  // Ember #9e2a1b … white-hot #fff3b0, lightness rising with power.
+  assert.equal(accentForSeverity('ember'), '158, 42, 27');
+  assert.equal(accentForSeverity('red'), '210, 64, 31');
+  assert.equal(accentForSeverity('flame'), '240, 106, 40');
+  assert.equal(accentForSeverity('orange'), '251, 154, 46');
+  assert.equal(accentForSeverity('gold'), '253, 200, 74');
+  assert.equal(accentForSeverity('white-hot'), '255, 243, 176');
+  assert.equal(accentForSeverity('blue'), accentForSeverity('ember'));
+  assert.equal(accentForSeverity('chartreuse'), accentForSeverity('ember'));
 });
 
 test('FIRMS power that rounds to 10 MW drops the decimal', () => {

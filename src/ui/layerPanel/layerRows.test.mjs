@@ -75,7 +75,7 @@ const fireRow = (value, active = 'all') => ({
       max: 1000,
       step: 1,
       value,
-      track: 'linear-gradient(90deg, #4a5bd4, #d1382a)',
+      track: 'linear-gradient(90deg, #9e2a1b, #fff3b0)',
       ticks: [
         { at: 0, label: '0' },
         { at: 0.5, label: '30' },

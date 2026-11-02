@@ -111,7 +111,7 @@ export const CULL_LIFT_M = 12;
 
 /**
  * Color stops for detection glow sprites and card accents: the
- * six-stop cold → hot FRP ramp (firmsIntensity.js), coldest first, as Cesium
+ * six-stop ember → white-hot FRP ramp (firmsIntensity.js), weakest first, as Cesium
  * colors. Stop names key the glow-sprite cache and the card accents.
  */
 

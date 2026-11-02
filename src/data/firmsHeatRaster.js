@@ -8,14 +8,18 @@
 /** Below this normalized heat nothing is painted: empty land stays empty. */
 export const HEAT_FLOOR = 0.03;
 
+/**
+ * The FRP marker ramp as a continuous glow: faint ember at the edges, a
+ * pale white-hot core where the most power burns.
+ */
 export const HEAT_PALETTE = Object.freeze([
-  { at: 0.0, rgb: [43, 108, 255], alpha: 0 },
-  { at: 0.08, rgb: [43, 108, 255], alpha: 0.35 },
-  { at: 0.25, rgb: [25, 195, 255], alpha: 0.55 },
-  { at: 0.45, rgb: [47, 224, 122], alpha: 0.65 },
-  { at: 0.65, rgb: [245, 230, 66], alpha: 0.75 },
-  { at: 0.82, rgb: [255, 138, 31], alpha: 0.82 },
-  { at: 1.0, rgb: [255, 42, 26], alpha: 0.88 },
+  { at: 0.0, rgb: [158, 42, 27], alpha: 0 },
+  { at: 0.08, rgb: [158, 42, 27], alpha: 0.35 },
+  { at: 0.25, rgb: [210, 64, 31], alpha: 0.55 },
+  { at: 0.45, rgb: [240, 106, 40], alpha: 0.65 },
+  { at: 0.65, rgb: [251, 154, 46], alpha: 0.75 },
+  { at: 0.82, rgb: [253, 200, 74], alpha: 0.82 },
+  { at: 1.0, rgb: [255, 243, 176], alpha: 0.9 },
 ]);
 
 export function heatColorAt(t) {
