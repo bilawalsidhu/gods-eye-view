@@ -1,3 +1,4 @@
+import { mountApplicationViews } from '../ui/views/index.js';
 const START_ORDER = ['scene', 'controls', 'data', 'tools'];
 // Controls cancel restoration while the data manager and viewer still exist.
 const STOP_ORDER = ['tools', 'controls', 'data', 'scene'];
@@ -6,7 +7,9 @@ const STOP_ORDER = ['tools', 'controls', 'data', 'scene'];
  * Own application startup and teardown without importing an application entry.
  * Constructors receive earlier components, an AbortSignal and defer(cleanup).
  * Register cleanup immediately after acquiring each resource, before any await.
- * @param {{createScene:Function,createControls:Function,createData:Function,createTools:Function}} constructors
+ * The page's views render first; `omitViews` names the ones this application
+ * leaves out (see mountApplicationViews).
+ * @param {{createScene:Function,createControls:Function,createData:Function,createTools:Function,omitViews?:string[]}} constructors
  * @returns {{start:Function,destroy:Function,subscribe:Function,getState:Function,getComponents:Function}}
  */
 export function createApplication({
@@ -14,7 +17,10 @@ export function createApplication({
   createControls,
   createData,
   createTools,
+  omitViews = [],
 }) {
+  // A host's page needs its views before any phase reads the markup.
+  mountApplicationViews(globalThis.document, { omit: omitViews });
   const factories = {
     scene: createScene,
     controls: createControls,

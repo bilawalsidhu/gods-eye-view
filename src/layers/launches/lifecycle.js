@@ -201,7 +201,6 @@ export function createLifecycle({
       if (layerState._dataSource) layerState._dataSource.show = true;
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
       parts.selection.focusFullGlobe(layerState._viewer);
-      document.getElementById('cockpit-context')?.setAttribute('hidden', '');
       if (layerState._selectedLaunchId)
         parts.selection.setSelectedMission(
           layerState._selectedLaunchId,
@@ -262,13 +261,7 @@ export function createLifecycle({
       layerState._animationStarts.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
-      layerState._missionPanel?.remove();
-      layerState._missionPanel = null;
-      if (layerState._missionRoster) {
-        layerState._missionRoster.onclick = null;
-      }
-      layerState._missionRosterPreviewOwnership = null;
-      layerState._missionRoster = null;
+      parts.panel.clearMissionPanel();
       layerState._viewer = null;
       if (layerState._dataSource)
         viewer.dataSources.remove(layerState._dataSource, true);
