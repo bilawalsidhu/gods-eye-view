@@ -1,6 +1,6 @@
 import * as geo from '../../../geo/index.js';
 import { distanceToSegment } from '../../../globe/cpuPicks.js';
-import { containsGroundPoint } from '../../shared/render/groundRing.js';
+import { containsGroundPoint } from './groundRing.js';
 
 function groundScreen(engine, [lon, lat]) {
   const point = geo.cartographic.fromDegrees(lon, lat);
@@ -14,40 +14,38 @@ function groundScreen(engine, [lon, lat]) {
 
 // The GPU may return the preceding gesture's vector feature. Resolve against
 // the current gesture and let the engine arbitrate the result with sibling layers.
-export function bindProductPicks(engine, productId, features) {
+export function bindGroundShapePicks(engine, owner, shapes) {
   const regions = [];
-  for (const [index, feature] of features.entries()) {
-    for (const [part, geometry] of feature.geometries.entries()) {
-      const coords =
-        geometry.type === 'point'
-          ? [geometry.position]
-          : geometry.type === 'line'
-            ? geometry.positions
-            : geometry.outer;
-      const west = coords[0][0];
-      const local = (lon) => lon - west - 360 * Math.round((lon - west) / 360);
-      let south = 90,
-        north = -90,
-        min = Infinity,
-        max = -Infinity;
-      for (const [lon, lat] of coords) {
-        south = Math.min(south, lat);
-        north = Math.max(north, lat);
-        min = Math.min(min, local(lon));
-        max = Math.max(max, local(lon));
-      }
-      regions.push({
-        geometry,
-        style: feature.style,
-        coords,
-        south,
-        north,
-        min,
-        max,
-        local,
-        id: `ghostmaps:${productId}:${index}:${part}`,
-      });
+  for (const { id, geometry, style } of shapes) {
+    const coords =
+      geometry.type === 'point'
+        ? [geometry.position]
+        : geometry.type === 'line'
+          ? geometry.positions
+          : geometry.outer;
+    const west = coords[0][0];
+    const local = (lon) => lon - west - 360 * Math.round((lon - west) / 360);
+    let south = 90,
+      north = -90,
+      min = Infinity,
+      max = -Infinity;
+    for (const [lon, lat] of coords) {
+      south = Math.min(south, lat);
+      north = Math.max(north, lat);
+      min = Math.min(min, local(lon));
+      max = Math.max(max, local(lon));
     }
+    regions.push({
+      geometry,
+      style,
+      coords,
+      south,
+      north,
+      min,
+      max,
+      local,
+      id,
+    });
   }
   const pick = (at) => {
     const world = engine.picker.pickGlobe(at);
@@ -77,8 +75,7 @@ export function bindProductPicks(engine, productId, features) {
       let hit = false;
       if (geometry.type === 'point') {
         const screen = groundScreen(engine, geometry.position);
-        const size =
-          10 * Math.min(1.5, Math.max(0.35, (style.iconScale ?? 1) * 0.7));
+        const size = style.pointRadius ?? 7;
         hit =
           screen &&
           Math.abs(at.x - screen.x) <= size &&
@@ -113,7 +110,7 @@ export function bindProductPicks(engine, productId, features) {
           onTop: 0,
           order: geometry.type === 'point' ? 1 : 0,
           depth,
-          result: { id: region.id, owner: 's2-ghostmaps' },
+          result: { id: region.id, owner },
         });
     }
     return hits;

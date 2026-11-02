@@ -61,6 +61,7 @@ const NAVARA_CREDIT_KEYS = new Set([
   's2-ghostmaps',
   'weather-noaa',
   'weather-lightning',
+  'weather-cyclones',
   'firms',
   'gbfs',
   'overture-military-names',
@@ -115,6 +116,10 @@ export async function registerNavaraLayerRenderers() {
         return (engine, options) => createWeatherNavaraRenderer(engine, navaraViews.get(engine), options);
       },
     ])),
+    'weather-cyclones': async () => {
+      const {createCyclonesNavaraRenderer} = await import('../layers/cyclones/render/navara.js');
+      return (engine,options) => createCyclonesNavaraRenderer(engine,navaraViews.get(engine).view,options);
+    },
     's2-ghostmaps': async () => {
       const { createGhostMapsNavaraRenderer } = await import('../layers/ghostMaps/render/navara.js');
       return (engine) => createGhostMapsNavaraRenderer(engine, navaraViews.get(engine).view);

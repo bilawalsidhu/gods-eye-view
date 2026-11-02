@@ -1,4 +1,4 @@
-import { bindProductPicks } from './navaraPick.js';
+import { bindGroundShapePicks } from '../../shared/render/navaraGroundPicks.js';
 
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
@@ -28,6 +28,7 @@ export function createGhostMapsNavaraRenderer(engine, view) {
       }),
     draw(productId, features, fallback, markerImage) {
       const groups = new Map();
+      const shapes = [];
       function add(style, geom, id) {
         const key = JSON.stringify(style);
         if (!groups.has(key)) groups.set(key, { style, features: [] });
@@ -50,6 +51,7 @@ export function createGhostMapsNavaraRenderer(engine, view) {
         };
         for (const [part, geometry] of feature.geometries.entries()) {
           const id = `ghostmaps:${productId}:${index}:${part}`;
+          shapes.push({ id, geometry, style: { ...style, pointRadius: 10 * clamp((style.iconScale ?? 1) * 0.7, 0.35, 1.5) } });
           if (geometry.type === 'point') {
             const color =
               style.iconColor && style.icon ? style.iconColor : null;
@@ -125,7 +127,7 @@ export function createGhostMapsNavaraRenderer(engine, view) {
             ...group.style,
           });
         }
-        unbind = bindProductPicks(engine, productId, features);
+        unbind = bindGroundShapePicks(engine, 's2-ghostmaps', shapes);
       } catch (error) {
         destroy();
         throw error;
