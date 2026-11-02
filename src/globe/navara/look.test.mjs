@@ -167,18 +167,48 @@ test('daylight inspection restores live exposure, tone mapping and time when lef
   const tone = view.added.find(({ desc }) =>
     Object.hasOwn(desc, 'toneMapping'),
   );
+  const aerial = view.added.find(({ desc }) =>
+    Object.hasOwn(desc, 'aerialPerspective'),
+  );
+  const opacity = { value: 1 };
+  aerial.ref = { raw: { rawEffect: { blendMode: { opacity } } } };
   const fuji = { lat: 35.2599, lng: 138.6574 };
   look.frame(6508, false, 2600, fuji, true);
   assert.equal(view.toneMappingExposure, 10);
+  assert.equal(opacity.value, 1);
   assert.equal(tone.updates.at(-1).toneMapping.mode, 7);
   assert.ok(
     Math.abs(view.atmosphere.date.getTime() / 3_600_000 + fuji.lng / 15 - 13) <
       1e-6,
   );
+  look.frame(750_149, false, 0, fuji, true);
+  assert.ok(opacity.value < 1);
+  const ambient = view.added.find(({ desc }) => Object.hasOwn(desc, 'ambient'));
+  assert.equal(ambient.desc.ambient.intensity, 1);
   look.frame(6508, false, 2600, fuji, false);
+  assert.equal(ambient.updates.at(-1).ambient.intensity, 0);
   assert.equal(view.toneMappingExposure, 1);
+  assert.equal(opacity.value, 1);
   assert.equal(tone.updates.at(-1).toneMapping.mode, 6);
   assert.equal(view.atmosphere.date.getTime(), 0);
+});
+
+test('inspection sunlight stays fixed through orbit, zoom and move end', () => {
+  const view = fakeView(0);
+  const look = warmCinematic(view);
+  const origin = { lat: -45.9847, lng: 67.8795 };
+  const rotated = { lat: -20, lng: -158 };
+  look.frame(50_151_111, false, 0, origin, true);
+  const sunDate = view.atmosphere.date;
+  look.frame(50_151_111, true, 0, rotated, true);
+  look.frame(750_149, false, 0, rotated, true);
+  assert.equal(view.atmosphere.date, sunDate);
+  look.resetDaylight();
+  look.frame(750_149, false, 0, rotated, true);
+  assert.notEqual(view.atmosphere.date.getTime(), sunDate.getTime());
+  const restored = view.atmosphere.date;
+  look.frame(50_151_111, false, 0, origin, true);
+  assert.equal(view.atmosphere.date, restored);
 });
 
 test('the sun follows the wall clock, a minute at most behind, only on drawn frames', () => {
