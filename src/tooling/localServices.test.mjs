@@ -729,6 +729,29 @@ test('Realtime service configuration selects compatible endpoint/model without f
   assert.doesNotMatch(response.body, /server-fixture|voice\.example/);
 });
 
+test('the HUD summary status says whether a summary is configured, without calling OpenAI', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('the status probe must not reach OpenAI');
+  });
+  const handler = install(openAiRealtimeProxy()).get('/api/openai/hud-summary');
+  for (const [key, configured] of [
+    [undefined, false],
+    ['   ', false],
+    ['fixture-key', true],
+  ]) {
+    env(t, 'OPENAI_API_KEY', key);
+    const response = await request(handler, { url: '/status' });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json(), { configured });
+    assert.equal(response.headers['cache-control'], 'no-store');
+  }
+  assert.equal(
+    (await request(handler, { url: '/' })).status,
+    405,
+    'only the status path answers GET',
+  );
+});
+
 test('OpenAI routes answer generically when the upstream or the request fails', async (t) => {
   env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
   env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);

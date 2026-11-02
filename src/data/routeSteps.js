@@ -13,6 +13,8 @@
  * roundabout turn, exit roundabout, exit rotary, notification, use lane.
  */
 
+import { formatDistanceText } from './distanceFormat.js';
+
 /** Cap on steps returned for one route — a 2,500 km drive rarely needs more. */
 export const ROUTE_STEPS_MAX = 200;
 
@@ -216,11 +218,7 @@ export function normalizeOsrmSteps(route) {
  * @returns {string}
  */
 export function formatRouteDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '';
-  if (meters < 100) return `${Math.round(meters)} m`;
-  if (meters < 1000) return `${Math.round(meters / 10) * 10} m`;
-  const km = meters / 1000;
-  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+  return formatDistanceText(meters, { metreStep: 10, exactBelowM: 100 }) ?? '';
 }
 
 /**
