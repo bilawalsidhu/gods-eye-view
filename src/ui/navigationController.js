@@ -254,7 +254,7 @@ export class NavigationController {
     });
   }
 
-  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool' } = {}) {
+  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool', keepTracking = false } = {}) {
     return reassertNavigationHandoff({
       generation,
       currentGeneration: this._navigationGeneration,
@@ -266,7 +266,7 @@ export class NavigationController {
       // was refused by the cockpit leaves the old readout standing.
       release: () => {
         this.clearLocation();
-        return this._releaseFollowCamera({ trackingOrigin });
+        if (!keepTracking) return this._releaseFollowCamera({ trackingOrigin });
       },
     });
   }

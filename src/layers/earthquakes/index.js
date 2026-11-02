@@ -16,9 +16,9 @@ export { createUsgsEarthquakeSource } from './source.js';
 /**
  * Own one earthquake display and its refresh lifecycle.
  * renderer.create({viewer, engine}) owns drawing and returns:
- * setVisible(boolean), replace(discs), records(limit), destroy().
+ * setVisible(boolean), replace(discs), destroy().
  * Discs are plain ECEF anchors, metre radii and Rgba colours; renderers keep
- * source order and return plain raw analyst rows (model.mapAnalystRecord).
+ * source order. The layer retains observations for queries while detached.
  */
 export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
   if (typeof source?.getSnapshot !== 'function')
@@ -26,13 +26,24 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
   if (!overlayHost) throw new TypeError('Earthquakes require an overlay host');
   if (typeof renderer?.create !== 'function')
     throw new TypeError('Earthquakes require a renderer factory');
-  let _viewer = null;
+  let initialized = false;
+  let observations = [];
+  let discs = [];
+  let labels = [];
   let _request = null;
   let _renderer = null;
   let _count = 0;
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
+
+  function publishLabels() {
+    overlayHost.setEntries(EARTHQUAKE_OVERLAY_SOURCE_ID, labels, {
+      cohortLimit: EARTHQUAKE_OVERLAY_COHORT_LIMIT,
+      collisionCapacity: EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
+      moving: false,
+    });
+  }
 
   const layer = {
     id: 'earthquakes',
@@ -42,17 +53,32 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
     updateInterval: 60000,
 
     init(viewer, { engine = null } = {}) {
-      if (_renderer) throw new Error('Earthquake layer is already initialized');
-      _viewer = viewer;
+      if (initialized) throw new Error('Earthquake layer is already initialized');
+      initialized = true;
+      try {
+        if (viewer || engine) this.attachRenderer(viewer, { engine });
+      } catch (error) {
+        this.destroy();
+        throw error;
+      }
+      console.log('[Data:Earthquakes] Initialized');
+    },
+
+    attachRenderer(viewer, { engine = null } = {}) {
+      if (!initialized || _renderer) throw new Error('Invalid earthquake scene attachment');
       _renderer = renderer.create({ viewer, engine });
       if (!_renderer) throw new Error('Earthquake renderer unavailable');
-      _renderer.setVisible(false);
-      _count = 0;
-      _lastUpdate = null;
-      _lastError = null;
-      _enabled = false;
+      _renderer.setVisible(_enabled);
+      if (discs.length) _renderer.replace(discs);
+      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, _enabled);
+      if (_enabled) publishLabels();
+    },
+
+    detachRenderer() {
+      overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
-      console.log('[Data:Earthquakes] Initialized');
+      _renderer?.destroy();
+      _renderer = null;
     },
 
     enable(viewer) {
@@ -60,7 +86,10 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
       // No continuous-render hold: the discs are static geometry now, so the
       // layer has no per-frame animator to keep the render loop alive for.
       _renderer?.setVisible(true);
-      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, true);
+      if (_renderer) {
+        overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, true);
+        if (labels.length) publishLabels();
+      }
     },
 
     disable(viewer) {
@@ -73,7 +102,7 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
     },
 
     async update(viewer) {
-      if (!_enabled || !_renderer) return false;
+      if (!_enabled) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -128,17 +157,12 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
           );
         }
 
-        _renderer.replace(nextDiscs);
-        if (_enabled) {
-          overlayHost.setEntries(
-            EARTHQUAKE_OVERLAY_SOURCE_ID,
-            selectEarthquakeOverlayCohort(overlayEntries),
-            {
-              cohortLimit: EARTHQUAKE_OVERLAY_COHORT_LIMIT,
-              collisionCapacity: EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
-              moving: false,
-            },
-          );
+        observations = rows;
+        discs = nextDiscs;
+        labels = selectEarthquakeOverlayCohort(overlayEntries);
+        if (_renderer) {
+          _renderer.replace(discs);
+          publishLabels();
         }
 
         _count = count;
@@ -157,15 +181,15 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
-      _viewer = null;
+      initialized = false;
       _enabled = false;
-      overlayHost.clearSource(EARTHQUAKE_OVERLAY_SOURCE_ID);
-      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
-      _renderer?.destroy();
-      _renderer = null;
+      this.detachRenderer();
+      observations = [];
+      discs = [];
+      labels = [];
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -180,11 +204,13 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (!_enabled || !_renderer) return [];
+      if (!_enabled) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
-      return _renderer.records(limit).map(mapAnalystRecord);
+      return observations.slice(0, limit).map((row, index) =>
+        mapAnalystRecord({ ...row, id: row.usgsId, depth: row.depthKm }, index),
+      );
     },
 
     getStats() {

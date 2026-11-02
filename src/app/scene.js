@@ -29,12 +29,14 @@ export async function createApplicationScene({
   signal,
   defer,
   rendererCache,
+  layerSession,
   ...options
 }) {
-  const operations = createApplicationOperations({
+  const operations = layerSession?.operations ?? createApplicationOperations({
     requests: requestServices,
-    signal,
+    signal: layerSession?.lifetime.signal ?? signal,
   });
+  if (layerSession) layerSession.operations = operations;
   defer(initLogoGaze());
   const previousKey = window.__GOOGLE_MAPS_API_KEY__;
   if (googleApiKey) {
@@ -55,6 +57,14 @@ export async function createApplicationScene({
   const { viewer, engine, tileset, mapStackController } = rendererCache
     ? await rendererCache.acquire(options.engineKind, build, defer)
     : await build({ defer });
+  if (layerSession) {
+    // DEM cells belong to the session. Mesh samples came from the outgoing
+    // scene, including when the incoming canvas was warm in the cache.
+    operations.surface.groundFloor.clearMeshFloorCells();
+    operations.surface.groundFloor.setMeshFloorPreferred(
+      mapStackController.getActiveId() === 'photoreal',
+    );
+  }
   return { viewer, engine, tileset, mapStackController, operations };
 }
 

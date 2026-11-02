@@ -42,6 +42,7 @@ export function createStandaloneApplication({
   allowQaRegistration = false,
   engineKind = pageEngineKind(),
   rendererCache,
+  layerSession,
   engineSwitch = false,
 }) {
   if (owner)
@@ -89,6 +90,7 @@ export function createStandaloneApplication({
         loaderStatus,
         engineKind,
         rendererCache,
+        layerSession,
       });
       // The catalog of this engine: on Navara only the layers with a Navara
       // renderer (src/app/layers/renderers.js; none yet), the others' state
@@ -108,6 +110,7 @@ export function createStandaloneApplication({
           : {};
       catalog = createStandaloneCatalog({
         engineKind,
+        layerSession,
         sources: { ...sources, ...qaSources },
         streetLevelProviders,
         nepalBoundaryResolver: (signal) =>
@@ -132,7 +135,7 @@ export function createStandaloneApplication({
         catalog,
       }),
     createData: (context) =>
-      createStandaloneData({ ...context, allowQaRegistration, catalog }),
+      createStandaloneData({ ...context, allowQaRegistration, catalog, layerSession }),
     createTools: async (context) => {
       const tools = await createStandaloneTools({
         ...context,

@@ -66,6 +66,7 @@ export function createApplicationCatalog({
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
   resolveAsset,
+  layerSession,
   nepalBoundaryResolver,
   streetLevelProviders,
   engineKind = 'cesium',
@@ -79,30 +80,48 @@ export function createApplicationCatalog({
 
   const sourceComposition = resolveCatalogSources(sources);
   sources = sourceComposition.sources;
-  const militaryRegistry = createMilitaryRegistry();
+  const militaryRegistry =
+    layerSession?.militaryRegistry ?? createMilitaryRegistry();
   const weatherClock = createWeatherClock();
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
-    militaryRegistry.dispose();
+    if (!layerSession) militaryRegistry.dispose();
     weatherClock.destroy();
   };
   signal.addEventListener('abort', dispose, { once: true });
   try {
-    if (sourceComposition.isConfigured('military'))
-      militaryRegistry.configureSource(sources.military, { signal });
+    if (!layerSession?.militaryRegistry) {
+      const lifetime = layerSession?.lifetime.signal ?? signal;
+      if (sourceComposition.isConfigured('military'))
+        militaryRegistry.configureSource(sources.military, { signal: lifetime });
+      if (layerSession) {
+        layerSession.militaryRegistry = militaryRegistry;
+        lifetime.addEventListener('abort', militaryRegistry.dispose, {
+          once: true,
+        });
+      }
+    }
     // Shared instances (awareness and launches read others) are made once,
     // when the first layer that needs them is built.
     const once = (create) => {
       let value;
       return () => (value ??= create());
     };
+    const sessionModel = (id, create) => {
+      if (!layerSession) return create();
+      const models = (layerSession.models ??= new Map());
+      if (!models.has(id)) models.set(id, create());
+      return models.get(id);
+    };
     const flights = once(() =>
-      createApplicationFlights({
-        surface,
-        source: sources.flights,
-        militaryRegistry,
-        resolveAsset,
-      }),
+      sessionModel('flights', () =>
+        createApplicationFlights({
+          surface,
+          source: sources.flights,
+          militaryRegistry,
+          resolveAsset,
+        }),
+      ),
     );
     const military = once(() =>
       createApplicationMilitary({
@@ -158,7 +177,10 @@ export function createApplicationCatalog({
       ],
       [
         'earthquakes',
-        () => createApplicationEarthquakes({ source: sources.earthquakes }),
+        () =>
+          sessionModel('earthquakes', () =>
+            createApplicationEarthquakes({ source: sources.earthquakes }),
+          ),
       ],
       [
         'air-quality',

@@ -37,7 +37,7 @@ export class CockpitCoordinator {
       operations,
     );
     this._cockpitDisplayPortal = null;
-    this.cockpitView = viewer || engine?.kind === 'navara'
+    this.cockpitView = viewer || (engine?.frames?.preUpdate && engine?.camera?.followChanged)
       ? this._createCockpitView(viewer, services)
       : null;
   }
@@ -88,7 +88,7 @@ export class CockpitCoordinator {
         this._stampNavigation({ cancelPendingSelection: false }),
       isEntryAllowed: () =>
         cockpitEntryAllowed({
-          standaloneAircraft: this.engine?.kind === 'navara',
+          standaloneAircraft: true,
           contextMode: this._contextMode,
           contextModeChanging: this._contextModeChanging,
           flightsEnabled: !!this._dataManager?.isEnabled('flights'),
@@ -279,7 +279,7 @@ export class CockpitCoordinator {
           action: 'control_cockpit',
           error: this._contextModeChanging
             ? 'Contacts is still starting up — try Cockpit again in a moment'
-            : this.engine?.kind === 'navara'
+            : !this._contextMode
               ? 'Enable an aircraft layer and track a flight to enter Cockpit'
               : 'Contacts must be active to enter Cockpit — say "open contacts" first',
           state: this.getCockpitState(),
