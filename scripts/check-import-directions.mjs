@@ -37,6 +37,7 @@ const RENDERED_LAYER_DIRS = [
   'src/layers/alpr/',
   'src/layers/airQuality/',
   'src/layers/gnss/',
+  'src/layers/perimeters/',
   'src/layers/radio/',
   'src/layers/bikeshare/',
   'src/layers/earthquakes/',

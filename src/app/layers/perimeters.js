@@ -1,3 +1,5 @@
+import { rendererFor } from './renderers.js';
+import { createPerimetersCesiumRenderer } from '../../layers/perimeters/render/cesium.js';
 import * as Cesium from 'cesium';
 import {
   createFirePerimetersLayer,
@@ -22,6 +24,9 @@ export function createApplicationFirePerimeters(options) {
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     screenSpaceEventHandlerFactory: (viewer) =>
       new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
+    createRenderer: ({viewer, engine, screenSpaceEventHandlerFactory}) => engine
+      ? rendererFor('fire-perimeters', engine, {viewer, screenSpaceEventHandlerFactory})
+      : createPerimetersCesiumRenderer({viewer, screenSpaceEventHandlerFactory}),
     picking,
     pointer: { isPointerFree },
     ...options,

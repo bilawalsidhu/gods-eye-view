@@ -1,3 +1,4 @@
+import { fromDegrees } from '../src/geo/cartesian3.js';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
@@ -31,6 +32,19 @@ try {
     const fetch = window.fetch.bind(window);
     window.fetch = (input, o) => {
       const url = new URL(input.url ?? input, document.baseURI);
+      if (url.pathname.startsWith('/api/fire-perimeters/inciweb')) {
+        return Promise.resolve(Response.json({ rows: [] }));
+      }
+      if (url.pathname === '/api/fire-perimeters') {
+        const square = (dx) => [
+          [-79.38-dx,43.65-dx],[-79.38+dx,43.65-dx],[-79.38+dx,43.65+dx],
+          [-79.38-dx,43.65+dx],[-79.38-dx,43.65-dx],
+        ];
+        return Promise.resolve(Response.json({rows: [{
+          stableId: 'fire:fixture', name:'QA Fire', acres:500, containedPct:40,
+          polygons:[[square(0.09), square(0.018).reverse()]],
+        }]}));
+      }
       if (url.pathname === '/api/gnss-integrity') {
         return Promise.resolve(Response.json({ageMs: 0, rows: ['a1','a2','a3'].map(hex =>
           ({hex, lat: 43.65, lon: -79.38, nic: 0, nacp: 0, degraded: true, gpsLost: false}))}));
@@ -146,6 +160,46 @@ try {
     assert.equal(gnss.levels.high, 1);
     console.log('PASS', kind, 'GNSS high cell, view anchor', gnss.coverage.latitude, gnss.coverage.longitude);
     await p.evaluate(() => window.__godsEyeView.dataManager.setEnabled('air-quality', true));
+  }
+  await p.evaluate(async () => {
+    const {dataManager} = window.__godsEyeView;
+    await dataManager.setEnabled('air-quality', false);
+    await dataManager.setEnabled('fire-perimeters', true, {origin: 'user'});
+    window.qaFire = dataManager.layers.get('fire-perimeters').module;
+    if (!dataManager.isEnabled('fire-perimeters') || window.qaFire.getStats().count !== 1)
+      throw Error('Failed to enable fire perimeter fixture: '+JSON.stringify(window.qaFire.getStats()));
+  });
+  const card = async (visible) => p.waitForFunction((want) => {
+    const canvas = document.getElementById('world-overlay-canvas');
+    const data = canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+    let pixels = 0;
+    for (let i=3; i<data.length; i+=4) if (data[i]) pixels++;
+    return want ? pixels > 100 : pixels === 0;
+  }, {timeout: 15000}, visible);
+  const click = async (lon, lat) => {
+    const {x, y} = await p.evaluate((world) => {
+      const {engine} = window.__godsEyeView;
+      const point = engine.projector.worldToWindow(world, {});
+      const box = engine.host.canvas.getBoundingClientRect();
+      return { x: box.left+point.x, y: box.top+point.y };
+    }, fromDegrees(lon, lat));
+    await p.mouse.click(x,y);
+  };
+  for (const kind of ['navara', 'cesium', 'navara']) {
+    if (await p.evaluate(() => window.__godsEyeView.engine.kind) !== kind) {
+      await p.select('#globe-engine', kind);
+      await ready(kind);
+      await card(true);
+      assert.ok(await p.evaluate(() => window.qaFire === window.__godsEyeView.dataManager.layers.get('fire-perimeters').module));
+    }
+    await click(-79.51, 43.65);
+    await card(false);
+    await click(-79.38, 43.65);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await card(false);
+    await click(-79.435, 43.65);
+    await card(true);
+    console.log('PASS', kind, 'select fire under GNSS, exclude hole, retain incident card');
   }
   assert.deepEqual(errors, []);
 } finally {
