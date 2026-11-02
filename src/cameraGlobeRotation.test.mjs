@@ -831,9 +831,36 @@ test('orbit-toggle controller stops globe motion before toggling', async (t) => 
         return true;
       },
     },
-    _orbitIndicator: { classList: { toggle() {} } },
+    _locationControls: { showOrbit() {} },
   });
   assert.equal(toggled, true);
+});
+test('the voice orbit switch lights and clears the ORBIT indicator', async () => {
+  const { LocationNavigation } = await import('./ui/locationNavigation.js');
+  const shown = [];
+  let active = false;
+  const nav = Object.assign(Object.create(LocationNavigation.prototype), {
+    services: {},
+    _currentTarget: {},
+    _currentPoi: {},
+    orbitController: {
+      get active() {
+        return active;
+      },
+      toggle() {
+        active = !active;
+        return active;
+      },
+      stop() {
+        active = false;
+      },
+    },
+    _locationControls: { showOrbit: (value) => shown.push(value) },
+  });
+  assert.deepEqual(nav.setOrbit(true), { ok: true, orbiting: true });
+  assert.deepEqual(nav.setOrbit(true), { ok: true, orbiting: true });
+  assert.deepEqual(nav.setOrbit(false), { ok: true, orbiting: false });
+  assert.deepEqual(shown, [true, false]);
 });
 for (const owner of ['tracking', 'cockpit', 'close-up'])
   test(`actual voice runner refuses ${owner} without releasing or repositioning`, async (t) => {

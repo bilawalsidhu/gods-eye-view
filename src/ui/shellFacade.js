@@ -9,14 +9,6 @@ export class ShellFacade {
     return this._navigation.subscribeCameraHandoff(listener);
   }
 
-  get _models3dModeBtns() {
-    return this._aircraftDisplay._models3dModeBtns;
-  }
-
-  set _models3dModeBtns(value) {
-    this._aircraftDisplay._models3dModeBtns = value;
-  }
-
   get _models3dEnabled() {
     return this._aircraftDisplay._models3dEnabled;
   }
@@ -137,14 +129,6 @@ export class ShellFacade {
     this._displayBindings._frameRateMonitor = value;
   }
 
-  get _displayControls() {
-    return this._displayBindings?._displayControls;
-  }
-
-  set _displayControls(value) {
-    this._displayBindings._displayControls = value;
-  }
-
   get _activeLocationId() {
     return this._locationNavigation._activeLocationId;
   }
@@ -247,14 +231,6 @@ export class ShellFacade {
 
   set orbitController(value) {
     this._locationNavigation.orbitController = value;
-  }
-
-  get _orbitIndicator() {
-    return this._locationNavigation._orbitIndicator;
-  }
-
-  set _orbitIndicator(value) {
-    this._locationNavigation._orbitIndicator = value;
   }
 
   get cockpitView() {
@@ -429,28 +405,12 @@ export class ShellFacade {
     this._visualSettings._contactsDetectionRestore = value;
   }
 
-  get _detectionAllocationBtns() {
-    return this._visualSettings._detectionAllocationBtns;
-  }
-
-  set _detectionAllocationBtns(value) {
-    this._visualSettings._detectionAllocationBtns = value;
-  }
-
   get _detectionAllocationPreference() {
     return this._visualSettings._detectionAllocationPreference;
   }
 
   set _detectionAllocationPreference(value) {
     this._visualSettings._detectionAllocationPreference = value;
-  }
-
-  get _styleParameters() {
-    return this._visualSettings._styleParameters;
-  }
-
-  set _styleParameters(value) {
-    this._visualSettings._styleParameters = value;
   }
 
   get _irBoostActive() {
@@ -697,13 +657,13 @@ export class ShellFacade {
   }
 
   /**
-   * Maps a normalized sharpen value (0-1) to the unsharp-mask `amount` uniform.
-   * Range: 0.1 (subtle) to 2.1 (aggressive edge enhancement).
-   * @param {number} val - Normalized sharpen intensity (0.0 to 1.0).
+   * Sets the sharpen amount the Display slider shows and applies it.
+   * @param {number} pct - Sharpen intensity, 0 to 100.
+   * @param {{syncShare?: boolean}} [options]
    * @returns {void}
    */
-  _applySharpenIntensity(val) {
-    return this._visualSettings._applySharpenIntensity(...arguments);
+  _setSharpenIntensity(pct, { syncShare = true } = {}) {
+    return this._visualSettings._setSharpenIntensity(...arguments);
   }
 
   /**
@@ -716,17 +676,24 @@ export class ShellFacade {
   }
 
   /**
-   * Reads and canonicalizes the five-stop density control. The engine derives
-   * Sparse/Balanced/Dense from the same stop.
+   * Sets the five-stop density control, canonicalized; the engine derives
+   * Sparse/Balanced/Dense from the same stop. Without a value it reapplies
+   * the current stop.
+   * @param {number} [pct]
    * @returns {void}
    */
-  _applyDetectionDensityFromUi() {
-    return this._visualSettings._applyDetectionDensityFromUi(...arguments);
+  _setDetectionDensity(pct) {
+    return this._visualSettings._setDetectionDensity(...arguments);
   }
 
-  /** Apply responsive keyhole fade controls from normalized UI percentages. */
-  _applyDetectionFadeFromUi() {
-    return this._visualSettings._applyDetectionFadeFromUi(...arguments);
+  /**
+   * Sets the keyhole fade distance and outside opacity, in percent; either
+   * one left out keeps its current value.
+   * @param {{fadePct?: number, outsideOpacityPct?: number}} [tuning]
+   * @returns {void}
+   */
+  _setDetectionFade(tuning) {
+    return this._visualSettings._setDetectionFade(...arguments);
   }
 
   _syncDetectionUiFromEngine() {
@@ -866,15 +833,6 @@ export class ShellFacade {
   }
 
   /**
-   * Allows either command-dock tray to remain open until explicitly unpinned.
-   * Both trays may be pinned; transient and error trays stack above them.
-   * @returns {void}
-   */
-  _initCommandDockPins() {
-    return this._panelChrome._initCommandDockPins(...arguments);
-  }
-
-  /**
    * Tracks the live pinned-tray height so a hovered sibling can stack above it
    * without hardcoded content dimensions.
    * @returns {void}
@@ -949,12 +907,8 @@ export class ShellFacade {
     return this._radioControls?._setCockpitDisclosure?.(...args);
   }
 
-  _setRadioDisclosure(...args) {
-    return this._radioControls?._setRadioDisclosure?.(...args);
-  }
-
-  _syncContextRadioLauncherState(...args) {
-    return this._radioControls?._syncContextRadioLauncherState?.(...args);
+  _cockpitDisclosureOpen(kind) {
+    return Boolean(this._radioControls?._cockpitDisclosureOpen?.(kind));
   }
 
   _renderRadioState(...args) {
@@ -1046,13 +1000,14 @@ export class ShellFacade {
   }
 
   /**
-   * Updates collapse button glyphs based on panel state. Right-rail panels
-   * use directional arrows; left-stack panels use +/- symbols.
-   * @param {HTMLElement} panelEl - The panel DOM element.
+   * Presents a panel's state, merged over what it shows now; its root and
+   * buttons draw it from the panel chrome store.
+   * @param {HTMLElement|string} panelOrId - The panel or its id.
+   * @param {object} [patch] - The state that changes.
    * @returns {void}
    */
-  _syncPanelCollapseButton(panelEl) {
-    return this._panelChrome._syncPanelCollapseButton(...arguments);
+  _presentPanel(panelOrId, patch) {
+    return this._panelChrome._presentPanel(...arguments);
   }
 
   _buildSharePanelState() {
@@ -1313,8 +1268,8 @@ export class ShellFacade {
    * @param {string} [styleName=this.activeStyle] - Style name to display.
    * @returns {void}
    */
-  _updateStyleMiniStatus(styleName = this.activeStyle) {
-    return this._visualSettings._updateStyleMiniStatus(...arguments);
+  _publishActiveStyle(styleName = this.activeStyle) {
+    return this._visualSettings._publishActiveStyle(...arguments);
   }
 
   _initOrbit(...args) {

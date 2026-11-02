@@ -80,7 +80,8 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     mount();
     if (resume && !disposed && provider === next)
       void current.session.start({ pushToTalk });
-    globalThis.document?.getElementById('gev-voice-provider')?.focus();
+    // The new control renders first; focus stays on the provider choice.
+    void current.ui?.focus?.(['provider'], { anyVisibility: true });
     return true;
   };
 
