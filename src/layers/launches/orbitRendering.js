@@ -67,6 +67,9 @@ export function createOrbitRendering({
     return Boolean(
       layerState._enabled &&
       layerState._dataSource?.show &&
+      !layerState.launchHidden(
+        layerState._missionOverlayRecords.get(launchId)?.launch,
+      ) &&
       (!layerState._selectedLaunchId ||
         layerState._selectedLaunchId === launchId),
     );

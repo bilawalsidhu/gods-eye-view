@@ -305,3 +305,17 @@ test('a coverage that throws counts as none', (t) => {
   assert.equal(clock.getState().supported, false);
   assert.equal(clock.coverage(), null);
 });
+
+test('continuous play runs past every driver, and live resets the rate', () => {
+  const t = fakeTime();
+  const clock = createWorldClock(t.options);
+  const calls = [];
+  clock.attachDriver({ play: () => calls.push('play'), pause() {} });
+  clock.seek(t.wall - 60_000);
+  clock.play({ rate: 30, continuous: true });
+  assert.deepEqual(calls, []);
+  t.advance(1_000);
+  assert.equal(clock.now(), t.wall - 61_000 + 30_000);
+  clock.goLive();
+  assert.equal(clock.getRate(), 1);
+});

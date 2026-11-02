@@ -152,23 +152,27 @@ export function createWorldClock({
       anchorMono = monotonicNow();
       changed();
     },
-    /** Back to the wall clock; playback stops. */
+    /** Back to the wall clock; playback stops and its rate goes back to 1. */
     goLive() {
-      if (live && !playing) return;
+      if (live && !playing && rate === 1) return;
       const stepping = active;
       live = true;
       cursorMs = null;
       playing = false;
       active = null;
+      rate = 1;
       // Its driven(false) finds nothing left to stop.
       stepping?.driver.pause();
       changed();
     },
-    /** Play from the cursor (from now, when live). */
-    play({ rate: nextRate } = {}) {
+    /**
+     * Play from the cursor (from now, when live). A driver steps it unless
+     * `continuous`, which runs the cursor at the rate past every driver.
+     */
+    play({ rate: nextRate, continuous: runOn = false } = {}) {
       if (nextRate !== undefined) api.setRate(nextRate);
       if (playing) return;
-      for (let index = drivers.length - 1; index >= 0; index -= 1) {
+      for (let index = drivers.length - 1; !runOn && index >= 0; index -= 1) {
         if (drivers[index].driver.play() !== false) return;
       }
       if (live) {

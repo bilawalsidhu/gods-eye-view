@@ -148,3 +148,73 @@ test('the track runs over the time the layers show, to now, and scrubs', async (
   assert.equal(worldClock.isLive(), false, 'a scrub past now stays there');
   assert.equal(worldClock.now(), ahead);
 });
+
+test('play runs the whole track in a minute, from the start when at live', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const start = now - 10 * 86_400_000;
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({ start, end: now - 86_400_000 }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  // Weather's replay stepping its own frames does not take the track's play.
+  const stepped = [];
+  const driver = worldClock.attachDriver({
+    play: () => stepped.push('play'),
+    pause: () => stepped.push('pause'),
+  });
+  t.after(() => driver.detach());
+  bar().querySelector('.world-timeline-play').click();
+  worldClock.pause();
+  await nextTick();
+  assert.deepEqual(stepped, []);
+  const rate = worldClock.getRate();
+  assert.ok(worldClock.now() - start < rate * 1_000, 'from the start of the track');
+  // The end is now and moves on with it: play outruns it by the track.
+  const length = Date.now() - start;
+  assert.ok(Math.abs(rate - (1 + length / 60_000)) < rate * 0.01, 'a minute end to end');
+  worldClock.play({ continuous: true });
+
+  // Playing on to now goes live.
+  worldClock.seek(Date.now() + 1_000);
+  await nextTick();
+  assert.equal(worldClock.isLive(), true);
+  assert.equal(worldClock.isPlaying(), false);
+  assert.equal(worldClock.getRate(), 1, 'live plays at the rate of the world');
+});
+
+test('play holds at the end of a track that reaches past now', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  // An hour ahead is within the track's share of now, but still ahead of it.
+  const end = now + 3_600_000;
+  const release = worldClock.hold('test-ahead');
+  const unregister = worldClock.register({
+    id: 'test-ahead',
+    coverage: () => ({ start: now - 10 * 86_400_000, end }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  // Paused just past now, play plays on rather than from the top.
+  worldClock.seek(Date.now() + 1_000);
+  await nextTick();
+  const from = worldClock.now();
+  bar().querySelector('.world-timeline-play').click();
+  worldClock.pause();
+  assert.ok(worldClock.now() >= from, 'plays on from where it was');
+  worldClock.play();
+  worldClock.seek(end + 60_000);
+  await nextTick();
+  assert.equal(worldClock.isPlaying(), false);
+  assert.equal(worldClock.isLive(), false);
+  assert.equal(worldClock.now(), end);
+});
