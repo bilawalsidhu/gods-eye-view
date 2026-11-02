@@ -533,7 +533,8 @@
       "src/ui/unitLabels.js",
       "src/ui/keyGuidance.js",
       "src/ui/statusText.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/ui/formatLayerCount.js"
     ],
     "external": []
   },
@@ -874,7 +875,8 @@
       "src/ui/statusText.js",
       "src/ui/statusBadge.js",
       "src/scopeMaskPolicy.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/ui/formatLayerCount.js"
     ],
     "external": ["cesium"]
   },
@@ -2811,7 +2813,25 @@
       "src/ui/statusBadge.js",
       "src/sceneCommandRelease.js",
       "src/scopeMaskPolicy.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/layers/usGroundwater/index.js",
+      "src/layers/usGroundwater/countGrids.js",
+      "src/layers/usGroundwater/countRenderer.js",
+      "src/layers/usGroundwater/bundledSource.js",
+      "src/layers/usGroundwater/spatialSource.js",
+      "src/layers/usGroundwater/source.js",
+      "src/layers/usGroundwater/pack.js",
+      "fixtures/us-groundwater/v1/expected-pack.json",
+      "src/layers/usGroundwater/partitionedCounts.js",
+      "src/layers/usGroundwater/wellCard.js",
+      "src/layers/usGroundwater/mixedDetail.js",
+      "src/layers/usGroundwater/tileReads.js",
+      "src/layers/usGroundwater/viewportCoverage.js",
+      "src/layers/usGroundwater/historicalPack.mjs",
+      "src/layers/usGroundwater/dataBase.mjs",
+      "src/layers/usGroundwater/recordPicker.js",
+      "src/layers/usGroundwater/rainfolkSource.js",
+      "src/ui/formatLayerCount.js"
     ],
     "external": [
       "hls.js",
@@ -3396,7 +3416,20 @@
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/data/geoImportImages.js",
       "src/data/geoImportPins.js",
-      "src/data/geoFileImport.js"
+      "src/data/geoFileImport.js",
+      "src/layers/usGroundwater/index.js",
+      "src/layers/usGroundwater/countGrids.js",
+      "src/layers/usGroundwater/countRenderer.js",
+      "src/layers/usGroundwater/source.js",
+      "src/layers/usGroundwater/pack.js",
+      "src/layers/usGroundwater/wellCard.js",
+      "src/layers/usGroundwater/mixedDetail.js",
+      "src/layers/usGroundwater/tileReads.js",
+      "src/layers/usGroundwater/viewportCoverage.js",
+      "src/layers/usGroundwater/historicalPack.mjs",
+      "src/layers/usGroundwater/dataBase.mjs",
+      "src/layers/usGroundwater/recordPicker.js",
+      "src/layers/usGroundwater/rainfolkSource.js"
     ],
     "external": [
       "hls.js",
@@ -4456,6 +4489,51 @@
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
       "src/i18n/marker.js"
+    ],
+    "external": ["cesium"]
+  },
+  "us-groundwater": {
+    "exports": ["./layers/us-groundwater", "./layers/us-groundwater/source"],
+    "modules": [
+      "src/layers/usGroundwater/index.js",
+      "src/layers/usGroundwater/countGrids.js",
+      "src/layers/usGroundwater/countRenderer.js",
+      "src/layers/usGroundwater/source.js",
+      "src/layers/usGroundwater/bundledSource.js",
+      "src/layers/usGroundwater/spatialSource.js",
+      "src/layers/usGroundwater/pack.js",
+      "src/data/contextStore.js",
+      "src/data/inputOwnership.js",
+      "src/data/localGeojsonLod.js",
+      "src/sources/httpBody.js",
+      "fixtures/us-groundwater/v1/expected-pack.json",
+      "src/i18n/marker.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/data/detectionCohort.js",
+      "src/layers/usGroundwater/partitionedCounts.js",
+      "src/layers/usGroundwater/wellCard.js",
+      "src/layers/usGroundwater/mixedDetail.js",
+      "src/layers/usGroundwater/tileReads.js",
+      "src/layers/usGroundwater/viewportCoverage.js",
+      "src/data/cameraSensitivity.js",
+      "src/celestialRing.js",
+      "src/data/infrastructureOverlayEntry.js",
+      "src/renderGovernor.js",
+      "src/layers/usGroundwater/historicalPack.mjs",
+      "src/layers/usGroundwater/dataBase.mjs",
+      "src/layers/usGroundwater/recordPicker.js",
+      "src/layers/usGroundwater/rainfolkSource.js",
+      "src/i18n/locales/de.json",
+      "src/i18n/locales/fr.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/pt.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-Hant.json"
     ],
     "external": ["cesium"]
   }

@@ -22,6 +22,7 @@ import { createFirmsSource } from '../layers/firms/source.js';
 import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
+import { createRainfolkWellSource } from '../layers/usGroundwater/rainfolkSource.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
@@ -45,6 +46,9 @@ export function createStandaloneLayerSources(overrides = {}) {
     radio: createRadioSource(),
     traffic: createTrafficSource({ mapTiles }),
     transit: createTransitSource(),
+    'us-groundwater': createRainfolkWellSource({
+      release: import.meta.env?.VITE_RAINFOLK_WELLS_RELEASE,
+    }),
     bikeshare: createBikeshareSource(),
     installations: createInstallationSource({ mapTiles }),
     satellites: createSatelliteSource(),

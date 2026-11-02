@@ -1,3 +1,4 @@
+import { formatLayerCount } from './formatLayerCount.js';
 import { syncChipGroup } from './chipGroup.js';
 import { syncRowList } from './rowList.js';
 import { layerFeedState } from '../data/feedState.js';
@@ -63,6 +64,7 @@ const PANEL_GROUPS = [
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'us-groundwater',
     ],
   },
   {
@@ -370,7 +372,15 @@ export class LayerPanel {
 
       const bottomRow = document.createElement('div');
       bottomRow.className = 'data-toggle-meta';
-      setRowText(bottomRow, this._buildMetaText(layer));
+      if (layer.id === 'us-groundwater') {
+        const description = document.createElement('span');
+        description.id = 'water-wells-description';
+        description.className = 'world-overlay-accessibility';
+        row.appendChild(description);
+        bottomRow._wellDescriptionNode = description;
+        bottomRow._wellToggle = toggle;
+      }
+      this._syncMetaText(bottomRow, layer);
 
       row.appendChild(topRow);
       row.appendChild(bottomRow);
@@ -481,8 +491,24 @@ export class LayerPanel {
    * (radio.css).
    */
   _syncCount(row, count, stats) {
-    const text = this._layerCountText(stats);
+    const wells = row.dataset?.layerId === 'us-groundwater';
+    const text = this._layerCountText(stats, wells);
     setRowText(count, text);
+    if (wells) {
+      count.removeAttribute?.('title');
+      if (Number.isSafeInteger(stats.catalogCount))
+        count.setAttribute(
+          'aria-label',
+          t('Catalog records: {count}', {
+            count: formatNumber(stats.catalogCount),
+          }),
+        );
+      else count.removeAttribute?.('aria-label');
+    } else if (Number.isSafeInteger(stats.catalogCount)) {
+      count.title = t('Catalog records: {count}', {
+        count: formatNumber(stats.catalogCount),
+      });
+    }
     const phrase =
       getLocale() !== 'en' &&
       typeof stats.countLabel === 'string' &&
@@ -492,10 +518,18 @@ export class LayerPanel {
   }
 
   /** Qualify a loaded count when it does not mean items currently on screen. */
-  _layerCountText(stats) {
+  _layerCountText(stats, wells = false) {
+    if (Number.isSafeInteger(stats.catalogCount))
+      return wells
+        ? formatLayerCount(stats.catalogCount)
+        : formatNumber(stats.catalogCount);
     if (typeof stats.countLabel === 'string' && stats.countLabel.trim())
       return stats.countLabel;
-    return stats.count ? this._formatCount(stats.count) : '—';
+    return stats.count
+      ? wells
+        ? formatLayerCount(stats.count)
+        : this._formatCount(stats.count)
+      : '—';
   }
 
   /**
@@ -619,7 +653,7 @@ export class LayerPanel {
 
       const meta = row.querySelector('.data-toggle-meta');
       if (meta) {
-        setRowText(meta, this._buildMetaText(layer));
+        this._syncMetaText(meta, layer);
       }
 
       this._syncRowControls(
@@ -631,15 +665,69 @@ export class LayerPanel {
     this._refreshWeatherPanel();
   }
 
+  _syncMetaText(element, layer) {
+    const text = this._buildMetaText(layer);
+    setRowText(element, text);
+    if (layer.id === 'us-groundwater') {
+      const note = t(
+        'Historical source records; incomplete coverage. Empty areas are unknown; no water availability inference.',
+      );
+      const timing = t(
+        'Checked means this app accepted validated Rainfolk data, not updated source observations or live well conditions. Dataset build and publication times are not supplied.',
+      );
+      const reference = layer.stats?.referenceRetrievedAt;
+      const evidence = reference
+        ? `${t('Reference acquisition retrieved')}: ${reference}`
+        : t('Source metadata retrieval time unavailable');
+      const details = [
+        layer.stats?.statusMessage,
+        layer.stats?.error,
+        layer.stats?.lastError,
+        layer.stats?.managerRefreshError,
+        layer.lifecycleUncertain ? t('Lifecycle state uncertain') : '',
+        layer.lifecycleState ? lifecycleStateLabel(layer.lifecycleState) : '',
+        Number.isSafeInteger(layer.stats?.catalogCount)
+          ? t('Catalog records: {count}', {
+              count: formatNumber(layer.stats.catalogCount),
+            })
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      element.removeAttribute?.('title');
+      const accessibleDetails = [note, timing, evidence, details]
+        .filter(Boolean)
+        .join(' ');
+      element.setAttribute('aria-label', text + '. ' + accessibleDetails);
+      if (element._wellDescriptionNode) {
+        element._wellDescriptionNode.textContent = accessibleDetails;
+        element._wellToggle?.setAttribute(
+          'aria-describedby',
+          element._wellDescriptionNode.id,
+        );
+      }
+    }
+  }
+
   _buildMetaText(layer) {
     const stats = layer.stats || {};
     const feedState = layerFeedState(stats);
     const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);
-    // A layer marks source text that is data rather than a catalog name.
-    const source =
-      stats.sourceVerbatim === true && stats.source
+    const wellSnapshot = layer.id === 'us-groundwater';
+    const source = wellSnapshot
+      ? 'Rainfolk'
+      : stats.sourceVerbatim === true && stats.source
         ? stats.source
         : sourceLabel(stats.source || layer.source);
+    if (wellSnapshot) {
+      const age =
+        Number.isFinite(stats.lastCheckedAt) &&
+        stats.lastCheckedAt > 0 &&
+        stats.lastCheckedAt <= Date.now()
+          ? this._timeAgo(stats.lastCheckedAt)
+          : t('never');
+      return t('{source} · {ago}', { source: 'Rainfolk', ago: age });
+    }
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {
@@ -751,11 +839,17 @@ export class LayerPanel {
 
   _syncToggleButton(button, layer) {
     const unavailable = layer.stats?.sourceUnavailable === true;
-    const feedState = unavailable
+    const rawFeedState = unavailable
       ? 'unavailable'
       : layer.enabled
         ? layerFeedState(layer.stats)
         : 'off';
+    const feedState =
+      layer.id === 'us-groundwater' &&
+      layer.stats?.mode === 'snapshot' &&
+      rawFeedState === 'partial'
+        ? 'nominal'
+        : rawFeedState;
     const transitioning =
       layer.lifecycleState === 'enabling' ||
       layer.lifecycleState === 'disabling';

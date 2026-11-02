@@ -56,6 +56,14 @@ test('OpenStreetMap has one generic data credit with separate tile and names dis
   );
 });
 
+test('USGS groundwater sample is credited separately from USGS earthquake data', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'usgs-groundwater');
+  assert.ok(credit);
+  assert.match(credit.html, /Groundwater wells and sampled water levels/);
+  assert.match(credit.html, /waterdata\.usgs\.gov/);
+  assert.match(credit.html, /provisional observations may be revised/);
+});
+
 test('inline OSM attribution persists until its last display owner leaves', async (t) => {
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -140,4 +148,19 @@ test('every Street Level imagery source is in the attribution lightbox', () => {
       DATA_CREDITS.some((entry) => entry.key === key),
       `${key} has no credit`,
     );
+});
+
+test('Rainfolk hosting credit preserves USGWD original attribution, licence and adaptation notice', () => {
+  const credit = DATA_CREDITS.find(
+    (entry) => entry.key === 'rainfolk-groundwater',
+  );
+  assert.ok(credit);
+  assert.match(credit.html, /Rainfolk.*preparation and hosting/);
+  assert.match(credit.html, /USGWD.*Lin, Miller, Waqar and Marston/);
+  assert.match(credit.html, /10\.4211/);
+  assert.match(credit.html, /creativecommons\.org\/licenses\/by\/4\.0/);
+  assert.match(
+    credit.html,
+    /normalized, datum-converted and spatially packaged/,
+  );
 });

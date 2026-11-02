@@ -34,6 +34,8 @@ import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
+import { createUsGroundwaterLayer } from '../layers/usGroundwater/index.js';
+import * as wellOverlays from '../overlays/worldOverlay.js';
 
 /**
  * Hardware-local layers are registered like any other but never enter share
@@ -170,6 +172,10 @@ export function createApplicationCatalog({
         }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),
+        createUsGroundwaterLayer({
+          source: sources['us-groundwater'],
+          overlays: wellOverlays,
+        }),
         createApplicationCables({ source: sources.cables }),
         createApplicationFirms({
           surface,

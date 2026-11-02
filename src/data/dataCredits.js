@@ -151,6 +151,21 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'rainfolk-groundwater',
+    html:
+      'Water Wells: <a href="https://rainfolk.org/" target="_blank" rel="noopener">Rainfolk</a> preparation and hosting; ' +
+      '<a href="https://doi.org/10.4211/hs.8b02895f02c14dd1a749bcc5584a5c55" target="_blank" rel="noopener">USGWD — Lin, Miller, Waqar and Marston</a>, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> ' +
+      '(historical source records; normalized, datum-converted and spatially packaged; incomplete coverage)',
+  },
+  {
+    key: 'usgs-groundwater',
+    html:
+      'Groundwater wells and sampled water levels: ' +
+      '<a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener">U.S. Geological Survey</a> ' +
+      '(bounded historical sample; provisional observations may be revised)',
+  },
+  {
     key: 'nasa-gibs',
     html:
       'Recent imagery: We acknowledge the use of imagery provided by services from ' +

@@ -283,6 +283,8 @@
     "./tools/panel": "./src/tools/panel.js",
     "./tools/services": "./src/tools/services.js",
     "./view": "./src/view/index.js",
-    "./agent/world-packet": "./src/agent/worldPacket.js"
+    "./agent/world-packet": "./src/agent/worldPacket.js",
+    "./layers/us-groundwater": "./src/layers/usGroundwater/index.js",
+    "./layers/us-groundwater/source": "./src/layers/usGroundwater/source.js"
   }
 }
