@@ -87,17 +87,21 @@ try {
         row().querySelector('.data-toggle-btn').dataset.feedState === 'stale',
       ]);
       const ui = window.__godsEyeView.styleManager;
-      ui._clearSelectedLayersBtn.click();
+      const clearButton = document.getElementById('clear-selected-layers');
+      clearButton.click();
+      // The bar renders the busy state on Vue's next flush.
+      await Promise.resolve();
       result.push([
         'native clear activation presents busy state',
-        ui._clearSelectedLayersBtn.getAttribute('aria-busy') === 'true' &&
+        clearButton.getAttribute('aria-busy') === 'true' &&
           !!ui._contextControls._clearSelectedLayersPromise,
       ]);
       await ui._contextControls._clearSelectedLayersPromise;
+      await Promise.resolve();
       result.push([
         'clear settles through the existing layer transaction',
         !manager.isEnabled(id) &&
-          ui._clearSelectedLayersBtn.getAttribute('aria-busy') === 'false',
+          clearButton.getAttribute('aria-busy') === 'false',
       ]);
       await manager.setEnabled(id, true);
       const final = row().querySelector('.data-toggle-btn');

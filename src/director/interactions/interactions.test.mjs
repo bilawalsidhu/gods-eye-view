@@ -274,7 +274,7 @@ test('settled pack shots cannot take the same-shot seek shortcut after Stop rele
     _claimCameraOwnership: () =>
       assert.fail('Must reload the released pack before camera seek'),
   });
-  assert.equal(director._seekLoadedShot({ id: 'scene' }, { shot }), false);
+  assert.equal(await director._seekLoadedShot({ id: 'scene' }, { shot }), null);
 });
 
 test('actions preserve camera refusal, layer admission signal and explicit transition cap', async () => {

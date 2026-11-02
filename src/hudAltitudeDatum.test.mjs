@@ -21,6 +21,7 @@
 // one file that can construct a real IntelHUD.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { ensureGeoidReady } from './data/geoid.js';
@@ -62,19 +63,7 @@ const SFO_ELLIPSOIDAL_M = -15;
  * text sinks this test reads.
  */
 function installHudEnvironment() {
-  const elements = new Map(
-    [
-      'hud-alt',
-      'hud-summary',
-      'hud-mgrs',
-      'hud-latlon',
-      'hud-bottom-line',
-      'hud-gsd',
-      'hud-coll',
-      'hud-ona',
-      'hud-mode',
-    ].map((id) => [id, { textContent: '' }]),
-  );
+  const { elements, publish, view } = hudReadouts();
   const previousDocument = globalThis.document;
   const cameraListeners = {};
   globalThis.document = {
@@ -109,6 +98,8 @@ function installHudEnvironment() {
   return {
     elements,
     viewer,
+    publish,
+    view,
     cameraListeners,
     restore() {
       if (previousDocument === undefined) delete globalThis.document;
@@ -213,7 +204,7 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
   const env = installHudEnvironment();
   let hud;
   try {
-    hud = new IntelHUD(env.viewer);
+    hud = new IntelHUD(env.viewer, { publish: env.publish });
     const alt = () => env.elements.get('hud-alt').textContent;
     const summary = () => env.elements.get('hud-summary').textContent;
 
@@ -267,7 +258,7 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
   env.viewer.camera.positionCartographic.height = 100;
   let hud;
   try {
-    hud = new IntelHUD(env.viewer);
+    hud = new IntelHUD(env.viewer, { publish: env.publish });
     hud._updateCameraData(); // cold: requests the grid, paints uncorrected
     assert.match(env.elements.get('hud-alt').textContent, /^ALT: 100m/);
     await ensureGeoidReady();
@@ -302,7 +293,7 @@ test('a summary asked for one view is dropped once the camera moves', async () =
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
+    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
     let place = 'Yellowstone';
     hud._summaryContext = async () => ({ place });
     const summary = () => env.elements.get('hud-summary').textContent;
@@ -362,7 +353,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
+    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ place: 'Yellowstone' });
     const element = env.elements.get('hud-summary');
     const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -371,7 +362,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
     // The move aborts the request in flight, and the abort paints nothing.
     let update = hud._updateSummary(false, true);
     await settle();
-    element.textContent = 'shown before the move';
+    hud._present({ summary: 'shown before the move' });
     env.cameraListeners.moveStart();
     assert.equal(pending[0].signal.aborted, true, 'the request is aborted');
     await update;
@@ -382,7 +373,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
     ignoreAbort = true;
     update = hud._updateSummary(false, true);
     await settle();
-    element.textContent = 'shown before the move';
+    hud._present({ summary: 'shown before the move' });
     env.cameraListeners.moveStart();
     pending[1].reject(new Error('network'));
     await update;
@@ -393,7 +384,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
       env.cameraListeners.moveStart();
       throw new Error('view target unavailable');
     };
-    element.textContent = 'shown before the move';
+    hud._present({ summary: 'shown before the move' });
     await hud._updateSummary(false, true);
     assert.equal(element.textContent, 'shown before the move');
   } finally {
@@ -424,7 +415,7 @@ test('a cancelled summary retries the same context but completed answers stay re
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
+    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ place: 'San Francisco' });
     hud._updateCameraData();
     const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -481,7 +472,7 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
+    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
     // The same place before and after: a slow follow camera, a small pan.
     hud._summaryContext = async () => ({ place: 'Lisboa' });
     const element = env.elements.get('hud-summary');
@@ -544,7 +535,7 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
+    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ place: 'San Francisco' });
     hud._updateCameraData();
     await hud._updateSummary(true);
@@ -572,6 +563,27 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
     hud?.destroy();
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
+
+// ── Retired layouts ─────────────────────────────────────────────────────────
+//
+// Share links keep the retired Operator code, so old links still name it. The
+// real HUD, not a caller, is what turns it into the default Tactical layout.
+
+test('a retired Operator layout falls back to Tactical in the live HUD', () => {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud.setVariant('minimal');
+    assert.equal(hud.getVariant(), 'minimal');
+    hud.setVariant('operator');
+    assert.equal(hud.getVariant(), 'tactical');
+    assert.equal(env.view().variant, 'tactical');
+  } finally {
+    hud?.destroy();
     env.restore();
   }
 });
