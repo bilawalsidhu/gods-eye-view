@@ -23,7 +23,7 @@ test('the application composition wires the draw tool and owns its teardown', ()
   const tools = read('src/app/tools.js');
   const engineAt = tools.indexOf('const annotations = initAnnotations({');
   const drawAt = tools.indexOf(
-    'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    publish: (view) => displayStore.publishDraw(view),',
+    'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    navigation: styleManager,\n    publish: (view) => displayStore.publishDraw(view),',
   );
   assert.ok(engineAt >= 0, 'initAnnotations call missing');
   assert.ok(
@@ -62,42 +62,62 @@ test('the engine resolves manual geometry before any name resolution', () => {
 });
 
 test('the Draw control markup carries the ids the tool binds to', () => {
-  // The DISPLAY rail is a Vue view now, rendered into index.html's view host —
-  // the markup is not in index.html any more.
-  const html = read('src/ui/views/panels/DisplayPanel.vue');
+  // UTILITIES ▸ Draw is a Vue view (DrawControls, with DrawMarkList for the
+  // drawn shapes' rows), rendered into the Utilities panel.
+  const html = [
+    read('src/ui/views/panels/DrawControls.vue'),
+    read('src/ui/views/panels/DrawMarkList.vue'),
+  ].join('\n');
   const ids = [
     'draw-toggle',
     'draw-mode-row',
+    'draw-colors',
     'draw-label-row',
-    'draw-label-input',
-    'draw-color-select',
     'draw-clear',
     'draw-hint',
+    'draw-mark-list',
   ];
   for (const id of ids) {
     assert.match(
       html,
       new RegExp(`id="${id}"`),
-      `#${id} missing from index.html`,
+      `#${id} missing from the Draw views`,
     );
   }
-  for (const shape of ['area', 'line', 'pin']) {
+  // Shapes are icons, named for screen readers and tooltips.
+  for (const [shape, icon] of [
+    ['area', 'pentagon'],
+    ['line', 'timeline'],
+    ['pin', 'location_on'],
+  ]) {
     assert.match(
       html,
-      new RegExp(`'data-shape': '${shape}'`),
+      new RegExp(`icon: '${icon}', attrs: \\{ 'data-shape': '${shape}' \\}`),
       `shape button ${shape} missing`,
     );
   }
+  assert.ok(
+    read('src/ui/views/LayerPanelsView.vue').includes('<DrawControls />'),
+    'the Utilities panel renders Draw',
+  );
+  assert.ok(
+    !read('src/ui/views/panels/DisplayPanel.vue').includes('draw-toggle'),
+    'Draw is no longer in DISPLAY',
+  );
   // The rows and the hint render what the tool publishes; the controls
   // call the actions the tool connects to the display store.
   for (const action of [
     "act('toggleDraw')",
     "act('setDrawShape', $event)",
-    "act('setDrawLabel', $event.target.value)",
     "act('setDrawColor', $event)",
     "act('clearDraw')",
+    "act('renameDrawMark', row.id, next)",
+    "act('recolorDrawMark', row.id, color)",
+    "act('toggleDrawMark', row.id)",
+    "act('flyToDrawMark', row.id)",
+    "act('removeDrawMark', row.id)",
   ]) {
-    assert.ok(html.includes(action), `DisplayPanel must call ${action}`);
+    assert.ok(html.includes(action), `the Draw views must call ${action}`);
     const name = /act\('([a-zA-Z]+)'/.exec(action)[1];
     assert.match(
       tool(),
@@ -119,14 +139,15 @@ test('the DISPLAY rail styles live in their current owner, not the shim', () => 
   assert.deepEqual(rules, [], 'style.css is an import shim, not a stylesheet');
   assert.doesNotMatch(
     shim,
-    /draw-hint|pp-text-input/,
+    /draw-hint|draw-color/,
     'draw styles belong to a component stylesheet',
   );
   const controls = read('src/ui/styles/controls.css');
   for (const rule of [
     '#draw-mode-row',
     '#draw-label-row',
-    '.pp-text-input',
+    '.draw-color',
+    '.draw-mark-name',
     '.draw-clear-btn',
     '.draw-hint',
     'body.gev-drawing',
@@ -149,10 +170,14 @@ test('nothing promises a GeoJSON export for drawn shapes', () => {
       `${file} still claims a GeoJSON export`,
     );
   }
-  for (const file of ['README.md', 'CHANGELOG.md', 'docs/CURRENT-STATE.md']) {
+  // Draw lives in UTILITIES; only the changelog's history still says DISPLAY.
+  for (const [file, heading] of [
+    ['README.md', 'UTILITIES ▸ **Draw**'],
+    ['CHANGELOG.md', 'DISPLAY ▸ Draw'],
+    ['docs/CURRENT-STATE.md', 'UTILITIES ▸ **Draw**'],
+  ]) {
     const source = read(file);
-    const at = source.indexOf('DISPLAY ▸ **Draw**');
-    const start = at >= 0 ? at : source.indexOf('DISPLAY ▸ Draw');
+    const start = source.indexOf(heading);
     assert.ok(start >= 0, `${file} should describe the Draw control`);
     const section = source.slice(start, start + 1200);
     assert.doesNotMatch(

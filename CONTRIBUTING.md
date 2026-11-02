@@ -4,13 +4,15 @@ Thanks for being here. God's Eye View is an open foundation for live spatial int
 
 ## Getting set up
 
-Use Node.js 24.14.x or 26.x (also enforced by `package.json`).
+Use Node.js 24 (24.14.0 or later) or 26.x (also enforced by `package.json`).
+Prefer 24.22.1 or later: earlier releases lack the October 21, 2026 security
+fixes, including CVE-2026-111497 (a Brotli decoder flaw).
 
 ```bash
 git clone https://github.com/bilawalsidhu/gods-eye-view.git
 cd gods-eye-view
-nvm install 24.14.0
-nvm use 24.14.0
+nvm install 24.22.2
+nvm use 24.22.2
 npm install
 npm run doctor
 ./scripts/dev-fresh.sh        # or: npm run dev (keys are optional)
@@ -26,6 +28,25 @@ People who only want to run the app can instead install the repository directly
 through Pinokio; the terminal path above remains the contributor path.
 
 Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
+
+### Test prerequisites
+
+- **`npm test`** — unit tests. Runs standalone; no dev server or credentials
+  required. Exit code is the gate.
+- **`npm run test:track`** — the 3D flight-tracking regression harness. It
+  drives the **real app** in headless Chromium, so it **requires a running
+  dev server** (default `http://localhost:4173`). To target another instance,
+  run `npm run test:track -- --url <app-url>` (or
+  `node scripts/track-regression.mjs --url <app-url>`). It does not depend on
+  live OpenSky / adsb.lol / AISStream (those are optional or rate-limited
+  locally); it installs a persistent `fetch` shim that returns synthetic
+  aircraft in the exact upstream payload shapes the layers parse.
+- **`npm run build`** — production Vite build. No server or credentials
+  required; it validates that the client bundle compiles cleanly.
+
+Each feature also has its own headless gate; see
+[Feature regression gates](#feature-regression-gates) below. Docs and changelog
+rules are under [Pull requests](#pull-requests).
 
 ## Checking a built app locally
 
@@ -226,8 +247,9 @@ template has a section for them.
    instead of attaching it.
 3. **The proposed category.** Say which layer-panel group the layer belongs in.
    The groups are defined in `PANEL_GROUPS` in `src/ui/layerPanel.js` (today:
-   Movement, Cameras, Infrastructure, Events, Weather and Utilities). A layer
-   that isn't listed there falls under "Other layers". If none of the groups
+   Movement, Cameras, Infrastructure, Events, Weather and Audio, plus Utilities,
+   whose rows render in the separate UTILITIES panel). A layer that isn't
+   listed there falls under "Other layers". If none of the groups
    fits, propose a new one and explain why.
 4. **The data source and licence.** Name the provider and endpoint, link its
    licence or terms, give the attribution shown in the app, and say whether it
