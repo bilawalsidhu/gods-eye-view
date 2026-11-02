@@ -172,11 +172,11 @@ export function createLifecycle({
       components.rendering.installRuntime(scene);
       restoreSpriteOrder(viewer);
       components.rendering.setVisible(state.feed.enabled);
-      if (!state.feed.enabled) return;
-      bindVisibleScene(viewer, scene);
       const horizon = components.rendering.makeOccluder();
       for (const record of state.records.all)
         components.rendering.addRecordPrimitives(record, horizon);
+      if (!state.feed.enabled) return;
+      bindVisibleScene(viewer, scene);
       components.tracking.attachSelectedVesselTrail();
       components.rendering.updateVisibility(true);
       if (state.selectedRecord)

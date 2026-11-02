@@ -19,7 +19,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
         return { box: bounds, coverage: { kind: 'subject', radiusM } };
       }
     }
-    return { box: viewportBox(viewer), coverage: { kind: 'viewport' } };
+    if (viewer || layerState.engine)
+      layerState.lastViewBox = viewportBox(viewer);
+    return { box: layerState.lastViewBox ?? null, coverage: { kind: 'viewport' } };
   }
 
   function viewportBox(viewer) {

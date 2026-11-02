@@ -1,3 +1,4 @@
+import { createAwarenessCesiumRenderer } from './render/cesium.js';
 import { cameraPoseSignature } from '../../data/iconOrientation.js';
 
 export function createLifecycle({
@@ -36,7 +37,7 @@ export function createLifecycle({
   }
 
   function attachRuntimeListeners() {
-    if (layerState.runtimeListenersAttached || !layerState.viewer) return;
+    if (layerState.runtimeListenersAttached || !layerState.display) return;
     window.addEventListener(
       'gev:awareness-subject-selected',
       layerState.subjectListener,
@@ -51,14 +52,14 @@ export function createLifecycle({
       layerState.subjectClearListener,
     );
     layerState.preRenderRemover =
-      layerState.viewer.scene.preRender.addEventListener(() => {
+      layerState.display.onFrame(() => {
         if (!layerState.enabled) return;
         const now = Date.now();
         // "Did the camera move" uses the SAME quantized pose signature the fleet
         // rotation pass gates on (iconOrientation.cameraPoseSignature) rather than
         // camera.changed, whose granularity is globally degraded by other layers
         // mutating camera.percentageChanged.
-        const poseSig = cameraMotionSignature(layerState.viewer.camera);
+        const poseSig = cameraMotionSignature(layerState.display.camera);
         if (poseSig !== layerState.lastCameraPoseSig) {
           layerState.lastCameraPoseSig = poseSig;
           layerState.lastCameraPoseChangeMs = now;
@@ -121,9 +122,7 @@ export function createLifecycle({
     layerState.runtimeListenersAttached = false;
   }
   const methods = {
-    init(viewer) {
-      detachRuntimeListeners();
-      layerState.viewer = viewer;
+    init(viewer, { engine = null } = {}) {
       layerState.subjectListener = (event) => {
         if (!layerState.enabled) return;
         parts.subject.selectSubject(event.detail);
@@ -177,6 +176,28 @@ export function createLifecycle({
           parts.subject.clearAwarenessSubject();
         }
       };
+      if (viewer || engine) this.attachRenderer(viewer, { engine });
+    },
+
+    attachRenderer(viewer, { engine = null } = {}) {
+      detachRuntimeListeners();
+      layerState.display?.destroy?.();
+      layerState.display = viewer
+        ? createAwarenessCesiumRenderer(viewer)
+        : services.renderer?.(engine) ?? null;
+      if (layerState.enabled) {
+        attachRuntimeListeners();
+        if (layerState.subject) parts.rendering.renderVisual(layerState.subject);
+        parts.rendering.scheduleDirectionOverlayUpdate(true);
+      }
+    },
+
+    detachRenderer() {
+      detachRuntimeListeners();
+      parts.rendering.clearVisual();
+      parts.rendering.removeDirectionOverlay();
+      layerState.display?.destroy?.();
+      layerState.display = null;
     },
 
     enable() {
@@ -235,7 +256,8 @@ export function createLifecycle({
       layerState.contextListener = null;
       layerState.clearListener = null;
       layerState.subjectClearListener = null;
-      layerState.viewer = null;
+      layerState.display?.destroy?.();
+      layerState.display = null;
       layerState.dataManager = null;
     },
   };

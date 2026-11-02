@@ -21,7 +21,7 @@ test('focus frames a selected installation through the globe engine camera', () 
     services: {},
     parts: {
       selection: { selectRecord: (id) => id === record.id },
-      rendering: { installationSurfaceHeightM: () => 126 },
+      model: { installationSurfaceHeightM: () => 126 },
     },
     source: {},
   }).methods;

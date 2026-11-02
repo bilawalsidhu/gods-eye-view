@@ -28,6 +28,9 @@ export function createInstallationsLayer({
   let renderer = null;
   const lifecycle = {
     init(viewer, options = {}) {
+      if (viewer || options.engine) return lifecycle.attachRenderer(viewer, options);
+    },
+    attachRenderer(viewer, options = {}) {
       if (renderer)
         throw new Error('Installations layer is already initialized');
       const engine = options.engine ?? null;
@@ -35,27 +38,47 @@ export function createInstallationsLayer({
       if (!renderer?.lifecycle?.methods)
         throw new Error('Installation renderer is unavailable');
       Object.assign(parts, renderer);
-      return renderer.lifecycle.methods.init(viewer, options);
+      const ready = renderer.lifecycle.methods.init(viewer, options);
+      if (state.enabled) {
+        renderer.lifecycle.methods.enable();
+        renderer.rendering.renderRecords({ claimSelection: Boolean(state.selectedId) });
+      }
+      return ready;
     },
     enable(...args) {
+      state.enabled = true;
       return renderer?.lifecycle?.methods.enable(...args);
     },
     disable(...args) {
-      return renderer?.lifecycle?.methods.disable(...args);
+      if (renderer) return renderer.lifecycle.methods.disable(...args);
+      state.enabled = false;
+      state.abort?.abort();
+      state.abort = null;
+      state.loading = false;
+      state.selectedId = null;
+      state.contextAnchor = null;
+      state.contextPosition = null;
+      state.cameraLoadKey = null;
+      state.cameraLoadOwner = null;
+      state.coverage = { kind: 'viewport' };
+      clearTimeout(state.timer);
+      parts.viewport.clearUnavailableRetry();
+      services.context.clearSelectedEntityContextForLayer('military-installations');
+      parts.ingestion.setInstallationStatus('idle');
+    },
+    detachRenderer(viewer) {
+      renderer?.lifecycle.methods.detach(viewer);
+      renderer = null;
+      for (const key of ['rendering', 'namedMarkers', 'selection', 'lifecycle'])
+        delete parts[key];
     },
     destroy(...args) {
-      try {
-        return renderer?.lifecycle?.methods.destroy(...args);
-      } finally {
-        renderer = null;
-        for (const key of [
-          'rendering',
-          'namedMarkers',
-          'selection',
-          'lifecycle',
-        ])
-          delete parts[key];
+      if (renderer) renderer.lifecycle.methods.destroy(...args);
+      else {
+        lifecycle.disable();
+        source.destroy?.();
       }
+      renderer = null;
     },
   };
   return Object.assign(

@@ -608,7 +608,7 @@ export function createInstallationsNavaraRenderer(
         services.picking.registerPickOwner(LAYER_ID, (id) =>
           layerState.recordById.has(id),
         );
-        renderRecords();
+        renderRecords({ claimSelection: Boolean(layerState.selectedId) });
       },
       disable() {
         visible = false;
@@ -640,6 +640,12 @@ export function createInstallationsNavaraRenderer(
       destroy() {
         source.destroy?.();
         this.disable();
+        this.detach();
+      },
+      detach() {
+        services.credits?.hideOsmCredit?.(engine, LAYER_ID);
+        syncPlacesCredit([]);
+        services.picking.unregisterPickOwner(LAYER_ID);
         layerState.moveEndRemove?.();
         layerState.changedRemove?.();
         layerState.moveEndRemove = layerState.changedRemove = null;

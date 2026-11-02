@@ -21,6 +21,7 @@ export function createApplicationControls({
   initialShareCode = null,
   localePicker = true,
   engineSwitch = false,
+  layerSession,
 }) {
   // Initialize the style manager (post-processing, HUD, locations, share links)
   const styleManager = new Controls(viewer, {
@@ -42,6 +43,7 @@ export function createApplicationControls({
     // A share code to open at start-up instead of the page's address.
     initialShareCode,
     engineSwitch,
+    layerSession,
     localePicker,
   });
   defer(() => styleManager.orbitController.stop());

@@ -102,6 +102,7 @@ export class LayerStateCoordinator {
   start({
     shareLayerState = null,
     allowLocalState = true,
+    handoffLayers = null,
     shareCreatedAtMs = null,
   } = {}) {
     if (this._destroyed)
@@ -139,11 +140,12 @@ export class LayerStateCoordinator {
     );
     this.shareLinkManager?.onLayerStateChange?.();
     this._notifyDurableState();
-    if (!selected) return this.restorePromise;
+    if (!selected && !handoffLayers) return this.restorePromise;
     this.restorePromise = this._restoreSelectedState(
       this._source === 'share'
         ? LAYER_RESTORE_ORIGINS.share
         : LAYER_RESTORE_ORIGINS.local,
+      handoffLayers,
     );
     return this.restorePromise;
   }
@@ -365,7 +367,7 @@ export class LayerStateCoordinator {
       : this.restoreGate);
   }
 
-  async _restoreSelectedState(origin) {
+  async _restoreSelectedState(origin, handoffLayers = null) {
     // One controller set per run: a superseded run must not clear the newer
     // run's controllers when it settles.
     const controllers = new Map();
@@ -379,7 +381,18 @@ export class LayerStateCoordinator {
       const settled = await Promise.allSettled(
         LAYER_STATE_REGISTRY.map(async (entry) => {
           const controller = controllers.get(entry.id);
-          const targetEnabled = enabled.has(entry.id);
+          const live = handoffLayers?.get(entry.id);
+          const targetEnabled = live?.enabled ?? enabled.has(entry.id);
+          // A same-document engine choice retains operational layer intents.
+          // The share still owns durable preferences and later history visits.
+          if (live && this.dataManager.layers.get(entry.id) === live.entry &&
+              !live.entry.lifecycleUncertain && live.entry.enabled === targetEnabled) {
+            return {
+              layerId: entry.id, targetEnabled, origin, phase: 'retained',
+              ...currentLayerOutcome(this.dataManager, entry.id),
+              appliedOptions: {}, persistenceWrite: false, succeeded: true,
+            };
+          }
           const options = layerOptionsForRestore(this._durableState, entry.id);
           if (origin === LAYER_RESTORE_ORIGINS.share && options) {
             for (const trackingKey of Object.values(

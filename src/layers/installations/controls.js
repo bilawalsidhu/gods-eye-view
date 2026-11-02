@@ -49,7 +49,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     statsRefreshInterval: 1000,
 
     visitNamedMarkers(visitor) {
-      parts.namedMarkers.visit(visitor);
+      parts.namedMarkers?.visit(visitor);
     },
 
     /** Request a one-shot Google Maps Places search around the current map view. */
@@ -153,7 +153,7 @@ export function createControls({ state: layerState, services, parts, source }) {
           position: geo.cartesian3.fromDegrees(
             record.longitude,
             record.latitude,
-            parts.rendering.installationSurfaceHeightM(record),
+            parts.model.installationSurfaceHeightM(record),
           ),
           distanceM,
         });
@@ -184,7 +184,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         center: geo.cartesian3.fromDegrees(
           record.longitude,
           record.latitude,
-          parts.rendering.installationSurfaceHeightM(record),
+          parts.model.installationSurfaceHeightM(record),
         ),
         radius: 18000,
       };

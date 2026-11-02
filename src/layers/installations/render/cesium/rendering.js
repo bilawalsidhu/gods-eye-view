@@ -353,8 +353,9 @@ export function createRendering({
       )
       .map((record) => ({ lat: record.latitude, lon: record.longitude }));
     if (!cold.length) return;
+    const owner = layerState.dataSource;
     warmFireAnchorFloors(cold).then(() => {
-      if (!layerState.enabled || !layerState.dataSource) return;
+      if (!layerState.enabled || !owner || layerState.dataSource !== owner) return;
       if (
         !cold.some((point) => cachedGroundFloor(point.lat, point.lon) != null)
       )

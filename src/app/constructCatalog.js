@@ -140,10 +140,12 @@ export function createApplicationCatalog({
       ),
     );
     const installations = once(() =>
-      createApplicationInstallations({
-        surface,
-        source: sources.installations,
-      }),
+      sessionModel('military-installations', () =>
+        createApplicationInstallations({
+          surface,
+          source: sources.installations,
+        }),
+      ),
     );
     const satellites = once(() =>
       createApplicationSatellites({
@@ -261,13 +263,14 @@ export function createApplicationCatalog({
       ['military-installations', installations],
       [
         'military-awareness',
-        () =>
+        () => sessionModel('military-awareness', () =>
           createApplicationAwareness({
             flights: flights(),
             military: military(),
             vessels: vessels(),
             installations: installations(),
           }),
+        ),
       ],
       [
         'wind',

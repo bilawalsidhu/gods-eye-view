@@ -124,12 +124,19 @@ async function reconcile(remember = false) {
   const previous = kind;
   let cover;
   let cockpit;
+  const handoffHash = remember ? location.hash : null;
   try {
     while (pageEngineKind() !== kind) {
       cover ??= keepGlobeFrame(application.getComponents().scene.engine);
       cockpit = application
         .getComponents()
         .controls.styleManager.getCockpitState();
+      const manager = application.getComponents().data.dataManager;
+      layerSession.handoffLayers = location.hash === handoffHash
+        ? new Map([...manager.layers].map(([id, entry]) => [
+            id, { entry: entry.module.attachRenderer ? entry : null, enabled: manager.isEffectivelyEnabled(id) },
+          ]))
+        : null;
       renderers.retain(kind);
       await application.destroy();
       await start(pageEngineKind(), true, cockpit);
@@ -156,6 +163,7 @@ async function reconcile(remember = false) {
       report(recoveryError);
     }
   } finally {
+    layerSession.handoffLayers = null;
     cover?.remove();
     busy = false;
     present();

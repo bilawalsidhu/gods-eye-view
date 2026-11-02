@@ -130,6 +130,7 @@ export function createStandaloneApplication({
       createStandaloneControls({
         ...context,
         engineSwitch,
+        layerSession,
         loaderStatus,
         placeSearch,
         catalog,

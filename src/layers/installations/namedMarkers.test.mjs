@@ -55,10 +55,11 @@ test('Contacts camera motion reprojects and declutters existing labels without s
   h.setX(600); h.lifecycle.enable();
   assert.equal(h.labels.length, 2);
   assert.equal(h.publications(), 5);
+  const oldScene = h.state.viewer.scene;
   h.lifecycle.destroy(h.state.viewer);
   assert.equal(h.camera.changed.numberOfListeners, 0);
   assert.equal(h.camera.moveEnd.numberOfListeners, 0);
-  assert.equal(h.state.viewer.scene.preRender.numberOfListeners, 0);
+  assert.equal(oldScene.preRender.numberOfListeners, 0);
 });
 
 test('wide named markers retain primitives until close polygons publish with the same identity', async (t) => {
