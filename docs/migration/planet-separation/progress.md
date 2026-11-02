@@ -43,3 +43,7 @@ The tuner, decoder poller, ICAO motion history and selected flight belong to the
 ### Wind on both globes
 
 The forecast model owns GFS/IFS acquisition, scalar overlay, pause, units and sampled position. Navara draws a single instanced flow mesh and composes the color field below observed weather. The keyless release round trip rendered 7,200 paths per engine, sampled 10 m/s from SW and 40 °C from the same grid, and proved the temperature color in the actual viewport. The animated phase advanced after resume and froze on pause. Package boundaries and the full unit suite passed.
+
+### Submarine cables on both globes
+
+The geographic source survives an in-flight scene change. Navara shares one route vector layer across 534 source colors, batches stems and marker tips, applies the common label ranking and flies to a clicked landing point. A keyless release round trip loaded all 712 cables and 1,917 landings, read each asset once, respected the 160-label ceiling and verified the landing flight. The full suite and package boundary checks passed.

@@ -59,6 +59,7 @@ const NAVARA_CREDIT_KEYS = new Set([
   'eccc-aqhi',
   'wfigs',
   's2-ghostmaps',
+  'telegeography',
   'wind-gfs',
   'ecmwf-ifs',
   'weather-noaa',
@@ -119,6 +120,10 @@ export async function registerNavaraLayerRenderers() {
         return (engine, options) => createWeatherNavaraRenderer(engine, navaraViews.get(engine), options);
       },
     ])),
+    'telegeography-submarine-cables': async () => {
+      const { createNavaraCables } = await import('../layers/submarineCables/render/navara.js');
+      return (engine, { overlayHost }) => createNavaraCables(engine, navaraViews.get(engine), overlayHost);
+    },
     wind: async () => {
       const { createWindNavaraRenderer } = await import('../layers/wind/render/navara.js');
       return (engine) => createWindNavaraRenderer(engine, navaraViews.get(engine));

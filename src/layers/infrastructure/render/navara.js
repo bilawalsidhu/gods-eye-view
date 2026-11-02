@@ -17,7 +17,7 @@ import { bindGroundShapePicks } from '../../shared/render/navaraGroundPicks.js';
 import { distanceToSegment } from '../../../globe/cpuPicks.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import { isPointerFree } from '../../../data/inputOwnership.js';
-import { createStemBatch } from './navaraStems.js';
+import { createStemBatch } from '../../shared/render/navaraStems.js';
 
 export function createInfrastructureNavaraRenderer(
   engine,
@@ -263,7 +263,7 @@ export function createInfrastructureNavaraRenderer(
         depthTest: 'always',
         point: { sizePx: 10, outlinePx: 2, outlineColor: [0, 0, 0, 1] },
       });
-      stems = createStemBatch(native, color);
+      stems = createStemBatch(native, color, INFRA_LOD_ACTIVE_MAX);
       for (const input of next.records) {
         const carto = geo.cartographic.fromDegrees(input.lon, input.lat);
         const base = geo.cartesian3.fromDegrees(input.lon, input.lat),
