@@ -1,3 +1,8 @@
+import { onLocaleChange } from '../i18n/index.js';
+import { useImagerySplitStore } from './stores/imagerySplit.js';
+import { applicationPinia } from './vueRuntime.js';
+
+let splitCount = 0;
 const HANDLE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
 
 function clampUnit(value) {
@@ -12,6 +17,9 @@ function defaultViewportWidth() {
   );
 }
 
+// A title or label given as a function is worded when published.
+const worded = (text) => (typeof text === 'function' ? text() : text);
+
 function defaultValueText(beforePercent, afterPercent) {
   return `A ${beforePercent} percent, B ${afterPercent} percent`;
 }
@@ -19,17 +27,19 @@ function defaultValueText(beforePercent, afterPercent) {
 /**
  * Split divider for before/after imagery comparison.
  *
- * Owns the DOM line + handle, pointer capture, keyboard, ARIA, a CSS custom
- * property and scene.splitPosition. `setValue` is the owner's own write and
- * never echoes through `onChange`; `onChange` reports pointer and keyboard
- * changes so the owner can mirror them, and `requestRender` fires whenever
- * the clamped value actually changes. `destroy` is idempotent: it removes the
- * listeners and line, clears the CSS property and restores the scene split
- * captured at creation once.
+ * Owns the divider's value, pointer capture, keyboard, ARIA, a CSS custom
+ * property and scene.splitPosition, and publishes the line to the imagery
+ * split store, where the ImagerySplitView renders it as a child of the body.
+ * `setValue` is the owner's own write and never echoes through `onChange`;
+ * `onChange` reports pointer and keyboard changes so the owner can mirror
+ * them, and `requestRender` fires whenever the clamped value actually
+ * changes. `destroy` is idempotent: it withdraws the line, clears the CSS
+ * property and restores the scene split captured at creation once. The
+ * titles and label may be functions, which are called again after a locale
+ * change, like `formatValueText`.
  */
 export function createImagerySplit({
   scene,
-  parent = document.body,
   initialValue = 0.5,
   id,
   handleClass,
@@ -44,33 +54,39 @@ export function createImagerySplit({
   getViewportWidth = defaultViewportWidth,
   onChange,
   requestRender,
+  store = useImagerySplitStore(applicationPinia()),
 } = {}) {
+  const key = ++splitCount;
   const restoreValue = scene ? (scene.splitPosition ?? null) : null;
-  const line = document.createElement('div');
-  if (id) line.id = id;
-  const before = document.createElement('span');
-  const after = document.createElement('span');
-  const handle = document.createElement('button');
-  before.className = 'before';
-  after.className = 'after';
-  before.textContent = beforeLabel;
-  if (beforeTitle != null) before.title = beforeTitle;
-  after.textContent = afterLabel;
-  if (afterTitle != null) after.title = afterTitle;
-  handle.type = 'button';
-  if (handleClass) handle.className = handleClass;
-  handle.setAttribute('role', 'slider');
-  if (ariaLabel != null) handle.setAttribute('aria-label', ariaLabel);
-  handle.setAttribute('aria-valuemin', '0');
-  handle.setAttribute('aria-valuemax', '100');
-  handle.setAttribute('aria-orientation', 'horizontal');
-  handle.textContent = '↔';
-
   let value = null;
   let cssValue = null;
+  let hidden = false;
   let dragging = false;
   let pointerId = null;
+  // The handle that holds the drag's pointer capture.
+  let captor = null;
   let destroyed = false;
+
+  function publish() {
+    if (destroyed) return;
+    const beforePercent = Math.round(value * 100);
+    store.publish(
+      key,
+      {
+        id: id ?? null,
+        hidden,
+        handleClass: handleClass ?? null,
+        beforeLabel,
+        afterLabel,
+        beforeTitle: worded(beforeTitle) ?? null,
+        afterTitle: worded(afterTitle) ?? null,
+        ariaLabel: worded(ariaLabel) ?? null,
+        valueNow: beforePercent,
+        valueText: formatValueText(beforePercent, 100 - beforePercent),
+      },
+      controls,
+    );
+  }
 
   function apply(next, { notify = false, render = true } = {}) {
     const clamped = clampUnit(next);
@@ -82,12 +98,7 @@ export function createImagerySplit({
       cssTarget.style.setProperty(cssProperty, css);
       cssValue = css;
     }
-    const beforePercent = Math.round(value * 100);
-    handle.setAttribute('aria-valuenow', String(beforePercent));
-    handle.setAttribute(
-      'aria-valuetext',
-      formatValueText(beforePercent, 100 - beforePercent),
-    );
+    if (changed) publish();
     if (changed && render) requestRender?.();
     if (changed && notify) onChange?.(value);
     return changed;
@@ -99,54 +110,47 @@ export function createImagerySplit({
     apply(Number(clientX) / viewportWidth, { notify: true });
   }
 
-  function handlePointerDown(event) {
-    if (event.button != null && event.button !== 0) return;
-    event.preventDefault?.();
-    dragging = true;
-    pointerId = event.pointerId ?? null;
-    handle.setPointerCapture?.(event.pointerId);
-    setFromClientX(event.clientX);
-  }
+  // The view's handle reports its input here.
+  const controls = {
+    pointerdown(event) {
+      if (destroyed) return;
+      if (event.button != null && event.button !== 0) return;
+      event.preventDefault?.();
+      dragging = true;
+      pointerId = event.pointerId ?? null;
+      captor = event.currentTarget ?? null;
+      captor?.setPointerCapture?.(event.pointerId);
+      setFromClientX(event.clientX);
+    },
+    pointermove(event) {
+      if (!dragging) return;
+      if (pointerId != null && event.pointerId !== pointerId) return;
+      event.preventDefault?.();
+      setFromClientX(event.clientX);
+    },
+    pointerup(event) {
+      if (!dragging) return;
+      if (pointerId != null && event.pointerId !== pointerId) return;
+      captor?.releasePointerCapture?.(event.pointerId);
+      dragging = false;
+      pointerId = null;
+      captor = null;
+    },
+    keydown(event) {
+      if (destroyed || !HANDLE_KEYS.has(event.key)) return;
+      event.preventDefault?.();
+      const step = event.shiftKey ? 0.05 : 0.01;
+      if (event.key === 'Home') apply(0, { notify: true });
+      else if (event.key === 'End') apply(1, { notify: true });
+      else
+        apply(value + (event.key === 'ArrowRight' ? step : -step), {
+          notify: true,
+        });
+    },
+  };
 
-  function handlePointerMove(event) {
-    if (!dragging) return;
-    if (pointerId != null && event.pointerId !== pointerId) return;
-    event.preventDefault?.();
-    setFromClientX(event.clientX);
-  }
-
-  function finishPointerDrag(event) {
-    if (!dragging) return;
-    if (pointerId != null && event.pointerId !== pointerId) return;
-    handle.releasePointerCapture?.(event.pointerId);
-    dragging = false;
-    pointerId = null;
-  }
-
-  function handleKeyDown(event) {
-    if (!HANDLE_KEYS.has(event.key)) return;
-    event.preventDefault?.();
-    const step = event.shiftKey ? 0.05 : 0.01;
-    if (event.key === 'Home') apply(0, { notify: true });
-    else if (event.key === 'End') apply(1, { notify: true });
-    else
-      apply(value + (event.key === 'ArrowRight' ? step : -step), {
-        notify: true,
-      });
-  }
-
-  const listeners = [
-    ['pointerdown', handlePointerDown],
-    ['pointermove', handlePointerMove],
-    ['pointerup', finishPointerDrag],
-    ['pointercancel', finishPointerDrag],
-    ['keydown', handleKeyDown],
-  ];
-  for (const [type, listener] of listeners)
-    handle.addEventListener(type, listener);
-  line.append(before, handle, after);
-  parent.appendChild(line);
   apply(initialValue, { render: false });
+  const offLocale = onLocaleChange(publish);
 
   return {
     getValue() {
@@ -157,18 +161,20 @@ export function createImagerySplit({
       return apply(next);
     },
     setVisible(visible) {
-      line.hidden = !visible;
+      if (hidden === !visible) return;
+      hidden = !visible;
+      publish();
     },
     destroy() {
       if (destroyed) return;
-      destroyed = true;
       if (dragging && pointerId != null)
-        handle.releasePointerCapture?.(pointerId);
+        captor?.releasePointerCapture?.(pointerId);
       dragging = false;
       pointerId = null;
-      for (const [type, listener] of listeners)
-        handle.removeEventListener?.(type, listener);
-      line.remove();
+      captor = null;
+      destroyed = true;
+      offLocale();
+      store.withdraw(key);
       if (cssProperty) cssTarget.style.removeProperty(cssProperty);
       if (scene && restoreValue != null) scene.splitPosition = restoreValue;
     },

@@ -1,5 +1,4 @@
 /** Measure Cockpit panels against visible HUD and viewport obstacles. */
-import { t, msg } from '../i18n/index.js';
 import {
   resolveCockpitUtilityAnchor,
   resolveCockpitUtilityLayout,
@@ -16,8 +15,12 @@ import {
 
 export function scheduleContextLayout() {
   if (this.destroyed) return false;
-  const contextVisible = this.context && !this.context.hidden;
-  const signalVisible = this.signalStream && !this.signalStream.hidden;
+  // The published presence shows the cards on Vue's next flush, before this
+  // frame runs, so it counts as visible already.
+  const contextVisible =
+    this.context && (this.presence?.context || !this.context.hidden);
+  const signalVisible =
+    this.signalStream && (this.presence?.active || !this.signalStream.hidden);
   if ((!contextVisible && !signalVisible) || this.contextLayoutFrame !== null)
     return;
   this.contextLayoutFrame = requestAnimationFrame(() => {
@@ -31,20 +34,10 @@ export function scheduleContextLayout() {
 export function setContextCollapsed(collapsed) {
   const wasCollapsed = this.contextCollapsed;
   this.contextCollapsed = Boolean(collapsed);
-  if (this.context)
-    this.context.dataset.collapsed = String(this.contextCollapsed);
-  if (this.contextToggle) {
-    const expanded = !this.contextCollapsed;
-    this.contextToggle.setAttribute('aria-expanded', String(expanded));
-    this.contextToggle.setAttribute(
-      'aria-label',
-      expanded ? t('Collapse Contact panel') : t('Expand Contact panel'),
-    );
-    this.contextToggle.title = t(
-      expanded ? msg('Collapse contact panel') : msg('Expand contact panel'),
-    );
-    const icon = this.contextToggle.querySelector('.material-symbols-outlined');
-    if (icon) icon.textContent = expanded ? 'chevron_left' : 'chevron_right';
+  // The Contact card and its toggle render the collapse from the presence.
+  if (this.presence.contextCollapsed !== this.contextCollapsed) {
+    this.presence.contextCollapsed = this.contextCollapsed;
+    this.publishPresenceView();
   }
   if (this.active && wasCollapsed && !this.contextCollapsed) {
     window.dispatchEvent(new CustomEvent('gev:cockpit-context-expanded'));
@@ -56,25 +49,10 @@ export function setSignalCollapsed(collapsed, { user = false } = {}) {
   const wasCollapsed = this.signalCollapsed;
   this.signalCollapsed = Boolean(collapsed);
   if (user) this.signalUserCollapsed = this.signalCollapsed;
-  if (this.signalStream)
-    this.signalStream.dataset.collapsed = String(this.signalCollapsed);
-  if (this.signalToggle) {
-    const expanded = !this.signalCollapsed;
-    this.signalToggle.setAttribute('aria-expanded', String(expanded));
-    this.signalToggle.setAttribute(
-      'aria-label',
-      t(
-        expanded
-          ? msg('Collapse cockpit briefing panel')
-          : msg('Expand cockpit briefing panel'),
-      ),
-    );
-    this.signalToggle.title = t(
-      expanded ? msg('Collapse briefing panel') : msg('Expand briefing panel'),
-    );
-    const icon = this.signalToggle.querySelector('.material-symbols-outlined');
-    if (icon)
-      icon.textContent = expanded ? 'right_panel_close' : 'right_panel_open';
+  // The briefing card and its toggle render the collapse from the presence.
+  if (this.presence.signalCollapsed !== this.signalCollapsed) {
+    this.presence.signalCollapsed = this.signalCollapsed;
+    this.publishPresenceView();
   }
   if (this.signalCollapsed) this.stopBriefRotation();
   else this.startBriefRotation({ reset: true });
@@ -155,20 +133,8 @@ export function syncSignalLayout() {
   const utilityControls = document.getElementById('cockpit-utility-controls');
   if (window.matchMedia('(max-width: 760px)').matches) {
     this.signalStream.dataset.layoutMode = 'compact-top';
-    utilityControls?.classList.remove('layout-primary-only');
-    utilityControls
-      ?.querySelectorAll('.cockpit-utility-control')
-      .forEach((control) => {
-        const hiddenSibling = Boolean(
-          utilityControls.querySelector(
-            '.cockpit-utility-control.is-expanded',
-          ) && !control.classList.contains('is-expanded'),
-        );
-        control.setAttribute('aria-hidden', String(hiddenSibling));
-      });
-    this.hud?.style.removeProperty('--cockpit-utility-top');
-    this.hud?.style.removeProperty('--cockpit-utility-max-height');
-    this.hud?.style.removeProperty('--cockpit-utility-expanded-max-height');
+    // The compact strip shows only an expanded control.
+    this.publishUtilityLayout(utilityLayoutView({ hideCollapsed: true }));
     this.signalStream.style.removeProperty('--cockpit-signal-right');
     this.signalStream.style.removeProperty('--cockpit-signal-top');
     this.signalStream.style.removeProperty('--cockpit-signal-max-height');
@@ -253,22 +219,13 @@ export function syncSignalLayout() {
         '--cyber-cockpit-panel-height',
         `${lane.panelHeight.toFixed(2)}px`,
       );
-      this.hud?.style.setProperty(
-        '--cockpit-utility-top',
-        `${alignedTop.toFixed(2)}px`,
+      this.publishUtilityLayout(
+        utilityLayoutView({
+          top: `${alignedTop.toFixed(2)}px`,
+          maxHeight: `${lane.utilityHeight.toFixed(2)}px`,
+          expandedMaxHeight: `${lane.panelHeight.toFixed(2)}px`,
+        }),
       );
-      this.hud?.style.setProperty(
-        '--cockpit-utility-max-height',
-        `${lane.utilityHeight.toFixed(2)}px`,
-      );
-      this.hud?.style.setProperty(
-        '--cockpit-utility-expanded-max-height',
-        `${lane.panelHeight.toFixed(2)}px`,
-      );
-      utilityControls.classList.remove('layout-primary-only');
-      utilityControls
-        .querySelectorAll('.cockpit-utility-control')
-        .forEach((control) => control.setAttribute('aria-hidden', 'false'));
       if (expandedControl) {
         this.signalStream.style.setProperty(
           '--cockpit-signal-top',
@@ -311,14 +268,6 @@ export function syncSignalLayout() {
           : 0,
     });
     const availableHeight = utilityAnchor.maxHeight;
-    this.hud?.style.setProperty(
-      '--cockpit-utility-top',
-      `${utilityAnchor.top.toFixed(1)}px`,
-    );
-    this.hud?.style.setProperty(
-      '--cockpit-utility-max-height',
-      `${availableHeight.toFixed(2)}px`,
-    );
     const utilityLayout =
       expandedControl && collapsedControl
         ? resolveCockpitUtilityLayout({
@@ -327,25 +276,37 @@ export function syncSignalLayout() {
             collapsedHeight,
           })
         : { primaryOnly: false, expandedMaxHeight: availableHeight };
-    utilityControls?.classList.toggle(
-      'layout-primary-only',
-      utilityLayout.primaryOnly,
+    this.publishUtilityLayout(
+      utilityLayoutView({
+        top: `${utilityAnchor.top.toFixed(1)}px`,
+        maxHeight: `${availableHeight.toFixed(2)}px`,
+        expandedMaxHeight: `${utilityLayout.expandedMaxHeight.toFixed(2)}px`,
+        primaryOnly: utilityLayout.primaryOnly,
+        hideCollapsed: utilityLayout.primaryOnly,
+      }),
     );
-    this.hud?.style.setProperty(
-      '--cockpit-utility-expanded-max-height',
-      `${utilityLayout.expandedMaxHeight.toFixed(2)}px`,
-    );
-    utilityControls
-      ?.querySelectorAll('.cockpit-utility-control')
-      .forEach((control) => {
-        const hiddenSibling =
-          utilityLayout.primaryOnly && control === collapsedControl;
-        control.setAttribute('aria-hidden', String(hiddenSibling));
-        if (hiddenSibling && control.contains(document.activeElement)) {
-          expandedControl
-            ?.querySelector('.cockpit-utility-glyph')
-            ?.focus({ preventScroll: true });
-        }
-      });
+    // Focus leaves a control the strip is about to hide.
+    if (
+      utilityLayout.primaryOnly &&
+      collapsedControl?.contains(document.activeElement)
+    ) {
+      expandedControl
+        ?.querySelector('.cockpit-utility-glyph')
+        ?.focus({ preventScroll: true });
+    }
   }
+}
+
+/**
+ * The utility strip's layout as CockpitView and CockpitUtilityControls
+ * render it: its anchor and height limits on the HUD, and which controls fit.
+ */
+function utilityLayoutView({
+  top = null,
+  maxHeight = null,
+  expandedMaxHeight = null,
+  primaryOnly = false,
+  hideCollapsed = false,
+} = {}) {
+  return { top, maxHeight, expandedMaxHeight, primaryOnly, hideCollapsed };
 }
