@@ -583,3 +583,205 @@ test('track backfill proxy returns 502 on an oversized upstream body and caches 
   assert.equal(res2.statusCode, 502);
   assert.equal(callCount, 1);
 });
+
+test('OpenSky Basic mode no longer sends username and password: it asks anonymously and warns once', async (t) => {
+  environment(t, {
+    OPENSKY_CLIENT_ID: undefined,
+    OPENSKY_CLIENT_SECRET: undefined,
+    OPENSKY_CREDENTIALS_FILE: undefined,
+    OPENSKY_AUTH_MODE: 'basic',
+    OPENSKY_USERNAME: 'fixture-user',
+    OPENSKY_PASSWORD: 'fixture-password',
+  });
+  const warnings = [];
+  t.mock.method(console, 'warn', (message) => warnings.push(message));
+  const authorizations = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url.includes('/states/')) {
+      authorizations.push(options.headers.Authorization);
+      return Response.json({ time: Math.floor(Date.now() / 1000), states: [] });
+    }
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?basic=${Math.random()}`
+  );
+  const flights = install(fresh.openSkyProxy());
+  const first = await flights('/api/flights');
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.headers['x-opensky-auth'], 'anon');
+  assert.equal(first.headers['x-opensky-auth-reason'], 'basic_retired');
+  assert.deepEqual(authorizations, [undefined]);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /retired username\/password sign-in/);
+  assert.ok(!warnings[0].includes('fixture-password'));
+});
+
+test('OpenSky auto mode never falls back to Basic, even when OAuth is rejected', async (t) => {
+  environment(t, {
+    OPENSKY_CLIENT_ID: 'fixture-client',
+    OPENSKY_CLIENT_SECRET: 'fixture-secret',
+    OPENSKY_CREDENTIALS_FILE: undefined,
+    OPENSKY_AUTH_MODE: 'auto',
+    OPENSKY_USERNAME: 'fixture-user',
+    OPENSKY_PASSWORD: 'fixture-password',
+  });
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'error', () => {});
+  const authorizations = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url.includes('/token'))
+      return Response.json({ access_token: 'fixture-token', expires_in: 1800 });
+    if (url.includes('/states/')) {
+      authorizations.push(options.headers.Authorization);
+      return new Response('', { status: 401 });
+    }
+    if (url.includes('/lat/')) return regionalFallback();
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?auto=${Math.random()}`
+  );
+  await install(fresh.openSkyProxy())('/api/flights', '?lat=30&lon=-97');
+  assert.deepEqual(authorizations, ['Bearer fixture-token']);
+});
+
+test('retired military history refuses without upstream I/O while validating identifiers', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => {
+    assert.fail('retired history must not contact the upstream');
+  });
+  const route = install(providers.trackBackfillProxies());
+  for (const hex of ['abc123', 'abc456']) {
+    const response = await route('/api/military/track', '?hex=' + hex);
+    assert.equal(response.statusCode, 503);
+    assert.equal(JSON.parse(response.body).code, 'history_unavailable');
+    assert.equal(response.headers['retry-after'], '1800');
+    assert.equal(response.headers['cache-control'], 'no-store');
+  }
+  assert.equal(
+    (await route('/api/military/track', '?hex=invalid')).statusCode,
+    400,
+  );
+});
+
+test('global aircraft snapshots coalesce cold and expired callers and clear rejected flights', async (t) => {
+  environment(t, { OPENSKY_AUTH_MODE: 'anon' });
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'error', () => {});
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
+  for (const kind of ['opensky', 'military']) {
+    const module =
+      kind === 'opensky'
+        ? await import(
+            `../../server/providers/aircraft/opensky.js?coalesce=${Math.random()}`
+          )
+        : await import('../../server/providers/aircraft/adsb-lol.js');
+    const request = install(
+      kind === 'opensky' ? module.openSkyProxy() : module.adsbLolProxy(),
+    );
+    const route = kind === 'opensky' ? '/api/flights' : '/api/military';
+    let calls = 0;
+    let release;
+    let blocked;
+    let fail = false;
+    t.mock.method(globalThis, 'fetch', async () => {
+      calls++;
+      await blocked;
+      if (fail) throw new Error('fixture connection failed');
+      return Response.json(
+        { time: now / 1000, states: [], ac: [] },
+        { headers: { 'x-rate-limit-remaining': '5000' } },
+      );
+    });
+    for (const phase of ['cold', 'expired', 'failed', 'recovered']) {
+      now += 13000;
+      fail = phase === 'failed';
+      blocked = new Promise((resolve) => {
+        release = resolve;
+      });
+      const before = calls;
+      const pending = Array.from({ length: 5 }, () => request(route));
+      await new Promise(setImmediate);
+      assert.equal(calls - before, 1, `${kind} ${phase}: one refresh starts`);
+      release();
+      const responses = await Promise.all(pending);
+      assert.equal(calls - before, fail && kind === 'opensky' ? 2 : 1);
+      assert.ok(responses.every((res) => res.statusCode === 200));
+      assert.ok(responses.every((res) => res.body === responses[0].body));
+    }
+  }
+});
+
+test('OpenSky 5xx retains dated last-good data, cancels error bodies and cools down before recovery', async (t) => {
+  environment(t, { OPENSKY_AUTH_MODE: 'anon' });
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
+  for (const status of [502, 503, 504]) {
+    const module = await import(
+      `../../server/providers/aircraft/opensky.js?server-error=${status}`
+    );
+    const request = install(module.openSkyProxy());
+    let fail = false;
+    let calls = 0;
+    let cancelled = false;
+    t.mock.method(globalThis, 'fetch', async () => {
+      calls++;
+      if (fail)
+        return new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status },
+        );
+      return Response.json(
+        { time: now / 1000, states: [] },
+        { headers: { 'x-rate-limit-remaining': '5000' } },
+      );
+    });
+    const good = await request('/api/flights');
+    now += 10000;
+    fail = true;
+    const stale = await request('/api/flights');
+    assert.equal(stale.statusCode, 200);
+    assert.equal(stale.body, good.body);
+    assert.equal(stale.headers['x-opensky-cache'], 'STALE');
+    assert.equal(
+      stale.headers['x-opensky-auth-reason'],
+      `upstream_http_${status}_serving_stale`,
+    );
+    assert.equal(stale.headers['x-opensky-stale-seconds'], '10');
+    assert.equal(cancelled, true);
+    const cooling = await request('/api/flights');
+    assert.equal(cooling.body, good.body);
+    assert.equal(
+      cooling.headers['x-opensky-auth-reason'],
+      `upstream_http_${status}_serving_stale`,
+    );
+    assert.equal(calls, 2);
+    now += 16000;
+    fail = false;
+    assert.equal(
+      (await request('/api/flights')).headers['x-opensky-cache'],
+      'MISS',
+    );
+    assert.equal(calls, 3);
+  }
+  const coldModule =
+    await import('../../server/providers/aircraft/opensky.js?cold-server-error');
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return new Response('<html>failure</html>', { status: 503 });
+  });
+  const cold = install(coldModule.openSkyProxy());
+  for (let i = 0; i < 2; i++) {
+    const response = await cold('/api/flights');
+    assert.equal(response.statusCode, 503);
+    assert.match(JSON.parse(response.body).error, /OpenSky/);
+  }
+  assert.equal(calls, 1);
+});

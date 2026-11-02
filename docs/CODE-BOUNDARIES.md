@@ -79,17 +79,13 @@ moves it. Do not label all ingestion modules platform-independent by filename.
 
 | Retained entry                                      | Owner and current reason                                                                                           |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `src/ui.js`                                         | UI facade; direct callers retain standalone StyleManager defaults. Normal assembly uses `src/ui/composition.js`    |
 | `src/data/manager.js`                               | Lifecycle/panel compatibility and existing tests; normal assembly constructs lifecycle and presentation separately |
 | `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources                                 |
-| `src/data/localGeojson.js`                          | Infrastructure compatibility factories; catalog imports services from `src/app/localGeojsonServices.js` directly   |
-| `src/app/sourceSlot.js`                             | Re-export for direct callers/tests; portable slot ownership is `src/sources/sourceSlot.js`                         |
 | `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances                         |
 | `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                                                    |
 
-The two exact standalone-import exceptions are `src/ui.js` to
-`src/standalone/catalog.js` and `server/providers/local.js` to
-`server/standalone/key-setup.js`. They do not authorize new compatibility
+The one exact standalone-import exception is `server/providers/local.js` to
+`server/standalone/key-setup.js`. It does not authorize new compatibility
 back-edges. Voice actions use plain `src/data/feedState.js`, not the manager
 facade. Settings filesystem hardening belongs in
 `server/standalone/key-setup-hardening.mjs`; its settings policy is unchanged.
@@ -237,7 +233,7 @@ DOM elements and callbacks; importing it creates no browser state. `destroy()`
 removes owned listeners and cancels pending work without changing saved state
 or moving focus. Call it before removing or replacing the controls.
 
-`src/ui.js` retains panel layout, persistence, share restoration and application
+`src/ui/applicationShell.js` retains panel layout, persistence, share restoration and application
 reactions to state changes. Map Source selection and Location draft cleanup are
 provided through callbacks. The component imports no globe, data, application
 or server modules. Package checks and scoped formatting cover this entry.
@@ -280,7 +276,7 @@ compatible through re-exports.
 
 ### Adding a right-rail readout panel
 
-Add the shell in `src/ui/templates/context.html` inside `#right-context-rail`:
+Add the shell in `src/ui/views/ContextView.vue` inside `#right-context-rail`:
 a `.panel-collapsible` with a stable `id` and matching `data-panel-id`, the
 existing `.panel-header`, collapse button and a dedicated body. Register it
 with the existing panel chrome/layout owners; do not allocate rail space in
@@ -301,13 +297,13 @@ compactStatus, blocks }` in place. Their full-width native button headers expose
 adapter owns accordion state. Generic cards do not select data or enable layers.
 
 `blocks` is an ordered array of loose, optional `{ id, type, ... }` descriptors,
-rendered by `railCardBlocks.js`. There are no per-section disclosures:
+rendered by `rail/RailCardBlocks.vue`. There are no per-section disclosures:
 
 - `summary`: `text`, a single summary line.
-- `list`: `list: { ariaLabel, items }`, reconciled by `syncRowList` in `rowList.js`.
+- `list`: `list: { ariaLabel, items }`, keyed by `rail/RailRowList.vue`.
 - `lines`: keyed `lines: [{ id, text, muted? }]` for details and status.
 - `settings`: `settings: [{ id, label, chips }]`; each labelled row has a 56 px
-  label column and a wrapping `syncChipGroup` from `chipGroup.js`.
+  label column and wrapping keyed chips from `rail/RailChips.vue`.
 - `legend`: `legend: { colors, labels, units?, zeroIndex?, categorical? }` for a
   ramp/scale (including a physical freezing anchor) or separate keyed swatches.
 - `actions`: keyed `actions: [{ id, label, params?, href?, onClick?, disabled?,
@@ -376,12 +372,10 @@ facade's asynchronous teardown can yield.
 
 ## Ordinary action buttons
 
-`src/ui/actionButton.js` is a native, listener-free view helper used by Scene
-presentation and sharing-toolbar owners. It receives translated text and explicit
-presentation/accessibility properties. Feature controllers own action dispatch,
-state, persistence and cleanup. Static Scenes/CCTV templates use the same CSS
-surface and preserve IDs and layout hooks. The helper imports no application,
-renderer, storage or services; it belongs to the consuming package closures.
+The scene panels view and the CCTV panel draw their action buttons with the shared
+`gev-action-button` classes in `src/ui/styles/action-button.css`. Feature
+controllers own action dispatch, state, persistence and cleanup, and the views
+preserve IDs and layout hooks.
 
 ## Display controls
 
@@ -405,9 +399,9 @@ remain in their callers.
 `ui/maps` owns source-chip presentation, selection feedback and its subscription
 lifetime. It receives the existing controller and explicit state/action callbacks;
 it imports no renderer or application. Source construction and availability policy
-remain with the map controller. Rebuilding controls removes their previous chip
-listeners, and destruction suppresses late completions without owning or destroying
-the supplied controller.
+remain with the map controller. The dock renders the chips; rebuilding controls
+drops their previous subscription, and destruction suppresses late completions
+without owning or destroying the supplied controller.
 
 ## Layer panel
 
@@ -470,8 +464,8 @@ release listeners; pending action feedback is limited to its current owner.
 ## UI assembly and styles
 
 `ui/shell` assembles controls from supplied existing layer, navigation, terrain,
-rendering, HUD and share operations. `src/standalone/ui.js` provides the running
-application's instances; `src/ui.js` remains the compatibility entry. The shell
+rendering, HUD and share operations. `src/standalone/controls.js` provides the running
+application's instances. The shell
 imports no standalone bootstrap or concrete live layer implementation.
 Panel layout, position/drag, notices, recording and deferred UI work have separate
 owners with synchronous cleanup. Existing scene, share and HUD engines retain
@@ -602,6 +596,10 @@ state subscriptions retain their existing event contract.
   tracking handoff. It reads Cockpit admission and uses supplied tracking operations.
 - `ui/share-restoration` owns the initial restore transaction, layer coordinator,
   status notices and gesture/timer cleanup.
+- `share/view-codec` is the share-link codec (`decodeShareView`,
+  `encodeShareView`). It is pure (no DOM, no Cesium), so a host's server can
+  read a `/share/<code>` link, for example to describe it in link previews.
+  `share/link-path` reads and builds the `/share/<code>` address itself.
 - `ui/visual-settings` owns style preferences, detection overrides, display inputs
   and IR cleanup. Its engine services and panel operations are explicit.
 - `ui/panel-chrome` owns disclosure, docking, collapse preferences and temporary
@@ -741,13 +739,13 @@ DOM and platform middleware.
 
 ### Native form fields
 
-`src/ui/formField.js` constructs native numeric inputs without listeners or
-application state. Static selects and number inputs use the same `gev-field`
-surface, with explicit compact and inline densities. Feature owners retain
+Native numeric inputs are rendered by the views that own them; the CCTV pose
+chip renders its inline input in `src/ui/cctv/CctvCalValue.vue`. Static
+selects and number inputs use the same `gev-field` surface, with explicit
+compact and inline densities. Feature owners retain
 option identity/order, bounds, parsing, draft values, input/change timing and
 teardown. CCTV effective-pose conversion and tuner/device operations remain
-feature responsibilities. A Vue replacement can reuse this contract and CSS;
-it replaces DOM construction, rather than adding a second state owner.
+feature responsibilities.
 
 The shared stylesheet owns field surfaces and disabled opacity; feature and theme
 palettes use `--gev-field-background`, `--gev-field-border-color`,
@@ -759,11 +757,9 @@ field rules separate, so Radio's palette remains an intentional exception.
 
 ### Read-only status badges
 
-`src/ui/statusBadge.js` constructs/updates ordinary badges without listeners,
-status inference or live-region policy. It consumes translated text and controlled
-visibility; appearance variants share CSS rather than mapping machine states to
-universal severity. CCTV owns frame/source and calibration rules and their data
-attributes, while Weather owns coverage labels. The keyed rail-card owner keeps
-node identity, header focus, disclosure and teardown. The shared adapter never
-creates another state store or announces all card updates. A Vue view can replace
-this adapter and retain these presentation inputs and styles.
+Views draw read-only badges with the `gev-status-badge` classes, without
+listeners, status inference or live-region policy. Appearance variants share
+CSS rather than mapping machine states to universal severity. CCTV owns
+frame/source and calibration rules and their data attributes, while Weather
+owns coverage labels. The rail card keeps node identity, header focus,
+disclosure and teardown, and does not announce every card update.

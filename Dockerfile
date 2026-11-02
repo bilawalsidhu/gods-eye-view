@@ -39,6 +39,11 @@ COPY --chown=node:node . .
 ENV HOST=0.0.0.0
 ENV PORT=4173
 EXPOSE 4173
+# node:slim has no curl, so probe with Node's built-in fetch. 127.0.0.1 is
+# always on the Host allowlist, and the generous start period covers Vite's
+# first-run dependency optimisation.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(Number.parseInt(process.env.PORT,10)||4173)+'/').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 # The launcher is `npm run dev` plus one step: it trusts the container's
 # gateway address for Provider Settings, because that is where Docker delivers
 # the host's own browser from (never 127.0.0.1). See scripts/docker-start.mjs.

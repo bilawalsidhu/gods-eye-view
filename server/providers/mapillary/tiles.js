@@ -42,7 +42,7 @@ export class TileUpstreamError extends Error {
 }
 
 /** Seconds a Retry-After header asks for (an integer or an HTTP date), else null. */
-export function retryAfterSeconds(header, now = Date.now()) {
+function retryAfterSeconds(header, now = Date.now()) {
   const text = String(header ?? '').trim();
   if (!text) return null;
   const seconds = /^\d+$/.test(text)

@@ -871,3 +871,39 @@ test('installation names wait for the name pack, briefly', async (t) => {
   assert.equal(slow.data.names_pending, true);
   assert.match(slow.summary, /site names are still loading\)\.$/);
 });
+
+test('stale fire perimeters say so, with when they were fetched', async () => {
+  const fetchedAt = Date.UTC(2026, 9, 22, 6);
+  const ring = [
+    [
+      [-118.5, 35.2],
+      [-118.4, 35.2],
+      [-118.4, 35.3],
+      [-118.5, 35.2],
+    ],
+  ];
+  const perimeters = {
+    getSnapshot: async () => [],
+    getSnapshotDetail: async () => ({
+      rows: [
+        {
+          stableId: 'held',
+          name: 'Held Fire',
+          acres: 300,
+          polygons: [ring],
+        },
+      ],
+      stale: true,
+      fetchedAt,
+    }),
+  };
+  const result = await catalogWith({ perimeters }).call('get_fire_perimeters', {
+    area: { bbox: [-120, 34, -117, 36] },
+  });
+  assert.equal(
+    result.summary,
+    '1 mapped wildfire perimeter in the requested box (data may be stale).',
+  );
+  assert.equal(result.data.stale, true);
+  assert.equal(result.data.retrieved_at, new Date(fetchedAt).toISOString());
+});

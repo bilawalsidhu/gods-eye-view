@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
+import { createTracking } from './tracking.js';
 
 function services() {
   const names = [
@@ -209,5 +210,29 @@ test('a newly seen military contact appears at its delayed position, not ahead o
   assert.ok(
     Math.abs(behindM - expectedM) < speedMps * 3,
     `expected about ${Math.round(expectedM)} m behind the fix, got ${Math.round(behindM)} m`,
+  );
+});
+
+test('voice context reads a track that rounds to north as 0°, not 360°', () => {
+  const stubs = services();
+  stubs.aircraftPresentation = { tr3bTypeLabel: (id, type) => type };
+  const tracking = createTracking({
+    flightState: {
+      feed: { _lastSource: 'Fixture aircraft' },
+      records: { data: new Map() },
+    },
+    services: stubs,
+    parts: {
+      queries: {
+        _describeFlight: () => ({ track: 359.6, callsign: 'RCH123' }),
+        _toCleanText: (value) => value || '',
+        _formatAltitude: () => '',
+      },
+    },
+    layer: {},
+  });
+  assert.equal(
+    tracking._contextSubjectMetadata('ae1234').properties.heading,
+    '0°',
   );
 });

@@ -8,13 +8,7 @@
  *   node scripts/qa-weather-swap.mjs --url http://localhost:4173 --label google
  *     [--layer weather-satellite] [--product clouds] [--headless]
  */
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 

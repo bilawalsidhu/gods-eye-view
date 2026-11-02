@@ -261,7 +261,7 @@ try {
     for (const [id, entry] of gev.dataManager.layers)
       if (entry.enabled)
         await gev.dataManager.setEnabled(id, false, { origin: 'user' });
-    document.querySelector('#data-panel')?.classList.remove('collapsed');
+    gev.styleManager._presentPanel('data-panel', { collapsed: false });
   });
 
   // 1. Earth view, clean.

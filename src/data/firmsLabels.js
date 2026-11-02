@@ -39,6 +39,17 @@ export function accentForSeverity(stopName) {
   return ACCENT_RGB[stopName] || ACCENT_RGB.yellow;
 }
 
+/**
+ * Fire radiative power as shown on a card: "9.9" below 10 MW, "10" once
+ * one-decimal rounding reaches 10. "10.0" would sit beside a whole "10".
+ * @param {number} frp Megawatts.
+ * @returns {string}
+ */
+export function formatFrpMw(frp) {
+  const digits = Number(Number(frp).toFixed(1)) >= 10 ? 0 : 1;
+  return Number(frp).toFixed(digits);
+}
+
 /** Raw FIRMS satellite code → short display name (N = Suomi NPP). */
 export function satelliteShortName(satellite) {
   const s = String(satellite || '')

@@ -64,7 +64,7 @@ export function keyAlternatives(providers) {
  * The filter controls a switched-on provider honours (both when none is on).
  * @param {Array<ProviderSnapshot>} providers
  */
-export function filterControls(providers) {
+function filterControls(providers) {
   const active = providers.filter((p) => p.on);
   const honoured = (key) =>
     active.length === 0 ||
@@ -78,7 +78,7 @@ export function filterControls(providers) {
  * note needs no provider name.
  * @param {Array<ProviderSnapshot>} providers
  */
-export function sinceNote(providers) {
+function sinceNote(providers) {
   return providers.some((p) => p.on && p.sinceBasis === 'upload')
     ? t('(by upload date)')
     : null;
