@@ -4856,5 +4856,20 @@
   "JTWC warning ↗": "تحذير JTWC ↗",
   "Active cyclone advisories and warnings": "نشرات وتحذيرات الأعاصير النشطة",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "اختر عاصفة على الخريطة، أو اختر عاصفة من القائمة لتحديدها وتحريك الكاميرا إليها. انقر على مكان فارغ من الخريطة لإلغاء التحديد. نشرات NOAA NHC/CPHC وتحذيرات JTWC. يصف مخروط NHC عدم اليقين في المسار المتوقع للمركز، لا حجم العاصفة ولا منطقة الخطر كاملة. منطقة خطر رياح 34 عقدة لدى JTWC هي حيث قد تصل رياح بسرعة 34 عقدة، موسّعةً بخطأ توقع المسار؛ وهي ليست مخروطًا. تسميات نقاط التوقع هي ساعات المهلة لدى المصدر، لا أوقات محسوبة من وقت الإصدار. تتبع الأشكال سطح الأرض؛ والارتفاع ليس ارتفاعًا جويًا. ارجع إلى النشرة الرسمية أو إلى مركز الإنذار الإقليمي.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · التحذير {number} · صدر {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · التحذير {number} · صدر {time}",
+  "Tilt up toward the horizon": "إمالة نحو الأفق",
+  "Tilt down toward top-down view": "إمالة نحو المنظر العلوي",
+  "Top-down view": "المنظر العلوي",
+  "Look left": "النظر يسارًا",
+  "Look right": "النظر يمينًا",
+  "Look up": "النظر إلى الأعلى",
+  "Look down": "النظر إلى الأسفل",
+  "Map navigation": "التنقل في الخريطة",
+  "Tilt": "الإمالة",
+  "Tilt: top-down (bottom) to near horizon (top)": "الإمالة: من المنظر العلوي (أسفل) إلى قرب الأفق (أعلى)",
+  "Map heading. Drag to rotate, arrow keys turn, Home for north": "اتجاه الخريطة. اسحب للتدوير، وتدير مفاتيح الأسهم الاتجاه، ومفتاح Home للشمال",
+  "North, 0 degrees": "الشمال، 0 درجة",
+  "Look around": "النظر حولك",
+  "{heading} degrees from north": "{heading} درجة عن الشمال",
+  "{tilt} degrees from top-down": "{tilt} درجة عن المنظر العلوي"
 }
