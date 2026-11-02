@@ -1183,5 +1183,6 @@
   "src/firstRunLauncherView.test.mjs",
   "src/firstRunCopy.js",
   "src/data/headingDegrees.test.mjs",
-  "src/data/distanceFormat.test.mjs"
+  "src/data/distanceFormat.test.mjs",
+  "src/sources/adsbFields.test.mjs"
 ]
