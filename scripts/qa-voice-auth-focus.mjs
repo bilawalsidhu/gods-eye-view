@@ -12,9 +12,13 @@ import { after, before, test } from 'node:test';
 import puppeteer from 'puppeteer';
 
 const root = new URL('../', import.meta.url);
-const template = await readFile(
-  new URL('src/ui/templates/provider-settings.html', root),
+const view = await readFile(
+  new URL('src/ui/views/ProviderSettingsView.vue', root),
   'utf8',
+);
+const template = view.slice(
+  view.indexOf('<template>') + '<template>'.length,
+  view.lastIndexOf('</template>'),
 );
 const assets = new Set([
   '/src/keySetup.js',
