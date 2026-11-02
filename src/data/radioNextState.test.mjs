@@ -271,3 +271,50 @@ test('a dial release plays only if a stream was active when the drag began', asy
     assert.equal(state.playingStationId, ids[2]);
   });
 });
+
+// Records the tuner noise graph so a test can see whether it was released.
+function withFakeAudioContext(body) {
+  const log = { contexts: [], sources: [] };
+  const node = () => ({ connect() {}, disconnect() {} });
+  class FakeAudioContext {
+    constructor() {
+      Object.assign(this, { state: 'suspended', sampleRate: 8000, currentTime: 0, destination: {} });
+      log.contexts.push(this);
+    }
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    suspend() { this.state = 'suspended'; return Promise.resolve(); }
+    close() { this.state = 'closed'; return Promise.resolve(); }
+    createBuffer(_channels, length) { return { getChannelData: () => new Float32Array(length) }; }
+    createBufferSource() {
+      const source = { ...node(), started: false, stopped: false, start() { this.started = true; }, stop() { this.stopped = true; } };
+      log.sources.push(source);
+      return source;
+    }
+    createBiquadFilter() { return { ...node(), frequency: { value: 0 }, Q: { value: 0 } }; }
+    createGain() {
+      return { ...node(), gain: { value: 0, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {} } };
+    }
+  }
+  const original = globalThis.AudioContext;
+  globalThis.AudioContext = FakeAudioContext;
+  return Promise.resolve(body(log)).finally(() => {
+    if (original === undefined) delete globalThis.AudioContext;
+    else globalThis.AudioContext = original;
+  });
+}
+
+test('a silent dial release stops the tuner noise and suspends its audio context', async () => {
+  await withFakeAudioContext(async ({ contexts, sources }) => {
+    await withLayer([], async ({ playUrls }) => {
+      radioLayer.selectStation(ids[0], { autoplay: false });
+      assert.equal(radioLayer.beginTuning(), true);
+      radioLayer.previewTuningStation(ids[1], { rotate: false });
+      assert.equal(radioLayer.commitTuningStation(ids[1], { origin: 'user' }).ok, true);
+      await settle();
+      assert.deepEqual(playUrls, []);
+      assert.equal(sources[0].started, true);
+      assert.equal(sources[0].stopped, true, 'noise source still looping');
+      assert.equal(contexts[0].state, 'suspended', 'audio context still running');
+    });
+  });
+});

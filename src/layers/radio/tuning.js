@@ -214,7 +214,9 @@ export function createTuning({ state: layerState, services, parts, source }) {
     layerState._playFallbackFocus = null;
     layerState._playFallbackOrigin = 'programmatic';
     layerState._playFallbackAttemptId = null;
-    parts.tuningNoise.syncTuningNoiseGain();
+    // Static covers only a connecting stream; a silent release frees the noise graph.
+    if (autoplay) parts.tuningNoise.syncTuningNoiseGain();
+    else parts.tuningNoise.clearRadioTuningNoise({ emit: false });
     parts.presentation.emitState();
     const selected = parts.selection.selectRadioStation(frozenStation.id, {
       autoplay,
