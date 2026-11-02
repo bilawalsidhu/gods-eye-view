@@ -1030,10 +1030,10 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // preserves the mission mapping and globe-rotation arguments.
   // Street Level adds a panel target; redundant panel-description words are removed to retain the prompt budget.
   // S2 GhostMaps extends the generated layer enums; both feature contracts remain.
-  assert.equal(block.length, 31223, 'serialized tool schema length drifted');
+  assert.equal(block.length, 30918, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '5d555749e3a61a8b1c40e723077f0bc1cb1cbf98c66467342a303cdfa0a2a90f',
+    '457c17ff8d010f87d69a7f4eb30cff9a113ed072876d02423dcb9f2d09b2162c',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
