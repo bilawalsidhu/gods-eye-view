@@ -26,10 +26,18 @@ import { createRainfolkWellSource } from '../layers/usGroundwater/rainfolkSource
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
-export function createStandaloneLayerSources(overrides = {}) {
+export function createStandaloneLayerSources(
+  overrides = {},
+  { createMapTiles = createOpenFreeMapSource } = {},
+) {
   if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))
     throw new TypeError('Source overrides must be an object');
-  const mapTiles = createOpenFreeMapSource();
+  const trafficTiles = createMapTiles({
+    selectDecoded: ({ roads }) => ({ roads }),
+  });
+  const installationTiles = createMapTiles({
+    selectDecoded: ({ military }) => ({ military }),
+  });
   const defaults = {
     ...createReferenceSources(),
     directions: createDirectionsSource(),
@@ -44,13 +52,13 @@ export function createStandaloneLayerSources(overrides = {}) {
     }),
     cctv: createCctvSource(),
     radio: createRadioSource(),
-    traffic: createTrafficSource({ mapTiles }),
+    traffic: createTrafficSource({ mapTiles: trafficTiles }),
     transit: createTransitSource(),
     'us-groundwater': createRainfolkWellSource({
       release: import.meta.env?.VITE_RAINFOLK_WELLS_RELEASE,
     }),
     bikeshare: createBikeshareSource(),
-    installations: createInstallationSource({ mapTiles }),
+    installations: createInstallationSource({ mapTiles: installationTiles }),
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),
     alpr: createAlprTileSource(),
