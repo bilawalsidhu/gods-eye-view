@@ -3,8 +3,7 @@
 // (the engine clock's frame time in the app: the app clock, which is the wall
 // clock the HUD's SUN elevation reads unless QA moves it); the cinematic look
 // lights the globe
-// from the atmosphere when seen from space, shows its clouds only for low
-// views over low ground and while the sun is up, brightens the atmosphere
+// from the atmosphere when seen from space, places its clouds above the terrain while the sun is up, brightens the atmosphere
 // (createLuminanceScaler, uniforms from internals.js), compiles both
 // night-side shader variants at startup and shows its stars only at night
 // or from space. All of it runs only on frames the view draws anyway, so an
@@ -12,7 +11,11 @@
 
 import {
   cloudsSunlitAt,
-  cloudsVisibleAt,
+  ACES_FILMIC,
+  AGX,
+  cloudTerrainOffset,
+  landscapeSunTime,
+  CUMULUS_BASES,
   globeLightingAt,
   starsVisibleAt,
   sunDateStale,
@@ -82,14 +85,30 @@ export function buildNavaraLook(
   let warmUp = aerial ? 2 : 0;
   let cloudsShown = true;
   let cloudsSunlit = true;
+  let landscape = false;
+  const tone = effect('toneMapping');
   let starsShown = true;
 
-  const frame = (height, moving = false, ground = Number.NaN, place = null) => {
+  const frame = (
+    height,
+    moving = false,
+    ground = Number.NaN,
+    place = null,
+    landscapeRequested = false,
+  ) => {
     // Every drawn frame: a material Navara rebuilds comes back unscaled.
-    let changed = brighten();
+    let changed = brighten(!landscapeRequested);
+    if (landscapeRequested !== landscape && tone) {
+      landscape = landscapeRequested;
+      view.toneMappingExposure = landscape ? 10 : 1;
+      tone.update({ toneMapping: { mode: landscape ? AGX : ACES_FILMIC } });
+      changed = true;
+    }
     const atmosphere = view.atmosphere;
-    if (atmosphere && sunDateStale(atmosphere.date.getTime(), now())) {
-      atmosphere.date = new Date(now());
+    const time =
+      landscape && place ? landscapeSunTime(now(), place.lng) : now();
+    if (atmosphere && sunDateStale(atmosphere.date.getTime(), time)) {
+      atmosphere.date = new Date(time);
       changed = true;
     }
     const elevation =
@@ -116,12 +135,24 @@ export function buildNavaraLook(
         changed = true;
       }
     }
-    // Clouds only for a camera below them over low ground, and while the
-    // sun is up at the camera (after sunset they read as dark puffs);
-    // switching them costs no recompile, so it follows the camera in motion.
+    // Terrain-relative layers keep distant cumulus above mountain ridges.
+    // Keep a downward view clear once the camera rises above the cloud deck.
     if (clouds) {
+      const offset = cloudTerrainOffset(height, ground);
+      const pass = clouds.ref?.raw;
+      const layers = pass?.cloudLayers;
+      if (layers) {
+        for (let i = 0; i < CUMULUS_BASES.length; i++) {
+          const altitude = CUMULUS_BASES[i] + offset;
+          if (layers[i].altitude !== altitude) {
+            layers[i].altitude = altitude;
+            changed = true;
+          }
+        }
+      }
       cloudsSunlit = cloudsSunlitAt(elevation, cloudsSunlit);
-      const next = cloudsSunlit && cloudsVisibleAt(height, ground, cloudsShown);
+      const ceiling = CUMULUS_BASES[0] + offset + (cloudsShown ? 800 : 500);
+      const next = cloudsSunlit && height <= ceiling;
       if (next !== cloudsShown) {
         cloudsShown = next;
         clouds.update(next ? VISIBLE : HIDDEN);
@@ -175,13 +206,15 @@ export function createLuminanceScaler(scale, forEachUniform, handles) {
     }
     return found;
   };
+  let applyScale = true;
   const record = (key, uniform) => entry(key, uniform.value);
   const scaleOne = (key, uniform, scaled) => {
     if (!scaled) return;
-    const { target } = entry(key, uniform.value);
+    const { base, target } = entry(key, uniform.value);
+    const desired = applyScale ? target : base;
     scaledVectors.add(uniform.value);
-    if (uniform.value.equals(target)) return;
-    uniform.value.copy(target);
+    if (uniform.value.equals(desired)) return;
+    uniform.value.copy(desired);
     changed = true;
   };
   const keepBase = (key, uniform, scaled) => {
@@ -195,7 +228,8 @@ export function createLuminanceScaler(scale, forEachUniform, handles) {
       changed = true;
     }
   };
-  return () => {
+  return (enabled = true) => {
+    applyScale = enabled;
     changed = false;
     // Bases first, from the values as Navara built them.
     forEachUniform(handles, record);

@@ -31,6 +31,13 @@ export const MAP_STACKS = [
     requiresIon: false,
   },
   {
+    id: 'sentinel2',
+    label: 'EOX Sentinel-2', // i18n-ignore: imagery product name
+    shortLabel: 'EOX',
+    kind: 'sentinel2',
+    requiresIon: false,
+  },
+  {
     id: 'osm',
     label: 'OSM', // i18n-ignore: imagery product name
     shortLabel: 'OSM',

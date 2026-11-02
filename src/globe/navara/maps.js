@@ -17,6 +17,12 @@
 //   it back until setBaseImagery. Hidden, not deleted: deleting the last
 //   raster layer stops Navara 0.2.1 loading terrain at the current view.
 
+import {
+  SENTINEL2_CREDIT,
+  SENTINEL2_MAX_ZOOM,
+  SENTINEL2_URL,
+} from '../../maps/sentinel2.js';
+
 const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_CREDIT = {
   attribution: '© OpenStreetMap contributors',
@@ -46,6 +52,12 @@ function imageryFor(source) {
   const credit =
     source?.credit != null ? { attributionHtml: String(source.credit) } : null;
   switch (kind) {
+    case 'sentinel2':
+      return {
+        url: SENTINEL2_URL,
+        maxZoom: SENTINEL2_MAX_ZOOM,
+        credit: { attributionHtml: SENTINEL2_CREDIT },
+      };
     case 'osm':
       return { url: OSM_URL, credit: credit ?? OSM_CREDIT };
     case 'esri-imagery':
@@ -165,6 +177,8 @@ export function createNavaraMaps(
           type: 'quantized-mesh',
           url: KEYLESS_TERRAIN_URL,
           maxZoom: KEYLESS_TERRAIN_MAX_ZOOM,
+          requestVertexNormals: true,
+          requestWaterMask: true,
         };
       case 'world': {
         const token = String(source.accessToken || '').trim();
@@ -195,16 +209,23 @@ export function createNavaraMaps(
   const knownTiles = new Set();
 
   const maps = {
+    get baseKind() {
+      return kindOf(currentBase);
+    },
     async setBaseImagery(source) {
       const generation = ++generations.display;
-      const { url, credit } = imageryFor(source);
+      const { url, credit, maxZoom } = imageryFor(source);
       if (destroyed || generation !== generations.display) return;
       baseSource = source;
       currentBase = source;
       if (slots.imagery?.key !== url)
-        show('imagery', url, { type: 'raster-tile', url }, { type: 'raster' }, [
-          credit,
-        ]);
+        show(
+          'imagery',
+          url,
+          { type: 'raster-tile', url, ...(maxZoom && { maxZoom }) },
+          { type: 'raster' },
+          [credit],
+        );
       // Under tiles the base imagery waits hidden, credit included.
       setImageryShown(slots.photoreal == null);
     },

@@ -6,11 +6,7 @@ import {
   GLOBE_LIGHTING_EXIT_M,
   NAVARA_CONTEXT_ATTRIBUTES,
   NAVARA_LOOKS,
-  CLOUDS_HIDE_ABOVE_M,
-  CLOUDS_HIDE_OVER_GROUND_M,
-  CLOUDS_SHOW_BELOW_M,
-  CLOUDS_SHOW_OVER_GROUND_M,
-  cloudsVisibleAt,
+  cloudTerrainOffset,
   globeLightingAt,
   navaraScenePlan,
   navaraViewOptions,
@@ -106,7 +102,7 @@ test('the cinematic look: photoreal plus clouds and ACES, no sun shadow maps, no
     useNormalBuffer: false,
     albedoScale: 2,
   });
-  assert.equal(clouds.clouds.coverage, 0.2);
+  assert.equal(clouds.clouds.coverage, 0.22);
   assert.equal(clouds.clouds.shadows, false, 'no cloud shadow maps');
   assert.ok(
     clouds.clouds.cloudLayers.every(({ altitude }) => altitude >= 1000),
@@ -154,30 +150,12 @@ test('globe lighting turns on from space and off near the ground, with hysteresi
   assert.ok(GLOBE_LIGHTING_EXIT_M < GLOBE_LIGHTING_ENTER_M);
 });
 
-test('the clouds show for low views over low ground, with hysteresis', () => {
-  assert.equal(cloudsVisibleAt(900, 10, true), true);
-  assert.equal(cloudsVisibleAt(900, Number.NaN, true), true, 'unknown ground');
-  assert.equal(cloudsVisibleAt(CLOUDS_HIDE_ABOVE_M, 0, true), true);
-  assert.equal(cloudsVisibleAt(CLOUDS_HIDE_ABOVE_M + 1, 0, true), false);
-  assert.equal(cloudsVisibleAt(3_800, 0, false), false, 'inside the gap');
-  assert.equal(cloudsVisibleAt(CLOUDS_SHOW_BELOW_M - 1, 0, false), true);
-  assert.equal(cloudsVisibleAt(3_000, 2_100, true), false, 'over a canyon rim');
-  assert.equal(cloudsVisibleAt(3_000, 900, false), false, 'inside the gap');
-  assert.equal(
-    cloudsVisibleAt(3_000, CLOUDS_SHOW_OVER_GROUND_M - 1, false),
-    true,
-  );
-  assert.equal(cloudsVisibleAt(CLOUDS_HIDE_OVER_GROUND_M, 0, true), true);
-  assert.equal(
-    cloudsVisibleAt(Number.NaN, 0, false),
-    false,
-    'unknown keeps it',
-  );
-  const layers = navaraScenePlan('cinematic').effects[1].clouds.cloudLayers;
-  assert.ok(
-    layers[0].altitude - CLOUDS_HIDE_OVER_GROUND_M >= 500,
-    'cloud base well above the highest ground they show over',
-  );
+test('cumulus layers rise over mountains, with sea-level bases from space', () => {
+  assert.equal(cloudTerrainOffset(900, 10), 0);
+  assert.equal(cloudTerrainOffset(4350, 3100), 4500);
+  assert.equal(cloudTerrainOffset(4350, 3200), 4500);
+  assert.equal(cloudTerrainOffset(8_000_000, 3100), 0);
+  assert.equal(cloudTerrainOffset(4350, Number.NaN), 0);
 });
 
 test('the sun date is stale once it drifts a minute from the clock', () => {
@@ -221,8 +199,8 @@ test('stars show at night and from space, not in a daylit sky, with hysteresis',
 test('the clouds hide once the sun sets at the camera, with hysteresis', () => {
   assert.equal(cloudsSunlitAt(40, true), true);
   assert.equal(cloudsSunlitAt(CLOUDS_HIDE_SUN_BELOW_DEG - 0.1, true), false);
-  assert.equal(cloudsSunlitAt(1, false), false, 'inside the gap');
-  assert.equal(cloudsSunlitAt(1, true), true, 'inside the gap');
+  assert.equal(cloudsSunlitAt(-5, false), false, 'inside the gap');
+  assert.equal(cloudsSunlitAt(-5, true), true, 'inside the gap');
   assert.equal(cloudsSunlitAt(CLOUDS_SHOW_SUN_ABOVE_DEG + 0.1, false), true);
   assert.equal(cloudsSunlitAt(Number.NaN, false), false, 'unknown keeps it');
 });

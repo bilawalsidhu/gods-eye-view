@@ -196,6 +196,23 @@ try {
   });
   await switchTo('navara');
   assert.equal(await stored(), 'cesium');
+  // The real Map Source chips move into daylight inspection and back to live lighting.
+  await page.$eval('[data-stack-id="sentinel2"]', (el) => el.click());
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView.mapStackController.getActiveId() === 'sentinel2' &&
+      window.__godsEyeView.engine.host.container.hasAttribute(
+        'data-terrain-daylight',
+      ),
+  );
+  await page.$eval('[data-stack-id="osm"]', (el) => el.click());
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView.mapStackController.getActiveId() === 'osm' &&
+      !window.__godsEyeView.engine.host.container.hasAttribute(
+        'data-terrain-daylight',
+      ),
+  );
   assert.deepEqual(errors, []);
   console.log(
     'PASS Cesium default, both switches, same document, warm engine identity, parked canvas, no startup splash, share pose/map/layers, Back/Forward, remembered engine, blocked preference storage',
