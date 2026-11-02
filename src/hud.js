@@ -3,10 +3,15 @@ import { applicationServices } from './services/application.js';
  * @module hud
  * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
  *
- * Renders authentic reconnaissance metadata over the Cesium canvas:
- * classification banners, live MGRS/lat-lon coordinates, sensor metrics
- * (GSD, NIIRS, ONA), timestamps, and orbital data — all updating in
- * real-time at configurable cadences.
+ * Renders reconnaissance-styled telemetry over the Cesium canvas. The
+ * MGRS/lat-lon coordinates (the point below the camera), altitude and
+ * off-nadir angle come from the live camera, and the clocks show the current
+ * UTC time. Sun elevation is an approximate estimate from that position and
+ * time. The classification banner, mission and orbit identifiers, the
+ * BAND/BITS/LVL strip and the REC blink are styling, and the GSD/NIIRS
+ * figures are scaled from camera altitude; none of them comes from imagery
+ * metadata, and COLL is the current time, not a capture time. Readouts update
+ * on independent fixed cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
  * selected and supports the layout variants: tactical, minimal, cyber.
@@ -163,10 +168,13 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
 /**
  * Full-screen intelligence HUD overlay rendered on top of the Cesium canvas.
  *
- * Displays classification banners, MGRS/lat-lon readouts, sensor metrics
- * (GSD, NIIRS, off-nadir angle), sun elevation, orbital metadata, and a
- * rolling semantic summary line. All values derive from the live camera
- * position and update on independent timer cadences.
+ * Displays MGRS/lat-lon, altitude and off-nadir readouts from the live
+ * camera, UTC clocks, an approximate sun elevation, the selected vessel and a
+ * semantic summary line built from the view and its data feeds, alongside
+ * styling that is not sensor metadata: the classification banner, generated
+ * mission, sensor and orbit identifiers, the fixed sensor strip, the REC blink
+ * and the altitude-scaled GSD/NIIRS figures. Readouts update on independent
+ * fixed cadences.
  */
 export class IntelHUD {
   /**
@@ -466,10 +474,11 @@ export class IntelHUD {
     // i18n-ignore: sensor codes
     readouts.bottom = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
 
-    // GSD (Ground Sample Distance): approximate resolution in meters per pixel
-    // derived from camera altitude. NIIRS (National Imagery Interpretability
-    // Rating Scale): 0-9 quality rating computed via the General Image Quality
-    // Equation (GIQE) simplified form: NIIRS = 10.25 - 3.32 * log10(GSD_inches).
+    // GSD (Ground Sample Distance): an illustrative meters-per-pixel figure
+    // scaled from camera altitude, not a measurement of the displayed imagery.
+    // NIIRS (National Imagery Interpretability Rating Scale) is then computed
+    // from that illustrative GSD with the simplified General Image Quality
+    // Equation (GIQE) form: NIIRS = 10.25 - 3.32 * log10(GSD_inches).
     const gsd = Math.max(0.01, altM * 0.000375);
     const gsdInches = gsd * 39.37;
     const niirs = Math.max(
