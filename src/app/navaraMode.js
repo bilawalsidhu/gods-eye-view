@@ -59,6 +59,8 @@ const NAVARA_CREDIT_KEYS = new Set([
   'eccc-aqhi',
   'wfigs',
   's2-ghostmaps',
+  'wind-gfs',
+  'ecmwf-ifs',
   'weather-noaa',
   'weather-lightning',
   'weather-cyclones',
@@ -117,6 +119,10 @@ export async function registerNavaraLayerRenderers() {
         return (engine, options) => createWeatherNavaraRenderer(engine, navaraViews.get(engine), options);
       },
     ])),
+    wind: async () => {
+      const { createWindNavaraRenderer } = await import('../layers/wind/render/navara.js');
+      return (engine) => createWindNavaraRenderer(engine, navaraViews.get(engine));
+    },
     'weather-cyclones': async () => {
       const {createCyclonesNavaraRenderer} = await import('../layers/cyclones/render/navara.js');
       return (engine,options) => createCyclonesNavaraRenderer(engine,navaraViews.get(engine).view,options);

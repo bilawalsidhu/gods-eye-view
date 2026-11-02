@@ -279,7 +279,11 @@ export function createApplicationCatalog({
       ],
       [
         'wind',
-        () => createWindLayer({ feed: sources.wind, clock: weatherClock }),
+        () => sessionModel('wind', () => createWindLayer({
+          feed: sources.wind,
+          clock: weatherClock,
+          createNativeRendering: (engine) => rendererFor('wind', engine),
+        })),
       ],
       ...['weather-radar', 'weather-satellite', 'weather-lightning'].map(
         (id) => [

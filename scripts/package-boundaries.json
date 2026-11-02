@@ -3677,6 +3677,8 @@
       "src/layers/infrastructure/render/navaraStems.js",
       "src/layers/weather/render/navara.js",
       "src/layers/weather/render/navaraSurface.js",
+      "src/layers/wind/render/navara.js",
+      "src/layers/wind/render/flowMesh.js",
       "src/layers/ghostMaps/render/navara.js",
       "src/layers/shared/render/navaraGroundPicks.js",
       "src/layers/cyclones/render/navara.js",
