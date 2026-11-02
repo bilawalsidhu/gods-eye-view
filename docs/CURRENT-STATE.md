@@ -6469,3 +6469,10 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+## CCTV live video startup
+
+Live HLS camera playback has a bounded 60-second startup window, allowing slow
+feeds to become playable after 30 seconds. Finite video feeds retain a 30-second
+deadline. A playable event or disposal cancels the startup timer; an unavailable
+stream reports failure once.

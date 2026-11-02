@@ -82,7 +82,9 @@ export function attachCctvVideo(
   };
   video.addEventListener('canplay', play);
   video.addEventListener('error', fail);
-  startup = setTimeout(fail, 30000);
+  // Live agency feeds may need multiple proxy readiness attempts to buffer.
+  // Keep that startup bounded without cutting off the existing two retries.
+  startup = setTimeout(fail, feedType === 'hls' ? 60000 : 30000);
   const ready = (async () => {
     if (feedType !== 'hls') {
       video.src = mediaUrl;
