@@ -92,11 +92,19 @@ export function createLifecycle({
     destroy(viewer) {
       source.destroy?.();
       this.disable();
-      layerState.contextAnchor = null;
-      layerState.contextPosition = null;
-      layerState.coverage = { kind: 'viewport' };
+      this.detach(viewer);
+    },
+
+    detach(viewer) {
+      services.credits?.hideOsmCredit?.(viewer, LAYER_ID);
+      services.credits?.hideGooglePlacesCredit?.(viewer, LAYER_ID);
+      unregisterPickOwner(LAYER_ID);
+      releaseCameraSensitivity(viewer?.camera, LAYER_ID);
+      layerState.surfaceChangedRemove?.();
+      layerState.surfaceChangedRemove = null;
       layerState.moveEndRemove?.();
       layerState.changedRemove?.();
+      layerState.moveEndRemove = layerState.changedRemove = null;
       parts.selection.destroy?.();
       layerState.clickHandler?.destroy();
       layerState.clickHandler = null;
@@ -105,6 +113,7 @@ export function createLifecycle({
       if (layerState.dataSource && viewer)
         viewer.dataSources.remove(layerState.dataSource, true);
       layerState.dataSource = null;
+      layerState.viewer = null;
       layerState.engine = null;
     },
   };

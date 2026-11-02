@@ -44,11 +44,11 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   function installationSurfaceHeightM(record) {
-    const floor = services.ground?.cachedGroundFloor?.(
+    const floor = services?.ground?.cachedGroundFloor?.(
       record?.latitude,
       record?.longitude,
     );
-    return services.ground?.floorAltitudeM?.(null, floor) ?? 0;
+    return services?.ground?.floorAltitudeM?.(null, floor) ?? 0;
   }
 
   /**

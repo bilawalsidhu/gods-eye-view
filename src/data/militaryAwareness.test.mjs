@@ -1984,18 +1984,6 @@ test('cockpit blocks only non-aircraft Context camera flights', () => {
   );
 });
 
-test('vessel entry and selection framing both use the 3 km focus radius', () => {
-  assert.match(
-    militaryAwarenessSource,
-    /const\s*VESSEL_FOCUS_RADIUS_M\s*=\s*3000;/,
-  );
-  const focusRadiusUses =
-    militaryAwarenessSource.match(
-      /new\s*Cesium\.BoundingSphere\(\s*vessel\.position,\s*VESSEL_FOCUS_RADIUS_M,?\s*\)/g,
-    ) || [];
-  assert.equal(focusRadiusUses.length, 2);
-});
-
 test('awareness rescans only for invalidation, source change, or meaningful movement', () => {
   assert.equal(
     awarenessRefreshRequired({
@@ -3081,6 +3069,7 @@ test('every Context camera flight without a tracked entity takes navigation auth
     assert.deepEqual(taken, ['context-vessel-focus']);
     // The announcement precedes the flight, never trails it.
     assert.equal(runtime.cameraFlights.length, 1);
+    assert.equal(runtime.cameraFlights[0].sphere.radius, 3000);
 
     militaryAwarenessLayer.focusTarget('military-installations', 'inst-1');
     assert.deepEqual(taken, [
@@ -3119,6 +3108,7 @@ test('Contacts vessel autofocus takes navigation authority before it frames', as
     // Activation enables dependencies before it auto-focuses.
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(runtime.cameraFlights.length, 1, 'autofocus framed a vessel');
+    assert.equal(runtime.cameraFlights[0].sphere.radius, 3000);
     assert.deepEqual(taken, [
       {
         reason: 'context-vessel-autofocus',

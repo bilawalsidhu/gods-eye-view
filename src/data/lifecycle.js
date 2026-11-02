@@ -147,12 +147,16 @@ export class LayerLifecycle {
     this.viewer = viewer;
     this.engine = engine ?? engineFromViewer(viewer) ?? null;
     this._catalogSourceAvailability = catalog.getSourceAvailability;
+    const attachments = [];
     for (const layer of catalog.layers) {
       const entry = this.layers.get(layer.id);
       if (!entry) this.register(layer);
       else {
         if (entry.module !== layer) throw new Error(`Layer owner changed: ${layer.id}`);
-        if (entry.initialized) layer.attachRenderer(viewer, this._moduleContext());
+        if (entry.initialized) {
+          const ready = layer.attachRenderer(viewer, this._moduleContext());
+          if (ready?.then) attachments.push(ready);
+        }
       }
     }
     // Retained entries may appear anywhere in the directory. Preserve both
@@ -163,6 +167,7 @@ export class LayerLifecycle {
       this.layers.set(id, entry);
     }
     this.finalizeRegistrations(catalog.metadata);
+    if (attachments.length) return Promise.all(attachments);
   }
 
   /** Register a synthetic layer after sealing in an explicitly dev-enabled manager. */

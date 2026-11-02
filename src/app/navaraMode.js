@@ -106,6 +106,8 @@ export async function registerNavaraLayerRenderers() {
     bikeshare: async () =>
       (await import('../layers/bikeshare/render/navara.js'))
         .createBikeshareNavaraRenderer,
+    'military-awareness': async () =>
+      (await import('../layers/awareness/render/navara.js')).createAwarenessNavaraRenderer,
     'military-installations': async () => {
       const { createInstallationsNavaraRenderer } =
         await import('../layers/installations/render/navara.js');

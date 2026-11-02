@@ -105,11 +105,13 @@ export class StyleManager extends ShellFacade {
       requestServices,
       initialShareCode = null,
       engineSwitch = false,
+      layerSession = null,
       localePicker = true,
     } = {},
   ) {
     super();
     this._localePickerEnabled = localePicker;
+    this._layerSession = layerSession;
     const {
       IntelHUD,
       ShareLinkManager,
@@ -197,6 +199,7 @@ export class StyleManager extends ShellFacade {
     this._shareRestoration = new ShareRestoration({
       viewer,
       canvas: engine?.host.canvas ?? viewer?.canvas,
+      handoffLayers: layerSession?.handoffLayers,
       navigation: this._navigation,
       syncShareState: () => this._syncShareState(),
       syncModels3d: (state) => this._syncModels3dFromLayerState(state),
@@ -972,6 +975,8 @@ export class StyleManager extends ShellFacade {
         setClearBusy: (busy) => this._publishClearBusy(busy),
       },
     });
+    if (this._layerSession?.handoffLayers)
+      this._contextControls.resumeScene(this._layerSession.contacts);
     // The Contacts layer publishes its panel; the view calls its navigation.
     contextStore.connectAwareness(militaryAwarenessLayer);
     // A panel left by an earlier shell must not outlive its layer.
@@ -1855,7 +1860,13 @@ export class StyleManager extends ShellFacade {
     // Close camera-entry seams synchronously. Context restoration may await
     // layer work, so leaving these listeners attached until afterward lets a
     // focus event release tracking or start a flight during teardown.
-    await this._contextControls.restoreForDisposal();
+    if (this._layerSession && !this._layerSession.lifetime.signal.aborted &&
+        this._contextControls.canRetainContacts()) {
+      this._layerSession.contacts = this._contextControls.captureScene();
+    } else {
+      if (this._layerSession) this._layerSession.contacts = null;
+      await this._contextControls.restoreForDisposal();
+    }
     // IR boost teardown BEFORE detaching the data manager: restore fog and
     // un-boost both aircraft layers so a surviving viewer or replacement
     // manager doesn't inherit sensor state (review P2, 2026-08-16).

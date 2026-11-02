@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
 import { t } from '../../i18n/index.js';
 import {
@@ -8,10 +7,9 @@ import {
 import {
   formatAwarenessLabel,
   formatAwarenessDistance,
-  AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
-import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
+import { AWARENESS_PAGE_SIZE } from './policy.js';
 import { formatAwarenessDirection } from './presentation.js';
 
 export function createRendering({
@@ -36,10 +34,10 @@ export function createRendering({
    * viewer's container. Each part keeps its last placement while hidden.
    */
   function ensureDirectionOverlay() {
-    if (layerState.directionView || !layerState.viewer)
+    if (layerState.directionView || !layerState.display)
       return layerState.directionView;
     presentDirection({
-      container: layerState.viewer.container,
+      container: layerState.display.container,
       hidden: true,
       ring: null,
       heading: { text: '', left: null, top: null },
@@ -129,7 +127,7 @@ export function createRendering({
       return;
     }
 
-    const canvas = layerState.viewer.scene.canvas;
+    const canvas = layerState.display.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     const sonar = isCyberSonarActive()
@@ -147,7 +145,7 @@ export function createRendering({
       120,
       Math.min(geometry.radius - 48, geometry.radius * 0.66),
     );
-    const cameraHeading = layerState.viewer.camera.heading || 0;
+    const cameraHeading = layerState.display.camera.heading || 0;
     const headingDeg =
       (Math.round(geo.math.toDegrees(cameraHeading)) + 360) % 360;
     const ring = {
@@ -205,8 +203,8 @@ export function createRendering({
       }
       geo.cartesian3.normalize(direction, direction);
       const projection = celestialScreenAngle(
-        geo.cartesian3.dot(direction, layerState.viewer.camera.rightWC),
-        geo.cartesian3.dot(direction, layerState.viewer.camera.upWC),
+        geo.cartesian3.dot(direction, layerState.display.camera.rightWC),
+        geo.cartesian3.dot(direction, layerState.display.camera.upWC),
         layerState.directionAngles[index],
       );
       if (projection.stable)
@@ -234,12 +232,12 @@ export function createRendering({
         transform: `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`,
       };
       const label = formatAwarenessLabel(item);
-      const subjectCartographic = Cesium.Cartographic.fromCartesian(
+      const subjectCartographic = geo.cartographic.fromCartesian(
         layerState.subject.position,
         undefined,
         layerState.SUBJECT_CARTOGRAPHIC_SCRATCH,
       );
-      const targetCartographic = Cesium.Cartographic.fromCartesian(
+      const targetCartographic = geo.cartographic.fromCartesian(
         item.position,
         undefined,
         layerState.TARGET_CARTOGRAPHIC_SCRATCH[index],
@@ -273,9 +271,8 @@ export function createRendering({
   }
 
   function clearVisual() {
-    if (layerState.visual?.entities && layerState.viewer) {
-      for (const entity of layerState.visual.entities)
-        layerState.viewer.entities.remove(entity);
+    if (layerState.visual) {
+      layerState.visual.rim.destroy();
       // Idle mode renders only on request; a removed ring must not linger.
       governorRequestRender('awareness-visual');
     }
@@ -283,8 +280,8 @@ export function createRendering({
   }
 
   function renderVisual(subject) {
-    if (!layerState.viewer || !subject?.position) return;
-    const cartographic = Cesium.Cartographic.fromCartesian(subject.position);
+    if (!layerState.display || !subject?.position) return;
+    const cartographic = geo.cartographic.fromCartesian(subject.position);
     if (!cartographic) return;
     const groundCenter = geo.cartesian3.fromRadians(
       cartographic.longitude,
@@ -299,8 +296,7 @@ export function createRendering({
       if (
         geo.cartesian3.distance(layerState.visual.center, groundCenter) >= 250
       ) {
-        for (const entity of layerState.visual.entities)
-          entity.position.setValue(groundCenter);
+        layerState.visual.rim.move(groundCenter);
         geo.cartesian3.clone(groundCenter, layerState.visual.center);
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
@@ -309,26 +305,9 @@ export function createRendering({
     }
     clearVisual();
 
-    const entities = [];
-
-    entities.push(
-      layerState.viewer.entities.add({
-        position: groundCenter,
-        ellipse: {
-          semiMajorAxis: AWARENESS_RADIUS_M,
-          semiMinorAxis: AWARENESS_RADIUS_M,
-          fill: false,
-          outline: true,
-          outlineColor:
-            Cesium.Color.fromCssColorString('#62b5ff').withAlpha(0.72),
-          height: CONTEXT_RIM_HEIGHT_M,
-        },
-      }),
-    );
-
     layerState.visual = {
       key,
-      entities,
+      rim: layerState.display.createRim(groundCenter),
       center: geo.cartesian3.clone(groundCenter),
     };
     governorRequestRender('awareness-visual');

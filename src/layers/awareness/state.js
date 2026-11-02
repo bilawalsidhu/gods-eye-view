@@ -14,7 +14,7 @@ export function createState({ services }) {
   );
 
   Object.assign(state, {
-    viewer: null,
+    display: null,
     dataManager: null,
     enabled: false,
     // Set once a refresh observes the subject gone from a still-reporting source.

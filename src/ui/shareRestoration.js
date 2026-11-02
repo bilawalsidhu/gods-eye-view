@@ -110,6 +110,7 @@ export class ShareRestoration {
   constructor({
     viewer,
     canvas = viewer?.canvas,
+    handoffLayers = null,
     navigation,
     syncShareState,
     syncModels3d,
@@ -121,6 +122,7 @@ export class ShareRestoration {
     Object.assign(this, {
       viewer,
       canvas,
+      handoffLayers,
       navigation,
       syncShareState,
       syncModels3d,
@@ -368,11 +370,13 @@ export class ShareRestoration {
       );
       this._layerStateRestorePromise = this._layerStateCoordinator.start({
         shareLayerState: this._initialShareState?.layerState || null,
+        handoffLayers: this.handoffLayers,
         shareCreatedAtMs: this._initialShareState?.sharedAtMs ?? null,
         // Any valid camera/style share isolates recipient-local preferences,
         // including legacy and malformed-v2 layer payloads.
         allowLocalState: !this._initialShareState,
       });
+      this.handoffLayers = null;
       if (this._initialShareSelectionSuperseded) {
         this._layerStateCoordinator.cancelPendingShareTracking(
           'superseded-before-layer-coordinator-start',
@@ -425,6 +429,7 @@ export class ShareRestoration {
     try {
       while (live()) {
         const vessels = this._dataManager?.layers?.get?.(layerId)?.module;
+        if (vessels?.getSelectedInfo?.()?.mmsi === id) return true;
         if (vessels?.hasContact?.(id) && vessels.selectById(id)) return true;
         if (Date.now() >= deadline) break;
         await new Promise((resolve) =>

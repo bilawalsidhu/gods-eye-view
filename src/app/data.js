@@ -45,7 +45,7 @@ export function createApplicationData({
   onData?.(dataManager);
   if (!catalog?.layers || !catalog?.metadata)
     throw new TypeError('An application layer catalog is required');
-  dataManager.bindCatalog(viewer, engine, catalog);
+  const attached = dataManager.bindCatalog(viewer, engine, catalog);
   for (const layer of catalog.layers) layer.attachDataManager?.(dataManager);
   for (const layer of catalog.layers)
     layer.attachMapStackController?.(mapStackController);
@@ -75,5 +75,6 @@ export function createApplicationData({
   // The sonar scene draws on the viewer; the Navara engine has none.
   if (viewer) defer(createCyberSonarScene(viewer, dataManager));
 
-  return { dataManager, catalog, presentation };
+  const data = { dataManager, catalog, presentation };
+  return attached ? attached.then(() => data) : data;
 }
