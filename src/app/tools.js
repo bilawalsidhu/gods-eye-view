@@ -2,6 +2,8 @@ import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
+import { useDisplayStore } from '../ui/stores/display.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
@@ -53,10 +55,22 @@ export function createApplicationTools({
     if (window.__gevAnnotations === annotations) delete window.__gevAnnotations;
     annotations.destroy();
   });
+  const displayStore = useDisplayStore(applicationPinia());
+  // The Display panel's controls answer through the store; returns the
+  // disconnect.
+  const connectDisplay = (actions) => {
+    const token = displayStore.connect(actions);
+    return () => displayStore.detach(token);
+  };
   // DISPLAY ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
   // while a session is open, so its teardown belongs to the application
   // lifetime rather than to whoever last pressed the button.
-  const drawTool = initDrawTool({ viewer, annotations });
+  const drawTool = initDrawTool({
+    viewer,
+    annotations,
+    publish: (view) => displayStore.publishDraw(view),
+    connect: connectDisplay,
+  });
   defer(() => drawTool?.destroy());
   // DISPLAY ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
   // own data source. They live for the page session, so the application
@@ -66,6 +80,8 @@ export function createApplicationTools({
     navigation: styleManager,
     ground: operations.surface?.groundFloor,
     subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
+    publish: (view) => displayStore.publishGeoImport(view),
+    connect: connectDisplay,
   });
   defer(() => geoFileImport?.destroy());
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the

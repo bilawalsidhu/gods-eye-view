@@ -161,6 +161,7 @@ test('a heading that rounds to north reads 000, not 360', () => {
   assert.equal(formatHeadingReadout(359.4), '359');
   assert.equal(formatHeadingReadout(0), '000');
   assert.equal(formatHeadingReadout(10.2), '010');
+  assert.equal(formatHeadingReadout(-0.6), '359');
   assert.equal(formatHeadingReadout(Number.NaN), '---');
 });
 
