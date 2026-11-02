@@ -461,14 +461,16 @@ html:not([lang='en']) .radio-transport button {
   border-top: 1px solid rgba(98, 181, 255, 0.16);
 }
 .military-awareness-standby strong {
-  color: #79c2ff;
+  color: var(--text-primary);
   font-size: 10px;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
 }
 .military-awareness-standby span {
-  color: #8192a6;
-  font-size: 9px;
-  letter-spacing: 0.05em;
+  color: rgba(214, 236, 255, 0.72);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
 }
 .military-awareness-standby button {
   justify-self: start;
@@ -686,6 +688,12 @@ html:not([lang='en']) .data-name {
 html:not([lang='en']) .data-count {
   min-width: auto;
   text-wrap: balance;
+}
+
+/* The status column keeps its width, so a wide chip (WIRD AKTIVIERT) never
+   overlaps the name; the name wraps in the room left beside it. */
+html:not([lang='en']) .data-toggle-right {
+  flex: none;
 }
 
 /* Row text pieces that must not break inside: a hyphenated code (ADS-B) and

@@ -125,8 +125,11 @@ export function extractMessages() {
     const html = readFileSync(path.join(ROOT, file), 'utf8');
     for (const [, tag, attrs, text] of html.matchAll(TAG)) {
       const where = `${file} <${tag}>`;
-      if (/\sdata-i18n(\s|=|$)/.test(attrs))
-        add(normalize(decodeHtml(text)), where);
+      if (/\sdata-i18n(\s|=|$)/.test(attrs)) {
+        const context = attrs.match(/\sdata-i18n-context="([^"]*)"/);
+        const message = normalize(decodeHtml(text));
+        add(context ? `${decodeHtml(context[1])}|${message}` : message, where);
+      }
       for (const [, name] of attrs.matchAll(
         /\sdata-i18n-(title|aria-label|placeholder)\b/g,
       )) {

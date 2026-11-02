@@ -107,7 +107,6 @@ body.mobile-shell #top-center-actions {
 /* ── HUD: one compact readout under the top bar ────────────────────────── */
 body.mobile-shell #intel-hud .hud-edge,
 body.mobile-shell #intel-hud .hud-corner,
-body.mobile-shell #intel-hud .hud-top-bar,
 body.mobile-shell #intel-hud .hud-bottom-bar {
   display: none;
 }

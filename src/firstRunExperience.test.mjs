@@ -374,24 +374,26 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
   assert.match(covered, /\} catch \{\s*\n\s*return false;\s*\n\s*\}/);
 });
 
-test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
+test('one ESC does one thing — a Cockpit utility disclosure stops later document listeners', () => {
   const ui = fs.readFileSync(
     new URL('./ui/radioBindings.js', import.meta.url),
     'utf8',
   );
 
-  // stopPropagation() does NOT stop later listeners on the SAME document, so the
-  // disclosure's earlier capture handler closed the disclosure and the launcher
-  // dismissed itself off the same key. The earlier listener is the only one that
-  // can stop the later one — and only the immediate form does it.
-  const radioEsc = ui.slice(ui.indexOf("event.key !== 'Escape' ||"));
-  const claim = radioEsc.slice(0, radioEsc.indexOf('setRadioDisclosure(false'));
+  // stopPropagation() does NOT stop later listeners on the SAME document. The
+  // Context Radio disclosure that once raced the launcher this way is gone, and
+  // Cockpit's utility disclosures never share the screen with the launcher, but
+  // they own the same contract: their capture handler is the only one that can
+  // keep a later document listener (Cockpit exit, the launcher) off the key, and
+  // only the immediate form does it.
+  const utilityEsc = ui.slice(ui.indexOf('if (!displayOpen && !radioOpen) return;'));
+  const claim = utilityEsc.slice(0, utilityEsc.indexOf('setCockpitDisclosure(kind, false'));
   assert.match(claim, /event\.preventDefault\(\);/);
   assert.match(claim, /event\.stopImmediatePropagation\(\);/);
   assert.doesNotMatch(
     claim,
     /event\.stopPropagation\(\);/,
-    'the plain form leaves the launcher listening and is the defect itself',
+    'the plain form leaves later document listeners acting on the same key',
   );
 
   // Belt on the launcher side: a key another surface already marked is not ours,
@@ -1022,14 +1024,10 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;
-  assert.deepEqual(hudLayout.enum, [
-    'tactical',
-    'operator',
-    'minimal',
-    'cyber',
-  ]);
-  // Cyber deliberately adds one layout; first-run missions still change no tools.
-  hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal', 'cyber']);
+  // Cyber deliberately adds one layout and Operator was retired; first-run
+  // missions still change no tools.
+  hudLayout.enum = ['tactical', 'operator', 'minimal'];
   const cameraMotion = legacyTools.find((tool) => tool.name === 'move_camera')
     .parameters.properties.motion;
   assert.deepEqual(cameraMotion.enum, [
@@ -1040,6 +1038,19 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
     'rotate_globe',
     'stop',
   ]);
+  // Snow is retired from set_visual_style; restore it to keep the legacy pin.
+  const visualStyle = legacyTools.find(
+    (tool) => tool.name === 'set_visual_style',
+  ).parameters.properties.style;
+  assert.deepEqual(visualStyle.enum, [
+    'normal',
+    'retro',
+    'surveillance',
+    'thermal',
+    'anime',
+    'noir',
+  ]);
+  visualStyle.enum = [...visualStyle.enum, 'snow'];
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt
@@ -1052,12 +1063,14 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Globe rotation adds one camera motion and its descriptions; Globe View
   // framing/default guidance updates only move_camera and mode descriptions.
   // Radio markup and the complete production-request comparison pin locality.
-  // Restore the base camera/Globe View wording with the globe-rotation append.
+  // Panel adds timeout and named voice/provider targets; consolidated guidance
+  // preserves the mission mapping and globe-rotation arguments.
+  // S2 GhostMaps extends the generated layer enums; both feature contracts remain.
   // Message signs adds its context enum value.
-  assert.equal(block.length, 30894, 'serialized tool schema length drifted');
+  assert.equal(block.length, 31222, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'd3b5f6b29eec0fb7883e798a2d1f06e54cfa3fce871d733d615d7a297dcecf9c',
+    '44c7694eca2b3ab9441edfde78aae0725c051fb4dac11c882c6ce7ee3bae3859',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

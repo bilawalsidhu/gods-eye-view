@@ -747,12 +747,6 @@
   .btn-icon::before {
   content: '◐';
 }
-:root[data-ui-theme='cyber']
-  #command-dock
-  .style-btn[data-style='snow']
-  .btn-icon::before {
-  content: '❄︎';
-}
 
 :root[data-ui-theme='cyber'] :where(#bloom-toggle, #sharpen-toggle) {
   font-size: 0;
@@ -1447,6 +1441,15 @@
   text-shadow: 0 0 6px var(--cyber-red);
 }
 
+/* Cyber frames each mode button itself; the shared segmented track would
+   draw a third, blue frame around them. */
+:root[data-ui-theme='cyber'] .global-context-modes {
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
 :root[data-ui-theme='cyber'] .dock-tray-toggle,
 :root[data-ui-theme='cyber'] .context-mode-button {
   background-color: rgba(38, 52, 58, 0.95);
@@ -1556,10 +1559,6 @@
   );
   box-shadow: 0 0 0 1px rgba(234, 240, 241, 0.06) inset;
   clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
-}
-
-#intel-hud[data-variant='cyber'] .hud-top-bar {
-  display: none;
 }
 
 /* Cyber keeps the useful style and locality readouts, not fictional IDs. */
@@ -1798,8 +1797,11 @@
     isolation: isolate;
     min-height: 132px;
     flex: 1 1 auto;
-    border-style: solid;
-    border-color: rgba(206, 222, 226, 0.14);
+    place-content: center;
+    padding: 12px;
+    border: 1px solid rgba(206, 222, 226, 0.14);
+    border-radius: 7px;
+    text-align: center;
     overflow: hidden;
     background:
       linear-gradient(
@@ -1861,7 +1863,6 @@
     background-size: 78px 78px;
   }
 
-  #intel-hud[data-variant='cyber'] .hud-top-bar,
   #intel-hud[data-variant='cyber'] .hud-bottom-bar {
     display: none;
   }

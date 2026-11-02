@@ -1,5 +1,5 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
-import { t } from '../../i18n/index.js';
+import { msg, t } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 import {
@@ -7,6 +7,59 @@ import {
   specFovCapabilityToken,
   isDatasheetFov,
 } from './modelSpecs.js';
+
+// The summary line names the CAL badge, the source kind and the view band in
+// the page language; the codes underneath stay English.
+const CAL_BADGE_LABELS = Object.freeze({
+  calibrated: msg('CALIBRATED'),
+  curated: msg('CURATED'),
+  'raw-prior': msg('RAW PRIOR'),
+});
+
+// The same source-kind words as the CCTV panel (src/ui/cctvFrames.js).
+const SOURCE_KIND_LABELS = Object.freeze({
+  snapshot: msg('SNAPSHOT'),
+  live: msg('LIVE'),
+  fallback: msg('FALLBACK'),
+  upstream: msg('UPSTREAM'),
+  synthetic: msg('SYNTHETIC'),
+  configured: msg('CONFIGURED'),
+  seed: msg('SEED'),
+  image: msg('IMAGE'),
+  unknown: msg('UNKNOWN'),
+});
+
+/** CAL badge id ('raw-prior') as the summary shows it; unknown ids stay codes. */
+export function summaryCalLabel(badge) {
+  const key = String(badge || '');
+  return CAL_BADGE_LABELS[key]
+    ? t(CAL_BADGE_LABELS[key])
+    : key.replace('-', ' ').toUpperCase();
+}
+
+/** Source kind ('image', 'snapshot') for the summary; HLS, MJPEG… stay codes. */
+export function summarySourceLabel(kind) {
+  const key = String(kind || 'image').toLowerCase();
+  return SOURCE_KIND_LABELS[key]
+    ? t(SOURCE_KIND_LABELS[key])
+    : key.toUpperCase();
+}
+
+/** View band id ('street', 'city'…) as the HUD names it. */
+export function summaryViewBandLabel(band) {
+  switch (band) {
+    case 'street':
+      return t('STREET', { context: 'view band' });
+    case 'city':
+      return t('CITY', { context: 'view band' });
+    case 'regional':
+      return t('REGIONAL', { context: 'view band' });
+    case 'global':
+      return t('GLOBAL', { context: 'view band' });
+    default:
+      return String(band || '').toUpperCase();
+  }
+}
 
 export function createPresentation({
   state: layerState,
@@ -72,17 +125,13 @@ export function createPresentation({
         : t('ISOLATED VIEW'),
       layerState._showProjection ? t('PROJ MONITOR') : t('PROJ OFF'),
       layerState._coverageMode === 'viewshed' ? t('VIEWSHED') : null,
-      t('CAL {value}', {
-        value: calBadge.replace('-', ' ').toUpperCase(),
+      t('CAL {value}', { value: summaryCalLabel(calBadge) }),
+      t('SRC {value}', {
+        value: summarySourceLabel(
+          health?.sourceKind || active.camera.feedType || 'image',
+        ),
       }),
-      health?.sourceKind
-        ? t('SRC {value}', {
-            value: String(health.sourceKind).toUpperCase(),
-          })
-        : t('SRC {value}', {
-            value: String(active.camera.feedType || 'image').toUpperCase(),
-          }),
-      t('{value} CONTEXT', { value: viewBand.toUpperCase() }),
+      t('{value} CONTEXT', { value: summaryViewBandLabel(viewBand) }),
       // Identified hardware: append the model's datasheet specs + attribution.
       active.camera.spec
         ? t('{spec} · SPECS: CCTV-DATABASE.COM', {
@@ -225,12 +274,51 @@ export function createPresentation({
       },
       activeCameraId: activeId,
       activeCamera: active ? getPublicCameraState(active, activeId) : null,
-      cameras: layerState._records.map((record) =>
-        getPublicCameraState(record, activeId),
-      ),
+      cameraIndex: cameraIndex(),
       summary: buildSummaryText(),
     };
+    // The full per-camera state is built only when a subscriber reads it: a
+    // catalog of tens of thousands would otherwise be rebuilt on every
+    // progress tick for listeners that only want the active camera. It reads
+    // the records live at that moment, and spreading or serializing the
+    // payload builds it, so callers that want a count use `count`.
+    let cameras = null;
+    Object.defineProperty(payload, 'cameras', {
+      enumerable: true,
+      get() {
+        cameras ??= layerState._records.map((record) =>
+          getPublicCameraState(record, activeId),
+        );
+        return cameras;
+      },
+    });
     return payload;
+  }
+
+  /**
+   * `{ id, city, name }` for the active camera, then every camera the view
+   * pass shows: what the camera picker lists. A whole catalog would put tens
+   * of thousands of options in the DOM and slow every layout. The same array
+   * is returned until the view or the active camera changes, so a consumer
+   * can compare it by identity.
+   * @returns {{id: string, city: string, name: string}[]}
+   */
+
+  function cameraIndex() {
+    const view = layerState._viewRecords;
+    const active = parts.selection.getActiveRecord();
+    const cached = layerState._cameraIndexCache;
+    if (cached?.view === view && cached.active === active) return cached.list;
+    const records = active
+      ? [active, ...view.filter((record) => record !== active)]
+      : view;
+    const list = records.map(({ camera }) => ({
+      id: camera.id,
+      city: camera.city,
+      name: camera.name,
+    }));
+    layerState._cameraIndexCache = { view, active, list };
+    return list;
   }
 
   /** Dispatches the current UI state to all registered subscriber callbacks. */

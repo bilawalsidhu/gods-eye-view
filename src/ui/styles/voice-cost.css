@@ -62,6 +62,15 @@
   color: #ffc46b;
 }
 
+.gev-voice-cost-warning {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.gev-voice-cost-warning[data-level='unknown'] {
+  color: #ffc46b;
+}
+
 .gev-voice-cost-value[data-level='cap'] {
   color: #ff6b6b;
   font-weight: 600;
@@ -111,7 +120,7 @@ html:not([lang='en']) #command-dock .gev-voice-cost {
   padding-left: 0.1rem;
 }
 
-html:not([lang='en']) #command-dock .gev-voice-tier-btn {
+html:not([lang='en']) #command-dock .gev-voice-heading .gev-voice-tier-btn {
   min-width: 0;
   padding: 0 0.2rem;
 }
@@ -230,5 +239,328 @@ html:not([lang='en'])
   .gev-voice-provider-field {
     opacity: 1;
     pointer-events: auto;
+  }
+}
+
+/* The opt-in provider and gear share a discoverable row at the existing anchor. */
+#gev-voice-control:has(> .gev-voice-settings-button) {
+  --gev-voice-settings-gap: 0.75rem;
+  --gev-voice-tray-clearance: 0px;
+}
+#gev-voice-control:has(> .gev-voice-settings-button)
+  .gev-voice-provider-field:not([hidden]) {
+  bottom: calc(
+    100% + var(--gev-provider-lift, 0px) + var(--gev-voice-settings-gap)
+  );
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 46px 6px 6px;
+  border-color: rgba(123, 189, 211, 0.28);
+  background: rgba(9, 18, 27, 0.88);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.46);
+  color-scheme: dark;
+  opacity: 1;
+  pointer-events: auto;
+}
+#gev-voice-control:has(> .gev-voice-settings-button)
+  .gev-voice-provider-field
+  > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+#gev-voice-control:has(> .gev-voice-settings-button)
+  .gev-voice-provider-field
+  select {
+  min-height: 34px;
+  font-size: 0.7rem;
+}
+#gev-voice-control .gev-voice-settings-button {
+  position: absolute;
+  top: 1rem;
+  right: 0.25rem;
+  z-index: 11;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  color: rgba(190, 221, 230, 0.72);
+  background: rgba(9, 18, 27, 0.92);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.3rem;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+#gev-voice-control[data-provider-choice='true']:has(
+    .gev-voice-provider-field:not([hidden])
+  )
+  .gev-voice-settings-button {
+  top: auto;
+  right: 7px;
+  bottom: calc(
+    100% + var(--gev-provider-lift, 0px) + var(--gev-voice-settings-gap) + 7px
+  );
+}
+#gev-voice-control
+  .gev-voice-settings-button:is(:hover, [aria-expanded='true']) {
+  color: var(--voice-panel-accent, var(--accent));
+  border-color: currentColor;
+  background: rgba(0, 212, 255, 0.12);
+}
+#gev-voice-control .gev-voice-settings-button:focus-visible {
+  outline: 2px solid var(--voice-panel-accent, var(--accent));
+  outline-offset: 2px;
+}
+:root[data-ui-theme='cyber']
+  #gev-voice-control:has(> .gev-voice-settings-button) {
+  --voice-panel-accent: var(--cyber-red-bright);
+}
+:root[data-ui-theme='cyber']
+  #gev-voice-control:has(> .gev-voice-settings-button)
+  .gev-voice-provider-field {
+  background: var(--cyber-panel-surface);
+  border-color: var(--glass-border);
+}
+@media (pointer: coarse) {
+  #gev-voice-control .gev-voice-settings-button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  #gev-voice-control:has(> .gev-voice-settings-button)
+    .gev-voice-provider-field:not([hidden]) {
+    padding-right: 56px;
+  }
+  #gev-voice-control:has(> .gev-voice-settings-button)
+    .gev-voice-provider-field
+    select {
+    min-height: 44px;
+  }
+}
+
+/* Keep the row and popup on the same lift, with a small gap above pinned
+   trays. On very short screens the shared lift still yields to the viewport. */
+#command-dock.dock-has-pinned-tray
+  #gev-voice-control[data-provider-choice='true']:has(
+    > .gev-voice-settings-button
+  ) {
+  --gev-voice-settings-gap: 0.375rem;
+  --gev-provider-lift: min(
+    calc(var(--dock-pinned-stack-height) + var(--gev-voice-tray-clearance)),
+    max(0px, calc(100dvh - 20rem))
+  );
+}
+
+/* Match the attribution-aware tray offsets without moving the trays. The
+   popup can scroll before the shared viewport budget caps its lift. */
+@media (max-width: 900px) {
+  #gev-voice-control:has(> .gev-voice-settings-button) {
+    --gev-voice-tray-clearance: calc(3rem - 1.2rem);
+  }
+}
+@media (max-width: 720px) {
+  #gev-voice-control:has(> .gev-voice-settings-button) {
+    --gev-voice-tray-clearance: calc(2vh + 2.5rem - 1.2rem);
+  }
+}
+
+/* Short touch landscapes have room beside the dock, not above its pinned
+   stack. Keep the same chooser and gear together in that empty lower gutter;
+   the open popup remains a bounded, scrollable overlay above the microphone. */
+@media (pointer: coarse) and (orientation: landscape) and (min-width: 480px) and (max-height: 500px) {
+  #command-dock
+    > #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    ),
+  #command-dock.dock-has-pinned-tray
+    > #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    ) {
+    --gev-provider-lift: 0px;
+    --gev-landscape-row-width: clamp(
+      108px,
+      calc((100vw - var(--dock-unified-width)) / 2 - 0.875rem),
+      calc(100% - 2px)
+    );
+  }
+  #command-dock
+    > #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    )
+    > .gev-voice-provider-field:not([hidden]) {
+    left: calc(50% - 50vw + 0.5rem);
+    right: auto;
+    bottom: 0.375rem;
+    width: var(--gev-landscape-row-width);
+    box-sizing: border-box;
+  }
+  #command-dock
+    > #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    )
+    > .gev-voice-settings-button {
+    left: calc(50% - 50vw + 0.5rem + var(--gev-landscape-row-width) - 51px);
+    right: auto;
+    top: auto;
+    bottom: calc(0.375rem + 7px);
+  }
+}
+
+/* The revealed row clears pinned wings without making the Voice column's
+   noninteractive gaps cover their controls. Keep hit surfaces stable so hover
+   promotion cannot oscillate when the pointer crosses root padding. */
+#command-dock
+  > #gev-voice-control[data-provider-choice='true']:has(
+    > .gev-voice-settings-button
+  ) {
+  pointer-events: none;
+}
+#command-dock
+  > #gev-voice-control[data-provider-choice='true']:has(
+    > .gev-voice-settings-button
+  )
+  > :is(
+    #gev-voice-button,
+    .gev-voice-heading,
+    .gev-voice-readout,
+    .gev-voice-provider-field,
+    .gev-voice-settings-button,
+    .gev-voice-panel,
+    .gev-voice-error-tray
+  ) {
+  pointer-events: auto;
+}
+@media (hover: hover) and (pointer: fine) {
+  #command-dock.dock-has-pinned-tray
+    > #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    ):is(
+      :hover,
+      [data-row-grace],
+      :has(
+        :focus-visible,
+        #gev-voice-provider:focus,
+        .gev-voice-panel[data-view='settings']:not([hidden])
+      )
+    ) {
+    z-index: 101;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  #command-dock.dock-has-pinned-tray
+    > #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    ) {
+    z-index: 101;
+  }
+}
+
+/* Pointer grace crosses pinned trays without covering their controls. Keyboard
+   focus, the provider select and an open panel hold the shared row visible. */
+@media (hover: hover) and (pointer: fine) {
+  #command-dock
+    #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    )
+    :is(.gev-voice-provider-field, .gev-voice-settings-button) {
+    transition:
+      opacity 160ms ease,
+      transform 180ms ease;
+  }
+  #command-dock
+    #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    ):not(:hover):not([data-row-grace]):not(
+      :has(
+        :focus-visible,
+        #gev-voice-provider:focus,
+        .gev-voice-panel[data-view='settings']:not([hidden])
+      )
+    )
+    :is(.gev-voice-provider-field, .gev-voice-settings-button) {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+  }
+  #command-dock:not(.dock-has-pinned-tray)
+    #gev-voice-control[data-provider-choice='true']:has(
+      > .gev-voice-settings-button
+    )
+    .gev-voice-provider-field::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    height: calc(var(--gev-voice-settings-gap) + 8px);
+  }
+}
+
+/* Existing tier and estimate controls are readable Settings content in panel mode. */
+.gev-voice-cost-settings {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--glass-border);
+}
+.gev-voice-cost-settings:has(#gev-voice-tier[hidden]):has(
+    #gev-voice-cost-value[hidden]
+  ),
+.gev-voice-cost-setting-row:has(> [hidden]) {
+  display: none;
+}
+.gev-voice-cost-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2rem;
+  color: var(--text-primary);
+  font-size: 0.68rem;
+}
+.gev-voice-cost-setting-row > span {
+  min-width: 0;
+}
+#gev-voice-control .gev-voice-cost-settings .gev-voice-tier-btn {
+  flex: 0 0 auto;
+  min-height: 2rem;
+  min-width: 3.25rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.67rem;
+}
+.gev-voice-cost-settings .gev-voice-cost-value {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+}
+.gev-voice-cost-settings .gev-voice-cost-value[data-level='ok'] {
+  color: var(--voice-panel-accent, var(--accent));
+}
+#gev-voice-control .gev-voice-settings-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+@media (pointer: coarse) {
+  #gev-voice-control .gev-voice-cost-settings .gev-voice-tier-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #command-dock
+    #gev-voice-control:has(> .gev-voice-settings-button)
+    :is(.gev-voice-provider-field, .gev-voice-settings-button) {
+    transition: none;
   }
 }

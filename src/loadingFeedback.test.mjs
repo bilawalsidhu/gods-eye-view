@@ -94,20 +94,27 @@ test('deferred terminal notices lose ownership to newer acquisition epochs and d
 
 test('share-follow failures use the universal top-center status instead of the bottom toast', () => {
   const handler = shellMethod('_handleShareTrackingRestoreStatus').toString();
-  assert.match(handler, /this\.showStatus\(message\)/);
-  assert.match(handler, /this\.initialRestorePromise\.then\(showAfterStartupCover\)/);
-  assert.match(handler, /this\._lifetime\.frame\(\(\) => \{/);
-  assert.match(handler, /this\._lifetime\.listen\(\s*startupCover,\s*'transitionend',\s*showOnce,\s*\{ once: true \},?\s*\)/);
-  assert.match(handler, /fallbackTimer = this\._lifetime\.timeout\(showOnce, 1000\)/);
-  assert.doesNotMatch(handler, /this\._showToast\(message\)/);
-  assert.doesNotMatch(handler, /pushCockpitSignal/);
+  const present = shellMethod('_presentAfterStartupCover').toString();
+  assert.match(
+    handler,
+    /this\.initialRestorePromise\.then\(\(\) =>\s*this\._presentAfterStartupCover\(message, noticeGeneration\),?\s*\)/,
+  );
+  assert.match(present, /this\.showStatus\(message\)/);
+  assert.match(present, /this\._lifetime\.frame\(\(\) => \{/);
+  assert.match(present, /this\._lifetime\.listen\(\s*startupCover,\s*'transitionend',\s*showOnce,\s*\{ once: true \},?\s*\)/);
+  assert.match(present, /fallbackTimer = this\._lifetime\.timeout\(showOnce, 1000\)/);
+  assert.match(present, /canPresentDeferredStatusNotice\(/);
+  for (const source of [handler, present]) {
+    assert.doesNotMatch(source, /this\._showToast\(message\)/);
+    assert.doesNotMatch(source, /pushCockpitSignal/);
+  }
   assert.match(handler, /result\.classification === 'pending'/);
   assert.match(handler, /state: 'acquiring'/);
   assert.match(handler, /persistent: true/);
   assert.match(handler, /this\._shareTrackingNoticeGeneration \+= 1/);
-  assert.match(handler, /canPresentDeferredStatusNotice\(/);
   assert.match(handler, /if \(this\._shareTrackingAcquiringKey\) return/);
-  assert.match(handler, /result\.classification === 'followed'\s*\|\|\s*result\.classification === 'cancelled'/);
+  assert.match(handler, /result\.classification === 'followed'/);
+  assert.match(handler, /result\.classification === 'cancelled'\) return/);
 });
 
 test('universal notice masks active loading only for its own fixed dwell', () => {

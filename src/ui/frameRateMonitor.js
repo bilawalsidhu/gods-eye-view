@@ -6,7 +6,7 @@ export function createFrameRateMonitor({ viewer, documentRef = document }) {
   if (!host || !frameEvent) return { destroy() {} };
 
   const readout = documentRef.createElement('div');
-  readout.className = 'frame-rate-readout';
+  readout.className = 'frame-rate-readout scene-text-holdout';
   readout.hidden = true;
   // i18n-ignore: FPS is a unit code, the same in every language
   readout.textContent = 'FPS —';

@@ -273,6 +273,14 @@ test('viewer caption reads "Image by" left, date right, and links to Mapillary',
   assert.equal(view.viewer.open, true);
 });
 
+test('a bearing that rounds to north reads 0°, not 360°', () => {
+  const caption = (bearing) =>
+    presentStreetLevelPanel(snapshot({ street: { open: true, bearing } }))
+      .viewer.captionRight;
+  assert.equal(caption(359.4), '359°');
+  assert.equal(caption(359.6), '0°');
+});
+
 test('an image without a creator name leaves the left caption empty', () => {
   const view = presentStreetLevelPanel(
     snapshot({

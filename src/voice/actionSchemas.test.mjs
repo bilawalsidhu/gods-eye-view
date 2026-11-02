@@ -32,7 +32,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the voice layer manifest (generated layer enums and
+    // Re-derived for Provider Settings and explicit Visual Presets/Scenes routing,
+    // plus the deliberate direct Panel tool/target additions and voice layer manifest (generated layer enums and
     // aliases), point-and-ask (pointer sentinels, referent args) and the
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
@@ -41,9 +42,13 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
-    // Restore base descriptions; append only globe-rotation defaults and fit guidance.
+    // S2 GhostMaps extends the generated layer enums.
+    // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
+    // is consolidated without changing either feature's arguments.
+    // Snow leaves the set_visual_style enum.
+    // The Operator HUD layout leaves set_hud's layout enum.
     // Message signs adds its context enum value.
-    'f3ceffdea16094b68ce126721067f03388182bbe030da1f314301a284afd3c9d',
+    '89e4991b203f7564e69e6414c6e7fceec4fbf337cda60261f3188adff5078b63',
   );
 });
 
@@ -101,12 +106,18 @@ test('metadata cannot add tools, fields, types or enum values', () => {
 
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
   const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
-    (tool) => !['next_satellite_pass', 'set_cyber_sonar'].includes(tool.name),
+    (tool) =>
+      ![
+        'next_satellite_pass',
+        'set_cyber_sonar',
+        'set_voice_inactivity_timeout',
+      ].includes(tool.name),
   );
   // Layer enums are generated from the voice layer manifest and pinned by
   // layerManifest.test.mjs; the two shipped right-rail panels are additive.
   const property = (name) =>
     legacy.find((tool) => tool.name === name).parameters.properties;
+  delete property('control_cockpit').voicePanel;
   delete property('set_layer_visibility').layerId.enum;
   delete property('show_data_layers_menu').layerId.enum;
   delete property('get_entity_context').layerId.enum;
@@ -124,7 +135,14 @@ test('all legacy action arguments are byte-identical after removing the delibera
   motion.enum = motion.enum.filter((value) => value !== 'rotate_globe');
   const panels = property('set_panel_open').panelId;
   panels.enum = panels.enum.filter(
-    (id) => !['weather-panel', 'recent-imagery-panel'].includes(id),
+    (id) =>
+      ![
+        'weather-panel',
+        'recent-imagery-panel',
+        'voice-settings',
+        'voice-preview',
+        'provider-settings',
+      ].includes(id),
   );
   for (const tool of legacy) {
     // Point-and-ask adds `referent` arguments and 'pointer' enum values.
@@ -151,9 +169,22 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout.
+  // Cyber adds one HUD layout and Operator was retired.
   const hud = property('set_hud').layout;
-  hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
+  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
+  hud.enum = ['tactical', 'operator', 'minimal'];
+  // Snow is retired from set_visual_style; restore it to keep the legacy pin.
+  const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')
+    .parameters.properties.style;
+  assert.deepEqual(visualStyle.enum, [
+    'normal',
+    'retro',
+    'surveillance',
+    'thermal',
+    'anime',
+    'noir',
+  ]);
+  visualStyle.enum = [...visualStyle.enum, 'snow'];
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
@@ -228,4 +259,14 @@ test('globe reset guidance requires a separate explicit command after refusal', 
   assert.match(paragraph, /never from your own plan/);
   assert.match(paragraph, /bare yes\/ok/);
   assert.match(paragraph, /Do not ask a question/);
+});
+
+test('direct voice timeout schema accepts None and exact integers, rejects malformed duration', () => {
+  const tool = GEV_REALTIME_TOOLS.find(
+    (tool) => tool.name === 'set_voice_inactivity_timeout',
+  );
+  for (const minutes of [0, 1, 5, 60])
+    assert.equal(validateArgs(tool.parameters, { minutes }).length, 0);
+  for (const minutes of [-1, 61, 1.5, '5'])
+    assert.ok(validateArgs(tool.parameters, { minutes }).length > 0);
 });

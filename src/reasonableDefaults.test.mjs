@@ -11,9 +11,8 @@ import { expandApplicationHtml } from '../build/application-html.js';
 //      actually decides fresh-boot layer state — including the early return that
 //      makes each layer's own initializer the operative default.
 //   2. Scope feather. Owner: "I like to hide feather" set it to 0% on
-//      2026-08-22; the owner revised that to 8% on 2026-08-23 and locked 11%
-//      on 2026-08-24, a soft
-//      edge. The hard crop is still one drag away, and that is pinned too.
+//      2026-08-22; later revisions were 8%, then 11%, then 100% on
+//      2026-10-25. Scope stays ON on a fresh boot. The hard crop remains available.
 //   3. Detection ON (Dense @ 75%) for EVERY style, Normal included.
 //      Owner: "detect should also be on by default."
 //   4. Detection OUTSIDE opacity 1% (owner final lock, 2026-08-24; 3% on 08-23, 5% before), with
@@ -38,6 +37,7 @@ import { AIRCRAFT_BRACKET_FLOOR_ANCHOR } from './data/detectionPolicy.js';
 import {
   SCOPE_FEATHER_RATIO_DEFAULT,
   getScopeMaskFeather,
+  isScopeMaskEnabled,
   scopeMaskGeometry,
   setScopeMaskFeather,
 } from './scopeMask.js';
@@ -75,32 +75,40 @@ function managerForHash(hash) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Scope feather — a subtle soft edge on a first run
+// 2. Scope ON with 100% feather on a first run
 // ---------------------------------------------------------------------------
 
-test('first run opens with a subtle scope feather, at every surface that decides it', () => {
-  assert.equal(SCOPE_FEATHER_RATIO_DEFAULT, 0.11,
-    'owner final lock 2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings');
-  assert.equal(getScopeMaskFeather(), 0.11,
+test('first run opens with Scope ON and 100% feather at every default surface', () => {
+  assert.equal(isScopeMaskEnabled(), true, 'the live mask starts enabled');
+  assert.equal(SCOPE_FEATHER_RATIO_DEFAULT, 1, 'owner preference 2026-10-25');
+  assert.equal(getScopeMaskFeather(), 1,
     'and the live module starts there, not merely documents it');
 
   // The slider and its readout are the same default rendered as markup — a
   // fresh boot applies no restore, so a stale value here would show one number
   // over a mask drawn at another.
-  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\svalue="11"/,
-    'index.html: the feather slider ships at 11');
-  assert.match(indexHtml, /id="scope-feather-value"[^>]*>11%</,
+  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\svalue="100"/,
+    'index.html: the feather slider ships at 100');
+  assert.match(indexHtml, /id="scope-feather-value"[^>]*>100%</,
     'index.html: and its readout agrees with the handle');
+
+  assert.match(indexHtml, /<input type="checkbox" id="scope-toggle"[^>]*\schecked\s*\/>/,
+    'the native Scope checkbox starts checked');
 
   // The link this session generates must describe the mask this session draws,
   // for the window before the first _syncShareState.
-  assert.match(shareSource, /this\._scopeFeatherPct = 11;/,
+  assert.match(shareSource, /this\._scopeFeatherPct = 100;/,
     'sharelink.js: the generator starts from the same value the mask starts at');
+  const params = managerForHash('')._buildHashParams();
+  assert.equal(params.get('sc'), '1');
+  assert.equal(params.get('scf'), '100');
 });
 
-test('an explicit feather still wins over the subtle default', () => {
+test('an explicit feather still wins over the 100% default', () => {
   // A link is authored state. The new default governs a session that said
   // nothing; it must never overwrite one that said something.
+  assert.equal(managerForHash('#lat=10&lon=20&scf=11').parseInitialHash().scopeFeatherPct, 11,
+    'links carrying the previous default preserve their authored feather');
   assert.equal(managerForHash('#lat=10&lon=20&scf=35').parseInitialHash().scopeFeatherPct, 35);
   assert.equal(managerForHash('#lat=10&lon=20&scf=64').parseInitialHash().scopeFeatherPct, 64);
   assert.equal(managerForHash('#lat=10&lon=20&scf=0').parseInitialHash().scopeFeatherPct, 0,
@@ -113,23 +121,28 @@ test('an explicit feather still wins over the subtle default', () => {
     'a pre-scf link restores the author\'s view, not the new default');
 });
 
-test('the subtle default did not weaken the feather control, and 0 is still reachable', () => {
+test('share links preserve explicit Scope OFF and feather choices over the defaults', () => {
+  const shared = managerForHash('#lat=10&lon=20&sc=0&scf=11').parseInitialHash();
+  assert.equal(shared.scopeEnabled, false);
+  assert.equal(shared.scopeFeatherPct, 11);
+});
+
+test('the 100% default retains the expanded feather range and hard edge', () => {
   // The cheap way to move a default would be to nerf the control. Prove the
   // slider still spans its full range and the geometry is still DERIVED from
   // the ratio — a check that would pass vacuously if it only ever saw one value.
-  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\smin="0"[^>]*\smax="100"/,
+  assert.match(indexHtml, /id="scope-feather-slider"[^>]*\smin="0"[^>]*\smax="200"/,
     'the slider still offers the whole range');
   const previous = getScopeMaskFeather();
   try {
-    for (const ratio of [0.35, 0.7, 1]) {
+    for (const ratio of [0.35, 0.7, 1, 1.75, 2]) {
       setScopeMaskFeather(ratio);
       const geo = scopeMaskGeometry(1200, 900);
       const keyholeR = 900 * 0.5 * KEYHOLE_OUTER_RADIUS;
       assert.ok(Math.abs((geo.outerR - geo.innerR) - keyholeR * ratio) < 1e-9,
         `feather ${ratio} must still widen the band to that fraction of the keyhole`);
     }
-    // The new default is a real, narrow band — not the hard crop, and nowhere
-    // near the retired 35 % halo.
+    // The first-run value draws a band derived from the same keyhole radius.
     setScopeMaskFeather(SCOPE_FEATHER_RATIO_DEFAULT);
     const soft = scopeMaskGeometry(1200, 900);
     const keyholeR = 900 * 0.5 * KEYHOLE_OUTER_RADIUS;

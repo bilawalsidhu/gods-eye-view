@@ -9,7 +9,7 @@ import { applicationServices } from './services/application.js';
  * real-time at configurable cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
- * selected and supports three layout variants: tactical, operator, minimal.
+ * selected and supports the layout variants: tactical, minimal, cyber.
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
@@ -39,6 +39,7 @@ import {
 } from './hudLayouts.js';
 import { formatNumber, msg, t } from './i18n/index.js';
 import { localizeLayerName } from './ui/layerPanel.js';
+import { isEmbeddedInline } from './app/embed.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -75,7 +76,6 @@ const MODE_LABELS = Object.freeze({
   thermal: msg('FLIR'),
   anime: msg('ANIME'),
   noir: msg('NOIR'),
-  snow: msg('SNOW'),
 });
 
 /** Region ids from _regionLabel() and the name shown for each. */
@@ -202,7 +202,13 @@ export class IntelHUD {
     this._dataManagerUnsubscribe = null;
     this._summaryDirty = true;
     this._summaryRequest = null;
+    this._summaryUnconfigured = false;
+    // The last place lookup and the view it answered for (see
+    // getBasemapLabelContext), reused until the view changes enough.
+    this._placeLabels = null;
     this._lastSummarySignature = '';
+    /** The reply painted for `_lastSummarySignature`, when it was accepted. */
+    this._lastSummaryText = null;
     this._summaryRevision = 0;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
@@ -281,29 +287,23 @@ export class IntelHUD {
     this._el.innerHTML = `
       <div class="hud-sonar" aria-hidden="true"></div>
 
-      <div class="hud-top-bar">
-        <span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span>
-        <span class="hud-top-bar-center">${this._missionId}</span>
-        <span class="hud-top-bar-right">PAGE 1/1</span>
-      </div>
-
       <div class="hud-corner hud-top-left">
         <div class="hud-bracket">┌</div>
         <div class="hud-content">
-          <div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div>
-          <div class="hud-system">${this._missionId}  ${this._sensorId}</div>
-          <div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div>
+          <div class="hud-readout"><div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div></div>
+          <div class="hud-readout"><div class="hud-system">${this._missionId}  ${this._sensorId}</div></div>
+          <div class="hud-readout"><div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div></div>
           <div class="hud-summary-wrap">
-            <div class="hud-summary-label">${t('SUMMARY')}</div>
-            <div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div>
+            <div class="hud-readout"><div class="hud-summary-label">${t('SUMMARY')}</div></div>
+            <div class="hud-readout"><div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div></div>
           </div>
         </div>
       </div>
 
       <div class="hud-corner hud-top-right">
         <div class="hud-content" style="text-align:right">
-          <div class="hud-rec"><span id="hud-rec-dot">●</span> ${t('REC')}  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
-          <div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div>
+          <div class="hud-readout"><div class="hud-rec"><span id="hud-rec-dot">●</span> ${t('REC')}  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div></div>
+          <div class="hud-readout"><div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div></div>
         </div>
         <div class="hud-bracket">┐</div>
       </div>
@@ -311,33 +311,33 @@ export class IntelHUD {
       <div class="hud-corner hud-bottom-left">
         <div class="hud-bracket">└</div>
         <div class="hud-content">
-          <div id="hud-mgrs">MGRS: ---</div>
-          <div id="hud-latlon">--°--'--"N ---°--'--"W</div>
+          <div class="hud-readout"><div id="hud-mgrs">MGRS: ---</div></div>
+          <div class="hud-readout"><div id="hud-latlon">--°--'--"N ---°--'--"W</div></div>
         </div>
       </div>
 
       <div class="hud-corner hud-bottom-right">
         <div class="hud-content" style="text-align:right">
-          <div id="hud-gsd">GSD: --m  NIIRS: --</div>
-          <div id="hud-alt">ALT: --m   SUN: --° EL</div>
-          <div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div>
+          <div class="hud-readout"><div id="hud-gsd">GSD: --m  NIIRS: --</div></div>
+          <div class="hud-readout"><div id="hud-alt">ALT: --m   SUN: --° EL</div></div>
+          <div class="hud-readout"><div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div></div>
         </div>
         <div class="hud-bracket">┘</div>
       </div>
 
       <div class="hud-edge hud-left-edge">
-        <div id="hud-coll">COLL: --:--:--Z</div>
-        <div id="hud-ona">ONA: --°</div>
+        <div class="hud-readout"><div id="hud-coll">COLL: --:--:--Z</div></div>
+        <div class="hud-readout"><div id="hud-ona">ONA: --°</div></div>
       </div>
 
       <div class="hud-edge hud-right-edge">
-        <div>BAND: PAN</div>
-        <div>BITS: 11</div>
-        <div>LVL: 1A</div>
+        <div class="hud-readout"><div>BAND: PAN</div></div>
+        <div class="hud-readout"><div>BITS: 11</div></div>
+        <div class="hud-readout"><div>LVL: 1A</div></div>
       </div>
 
       <div class="hud-bottom-bar">
-        <span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span>
+        <span class="hud-readout"><span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span></span>
       </div>
     `;
     this._el.dataset.variant = this._variant;
@@ -363,9 +363,11 @@ export class IntelHUD {
         dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
     }, 800);
 
-    // Camera-derived data — 4 updates/second (250ms)
+    // Camera-derived data — 4 updates/second (250ms). Skipped in a hidden
+    // page, except an inline panel, whose host may report it hidden while it
+    // is on screen (see keepPanelRendering in app/embed.js).
     this._updateInterval = setInterval(() => {
-      if (!this._visible) return;
+      if (!this._visible || (document.hidden && !isEmbeddedInline())) return;
       this._updateCameraData();
     }, 250);
 
@@ -826,6 +828,15 @@ export class IntelHUD {
     if (this.summaryPolicy.canRequest?.() === false) return;
 
     const revision = this._summaryRevision;
+    // The place lookups below are paid Google requests made only to feed the
+    // AI summary, so a server without one must not be asked to make them.
+    if (!(await this._summaryAvailable())) {
+      if (revision !== this._summaryRevision) return;
+      this._summaryDirty = false;
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
+    if (revision !== this._summaryRevision) return;
     // Every caller invokes this as `void this._updateSummary(...)`, so nothing
     // owns the returned promise — a rejection escaping from here lands as an
     // unhandled rejection in the console. Building the context walks the live
@@ -848,6 +859,9 @@ export class IntelHUD {
     const signature = JSON.stringify(context);
     if (!force && signature === this._lastSummarySignature) {
       this._summaryDirty = false;
+      // A settle painted the fallback line over the reply this context
+      // already has; reused place labels make that common, so restore it.
+      if (this._lastSummaryText) this._setSummaryText(this._lastSummaryText);
       return;
     }
     if (this._summaryRequest) return;
@@ -855,6 +869,7 @@ export class IntelHUD {
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
+    this._lastSummaryText = null;
     const controller = new AbortController();
     let timedOut = false;
     const timeout = window.setTimeout(() => {
@@ -870,18 +885,16 @@ export class IntelHUD {
       const data = response.data;
       if (revision !== this._summaryRevision) return;
       if (isHudSummaryUnconfigured(response.status, data)) {
+        this._summaryUnconfigured = true;
         this._setSummaryText(fallbackText, animate);
         return;
       }
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      this._setSummaryText(
-        hudSummaryMatchesProvenance(data.summary, context.feedProvenance)
-          ? data.summary
-          : fallbackText,
-        animate,
-      );
+      if (hudSummaryMatchesProvenance(data.summary, context.feedProvenance))
+        this._lastSummaryText = data.summary;
+      this._setSummaryText(this._lastSummaryText || fallbackText, animate);
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
       // destroy's) is not.
@@ -915,12 +928,31 @@ export class IntelHUD {
     if (el) el.textContent = text;
   }
 
+  /**
+   * False once the summary service reports no AI summary: by its capability
+   * probe, when it has one, or by a deliberate unconfigured reply. Unknown
+   * stays available, as before.
+   */
+  async _summaryAvailable() {
+    if (this._summaryUnconfigured) return false;
+    try {
+      if ((await this.summaryService?.configured?.()) === false)
+        this._summaryUnconfigured = true;
+    } catch {
+      /* an unanswered probe leaves the summary as it was */
+    }
+    return !this._summaryUnconfigured;
+  }
+
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(
-      this.viewer,
-      this.placeSearch,
-      this.basemapContext,
-    );
+    const revision = this._summaryRevision;
+    const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, {
+      ...this.basemapContext,
+      previous: this._placeLabels,
+    });
+    // A slower build for a view the camera has left must not replace the
+    // newer view's lookup.
+    if (revision === this._summaryRevision) this._placeLabels = labels;
     const enabledLayers =
       this._dataManager
         ?.getAll?.()
@@ -1024,7 +1056,7 @@ export class IntelHUD {
    * Switch the HUD layout variant. Falls back to `'tactical'` if the
    * name is unrecognized. Cyber also applies a coordinated skin to the full
    * application shell; leaving Cyber restores the standard shell tokens.
-   * @param {string} variantName - One of `'tactical'`, `'operator'`, `'minimal'`, `'cyber'`.
+   * @param {string} variantName - One of `'tactical'`, `'minimal'`, `'cyber'`.
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);

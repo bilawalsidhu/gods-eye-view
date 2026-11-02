@@ -1603,7 +1603,7 @@ try {
     cockpit.setVisionMode('optical');
     current.focus({ preventScroll: true });
     const states = [read()];
-    for (let index = 0; index < 7; index += 1) {
+    for (let index = 0; index < 6; index += 1) {
       current.click();
       states.push(read());
     }
@@ -1637,36 +1637,36 @@ try {
       reentered,
     };
   });
-  const cycleModes = ['optical', 'crt', 'nvg', 'thermal', 'anime', 'noir', 'snow', 'optical'];
-  const cycleLabels = ['NORMAL', 'CRT', 'NVG', 'FLIR', 'ANIME', 'NOIR', 'SNOW', 'NORMAL'];
+  const cycleModes = ['optical', 'crt', 'nvg', 'thermal', 'anime', 'noir', 'optical'];
+  const cycleLabels = ['NORMAL', 'CRT', 'NVG', 'FLIR', 'ANIME', 'NOIR', 'NORMAL'];
   check(
-    'Cockpit vision control exposes Normal, CRT, NVG, FLIR, Anime, Noir and Snow before wrapping',
+    'Cockpit vision control exposes Normal, CRT, NVG, FLIR, Anime and Noir before wrapping',
     JSON.stringify(visionCycle.states.map((state) => state.mode)) === JSON.stringify(cycleModes)
       && JSON.stringify(visionCycle.states.map((state) => state.label)) === JSON.stringify(cycleLabels)
       && visionCycle.states[5]?.aria === 'Current cockpit vision style: Noir. Activate for next style.'
-      && visionCycle.states[7]?.aria === 'Current cockpit vision style: Normal. Activate for next style.',
+      && visionCycle.states[6]?.aria === 'Current cockpit vision style: Normal. Activate for next style.',
     JSON.stringify(visionCycle.states.map(({ mode, label, aria }) => ({ mode, label, aria }))),
   );
   check(
     'user vision changes open Display for every temporary treatment and retain selector focus',
-    visionCycle.states.slice(1, 7).every((state) => state.displayOpen === 'true')
-      && visionCycle.states.slice(1, 7).every((state) => state.radioOpen === 'false')
-      && visionCycle.states.slice(1, 7).every((state) => state.parametersActive)
-      && visionCycle.states.slice(1, 7).every((state) => !state.parametersCollapsed)
-      && visionCycle.states.slice(1, 7).every((state) => state.signalCollapsed)
+    visionCycle.states.slice(1, 6).every((state) => state.displayOpen === 'true')
+      && visionCycle.states.slice(1, 6).every((state) => state.radioOpen === 'false')
+      && visionCycle.states.slice(1, 6).every((state) => state.parametersActive)
+      && visionCycle.states.slice(1, 6).every((state) => !state.parametersCollapsed)
+      && visionCycle.states.slice(1, 6).every((state) => state.signalCollapsed)
       && visionCycle.states.every((state) => state.focusRetained),
     JSON.stringify(visionCycle.states),
   );
   check(
     'each Cockpit vision mode drives only its own shader and Normal clears them all',
-    visionCycle.states.slice(1, 7).every((state) => {
+    visionCycle.states.slice(1, 6).every((state) => {
       const target = {
-        crt: 'retro', nvg: 'surveillance', thermal: 'thermal', anime: 'anime', noir: 'noir', snow: 'snow',
+        crt: 'retro', nvg: 'surveillance', thermal: 'thermal', anime: 'anime', noir: 'noir',
       }[state.mode];
       return Object.entries(state.intensities).every(([name, value]) =>
         name === target ? value > 0 : value === 0);
     })
-      && Object.values(visionCycle.states[7].intensities).every((value) => value === 0),
+      && Object.values(visionCycle.states[6].intensities).every((value) => value === 0),
     JSON.stringify(visionCycle.states.map(({ mode, intensities }) => ({ mode, intensities }))),
   );
   check(
@@ -1751,7 +1751,7 @@ try {
     return state;
   }, { variantName: variant, kind: openKind });
 
-  for (const variant of ['off', 'minimal', 'tactical', 'operator']) {
+  for (const variant of ['off', 'minimal', 'tactical']) {
     for (const kind of ['display', 'radio']) {
       const state = await desktopState(variant, kind);
       check(
@@ -2081,7 +2081,7 @@ try {
       await page.screenshot({ path: path.join(shotsDir, `cyber-resize-${height}.png`) });
     }
   }
-  await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('operator'));
+  await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('tactical'));
 
   const signalTransition = await page.evaluate(() => {
     const manager = window.__godsEyeView.styleManager;
@@ -2317,13 +2317,13 @@ try {
     const styleManager = window.__godsEyeView.styleManager;
     const styleBefore = styleManager.activeStyle;
     // A Cockpit-only choice that Reset must undo.
-    styleManager.cockpitView.setVisionMode('snow');
+    styleManager.cockpitView.setVisionMode('anime');
     window.__qaCockpitReset = {
       calls: 0,
       original: manager.resetToGlobeView,
       subjectId: awareness?.getContextSnapshot?.()?.subject?.id || null,
       styleBefore,
-      snowDuringCockpit: styleManager.stages?.snow?.uniforms?.intensity,
+      animeDuringCockpit: styleManager.stages?.anime?.uniforms?.intensity,
     };
     manager.resetToGlobeView = function qaCountedCockpitReset(...args) {
       window.__qaCockpitReset.calls += 1;
@@ -2360,7 +2360,7 @@ try {
       height,
       subjectPreserved: Boolean(qa.subjectId && subjectId === qa.subjectId),
       styleRestored: gev.styleManager.activeStyle === qa.styleBefore,
-      snowDuringCockpit: qa.snowDuringCockpit,
+      animeDuringCockpit: qa.animeDuringCockpit,
       // Cockpit-time intensities are Cockpit's own, so check against the map preset.
       visionRestored: Object.entries(gev.styleManager.stages || {}).every(([name, stage]) =>
         name === gev.styleManager.activeStyle
@@ -2376,7 +2376,7 @@ try {
       && resetState.resetHidden
       && Math.abs(resetState.height - 18_000_000) < 150_000
       && resetState.subjectPreserved
-      && resetState.snowDuringCockpit > 0
+      && resetState.animeDuringCockpit > 0
       && resetState.styleRestored
       && resetState.visionRestored,
     JSON.stringify(resetState),

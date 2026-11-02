@@ -283,22 +283,33 @@ function clampFmFrequency(value) {
   );
 }
 
+/** A failed connection in English; errorState() shows it translated. */
 function describeConnectionError(error) {
   const message = String(error?.message || error || '').trim();
   if (/No device was selected|NotFoundError/i.test(message))
-    return t('No RTL-SDR device selected');
+    return msg('No RTL-SDR device selected');
   if (
     /does not support the WebUSB|usb/i.test(message) &&
     /support/i.test(message)
   ) {
-    return t('WebUSB requires desktop Chrome or Edge on localhost/HTTPS');
+    return msg('WebUSB requires desktop Chrome or Edge on localhost/HTTPS');
   }
   if (/access|permission|claim|busy/i.test(message)) {
-    return t(
+    return msg(
       'RTL-SDR access failed; close other SDR apps and check USB permissions',
     );
   }
-  return message ? translateKnown(message) : t('RTL-SDR connection failed');
+  return message || msg('RTL-SDR connection failed');
+}
+
+/**
+ * State fields for a receiver error: `message` in the UI language for the
+ * Radio card, `errorText` as English data for the Local ADS-B layer's stats.
+ * A new connection, a mode switch and stop() clear `errorText` again.
+ * @param {string} text English error text (ours or the browser's).
+ */
+function errorState(text) {
+  return { status: 'error', message: translateKnown(text), errorText: text };
 }
 
 function streamingMessage(mode) {
@@ -350,6 +361,7 @@ export class SdrController {
       gain: this._gainByMode.fm,
       seeking: false,
       seekMessage: '',
+      errorText: null,
       snr: null,
       aircraft: [],
       decodedMessages: 0,
@@ -555,10 +567,7 @@ export class SdrController {
       // A failed worker (e.g. its module did not load) never recovers: drop
       // it so the next session builds and configures a fresh one.
       this._discardWorker();
-      this._setState({
-        status: 'error',
-        message: t('SDR decoder worker failed'),
-      });
+      this._setState(errorState(msg('SDR decoder worker failed')));
       if (this._device) void this.stop({ preserveMessage: true });
     };
     return worker;
@@ -779,16 +788,16 @@ export class SdrController {
     // Published before stopping; stop() preserves it, and nothing is set
     // afterwards, so a reconnect started during teardown keeps its own state.
     this._setState({
-      status: 'error',
+      ...errorState(
+        reason === 'startup'
+          ? msg('SDR decoder did not start; receiver stopped')
+          : reason === 'stalled'
+            ? msg('SDR decoder stopped responding; receiver stopped')
+            : msg('SDR decoder fell behind; receiver stopped'),
+      ),
       connected: false,
       decoderOverload: reason,
       decoderOverloadSnapshot: snapshot,
-      message:
-        reason === 'startup'
-          ? t('SDR decoder did not start; receiver stopped')
-          : reason === 'stalled'
-            ? t('SDR decoder stopped responding; receiver stopped')
-            : t('SDR decoder fell behind; receiver stopped'),
     });
     void this.stop({ preserveMessage: true });
   }
@@ -1075,6 +1084,7 @@ export class SdrController {
     this._setState({
       status: 'connecting',
       message: t('Waiting for an RTL-SDR device…'),
+      errorText: null,
     });
     let acquisition = null;
     try {
@@ -1085,7 +1095,7 @@ export class SdrController {
       // consumes the click activation.
       if (nextMode === 'fm' && !(await this._ensureAudio())) {
         throw new Error(
-          t('Browser audio is suspended; press Connect again to resume it'),
+          msg('Browser audio is suspended; press Connect again to resume it'),
         );
       }
       if (superseded()) return false;
@@ -1153,8 +1163,7 @@ export class SdrController {
       if (superseded()) return false;
       this._setState({
         connected: false,
-        status: 'error',
-        message: describeConnectionError(error),
+        ...errorState(describeConnectionError(error)),
       });
       return false;
     }
@@ -1507,8 +1516,7 @@ export class SdrController {
         console.warn('[SDR] Sample read failed:', error);
         this._setState({
           connected: false,
-          status: 'error',
-          message: t('RTL-SDR sample stream stopped'),
+          ...errorState(msg('RTL-SDR sample stream stopped')),
         });
         await this.stop({ preserveMessage: true });
         break;
@@ -1549,11 +1557,12 @@ export class SdrController {
       message: t('Switching to {mode}…', {
         mode: nextMode === 'adsb' ? 'ADS-B' : 'FM',
       }),
+      errorText: null,
     });
     try {
       if (nextMode === 'fm' && !(await this._ensureAudio())) {
         throw new Error(
-          t('Browser audio is suspended; select FM again to resume it'),
+          msg('Browser audio is suspended; select FM again to resume it'),
         );
       }
       // A stall teardown, stop() or reconnect during the switch supersedes
@@ -1578,10 +1587,7 @@ export class SdrController {
     } catch (error) {
       if (!this._owns(token, device)) return false;
       console.warn('[SDR] Mode switch failed:', error);
-      this._setState({
-        status: 'error',
-        message: describeConnectionError(error),
-      });
+      this._setState(errorState(describeConnectionError(error)));
       return false;
     }
   }
@@ -1622,10 +1628,7 @@ export class SdrController {
       if (targetMode === 'adsb') this._setState(this._resetAdsbCounters());
     } catch (error) {
       console.warn('[SDR] Gain change failed:', error);
-      this._setState({
-        status: 'error',
-        message: t('RTL-SDR gain change failed'),
-      });
+      this._setState(errorState(msg('RTL-SDR gain change failed')));
       return null;
     }
     return setting;
@@ -1679,10 +1682,7 @@ export class SdrController {
       });
       return true;
     } catch (error) {
-      this._setState({
-        status: 'error',
-        message: describeConnectionError(error),
-      });
+      this._setState(errorState(describeConnectionError(error)));
       return false;
     }
   }
@@ -1873,7 +1873,7 @@ export class SdrController {
       status: preserveMessage ? this.state.status : idleStatus,
       ...(preserveMessage
         ? {}
-        : { message: message || t('RTL-SDR disconnected') }),
+        : { message: message || t('RTL-SDR disconnected'), errorText: null }),
       snr: null,
       samplesPerSecond: 0,
       workerBlocks: 0,

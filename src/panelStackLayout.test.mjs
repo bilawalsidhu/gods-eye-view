@@ -193,7 +193,8 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
 
 test('share-panel state excludes responsive collapse and preserves recipient preferences', () => {
   const ui = readShellSource();
-  const sharelink = readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
+  // The long form spells the share format's panel table (one source of truth).
+  const panels = readFileSync(new URL('./share/viewCodec.js', import.meta.url), 'utf8');
 
   assert.match(
     ui,
@@ -211,7 +212,7 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
     'pin and unpin must update the share hash even when collapse state is unchanged',
   );
   assert.match(ui, /\{ id: 'param-slider-panel' \}/);
-  assert.match(sharelink, /\{ id: 'param-slider-panel', token: 'm', pinnable: false \}/);
+  assert.match(panels, /id: 'param-slider-panel',\s*token: 'm',\s*pinnable: false,/);
 });
 
 test('parameterized Display presets keep one stable scroll owner', () => {

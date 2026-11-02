@@ -175,12 +175,12 @@ const MUTATIONS = [
     to: '    /* belt removed */',
   },
   {
-    // Anchored past the call so it cannot land on the cockpit disclosure's own
-    // stopImmediatePropagation() a few lines below and prove nothing about this.
-    defect: 'the radio disclosure returns to stopPropagation, so one ESC does two things',
+    // Anchored past the call so it lands on the Cockpit utility disclosure's
+    // Escape claim and nowhere else.
+    defect: 'a Cockpit utility disclosure returns to stopPropagation, so later document listeners also act on its ESC',
     file: 'radio',
-    from: '      event.stopImmediatePropagation();\n      const escapedFromDisclosure =\n        event.target === this._contextRadioToggleBtn ||',
-    to: '      event.stopPropagation();\n      const escapedFromDisclosure =\n        event.target === this._contextRadioToggleBtn ||',
+    from: "      event.stopImmediatePropagation();\n      const kind = displayOpen ? 'display' : 'radio';",
+    to: "      event.stopPropagation();\n      const kind = displayOpen ? 'display' : 'radio';",
   },
   {
     defect: 'the "no timer" decision is deleted, so the next editor re-litigates it blind',

@@ -21,6 +21,9 @@ export class SceneControls {
     this.rowRemovers = [];
     this.playbackKeyRemover = null;
     if (!elements.select) return;
+    // The radio's PLAY means "listen"; this one plays the scene.
+    const playLabel = t('PLAY', { context: 'scene' });
+    if (elements.start) elements.start.textContent = playLabel;
     if (subscribe)
       this.unsubscribe = subscribe((notification) =>
         this.present(notification),
@@ -94,7 +97,21 @@ export class SceneControls {
       this.renderShotList();
     if (type === 'selection-changed')
       presentSceneSelection(this.elements.shots, state.selectedShotId);
-    if (initial || type === 'buttons-changed') this.setButtons(state.running);
+    if (
+      initial ||
+      [
+        'buttons-changed',
+        'selection-changed',
+        'scene-options-changed',
+        'scene-created',
+        'scene-deleted',
+        'shots-changed',
+        'shot-captured',
+        'shot-deleted',
+        'project-imported',
+      ].includes(type)
+    )
+      this.setButtons(state.running);
     if (initial || type === 'progress-changed')
       this.setProgress(state.progress);
     if (initial || type === 'status-changed') this.updateStatus(state.status);
@@ -183,11 +200,9 @@ export class SceneControls {
         this.listen(element, type, callback, this.rowRemovers),
       select: (id) => {
         this.run('selectShot', id);
-        if (!this.destroyed)
-          presentSceneSelection(
-            this.elements.shots,
-            this.read().selectedShotId,
-          );
+        if (this.destroyed) return;
+        presentSceneSelection(this.elements.shots, this.read().selectedShotId);
+        this.setButtons(this.read().running);
       },
       rename: (sceneId, shotId, title) =>
         this.run('renameShot', sceneId, shotId, title),
@@ -197,8 +212,22 @@ export class SceneControls {
   }
 
   setButtons(running) {
-    if (!this.destroyed)
-      presentSceneButtons(this.elements, running, this.read().hasRun);
+    if (this.destroyed) return;
+    const state = this.read();
+    const scene = state.scenes?.find(
+      (item) => item.id === state.selectedSceneId,
+    );
+    const shots = scene?.shots ?? [];
+    presentSceneButtons(this.elements, running, state.hasRun, {
+      hasScene: !!scene,
+      // PLAY and NEXT run on into the following scenes.
+      playableShots: (state.scenes ?? []).reduce(
+        (total, item) => total + (item.shots?.length ?? 0),
+        0,
+      ),
+      hasSelectedShot: shots.some((shot) => shot.id === state.selectedShotId),
+    });
+    this.elements.panel?.classList.toggle('has-shots', shots.length > 0);
   }
 
   setProgress(progress) {
@@ -247,6 +276,7 @@ export class SceneControls {
     ])
       remove();
     if (this.elements.shots) this.elements.shots.textContent = '';
+    this.elements.panel?.classList.toggle('has-shots', false);
     presentSceneRuntime(this.elements.runtime, '');
     this.setPlaybackActive(false);
   }

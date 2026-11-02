@@ -575,3 +575,25 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
     env.restore();
   }
 });
+
+// ── Retired layouts ─────────────────────────────────────────────────────────
+//
+// Share links keep the retired Operator code, so old links still name it. The
+// real HUD, not a caller, is what turns it into the default Tactical layout.
+
+test('a retired Operator layout falls back to Tactical in the live HUD', () => {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer);
+    hud._el = { dataset: {} };
+    hud.setVariant('minimal');
+    assert.equal(hud.getVariant(), 'minimal');
+    hud.setVariant('operator');
+    assert.equal(hud.getVariant(), 'tactical');
+    assert.equal(hud._el.dataset.variant, 'tactical');
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});

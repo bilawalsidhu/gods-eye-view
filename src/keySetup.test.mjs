@@ -48,7 +48,7 @@ test('setup placement moves the same button only in Cyber and disconnects on tea
     chip,
   );
   assert.equal(chip.parentNode, home);
-  for (const variant of ['cyber', 'operator', 'cyber', 'minimal']) {
+  for (const variant of ['cyber', 'tactical', 'cyber', 'minimal']) {
     theme.dataset.uiTheme = variant;
     notify();
     assert.equal(chip.parentNode, variant === 'cyber' ? toolbar : home);

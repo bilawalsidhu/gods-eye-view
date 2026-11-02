@@ -56,10 +56,6 @@
 #recent-imagery-split-line[hidden] {
   display: none !important;
 }
-#recent-imagery-panel.collapsed .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.8px;
-}
 #recent-imagery-panel.collapsed .panel-header {
   margin-bottom: 2px;
 }

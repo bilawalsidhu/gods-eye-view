@@ -550,7 +550,7 @@ export class ShellFacade {
   }
 
   /** Settle only the search generation that still owns the shared input UI. */
-  _settleLocationSearchUi(generation) {
+  _settleLocationSearchUi(generation, options) {
     return this._navigation._settleLocationSearchUi(...arguments);
   }
 
@@ -947,14 +947,6 @@ export class ShellFacade {
 
   _setCockpitDisclosure(...args) {
     return this._radioControls?._setCockpitDisclosure?.(...args);
-  }
-
-  _setRadioDisclosure(...args) {
-    return this._radioControls?._setRadioDisclosure?.(...args);
-  }
-
-  _syncContextRadioLauncherState(...args) {
-    return this._radioControls?._syncContextRadioLauncherState?.(...args);
   }
 
   _renderRadioState(...args) {

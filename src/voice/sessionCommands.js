@@ -36,15 +36,24 @@ export function createVoiceCommands({
   pointer = null,
   referents = null,
   createReticle = createDefaultReticle,
+  panelHost = null,
+  nativePanelProvider = null,
 }) {
   if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
-  const ui = createControl({ reset: true });
+  const ui = createControl({
+    reset: true,
+    ...(panelHost ? { panel: true } : {}),
+  });
+  let actionObserver;
+  let panelMount;
   const session = createVoiceSession({
     runner,
     signal,
-    createAdapter: (hooks) =>
-      createSession({
+    createAdapter: (hooks) => {
+      if (panelHost) actionObserver = panelHost.observeActions(hooks);
+      return createSession({
         ...hooks,
+        ...(actionObserver ? { runAction: actionObserver.runAction } : {}),
         runner,
         ui,
         dataManager,
@@ -53,7 +62,8 @@ export function createVoiceCommands({
         createController,
         pointer,
         radioLayer: dataManager?.layers?.get('radio')?.module || null,
-      }),
+      });
+    },
   });
   const adapter = session.adapter;
   const capabilities = adapter.capabilities || {};
@@ -117,11 +127,31 @@ export function createVoiceCommands({
   });
   // Captions, plan and result card nested in the control; it only reads
   // provider-neutral session events.
-  const card = ui.card ? createCard({ root: ui.root }) : null;
-  const updateCard = card
-    ? session.subscribe((event) => card.handle(event))
+  const card = ui.card
+    ? createCard({
+        root: ui.root,
+        ...(panelHost ? { onRender: () => panelMount?.panel.sync() } : {}),
+      })
     : null;
+  panelMount = panelHost?.mount({
+    ui,
+    card,
+    session,
+    observer: actionObserver,
+    nativeProvider: nativePanelProvider,
+  });
+  const updatePanel = panelMount ? session.subscribe(panelMount.handle) : null;
+  const updateCard =
+    card && !panelMount
+      ? session.subscribe((event) => card.handle(event))
+      : null;
   controls.voiceCard = card;
+  if (panelMount) {
+    controls.voicePanel = panelMount.panel;
+    controls.captureVoicePanelOperation = panelMount.captureOperation;
+    controls.getVoicePanelState = panelMount.snapshot;
+    controls.getVoicePreferences = panelHost.snapshot;
+  }
   // Point-and-ask: the reticle follows turn events; pointer and referents are
   // session-scoped, so a session that ends forgets both.
   const reticle = pointer ? createReticle(pointer) : null;
@@ -151,8 +181,11 @@ export function createVoiceCommands({
   );
   const buttonHandler = () => {
     if (adapter.ignoreButtonClick?.()) return;
-    if (session.isActive()) session.stop();
-    else void session.start({ pushToTalk: false });
+    if (session.isActive()) {
+      const ticket = panelMount?.stopTicket();
+      session.stop();
+      panelMount?.closeAfterStop(ticket);
+    } else void session.start({ pushToTalk: false });
   };
   ui.button.addEventListener('click', buttonHandler);
   let cleaned = false;
@@ -165,6 +198,9 @@ export function createVoiceCommands({
     annotationUnsubscribe?.();
     updateStatus();
     updateCard?.();
+    updatePanel?.();
+    panelMount?.destroy();
+    actionObserver?.dispose();
     updatePointer();
     forwardEvents?.();
     reticle?.destroy();

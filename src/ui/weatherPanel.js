@@ -215,6 +215,7 @@ export function createWeatherPanel({
           colors: legend.map(({ color }) => color),
           labels: legend.map(({ label }) => label),
           units: categorical ? '' : summary.units,
+          ...(summary.unitsVerbatim === true ? { unitsVerbatim: true } : {}),
           zeroIndex: legend.findIndex(({ label }) => label === '0'),
         },
       };

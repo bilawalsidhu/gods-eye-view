@@ -28,6 +28,7 @@ import {
   loadNycSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
   loadFloridaSourcesFromOpenData,
+  loadA22SourcesFromOpenDataHub,
   loadNe511SourcesFromGraphQL,
 } from './sources.js';
 
@@ -165,6 +166,11 @@ const LIVE_PACKS = [
     name: 'taiwan',
     enabled: () => envEnabled('CCTV_TAIWAN_ENABLED'),
     load: loadTaiwanSources,
+  },
+  {
+    name: 'a22',
+    enabled: () => envEnabled('CCTV_A22_ENABLED'),
+    load: loadA22SourcesFromOpenDataHub,
   },
   {
     // NDOT grants no reuse licence for its camera images (transportation

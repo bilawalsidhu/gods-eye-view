@@ -132,7 +132,7 @@ test('rejects the whole invalid request before any mutation', () => {
 });
 
 test('requires Cyber and preserves off state and every omitted setting', () => {
-  for (const theme of ['tactical', 'operator', 'minimal']) {
+  for (const theme of ['tactical', 'minimal']) {
     const f = fixture(theme);
     assert.equal(setCyberSonarControls(f.owner, { enabled: true }, f.doc).ok, false);
     assert.deepEqual(f.calls, []);

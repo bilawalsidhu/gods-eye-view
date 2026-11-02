@@ -752,3 +752,27 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
   view.destroy();
   layer.destroy();
 });
+test('source-supplied legend units are shown as given; catalog units are translated', () => {
+  setLocale('ru');
+  try {
+    const f = fixture();
+    const view = createWeatherPanel(f);
+    const row = (summary) => ({
+      ...radar,
+      summary: { ...radar.summary, units: 'km/h', ...summary },
+      legend: [
+        { label: '1', color: '#000000' },
+        { label: '2', color: '#ffffff' },
+      ],
+    });
+    const scale = () =>
+      f.find((n) => n.className === 'rail-card-scale').textContent;
+    view.update([row()]);
+    assert.equal(scale(), '1 — 2 км/ч');
+    view.update([row({ unitsVerbatim: true })]);
+    assert.equal(scale(), '1 — 2 km/h');
+    view.destroy();
+  } finally {
+    setLocale('en');
+  }
+});

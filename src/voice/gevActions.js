@@ -13,6 +13,11 @@ import * as Cesium from 'cesium';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
 import {
+  hudViewportSamples,
+  placeLookupView,
+  placeLookupViewChanged,
+} from '../hudPlaceLookup.js';
+import {
   findPoiByName,
   flyToGlobeView,
   flyToLandmark,
@@ -61,7 +66,6 @@ const ALLOWED_STYLES = new Set([
   'thermal',
   'anime',
   'noir',
-  'snow',
 ]);
 const PANEL_ALIASES = new Map([
   ['data', 'data-panel'],
@@ -74,8 +78,17 @@ const PANEL_ALIASES = new Map([
   ['styles', 'control-panel'],
   ['filters', 'control-panel'],
   ['visual styles', 'control-panel'],
+  ['visual preset', 'control-panel'],
+  ['visual presets', 'control-panel'],
+  ['provider settings', 'provider-settings'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
+  ['voice settings', 'voice-settings'],
+  ['voice-settings', 'voice-settings'],
+  ['voice preview', 'voice-preview'],
+  ['voice-preview', 'voice-preview'],
+  ['voice control', 'voice-preview'],
+  ['voice controls', 'voice-preview'],
   ['radio', 'radio-panel'],
   ['internet radio', 'radio-panel'],
   ['radio stations', 'radio-panel'],
@@ -84,6 +97,7 @@ const PANEL_ALIASES = new Map([
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],
   ['context right panel', 'global-context-panel'],
+  ['authoring', 'scene-panel'],
   ['scenes', 'scene-panel'],
   ['scene', 'scene-panel'],
   ['post processing', 'pp-toggles'],
@@ -110,6 +124,7 @@ const PANEL_IDS = new Set([
   'pp-toggles',
   'weather-panel',
   'recent-imagery-panel',
+  'provider-settings',
 ]);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
@@ -243,6 +258,7 @@ export function createGevActionRunner({
   searchNavigation = searchAndFlyTo,
   speechBuilders = null,
   deixis = null,
+  readVoicePanelOperation = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -268,6 +284,81 @@ export function createGevActionRunner({
   });
   // Nested calls (select_nearest_aircraft composing layer + flight) use the
   // raw runner; only the outer call gets a voice envelope.
+  const voiceUnavailable = (action) => ({
+    ok: false,
+    action,
+    applied: false,
+    unavailable: true,
+    error: 'Voice panel controls are unavailable in this host.',
+    say: 'Voice panel controls are unavailable in this host.',
+  });
+  async function showVoicePanel(
+    view,
+    open,
+    options,
+    operation = readVoicePanelOperation?.(),
+  ) {
+    const current = () =>
+      !options.signal?.aborted &&
+      (!options.isCurrent || options.isCurrent()) &&
+      operation?.isCurrent();
+    if (!operation) return voiceUnavailable('set_panel_open');
+    if (!current())
+      return {
+        ok: false,
+        action: 'set_panel_open',
+        applied: false,
+        cancelled: true,
+      };
+    let exit = null;
+    if (open) {
+      if (typeof styleManager?.getCockpitState !== 'function')
+        return voiceUnavailable('set_panel_open');
+      if (styleManager.getCockpitState()?.active) {
+        if (typeof styleManager.controlCockpit !== 'function')
+          return voiceUnavailable('set_panel_open');
+        exit = await styleManager.controlCockpit('exit');
+        if (styleManager.getCockpitState()?.active)
+          return {
+            ok: false,
+            action: 'set_panel_open',
+            applied: false,
+            exit,
+            error: exit?.error || 'Cockpit did not exit.',
+          };
+      }
+    }
+    if (!current())
+      return {
+        ok: false,
+        action: 'set_panel_open',
+        applied: false,
+        cancelled: true,
+        exit,
+        cockpitExited: Boolean(exit && !styleManager.getCockpitState()?.active),
+        say:
+          exit && !styleManager.getCockpitState()?.active
+            ? 'Cockpit exited; the voice panel was left as you last set it.'
+            : 'The voice panel was left as you last set it.',
+      };
+    const result = operation.show(view, open);
+    return {
+      ...result,
+      action: 'set_panel_open',
+      panelId: view === 'settings' ? 'voice-settings' : 'voice-preview',
+      exit,
+      state: styleManager?.getCockpitState?.() ?? null,
+      say: !result.ok
+        ? 'The voice panel was not changed.'
+        : result.settingsOpen
+          ? 'Voice Settings is open.'
+          : result.panelOpen
+            ? result.previewEnabled
+              ? 'Voice Preview is open.'
+              : 'Voice control is open; Preview remains off.'
+            : 'The voice panel is closed.',
+    };
+  }
   const runGevAction = async function runGevAction(
     name,
     rawArgs = {},
@@ -639,6 +730,25 @@ export function createGevActionRunner({
       return { ok: true, action: 'set_visual_style', style };
     }
 
+    if (name === 'set_voice_inactivity_timeout') {
+      const operation = readVoicePanelOperation?.();
+      if (!operation) return voiceUnavailable(name);
+      if (!current() || !operation.isCurrent())
+        return { ok: false, action: name, applied: false, cancelled: true };
+      const result = operation.setMinutes(args.minutes);
+      const duration =
+        result.minutes === 0 ? 'disabled' : `${result.minutes} minutes`;
+      return {
+        ...result,
+        action: name,
+        say: !result.applied
+          ? 'Voice inactivity was not changed.'
+          : result.persisted
+            ? `Voice inactivity is ${duration}, saved in this browser.`
+            : `Voice inactivity is ${duration} for now, but could not be saved in this browser.`,
+      };
+    }
+
     if (name === 'set_panel_open') {
       const panelId = normalizePanelId(args.panelId || args.panel);
       if (!panelId)
@@ -646,6 +756,70 @@ export function createGevActionRunner({
           `Unknown panel: ${args.panelId || args.panel || 'missing'}`,
         );
       const open = args.open !== false;
+      if (panelId === 'voice-settings' || panelId === 'voice-preview')
+        return showVoicePanel(
+          panelId === 'voice-settings' ? 'settings' : 'preview',
+          open,
+          runOptions,
+        );
+      if (panelId === 'provider-settings') {
+        if (!current())
+          return {
+            ok: false,
+            action: name,
+            panelId,
+            applied: false,
+            cancelled: true,
+          };
+        const doc = globalThis.document;
+        const panel = doc?.getElementById?.('key-setup');
+        const button = open
+          ? doc?.getElementById?.('key-setup-chip')
+          : panel?.querySelector?.('[data-key-setup-close]');
+        const concealed =
+          open &&
+          [
+            'ui-clean-view',
+            'recording-mode',
+            'cockpit-mode',
+            'scene-playback-mode',
+          ].some((mode) => doc?.body?.classList?.contains(mode));
+        if (
+          concealed ||
+          panel?.dataset?.ready !== 'true' ||
+          typeof button?.click !== 'function'
+        ) {
+          const error = concealed
+            ? 'Provider Settings is hidden in the current view. Leave that view before opening it.'
+            : 'Provider Settings is unavailable in this runtime.';
+          return {
+            ok: false,
+            action: name,
+            panelId,
+            applied: false,
+            unavailable: true,
+            error,
+            say: error,
+          };
+        }
+        button.click();
+        // Opening unhides immediately; closing removes visible before its fade ends.
+        const applied = open
+          ? !panel.hidden
+          : !panel.classList.contains('visible');
+        const say = applied
+          ? `Provider Settings is ${open ? 'open' : 'closed'}.`
+          : 'Provider Settings did not change.';
+        return {
+          ok: applied,
+          action: name,
+          panelId,
+          applied,
+          open: applied ? open : !panel.hidden,
+          say,
+          ...(!applied ? { error: say } : {}),
+        };
+      }
       setPanelOpen(styleManager, panelId, open);
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
@@ -732,6 +906,25 @@ export function createGevActionRunner({
           ok: false,
           action: 'control_cockpit',
           error: `Unknown cockpit action: ${args.action || args.command || 'missing'}`,
+        };
+      }
+      if (args.voicePanel !== undefined) {
+        if (
+          action !== 'exit' ||
+          !['preview', 'settings'].includes(args.voicePanel)
+        )
+          return {
+            ok: false,
+            action: 'control_cockpit',
+            applied: false,
+            error: 'Voice panel reveal requires exit and a valid view.',
+          };
+        const result = await showVoicePanel(args.voicePanel, true, runOptions);
+        return {
+          ...result,
+          action: 'control_cockpit',
+          cockpitAction: 'exit',
+          voicePanel: args.voicePanel,
         };
       }
       const inferred = normalizeCockpitNavigationHints(rawAction);
@@ -1467,9 +1660,8 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
     return {
       activeCameraId: ui.activeCameraId || null,
       activeCamera: ui.activeCamera?.name || ui.activeCamera?.id || null,
-      cameraCount: Array.isArray(ui.cameras)
-        ? ui.cameras.length
-        : ui.count || 0,
+      // `count`, not `cameras.length`: reading `cameras` builds every camera.
+      cameraCount: Number.isFinite(ui.count) ? ui.count : 0,
       showCoverage: !!ui.showCoverage,
       coverageMode: ui.coverageMode || (ui.showCoverage ? 'on' : 'off'),
       showProjection: !!ui.showProjection,
@@ -2504,13 +2696,20 @@ function runManagedVoiceNavigation(
   };
 }
 
+/**
+ * Place labels for the HUD's passive summary. It geocodes the view center
+ * and one more point. While the view still shows about the same area (see
+ * hudPlaceLookup.js) it answers for the points the last lookup asked about
+ * instead, so a settled camera does not buy a new set of Google requests for
+ * every small pan; those points are cache hits, and only what the last
+ * lookup did not get (a timeout, a failure, an empty answer) is asked again.
+ * `cachedOnly` reads the shared caches and makes no request.
+ */
 export async function getBasemapLabelContext(
   viewer,
   service = defaultGeospatial,
-  { cachedOnly = false } = {},
+  { cachedOnly = false, previous = null } = {},
 ) {
-  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
-  const samples = sampleViewportCartographics(viewer);
   const cameraHeightM = viewer.camera.positionCartographic.height;
   const target = getViewTargetCartographic(viewer);
   if (!target) {
@@ -2518,11 +2717,77 @@ export async function getBasemapLabelContext(
       placeLabels: [],
       streetLabels: [],
       nearbyPlaceLabels: [],
+      view: null,
+      lookup: null,
     };
   }
 
   const latitude = Number(Cesium.Math.toDegrees(target.latitude).toFixed(6));
   const longitude = Number(Cesium.Math.toDegrees(target.longitude).toFixed(6));
+  const view = placeLookupView({
+    latitude,
+    longitude,
+    rangeM: viewTargetRangeM(viewer, target, cameraHeightM),
+    fovRad: viewer.camera.frustum?.fov,
+    aspectRatio: viewer.camera.frustum?.aspectRatio,
+    tier: basemapLookupTier(cameraHeightM),
+  });
+  if (
+    !cachedOnly &&
+    previous?.lookup &&
+    !placeLookupViewChanged(previous.view, view)
+  ) {
+    // The same points again: what the last lookup got is a cache hit, and
+    // only what it did not (a timeout, a failure, an empty answer) is asked.
+    const labels = await basemapLabelsAt(previous.lookup, service, {
+      cachedOnly: false,
+    });
+    return { ...labels, view: previous.view, lookup: previous.lookup };
+  }
+  const samples = sampleViewportCartographics(viewer);
+  const lookup = {
+    latitude,
+    longitude,
+    cameraHeightM,
+    // Cache reads are free, so a cached-only host keeps every sample.
+    samples: cachedOnly
+      ? samples
+      : hudViewportSamples(samples, shouldReverseGeocode(cameraHeightM)),
+  };
+  return {
+    ...(await basemapLabelsAt(lookup, service, { cachedOnly })),
+    view,
+    lookup,
+  };
+}
+
+/** Which of the height-gated lookups a camera height calls for. */
+function basemapLookupTier(cameraHeightM) {
+  return [
+    shouldReverseGeocode(cameraHeightM),
+    shouldReverseGeocodeViewport(cameraHeightM) && cameraHeightM > 10000,
+    shouldFetchNearbyPlaces(cameraHeightM) &&
+      nearbyPlacesRadiusM(cameraHeightM),
+  ].join(':');
+}
+
+/** Camera distance to the view target, or the camera height without one. */
+function viewTargetRangeM(viewer, target, cameraHeightM) {
+  const position = viewer.camera.positionWC;
+  if (!position) return cameraHeightM;
+  const range = Cesium.Cartesian3.distance(
+    position,
+    Cesium.Cartographic.toCartesian(target),
+  );
+  return Number.isFinite(range) ? range : cameraHeightM;
+}
+
+async function basemapLabelsAt(
+  { latitude, longitude, cameraHeightM, samples },
+  service,
+  { cachedOnly },
+) {
+  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const cachedViewportPlaces = viewportPlacesFromCache(
     samples,
     cameraHeightM,
@@ -2560,7 +2825,6 @@ export async function getBasemapLabelContext(
     resolveWithin(placePromise, BASEMAP_CONTEXT_WAIT_MS, null),
     resolveWithin(nearbyPromise, BASEMAP_CONTEXT_WAIT_MS, []),
   ]);
-
   return {
     placeLabels: uniqueStrings([
       place?.formattedAddress,

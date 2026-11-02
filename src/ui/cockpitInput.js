@@ -9,12 +9,6 @@ export function onKeyDown(event) {
     // focus; Cockpit must stay active behind it.
     if (event.target?.closest?.('.cesium-credit-lightbox')) return;
     if (
-      document
-        .getElementById('context-radio-dock')
-        ?.classList.contains('disclosure-open')
-    )
-      return;
-    if (
       document.querySelector('#cockpit-utility-controls [aria-expanded="true"]')
     )
       return;
