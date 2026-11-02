@@ -171,6 +171,8 @@ export function createProjection({
 
   function createProjectionRuntime(record) {
     if (!layerState._viewer) return null;
+    // A location-only camera has no feed to project.
+    if (parts.model.isNoFeedType(record.camera.feedType)) return null;
     const canvas = document.createElement('canvas');
     canvas.width = PROJECTION_CANVAS_WIDTH;
     canvas.height = PROJECTION_CANVAS_HEIGHT;
