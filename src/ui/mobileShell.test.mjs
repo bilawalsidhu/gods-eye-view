@@ -114,6 +114,7 @@ function fixture({
   mobile = true,
   expanded = [],
   onTabOpened = () => {},
+  afterPublish,
 } = {}) {
   const document = new EventTarget();
   document.ids = new Map();
@@ -158,6 +159,37 @@ function fixture({
     rails[root].append(panel);
   }
 
+  // Core's dock renders the tab bar and backdrop while the shell publishes;
+  // this applies what it publishes the way that component does.
+  const backdrop = element('div', document);
+  backdrop.id = 'mobile-sheet-backdrop';
+  backdrop.hidden = true;
+  const tabBar = element('nav', document);
+  tabBar.id = 'mobile-tab-bar';
+  for (const { sheet } of MOBILE_TABS) {
+    const button = element('button', document);
+    button.dataset.mobileSheet = sheet;
+    button.setAttribute('aria-expanded', 'false');
+    tabBar.append(button);
+  }
+  document.body.append(backdrop, tabBar);
+  const views = [];
+  const publish = (view) => {
+    views.push(view);
+    if (!view) {
+      backdrop.remove();
+      tabBar.remove();
+      return;
+    }
+    backdrop.hidden = !view.sheet;
+    tabBar.setAttribute('aria-hidden', String(!view.enabled));
+    for (const button of tabBar.children)
+      button.setAttribute(
+        'aria-expanded',
+        String(button.dataset.mobileSheet === view.sheet),
+      );
+  };
+
   const media = new EventTarget();
   media.matches = mobile;
   const calls = [];
@@ -176,6 +208,8 @@ function fixture({
   const shell = initMobileShell({
     documentRef: document,
     onTabOpened,
+    publish,
+    afterPublish,
     matchMedia: () => media,
     MutationObserverImpl: FakeMutationObserver,
     ResizeObserverImpl: null,
@@ -197,7 +231,7 @@ function fixture({
   const press = (sheet) => {
     const event = new Event('click', { cancelable: true });
     Object.defineProperty(event, 'target', { value: tab(sheet) });
-    document.getElementById('mobile-tab-bar').dispatchEvent(event);
+    document.dispatchEvent(event);
   };
   const resize = (matches) => {
     media.matches = matches;
@@ -215,6 +249,7 @@ function fixture({
   return {
     document,
     shell,
+    views,
     calls,
     runFrames,
     closedCount: () => closedCount,
@@ -398,12 +433,55 @@ test('layout settling after a sheet opens is part of opening', () => {
   assert.equal(collapsed('street-level-panel'), false, 'put back as it was');
 });
 
+test('only taps on a tab toggle sheets', () => {
+  const { document, shell, press, tab } = fixture();
+  const click = (target) => {
+    const event = new Event('click', { cancelable: true });
+    Object.defineProperty(event, 'target', { value: target });
+    document.dispatchEvent(event);
+  };
+  press('layers');
+  // While a sheet is open the body carries data-mobile-sheet too, which the
+  // DOM mirrors in its dataset.
+  document.body.dataset.mobileSheet = 'layers';
+  click(document.getElementById('data-panel'));
+  assert.equal(shell.getSheet(), 'layers');
+  click(document.getElementById('mobile-tab-bar'));
+  assert.equal(shell.getSheet(), 'layers');
+  // A tap usually lands on the tab's icon or label.
+  const label = document.createElement('span');
+  tab('more').append(label);
+  click(label);
+  assert.equal(shell.getSheet(), 'more');
+});
+
+test('focus that moved before the tab bar renders stays where it went', () => {
+  const pending = [];
+  const { document, shell, press, tab } = fixture({
+    afterPublish: (callback) => pending.push(callback),
+  });
+  tab('layers').focus();
+  press('layers');
+  const elsewhere = document.getElementById('location-search');
+  press('layers');
+  elsewhere.focus();
+  pending.splice(0).forEach((callback) => callback());
+  assert.equal(document.activeElement === elsewhere, true);
+  press('layers');
+  press('layers');
+  pending.splice(0).forEach((callback) => callback());
+  assert.equal(document.activeElement === tab('layers'), true);
+  assert.equal(shell.getSheet(), null);
+});
+
 test('the backdrop closes the open sheet', () => {
   const { document, shell, press } = fixture();
   press('context');
-  document
-    .getElementById('mobile-sheet-backdrop')
-    .dispatchEvent(new Event('click'));
+  const event = new Event('click');
+  Object.defineProperty(event, 'target', {
+    value: document.getElementById('mobile-sheet-backdrop'),
+  });
+  document.dispatchEvent(event);
   assert.equal(shell.getSheet(), null);
 });
 
@@ -448,11 +526,37 @@ test('desktop widths never see the shell; crossing to desktop restores it', () =
   );
 });
 
+test('the shell publishes whether it is on and which sheet is open', () => {
+  const phone = fixture();
+  assert.deepEqual(phone.views.at(-1), {
+    enabled: true,
+    sheet: null,
+    tabs: MOBILE_TABS,
+  });
+  phone.press('search');
+  assert.deepEqual(phone.views.at(-1), {
+    enabled: true,
+    sheet: 'search',
+    tabs: MOBILE_TABS,
+  });
+  phone.resize(false);
+  assert.deepEqual(phone.views.at(-1), {
+    enabled: false,
+    sheet: null,
+    tabs: MOBILE_TABS,
+  });
+  const desktop = fixture({ mobile: false });
+  assert.deepEqual(desktop.views, [
+    { enabled: false, sheet: null, tabs: MOBILE_TABS },
+  ]);
+});
+
 test('destroy puts panels back and removes the shell', () => {
-  const { document, shell, press, viewport, collapsed } = fixture();
+  const { document, shell, views, press, viewport, collapsed } = fixture();
   press('layers');
   shell.destroy();
   assert.equal(collapsed('data-panel'), true);
+  assert.equal(views.at(-1), null);
   assert.equal(document.getElementById('mobile-tab-bar'), null);
   assert.equal(document.getElementById('mobile-sheet-backdrop'), null);
   assert.equal(document.body.classList.contains('mobile-shell'), false);

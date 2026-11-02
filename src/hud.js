@@ -37,9 +37,10 @@ import {
   DEFAULT_HUD_LAYOUT,
   normalizeHudLayout,
 } from './hudLayouts.js';
-import { formatNumber, msg, t } from './i18n/index.js';
+import { formatNumber, msg, onLocaleChange, t } from './i18n/index.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
+import { subscribeSelectedVessel } from './hudReadouts.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -179,8 +180,10 @@ export class IntelHUD {
       summaryPolicy = {},
       basemapContext = {},
       summaryService = applicationServices.summary,
+      publish = () => {},
     } = {},
   ) {
+    this._publish = publish;
     this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
@@ -189,7 +192,9 @@ export class IntelHUD {
     this._visible = false;
     this._autoMode = true; // auto show/hide based on style
     this._currentStyle = 'normal';
-    this._el = null;
+    /** The presented HUD; see {@link IntelHUD#_initView}. */
+    this._view = null;
+    this._viewSignature = '';
     this._variant = DEFAULT_HUD_LAYOUT;
     this._recBlinkState = true;
     this._updateInterval = null;
@@ -268,79 +273,83 @@ export class IntelHUD {
     this._orbitNum = 47000 + Math.floor(Math.random() * 1000);
     this._passNum = 100 + Math.floor(Math.random() * 200);
 
-    this._buildDOM();
+    this._initView();
+    this._vesselUnsubscribe = subscribeSelectedVessel((readout) =>
+      this._present({
+        vessel: readout
+          ? { active: true, text: readout.text }
+          : { active: false, text: t('AIS: --') },
+      }),
+    );
     this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
+    this._offLocale = onLocaleChange(() => this._relocalize());
     this._startTimers();
   }
 
   /**
-   * Construct the HUD DOM structure inside the existing `#intel-hud` element.
-   * Populates corner brackets, classification banners, sensor readouts,
-   * edge metadata strips, and the bottom summary bar.
+   * Show the HUD's own words in the new locale. The deterministic summary
+   * is composed again; the AI reply does not depend on the locale, so the
+   * next tick shows the one already received rather than asking again.
    */
-  _buildDOM() {
-    this._el = document.getElementById('intel-hud');
-    if (!this._el) return;
+  _relocalize() {
+    this._present({
+      mode: MODE_LABELS[this._currentStyle]
+        ? t(MODE_LABELS[this._currentStyle])
+        : this._currentStyle.toUpperCase(),
+      summaryLabel: t('SUMMARY'),
+      rec: t('REC'),
+      ...(this._view.vessel.active
+        ? {}
+        : { vessel: { active: false, text: t('AIS: --') } }),
+    });
+    if (this._visible && this._latestMetrics) this._updateCameraData();
+    this._setSummaryText(this._composeSummary(), false);
+  }
 
+  /**
+   * Present the HUD's first view: corner brackets, classification banners,
+   * sensor readouts, edge metadata strips and the bottom summary bar, which
+   * the Intel HUD view renders in `#intel-hud`.
+   */
+  _initView() {
     // i18n-ignore: sensor codes and a classification banner; the rest uses t()
-    this._el.innerHTML = `
-      <div class="hud-sonar" aria-hidden="true"></div>
+    this._view = {
+      active: false,
+      variant: this._variant,
+      colors: null,
+      classification: 'TOP SECRET // SI-TK // NOFORN',
+      system: `${this._missionId}  ${this._sensorId}`,
+      mode: t(MODE_LABELS.normal),
+      summaryLabel: t('SUMMARY'),
+      summary: t('Awaiting telemetry...'),
+      rec: t('REC'),
+      recShown: null,
+      timestamp: '2026-01-01 00:00:00Z',
+      orbital: `ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}`,
+      mgrs: 'MGRS: ---',
+      latlon: `--°--'--"N ---°--'--"W`,
+      gsd: 'GSD: --m  NIIRS: --',
+      alt: 'ALT: --m   SUN: --° EL',
+      vessel: { active: false, text: t('AIS: --') },
+      coll: 'COLL: --:--:--Z',
+      ona: 'ONA: --°',
+      sensor: ['BAND: PAN', 'BITS: 11', 'LVL: 1A'],
+      bottom: 'LAT: --  LON: --  MGRS: ---',
+    };
+    this._present({});
+  }
 
-      <div class="hud-corner hud-top-left">
-        <div class="hud-bracket">┌</div>
-        <div class="hud-content">
-          <div class="hud-readout"><div class="hud-classification">TOP SECRET // SI-TK // NOFORN</div></div>
-          <div class="hud-readout"><div class="hud-system">${this._missionId}  ${this._sensorId}</div></div>
-          <div class="hud-readout"><div class="hud-mode" id="hud-mode">${t(MODE_LABELS.normal)}</div></div>
-          <div class="hud-summary-wrap">
-            <div class="hud-readout"><div class="hud-summary-label">${t('SUMMARY')}</div></div>
-            <div class="hud-readout"><div class="hud-summary" id="hud-summary">${t('Awaiting telemetry...')}</div></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="hud-corner hud-top-right">
-        <div class="hud-content" style="text-align:right">
-          <div class="hud-readout"><div class="hud-rec"><span id="hud-rec-dot">●</span> ${t('REC')}  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div></div>
-          <div class="hud-readout"><div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div></div>
-        </div>
-        <div class="hud-bracket">┐</div>
-      </div>
-
-      <div class="hud-corner hud-bottom-left">
-        <div class="hud-bracket">└</div>
-        <div class="hud-content">
-          <div class="hud-readout"><div id="hud-mgrs">MGRS: ---</div></div>
-          <div class="hud-readout"><div id="hud-latlon">--°--'--"N ---°--'--"W</div></div>
-        </div>
-      </div>
-
-      <div class="hud-corner hud-bottom-right">
-        <div class="hud-content" style="text-align:right">
-          <div class="hud-readout"><div id="hud-gsd">GSD: --m  NIIRS: --</div></div>
-          <div class="hud-readout"><div id="hud-alt">ALT: --m   SUN: --° EL</div></div>
-          <div class="hud-readout"><div id="hud-ais-vessel" class="hud-ais-vessel">${t('AIS: --')}</div></div>
-        </div>
-        <div class="hud-bracket">┘</div>
-      </div>
-
-      <div class="hud-edge hud-left-edge">
-        <div class="hud-readout"><div id="hud-coll">COLL: --:--:--Z</div></div>
-        <div class="hud-readout"><div id="hud-ona">ONA: --°</div></div>
-      </div>
-
-      <div class="hud-edge hud-right-edge">
-        <div class="hud-readout"><div>BAND: PAN</div></div>
-        <div class="hud-readout"><div>BITS: 11</div></div>
-        <div class="hud-readout"><div>LVL: 1A</div></div>
-      </div>
-
-      <div class="hud-bottom-bar">
-        <span class="hud-readout"><span id="hud-bottom-line">LAT: --  LON: --  MGRS: ---</span></span>
-      </div>
-    `;
-    this._el.dataset.variant = this._variant;
+  /**
+   * Merge `patch` into the view and publish it when anything changed.
+   * @param {object} patch
+   */
+  _present(patch) {
+    Object.assign(this._view, patch);
+    const signature = JSON.stringify(this._view);
+    if (signature === this._viewSignature) return;
+    this._viewSignature = signature;
+    this._publish(Object.freeze({ ...this._view }));
   }
 
   /**
@@ -351,16 +360,13 @@ export class IntelHUD {
   _startTimers() {
     // Timestamp — every second
     this._timestampInterval = setInterval(() => {
-      const el = document.getElementById('hud-timestamp');
-      if (el) el.textContent = this._formatUTC();
+      this._present({ timestamp: this._formatUTC() });
     }, 1000);
 
     // REC blink — every 800ms
     this._recBlinkInterval = setInterval(() => {
       this._recBlinkState = !this._recBlinkState;
-      const dot = document.getElementById('hud-rec-dot');
-      if (dot)
-        dot.style.visibility = this._recBlinkState ? 'visible' : 'hidden';
+      this._present({ recShown: this._recBlinkState });
     }, 800);
 
     // Camera-derived data — 4 updates/second (250ms). Skipped in a hidden
@@ -449,23 +455,16 @@ export class IntelHUD {
       // Format: 18SUJ23370716 → 18S UJ 2337 0716
       const formatted = this._formatMGRS(mgrsStr);
       mgrsLabel = formatted;
-      const el = document.getElementById('hud-mgrs');
-      // i18n-ignore: sensor codes
-      if (el) el.textContent = `MGRS: ${formatted}`;
     } catch {
-      const el = document.getElementById('hud-mgrs');
-      // i18n-ignore: sensor codes
-      if (el) el.textContent = 'MGRS: ---';
+      /* the readout keeps its dashes */
     }
+    // i18n-ignore: sensor codes
+    const readouts = { mgrs: `MGRS: ${mgrsLabel}` };
 
     // Lat/Lon DMS
-    const llEl = document.getElementById('hud-latlon');
-    if (llEl) llEl.textContent = `${latDMS} ${lonDMS}`;
-    const bottomEl = document.getElementById('hud-bottom-line');
-    if (bottomEl) {
-      // i18n-ignore: sensor codes
-      bottomEl.textContent = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
-    }
+    readouts.latlon = `${latDMS} ${lonDMS}`;
+    // i18n-ignore: sensor codes
+    readouts.bottom = `MGRS: ${mgrsLabel}  LAT: ${latDMS}  LON: ${lonDMS}`;
 
     // GSD (Ground Sample Distance): approximate resolution in meters per pixel
     // derived from camera altitude. NIIRS (National Imagery Interpretability
@@ -477,42 +476,35 @@ export class IntelHUD {
       0,
       Math.min(9, 10.25 - 3.32 * Math.log10(gsdInches)),
     );
-    const gsdEl = document.getElementById('hud-gsd');
-    if (gsdEl)
-      // i18n-ignore: sensor codes
-      gsdEl.textContent = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
+    // i18n-ignore: sensor codes
+    readouts.gsd = `GSD: ${gsd.toFixed(2)}m  NIIRS: ${niirs.toFixed(1)}`;
 
     // Altitude — reported as height above MEAN SEA LEVEL. `altM` is the raw
     // ellipsoidal camera height, which reads far below zero wherever the geoid
     // sits under the ellipsoid: a cockpit parked on the SFO deck (N ≈ -32 m)
     // showed "ALT: -15m", and JFK "ALT: -18m". Subtracting N restores the
     // number a viewer expects without touching the camera or any render path.
-    const altEl = document.getElementById('hud-alt');
     const geoidN = this._geoidUndulationM(latDeg, lonDeg);
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
-    if (altEl)
-      // i18n-ignore: sensor codes
-      altEl.textContent = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    // i18n-ignore: sensor codes
+    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
 
     // Collection timestamp
-    const collEl = document.getElementById('hud-coll');
-    if (collEl) {
-      const now = new Date();
-      const h = String(now.getUTCHours()).padStart(2, '0');
-      const m = String(now.getUTCMinutes()).padStart(2, '0');
-      const s = String(now.getUTCSeconds()).padStart(2, '0');
-      // i18n-ignore: sensor codes
-      collEl.textContent = `COLL: ${h}:${m}:${s}Z`;
-    }
+    const now = new Date();
+    const h = String(now.getUTCHours()).padStart(2, '0');
+    const m = String(now.getUTCMinutes()).padStart(2, '0');
+    const s = String(now.getUTCSeconds()).padStart(2, '0');
+    // i18n-ignore: sensor codes
+    readouts.coll = `COLL: ${h}:${m}:${s}Z`;
 
     // Off-nadir angle (ONA): camera pitch of -90 deg is nadir (straight down),
     // so ONA = 90 + pitch gives 0 at nadir and increases toward the horizon.
     const pitchDeg = Cesium.Math.toDegrees(camera.pitch);
     const ona = Math.max(0, 90 + pitchDeg);
-    const onaEl = document.getElementById('hud-ona');
     // i18n-ignore: sensor codes
-    if (onaEl) onaEl.textContent = `ONA: ${ona.toFixed(1)}°`;
+    readouts.ona = `ONA: ${ona.toFixed(1)}°`;
+    this._present(readouts);
 
     // `altM` stays the raw ellipsoidal camera height the sensor model reads
     // (GSD/NIIRS, view band). `altMslM` is the ADDITIVE display datum — the
@@ -733,8 +725,7 @@ export class IntelHUD {
     const m = this._latestMetrics;
     if (!m) return t('Awaiting telemetry...');
 
-    const modeEl = document.getElementById('hud-mode');
-    const modeLabel = modeEl?.textContent || t(MODE_LABELS.normal);
+    const modeLabel = this._view.mode || t(MODE_LABELS.normal);
     const region = this._regionLabel(m.latDeg, m.lonDeg);
     const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
@@ -796,20 +787,18 @@ export class IntelHUD {
    * @param {string} text - Full summary string to type out.
    */
   _typeSummary(text) {
-    const el = document.getElementById('hud-summary');
-    if (!el) return;
     clearInterval(this._summaryTypingInterval);
     let index = 0;
-    el.textContent = '';
+    this._present({ summary: '' });
     this._summaryTypingInterval = setInterval(() => {
       index += 2;
       if (index >= text.length) {
-        el.textContent = text;
+        this._present({ summary: text });
         clearInterval(this._summaryTypingInterval);
         this._summaryTypingInterval = null;
         return;
       }
-      el.textContent = text.slice(0, index);
+      this._present({ summary: text.slice(0, index) });
     }, 24);
   }
 
@@ -924,8 +913,7 @@ export class IntelHUD {
     }
     // A plain paint replaces any reply still typing.
     this._stopSummaryTyping();
-    const el = document.getElementById('hud-summary');
-    if (el) el.textContent = text;
+    this._present({ summary: text });
   }
 
   /**
@@ -984,20 +972,18 @@ export class IntelHUD {
   onStyleChange(styleName) {
     this._currentStyle = styleName;
 
-    // Update mode label
-    const modeEl = document.getElementById('hud-mode');
-    if (modeEl) {
-      modeEl.textContent = MODE_LABELS[styleName]
-        ? t(MODE_LABELS[styleName])
-        : styleName.toUpperCase();
-    }
-    // Update color scheme
+    // Mode label and color scheme
     const colors = HUD_COLORS[styleName] || HUD_COLORS._default;
-    if (this._el) {
-      this._el.style.setProperty('--hud-color', colors.main);
-      this._el.style.setProperty('--hud-glow', colors.glow);
-      this._el.style.setProperty('--hud-border', colors.border);
-    }
+    this._present({
+      mode: MODE_LABELS[styleName]
+        ? t(MODE_LABELS[styleName])
+        : styleName.toUpperCase(),
+      colors: {
+        '--hud-color': colors.main,
+        '--hud-glow': colors.glow,
+        '--hud-border': colors.border,
+      },
+    });
 
     // Auto show/hide
     if (this._autoMode) {
@@ -1012,7 +998,7 @@ export class IntelHUD {
   /** Make the HUD visible and immediately refresh all readouts. */
   show() {
     this._visible = true;
-    if (this._el) this._el.classList.add('active');
+    this._present({ active: true });
     this._updateCameraData(); // immediate update
     this._markSummaryDirty();
     void this._updateSummary(false, true);
@@ -1021,7 +1007,7 @@ export class IntelHUD {
   /** Hide the HUD overlay. */
   hide() {
     this._visible = false;
-    if (this._el) this._el.classList.remove('active');
+    this._present({ active: false });
   }
 
   /** Toggle HUD visibility and disable auto-mode (user override). */
@@ -1060,9 +1046,7 @@ export class IntelHUD {
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);
-    if (this._el) {
-      this._el.dataset.variant = this._variant;
-    }
+    this._present({ variant: this._variant });
     applyHudUiTheme(document.documentElement, this._variant);
   }
 
@@ -1116,6 +1100,8 @@ export class IntelHUD {
     this.viewer.camera.moveStart.removeEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
     this._dataManagerUnsubscribe?.();
+    this._vesselUnsubscribe?.();
     this._summaryRequest?.abort();
+    this._offLocale();
   }
 }

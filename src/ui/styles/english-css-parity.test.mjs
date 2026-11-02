@@ -128,20 +128,9 @@ test('cockpit brief controls keep their English sizes', () => {
 
 test('the count-line class is set only outside English', async () => {
   const { setLocale } = await import('../../i18n/index.js');
-  const { LayerPanel } = await import('../layerPanel.js');
-  const classes = () => {
-    const toggled = new Map();
-    const node = () => ({
-      textContent: '',
-      classList: { toggle: (name, on) => toggled.set(name, on) },
-      appendChild() {},
-    });
-    LayerPanel.prototype._syncCount.call(LayerPanel.prototype, node(), node(), {
-      countLabel: '693 nearby · 93 on screen',
-    });
-    return toggled.get('data-toggle-row--count-line');
-  };
-  globalThis.document ??= { createElement: () => ({}) };
+  const { presentLayerCount } = await import('../layerPanel.js');
+  const classes = () =>
+    presentLayerCount({ countLabel: '693 nearby · 93 on screen' }).countLine;
   try {
     setLocale('en');
     assert.equal(classes(), false);

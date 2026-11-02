@@ -1100,7 +1100,7 @@ async function main() {
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationFalseMessage = document.getElementById('toast').textContent;
-        const installationFalseReleased = !document.getElementById('installations-search-btn').disabled;
+        const installationFalseReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
 
         dataManager.setEnabled = async (layerId, shouldEnable) => {
           if (layerId === 'military-installations' && shouldEnable) {
@@ -1111,7 +1111,7 @@ async function main() {
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationEnableRejectionMessage = document.getElementById('toast').textContent;
-        const installationEnableRejectionReleased = !document.getElementById('installations-search-btn').disabled;
+        const installationEnableRejectionReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
 
         dataManager.setEnabled = async (layerId, shouldEnable) => {
           if (layerId === 'military-installations' && shouldEnable) enabled.add(layerId);
@@ -1123,13 +1123,13 @@ async function main() {
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationRejectionMessage = document.getElementById('toast').textContent;
-        const installationRejectionReleased = !document.getElementById('installations-search-btn').disabled;
+        const installationRejectionReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
 
         if (installations) installations.searchNearby = async () => false;
         document.getElementById('installations-search-btn').click();
         await new Promise((resolve) => setTimeout(resolve, 50));
         const installationSearchFalseMessage = document.getElementById('toast').textContent;
-        const installationSearchFalseReleased = !document.getElementById('installations-search-btn').disabled;
+        const installationSearchFalseReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
         await new Promise((resolve) => setTimeout(resolve, 0));
         return {
           semanticFalseMessage,
@@ -1716,7 +1716,14 @@ async function main() {
           else panel.setAttribute('style', state.style);
           if (state.ariaHidden === null) panel.removeAttribute('aria-hidden');
           else panel.setAttribute('aria-hidden', state.ariaHidden);
-          manager._syncPanelCollapseButton(panel);
+          // The restored classes are the panel's state again.
+          const has = (name) => panel.classList.contains(name);
+          manager._presentPanel(panel, {
+            collapsed: has('collapsed'),
+            pinned: has('dock-pinned'),
+            pinnedTop: has('dock-pinned-top'),
+            auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
+          });
         }
         for (const [id, state] of Object.entries(prior.stacks)) {
           const stack = document.getElementById(id);
@@ -1974,7 +1981,7 @@ async function main() {
       manager._setCockpitDisplayPortalActive(true);
       hud.hidden = false;
       signal.hidden = false;
-      dataPanel.classList.remove('collapsed');
+      manager._presentPanel(dataPanel, { collapsed: false });
       window.__godsEyeView.styleManager._syncLeftPanelAdaptiveLayout();
       window.__godsEyeView.styleManager.cockpitView.syncSignalLayout();
       if (display.getAttribute('aria-expanded') === 'true') display.click();
@@ -2059,8 +2066,7 @@ async function main() {
       contextCard.hidden = false;
       // Expand the panel the same way this block already does at entry, so the
       // portaled Display groups measured further down keep their DOM home.
-      dataPanel.classList.remove('collapsed', 'layout-auto-collapsed');
-      manager._syncPanelCollapseButton(dataPanel);
+      manager._presentPanel(dataPanel, { collapsed: false, auto: null });
       manager._syncLeftPanelAdaptiveLayout();
       await waitForLayout();
       const panelRect = dataPanel.getBoundingClientRect();
@@ -2154,16 +2160,20 @@ async function main() {
         .every((control) => control.closest('.pp-toggle-group')?.parentElement
           ?.closest('#cockpit-display-panel'));
       display.click();
+      await waitForLayout();
 
       manager.cockpitView.syncSignalLayout();
       radio.click();
+      await waitForLayout();
       const radioOpened = radio.getAttribute('aria-expanded') === 'true'
         && !document.getElementById('cockpit-radio-panel').hidden;
       const mutuallyExclusive = display.getAttribute('aria-expanded') === 'false';
       radio.click();
+      await waitForLayout();
 
       manager.cockpitView.syncSignalLayout();
       radio.click();
+      await waitForLayout();
 
       const radioNavigationAvailable = [
         document.getElementById('cockpit-radio-prev-btn'),
@@ -2283,7 +2293,14 @@ async function main() {
           else panel.setAttribute('style', state.style);
           if (state.ariaHidden === null) panel.removeAttribute('aria-hidden');
           else panel.setAttribute('aria-hidden', state.ariaHidden);
-          manager._syncPanelCollapseButton(panel);
+          // The restored classes are the panel's state again.
+          const has = (name) => panel.classList.contains(name);
+          manager._presentPanel(panel, {
+            collapsed: has('collapsed'),
+            pinned: has('dock-pinned'),
+            pinnedTop: has('dock-pinned-top'),
+            auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
+          });
         }
         manager._panelLayout._leftStackPreferredPanelId = prior.preferredLeftPanelId;
         localStorage.clear();
@@ -2700,14 +2717,20 @@ async function main() {
       };
       const playsBefore = window.__qaRadioPlayCalls.length;
       const frozenSignature = style._radioControls._radioTunerBandSignature;
+      // The tuner renders from the Radio store; let Vue patch before reading.
+      const rendered = () => Promise.resolve();
       pointer('pointerdown', xFor(0));
+      await rendered();
       const left = snapshot();
       const centerCoordinate = (count - 1) / 2;
       pointer('pointermove', xFor(centerCoordinate));
+      await rendered();
       const center = snapshot();
       pointer('pointermove', xFor(centerCoordinate + 2));
+      await rendered();
       const shifted = snapshot();
       pointer('pointermove', xFor(count - 1));
+      await rendered();
       const right = snapshot();
       const shiftedByIndex = new Map(shifted.ticks.map((tick) => [tick.index, tick.x]));
       const sharedTick = center.ticks.find((tick) => shiftedByIndex.has(tick.index));
@@ -2764,7 +2787,7 @@ async function main() {
         tapeDelta: absoluteTuner.tapeDelta,
       }),
     );
-    const tunerCancelRestore = await page.evaluate(() => {
+    const tunerCancelRestore = await page.evaluate(async () => {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
       const radio = gev.dataManager.layers.get('radio').module;
@@ -2797,11 +2820,14 @@ async function main() {
       const targetIndex = before.slot < beforeStations.length - 2 ? before.slot + 2 : before.slot - 2;
       pointer('pointerdown', before.slot);
       pointer('pointermove', targetIndex);
+      // The tuner renders from the Radio store; let Vue patch before reading.
+      await Promise.resolve();
       const shiftedSlot = Number(slider.value);
       const previewBeforeCancel = gev.viewer.entities.values
         .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
       const flyToCallsBeforeCancel = flyToCalls.length;
       pointer('pointercancel', targetIndex);
+      await Promise.resolve();
       const afterStations = style._radioControls._radioTunerStations;
       const afterState = radio.getUIState();
       const after = {
@@ -2957,7 +2983,7 @@ async function main() {
     await page.evaluate(async () => {
       await window.__godsEyeView.dataManager.layers.get('radio').module.update();
     });
-    const tunerRefreshRelease = await page.evaluate((target) => {
+    const tunerRefreshRelease = await page.evaluate(async (target) => {
       const gev = window.__godsEyeView;
       const slider = document.getElementById('radio-tuner-slider');
       const displayedBeforeRelease = document.getElementById('radio-tuner-station').textContent;
@@ -2970,6 +2996,10 @@ async function main() {
         clientY: target.clientY,
       }));
       const state = gev.dataManager.layers.get('radio').module.getUIState();
+      // The playback line renders from the Radio store once Vue flushes.
+      const message = await Promise.resolve().then(
+        () => document.getElementById('radio-playback-state').textContent,
+      );
       return {
         displayedBeforeRelease,
         frozenGeneration,
@@ -2978,7 +3008,7 @@ async function main() {
         plays: window.__qaRadioPlayCalls.length,
         value: document.getElementById('radio-tuner-value').textContent,
         stationText: document.getElementById('radio-tuner-station').textContent,
-        message: document.getElementById('radio-playback-state').textContent,
+        message,
         targetId: target.id,
       };
     }, tunerRefreshTarget);
@@ -3025,6 +3055,8 @@ async function main() {
       pointer('pointermove', targetIndex);
       const previewPlays = window.__qaRadioPlayCalls.length;
       pointer('pointerup', targetIndex);
+      // The tuner renders from the Radio store; sample once Vue has patched.
+      await Promise.resolve();
       const samples = [needle.getBoundingClientRect().left];
       await new Promise((resolve) => requestAnimationFrame(resolve));
       samples.push(needle.getBoundingClientRect().left);

@@ -57,7 +57,8 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     new URL('./standalone/application.js', import.meta.url),
     'utf8',
   )
-    .replace(/^import .*;\n/gm, '')
+    // Imports may span lines (`import {\n  a,\n  b,\n} from '…';`).
+    .replace(/^import [^;]*;\n/gm, '')
     .replace(/^export /gm, '');
   const context = vm.createContext({
     document: {
@@ -65,6 +66,9 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     },
     resolveLocale: () => 'en',
     setLocale() {},
+    getLocale: () => 'en',
+    onLocaleChange: () => () => {},
+    mountApplicationViews() {},
     applyDocumentLanguage() {},
     applyDocumentTranslations() {},
     CITY_POIS: [],
@@ -81,7 +85,8 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
   });
   vm.runInContext(source, context);
   const app = context.createStandaloneApplication(credentials);
-  return app.createScene({ signal: new AbortController().signal });
+  // The application passes each constructor its signal and defer(cleanup).
+  return app.createScene({ signal: new AbortController().signal, defer() {} });
 }
 
 test('standalone falls back to ion when the server token route is unavailable', async () => {
