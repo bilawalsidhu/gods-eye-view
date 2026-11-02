@@ -557,7 +557,9 @@ those reports arrive as 102.3 knots and 360 degrees. Both are stored as unknown,
 and vessel cards, the HUD and analyst queries show a missing measurement rather
 than a reading. Heading keeps its existing separate check for its own sentinel.
 Genuine readings are unchanged, including a stopped vessel's zero and the
-highest speed and course the fields can encode.
+highest speed and course the fields can encode. Vessel cards and the HUD wrap
+the direction after rounding to whole degrees, so a course of 359.5° or more
+reads `0°` (`0DEG` in the HUD) rather than `360°`.
 
 For an already tracked vessel, AISStream static messages update name, type,
 destination and IMO without changing its position, motion, fix timestamps,
@@ -958,7 +960,9 @@ change. Once the camera is still and tiles have settled, each overlay anchor is
 replaced once by the rendered surface under it (two depth samples per paint,
 accepted only within -30/+40 m of the floor cell), so badges do not float or
 sink on slopes; wedge corners follow their own floor cells instead of staying
-level with the apex. Unknown bearings never acquire a wedge. The row reads
+level with the apex. Unknown bearings never acquire a wedge. The selected
+card's `DIRECTION` wraps after rounding to whole degrees, so a mapped bearing
+of 359.5° or more reads `0°` rather than `360°`. The row reads
 `N nearby · M on screen`; when every loaded camera is outside the view it adds
 "None on screen — nearby cameras are outside the view" instead of looking
 unloaded. `scripts/qa-alpr-journey.mjs` drives an Austin journey with ALPR off,
@@ -4926,7 +4930,9 @@ silently demoting every later lookup for the session.
   wireframe dashed; colours, widths and active/idle emphasis are unchanged. A manual calibration
   (`calSource: 'manual'`) or curated pose (`poseSource: 'curated'`) is never presented as
   estimated, matching the CAL badge. Public camera state carries `headingConfidence` and
-  `headingEstimated` (`src/layers/cctv/headingConfidence.js`, #639).
+  `headingEstimated` (`src/layers/cctv/headingConfidence.js`, #639). The HUD token and the
+  camera panel's meta line wrap the bearing after rounding to whole degrees, so a camera
+  facing 359.5° or more reads `HDG 0°` rather than `HDG 360°`.
 - **CCTV identified hardware:** a camera whose source or seed names a hardware `model` that
   resolves in `src/layers/cctv/modelSpecs.js` (vendored CC0 records from the CCTV Camera
   Database) gets the model's specs appended to the HUD meta line. Only fixed single-lens
