@@ -58,6 +58,7 @@ const NAVARA_CREDIT_KEYS = new Set([
   'usgs',
   'eccc-aqhi',
   'wfigs',
+  's2-ghostmaps',
   'firms',
   'gbfs',
   'overture-military-names',
@@ -106,6 +107,10 @@ export async function registerNavaraLayerRenderers() {
     bikeshare: async () =>
       (await import('../layers/bikeshare/render/navara.js'))
         .createBikeshareNavaraRenderer,
+    's2-ghostmaps': async () => {
+      const { createGhostMapsNavaraRenderer } = await import('../layers/ghostMaps/render/navara.js');
+      return (engine) => createGhostMapsNavaraRenderer(engine, navaraViews.get(engine).view);
+    },
     'military-awareness': async () =>
       (await import('../layers/awareness/render/navara.js')).createAwarenessNavaraRenderer,
     'military-installations': async () => {

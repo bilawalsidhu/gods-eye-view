@@ -2,23 +2,7 @@ import * as geo from '../../../geo/index.js';
 import { createNavaraPolygonDisplay } from '../../shared/render/navaraPolygons.js';
 import { containmentAccent } from '../cards.js';
 
-// A fire ring is local, including across 180°. Put the click and ring in
-// the same longitude interval before casting the ray.
-function contains(ring, lon, lat) {
-  const origin = ring[0][0];
-  const local = (x) => x - origin - 360 * Math.round((x - origin) / 360);
-  const x = local(lon);
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [ax, ay] = ring[j],
-      [bx, by] = ring[i];
-    if (ay > lat === by > lat) continue;
-    const a = local(ax),
-      b = local(bx);
-    if (x < a + ((b - a) * (lat - ay)) / (by - ay)) inside = !inside;
-  }
-  return inside;
-}
+import { containsGroundPoint } from '../../shared/render/groundRing.js';
 
 export function createPerimetersNavaraRenderer(engine, { view }) {
   let polygons = [];
@@ -86,8 +70,8 @@ export function createPerimetersNavaraRenderer(engine, { view }) {
       for (let i = polygons.length - 1; i >= 0; i--) {
         const { id, rings } = polygons[i];
         if (
-          contains(rings[0], lon, lat) &&
-          !rings.slice(1).some((ring) => contains(ring, lon, lat))
+          containsGroundPoint(rings[0], lon, lat) &&
+          !rings.slice(1).some((ring) => containsGroundPoint(ring, lon, lat))
         )
           return { id };
       }

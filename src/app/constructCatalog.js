@@ -207,7 +207,7 @@ export function createApplicationCatalog({
       ],
       [
         's2-ghostmaps',
-        () => createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
+        () => sessionModel('s2-ghostmaps', () => createApplicationGhostMaps({ source: sources['s2-ghostmaps'] })),
       ],
       [
         'alpr-cameras',

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { rendererFor } from './renderers.js';
 import { createGhostMapsLayer } from '../../layers/ghostMaps/index.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
@@ -18,6 +19,7 @@ export function createApplicationGhostMaps(options) {
       new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
     picking,
     pointer: { isPointerFree },
+    createRenderer: (engine) => rendererFor('s2-ghostmaps', engine),
     ...options,
   });
 }
