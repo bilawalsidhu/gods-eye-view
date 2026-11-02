@@ -2801,11 +2801,11 @@ isCurrent })` gates BOTH halves of the map-stack switch, which is its only
 >   to 4.25rem, open or closed (an open tray pops out above the dock), which is
 >   too narrow for their text labels. The labels used to spill over the voice
 >   control, and the LOCATION label captured taps on the left half of the mic
->   button (HAL-728). `src/ui/styles/command-dock-trays.css` now sets the
+>   button. `src/ui/styles/command-dock-trays.css` now sets the
 >   labels to `font-size: 0` and drops their `›`/`‹` chevrons in that band, so
->   each wing shows only its icon. The text node is unchanged, so
->   `panelChrome.js` still builds the toggles' "Expand/Collapse …" `aria-label`
->   and `title` from it; the browser tooltip is the only visible name on hover.
+>   each wing shows only its icon. `CommandDockView.vue` still gives the toggles
+>   their "Expand/Collapse …" `aria-label` and `title` (`trayWords`), so the
+>   browser tooltip is the only visible name on hover.
 >   The Cyber HUD layout is excluded: it sets `--dock-side-compact` to
 >   9–9.75rem, which fits its labels. The former ≤620px ellipsis clip is gone:
 >   the phone shell takes over at 720px, so it never applied to a visible

@@ -511,6 +511,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(
     .location-toolbar-label {
     font-size: 0;
     letter-spacing: 0;
+    /* The empty text is still a flex item; drop the gap it would claim. */
+    gap: 0;
   }
 
   :root:not([data-ui-theme='cyber'])
