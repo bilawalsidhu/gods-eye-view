@@ -2871,5 +2871,9 @@
   "PAD / RTLS": "射場 / RTLS",
   "World time": "世界時刻",
   "Back to live": "ライブに戻る",
-  "Live": "ライブ"
+  "Live": "ライブ",
+  "1 h/s": "1時間/秒",
+  "1 d/s": "1日/秒",
+  "1 wk/s": "1週間/秒",
+  "Play speed": "再生速度"
 }

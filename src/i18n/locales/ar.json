@@ -3221,5 +3221,9 @@
   "Download this scene as JSON or an asset bundle": "تنزيل هذا المشهد بصيغة JSON أو حزمة موارد",
   "World time": "وقت العالم",
   "Back to live": "العودة إلى البث المباشر",
-  "Live": "مباشر"
+  "Live": "مباشر",
+  "1 h/s": "ساعة/ث",
+  "1 d/s": "يوم/ث",
+  "1 wk/s": "أسبوع/ث",
+  "Play speed": "سرعة التشغيل"
 }

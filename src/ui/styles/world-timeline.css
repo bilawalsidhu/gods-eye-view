@@ -77,6 +77,10 @@ body.cockpit-mode #world-timeline {
   text-transform: uppercase;
 }
 
+#world-timeline .world-timeline-speed {
+  flex: none;
+}
+
 #world-timeline .world-timeline-time {
   overflow: hidden;
   font-family: var(--font-mono);
@@ -206,9 +210,15 @@ body.mobile-shell #world-timeline .world-timeline-time {
   flex: 1 1 0;
 }
 
+/* The speed sits on the track's row, a full-size target beside it. */
 body.mobile-shell #world-timeline .world-timeline-track {
   order: 1;
-  flex-basis: 100%;
+  flex: 1 1 calc(100% - 96px);
+}
+
+body.mobile-shell #world-timeline .world-timeline-speed {
+  order: 2;
+  height: 32px;
 }
 
 @media (max-width: 640px) {

@@ -149,7 +149,7 @@ test('the track runs over the time the layers show, to now, and scrubs', async (
   assert.equal(worldClock.now(), ahead);
 });
 
-test('play runs the whole track in a minute, from the start when at live', async (t) => {
+test('play runs a day a second, from the start of the track when at live', async (t) => {
   const bar = mount(t);
   const now = Date.now();
   const start = now - 10 * 86_400_000;
@@ -176,9 +176,7 @@ test('play runs the whole track in a minute, from the start when at live', async
   assert.deepEqual(stepped, []);
   const rate = worldClock.getRate();
   assert.ok(worldClock.now() - start < rate * 1_000, 'from the start of the track');
-  // The end is now and moves on with it: play outruns it by the track.
-  const length = Date.now() - start;
-  assert.ok(Math.abs(rate - (1 + length / 60_000)) < rate * 0.01, 'a minute end to end');
+  assert.equal(rate, 86_400, 'a day a second');
   worldClock.play({ continuous: true });
 
   // Playing on to now goes live.
@@ -217,4 +215,87 @@ test('play holds at the end of a track that reaches past now', async (t) => {
   assert.equal(worldClock.isPlaying(), false);
   assert.equal(worldClock.isLive(), false);
   assert.equal(worldClock.now(), end);
+});
+
+test('the speed chosen sets how fast play runs, at once while playing', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({ start: now - 10 * 86_400_000, end: now - 86_400_000 }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const select = bar().querySelector('select.world-timeline-speed');
+  assert.equal(select.value, 'day');
+  select.value = 'week';
+  select.dispatchEvent(new Event('change'));
+  await nextTick();
+  bar().querySelector('.world-timeline-play').click();
+  assert.equal(worldClock.getRate(), 604_800, 'a week a second');
+  select.value = 'hour';
+  select.dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.equal(worldClock.isPlaying(), true);
+  assert.equal(worldClock.getRate(), 3_600, 'changed while playing');
+  select.value = 'real';
+  select.dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.equal(worldClock.getRate(), 1, 'the world as it goes');
+});
+
+test('a speed chosen while weather replay steps takes playback over', async (t) => {
+  const bar = mount(t);
+  const at = Date.now() - 3_600_000;
+  supportingLayer(t, at);
+  const calls = [];
+  const driver = worldClock.attachDriver({
+    play() {
+      calls.push('play');
+      driver.driven(true, at - 600_000);
+    },
+    pause() {
+      calls.push('pause');
+      driver.driven(false);
+    },
+  });
+  t.after(() => driver.detach());
+  worldClock.play();
+  await nextTick();
+  assert.equal(worldClock.getState().stepping, true);
+  const select = bar().querySelector('select.world-timeline-speed');
+  select.value = 'hour';
+  select.dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.deepEqual(calls, ['play', 'pause']);
+  assert.equal(worldClock.getState().stepping, false);
+  assert.equal(worldClock.isPlaying(), true);
+  assert.equal(worldClock.getRate(), 3_600);
+  assert.ok(worldClock.now() - (at - 600_000) < 3_600 * 1_000, 'on from where it was');
+  worldClock.pause();
+});
+
+test('paused just before the end, play carries on rather than restarting', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const end = now + 86_400_000;
+  const release = worldClock.hold('test-ahead');
+  const unregister = worldClock.register({
+    id: 'test-ahead',
+    coverage: () => ({ start: now - 86_400_000, end }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  worldClock.seek(end - 4_000);
+  await nextTick();
+  bar().querySelector('.world-timeline-play').click();
+  worldClock.pause();
+  assert.ok(worldClock.now() >= end - 4_000, 'not back to the start');
 });

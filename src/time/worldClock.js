@@ -96,6 +96,8 @@ export function createWorldClock({
       timeMs: time(),
       playing,
       rate,
+      // A driver steps the clock, at its own pace rather than the rate.
+      stepping: Boolean(active),
       following: followedIds(),
       supported: isSupported(),
     });

@@ -5,6 +5,7 @@ import { formatDate, t } from '../../../i18n/index.js';
 import { useWorldTimeStore } from '../../stores/worldTime.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
+import UiSelect from '../../kit/UiSelect.js';
 
 // The world timeline: play and pause on the left, the time, a track across
 // the stretch the layers on can show (each launch or frame a tick) with a
@@ -13,7 +14,13 @@ import UiIcon from '../../kit/UiIcon.vue';
 // or one a host follows) is on with time to show; with only live feeds such
 // as flights on, the bar stays hidden.
 const store = useWorldTimeStore();
-const { time } = storeToRefs(store);
+const { time, speed } = storeToRefs(store);
+const speeds = computed(() => [
+  { value: 'real', label: '1×' },
+  { value: 'hour', label: t('1 h/s') },
+  { value: 'day', label: t('1 d/s') },
+  { value: 'week', label: t('1 wk/s') },
+]);
 
 const DATE_TIME = Object.freeze({
   dateStyle: 'medium',
@@ -72,7 +79,8 @@ const onKey = (event) => {
   <div v-if="time.supported && time.span" id="world-timeline" role="group" :aria-label="t('World time')"
     ><UiButton class="world-timeline-play" :label="time.playing ? t('Pause') : t('Play')" @click="store.togglePlay()"
       ><UiIcon :name="time.playing ? 'pause' : 'play_arrow'" :size="20" /></UiButton
-    ><time class="world-timeline-time" :datetime="new Date(time.timeMs).toISOString()" aria-live="off">{{ readout }}</time
+    ><UiSelect class="gev-field gev-field--compact world-timeline-speed" :aria-label="t('Play speed')" :title="t('Play speed')" :options="speeds" :model-value="speed" @update:model-value="store.setSpeed($event)"
+    /><time class="world-timeline-time" :datetime="new Date(time.timeMs).toISOString()" aria-live="off">{{ readout }}</time
     ><span class="world-timeline-edge">{{ formatDate(span.start, EDGE_DATE) }}</span
     ><div class="world-timeline-track"
       ><span v-for="(left, index) in ticks" :key="index" class="world-timeline-tick" :style="{ left }" aria-hidden="true"></span

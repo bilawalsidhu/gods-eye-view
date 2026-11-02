@@ -3011,5 +3011,9 @@
   "PAD / RTLS": "PAS DE TIR / RTLS",
   "World time": "Heure du monde",
   "Back to live": "Revenir au direct",
-  "Live": "Direct"
+  "Live": "Direct",
+  "1 h/s": "1 h/s",
+  "1 d/s": "1 j/s",
+  "1 wk/s": "1 sem/s",
+  "Play speed": "Vitesse de lecture"
 }

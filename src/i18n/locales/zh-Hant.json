@@ -2871,5 +2871,9 @@
   "Right panels": "右側面板",
   "World time": "世界時間",
   "Back to live": "返回即時",
-  "Live": "即時"
+  "Live": "即時",
+  "1 h/s": "1 小時/秒",
+  "1 d/s": "1 天/秒",
+  "1 wk/s": "1 週/秒",
+  "Play speed": "播放速度"
 }

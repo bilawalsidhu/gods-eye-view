@@ -8,12 +8,17 @@ const LIVE_TICK_MS = 1000;
 const LIVE_EDGE = 0.005;
 /** The least that counts as at now, past the readout's own second. */
 const LIVE_EDGE_MS = 5000;
-/** How long play takes to run the whole track, in real ms. */
-const PLAY_THROUGH_MS = 60_000;
+/** The speeds play offers, in world ms per real ms. */
+export const WORLD_TIME_SPEEDS = Object.freeze({
+  real: 1,
+  hour: 3_600,
+  day: 86_400,
+  week: 604_800,
+});
 
 /**
- * The world clock as the timeline shows it: `{live, playing, timeMs,
- * supported, span}`, where `supported` says a layer that moves with the clock
+ * The world clock as the timeline shows it: `{live, playing, stepping,
+ * timeMs, supported, span}`, where `supported` says a layer that moves with the clock
  * has time to show and `span` is the stretch the timeline runs over: the
  * time those layers cover, reaching to now and to the world time, with their
  * marks. It follows the page's world clock, which tells it of every move, and
@@ -75,11 +80,14 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     Object.freeze({
       live: state.live,
       playing: state.playing,
+      stepping: state.stepping,
       timeMs: state.timeMs,
       supported: state.supported,
       span: spanOf(state),
     });
   const time = shallowRef(read());
+  const speed = shallowRef('day');
+  const rate = () => WORLD_TIME_SPEEDS[speed.value];
   let ticker = null;
   const syncTicker = () => {
     // Playing, the clock tells of the time itself.
@@ -108,8 +116,8 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
   return {
     time,
     /**
-     * Play runs the whole track in about a minute, from the start when it is
-     * at its end (at live, say), as a video plays again from the top. It runs
+     * Play runs the track at the speed chosen, from the start when it is at
+     * its end (at live, say), as a video plays again from the top. It runs
      * the clock itself, past weather's own replay: weather follows the time
      * frame by frame like every other layer the track covers.
      */
@@ -117,15 +125,24 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       const { playing, live, timeMs, span } = time.value;
       if (playing) return worldClock.pause();
       const covered = reach();
-      if (!span || !covered) return worldClock.play({ rate: 1 });
-      const length = span.end - span.start;
-      if (live || timeMs >= covered.end - LIVE_EDGE_MS)
+      if (span && covered && (live || timeMs >= covered.end))
         worldClock.seek(span.start);
-      // An end at now moves on with it, so play outruns it by the track.
-      const rate = endsAtNow(covered)
-        ? 1 + length / PLAY_THROUGH_MS
-        : Math.max(1, length / PLAY_THROUGH_MS);
-      worldClock.play({ rate, continuous: true });
+      worldClock.play({ rate: rate(), continuous: true });
+    },
+    speed,
+    /**
+     * Choose how fast play runs; playing, it changes at once. Weather's own
+     * replay steps at its own pace, so a speed chosen while it plays takes
+     * playback over from where it is.
+     */
+    setSpeed(next) {
+      if (!Object.hasOwn(WORLD_TIME_SPEEDS, next)) return;
+      speed.value = next;
+      const { playing, stepping } = worldClock.getState();
+      if (!playing) return;
+      if (!stepping) return worldClock.setRate(rate());
+      worldClock.pause();
+      worldClock.play({ rate: rate(), continuous: true });
     },
     goLive: () => worldClock.goLive(),
     /** Scrub to `ms`: playback stops where the hand puts it; at now, live. */
