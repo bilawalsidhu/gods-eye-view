@@ -315,7 +315,7 @@ export function createApplicationCatalog({
       ],
       [
         'telegeography-submarine-cables',
-        () => createApplicationCables({ source: sources.cables }),
+        () => sessionModel('telegeography-submarine-cables', () => createApplicationCables({ source: sources.cables, session: true })),
       ],
       [
         'local-firms',

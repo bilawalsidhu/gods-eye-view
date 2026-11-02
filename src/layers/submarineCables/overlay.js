@@ -260,7 +260,7 @@ export function createCableReferenceSweepGate({
  * @returns {boolean} True when the stem geometry was redefined.
  */
 
-export function updateCableReferenceStem(
+export function updateCableReferenceTip(
   record,
   cameraPositionWC,
   canvasHeight,
@@ -289,6 +289,11 @@ export function updateCableReferenceStem(
     return false;
   }
   geo.cartesian3.clone(record.nextTip, record.tip);
+  return true;
+}
+
+export function updateCableReferenceStem(record, cameraPositionWC, canvasHeight, fov) {
+  if (!updateCableReferenceTip(record, cameraPositionWC, canvasHeight, fov)) return false;
   record.stemPositionBufferIndex = 1 - record.stemPositionBufferIndex;
   const stemPositions =
     record.stemPositionBuffers[record.stemPositionBufferIndex];

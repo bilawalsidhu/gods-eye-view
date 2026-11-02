@@ -1,12 +1,11 @@
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { INFRA_LOD_ACTIVE_MAX } from '../../../data/localGeojsonLod.js';
 
 const KEY = 'gevInfrastructureStems';
 const views = new WeakSet();
 /** All visible stems use one draw and one fixed buffer; tips are a point bank. */
-export function createStemBatch({ view, MeshDesc }, color) {
+export function createStemBatch({ view, MeshDesc }, color, capacity, width = 3.5, opacity = 1) {
   if (!views.has(view)) {
     view.registerMesh(
       KEY,
@@ -29,12 +28,13 @@ export function createStemBatch({ view, MeshDesc }, color) {
     );
     views.add(view);
   }
-  const xyz = new Float32Array(6 * INFRA_LOD_ACTIVE_MAX);
+  const xyz = new Float32Array(6 * capacity);
   const geometry = new LineSegmentsGeometry().setPositions(xyz);
   geometry.instanceCount = 0;
   const material = new LineMaterial({
     color,
-    linewidth: 3.5,
+    linewidth: width,
+    opacity,
     depthWrite: false,
     transparent: true,
     toneMapped: false,
