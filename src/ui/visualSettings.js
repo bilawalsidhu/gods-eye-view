@@ -1,5 +1,6 @@
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import {
+  ENGINE_SHARPEN_DEFAULT,
   STYLE_STATUS_LABELS,
   presetSharpenIntensity,
 } from './visualPresets.js';
@@ -104,8 +105,7 @@ export class VisualSettings {
       const intensity = decodeBloomIntensity(bloomIntensity, bloomVersion);
       this._setBloomIntensity(intensity, { syncShare: false });
     }
-    if (typeof sharpenIntensity === 'number')
-      this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
+    this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
     if (typeof bloom === 'boolean') this._setBloomEnabled(bloom);
     if (typeof sharpen === 'boolean') this._setSharpenEnabled(sharpen);
     if (hudVariant) this._setHudVariant(hudVariant);
@@ -210,6 +210,7 @@ export class VisualSettings {
     });
     // The sharpen amount as a whole percentage. VisualEffects keeps the
     // fraction it applies, and drops writes once it is stopped.
+    this._sharpenFollowsEngine = true;
     this._sharpenPct = presetSharpenIntensity(
       GLOBAL_POST_DEFAULTS.sharpen.intensity,
       this._engineKind,
@@ -588,8 +589,10 @@ export class VisualSettings {
 
   /** Set the sharpen amount, a percentage clamped to 0-100, and apply it. */
   _setSharpenIntensity(pct, { syncShare = true } = {}) {
-    if (!Number.isFinite(pct)) return;
-    this._sharpenPct = Math.max(0, Math.min(100, Math.round(pct)));
+    const value = presetSharpenIntensity(pct, this._engineKind);
+    if (!Number.isFinite(value)) return;
+    this._sharpenFollowsEngine = pct === ENGINE_SHARPEN_DEFAULT;
+    this._sharpenPct = Math.max(0, Math.min(100, Math.round(value)));
     this._applySharpenIntensity(this._sharpenPct / 100);
     this._publishDisplay();
     if (syncShare) this._syncShareState();
@@ -798,12 +801,7 @@ export class VisualSettings {
     }
 
     const sharpenInput = preset.sharpen || {};
-    const presetSharpen = presetSharpenIntensity(
-      sharpenInput.intensity,
-      this._engineKind,
-    );
-    if (typeof presetSharpen === 'number')
-      this._setSharpenIntensity(presetSharpen, { syncShare: false });
+    this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
     if (typeof sharpenInput.enabled === 'boolean') {
       this._setSharpenEnabled(sharpenInput.enabled);
     }
@@ -845,14 +843,9 @@ export class VisualSettings {
       this._setBloomEnabled(defaults.bloom.enabled);
     }
 
-    const defaultSharpen = presetSharpenIntensity(
-      defaults.sharpen?.intensity,
-      this._engineKind,
-    );
-    if (typeof defaultSharpen === 'number')
-      this._setSharpenIntensity(defaultSharpen, {
-        syncShare: false,
-      });
+    this._setSharpenIntensity(defaults.sharpen?.intensity, {
+      syncShare: false,
+    });
     if (typeof defaults.sharpen?.enabled === 'boolean') {
       this._setSharpenEnabled(defaults.sharpen.enabled);
     }
@@ -912,6 +905,7 @@ export class VisualSettings {
         bloomIntensity: this._getBloomIntensity(),
         bloomVersion: BLOOM_SCALE_VERSION,
         sharpenIntensity: this._sharpenPct,
+        sharpenFollowsEngine: this._sharpenFollowsEngine,
         hudVariant: this.hud.getVariant(),
         hudVisible: this.hud.visible,
         detectionMode: detection.mode,
