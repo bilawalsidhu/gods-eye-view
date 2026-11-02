@@ -51,6 +51,8 @@ export function createWorldAnnotationRenderer(viewer) {
   const dataSource = new Cesium.CustomDataSource('gev-annotations');
   viewer.dataSources.add(dataSource);
   const osmAnnotations = new Set();
+  // Every mark with entities on the globe, so sync() can take a hidden one out.
+  const drawn = new Set();
 
   // Register the GevRouteFlow fabric once so Cesium's Material.fromType() can build the
   // material the route pipeline renders. The animated `time` uniform is read straight
@@ -89,6 +91,7 @@ export function createWorldAnnotationRenderer(viewer) {
     // path cannot reach them and they stay on the globe forever.
     const entities = [];
     anno._entities = entities;
+    drawn.add(anno);
 
     if (
       anno.ring &&
@@ -247,6 +250,7 @@ export function createWorldAnnotationRenderer(viewer) {
             width: 9,
             material: new FlowMaterialProperty(
               PALETTE[anno.color] || PALETTE.primary,
+              () => anno.alpha ?? 1,
             ),
             clampToGround: true,
             classificationType: CLASSIFY,
@@ -320,6 +324,7 @@ export function createWorldAnnotationRenderer(viewer) {
   function remove(anno) {
     hideOsmCredit(viewer, anno);
     osmAnnotations.delete(anno);
+    drawn.delete(anno);
     if (!anno?._entities) return;
     for (const entity of anno._entities) {
       try {
@@ -331,13 +336,23 @@ export function createWorldAnnotationRenderer(viewer) {
     anno._entities = null;
   }
 
+  /**
+   * CallbackProperty drives per-frame alpha and pulse. A hidden mark is taken
+   * out whole, so no material that keeps its own colour (the route's flow),
+   * ground classification or pick can still show it.
+   */
   function sync() {
-    // No-op: CallbackProperty drives per-frame alpha/pulse animation.
+    for (const anno of drawn) {
+      const show = !anno.hidden;
+      for (const entity of anno._entities || [])
+        if (entity.show !== show) entity.show = show;
+    }
   }
 
   function destroy() {
     for (const anno of osmAnnotations) hideOsmCredit(viewer, anno);
     osmAnnotations.clear();
+    drawn.clear();
     try {
       viewer.dataSources.remove(dataSource, true);
     } catch {
@@ -407,8 +422,11 @@ export function ensureFlowFabricRegistered() {
  * returned a standalone Material Cesium never rendered, or treated `result` as a
  * Material — both left the real uniforms untouched, so nothing animated.)
  */
-export function FlowMaterialProperty(colorCss) {
+export function FlowMaterialProperty(colorCss, alphaOf = () => 1) {
   this._color = Cesium.Color.fromCssColorString(colorCss).withAlpha(0.95);
+  // The mark's live alpha (fade in and out, hidden), applied every frame.
+  this._alphaOf = alphaOf;
+  this._live = this._color.clone();
   this._definitionChanged = new Cesium.Event();
 }
 Object.defineProperties(FlowMaterialProperty.prototype, {
@@ -431,7 +449,8 @@ FlowMaterialProperty.prototype.getValue = function getValue(time, result) {
   // `time` is read straight from the wall clock so the dashes flow every rendered
   // frame (the scene renders continuously; no requestRenderMode here).
   if (!Cesium.defined(result)) result = {};
-  result.color = this._color;
+  this._live.alpha = this._color.alpha * this._alphaOf();
+  result.color = this._live;
   result.time = performance.now() / 1000; // the per-frame animated value
   result.repeat = 64.0;
   result.duty = 0.46;

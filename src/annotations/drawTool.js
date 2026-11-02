@@ -1,9 +1,10 @@
 /**
  * Manual whiteboard drawing: the Cesium + DOM half.
  *
- * DISPLAY ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
- * shape (area, line or pin), click the vertices on the real world, double-click
- * or press Enter to finish, type a label. Each finished shape goes through the
+ * UTILITIES ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
+ * shape (area, line or pin) and a colour, click the vertices on the real world,
+ * double-click or press Enter to finish, then name, recolour, hide, fly to or
+ * remove the shape from its row (drawMarks.js). Each finished shape goes through the
  * SAME `annotationEngine.annotate()` the voice agent uses, with its geometry
  * supplied and `manual: true`, so it renders with the whiteboard look,
  * persists, de-dups, shows up in `.list()`, and clears with the board.
@@ -49,32 +50,30 @@ import {
   removeLastVertex,
 } from './drawMode.js';
 
+import { DRAW_COLORS, DRAW_COLOR_CSS, presentDrawMarks } from './drawMarks.js';
+
 import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
 /** The id this tool claims the pointer under. */
 const DRAW_POINTER_OWNER = 'draw';
 const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
 
-const COLORS = ['primary', 'amber', 'cyan', 'green', 'red'];
-const PREVIEW = {
-  primary: '#8be9ff',
-  amber: '#ffb547',
-  cyan: '#39d0ff',
-  green: '#5dff9f',
-  red: '#ff6b6b',
-};
+const PREVIEW = DRAW_COLOR_CSS;
 
 /**
  * Run the Draw control. Returns a handle with a `destroy()` the application
  * lifetime owns, plus the console/test seam (`window.__gevDrawTool`).
- * The tool hands what the controls show (`{ active, shape, color, label,
- * hint }`) to `publish`, which the view renders, and answers the controls
+ * The tool hands what the controls show (`{ active, shape, color, hint,
+ * marks }`) to `publish`, which the view renders, and answers the controls
  * through the actions it gives `connect`, which returns their disconnect.
- * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, publish?: Function, connect?: Function}} deps
+ * A row's fly-to is an immediate navigation through `navigation`, like
+ * Import's, so Cockpit can refuse it and a running orbit or follow lets go.
+ * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
  * @returns {{destroy: Function}|null}
  */
 export function initDrawTool({
   viewer,
   annotations,
+  navigation = null,
   publish = () => {},
   connect = () => () => {},
 }) {
@@ -88,7 +87,6 @@ export function initDrawTool({
   let session = null;
   let shape = 'area';
   let color = 'primary';
-  let label = '';
   let hint = '';
   let handler = null;
   let lease = null;
@@ -117,7 +115,14 @@ export function initDrawTool({
     () => null,
   );
 
-  const present = () => publish({ active, shape, color, label, hint });
+  const present = () =>
+    publish({
+      active,
+      shape,
+      color,
+      hint,
+      marks: presentDrawMarks(annotations.list?.() || []),
+    });
   // The hint is kept as the call that words it, so a language switch can
   // word it again.
   let hintText = () => '';
@@ -240,15 +245,14 @@ export function initDrawTool({
       if (reason !== 'too-few') setHint(() => drawHint(session));
       return null;
     }
-    const spec = finishSpec(session, { label, color });
+    // Named afterwards, in the shape's row.
+    const spec = finishSpec(session, { label: '', color });
     if (!spec) return null;
     // Start a fresh session BEFORE awaiting, so a second Enter or the second
     // half of a double-click cannot submit the same shape twice.
     session = createDrawSession(shape);
     cursor = null;
     syncPreview();
-    label = '';
-    present();
     const attempt = generation;
     try {
       const result = await annotations.annotate([spec], {
@@ -287,11 +291,9 @@ export function initDrawTool({
   };
 
   // ---- keys: only while drawing, never while typing in another field ----
-  // The label field is this tool's own: typing there still drives drawing.
-  const isLabelField = (target) => target?.id === 'draw-label-input';
   const typingElsewhere = (event) => {
     const t = event.target;
-    if (!t || isLabelField(t)) return false;
+    if (!t) return false;
     return (
       t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable
     );
@@ -299,12 +301,12 @@ export function initDrawTool({
   /**
    * Enter is the finish key, but on a focused control Enter means "press this
    * control". Keyboard-focusing Clear and pressing Enter must clear the board,
-   * not finish the shape — so the finish key is only taken from the canvas,
-   * the page body, or the label field this tool owns.
+   * not finish the shape — so the finish key is only taken from the canvas or
+   * the page body.
    */
   const enterBelongsToDrawing = (event) => {
     const t = event.target;
-    if (!t || isLabelField(t)) return true;
+    if (!t) return true;
     if (
       typeof t.closest === 'function' &&
       t.closest('button, a, select, [role="button"], [role="radio"]')
@@ -316,6 +318,9 @@ export function initDrawTool({
   };
   const onKey = (event) => {
     if (!active || destroyed || typingElsewhere(event)) return;
+    // Keys on the shape list's own controls are the list's (Esc closes a
+    // colour picker there), not the drawing's.
+    if (event.target?.closest?.('#draw-mark-list')) return;
     // Enter goes to finish() once a shape has been started; finish() owns the
     // decision and says WHY it refused. Swallowing the key on a degenerate
     // shape left the person pressing Enter at a silent panel. A focused button
@@ -334,7 +339,7 @@ export function initDrawTool({
       else setActive(false);
       return;
     }
-    if (event.key === 'Backspace' && !isLabelField(event.target)) {
+    if (event.key === 'Backspace') {
       if (removeLastVertex(session)) {
         event.preventDefault();
         syncPreview();
@@ -431,6 +436,20 @@ export function initDrawTool({
     }
   }
 
+  /**
+   * Frame one drawn shape: an immediate navigation, so Cockpit can refuse it
+   * and the current orbit, follow or track lets go first.
+   */
+  function flyToMark(id) {
+    if (typeof navigation?.runImmediateNavigation === 'function')
+      return (
+        navigation.runImmediateNavigation('drawing', () =>
+          annotations.frame?.(id),
+        ) !== false
+      );
+    return annotations.frame?.(id) ?? false;
+  }
+
   /** Draw `next` from now on; an open shape starts over in it. */
   function chooseShape(next) {
     shape = normalizeShape(next);
@@ -446,16 +465,26 @@ export function initDrawTool({
     toggleDraw: () => setActive(!active),
     setDrawShape: chooseShape,
     setDrawColor: (value) => {
-      color = COLORS.includes(value) ? value : 'primary';
+      color = DRAW_COLORS.includes(value) ? value : 'primary';
       present();
       syncPreview();
     },
-    setDrawLabel: (text) => {
-      label = String(text ?? '');
-      present();
-    },
     clearDraw: clearAll,
+    renameDrawMark: (id, name) => annotations.restyle?.(id, { name }),
+    recolorDrawMark: (id, next) => annotations.restyle?.(id, { color: next }),
+    toggleDrawMark: (id) => {
+      const mark = annotations.list?.().find((entry) => entry.id === id);
+      if (mark) annotations.setHidden?.(id, !mark.hidden);
+    },
+    flyToDrawMark: flyToMark,
+    removeDrawMark: (id) => annotations.remove?.(id),
   });
+  // The rows follow the board: a shape drawn, renamed, hidden or removed
+  // here, by voice or by a clear.
+  const offBoard =
+    annotations.onChange?.(() => {
+      if (!destroyed) present();
+    }) || (() => {});
   setHint(() => drawHint(null));
 
   const api = {
@@ -470,6 +499,14 @@ export function initDrawTool({
     },
     setActive,
     setShape: chooseShape,
+    /** The hand-drawn marks the list shows, as its rows. */
+    marks: () => presentDrawMarks(annotations.list?.() || []),
+    setColor(next) {
+      color = DRAW_COLORS.includes(next) ? next : 'primary';
+      present();
+      syncPreview();
+    },
+    flyToMark,
     /** Test seam: add a vertex from lon/lat as if it had been clicked. */
     addVertex(lon, lat, height = 0) {
       if (!session) return false;
@@ -519,6 +556,7 @@ export function initDrawTool({
       if (active) setActive(false);
       destroyed = true;
       offLocale();
+      offBoard();
       disconnect();
       releaseSceneHandler();
       releasePointer(lease);
