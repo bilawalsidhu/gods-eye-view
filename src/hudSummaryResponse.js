@@ -60,20 +60,23 @@ export const HUD_SUMMARY_INSTRUCTIONS = [
   'Use only the supplied place, street, nearby-place, enabled-layer labels, and feedProvenance.',
   'Prefer the clearest named place and include a relevant enabled layer only when useful.',
   'In the summary, name layers only as in enabledLayerLabels; never copy layer names or state words from feedProvenance into it.',
-  'Set feedState to feedProvenance.overall exactly as given, or none when it is null.',
+  'Set feedState to feedProvenance.overall exactly as given, or null when it is null.',
+  'When feedProvenance.overall is null, say nothing about feeds or layers, present or missing.',
   'If feedProvenance.overall is partial, do not present the coverage as complete; if it is any other state but nominal, do not present the view as live or healthy.',
   'Do not infer from coordinates or invent a place or feed state.',
-  'The summary is exactly five words with no title, punctuation, markdown, or introductory phrase.',
+  // "Exactly five words" made a small model pad a short view with words like
+  // "no data" or "unavailable".
+  'The summary has at most five words, with no title, punctuation, markdown, or introductory phrase.',
 ].join(' ');
 
 /** Longest summary, in characters, for a script written without spaces. */
 export const HUD_SUMMARY_MAX_UNSPACED_CHARS = 20;
 
-/** feedState values the model may return; none stands for a null overall. */
-export const HUD_SUMMARY_FEED_STATES = Object.freeze([
-  ...SNAPSHOT_FEED_STATES,
-  'none',
-]);
+/** Longest five-word summary, in characters. */
+export const HUD_SUMMARY_MAX_CHARS = 80;
+
+/** feedState values the model may return besides null. */
+export const HUD_SUMMARY_FEED_STATES = SNAPSHOT_FEED_STATES;
 
 /** Responses API structured output: the five words plus the canonical state. */
 export const HUD_SUMMARY_RESPONSE_FORMAT = Object.freeze({
@@ -84,7 +87,14 @@ export const HUD_SUMMARY_RESPONSE_FORMAT = Object.freeze({
     type: 'object',
     properties: {
       summary: { type: 'string' },
-      feedState: { type: 'string', enum: [...HUD_SUMMARY_FEED_STATES] },
+      // Nullable rather than a `none` token, which the model wrote into the
+      // summary of a view without layers.
+      feedState: {
+        anyOf: [
+          { type: 'string', enum: [...HUD_SUMMARY_FEED_STATES] },
+          { type: 'null' },
+        ],
+      },
     },
     required: ['summary', 'feedState'],
     additionalProperties: false,
@@ -107,38 +117,82 @@ const SUMMARY_LANGUAGES = Object.freeze({
 /** Scripts written without spaces, where five words do not apply. */
 const UNSPACED_LOCALES = /^(?:ja|zh)(?:-|$)/;
 
+/** Shipped locales not written in Latin letters. */
+const NON_LATIN_LOCALES = /^(?:ar|ja|ru|uk|zh)(?:-|$)/;
+
+/** Scripts whose letters extend a word; any other neighbour ends it. */
+const WORD_SCRIPTS = [
+  'Latin',
+  'Cyrillic',
+  'Greek',
+  'Arabic',
+  'Hebrew',
+  'Han',
+  'Hiragana',
+  'Katakana',
+  'Hangul',
+].map((script) => new RegExp(`\\p{Script=${script}}`, 'u'));
+
+/** Lower case, with punctuation and brackets as spaces: `Earthquakes 24h`. */
+function flatWords(value) {
+  return String(value || '')
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+function sameScript(a, b) {
+  return WORD_SCRIPTS.some((script) => script.test(a ?? '') && script.test(b));
+}
+
 /**
- * Whether a non-English summary echoes English the HUD does not show: a
- * feed-state id or a translated layer's English name. Only Latin letters
- * extend a word, so `stale` flush against kana or Han still counts.
+ * Whether `word` stands on its own in `text`. Only a letter of the same
+ * script extends it, so `stale` flush against kana or Han still counts.
+ * @param {string} text
+ * @param {string} word
+ * @returns {boolean}
+ */
+export function hasWord(text, word) {
+  const haystack = flatWords(text);
+  const needle = flatWords(word);
+  if (!needle) return false;
+  for (
+    let at = haystack.indexOf(needle);
+    at >= 0;
+    at = haystack.indexOf(needle, at + 1)
+  ) {
+    const before = haystack[at - 1];
+    const after = haystack[at + needle.length];
+    if (!sameScript(before, needle[0]) && !sameScript(after, needle.at(-1)))
+      return true;
+  }
+  return false;
+}
+
+/**
+ * Whether a non-English summary carries what the HUD does not show: one of
+ * `words` (feed-state ids, translated layers' English names and ids), or only
+ * Latin letters in a language written in another script.
  * @param {string} summary The model's words.
  * @param {unknown} locale The request locale.
- * @param {string[]} [words] The English words the summary must not carry.
+ * @param {string[]} [words] Words the summary must not carry.
  * @returns {boolean}
  */
 export function hudSummaryHasEnglish(summary, locale, words = []) {
-  if (hudSummaryLocale(locale) === DEFAULT_LOCALE) return false;
-  const flat = (value) =>
-    String(value || '')
-      .toLowerCase()
-      .replace(/-/g, ' ');
-  const text = flat(summary);
-  const latin = (char) => /\p{Script=Latin}/u.test(char ?? '');
-  return words.some((word) => {
-    const needle = flat(word);
-    if (!needle) return false;
-    for (
-      let at = text.indexOf(needle);
-      at >= 0;
-      at = text.indexOf(needle, at + 1)
-    ) {
-      if (!latin(text[at - 1]) && !latin(text[at + needle.length])) return true;
-    }
-    return false;
-  });
+  const tag = hudSummaryLocale(locale);
+  if (tag === DEFAULT_LOCALE) return false;
+  const letters = String(summary || '').replace(/[^\p{L}]/gu, '');
+  if (!hudSummaryIsLatin(tag) && !letters.replace(/\p{Script=Latin}/gu, ''))
+    return true;
+  return words.some((word) => hasWord(summary, word));
 }
 
-/** Whether the summary for this locale is capped in characters, not words. */
+/** Whether the locale is written in Latin letters. */
+export function hudSummaryIsLatin(locale) {
+  return !NON_LATIN_LOCALES.test(hudSummaryLocale(locale));
+}
+
 export function hudSummaryIsUnspaced(locale) {
   return UNSPACED_LOCALES.test(hudSummaryLocale(locale));
 }
@@ -154,7 +208,6 @@ function summaryLanguage(tag) {
 }
 
 /**
- * Build the summary instructions for the requested locale.
  * @param {unknown} locale The `locale` the HUD sent.
  * @returns {string}
  */

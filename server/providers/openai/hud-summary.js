@@ -1,10 +1,12 @@
 import {
   HUD_SUMMARY_FEED_STATES,
+  HUD_SUMMARY_MAX_CHARS,
   HUD_SUMMARY_MAX_UNSPACED_CHARS,
   HUD_SUMMARY_RESPONSE_FORMAT,
   hudSummaryInput,
   hudSummaryInstructions,
   hudSummaryIsUnspaced,
+  hudSummaryLocale,
   keylessHudSummaryResponse,
 } from '../../../src/hudSummaryResponse.js';
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
@@ -35,36 +37,50 @@ function parseHudSummaryReply(text, locale) {
     ? reply.feedState
     : null;
   return {
-    summary: toFiveWordHudSummary(reply?.summary, hudSummaryIsUnspaced(locale)),
-    feedState: feedState === 'none' ? null : feedState,
+    summary: toFiveWordHudSummary(reply?.summary, locale),
+    feedState,
   };
 }
 
-function toFiveWordHudSummary(value, unspaced) {
+function toFiveWordHudSummary(value, requested) {
+  const locale = hudSummaryLocale(requested);
   const words = String(value || '')
-    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
-    .trim()
+    .normalize('NFC')
+    // Marks, and apostrophes and dots inside a word, belong to it: ar vowel
+    // signs, fr d'Orléans, ja サンフランシスコ・ベイエリア.
+    .replace(/[^\p{L}\p{M}\p{N}\s'’·・-]/gu, ' ')
     .split(/\s+/)
+    .map((word) => word.replace(/^['’·・-]+|['’·・-]+$/gu, ''))
     .filter(Boolean);
-  // Other languages keep five words, even around a Han place name.
-  if (!unspaced) return words.slice(0, 5).join(' ');
-  // Japanese and Chinese have no spaces to count words by: cap characters,
-  // stepping back to the start of a Latin word rather than cutting it in two.
-  const text = words.join(' ');
-  const graphemes = [
-    ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text),
-  ].map(({ segment }) => segment);
-  if (graphemes.length <= HUD_SUMMARY_MAX_UNSPACED_CHARS) return text;
-  const head = graphemes.slice(0, HUD_SUMMARY_MAX_UNSPACED_CHARS);
-  const next = graphemes[HUD_SUMMARY_MAX_UNSPACED_CHARS];
-  const inWord = (g) => /^[\p{Script=Latin}\p{N}]/u.test(g ?? '');
-  if (inWord(head.at(-1)) && inWord(next)) {
-    let start = head.length - 1;
-    while (start > 0 && inWord(head[start - 1])) start -= 1;
-    // A Latin word longer than the cap is cut where the cap falls.
-    if (start > 0) return head.slice(0, start).join('').trim();
+  // Japanese and Chinese have no spaces to count words by: cap characters.
+  if (hudSummaryIsUnspaced(locale))
+    return capAtWord(words.join(' '), HUD_SUMMARY_MAX_UNSPACED_CHARS, locale);
+  return capAtWord(words.slice(0, 5).join(' '), HUD_SUMMARY_MAX_CHARS, locale);
+}
+
+/**
+ * Cut `text` to `max` characters at a word boundary; a first word longer
+ * than that is cut where the cap falls.
+ */
+function capAtWord(text, max, locale) {
+  const graphemes = (value) => [
+    ...new Intl.Segmenter(locale, { granularity: 'grapheme' }).segment(value),
+  ];
+  if (graphemes(text).length <= max) return text;
+  let kept = '';
+  for (const { segment } of new Intl.Segmenter(locale, {
+    granularity: 'word',
+  }).segment(text)) {
+    if (graphemes(kept + segment).length > max) break;
+    kept += segment;
   }
-  return head.join('').trim();
+  return (
+    kept.trim() ||
+    graphemes(text)
+      .slice(0, max)
+      .map(({ segment }) => segment)
+      .join('')
+  );
 }
 
 async function handleHudSummary(req, res) {

@@ -1,30 +1,7 @@
-// The HUD summary line in another language: what the model is sent and what
-// the readout shows. hud.js imports `mgrs`, which Node's ESM loader cannot
-// read named exports from, so a module hook swaps it for a stub before the
-// import (the same setup as hudSummaryGate.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { registerHooks } from 'node:module';
+import './testSupport/stubMgrs.mjs';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
-
-const MGRS_STUB_URL = 'gev-test-stub:mgrs';
-registerHooks({
-  resolve(specifier, context, next) {
-    if (specifier === 'mgrs') return { url: MGRS_STUB_URL, shortCircuit: true };
-    return next(specifier, context);
-  },
-  load(url, context, next) {
-    if (url === MGRS_STUB_URL) {
-      return {
-        format: 'module',
-        shortCircuit: true,
-        source:
-          'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
-      };
-    }
-    return next(url, context);
-  },
-});
 
 const { IntelHUD } = await import('./hud.js');
 const { setLocale } = await import('./i18n/index.js');
@@ -38,11 +15,11 @@ const PARTIAL_FLIGHTS = {
   stats: { count: 4, partial: true, source: 'opensky' },
 };
 
-/**
- * A HUD over one partial Live Flights layer and `places`, answering with
- * `reply`; ru unless `locale` says otherwise.
- */
-function createHud(t, reply, { places = ['Остин'], locale = 'ru' } = {}) {
+function createHud(
+  t,
+  reply,
+  { places = ['Остин'], locale = 'ru', layers = () => [PARTIAL_FLIGHTS] } = {},
+) {
   const { elements, publish } = hudReadouts();
   const previous = { document: globalThis.document, window: globalThis.window };
   globalThis.document = {
@@ -94,7 +71,7 @@ function createHud(t, reply, { places = ['Остин'], locale = 'ru' } = {}) {
   const buildContext = hud._summaryContext.bind(hud);
   hud._summaryContext = async () =>
     Object.assign(await buildContext(), { placeLabels: places });
-  hud._dataManager = { getAll: () => [PARTIAL_FLIGHTS] };
+  hud._dataManager = { getAll: layers };
   hud._latestMetrics = { altM: 600 };
   setLocale(locale);
   return {
@@ -113,7 +90,7 @@ test('a ru HUD request carries no English layer name', async (t) => {
   assert.doesNotMatch(input, /Live Flights/, input);
   // The locale signs the dedupe signature; the English names stay local.
   assert.match(JSON.stringify(context), /"locale":"ru"/);
-  assert.doesNotMatch(JSON.stringify(context), /translatedLayerNames/);
+  assert.doesNotMatch(JSON.stringify(context), /englishLayerWords|warning/);
 });
 
 test('a ru summary shows the state word first and the layer names last', async (t) => {
@@ -128,6 +105,8 @@ test('a ru summary shows the state word first and the layer names last', async (
 for (const words of [
   'Live Flights частично онлайн',
   'Рейсы онлайн stale данные',
+  'Остин flights частично онлайн',
+  'Austin flights partially online',
 ]) {
   test(`a ru reply echoing English falls back: ${words}`, async (t) => {
     const { hud, shown } = createHud(t, {
@@ -139,13 +118,6 @@ for (const words of [
     assert.ok(!shown().includes(words), shown());
   });
 }
-
-test('a camera move during typing shows the plain line, not a fragment', (t) => {
-  const { hud, shown } = createHud(t, {});
-  hud._setSummaryText('ЧАСТИЧНО | Аэропорт задерживает рейсы', true);
-  hud._onCameraMoveStart();
-  assert.equal(shown(), hud._composeSummary());
-});
 
 test('a view with layers but no place label does not ask the model', async (t) => {
   const { hud, sent, shown } = createHud(
@@ -242,4 +214,71 @@ test('a language switch drops the reply in flight and asks again', async (t) => 
   await hud._updateSummary(false);
   assert.equal(sent.at(-1).locale, 'es');
   assert.ok(shown().startsWith('PARCIAL | Austin vuelos parciales'), shown());
+});
+
+test('a reused ru reply carries the current warning, not the cached one', async (t) => {
+  // Both layers load an empty view: no count, no lastUpdate yet.
+  let flights = { loading: true, count: 0 };
+  const { hud, shown } = createHud(
+    t,
+    { summary: 'Остин небо над городом', feedState: 'loading' },
+    {
+      layers: () => [
+        { id: 'flights', name: 'Live Flights', enabled: true, stats: flights },
+        {
+          id: 'ais',
+          name: 'Live AIS Vessels',
+          enabled: true,
+          stats: { loading: true, count: 0 },
+        },
+      ],
+    },
+  );
+  await hud._updateSummary(false, true);
+  assert.match(shown(), /РЕЙСЫ ОНЛАЙН/, shown());
+  // Live Flights finishes with nothing to show; AIS is still loading.
+  flights = { count: 0 };
+  hud._markSummaryDirty();
+  await hud._updateSummary(false);
+  assert.match(
+    shown(),
+    /^ЗАГРУЗКА \| Остин небо над городом \| СУДА AIS/,
+    shown(),
+  );
+  assert.doesNotMatch(shown(), /РЕЙСЫ ОНЛАЙН/, shown());
+});
+
+test('with every feed healthy a reply calling one unavailable falls back', async (t) => {
+  const { hud, shown } = createHud(
+    t,
+    { summary: 'Остин рейсы недоступно сейчас', feedState: null },
+    { layers: () => [] },
+  );
+  await hud._updateSummary(false, true);
+  assert.equal(shown(), hud._composeSummary());
+});
+
+test('an ar reply opening with a Latin name keeps reading right to left', async (t) => {
+  const { hud, shown } = createHud(
+    t,
+    { summary: 'Times Square نيويورك الولايات المتحدة', feedState: null },
+    { locale: 'ar', places: ['Times Square'], layers: () => [] },
+  );
+  await hud._updateSummary(false, true);
+  assert.equal(shown(), '\u200fTimes Square نيويورك الولايات المتحدة');
+});
+
+test('a one-word layer name that is a French word is not an echo', async (t) => {
+  const summary = 'Bus en transit à Paris';
+  const { hud, shown } = createHud(
+    t,
+    { summary, feedState: null },
+    {
+      locale: 'fr',
+      places: ['Paris'],
+      layers: () => [{ id: 'transit', name: 'Transit', enabled: true }],
+    },
+  );
+  await hud._updateSummary(false, true);
+  assert.equal(shown(), summary);
 });

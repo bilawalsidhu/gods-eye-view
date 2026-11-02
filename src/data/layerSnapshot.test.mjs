@@ -11,6 +11,7 @@ import {
   layerFeedState,
   layerSnapshot,
   layerSnapshots,
+  provenanceTag,
   snapshotAgeLabel,
   snapshotAgeSec,
   viewStateLayerRow,
@@ -292,4 +293,19 @@ test('age labels match the Data Layers meta clock', () => {
   assert.equal(snapshotAgeLabel(NOW - 12_000, NOW), '12s ago');
   assert.equal(snapshotAgeLabel(NOW - 240_000, NOW), '4m ago');
   assert.equal(snapshotAgeLabel(NOW - 7_200_000, NOW), '2h ago');
+});
+
+test('the warning tag names the layers in the reported state first', () => {
+  const tag = provenanceTag({
+    overall: 'unavailable',
+    layers: [
+      { name: 'Live Flights', feedState: 'partial' },
+      { name: 'Live AIS Vessels', feedState: 'partial' },
+      { name: 'CCTV', feedState: 'unavailable' },
+    ],
+  });
+  assert.deepEqual(tag, {
+    state: 'unavailable',
+    names: ['CCTV', 'Live Flights'],
+  });
 });

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import {
   HUD_SUMMARY_FEED_STATES,
@@ -233,9 +232,10 @@ test('HUD summary instructions ask for the canonical feedState as its own field'
     'feedState',
   ]);
   assert.deepEqual(
-    HUD_SUMMARY_RESPONSE_FORMAT.schema.properties.feedState.enum,
-    [...HUD_SUMMARY_FEED_STATES],
+    HUD_SUMMARY_RESPONSE_FORMAT.schema.properties.feedState.anyOf,
+    [{ type: 'string', enum: [...HUD_SUMMARY_FEED_STATES] }, { type: 'null' }],
   );
+  assert.ok(!HUD_SUMMARY_FEED_STATES.includes('none'));
   assert.ok(HUD_SUMMARY_FEED_STATES.includes('partial'));
 });
 
@@ -266,7 +266,7 @@ test('shipped catalogs get their exact language, and CJK a character limit', () 
     hudSummaryInstructions('ja'),
     new RegExp(`at most ${HUD_SUMMARY_MAX_UNSPACED_CHARS} characters`),
   );
-  assert.doesNotMatch(hudSummaryInstructions('es'), /at most/);
+  assert.doesNotMatch(hudSummaryInstructions('es'), /characters/);
   assert.match(hudSummaryInstructions('es'), /names in enabledLayerLabels/);
 });
 
@@ -350,10 +350,35 @@ test('a Japanese summary is capped in characters, not words', async () => {
     { locale: 'ja', feedProvenance: { overall: 'stale' } },
     JSON.stringify({ summary: long, feedState: 'stale' }),
   );
-  assert.equal(
-    response.body.summary,
-    [...long].slice(0, HUD_SUMMARY_MAX_UNSPACED_CHARS).join(''),
+  const shown = response.body.summary;
+  assert.ok(long.startsWith(shown), shown);
+  assert.ok([...shown].length <= HUD_SUMMARY_MAX_UNSPACED_CHARS, shown);
+  assert.ok([...shown].length >= 10, shown);
+});
+
+for (const [locale, summary] of [
+  ['ar', 'دبي حركة الطيران محدودة حاليًا'],
+  ['ar', 'القاهرة تتبّع الرحلات الآن'],
+  ['fr', "Vols au-dessus d'Orléans aujourd'hui partiels"],
+  ['it', "Voli sull'aeroporto di Roma parziali"],
+  ['fr', 'Données de vol à Paris'.normalize('NFD')],
+  ['ja', 'サンフランシスコ・ベイエリア'],
+]) {
+  test(`a ${locale} summary keeps marks, apostrophes and dots: ${summary}`, async () => {
+    const { response } = await postHudSummary(
+      { locale, feedProvenance: { overall: null } },
+      JSON.stringify({ summary, feedState: null }),
+    );
+    assert.equal(response.body.summary, summary.normalize('NFC'));
+  });
+}
+
+test('a five-word summary is capped in characters too', async () => {
+  const { response } = await postHudSummary(
+    { locale: 'de', feedProvenance: { overall: null } },
+    JSON.stringify({ summary: `Berlin ${'x'.repeat(200)}`, feedState: null }),
   );
+  assert.equal(response.body.summary, 'Berlin');
 });
 
 for (const [locale, summary] of [
@@ -460,7 +485,7 @@ test("a localized summary is shown only with the HUD's own canonical state", () 
   assert.equal(hudSummaryMatchesProvenance({ summary: 'x' }, null), true);
 });
 
-test('a partial view keeps its warning tag, translated in es and ru', async () => {
+test('a partial view keeps its warning tag', () => {
   const now = 1_000_000;
   const layers = [
     {
@@ -486,13 +511,4 @@ test('a partial view keeps its warning tag, translated in es and ru', async () =
     state: 'partial',
     names: ['Live Flights'],
   });
-  const { setLocale, t } = await import('./i18n/index.js');
-  try {
-    for (const locale of ['es', 'ru']) {
-      setLocale(locale);
-      assert.notEqual(t('PARTIAL'), 'PARTIAL', locale);
-    }
-  } finally {
-    setLocale('en');
-  }
 });

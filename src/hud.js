@@ -27,7 +27,9 @@ import {
 } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
 import {
+  hasWord,
   hudSummaryHasEnglish,
+  hudSummaryIsLatin,
   hudSummaryMatchesProvenance,
   hudSummaryLayerContext,
   hudTelemetryProvenance,
@@ -46,6 +48,7 @@ import {
   onLocaleChange,
   t,
 } from './i18n/index.js';
+import { isRtlLocale } from './i18n/locale.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
 import { subscribeSelectedVessel } from './hudReadouts.js';
@@ -130,28 +133,43 @@ function withProvenance(text, provenance) {
 }
 
 /**
- * The English a summary outside English must not carry: feed-state ids and
- * translated layers' English names. A state word the locale keeps in English
- * (de FALLBACK) and words inside a place label (Radio City, Loading Dock) are
- * fine.
+ * The AI line. In an RTL locale a leading right-to-left mark keeps a reply
+ * that opens with a Latin name (Times Square …) reading right to left.
  */
-function summaryEnglishWords(context) {
+function aiSummaryLine(summary, warning) {
+  const line = withProvenance(summary, warning);
+  return isRtlLocale(getLocale()) ? `\u200f${line}` : line;
+}
+
+/**
+ * What a summary outside English must not carry: feed-state ids, translated
+ * layers' English names and ids, and with every feed healthy the
+ * UNAVAILABLE word. A state word the locale keeps in English (de FALLBACK)
+ * and words of a place label (Radio City, Loading Dock) are fine; so is a
+ * one-word layer name in a Latin-script locale, where it may be a word of
+ * the language (fr transit).
+ */
+function summaryForbiddenWords(context) {
   const places = [
     ...(context.placeLabels || []),
     ...(context.streetLabels || []),
     ...(context.nearbyPlaceLabels || []),
-  ]
-    .join(' ')
-    .toLowerCase();
+  ].join(' ');
+  const latin = hudSummaryIsLatin(context.locale);
+  const overall = context.feedProvenance?.overall;
   return [
     ...Object.keys(FEED_STATE_LABELS).filter(
       (state) =>
         t(FEED_STATE_LABELS[state]).toLowerCase() !== state &&
-        !places.includes(state),
+        !hasWord(places, state),
     ),
-    ...(context.translatedLayerNames || []).filter(
-      (name) => !places.includes(name.toLowerCase()),
+    ...(context.englishLayerWords || []).filter(
+      (word) =>
+        !hasWord(places, word) && (!latin || /[^\p{L}\p{N}]/u.test(word)),
     ),
+    ...(!overall || overall === 'nominal'
+      ? [t(FEED_STATE_LABELS.unavailable)]
+      : []),
   ];
 }
 
@@ -246,7 +264,7 @@ export class IntelHUD {
     this._placeLabels = null;
     this._lastSummarySignature = '';
     /** The reply painted for `_lastSummarySignature`, when it was accepted. */
-    this._lastSummaryText = null;
+    this._lastSummaryReply = null;
     this._summaryRevision = 0;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
@@ -325,15 +343,11 @@ export class IntelHUD {
     this._startTimers();
   }
 
-  /**
-   * Show the HUD's own words in the new locale. The AI reply is written in
-   * the locale too, so the one received is dropped like a camera move drops
-   * it: a request in flight is aborted and the next tick asks again.
-   */
+  /** Show the HUD's words in the new locale; drop AI text in the old one. */
   _relocalize() {
     this._markSummaryDirty();
     this._lastSummarySignature = null;
-    this._lastSummaryText = null;
+    this._lastSummaryReply = null;
     this._summaryRequest?.abort();
     this._present({
       mode: MODE_LABELS[this._currentStyle]
@@ -887,8 +901,7 @@ export class IntelHUD {
       return;
     }
     if (revision !== this._summaryRevision) return;
-    // No place to name: with layers alone the model invents one, so the plain
-    // line (state and layers) is shown instead.
+    // Without a place label the model invents a place: show the plain line.
     const described = [
       context.placeLabels,
       context.streetLabels,
@@ -896,7 +909,7 @@ export class IntelHUD {
     ].some((list) => list?.length);
     if (!described) {
       this._summaryDirty = false;
-      this._setSummaryText(fallbackText, animate);
+      this._setSummaryText(fallbackText, false);
       return;
     }
     const signature = JSON.stringify(context);
@@ -904,7 +917,12 @@ export class IntelHUD {
       this._summaryDirty = false;
       // A settle painted the fallback line over the reply this context
       // already has; reused place labels make that common, so restore it.
-      if (this._lastSummaryText) this._setSummaryText(this._lastSummaryText);
+      // The warning is the current one: layer states are not in a
+      // non-English signature.
+      if (this._lastSummaryReply)
+        this._setSummaryText(
+          aiSummaryLine(this._lastSummaryReply, context.warning),
+        );
       return;
     }
     if (this._summaryRequest) return;
@@ -912,7 +930,7 @@ export class IntelHUD {
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
-    this._lastSummaryText = null;
+    this._lastSummaryReply = null;
     const controller = new AbortController();
     let timedOut = false;
     const timeout = window.setTimeout(() => {
@@ -940,13 +958,18 @@ export class IntelHUD {
         !hudSummaryHasEnglish(
           data.summary,
           context.locale,
-          summaryEnglishWords(context),
+          summaryForbiddenWords(context),
         )
       ) {
-        // The warning is the HUD's own translated state, not the model's words.
-        this._lastSummaryText = withProvenance(data.summary, context.warning);
+        this._lastSummaryReply = data.summary;
       }
-      this._setSummaryText(this._lastSummaryText || fallbackText, animate);
+      // The warning is the HUD's own translated state, not the model's words.
+      this._setSummaryText(
+        this._lastSummaryReply
+          ? aiSummaryLine(this._lastSummaryReply, context.warning)
+          : fallbackText,
+        animate,
+      );
     } catch (error) {
       // The 5 s timeout is a failure like any other; a move's abort (or
       // destroy's) is not.
@@ -1021,7 +1044,6 @@ export class IntelHUD {
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
-      ...layerContext,
       // The model sees only the layer names the user sees. The English note
       // goes too: a small model copies its words. `overall` stays the id.
       enabledLayerLabels:
@@ -1034,14 +1056,14 @@ export class IntelHUD {
       },
     };
     // Not sent and not part of the signature: the line's own warning, taken
-    // before the layer states are left out, and the English names a reply in
-    // another language must not echo.
+    // before the layer states are left out, and the English names and ids of
+    // translated layers, which a reply in another language must not echo.
     Object.defineProperties(context, {
       warning: { value: provenanceTag(feedProvenance) },
-      translatedLayerNames: {
-        value: layerContext.enabledLayerLabels.filter(
-          (name) => localizeLayerName(name) !== name,
-        ),
+      englishLayerWords: {
+        value: layerContext.enabledLayers
+          .filter(({ name }) => localizeLayerName(name) !== name)
+          .flatMap(({ name, id }) => [name, id].filter(Boolean)),
       },
     });
     return context;

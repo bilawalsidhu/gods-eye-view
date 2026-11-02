@@ -259,8 +259,9 @@ export function viewStateLayerRow(layer, options) {
 
 /**
  * The feed state and up to two layer names of a provenance envelope that is
- * not nominal, or null. Values stay English (`state` is a feed-state id,
- * `names` are `layer.name`); the HUD translates them for display.
+ * not nominal, or null; the worst layers come first, so the names match the
+ * state. Values stay English (`state` is a feed-state id, `names` are
+ * `layer.name`); the HUD translates them for display.
  * @param {{ overall?: string|null, layers?: Array<object> }|null} envelope
  * @returns {{ state: string, names: string[] }|null}
  */
@@ -270,6 +271,11 @@ export function provenanceTag(envelope) {
   const names = (envelope.layers || [])
     .filter(
       (s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off',
+    )
+    .sort(
+      (a, b) =>
+        (FEED_STATE_SEVERITY[a.feedState] ?? Infinity) -
+        (FEED_STATE_SEVERITY[b.feedState] ?? Infinity),
     )
     .map((s) => String(s.name || s.id || 'LAYER'))
     .slice(0, 2);
