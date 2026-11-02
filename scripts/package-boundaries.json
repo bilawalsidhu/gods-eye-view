@@ -179,6 +179,7 @@
     "runtime": "node",
     "exports": ["./server/providers/live"],
     "modules": [
+      "src/sources/adsbFields.js",
       "server/providers/live.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
@@ -198,7 +199,7 @@
   },
   "adsb-lol-source": {
     "exports": ["./sources/adsb-lol"],
-    "modules": ["src/data/adsbLolFallback.js"],
+    "modules": ["src/data/adsbLolFallback.js", "src/sources/adsbFields.js"],
     "external": []
   },
   "place-providers": {
@@ -1247,6 +1248,7 @@
   "live-observations": {
     "exports": ["./sources/live"],
     "modules": [
+      "src/sources/adsbFields.js",
       "src/i18n/marker.js",
       "src/data/aircraftEmergency.js",
       "src/sources/live/aircraft.js",
@@ -2203,6 +2205,7 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/ui/placeNames.js",
@@ -3179,6 +3182,7 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/cyberSonar.js",
@@ -4721,6 +4725,7 @@
   "tools-services": {
     "exports": ["./tools/services"],
     "modules": [
+      "src/sources/adsbFields.js",
       "src/tools/services.js",
       "src/layers/bikeshare/registry.js",
       "src/layers/bikeshare/source.js",
