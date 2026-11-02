@@ -23,7 +23,7 @@ test('the application composition wires the draw tool and owns its teardown', ()
   const tools = read('src/app/tools.js');
   const engineAt = tools.indexOf('const annotations = initAnnotations({');
   const drawAt = tools.indexOf(
-    'const drawTool = initDrawTool({ viewer, annotations });',
+    'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    publish: (view) => displayStore.publishDraw(view),',
   );
   assert.ok(engineAt >= 0, 'initAnnotations call missing');
   assert.ok(
@@ -62,9 +62,9 @@ test('the engine resolves manual geometry before any name resolution', () => {
 });
 
 test('the Draw control markup carries the ids the tool binds to', () => {
-  // The DISPLAY rail is a component template now, assembled into index.html at
-  // build time — the markup is not in index.html any more.
-  const html = read('src/ui/templates/display-controls.html');
+  // The DISPLAY rail is a Vue view now, rendered into index.html's view host —
+  // the markup is not in index.html any more.
+  const html = read('src/ui/views/panels/DisplayPanel.vue');
   const ids = [
     'draw-toggle',
     'draw-mode-row',
@@ -84,15 +84,25 @@ test('the Draw control markup carries the ids the tool binds to', () => {
   for (const shape of ['area', 'line', 'pin']) {
     assert.match(
       html,
-      new RegExp(`data-shape="${shape}"`),
+      new RegExp(`'data-shape': '${shape}'`),
       `shape button ${shape} missing`,
     );
   }
-  for (const id of ids) {
+  // The rows and the hint render what the tool publishes; the controls
+  // call the actions the tool connects to the display store.
+  for (const action of [
+    "act('toggleDraw')",
+    "act('setDrawShape', $event)",
+    "act('setDrawLabel', $event.target.value)",
+    "act('setDrawColor', $event)",
+    "act('clearDraw')",
+  ]) {
+    assert.ok(html.includes(action), `DisplayPanel must call ${action}`);
+    const name = /act\('([a-zA-Z]+)'/.exec(action)[1];
     assert.match(
       tool(),
-      new RegExp(`getElementById\\('${id}'\\)`),
-      `drawTool must bind #${id}`,
+      new RegExp(`\\b${name}: `),
+      `drawTool must answer ${name}`,
     );
   }
 });
@@ -102,10 +112,11 @@ test('the DISPLAY rail styles live in their current owner, not the shim', () => 
   // these rules lived in the root style.css. That file is an import shim now,
   // and putting rules back into it would silently undo the split.
   const shim = read('style.css');
-  assert.ok(
-    shim.split('\n').length < 40,
-    'style.css is an import shim, not a stylesheet',
-  );
+  const rules = shim
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => line.trim() && !/^@import '[^']+';$/.test(line.trim()));
+  assert.deepEqual(rules, [], 'style.css is an import shim, not a stylesheet');
   assert.doesNotMatch(
     shim,
     /draw-hint|pp-text-input/,

@@ -32,13 +32,22 @@ export function createIngestion({
         // projectionTilesReady() is false while a (hidden) Google tileset
         // exists, so this latch effectively fires for the google-3d regime —
         // terrain-globe records resolve from the prior in their drain pass.
-        const unresolved = layerState._records.filter(
-          (record) => !parts.ground.isGroundResolved(record),
-        );
+        const unresolved = parts.geometryQueue
+          .geometryWorkingSet()
+          .filter(
+            (record) =>
+              !parts.ground.isGroundResolved(record) &&
+              parts.geometryQueue.withinViewBudget(record),
+          );
         if (unresolved.length)
           parts.geometryQueue.enqueueGeometryRefresh(unresolved);
       }
       await parts.health.syncHealthState();
+      // New health can change which camera wins a crowded cell.
+      if (layerState._enabled && parts.rendering.refreshHorizonCulling()) {
+        parts.geometryQueue.enqueueViewGeometry();
+        parts.cards.refreshAmbientCards();
+      }
       parts.navigation.maybeAutoHop(now);
       parts.presentation.notifyListeners();
     },

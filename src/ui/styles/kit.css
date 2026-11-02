@@ -1,0 +1,181 @@
+/* Generic components in src/ui/kit. The surfaces use this application's
+   glass, accent and type tokens. */
+
+/* The thin themed scrollbar every scrolling surface wears (.ui-scroll). Without it a surface draws the platform's light scrollbar,
+   because the page declares no dark color-scheme. */
+/* Cesium builds its credit list and the rail card builder its lines, so
+   those two surfaces are named here instead of carrying the class. */
+.ui-scroll,
+.cesium-credit-lightbox > ul,
+.weather-card [data-line-id='status'] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+.ui-scroll::-webkit-scrollbar,
+.cesium-credit-lightbox > ul::-webkit-scrollbar,
+.weather-card [data-line-id='status']::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ui-scroll::-webkit-scrollbar-thumb,
+.cesium-credit-lightbox > ul::-webkit-scrollbar-thumb,
+.weather-card [data-line-id='status']::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--scroll-thumb);
+}
+.ui-scroll::-webkit-scrollbar-track,
+.cesium-credit-lightbox > ul::-webkit-scrollbar-track,
+.weather-card [data-line-id='status']::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+}
+
+.ui-icon {
+  display: inline-block;
+  line-height: 1;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
+  user-select: none;
+}
+
+.ui-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+.ui-tooltip__tip {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--menu-bg);
+  color: var(--dock-label-color);
+  font: var(--dock-label-font-weight) var(--dock-label-font-size) / 1.4
+    var(--font-sans);
+  letter-spacing: var(--dock-label-letter-spacing);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+/* Sides are for left-to-right; a right-to-left page mirrors them with the
+   rails, so a tip still opens toward the middle of the screen. */
+.ui-tooltip__tip--right {
+  inset-inline-start: calc(100% + 10px);
+}
+.ui-tooltip__tip--left {
+  inset-inline-end: calc(100% + 10px);
+}
+
+.ui-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--btn-radius) + 4px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+.ui-rail__sep {
+  height: 1px;
+  margin: 3px 6px;
+  background: var(--glass-border);
+}
+.ui-rail__item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+.ui-rail__item:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+.ui-rail__item--on,
+.ui-rail__item--on:hover:not(:disabled) {
+  border-color: var(--accent-dim);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.ui-rail__item:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* A collapsible rail shows each item as an icon and its label while no panel
+   is open, and folds the labels away once one is. The collapsed item keeps
+   the plain rail's 32px square. */
+.ui-rail--collapsible {
+  transition: border-radius var(--transition-fast);
+}
+.ui-rail--collapsible .ui-rail__item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 32px;
+  padding: 0 6px;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    border-radius var(--transition-fast);
+}
+.ui-rail__label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: var(--dock-label-font-weight) var(--dock-label-font-size) / 1
+    var(--font-sans);
+  letter-spacing: var(--dock-label-letter-spacing);
+  transition:
+    max-width var(--transition-fast),
+    margin var(--transition-fast),
+    opacity var(--transition-fast);
+}
+.ui-rail--expanded {
+  border-radius: 21px;
+}
+.ui-rail--expanded .ui-rail__item {
+  border-radius: 16px;
+}
+.ui-rail--expanded .ui-rail__label {
+  max-width: 220px;
+  margin-inline: 8px 8px;
+  opacity: 1;
+}
+.ui-rail__badge {
+  position: absolute;
+  top: 1px;
+  inset-inline-end: 1px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--bg-dark);
+  font: 600 9px/14px var(--font-mono);
+  text-align: center;
+}
+
+/* Application view hosts (src/ui/views): the view's own elements lay out as
+   children of the page, as the static markup they replace did. */
+.gev-view {
+  display: contents;
+}
