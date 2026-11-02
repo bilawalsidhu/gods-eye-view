@@ -60,6 +60,7 @@ const PANEL_GROUPS = [
     label: msg('Infrastructure'),
     ids: [
       'alpr-cameras',
+      'caba-traffic-enforcement',
       'military-installations',
       'local-datacenters',
       'telegeography-submarine-cables',

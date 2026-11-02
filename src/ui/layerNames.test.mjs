@@ -6,8 +6,10 @@ import { FEED_SOURCE, COMBINED_SOURCE } from '../layers/localAdsb/status.js';
 import {
   LAYER_NAME_KEYS,
   PANEL_LABEL_KEYS,
+  layerNameForId,
   sourceLabel,
 } from './layerNames.js';
+import { translateFeedError } from './statusText.js';
 
 // Layers whose module name is a proper name and stays as it is in every
 // language: the Bhote Koshi pair belong to a scripted scene.
@@ -46,6 +48,45 @@ for (const locale of ['es', 'ru']) {
         assert.notEqual(t(source), source, 'the catalog has the entry');
         assert.equal(sourceLabel(source), t(source));
       }
+    } finally {
+      setLocale('en');
+    }
+  });
+}
+
+for (const [locale, name, source, unavailable] of [
+  [
+    'en',
+    'CABA Traffic Enforcement',
+    'Buenos Aires Data · location inventory',
+    'CABA inventory unavailable',
+  ],
+  [
+    'es',
+    'Fiscalización de tránsito de CABA',
+    'Buenos Aires Data · inventario de ubicaciones',
+    'Inventario de CABA no disponible',
+  ],
+  [
+    'ru',
+    'Контроль дорожного движения CABA',
+    'Buenos Aires Data · реестр местоположений',
+    'Реестр CABA недоступен',
+  ],
+  ['zh-CN', 'CABA 交通执法', 'Buenos Aires Data · 位置清单', 'CABA 清单不可用'],
+]) {
+  test(`${locale}: CABA inventory labels and unavailable state follow the UI language`, () => {
+    setLocale(locale);
+    try {
+      assert.equal(layerNameForId('caba-traffic-enforcement'), name);
+      assert.equal(
+        sourceLabel('Buenos Aires Data · location inventory'),
+        source,
+      );
+      assert.equal(
+        translateFeedError('CABA inventory unavailable'),
+        unavailable,
+      );
     } finally {
       setLocale('en');
     }

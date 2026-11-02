@@ -3008,5 +3008,8 @@
   "Left panels": "Painéis à esquerda",
   "Right panels": "Painéis à direita",
   "CONFIRMED": "CONFIRMADA",
-  "PAD / RTLS": "PLATAFORMA / RTLS"
+  "PAD / RTLS": "PLATAFORMA / RTLS",
+  "CABA inventory unavailable": "Inventário de CABA indisponível",
+  "CABA Traffic Enforcement": "Fiscalização de trânsito de CABA",
+  "Buenos Aires Data · location inventory": "Buenos Aires Data · inventário de localizações"
 }

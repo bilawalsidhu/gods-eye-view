@@ -42,13 +42,12 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
-    // S2 GhostMaps extends the generated layer enums.
+    // S2 GhostMaps and CABA extend the generated layer enums.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
-    // The layer alias hint leaves out aliases the layer id already spells.
-    'e65812db60a2702cebb496fca257cb04a28f1bbbf250cb9ab65a3db33005e0c8',
+    '1adce03711a9c2cc169f14314359278fb24c5f1cbee8bf56b9b8ed80c09af0b0',
   );
 });
 

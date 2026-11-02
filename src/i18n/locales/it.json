@@ -3008,5 +3008,8 @@
   "Left panels": "Pannelli a sinistra",
   "Right panels": "Pannelli a destra",
   "CONFIRMED": "CONFERMATA",
-  "PAD / RTLS": "SITO DI LANCIO / RTLS"
+  "PAD / RTLS": "SITO DI LANCIO / RTLS",
+  "CABA inventory unavailable": "Inventario CABA non disponibile",
+  "CABA Traffic Enforcement": "Controllo del traffico di CABA",
+  "Buenos Aires Data · location inventory": "Buenos Aires Data · inventario delle posizioni"
 }
