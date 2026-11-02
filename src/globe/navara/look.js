@@ -86,6 +86,9 @@ export function buildNavaraLook(
   let cloudsShown = true;
   let cloudsSunlit = true;
   let landscape = false;
+  let daylightTime = null;
+  let fillLight;
+  let fill = 0;
   const tone = effect('toneMapping');
   let starsShown = true;
 
@@ -100,13 +103,35 @@ export function buildNavaraLook(
     let changed = brighten(!landscapeRequested);
     if (landscapeRequested !== landscape && tone) {
       landscape = landscapeRequested;
+      daylightTime = null;
       view.toneMappingExposure = landscape ? 10 : 1;
       tone.update({ toneMapping: { mode: landscape ? AGX : ACES_FILMIC } });
       changed = true;
     }
+    // In orbit, retain some of the underlying imagery in the atmospheric
+    // shadow. Fade up with altitude so ground views keep their original light.
+    const nextFill =
+      landscape && Number.isFinite(height)
+        ? Math.min(1, Math.max(0, (height - 50_000) / 250_000))
+        : 0;
+    if (nextFill !== fill) {
+      fill = nextFill;
+      if (fillLight) fillLight.update({ ambient: { intensity: fill } });
+      else fillLight = view.addLight({ ambient: { intensity: fill } });
+      changed = true;
+    }
+    const opacity = aerial?.ref?.raw?.rawEffect?.blendMode.opacity;
+    const strength = 1 - 0.2 * fill;
+    if (opacity && opacity.value !== strength) {
+      opacity.value = strength;
+      changed = true;
+    }
     const atmosphere = view.atmosphere;
-    const time =
-      landscape && place ? landscapeSunTime(now(), place.lng) : now();
+    // Choose inspection daylight once. Rotating the camera must not rotate
+    // the terminator across the geography.
+    if (landscape && place && daylightTime === null)
+      daylightTime = landscapeSunTime(now(), place.lng);
+    const time = daylightTime ?? now();
     if (atmosphere && sunDateStale(atmosphere.date.getTime(), time)) {
       atmosphere.date = new Date(time);
       changed = true;
@@ -170,7 +195,13 @@ export function buildNavaraLook(
     }
     return changed;
   };
-  return { handles, frame };
+  return {
+    handles,
+    frame,
+    resetDaylight() {
+      daylightTime = null;
+    },
+  };
 }
 
 const IRRADIANCE_ON = Object.freeze({

@@ -52,8 +52,8 @@ export function resolveNavaraLook(search = '') {
 export const ACES_FILMIC = 6;
 export const AGX = 7;
 
-// The Sentinel-2 landscape uses early afternoon at the camera longitude,
-// independently of the telemetry clock. Only the displayed sunlight moves.
+// Pick early afternoon at the starting landscape longitude. The look keeps
+// this timestamp while the user explores; telemetry uses its own clock.
 export function landscapeSunTime(now, longitude) {
   const hour = 3_600_000;
   const day = 24 * hour;

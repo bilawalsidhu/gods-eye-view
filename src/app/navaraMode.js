@@ -199,6 +199,7 @@ export async function createNavaraScene({
   const { engine } = globe;
   navaraViews.set(engine, {
     view: globe.view,
+    alignDaylightToRestoredView: globe.alignDaylightToRestoredView,
     MeshDesc: globe.MeshDesc,
     EffectDesc: globe.EffectDesc,
     NavaraEffect: globe.NavaraEffect,
@@ -264,6 +265,10 @@ export function createViewerlessTools({
   defer,
 }) {
   const { dataManager } = data;
+  void styleManager.initialRestorePromise?.then(() => {
+    if (!signal.aborted)
+      navaraViews.get(engine)?.alignDaylightToRestoredView?.();
+  });
   const recentImagery = dataManager.layers.get('recent-imagery')?.module;
   if (recentImagery) {
     const tool = initNavaraImageryBoxTool({

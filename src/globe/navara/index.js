@@ -109,6 +109,7 @@ export async function createNavaraGlobe({
   let view;
   let engine;
   let overlay = null;
+  let look;
   let removeLook = null;
   let removePostSampling = null;
   try {
@@ -123,13 +124,9 @@ export async function createNavaraGlobe({
     });
     // The sun follows the engine clock (one time source for layers and the
     // look); the look only runs in preRender, after the engine exists.
-    const look = buildNavaraLook(
-      view,
-      plugin,
-      plan,
-      () => engine.clock.frameTime(),
-      { forEachLuminanceUniform },
-    );
+    look = buildNavaraLook(view, plugin, plan, () => engine.clock.frameTime(), {
+      forEachLuminanceUniform,
+    });
     // The look's shadowed sun leaked a light per frame (internals.js).
     keepCascadedLightIds(view);
     removePostSampling = createPostSampling(view);
@@ -213,6 +210,11 @@ export async function createNavaraGlobe({
     NavaraEffect,
     DrapedMesh,
     setupMaterialForDrape,
+    // Startup can fly from the engine's placeholder camera into a shared view.
+    alignDaylightToRestoredView() {
+      look.resetDaylight();
+      engine.render.request('restored-daylight');
+    },
     setRenderLoop: (enabled) => setRenderLoopEnabled(view, enabled),
     destroy() {
       if (destroyed) return;
