@@ -4376,13 +4376,15 @@ service's usage policy states; past a bounded queue the answer is a 429 with a
 upstream host is pinned and a redirect is refused rather than followed, and a
 rate limit from the routing service is reported as one instead of as "no route
 found". So is an outage: any failure status but 400 (a 5xx, a 403 block, a
-404), no answer (a 12 s timeout counted from when the request leaves, not
-while it waits for an outbound slot; a network error) or a body that is not
-JSON answers
-`502 routing service unavailable`, which `plan_route`
-reports as `unavailable` and the layer as `Routing unavailable (HTTP 502)`;
-only OSRM's own refusal (a 400, or a 200 without a route) reads "no route
-found".
+404), no answer (timeout, network error) or a body that is not JSON answers
+`502 routing service unavailable`. `plan_route` throws `Routing service
+unavailable (HTTP 502)`, which is what voice hears, and the layer shows
+`Routing unavailable (HTTP 502)`; only OSRM's own refusal (a 400, or a 200
+without a route) reads "no route found". The 12 s timeout runs from the
+request's arrival, queue wait included; a budget spent before the request
+leaves the queue answers 429 "routing busy". A request that waited in the
+queue gives OSRM the rest of the 12 s, so a slow answer then still reads as
+unavailable.
 `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
 road name into one plain-English sentence per decision, folding
 `exit roundabout` steps into the roundabout they leave, and caps one route at

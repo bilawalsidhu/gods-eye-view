@@ -311,15 +311,16 @@ test('callers sharing one failed upstream call all hear the outage, and it is no
   assert.equal(calls, 2, 'the next request asks the routing service again');
 });
 
-test('a wait for an outbound slot does not count toward the upstream timeout', async (t) => {
+test('a budget spent in the outbound queue is reported as busy, not as an outage', async (t) => {
   _resetRouteUpstreamForTest();
-  // The second request waits 13 s for its slot, longer than the 12 s budget.
+  // The second request waits 13 s for its slot, past the 12 s budget.
   _setRouteUpstreamIntervalForTest(13_000);
   t.after(() => _resetRouteUpstreamForTest());
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
   const request = install(installRouteMiddleware);
-  t.mock.method(globalThis, 'fetch', async (_url, { signal }) => {
-    signal.throwIfAborted();
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
     return Response.json(osrmRouteWithSteps(2));
   });
   const first = request(
@@ -333,8 +334,9 @@ test('a wait for an outbound slot does not count toward the upstream timeout', a
   assert.equal((await first).body.ok, true);
   t.mock.timers.tick(13_000);
   const result = await second;
-  assert.equal(result.statusCode, 200);
-  assert.equal(result.body.ok, true);
+  assert.equal(result.statusCode, 429);
+  assert.match(result.body.error, /routing busy/);
+  assert.equal(calls, 1, 'the spent request never reaches the routing service');
 });
 
 /** One OSRM route with `count` maneuvers, for the step tests. */

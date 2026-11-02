@@ -1,4 +1,4 @@
-- A routing service outage (an error status, no answer or a non-JSON body)
-  is reported as "routing service unavailable" instead of "no route found",
-  so voice route planning and the Directions layer no longer blame the
-  request (quanticsoul4772, #1509).
+- When the routing service is down (an error status, no answer or a non-JSON
+  body), voice route planning hears "Routing service unavailable" and the
+  Directions layer shows "Routing unavailable" instead of "no route found",
+  so neither blames the request (quanticsoul4772, #1509).

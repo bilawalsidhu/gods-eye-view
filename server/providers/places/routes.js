@@ -178,14 +178,16 @@ async function fetchRoute({
     `${base.replace(/\/$/, '')}/route/v1/${osrmProfile}/${coords}` +
     `?overview=full&geometries=geojson&alternatives=false&steps=${withSteps ? 'true' : 'false'}`;
   const controller = new AbortController();
-  let timer;
+  // One 12 s budget from arrival, queue wait included, so callers sized to it
+  // (the Directions layer gives up at 15 s) hear back in time.
+  const timer = setTimeout(() => controller.abort(), 12000);
   let osrm;
   try {
     const upstreamRes = await throughUpstreamGate(async () => {
-      // The 12 s budget starts when the request leaves, not while it waits
-      // for an outbound slot, so a wait in our own queue is never reported
-      // as the routing service being unavailable.
-      timer = setTimeout(() => controller.abort(), 12000);
+      // A budget spent waiting in our own queue is our backlog, not the
+      // routing service failing.
+      if (controller.signal.aborted)
+        throw new RouteBusyError(_upstreamIntervalMs);
       try {
         return await fetchImpl(upstream, {
           signal: controller.signal,

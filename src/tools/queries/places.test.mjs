@@ -283,6 +283,24 @@ test('a routing outage is reported as unavailable, not as invalid arguments', as
     assert.equal(result.structuredContent.error, 'unavailable');
     assert.doesNotMatch(result.content[0].text, /No walk route/);
   }
+  // Voice passes only the message on, so it names the outage itself.
+  const outage = createRouteService({
+    fetchImpl: async () =>
+      Response.json(
+        { ok: false, error: 'routing service unavailable' },
+        { status: 502 },
+      ),
+  });
+  await assert.rejects(
+    outage.route(
+      [
+        { lat: 30, lon: -97 },
+        { lat: 30.01, lon: -97.01 },
+      ],
+      'foot',
+    ),
+    { message: 'Routing service unavailable (HTTP 502)' },
+  );
 });
 
 test('place answers say when the search limits may have left places out', async () => {
