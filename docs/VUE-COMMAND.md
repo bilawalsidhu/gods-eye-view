@@ -57,8 +57,33 @@ account status and tool responses are scripted fixtures unless explicitly
 labelled offline. No real OAuth grant, credentials, microphone session or paid
 inference is used.
 
-Results and the exact publish commit are recorded in the PR description after
-the final gate completes. Relevant commands:
+Runtime candidate: `ec56d7be02a5a9eef26bbf7bb031a0d08a06436d` (the following
+commit records documentation and screenshots only).
+
+| Check | Result |
+| --- | --- |
+| Ordinary unit/integration suite, four workers | 10,012 passed; 31 skipped; 0 failed |
+| Serialized allocation probes | 15 passed |
+| Build, full adopted formatting, import/package boundaries | Passed |
+| i18n / layer tokens / changelog fragment validation | 11 complete translated catalogs, 2,762 messages each; 32 unchanged published tokens; valid fragments |
+| ChatGPT browser fixture | 12 combinations: en/es/ru/zh-CN/zh-Hant/zh-TW × two sizes |
+| Live locale + RTL fixture | 12 combinations: en/ar × six desktop/portrait/landscape sizes |
+| Voice panel and console, including Escape | Both 1440×1000 and 800×800 passed |
+| Actual rendered Cesium camera | Rotation, direction/speed, explicit stop, navigation and refusal/reset guards passed |
+| Production application rails | Tactical/Minimal/Cyber, batched/sequential commands, preferences and fresh-context shared-link restore passed |
+| Production rail controls (separate invocation) | Native Tab/Shift+Tab, Enter/Space, aria-pressed, panel Escape, independent mobile expansion and sheets passed |
+| Production phone geometry | en/ar × 390×844/320×568: four passed, including safe areas, pointer hit tests, minimum size and simulated keyboard viewport |
+| Full application console, offline | Mount, live endpoint listings, provider controls, drag/resize/persistence, Escape and no console/render errors passed |
+
+The rail matrix and control phases were verified in separate invocations of
+the same runtime candidate. `--controls-only` reruns the control/phone-sheet
+phase without repeating the three desktop themes and share restoration.
+Earlier attempts exposed stale QA selectors and an invalid Puppeteer key
+chord; the scripts now use Vue rail buttons and explicit modifier key events.
+A parallel browser attempt was terminated under load; the passing results above
+come from completed reruns. No timeout or product assertion was relaxed.
+
+Relevant commands:
 
 ```sh
 # Ordinary suite, bounded concurrency (allocation probes run separately).
@@ -89,3 +114,13 @@ The original draft gates for eligible-account OAuth/model use, native Windows
 credential enforcement and broader graphics/tracking validation remain open.
 These fixture checks do not certify those unrelated release gates or approve
 an independently open upstream proposal.
+
+## Console fixture screenshots
+
+These show the real Vue console with scripted account/model responses and no
+globe or live OAuth. The English example includes mixed Arabic input; the phone
+example uses the Arabic page locale.
+
+![English console with mixed-direction input](media/command-vue/fixture-en-desktop.png)
+
+![Arabic phone console](media/command-vue/fixture-ar-phone.png)
