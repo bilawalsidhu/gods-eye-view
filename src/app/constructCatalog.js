@@ -35,6 +35,7 @@ import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
 import { createUsGroundwaterLayer } from '../layers/usGroundwater/index.js';
+import { createWellRecordUi } from '../ui/wellRecordUi.js';
 import * as wellOverlays from '../overlays/worldOverlay.js';
 
 /**
@@ -174,6 +175,7 @@ export function createApplicationCatalog({
         ...createInfrastructureLayers(localGeoJsonServices),
         createUsGroundwaterLayer({
           source: sources['us-groundwater'],
+          recordUi: createWellRecordUi(),
           overlays: wellOverlays,
         }),
         createApplicationCables({ source: sources.cables }),

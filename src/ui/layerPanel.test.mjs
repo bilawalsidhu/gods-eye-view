@@ -1,3 +1,4 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -61,14 +62,8 @@ test('panel presentation exposes groundwater wells under Infrastructure', () => 
 });
 
 test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
-  const { LayerPanel, layerFeedState } = await import('./layerPanel.js');
-  const classes = new Map();
-  const attrs = new Map();
-  const button = {
-    classList: { toggle: (key, value) => classes.set(key, value) },
-    dataset: {},
-    setAttribute: (key, value) => attrs.set(key, value),
-  };
+  const { LayerPanel, layerFeedState, presentLayerToggle } =
+    await import('./layerPanel.js');
   const layer = {
     id: 'ais-live-vessels',
     name: 'Live Vessels',
@@ -84,12 +79,12 @@ test('partial feed controls distinguish incomplete records from stale data and o
     },
   };
   const panel = LayerPanel.prototype;
-  panel._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'PARTIAL');
-  assert.equal(button.dataset.feedState, 'partial');
-  assert.equal(classes.get('feed-partial'), true);
-  assert.equal(classes.get('feed-stale'), false);
-  assert.match(attrs.get('aria-label'), /PARTIAL/);
+  let toggle = presentLayerToggle(layer);
+  assert.equal(toggle.text, 'PARTIAL');
+  assert.equal(toggle.feedState, 'partial');
+  assert.equal(toggle.classes['feed-partial'], true);
+  assert.equal(toggle.classes['feed-stale'], false);
+  assert.match(toggle.ariaLabel, /PARTIAL/);
   assert.match(
     panel._buildMetaText(layer),
     /^PARTIAL · AISStream · 2 of 3 records accepted · /,
@@ -112,12 +107,11 @@ test('partial feed controls distinguish incomplete records from stale data and o
   );
   assert.equal(layerFeedState({ ...layer.stats, loading: true }), 'loading');
   layer.stats = { ...layer.stats, partial: false };
-  panel._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'ON');
-  assert.equal(classes.get('feed-partial'), false);
+  toggle = presentLayerToggle(layer);
+  assert.equal(toggle.text, 'ON');
+  assert.equal(toggle.classes['feed-partial'], false);
   layer.enabled = false;
-  panel._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'OFF');
+  assert.equal(presentLayerToggle(layer).text, 'OFF');
 });
 
 test('a stale row dates cached data by its oldest tile, not the last load', async () => {
@@ -143,10 +137,9 @@ test('a stale row dates cached data by its oldest tile, not the last load', asyn
 
 test('readout rows contain only toggles and metadata; ordinary rows retain controls', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
-  const { railFixture } = await import('./railTestFixture.mjs');
-  const f = railFixture();
-  const previousDocument = globalThis.document;
-  globalThis.document = f.document;
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const find = (id) => container.querySelector(`[data-layer-id="${id}"]`);
   const ids = [
     'wind',
     'weather-radar',
@@ -187,9 +180,9 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
     }),
   });
   try {
-    panel.mount(f.container);
+    panel.mount(container);
     for (const id of ids.slice(0, -1)) {
-      const row = f.find((n) => n.dataset.layerId === id);
+      const row = find(id);
       assert.equal(row.children.length, 2);
       assert.ok(row.querySelector('.data-name'));
       assert.ok(row.querySelector('.data-toggle-meta'));
@@ -200,14 +193,14 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
         'data-toggle-controls-status',
         'data-row-list',
       ])
-        assert.equal(row.querySelector(`.${cls}`), null);
+        assert.ok(!row.querySelector(`.${cls}`), cls);
       row.querySelector('.data-toggle-btn').click();
     }
     assert.deepEqual(
       calls.map(([id]) => id),
       ids.slice(0, -1),
     );
-    const ordinary = f.find((n) => n.dataset.layerId === 'other');
+    const ordinary = find('other');
     assert.equal(
       ordinary.querySelector('.data-toggle-controls-info').textContent,
       'Detailed time',
@@ -222,19 +215,16 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
     assert.equal(typeof refresh, 'function');
   } finally {
     panel.destroy();
-    globalThis.document = previousDocument;
+    document.body.replaceChildren();
   }
 });
 
 test('the Recent Imagery readout mounts in its rail body like the weather readout and is rebuilt or released with the panel', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
-  const { railFixture } = await import('./railTestFixture.mjs');
-  const f = railFixture();
-  const body = f.document.createElement('div');
-  f.document.getElementById = (id) =>
-    id === 'recent-imagery-panel-body' ? body : null;
-  const previousDocument = globalThis.document;
-  globalThis.document = f.document;
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const body = document.body.appendChild(document.createElement('div'));
+  body.id = 'recent-imagery-panel-body';
   const mounted = [];
   const factory = (container) => {
     const readout = {
@@ -259,10 +249,10 @@ test('the Recent Imagery readout mounts in its rail body like the weather readou
   try {
     panel.attachRecentImagery(factory);
     assert.equal(mounted.length, 0, 'no body before the panel mounts');
-    panel.mount(f.container);
+    panel.mount(container);
     assert.equal(mounted.length, 1);
-    assert.equal(mounted[0].container, body);
-    panel.mount(f.container);
+    assert.ok(mounted[0].container === body);
+    panel.mount(container);
     assert.equal(mounted[0].destroyed, true, 'a remount rebuilds it');
     assert.equal(mounted.length, 2);
     panel.attachRecentImagery(null);
@@ -275,18 +265,12 @@ test('the Recent Imagery readout mounts in its rail body like the weather readou
     assert.equal(mounted.length, 3, 'a destroyed panel mounts nothing');
   } finally {
     panel.destroy();
-    globalThis.document = previousDocument;
+    document.body.replaceChildren();
   }
 });
 
 test('an omitted source is visibly unavailable and cannot be toggled on', async () => {
-  const { LayerPanel } = await import('./layerPanel.js');
-  const attrs = new Map();
-  const button = {
-    classList: { toggle() {} },
-    dataset: {},
-    setAttribute: (key, value) => attrs.set(key, value),
-  };
+  const { presentLayerToggle } = await import('./layerPanel.js');
   const layer = {
     id: 'flights',
     name: 'Flights',
@@ -297,94 +281,63 @@ test('an omitted source is visibly unavailable and cannot be toggled on', async 
       error: 'Data source not configured: flights',
     },
   };
-  LayerPanel.prototype._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'UNAVAILABLE');
-  assert.equal(attrs.get('aria-disabled'), 'true');
-  assert.match(button.title, /not configured/);
-  LayerPanel.prototype._syncToggleButton(button, { ...layer, enabled: true });
+  const toggle = presentLayerToggle(layer);
+  assert.equal(toggle.text, 'UNAVAILABLE');
+  assert.equal(toggle.ariaDisabled, true);
+  assert.match(toggle.title, /not configured/);
   assert.equal(
-    attrs.get('aria-disabled'),
-    'false',
+    presentLayerToggle({ ...layer, enabled: true }).ariaDisabled,
+    false,
     'an active layer can always be switched off',
   );
 });
 
 test('row text keeps a hyphenated code whole and never starts a line with the separator', async () => {
-  const { setRowText } = await import('./layerPanel.js');
-  const previousDocument = globalThis.document;
-  const element = () => ({
-    className: '',
-    textContent: '',
-    children: [],
-    appendChild(child) {
-      this.children.push(child);
-      return child;
-    },
-  });
-  globalThis.document = { createElement: element };
-  try {
-    const text = (node) =>
-      node.children.length
-        ? node.children.map((child) => child.textContent).join('')
-        : node.textContent;
-    const kept = (node) =>
-      node.children
-        .filter((child) => child.className === 'data-keep')
-        .map((child) => child.textContent);
+  const { rowTextRuns } = await import('./layerRowText.js');
+  const text = (runs) => runs.map((run) => run.text).join('');
+  const kept = (runs) => runs.filter((run) => run.keep).map((run) => run.text);
 
-    const name = element();
-    setRowText(name, 'Локальный ADS-B');
-    assert.equal(text(name), 'Локальный ADS-B');
-    assert.deepEqual(kept(name), ['ADS-B']);
+  const name = rowTextRuns('Локальный ADS-B');
+  assert.equal(text(name), 'Локальный ADS-B');
+  assert.deepEqual(kept(name), ['ADS-B']);
 
-    const meta = element();
-    setRowText(meta, 'UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED');
-    assert.equal(text(meta), 'UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED');
-    assert.deepEqual(kept(meta), [' ·', ' ·', ' ·']);
-    assert.ok(
-      meta.children.every((child) => !child.textContent.startsWith('·')),
-      'the space before each dot is held to the piece it closes',
-    );
+  const meta = rowTextRuns('UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED');
+  assert.equal(text(meta), 'UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED');
+  assert.deepEqual(kept(meta), [' ·', ' ·', ' ·']);
+  assert.ok(
+    meta.every((run) => !run.text.startsWith('·')),
+    'the space before each dot is held to the piece it closes',
+  );
 
-    const plain = element();
-    setRowText(plain, 'Satellites');
-    assert.equal(plain.textContent, 'Satellites');
-    assert.equal(plain.children.length, 0);
+  assert.equal(rowTextRuns('Satellites'), null, 'plain text needs no runs');
 
-    const compound = element();
-    setRowText(compound, 'Kartierte ALPR-Kameras · ADS-B-Flüge');
-    assert.equal(text(compound), 'Kartierte ALPR-Kameras · ADS-B-Flüge');
-    assert.deepEqual(
-      kept(compound),
-      [' ·', 'ADS-B'],
-      'a compound may break at its hyphen; the code inside it stays whole',
-    );
+  const compound = rowTextRuns('Kartierte ALPR-Kameras · ADS-B-Flüge');
+  assert.equal(text(compound), 'Kartierte ALPR-Kameras · ADS-B-Flüge');
+  assert.deepEqual(
+    kept(compound),
+    [' ·', 'ADS-B'],
+    'a compound may break at its hyphen; the code inside it stays whole',
+  );
 
-    const long = element();
-    setRowText(long, 'see https-proxy-endpoint-config-x');
-    assert.deepEqual(kept(long), [], 'a long hyphenated run may still wrap');
-  } finally {
-    globalThis.document = previousDocument;
-  }
+  const long = rowTextRuns('see https-proxy-endpoint-config-x');
+  assert.deepEqual(
+    kept(long || []),
+    [],
+    'a long hyphenated run may still wrap',
+  );
 });
 
 test('the unavailable chip may abbreviate, but its accessible name keeps the full state', async () => {
-  const { LayerPanel } = await import('./layerPanel.js');
-  const attrs = new Map();
-  const button = {
-    classList: { toggle() {} },
-    dataset: {},
-    setAttribute: (key, value) => attrs.set(key, value),
-  };
-  LayerPanel.prototype._syncToggleButton(button, {
+  const { presentLayerToggle } = await import('./layerPanel.js');
+  const toggle = presentLayerToggle({
     id: 'local-firms',
     name: 'FIRMS Active Fires',
     enabled: false,
     stats: { sourceUnavailable: true, error: 'KEY REQUIRED' },
   });
-  assert.equal(button.textContent, 'UNAVAILABLE');
-  assert.equal(button.dataset.feedState, 'unavailable');
-  assert.match(attrs.get('aria-label'), /^Active Fires: UNAVAILABLE\./);
+  assert.equal(toggle.text, 'UNAVAILABLE');
+  assert.equal(toggle.feedState, 'unavailable');
+  assert.match(toggle.ariaLabel, /^Active Fires: UNAVAILABLE\./);
 });
 
 test('the Weather readout receives enabled air-quality alongside weather layers', async () => {
@@ -416,9 +369,8 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
 });
 
 test('well snapshot separates enabled/loading/error state from coverage and reference-page date', async () => {
-  const { LayerPanel } = await import('./layerPanel.js');
+  const { LayerPanel, presentLayerToggle } = await import('./layerPanel.js');
   const panel = LayerPanel.prototype;
-  const button = { classList: { toggle() {} }, dataset: {}, setAttribute() {} };
   const layer = {
     id: 'us-groundwater',
     name: 'U.S. Groundwater Wells',
@@ -433,29 +385,32 @@ test('well snapshot separates enabled/loading/error state from coverage and refe
       selectedGroupCount: 12345,
     },
   };
-  panel._syncToggleButton(button, layer);
-  assert.equal(button.textContent, 'ON');
-  assert.equal(button.dataset.feedState, 'nominal');
+  assert.equal(presentLayerToggle(layer).text, 'ON');
+  assert.equal(presentLayerToggle(layer).feedState, 'nominal');
   const text = panel._buildMetaText(layer);
   assert.equal(text, 'Rainfolk · never');
-  panel._syncToggleButton(button, {
-    ...layer,
-    stats: { ...layer.stats, loading: true },
-  });
-  assert.equal(button.textContent, 'LOADING');
-  panel._syncToggleButton(button, {
-    ...layer,
-    stats: { ...layer.stats, error: 'synthetic failure' },
-  });
-  assert.equal(button.textContent, 'DEGRADED');
-  panel._syncToggleButton(button, { ...layer, enabled: false });
-  assert.equal(button.textContent, 'OFF');
+  assert.equal(
+    presentLayerToggle({
+      ...layer,
+      stats: { ...layer.stats, loading: true },
+    }).text,
+    'LOADING',
+  );
+  assert.equal(
+    presentLayerToggle({
+      ...layer,
+      stats: { ...layer.stats, error: 'synthetic failure' },
+    }).text,
+    'DEGRADED',
+  );
+  assert.equal(presentLayerToggle({ ...layer, enabled: false }).text, 'OFF');
 });
 
 test('well catalog badge stays exact while represented locations and OFF state are separate', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
   const panel = LayerPanel.prototype;
-  const wellCountText = (stats) => panel._layerCountText(stats, true);
+  const { presentLayerCount } = await import('./layerPanel.js');
+  const wellCountText = (stats) => presentLayerCount(stats, true).text;
   const layer = {
     id: 'us-groundwater',
     enabled: true,
@@ -624,77 +579,47 @@ test('all initial and repeated lifecycle states keep the exact Rainfolk subtitle
   }
 });
 
-test('well row explanations and exact catalog count are accessible without custom hover titles', async () => {
-  const { LayerPanel } = await import('./layerPanel.js');
-  const panel = LayerPanel.prototype;
-  const previousDocument = globalThis.document;
-  const attributes = new Map([['title', 'old wells popup']]);
-  const node = {
-    textContent: 'Rainfolk · never',
-    removeAttribute: (key) => attributes.delete(key),
-    setAttribute: (key, value) => attributes.set(key, value),
-  };
-  panel._syncMetaText(node, {
+test('wells expose exact count and failures in native Vue descriptions without custom hover titles', async () => {
+  const { LayerPanel, presentLayerCount } = await import('./layerPanel.js');
+  const { h, render } = await import('vue');
+  const { default: LayerRows } = await import('./layerPanel/LayerRows.vue');
+  const panel = new LayerPanel({});
+  const layer = {
     id: 'us-groundwater',
-    enabled: false,
-    source: 'USGWD historical catalog',
-    stats: {},
-  });
-  assert.equal(attributes.has('title'), false);
-  assert.match(attributes.get('aria-label'), /Historical source records/);
-});
-
-test('wells preserve exact count and failures in toggle descriptions without altering peer catalog rows', async () => {
-  const { LayerPanel } = await import('./layerPanel.js');
-  const panel = LayerPanel.prototype;
-  const attrs = new Map();
-  const count = {
-    textContent: '',
-    classList: { toggle() {} },
-    setAttribute: (k, v) => attrs.set(k, v),
-    removeAttribute: (k) => attrs.delete(k),
-  };
-  const row = {
-    dataset: { layerId: 'us-groundwater' },
-    classList: { toggle() {} },
-  };
-  panel._syncCount(row, count, { catalogCount: 5918051 });
-  assert.equal(count.textContent, '5.9M');
-  assert.equal(attrs.get('aria-label'), 'Catalog records: 5,918,051');
-  assert.equal(attrs.has('title'), false);
-  panel._syncCount(row, count, { catalogCount: null });
-  assert.equal(attrs.has('aria-label'), false);
-  row.dataset.layerId = 'other';
-  panel._syncCount(row, count, { catalogCount: 5918051 });
-  assert.equal(count.textContent, '5,918,051');
-  assert.equal(count.title, 'Catalog records: 5,918,051');
-  const toggleAttrs = new Map(),
-    description = { id: 'water-wells-description', textContent: '' };
-  const meta = {
-    textContent: 'Rainfolk · never',
-    _wellDescriptionNode: description,
-    _wellToggle: { setAttribute: (k, v) => toggleAttrs.set(k, v) },
-    setAttribute() {},
-    removeAttribute() {},
-  };
-  panel._syncMetaText(meta, {
-    id: 'us-groundwater',
+    name: 'U.S. Groundwater Wells',
+    icon: '🪣',
     lifecycleUncertain: true,
     lifecycleState: 'disabled',
+    enabled: false,
     stats: { lastError: 'source failed', catalogCount: 5918051 },
-  });
-  assert.equal(toggleAttrs.get('aria-describedby'), description.id);
-  assert.match(description.textContent, /source failed/);
-  assert.match(description.textContent, /Lifecycle state uncertain/);
-  assert.match(description.textContent, /Historical source records/);
-  assert.match(description.textContent, /5,918,051/);
-});
-
-test('peer noncatalog counts and shared legend formatter keep native decimals while wells use compact units', async () => {
-  const { LayerPanel } = await import('./layerPanel.js');
-  const panel = LayerPanel.prototype;
-  assert.equal(panel._layerCountText({ count: 1000 }, false), '1.0K');
-  assert.equal(panel._layerCountText({ count: 1000 }, true), '1K');
-  assert.equal(panel._formatCount(1000), '1.0K');
-  assert.equal(panel._formatCount(1000000), '1000.0K');
+  };
+  const item = panel._presentRow({ count: true }, layer);
+  assert.equal(item.count.text, '5.9M');
+  assert.equal(item.meta, 'Rainfolk · never');
+  assert.match(item.description, /source failed/);
+  assert.match(item.description, /Lifecycle state uncertain/);
+  assert.match(item.description, /Historical source records/);
+  assert.match(item.description, /5,918,051/);
+  const container = document.body.appendChild(document.createElement('div'));
+  render(h(LayerRows, { items: [item] }), container);
+  const button = container.querySelector('.data-toggle-btn');
+  assert.equal(button.hasAttribute('title'), false);
+  assert.equal(
+    button.getAttribute('aria-describedby'),
+    'water-wells-description',
+  );
+  assert.equal(
+    container.querySelector('#water-wells-description').textContent,
+    item.description,
+  );
+  assert.equal(
+    container.querySelector('.data-toggle-meta').textContent,
+    'Rainfolk · never',
+  );
+  render(null, container);
+  container.remove();
+  panel.destroy();
+  assert.equal(presentLayerCount({ count: 1000 }).text, '1.0K');
+  assert.equal(presentLayerCount({ count: 1000 }, true).text, '1K');
+  assert.equal(presentLayerCount({ catalogCount: 0 }, true).text, '0');
 });

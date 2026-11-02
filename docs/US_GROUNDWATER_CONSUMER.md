@@ -3,7 +3,7 @@
 The Infrastructure **Water Wells** layer streams historical well source records
 prepared and hosted by Rainfolk. It uses GEV's ordinary standalone source assembly;
 there is no preview launcher injection or query-string endpoint override. The
-contribution is reconciled against GEV main `0d1a68160e532ba65dc34b48ea205de6de4028fc`.
+contribution is reconciled against GEV main `4c94f202d70c385559ea3ecc8f11948ba35bbec6`.
 
 ## Data and interpretation
 
@@ -32,6 +32,12 @@ No well-data key is needed. Enable Water Wells and zoom below 50 km for individu
 source-location points. Click a point for available depth, reported capacity,
 screen dimensions or construction/report years; absent facts are omitted.
 Coincident records keep their coordinates and use a small source-record chooser.
+The application renders the layer row, keyboard record actions and coincident
+chooser through the existing Vue/Pinia UI. The portable layer stays framework-free;
+embedding hosts supply `recordUi.publishRecords(view)` and
+`recordUi.publishChoices(view)` to present plain record labels and handlers. A null
+view releases that surface. No Cesium entities are stored in Pinia.
+
 Count grids remain internal. There are no numeric clusters, group panels or
 automatic drilldown flights. Zooming out hides well detail; disabling clears it.
 The row shows **Rainfolk** and elapsed time since this app accepted validated

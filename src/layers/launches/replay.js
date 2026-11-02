@@ -139,8 +139,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
       0,
       Number(preCountdownDurationSec) || 0,
     );
+    // The hold precedes the whole countdown; ending it at -hold cut T-10 to T-5.
     const preCountdownActive =
-      preCountdownDuration > 0 && realSecondsSinceStart < -preCountdownDuration;
+      preCountdownDuration > 0 &&
+      realSecondsSinceStart < -REPLAY_COUNTDOWN_DURATION_SEC;
     const countdownActive = realSecondsSinceStart < 0 && !preCountdownActive;
     const countdownSeconds = countdownActive
       ? Math.ceil(-realSecondsSinceStart)
@@ -179,60 +181,41 @@ export function createReplay({ state: layerState, services, parts, source }) {
     };
   }
 
+  /** Republish the mission panel after a replay state change. */
   function syncReplayButton() {
-    const button = layerState._missionPanel?.querySelector(
-      '[data-mission-replay]',
-    );
-    const transport = layerState._missionPanel?.querySelector(
-      '[data-mission-replay-transport]',
-    );
-    const speedControl = layerState._missionPanel?.querySelector(
-      '.mission-replay-speed-control',
-    );
-    if (!button) return;
+    parts.panel.publishPanel();
+  }
+
+  /**
+   * The replay controls as the mission panel shows them: the start button,
+   * the transport with its pause toggle, and the speed slider.
+   */
+  function presentReplay() {
     const active = Boolean(
       layerState._replayCameraLaunchId &&
       layerState._replayCameraLaunchId === layerState._selectedLaunchId,
     );
-    const replayAvailable = Boolean(
+    const available = Boolean(
       layerState._selectedLaunchId &&
       layerState._replayTracks.has(layerState._selectedLaunchId),
     );
-    if (speedControl) speedControl.hidden = !replayAvailable;
-    button.hidden = active || !replayAvailable;
-    button.disabled = !replayAvailable;
-    button.textContent = t('REPLAY ASCENT');
-    button.classList.remove('active');
-    button.setAttribute('aria-pressed', String(active));
-    button.title = t('Replay the estimated ascent with a following camera');
-    if (transport) {
-      transport.hidden = !active;
-      transport.classList.toggle(
-        'is-paused',
-        active && layerState._replayPaused,
-      );
-      const toggleButton = transport.querySelector(
-        '[data-mission-replay-toggle]',
-      );
-      if (toggleButton) {
-        toggleButton.disabled = !active;
-        toggleButton.textContent = layerState._replayPaused ? '▶' : 'Ⅱ';
-        toggleButton.setAttribute(
-          'aria-label',
-          layerState._replayPaused ? t('Resume replay') : t('Pause replay'),
-        );
-        toggleButton.title = layerState._replayPaused
-          ? t('Resume replay')
-          : t('Pause replay');
-      }
-    }
+    const paused = layerState._replayPaused;
+    const speed = layerState._replaySpeed;
+    return {
+      available,
+      active,
+      paused: active && paused,
+      toggleText: paused ? '▶' : 'Ⅱ',
+      toggleLabel: paused ? t('Resume replay') : t('Pause replay'),
+      transportLabel: layerState._replayTransportLabel,
+      speed: String(speed),
+      speedText: `${speed.toFixed(speed % 1 ? 2 : 0)}×`,
+      speedProgress: `${((speed - REPLAY_SPEED_MIN) / (REPLAY_SPEED_MAX - REPLAY_SPEED_MIN)) * 100}%`,
+    };
   }
 
   function syncReplayCountdownButton(state) {
-    const transport = layerState._missionPanel?.querySelector(
-      '[data-mission-replay-transport]',
-    );
-    if (!transport || !layerState._replayCameraLaunchId) return;
+    if (!layerState._replayCameraLaunchId) return;
     const phase = state.countdownActive
       ? t('T minus {seconds}', {
           seconds: state.countdownSeconds,
@@ -244,29 +227,14 @@ export function createReplay({ state: layerState, services, parts, source }) {
           : state.ascending
             ? t('Ascent replay')
             : t('Orbit replay');
-    transport.setAttribute(
-      'aria-label',
-      `${phase}${layerState._replayPaused ? t(', paused') : ''}`,
-    );
+    const label = `${phase}${layerState._replayPaused ? t(', paused') : ''}`;
+    if (label === layerState._replayTransportLabel) return;
+    layerState._replayTransportLabel = label;
+    parts.panel.publishPanel();
   }
 
   function syncReplaySpeedControl() {
-    const input = layerState._missionPanel?.querySelector(
-      '[data-mission-replay-speed]',
-    );
-    const output = layerState._missionPanel?.querySelector(
-      '[data-mission-replay-speed-output]',
-    );
-    if (input) {
-      input.value = String(layerState._replaySpeed);
-      const progress =
-        ((layerState._replaySpeed - REPLAY_SPEED_MIN) /
-          (REPLAY_SPEED_MAX - REPLAY_SPEED_MIN)) *
-        100;
-      input.style.setProperty('--replay-speed-progress', `${progress}%`);
-    }
-    if (output)
-      output.textContent = `${layerState._replaySpeed.toFixed(layerState._replaySpeed % 1 ? 2 : 0)}×`;
+    parts.panel.publishPanel();
   }
 
   function setReplaySpeed(value) {
@@ -281,7 +249,8 @@ export function createReplay({ state: layerState, services, parts, source }) {
         ? layerState._replayPausedAtMs
         : Date.now();
     for (const [launchId, startedAt] of layerState._animationStarts) {
-      if (!Number.isFinite(startedAt)) continue;
+      // A countdown runs in real time; rescaling it turned T-8 into T-32 at 0.25x.
+      if (!Number.isFinite(startedAt) || startedAt > now) continue;
       const elapsedMissionMs = (now - startedAt) * previousSpeed;
       layerState._animationStarts.set(
         launchId,
@@ -548,6 +517,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     replayStartAfterPause,
     replayState,
     syncReplayButton,
+    presentReplay,
     syncReplayCountdownButton,
     syncReplaySpeedControl,
     setReplaySpeed,

@@ -39,8 +39,6 @@
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
 }
 
 /* Class-qualified, not id-qualified, so a theme's header rule still wins. */
@@ -236,17 +234,10 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
   gap: 4px 10px;
 }
 
+/* The shared slider surface, in Street Level's green. */
 .sl-range {
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  accent-color: var(--sl-green);
-  cursor: pointer;
-}
-
-.sl-range:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 3px;
+  --accent: var(--sl-green);
+  --accent-glow: color-mix(in srgb, var(--sl-green) 55%, transparent);
 }
 
 /* The value and its note share a line: ANY DATE (by upload date). */

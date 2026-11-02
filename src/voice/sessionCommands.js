@@ -3,14 +3,12 @@ import { createVoiceSession } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
-import { msg, registerUnsavedWork, t } from '../i18n/index.js';
+import { t } from '../i18n/index.js';
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
-  const doc = element?.ownerDocument;
-  if (!doc) return null;
+  if (!element?.ownerDocument) return null;
   return new PointerReticle({
-    doc,
     rectOf: () => element.getBoundingClientRect?.() || null,
   });
 }
@@ -40,10 +38,7 @@ export function createVoiceCommands({
   nativePanelProvider = null,
 }) {
   if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
-  const ui = createControl({
-    reset: true,
-    ...(panelHost ? { panel: true } : {}),
-  });
+  const ui = createControl(panelHost ? { panel: true } : {});
   let actionObserver;
   let panelMount;
   const session = createVoiceSession({
@@ -67,40 +62,38 @@ export function createVoiceCommands({
   });
   const adapter = session.adapter;
   const capabilities = adapter.capabilities || {};
-  const providerHandler = () => onProviderChange?.(ui.providerSelect.value);
-  if (ui.providerSelect && onProviderChange) {
-    if (supportedProviders && ui.providerSelect.replaceChildren) {
-      const doc = ui.providerSelect.ownerDocument;
-      ui.providerSelect.replaceChildren(
-        ...supportedProviders.map((name) => {
-          const option = doc.createElement('option');
-          option.value = name;
-          option.textContent = VOICE_PROVIDERS[name].label;
-          return option;
-        }),
-      );
-    }
-    ui.providerSelect.value = provider;
-    ui.providerSelect.title = [
-      t('Changing provider reconnects voice if it is on.'),
-      capabilities.advisoryLimit,
-    ]
-      .filter(Boolean)
-      .join(' ');
-    ui.providerSelect.addEventListener('change', providerHandler);
-    ui.root.dataset.provider = provider;
+  const offProvider = onProviderChange
+    ? ui.on('provider-change', (value) => onProviderChange(value))
+    : null;
+  if (onProviderChange) {
+    ui.update('provider', {
+      ...(supportedProviders && {
+        options: supportedProviders.map((name) => ({
+          value: name,
+          label: VOICE_PROVIDERS[name].label,
+        })),
+      }),
+      value: provider,
+      title: () =>
+        [
+          t('Changing provider reconnects voice if it is on.'),
+          capabilities.advisoryLimit,
+        ]
+          .filter(Boolean)
+          .join(' '),
+    });
+    ui.update('root', { provider });
   }
   const hasProviderChoice = Boolean(
     onProviderChange && supportedProviders?.length > 1,
   );
-  if (ui.providerField) ui.providerField.hidden = !hasProviderChoice;
-  ui.root.dataset.providerChoice = String(hasProviderChoice);
-  if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
-  if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
+  ui.update('provider', { hidden: !hasProviderChoice });
+  ui.update('root', { providerChoice: String(hasProviderChoice) });
+  ui.update('tier', { hidden: !capabilities.costControls });
+  ui.update('cost', { hidden: !capabilities.costControls });
   if (!capabilities.pushToTalk) {
-    ui.button.setAttribute('aria-label', t('Toggle voice control'));
-    if (ui.helpDetail)
-      ui.helpDetail.textContent = t('Activate to toggle voice');
+    ui.update('button', { label: () => t('Toggle voice control') });
+    ui.update('help', { text: () => t('Activate to toggle voice') });
   }
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
@@ -108,31 +101,33 @@ export function createVoiceCommands({
   controls.ui = ui;
   const updateStatus = session.subscribe((event) => {
     if (event.type !== 'state') return;
-    ui.root.dataset.status = event.state;
+    ui.update('root', {
+      status: event.state,
+      ...(event.state === 'error' && { errorDismissed: false }),
+    });
     // States are machine values; only the label is translated.
-    ui.status.textContent = voiceStatusLabel(event.state);
+    ui.update('status', { text: () => voiceStatusLabel(event.state) });
     // The portable session reports 'Voice off' in English: show the idle
     // label instead. Other details are provider messages, shown as they come.
     const idle = event.state === 'idle';
     const detail = event.detail === 'Voice off' ? '' : event.detail;
-    ui.detail.textContent =
-      detail || (idle ? t('Voice off') : t('Voice active'));
-    ui.button.setAttribute('aria-pressed', String(session.isActive()));
-    if (ui.errorDetail)
-      ui.errorDetail.textContent =
+    ui.update('detail', {
+      text: () => detail || (idle ? t('Voice off') : t('Voice active')),
+    });
+    ui.update('button', { pressed: session.isActive() });
+    ui.update('error', {
+      text: () =>
         event.state === 'error'
           ? event.detail || t('Voice could not be started.')
-          : '';
-    if (event.state === 'error') ui.root.classList?.remove('error-dismissed');
+          : '',
+    });
   });
   // Captions, plan and result card nested in the control; it only reads
   // provider-neutral session events.
-  const card = ui.card
-    ? createCard({
-        root: ui.root,
-        ...(panelHost ? { onRender: () => panelMount?.panel.sync() } : {}),
-      })
-    : null;
+  const card = createCard({
+    ui,
+    ...(panelHost ? { onRender: () => panelMount?.panel.sync() } : {}),
+  });
   panelMount = panelHost?.mount({
     ui,
     card,
@@ -175,10 +170,6 @@ export function createVoiceCommands({
     card?.outline(event);
     session.sendMapEvent({ type: 'map_annotation_outline', ...event });
   });
-  // A reload (the language switch) ends the conversation: ask first.
-  const unregisterUnsavedWork = registerUnsavedWork(() =>
-    session.isActive() ? msg('the active voice session') : null,
-  );
   const buttonHandler = () => {
     if (adapter.ignoreButtonClick?.()) return;
     if (session.isActive()) {
@@ -187,14 +178,13 @@ export function createVoiceCommands({
       panelMount?.closeAfterStop(ticket);
     } else void session.start({ pushToTalk: false });
   };
-  ui.button.addEventListener('click', buttonHandler);
+  const offButton = ui.on('button', buttonHandler);
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
-    ui.button.removeEventListener('click', buttonHandler);
-    ui.providerSelect?.removeEventListener('change', providerHandler);
-    unregisterUnsavedWork();
+    offButton();
+    offProvider?.();
     annotationUnsubscribe?.();
     updateStatus();
     updateCard?.();
@@ -206,7 +196,7 @@ export function createVoiceCommands({
     reticle?.destroy();
     card?.destroy();
     if (disposeRunner) runner.dispose?.();
-    ui.root.remove();
+    ui.remove();
   };
   session.signal.addEventListener('abort', cleanup, { once: true });
   if (session.disposed) cleanup();

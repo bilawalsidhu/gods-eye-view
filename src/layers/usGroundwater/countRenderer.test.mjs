@@ -58,99 +58,49 @@ test('exact record positions survive and obey the outer visibility gate', () => 
   assert.equal(frame.numberOfListeners, 0);
 });
 
-test('keyed record controls preserve focused identity and magnification through refresh', () => {
-  const prior = globalThis.document;
-  class Node {
-    constructor() {
-      this.children = [];
-      this.dataset = {};
-      this.style = {};
-      this.attributes = {};
-      this.events = {};
-    }
-    setAttribute(key, value) {
-      this.attributes[key] = value;
-    }
-    append(n) {
-      n.parent = this;
-      this.children.push(n);
-    }
-    remove() {
-      if (this.parent)
-        this.parent.children = this.parent.children.filter((x) => x !== this);
-    }
-    contains(n) {
-      return this === n || this.children.includes(n);
-    }
-    addEventListener(k, f) {
-      this.events[k] = f;
-    }
-    focus() {
-      document.activeElement = this;
-      this.events.focus?.();
-    }
-  }
-  const host = new Node(),
-    fallback = new Node();
-  globalThis.document = {
-    activeElement: null,
-    body: new Node(),
-    createElement: () => new Node(),
-    querySelector: (s) => (s === '#world-overlay-actions' ? host : fallback),
-  };
-  try {
-    const ds = new Cesium.CustomDataSource();
-    const add = () =>
-      ds.entities.add({
-        id: 'same',
-        name: 'source record',
-        position: Cesium.Cartesian3.fromDegrees(1, 1),
-        billboard: { image: 'fixture' },
-      });
-    add();
-    const frame = new Cesium.Event();
-    const viewer = {
-      scene: {
-        postRender: frame,
-        canvas: {
-          clientWidth: 1000,
-          clientHeight: 800,
-          focus() {
-            document.activeElement = this;
-          },
-        },
-        cartesianToCanvasCoordinates: () => ({ x: 500, y: 400 }),
-      },
-      camera: {
-        positionCartographic: { height: 10000 },
-        moveEnd: new Cesium.Event(),
-      },
-    };
-    let selected;
-    const renderer = createCountRenderer(viewer, {
-      onSelectRecord: (e) => (selected = e),
+test('record actions publish current entities without DOM ownership and release on broad views', () => {
+  const ds = new Cesium.CustomDataSource();
+  const add = () =>
+    ds.entities.add({
+      id: 'same',
+      name: 'record',
+      position: Cesium.Cartesian3.fromDegrees(1, 1),
+      billboard: { image: 'fixture' },
     });
-    renderer.draw({ ...view, cells: [] }, ds, true);
-    const button = host.children[0].children[0];
-    assert.equal(button.attributes['aria-describedby'], host.children[1].id);
-    assert.match(host.children[1].textContent, /Arrow keys/);
-    button.focus();
-    assert.match(document.body.children[0].textContent, /source record/);
-    ds.entities.removeAll();
-    const replacement = add();
-    renderer.draw({ ...view, cells: [] }, ds, true);
-    assert.equal(document.activeElement, button);
-    assert.equal(host.children[0].children[0], button);
-    assert.equal(replacement.billboard.scale.getValue(), 1.8);
-    button.events.click();
-    assert.equal(selected, replacement);
-    ds.entities.removeAll();
-    renderer.draw({ ...view, cells: [] }, ds, true);
-    assert.equal(document.activeElement, viewer.scene.canvas);
-    assert.equal(document.body.children.length, 0);
-    renderer.clear();
-  } finally {
-    if (prior === undefined) delete globalThis.document;
-    else globalThis.document = prior;
-  }
+  add();
+  const frame = new Cesium.Event();
+  const viewer = {
+    scene: {
+      postRender: frame,
+      canvas: { clientWidth: 1000, clientHeight: 800 },
+      cartesianToCanvasCoordinates: () => ({ x: 500, y: 400 }),
+    },
+    camera: {
+      positionCartographic: { height: 10000 },
+      moveEnd: new Cesium.Event(),
+    },
+  };
+  let presentation, selected;
+  const renderer = createCountRenderer(viewer, {
+    publishRecords: (view) => {
+      presentation = view;
+    },
+    onSelectRecord: (entity) => {
+      selected = entity;
+    },
+  });
+  renderer.draw({ ...view, cells: [] }, ds, true);
+  assert.deepEqual(presentation.records, [{ id: 'same', label: 'record' }]);
+  presentation.focus('same', true);
+  assert.equal(ds.entities.getById('same').billboard.scale.getValue(), 1.8);
+  ds.entities.removeAll();
+  const replacement = add();
+  renderer.draw({ ...view, cells: [] }, ds, true);
+  presentation.select('same');
+  assert.equal(selected, replacement);
+  viewer.camera.positionCartographic.height = WELL_DETAIL_HEIGHT + 1;
+  frame.raiseEvent();
+  assert.equal(presentation, null);
+  renderer.clear();
+  assert.equal(frame.numberOfListeners, 0);
 });

@@ -37,6 +37,7 @@ export function createUsGroundwaterLayer({
   source,
   onSelect = () => {},
   onStatus = () => {},
+  recordUi = {},
   requestRender,
   overlays,
   validatePack = validateWellPack,
@@ -192,7 +193,7 @@ export function createUsGroundwaterLayer({
     requestFrame('well-select');
     return true;
   }
-  const recordPicker = createRecordPicker(selectWell);
+  const recordPicker = createRecordPicker(selectWell, recordUi.publishChoices);
   const hasContextHost = () => typeof window !== 'undefined';
   const representedCount = () =>
     pack?.kind === 'gev-well-count-view'
@@ -589,6 +590,7 @@ export function createUsGroundwaterLayer({
           status();
         },
         onSelectRecord: selectWell,
+        publishRecords: recordUi.publishRecords,
       });
     },
     async enable() {

@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium';
-import { t } from '../../i18n/index.js';
 import { validateCountView } from './countGrids.js';
 
 export const circleDiameter = () => 10;
@@ -34,60 +33,24 @@ export function wellMarkerImage(hasReadings, uncertain = false) {
 /** Counts remain transport evidence; only admitted source positions are rendered. */
 export function createCountRenderer(
   viewer,
-  { overlays, onSelectRecord = () => {} } = {},
+  { overlays, onSelectRecord = () => {}, publishRecords = () => {} } = {},
 ) {
   let source,
     removeFrame,
     removeEnd,
-    controls,
-    signature = '';
-  let focusLabel, instructions;
-  function hideFocusLabel() {
-    focusLabel?.remove();
-    focusLabel = undefined;
-  }
-  function revealFocusLabel(button) {
-    if (!document.body) return;
-    if (!focusLabel) {
-      focusLabel = document.createElement('div');
-      focusLabel.className = 'gev-panel';
-      Object.assign(focusLabel.style, {
-        position: 'fixed',
-        zIndex: '1000',
-        bottom: '110px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        maxWidth: 'calc(100vw - 32px)',
-        padding: '8px 12px',
-        background: '#0b1018',
-        color: '#dbe4ea',
-        border: '1px solid #33434c',
-        borderRadius: '8px',
-        fontFamily: 'monospace',
-        fontSize: '12px',
-      });
-      document.body.append(focusLabel);
-    }
-    focusLabel.textContent = t(
-      '{record} · Enter: inspect record · Arrow keys: move',
-      { record: button.textContent },
-    );
-  }
+    signature = '',
+    presentation;
   function focusMap() {
     const canvas = viewer.scene.canvas;
     if (typeof canvas?.focus === 'function') {
       canvas.tabIndex = 0;
       canvas.focus();
-    } else document.querySelector('#data-panel .panel-collapse-btn')?.focus();
+    }
   }
-  function removeControls() {
-    if (controls?.contains(document.activeElement)) focusMap();
-    hideFocusLabel();
-    controls?.remove();
-    controls = undefined;
-    instructions?.remove();
-    instructions = undefined;
-    signature = '';
+  function focusRecord(id, focused) {
+    const entity = source?.entities.getById(id);
+    if (entity?.billboard) entity.billboard.scale = focused ? 1.8 : 1;
+    viewer.scene.requestRender?.();
   }
   function publish() {
     if (!source) return;
@@ -95,118 +58,43 @@ export function createCountRenderer(
       (viewer.camera.positionCartographic?.height ?? Infinity) <=
       WELL_DETAIL_HEIGHT;
     source.show = near;
-    if (typeof document === 'undefined') return;
-    const records = near
-      ? source.entities.values.filter(
-          (e) => !String(e.id).startsWith('well-cell:'),
-        )
+    const visible = near
+      ? source.entities.values.filter((e) => {
+          if (String(e.id).startsWith('well-cell:')) return false;
+          const pos = e.position?.getValue?.(Cesium.JulianDate.now());
+          const point = pos && viewer.scene.cartesianToCanvasCoordinates?.(pos);
+          const canvas = viewer.scene.canvas;
+          return (
+            point &&
+            canvas &&
+            point.x >= 0 &&
+            point.y >= 0 &&
+            point.x <= canvas.clientWidth &&
+            point.y <= canvas.clientHeight
+          );
+        })
       : [];
-    const visible = records.filter((e) => {
-      const pos = e.position?.getValue?.(Cesium.JulianDate.now());
-      const p = pos && viewer.scene.cartesianToCanvasCoordinates?.(pos);
-      const c = viewer.scene.canvas;
-      return (
-        p &&
-        c &&
-        p.x >= 0 &&
-        p.y >= 0 &&
-        p.x <= c.clientWidth &&
-        p.y <= c.clientHeight
-      );
-    });
-    const next = visible.map((e) => e.id).join('|');
+    const next = visible
+      .map((e) => e.id + ':' + (e.gevWellRecordLabel || e.name))
+      .join('|');
     if (next === signature) return;
     signature = next;
-    const host = document.querySelector('#world-overlay-actions');
-    if (!host) return;
-    if (!visible.length) {
-      removeControls();
-      return;
-    }
-    if (!controls) {
-      controls = document.createElement('div');
-      controls.className = 'world-overlay-accessibility';
-      controls.setAttribute('role', 'group');
-      controls.setAttribute('aria-label', t('Visible source records'));
-      host.append(controls);
-      instructions = document.createElement('span');
-      instructions.id = 'well-record-navigation-instructions';
-      instructions.textContent = t(
-        'Use Arrow keys to move between source records, Home or End to jump, and Enter to inspect.',
-      );
-      host.append(instructions);
-    }
-    const wanted = new Set(visible.map((e) => String(e.id)));
-    for (const button of [...controls.children])
-      if (!wanted.has(button.dataset.recordId)) {
-        if (document.activeElement === button) {
-          hideFocusLabel();
-          focusMap();
+    presentation = visible.length
+      ? {
+          records: visible.map((e) => ({
+            id: String(e.id),
+            label: e.gevWellRecordLabel || e.name || String(e.id),
+          })),
+          disabled: false,
+          focus: focusRecord,
+          focusMap,
+          select(id) {
+            const entity = source?.entities.getById(id);
+            if (entity) onSelectRecord(entity);
+          },
         }
-        button.remove();
-      }
-    for (const entity of visible) {
-      const id = String(entity.id);
-      let button = [...controls.children].find(
-        (b) => b.dataset.recordId === id,
-      );
-      if (!button) {
-        button = document.createElement('button');
-        button.type = 'button';
-        button.setAttribute(
-          'aria-describedby',
-          'well-record-navigation-instructions',
-        );
-        button.dataset.recordId = id;
-        button.tabIndex = controls.children.length ? -1 : 0;
-        button.addEventListener('keydown', (event) => {
-          const list = [...controls.children],
-            index = list.indexOf(button);
-          const next =
-            event.key === 'ArrowDown' || event.key === 'ArrowRight'
-              ? (index + 1) % list.length
-              : event.key === 'ArrowUp' || event.key === 'ArrowLeft'
-                ? (index + list.length - 1) % list.length
-                : event.key === 'Home'
-                  ? 0
-                  : event.key === 'End'
-                    ? list.length - 1
-                    : -1;
-          if (next >= 0) {
-            event.preventDefault();
-            list[next].focus();
-          }
-        });
-        const current = () => source?.entities.getById(id);
-        button.addEventListener('click', () => {
-          const e = current();
-          if (e) onSelectRecord(e);
-        });
-        button.addEventListener('focus', () => {
-          for (const other of controls.children)
-            other.tabIndex = other === button ? 0 : -1;
-          revealFocusLabel(button);
-          const e = current();
-          if (e?.billboard) e.billboard.scale = 1.8;
-          viewer.scene.requestRender?.();
-        });
-        button.addEventListener('blur', () => {
-          hideFocusLabel();
-          const e = current();
-          if (e?.billboard) e.billboard.scale = 1;
-          viewer.scene.requestRender?.();
-        });
-        controls.append(button);
-      }
-      button.setAttribute('aria-disabled', 'false');
-      button.textContent = entity.gevWellRecordLabel || entity.name;
-      if (document.activeElement === button) {
-        if (entity.billboard) entity.billboard.scale = 1.8;
-        revealFocusLabel(button);
-      }
-      if (![...controls.children].some((b) => b.tabIndex === 0))
-        button.tabIndex = 0;
-    }
+      : null;
+    publishRecords(presentation);
   }
   function clear(retain = false) {
     removeFrame?.();
@@ -215,10 +103,11 @@ export function createCountRenderer(
     if (source) source.clustering.enabled = false;
     source = undefined;
     signature = null;
-    if (typeof document !== 'undefined' && !retain) removeControls();
-    else if (controls)
-      for (const button of controls.children)
-        button.setAttribute('aria-disabled', 'true');
+    if (!retain) {
+      presentation = null;
+      publishRecords(null);
+    } else if (presentation)
+      publishRecords({ ...presentation, disabled: true });
     overlays?.clearOverlaySource('us-groundwater-counts');
     overlays?.setOverlaySourceVisible?.('us-groundwater-counts', false);
   }
