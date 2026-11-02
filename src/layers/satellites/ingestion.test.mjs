@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTleText } from '../../sources/tle.js';
+import { parseTleText, tleLineLaunchYear } from '../../sources/tle.js';
 import { createIngestion } from './ingestion.js';
 import { createOrbits } from './orbits.js';
 
@@ -97,4 +97,25 @@ test('a mission payload does not match a loaded satellite from another launch ye
     getSatelliteOrbitTrack('Sirius SXM-11', { launchTime });
   assert.equal(track('2026-06-29T02:25:00Z')?.noradId, 69728);
   assert.equal(track('2030-06-29T02:25:00Z'), null);
+});
+
+test('a satellite with a blank designator keeps matching by name', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  const { state, update } = ingestionFor(
+    [
+      'SXM-11',
+      '1 69728U          26208.65166678  .00000015  00000+0  00000+0 0  9990',
+      '2 69728   0.0784 264.9826 0001797 240.4588 273.9506  1.00271527   440',
+    ].join('\n'),
+  );
+  await update();
+  const { getSatelliteOrbitTrack } = createOrbits({ state });
+  assert.equal(tleLineLaunchYear('1 69728U          26208.65166678'), null);
+  assert.equal(
+    getSatelliteOrbitTrack('Sirius SXM-11', {
+      launchTime: '2030-06-29T02:25:00Z',
+    })?.noradId,
+    69728,
+  );
 });

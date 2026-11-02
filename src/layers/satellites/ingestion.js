@@ -1,7 +1,7 @@
 import { twoline2satrec } from 'satellite.js';
 import * as Cesium from 'cesium';
 import { msg } from '../../i18n/index.js';
-import { noradIdFromSatnum } from '../../sources/tle.js';
+import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
 
 export function createIngestion({
@@ -119,8 +119,6 @@ export function createIngestion({
         for (const entry of allEntries) {
           const satrec = twoline2satrec(entry.line1, entry.line2);
           if (!satrec || satrec.error !== 0) continue;
-          // satellite.js omits the designator the launch-year match reads.
-          satrec.intldesg = entry.line1.slice(9, 17).trim();
 
           const noradId = noradIdFromSatnum(satrec.satnum);
           if (seen.has(noradId)) continue;
@@ -131,6 +129,8 @@ export function createIngestion({
             name: entry.name,
             satrec,
             group: entry.group,
+            // satellite.js does not keep the designator the year match reads.
+            launchYear: tleLineLaunchYear(entry.line1),
           });
 
           coreStale ||= entry.stale;
