@@ -18,9 +18,19 @@
 
 import * as Cesium from 'cesium';
 import { roadLabel } from '../../data/routeSteps.js';
-import { t, msg, formatNumber, translateKnown } from '../../i18n/index.js';
+import {
+  t,
+  msg,
+  formatNumber,
+  getLocale,
+  translateKnown,
+} from '../../i18n/index.js';
 import { pointerOwnerName } from '../../data/pointerOwnerNames.js';
-import { formatQuantity } from '../../ui/unitLabels.js';
+import {
+  formatQuantity,
+  quantitySeparator,
+  unitLabel,
+} from '../../ui/unitLabels.js';
 
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_ID = 'directions-step';
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -38,33 +48,21 @@ export const DIRECTIONS_MODES = Object.freeze({
 export const DEFAULT_DIRECTIONS_MODE = 'car';
 
 /**
- * The route proxy's refusal texts (server/providers/places/routes.js). They
- * stay English on the wire and in the AI tools; the row shows them translated.
+ * The row error for a failed route request (createDirectionsSource errors),
+ * as English data; the Layers panel shows it translated (ROUTING_ERROR_PATTERNS
+ * in src/ui/statusText.js).
  */
-const ROUTING_REFUSALS = new Set([
-  msg('rate limited'),
-  msg('routing service is rate limited'),
-  msg('route leg too long'),
-  msg('route too long'),
-]);
-
-/** A refusal text from the route proxy in the language; unknown ones as given. */
-export function presentRoutingRefusal(text) {
-  return ROUTING_REFUSALS.has(text) ? t(text) : text;
-}
-
-/** The row text for a failed route request (createDirectionsSource errors). */
 export function presentRoutingFailure(error) {
   if (error?.status === 429) {
     return error.refusal
-      ? t('{error} — try again in a moment', {
-          error: presentRoutingRefusal(error.refusal),
-        })
-      : t('Routing is rate limited — try again in a moment');
+      ? // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+        `${error.refusal} — try again in a moment`
+      : msg('Routing is rate limited — try again in a moment');
   }
   if (Number.isFinite(error?.status) && error.status > 0)
-    return t('Routing unavailable (HTTP {status})', { status: error.status });
-  return error?.message || t('Routing unavailable');
+    // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+    return `Routing unavailable (HTTP ${error.status})`;
+  return error?.message || msg('Routing unavailable');
 }
 
 /** Route colour — the annotation palette's cyan, so voice routes and Directions match. */
@@ -137,7 +135,9 @@ export function routeDurationText(seconds) {
   if (minutes < 60) return formatQuantity(minutes, 'min');
   const hours = formatQuantity(Math.floor(minutes / 60), 'h');
   const rest = minutes % 60;
-  return rest ? `${hours}\u00a0${formatQuantity(rest, 'min')}` : hours;
+  if (!rest) return hours;
+  // "1 h 5 min"; Japanese runs the parts together: 1時間5分.
+  return `${hours}${quantitySeparator(unitLabel('h'))}${formatQuantity(rest, 'min')}`;
 }
 
 /** "left", "slightly right", … as it reads inside a maneuver sentence. */
@@ -407,6 +407,16 @@ export function normalizeDirectionsParams(params = {}) {
 }
 
 /**
+ * A travel-mode word inside a sentence: lower case, except in German, where
+ * the words are nouns and keep their capital ("Auto", "Fahrrad").
+ * @param {string} word Translated mode word.
+ * @returns {string}
+ */
+function modeWordInSentence(word) {
+  return getLocale() === 'de' ? word : word.toLowerCase();
+}
+
+/**
  * Row chips for a given state. Pure so the chip logic is testable without a DOM.
  * @param {{mode:string, armed:null|'a'|'b', a:object|null, b:object|null, status:string, route:object|null}} state
  * @returns {{chips: object[], legend: object[]}}
@@ -421,7 +431,7 @@ export function directionsRowControls(state) {
     state: mode === id ? 'active' : 'idle',
     title: t('{mode} — reroute for {modeLower}', {
       mode: t(spec.word),
-      modeLower: t(spec.word).toLowerCase(),
+      modeLower: modeWordInSentence(t(spec.word)),
     }),
     params: { mode: id },
   }));
@@ -659,7 +669,9 @@ export function directionsStats(state) {
     return {
       count: route?.steps.length || 0,
       lastUpdate,
-      error: t('Another map tool is using clicks — close it, then SET A again'),
+      error: msg(
+        'Another map tool is using clicks — close it, then SET A again',
+      ),
       status: 'empty',
       source,
     };
@@ -678,7 +690,7 @@ export function directionsStats(state) {
     return {
       count: 0,
       lastUpdate,
-      error: error || t('No route found'),
+      error: error || msg('No route found'),
       status: 'empty',
       source,
     };
@@ -1160,13 +1172,10 @@ export function createDirectionsLayer({ services, source }) {
         clearRouteGraphics();
         _status = 'error';
         _error =
-          payload?.error === 'no route found'
-            ? t('No route found between A and B')
-            : payload?.error
-              ? t('Routing failed: {error}', {
-                  error: presentRoutingRefusal(payload.error),
-                })
-              : t('No route found between A and B');
+          // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+          payload?.error && payload.error !== 'no route found'
+            ? `Routing failed: ${payload.error}`
+            : msg('No route found between A and B');
         return;
       }
       _route = route;
@@ -1183,9 +1192,9 @@ export function createDirectionsLayer({ services, source }) {
       // happened instead.
       _error =
         error?.name === 'AbortError'
-          ? t('Routing timed out')
+          ? msg('Routing timed out')
           : error?.name === 'TypeError'
-            ? t('Routing unavailable — no response from the routing service')
+            ? msg('Routing unavailable — no response from the routing service')
             : presentRoutingFailure(error);
     } finally {
       clearTimeout(timer);

@@ -13,28 +13,23 @@ export function createCards({
   options,
 }) {
   function updateSelectedVesselHud(record) {
-    const el = document.getElementById('hud-ais-vessel');
-    if (!el) return;
-
     // Pinned vessels missing from recent refreshes get a stale marker
     const stale = (record.missedRefreshes || 0) > 0;
-    el.classList.add('active');
-    el.textContent = [
-      t('AIS: {name}', { name: trimHudValue(record.name, 32) }),
-      t('{type}  SPD: {speed}  HDG: {heading}', {
-        type: trimHudValue(record.type || t('VESSEL'), 24),
-        speed: formatSpeed(record.speed),
-        heading: formatHeading(record.heading ?? record.course),
-      }),
-      `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('STALE')}` : ''}`,
-    ].join('\n');
+    services.readouts?.presentSelectedVessel({
+      text: [
+        t('AIS: {name}', { name: trimHudValue(record.name, 32) }),
+        t('{type}  SPD: {speed}  HDG: {heading}', {
+          type: trimHudValue(record.type || t('VESSEL'), 24),
+          speed: formatSpeed(record.speed),
+          heading: formatHeading(record.heading ?? record.course),
+        }),
+        `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('STALE')}` : ''}`,
+      ].join('\n'),
+    });
   }
 
   function resetSelectedVesselHud() {
-    const el = document.getElementById('hud-ais-vessel');
-    if (!el) return;
-    el.classList.remove('active');
-    el.textContent = t('AIS: --');
+    services.readouts?.presentSelectedVessel(null);
   }
 
   function trimHudValue(value, maxLength) {

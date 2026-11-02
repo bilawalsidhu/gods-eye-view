@@ -6,6 +6,8 @@ import {
   GEO_TRACKING_BATCH_DELAY_MS,
   GEO_LOAD_BATCH_SIZE,
   GEO_LOAD_BATCH_DELAY_MS,
+  VIEW_GEOMETRY_ATTEMPTS,
+  VIEW_GEOMETRY_RETRY_MS,
 } from './policy.js';
 
 export function createGeometryQueue({
@@ -25,6 +27,8 @@ export function createGeometryQueue({
       clearTimeout(layerState._geoQueueTimer);
       layerState._geoQueueTimer = 0;
     }
+    clearTimeout(layerState._viewGeometryRetryTimer);
+    layerState._viewGeometryRetryTimer = 0;
     layerState._geoQueue = [];
     layerState._geoProgressNotifier = null;
     if (clearProgress) {
@@ -223,6 +227,7 @@ export function createGeometryQueue({
             err?.message || err,
           );
         }
+        noteViewAttempt(record);
         if (
           layerState._geoLoading &&
           layerState._geoLoadDone < layerState._geoLoadTotal
@@ -236,14 +241,15 @@ export function createGeometryQueue({
         layerState._geoLoading = false;
         if (wasInitialLoad) {
           layerState._geoLoadDone = layerState._geoLoadTotal;
-          if (layerState._enabled) {
-            parts.rendering.refreshCoverageStyles();
-            // Geometry refinement may have replaced record.position objects — the
-            // one-shot drain completion re-anchors the card entries (event-driven,
-            // not a per-frame or timer pass).
-            parts.cards.refreshAmbientCards();
-          }
+          if (layerState._enabled) parts.rendering.refreshCoverageStyles();
         }
+        // Geometry refinement may have replaced record.position objects — every
+        // drain's completion re-anchors the card entries (event-driven, not a
+        // per-frame or timer pass).
+        // While the camera moves, moveEnd reselects them instead.
+        if (layerState._enabled && !layerState._cameraMoving)
+          parts.cards.refreshAmbientCards();
+        scheduleViewGeometryRetry();
         // Completion is never coalesced: subscribers must observe the final
         // loading state even if the last progress tick just happened.
         layerState._geoProgressNotifier?.finish();
@@ -261,16 +267,17 @@ export function createGeometryQueue({
 
   /**
    * Appends records to the geometry queue (no progress tracking) and starts
-   * the batch timer if idle. Used by update()'s ONE-SHOT tiles-ready completion
-   * pass (records left `!groundResolved` by an enable-time drain that ran while
-   * tiles were still streaming) so it shares the same stagger machinery as the
-   * initial load. Fires at most once per enable — never on a recurring timer.
+   * the batch timer if idle. Used by update()'s one-shot tiles-ready
+   * completion pass and by enqueueViewGeometry, so both share the initial
+   * load's stagger machinery. Never driven by a recurring timer.
    * @param {Object[]} records - Camera records needing geometry refresh.
    */
 
   function enqueueGeometryRefresh(records) {
+    const queued = new Set(layerState._geoQueue);
     for (const record of records) {
-      if (!layerState._geoQueue.includes(record)) {
+      if (!queued.has(record)) {
+        queued.add(record);
         layerState._geoQueue.push(record);
       }
     }
@@ -283,10 +290,10 @@ export function createGeometryQueue({
   }
 
   /**
-   * Starts the initial staggered load: orders all records active-camera-first,
-   * then by distance from the current viewer position (nearest first, so
-   * cameras likely in view refine before off-screen ones), and exposes
-   * loaded/total progress through uiState()/getStats() while running.
+   * Starts the initial staggered load over the geometry working set: active
+   * camera first, then by distance from the current viewer position (nearest
+   * first), and exposes loaded/total progress through uiState()/getStats()
+   * while running. Cameras outside the view refine when they come into it.
    */
 
   function startGeometryLoadQueue() {
@@ -303,7 +310,7 @@ export function createGeometryQueue({
     const refLon = carto
       ? Cesium.Math.toDegrees(carto.longitude)
       : (active?.camera.lon ?? 0);
-    const pending = layerState._records
+    const pending = geometryWorkingSet()
       .filter((record) => record !== active)
       .map((record) => ({
         record,
@@ -325,7 +332,134 @@ export function createGeometryQueue({
     );
     layerState._geoQueueTimer = setTimeout(processGeometryBatch, 0);
   }
+  /**
+   * The records whose geometry the view needs: the shown icons, the active
+   * camera and the coverage cohort drawn around it.
+   * @returns {Object[]}
+   */
+
+  function geometryWorkingSet() {
+    const records = new Set(layerState._viewRecords);
+    const active = parts.selection.getActiveRecord();
+    if (active) records.add(active);
+    for (const id of layerState._coverageVisibleIds) {
+      const record = layerState._recordById.get(id);
+      if (record) records.add(record);
+    }
+    return [...records];
+  }
+
+  /** The regime key a view attempt counts against: interim while tiles stream. */
+  function viewAttemptKey() {
+    const regime = parts.ground.currentSurfaceRegime();
+    const tilesReady =
+      regime !== 'google-3d' || parts.model.projectionTilesReady();
+    return { key: tilesReady ? regime : `${regime}:interim`, tilesReady };
+  }
+
+  /**
+   * Counts a processed geometry attempt against the current regime key; each
+   * key keeps its own count, so tile streaming going on and off does not
+   * reset the ready-tiles budget.
+   */
+  function noteViewAttempt(record) {
+    const { key } = viewAttemptKey();
+    record.viewAttempts ??= {};
+    record.viewAttempts[key] = (record.viewAttempts[key] || 0) + 1;
+    record.viewAttemptAt = performance.now();
+  }
+
+  /**
+   * Whether a record may be attempted again under `key`. After a first
+   * unresolved attempt, the second waits out VIEW_GEOMETRY_RETRY_MS so its
+   * elevation cell can warm, rather than going to the next motion tick.
+   */
+  /** Whether a record still has an attempt left under the current key. */
+  function withinViewBudget(record) {
+    const { key } = viewAttemptKey();
+    return (record.viewAttempts?.[key] || 0) < VIEW_GEOMETRY_ATTEMPTS;
+  }
+
+  function attemptsLeft(record, key) {
+    const attempts = record.viewAttempts?.[key] || 0;
+    if (attempts >= VIEW_GEOMETRY_ATTEMPTS) return false;
+    return (
+      attempts === 0 ||
+      performance.now() - record.viewAttemptAt >= VIEW_GEOMETRY_RETRY_MS
+    );
+  }
+
+  /**
+   * After a drain, gives working-set cameras it left ungrounded one more
+   * attempt once their elevation cells have had time to warm. The timer is
+   * set for the earliest such camera and re-arms for the rest when it fires.
+   */
+  function scheduleViewGeometryRetry() {
+    if (!layerState._enabled || layerState._viewGeometryRetryTimer) return;
+    const { key } = viewAttemptKey();
+    const active = parts.selection.getActiveRecord();
+    let due = Infinity;
+    for (const record of geometryWorkingSet()) {
+      const attempts = record.viewAttempts?.[key] || 0;
+      if (
+        record === active ||
+        attempts === 0 ||
+        attempts >= VIEW_GEOMETRY_ATTEMPTS ||
+        !parts.ground.needsGeometry(record)
+      )
+        continue;
+      due = Math.min(due, record.viewAttemptAt + VIEW_GEOMETRY_RETRY_MS);
+    }
+    if (due === Infinity) return;
+    layerState._viewGeometryRetryTimer = setTimeout(
+      () => {
+        layerState._viewGeometryRetryTimer = 0;
+        enqueueViewGeometry();
+        // A drain re-arms on completion; with none running, the cameras still
+        // cooling down need their own timer.
+        if (!layerState._geoQueueTimer) scheduleViewGeometryRetry();
+      },
+      Math.max(0, due - performance.now()),
+    );
+  }
+
+  /**
+   * Queues working-set cameras the current surface has not grounded yet,
+   * after a camera move brings new ones into view. Attempts are counted when
+   * a record is processed, not queued, so a drain cut short by disable() is
+   * not lost; each record gets VIEW_GEOMETRY_ATTEMPTS per surface regime,
+   * spaced by VIEW_GEOMETRY_RETRY_MS, so a sample the shared floor refuses
+   * (too far, too high) is not retried on every move. While photoreal tiles are still streaming the attempts are
+   * interim, and the update() completion pass is re-armed to retry these
+   * records when they land. The active camera is left to selection, which
+   * owns its re-sampling.
+   */
+
+  function enqueueViewGeometry() {
+    if (!layerState._enabled) return;
+    const { key, tilesReady } = viewAttemptKey();
+    const active = parts.selection.getActiveRecord();
+    const pending = [];
+    let coolingDown = false;
+    for (const record of geometryWorkingSet()) {
+      if (record === active || !parts.ground.needsGeometry(record)) continue;
+      if (!attemptsLeft(record, key)) {
+        coolingDown ||=
+          (record.viewAttempts?.[key] || 0) < VIEW_GEOMETRY_ATTEMPTS;
+        continue;
+      }
+      pending.push(record);
+    }
+    // A camera back in view during its cooldown still needs its retry timer.
+    if (coolingDown && !layerState._geoQueueTimer) scheduleViewGeometryRetry();
+    if (!pending.length) return;
+    if (!tilesReady) layerState._tilesReadyReenqueued = false;
+    enqueueGeometryRefresh(pending);
+  }
   return {
+    enqueueViewGeometry,
+    withinViewBudget,
+    geometryWorkingSet,
     stopGeometryLoadQueue,
     createGeometryProgressNotifier,
     processCctvGeometryQueueBatch,

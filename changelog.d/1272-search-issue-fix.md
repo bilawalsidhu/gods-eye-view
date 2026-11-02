@@ -1,1 +1,0 @@
-- Normalize geocoder bias across the antimeridian (asturksever, #1272).
