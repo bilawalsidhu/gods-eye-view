@@ -1,3 +1,4 @@
+import { coalesceProxyRequest } from '../common/http.js';
 import { isOverpassBoundaryQuery } from './query.js';
 import {
   OVERPASS_BOUNDARY_DISK_TTL_MS,
@@ -78,7 +79,9 @@ function writeOverpassDisk(cacheKey, payload) {
 /**
  * Resolve every cache/coalescing layer before admitting a request to the local
  * upstream rate limiter. The injected limiter callback is invoked exactly once
- * for a complete cache miss and never for memory, in-flight, or disk hits.
+ * for a complete cache miss and never for memory, in-flight, or disk hits. A
+ * caller that joined a reservation rejected by another client's limiter
+ * retries with its own limiter instead of inheriting that 429.
  * Exported so the admission ordering can be tested without a Vite server.
  *
  * @param {object} options
@@ -87,6 +90,7 @@ function writeOverpassDisk(cacheKey, payload) {
  * @param {Map<string, Promise<object>>} options.inFlight
  * @param {()=>Promise<object|null>} options.readDisk
  * @param {()=>boolean} options.allowUpstream
+ * @param {()=>Promise<object>} options.loadUpstream Fetch and publish the admitted result.
  * @param {number} [options.now]
  * @param {number} [options.cacheMs]
  * @returns {Promise<{source:'HIT'|'INFLIGHT'|'DISK'|'UPSTREAM'|'RATE_LIMITED', payload:object|null}>}
@@ -97,22 +101,34 @@ async function resolveOverpassPreflight({
   inFlight,
   readDisk,
   allowUpstream,
+  loadUpstream = async () => null,
   now = Date.now(),
   cacheMs = OVERPASS_CACHE_MS,
 }) {
-  const cached = memoryCache.get(cacheKey);
-  if (overpassPayloadIsData(cached) && now - cached.cachedAt <= cacheMs)
-    return { source: 'HIT', payload: cached };
+  for (;;) {
+    const cached = memoryCache.get(cacheKey);
+    if (overpassPayloadIsData(cached) && now - cached.cachedAt <= cacheMs)
+      return { source: 'HIT', payload: cached };
 
-  const pending = inFlight.get(cacheKey);
-  if (pending) return { source: 'INFLIGHT', payload: await pending };
-
-  const disk = await readDisk();
-  if (overpassPayloadIsData(disk)) return { source: 'DISK', payload: disk };
-
-  return allowUpstream()
-    ? { source: 'UPSTREAM', payload: null }
-    : { source: 'RATE_LIMITED', payload: null };
+    // Reserve synchronously before disk I/O. The owner retains the reservation
+    // through its own upstream admission, fetch and cache publication.
+    const request = coalesceProxyRequest(inFlight, cacheKey, async () => {
+      const disk = await readDisk();
+      if (overpassPayloadIsData(disk)) {
+        memoryCache.set(cacheKey, disk);
+        return { source: 'DISK', payload: disk };
+      }
+      if (!allowUpstream()) return { source: 'RATE_LIMITED', payload: null };
+      return { source: 'UPSTREAM', payload: await loadUpstream() };
+    });
+    const result = await request.promise;
+    if (!request.shared) return result;
+    // The owner's quota rejection belongs to the owner's client. The rejected
+    // reservation is released before joiners resume, so retry and let this
+    // caller own the next reservation (or join an admitted one) on its quota.
+    if (result.source === 'RATE_LIMITED') continue;
+    return { ...result, source: 'INFLIGHT' };
+  }
 }
 
 /** Return only last-good Overpass data, regardless of its age. */

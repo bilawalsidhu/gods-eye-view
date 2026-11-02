@@ -1,5 +1,6 @@
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 import { readRequestBodyCapped } from './common/request.js';
+import { admitSameSite } from './common/same-site.js';
 import {
   OVERPASS_MAX_BODY_BYTES,
   OVERPASS_MAX_CONCURRENT,
@@ -26,6 +27,14 @@ import { installRouteMiddleware } from './places/routes.js';
 const _overpassInFlight = new Map();
 
 let _overpassConcurrent = 0;
+
+// Bound body-reading and validation work, including malformed requests and
+// cache hits. Keep the tighter upstream budget below independent of this gate.
+const _overpassRequestLimiter = makeRateLimiter({
+  windowMs: 60_000,
+  max: 300,
+  globalMax: 900,
+});
 
 const _overpassRateLimiter = makeRateLimiter({
   windowMs: 60_000,
@@ -94,6 +103,17 @@ function overpassProxy({ routing = {} } = {}) {
           return;
         }
 
+        if (admitSameSite(req, res)) return;
+        if (!_overpassRequestLimiter(clientKey(req))) {
+          res.writeHead(429, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'Retry-After': '60',
+          });
+          res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+          return;
+        }
+
         // Collect POST body with a hard byte cap (Overpass QL queries are small)
         let body;
         try {
@@ -144,6 +164,30 @@ function overpassProxy({ routing = {} } = {}) {
           readDisk: () =>
             readOverpassDisk(cacheKey, overpassDiskTtlMs(cacheKey)),
           allowUpstream: () => _overpassRateLimiter(clientKey(req)),
+          loadUpstream: async () => {
+            if (_overpassConcurrent >= OVERPASS_MAX_CONCURRENT)
+              return {
+                status: 503,
+                contentType: 'application/json',
+                retryAfterMs: 2000,
+                body: JSON.stringify({
+                  error: 'Overpass proxy busy — try again shortly',
+                }),
+              };
+            _overpassConcurrent++;
+            try {
+              const payload = await fetchOverpassPayload(safeBody);
+              if (overpassPayloadIsData(payload)) {
+                const entry = { ...payload, cachedAt: Date.now() };
+                _overpassCache.set(cacheKey, entry);
+                trimOverpassCache();
+                writeOverpassDisk(cacheKey, entry);
+              }
+              return payload;
+            } finally {
+              _overpassConcurrent--;
+            }
+          },
         });
         if (preflight.source === 'RATE_LIMITED') {
           res.writeHead(429, {
@@ -153,71 +197,20 @@ function overpassProxy({ routing = {} } = {}) {
           res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
           return;
         }
-        if (preflight.source !== 'UPSTREAM') {
-          // A coalesced caller sees the same failure as the original request
-          // and must get the same last-good fallback, not the raw refusal.
-          if (!overpassPayloadIsData(preflight.payload)) {
-            const stale = await readStaleOverpass(cacheKey);
-            if (stale) {
-              sendOverpassResponse(res, stale, 'STALE');
-              return;
-            }
-          }
-          if (preflight.source === 'DISK') {
-            _overpassCache.set(cacheKey, preflight.payload);
-            trimOverpassCache();
-          }
-          sendOverpassResponse(res, preflight.payload, preflight.source);
-          return;
-        }
-
-        // From here onward the request is genuinely upstream-bound and has
-        // consumed one local limiter slot. Cache and dedupe hits above do not.
-        if (_overpassConcurrent >= OVERPASS_MAX_CONCURRENT) {
-          res.writeHead(503, {
-            'Content-Type': 'application/json',
-            'Retry-After': '2',
-          });
-          res.end(
-            JSON.stringify({
-              error: 'Overpass proxy busy — try again shortly',
-            }),
-          );
-          return;
-        }
-        _overpassConcurrent += 1;
-        const requestPromise = fetchOverpassPayload(safeBody)
-          .then((payload) => {
-            // Only a 2xx is data. `< 500` cached every 4xx, so one mirror's
-            // refusal was written to memory AND disk — and boundary-class
-            // queries hold a month-long TTL, so a single 406 outlived the
-            // outage that caused it.
-            if (overpassPayloadIsData(payload)) {
-              const entry = { ...payload, cachedAt: Date.now() };
-              _overpassCache.set(cacheKey, entry);
-              trimOverpassCache();
-              writeOverpassDisk(cacheKey, entry);
-            }
-            return payload;
-          })
-          .finally(() => {
-            _overpassConcurrent -= 1;
-            _overpassInFlight.delete(cacheKey);
-          });
-
-        _overpassInFlight.set(cacheKey, requestPromise);
-        const payload = await requestPromise;
-        // Degraded upstream (rate-limited on every mirror / 5xx / runtime
-        // error): last-good roads beat an empty layer — serve stale from
-        // memory or disk at ANY age before surfacing the failure.
-        if (!overpassPayloadIsData(payload)) {
+        if (!overpassPayloadIsData(preflight.payload)) {
           const stale = await readStaleOverpass(cacheKey);
           if (stale) {
             sendOverpassResponse(res, stale, 'STALE');
             return;
           }
         }
-        sendOverpassResponse(res, payload, 'MISS');
+        // Preflight already published the disk hit to memory; only trim.
+        if (preflight.source === 'DISK') trimOverpassCache();
+        sendOverpassResponse(
+          res,
+          preflight.payload,
+          preflight.source === 'UPSTREAM' ? 'MISS' : preflight.source,
+        );
       } catch (e) {
         // Every mirror threw (network-level). Same serve-stale rule.
         const stale = cacheKey ? await readStaleOverpass(cacheKey) : null;

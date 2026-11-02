@@ -18,7 +18,7 @@ export const CCTV_MAX_SOURCES_CEILING = 5000;
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
 /** TxDOT ITS: one keyless JSON catalog per district (25 districts statewide). */
-export const TXDOT_ORIGIN = 'https://its.txdot.gov';
+const TXDOT_ORIGIN = 'https://its.txdot.gov';
 export const TXDOT_CCTV_STATUS_URL = (district) =>
   `${TXDOT_ORIGIN}/its/DistrictIts/GetCctvStatusListByDistrict?districtCode=${encodeURIComponent(district)}`;
 /** Per-camera frame. Returns JSON `{snippet:<base64 jpeg>}`, not an image body;
@@ -442,6 +442,39 @@ export const NYC_ANCHORS = [
   { lat: 40.8448, lon: -73.8648 }, // Bronx
   { lat: 40.5795, lon: -74.1502 }, // Staten Island
 ];
+
+/** Autostrada del Brennero (A22, Brenner–Modena) webcams: the keyless Open
+ * Data Hub (NOI Techpark, South Tyrol) tourism API republishes Autobrennero's
+ * own camera list with coordinates, one request for the whole motorway
+ * (13 cameras). Frames are stills on the operator's host, refreshed about
+ * once a minute. */
+export const DEFAULT_A22_CCTV_URL =
+  'https://tourism.api.opendatahub.com/v1/WebcamInfo?source=a22&pagesize=200&removenullvalues=true';
+/** The only origin A22 camera frames may come from: `km<N>.jpg` per camera. */
+export const A22_IMAGE_ORIGIN = 'https://www.autobrennero.it/WebCamImg/';
+/** Hard ceiling on the catalog body. The whole motorway is ~45 KB. */
+export const A22_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Orthometric ground elevation (m) at each camera, keyed by its motorway
+ * kilometre, from the Copernicus GLO-90 DEM via Open-Meteo's elevation API.
+ * The feed's coordinates are 2D and the road climbs from the Po valley (~20 m)
+ * to the Brenner Pass (~1,370 m), so one flat prior would bury the Alpine
+ * cameras. A camera not listed here uses A22_DEFAULT_GROUND_ELEVATION_M. */
+export const A22_GROUND_ELEVATION_BY_KM = Object.freeze({
+  1: 1365,
+  68: 375,
+  77: 301,
+  100: 219,
+  129: 206,
+  138: 204,
+  159: 175,
+  205: 188,
+  228: 72,
+  240: 38,
+  272: 16,
+  285: 19,
+  313: 40,
+});
+export const A22_DEFAULT_GROUND_ELEVATION_M = 200;
 
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';

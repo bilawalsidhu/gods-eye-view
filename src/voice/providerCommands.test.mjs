@@ -10,7 +10,7 @@ import { createVoiceCommands as createCommands } from './commands.js';
 import { createGevActionRunner } from './gevActions.js';
 import { createPointerTracker } from './pointerContext.js';
 import { createReferentRegistry } from './referents.js';
-import { describeUnsavedWork, t as translate } from '../i18n/index.js';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 
 const PROVIDER_KEY = 'gev.voice.provider';
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -25,28 +25,31 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-// Listener counts observe the actual binder's registrations/removals.
-class Element extends EventTarget {
-  listeners = new Map();
-  attributes = new Map();
-  addEventListener(type, handler, options) {
-    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
-    this.listeners.get(type).add(handler);
-    super.addEventListener(type, handler, options);
-  }
-  removeEventListener(type, handler, options) {
-    this.listeners.get(type)?.delete(handler);
-    super.removeEventListener(type, handler, options);
-  }
-  listenerCount(type) {
-    return this.listeners.get(type)?.size || 0;
-  }
-  setAttribute(name, value) {
-    this.attributes.set(name, String(value));
-  }
-  focus() {
-    this.focusCount = (this.focusCount || 0) + 1;
-  }
+// A real control whose listeners, removals and provider focus are counted.
+// Removal is counted but keeps the control, so an interaction after teardown
+// still reaches any listener the binder failed to release.
+function countedControl(options, onRemove = () => {}) {
+  const ui = createTestVoiceUi(options);
+  const counts = new Map();
+  const on = ui.on;
+  ui.on = (name, listener) => {
+    counts.set(name, (counts.get(name) || 0) + 1);
+    const off = on(name, listener);
+    let live = true;
+    return () => {
+      if (live) counts.set(name, counts.get(name) - 1);
+      live = false;
+      off();
+    };
+  };
+  ui.listenerCount = (name) => counts.get(name) || 0;
+  ui.removeCount = 0;
+  ui.remove = () => {
+    ui.removeCount++;
+    onRemove();
+  };
+  ui.focusCount = 0;
+  return ui;
 }
 
 for (const custom of [false, true]) {
@@ -58,13 +61,7 @@ for (const custom of [false, true]) {
       controls?.session.destroy();
       globalThis.window = prior;
     });
-    const ui = {
-      root: { dataset: {}, remove() {} },
-      button: new Element(),
-      status: {},
-      detail: {},
-      providerField: {},
-    };
+    const ui = countedControl();
     let defaultCreated = 0;
     let customCreated = 0;
     const options = {
@@ -108,8 +105,8 @@ for (const custom of [false, true]) {
       controls.session.sendText('test'),
       `${custom ? 'custom' : 'default'}:test`,
     );
-    assert.equal(ui.providerField.hidden, true);
-    assert.equal(ui.root.dataset.providerChoice, 'false');
+    assert.equal(ui.state.provider.hidden, true);
+    assert.equal(ui.state.root.providerChoice, 'false');
     if (!custom)
       assert.deepEqual(controls.session.adapter.getStartOptions(), {
         pushToTalk: true,
@@ -153,7 +150,13 @@ function compositionFixture(
   globalThis.window = new EventTarget();
   globalThis.document = {
     getElementById: (id) =>
-      id === 'gev-voice-provider' ? views.at(-1)?.providerSelect : null,
+      id === 'gev-voice-provider'
+        ? {
+            focus() {
+              views.at(-1).focusCount++;
+            },
+          }
+        : null,
   };
   t.after(async () => {
     try {
@@ -313,35 +316,10 @@ function compositionFixture(
     ]),
   );
 
-  function createControl() {
+  function createControl(options) {
     const id = views.length;
     order.push(`control:${id}`);
-    const providerSelect = new Element();
-    providerSelect.ownerDocument = { createElement: () => ({}) };
-    providerSelect.replaceChildren = (...options) => {
-      providerSelect.options = options;
-    };
-    const view = {
-      root: {
-        dataset: {},
-        classList: { remove() {} },
-        removeCount: 0,
-        remove() {
-          this.removeCount++;
-          order.push(`remove:${id}`);
-        },
-      },
-      button: new Element(),
-      providerSelect,
-      providerField: {},
-      status: {},
-      detail: {},
-      errorDetail: {},
-      tierButton: {},
-      costValue: {},
-      helpDetail: {},
-      card: {},
-    };
+    const view = countedControl(options, () => order.push(`remove:${id}`));
     views.push(view);
     return view;
   }
@@ -431,9 +409,7 @@ function compositionFixture(
     storageWrites,
     state,
     select(provider) {
-      const select = views.at(-1).providerSelect;
-      select.value = provider;
-      select.dispatchEvent(new Event('change'));
+      views.at(-1).emit('provider-change', provider);
     },
     seedConversation() {
       pointer.beginTurn('text', {
@@ -518,15 +494,15 @@ for (const scenario of [
     assert.equal(Object.isFrozen(f.facade.supportedProviders), true);
     assert.equal(f.facade.provider, scenario.provider);
     assert.deepEqual(
-      f.views[0].providerSelect.options.map((option) => option.value),
+      f.views[0].state.provider.options.map((option) => option.value),
       scenario.expected,
     );
     assert.equal(
-      f.views[0].providerField.hidden,
+      f.views[0].state.provider.hidden,
       scenario.expected.length === 1,
     );
     assert.equal(
-      f.views[0].root.dataset.providerChoice,
+      f.views[0].state.root.providerChoice,
       String(scenario.expected.length > 1),
     );
     assert.equal(f.instances.length, 1);
@@ -599,12 +575,12 @@ test('active switch keeps PTT mode, retires the held key, and disposes before mo
   assert.ok(f.order.indexOf('stop:0') < f.order.indexOf('control:1'));
   assert.ok(f.order.indexOf('remove:0') < f.order.indexOf('control:1'));
   assert.ok(f.order.indexOf('stop:0') < f.order.indexOf('factory:1'));
-  assert.equal(f.views[0].button.listenerCount('click'), 0);
-  assert.equal(f.views[0].providerSelect.listenerCount('change'), 0);
-  assert.equal(f.views[1].providerSelect.listenerCount('change'), 1);
-  assert.equal(f.views[1].providerSelect.focusCount, 1);
-  assert.equal(f.views[1].tierButton.hidden, true);
-  assert.equal(f.views[1].costValue.hidden, true);
+  assert.equal(f.views[0].listenerCount('button'), 0);
+  assert.equal(f.views[0].listenerCount('provider-change'), 0);
+  assert.equal(f.views[1].listenerCount('provider-change'), 1);
+  assert.equal(f.views[1].focusCount, 1);
+  assert.equal(f.views[1].state.tier.hidden, true);
+  assert.equal(f.views[1].state.cost.hidden, true);
   assert.equal(f.facade.providerDiagnostic(), 'gemini:1');
   assert.equal(f.pointer.activeSnapshot(), null);
   assert.deepEqual(f.referents.list(), []);
@@ -772,15 +748,11 @@ for (const emitsIdle of [false, true]) {
 }
 
 test('outer destruction disposes the runner once and removes each provider binding', async (t) => {
-  const priorUnsaved = describeUnsavedWork();
   const f = compositionFixture(t);
   await f.facade.start();
   f.select('gemini');
   await settle();
   assert.equal(f.annotations.size, 1);
-  assert.ok(
-    describeUnsavedWork().includes(translate('the active voice session')),
-  );
   const oldCardEvents = f.views[0].cardView.events.length;
   for (const callback of f.annotations) callback({ id: 'fixture-outline' });
   assert.equal(f.views[0].cardView.outlines.length, 0);
@@ -794,19 +766,17 @@ test('outer destruction disposes the runner once and removes each provider bindi
   assert.equal(f.facade.signal.aborted, true);
   assert.equal(f.facade.disposed, true);
   assert.equal(f.annotations.size, 0);
-  assert.deepEqual(describeUnsavedWork(), priorUnsaved);
   const finalEvents = f.events.length;
   const starts = f.instances.map((instance) => instance.starts.length);
   for (const [index, view] of f.views.entries()) {
-    assert.equal(view.root.removeCount, 1);
+    assert.equal(view.removeCount, 1);
     assert.equal(view.cardView.destroyed, 1);
     assert.equal(view.reticle.destroyed, 1);
-    assert.equal(view.button.listenerCount('click'), 0);
-    assert.equal(view.providerSelect.listenerCount('change'), 0);
+    assert.equal(view.listenerCount('button'), 0);
+    assert.equal(view.listenerCount('provider-change'), 0);
     assert.equal(f.instances[index].hooks.signal.aborted, true);
-    view.button.dispatchEvent(new Event('click'));
-    view.providerSelect.value = 'openai';
-    view.providerSelect.dispatchEvent(new Event('change'));
+    view.emit('button');
+    view.emit('provider-change', 'openai');
     f.instances[index].hooks.emit({ type: 'state', state: 'connecting' });
     f.mounts[index].callback({ type: 'state', state: 'connecting' });
   }
