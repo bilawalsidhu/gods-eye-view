@@ -169,6 +169,20 @@ test('a feed document names its band on every record', () => {
   assert.ok(uat.every((record) => record.source === 'feed'));
 });
 
+test('a decoder feed reads a GNSS-sourced vertical rate when no baro rate is sent', () => {
+  // dump1090-fa and readsb file a velocity message's rate under geom_rate
+  // instead of baro_rate when its source bit says GNSS.
+  const rate = (fields) =>
+    normalizeDump1090Aircraft(
+      { aircraft: [{ hex: 'abc123', seen: 1, ...fields }] },
+      10_000,
+    )[0].verticalRateFpm;
+  assert.equal(rate({ geom_rate: -832 }), -832);
+  assert.equal(rate({ baro_rate: -768, geom_rate: -832 }), -768);
+  assert.equal(rate({ baro_rate: 0, geom_rate: -832 }), 0);
+  assert.equal(rate({}), null);
+});
+
 function heard(overrides = {}) {
   return {
     icao: 'abc123',

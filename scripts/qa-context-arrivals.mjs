@@ -474,12 +474,22 @@ async function contacts() {
 
   // SEARCH NEARBY SITES, as the user presses it.
   await page.evaluate(() => {
-    document.getElementById('toast').textContent = '';
+    const toast = document.getElementById('toast');
+    const before = toast.firstChild;
     document.getElementById('installations-search-btn').click();
+    window.__qaToastBefore = before;
   });
+  // Every toast show writes a new text node, even for a repeated message.
   await page
     .waitForFunction(
-      () => document.getElementById('toast').textContent.trim().length > 0,
+      () => {
+        const toast = document.getElementById('toast');
+        return (
+          toast.classList.contains('visible') &&
+          toast.firstChild !== window.__qaToastBefore &&
+          toast.textContent.trim().length > 0
+        );
+      },
       { timeout: 20_000 },
     )
     .catch(() => {});
