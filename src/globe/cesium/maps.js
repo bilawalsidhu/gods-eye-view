@@ -12,7 +12,7 @@ import {
 } from '../../maps/imagery.js';
 import { applyTerrain, terrainSourceFor } from '../../maps/terrain.js';
 
-const IMAGERY_KINDS = new Set(['osm', 'esri-imagery', 'ion']);
+const IMAGERY_KINDS = new Set(['osm', 'esri-imagery', 'sentinel2', 'ion']);
 
 function imageryCreator(source) {
   if (typeof source?.imagery === 'function') return source.imagery;

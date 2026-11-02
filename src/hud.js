@@ -500,6 +500,8 @@ export class IntelHUD {
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
     // i18n-ignore: sensor codes
     readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    if (this.engine.host.container?.hasAttribute?.('data-terrain-daylight'))
+      readouts.alt += ' · DAYLIGHT VIEW';
 
     // Collection timestamp
     const now = new Date();

@@ -50,6 +50,16 @@ export function resolveNavaraLook(search = '') {
 
 // postprocessing's ToneMappingMode.ACES_FILMIC (Navara's default is AGX, 7).
 export const ACES_FILMIC = 6;
+export const AGX = 7;
+
+// The Sentinel-2 landscape uses early afternoon at the camera longitude,
+// independently of the telemetry clock. Only the displayed sunlight moves.
+export function landscapeSunTime(now, longitude) {
+  const hour = 3_600_000;
+  const day = 24 * hour;
+  const offset = (longitude / 15) * hour;
+  return Math.floor((now + offset) / day) * day + 13 * hour - offset;
+}
 
 // Camera heights (m) where the cinematic look switches the globe to
 // atmosphere lighting (night side and terminator) and back. The gap keeps a
@@ -70,28 +80,14 @@ export function globeLightingAt(height, current = false) {
     : height >= GLOBE_LIGHTING_ENTER_M;
 }
 
-// Where the cinematic clouds show. Their layers span 1,500 to 3,000 m above
-// the ellipsoid. Above 4 km the camera would look down on them, and they
-// would hide the map under clouds that are a backdrop, not weather; over
-// ground above 1,000 m (canyons, the Alps) they would cut into the terrain
-// as dark puffs.
-// Each limit has a gap so a camera near it does not flicker them.
-export const CLOUDS_HIDE_ABOVE_M = 4_000;
-export const CLOUDS_SHOW_BELOW_M = 3_500;
-export const CLOUDS_HIDE_OVER_GROUND_M = 1_000;
-export const CLOUDS_SHOW_OVER_GROUND_M = 800;
-
-/**
- * Whether the cinematic clouds show for a camera at `height` looking at
- * ground at `ground` (both metres above the ellipsoid; an unknown ground
- * counts as low).
- */
-export function cloudsVisibleAt(height, ground, current = true) {
-  if (!Number.isFinite(height)) return current;
-  const low = Number.isFinite(ground) ? ground : 0;
-  return current
-    ? height <= CLOUDS_HIDE_ABOVE_M && low <= CLOUDS_HIDE_OVER_GROUND_M
-    : height < CLOUDS_SHOW_BELOW_M && low < CLOUDS_SHOW_OVER_GROUND_M;
+// Navara cloud layers use ellipsoid heights. Over uplands raise the two
+// cumulus layers together; at world scale a single ground sample no longer
+// represents the whole view. Quantize the offset to avoid tiny layer updates.
+export const LOCAL_CLOUD_COVERAGE = 0.22;
+export const CUMULUS_BASES = Object.freeze([1500, 1800]);
+export function cloudTerrainOffset(height, ground) {
+  if (!Number.isFinite(ground) || height >= STARS_SPACE_ENTER_M) return 0;
+  return Math.ceil(Math.max(0, ground - 500) / 500) * 750;
 }
 
 // Navara's sky, clouds and haze come from the atmosphere model in physical
@@ -113,10 +109,9 @@ export const STARS_HIDE_SUN_ABOVE_DEG = -4;
 export const STARS_SPACE_ENTER_M = 100_000;
 export const STARS_SPACE_EXIT_M = 80_000;
 
-// The cinematic clouds hide once the sun at the camera sets (below 0°):
-// unlit, they read as dark puffs over a dusk sky. They show again above 2°.
-export const CLOUDS_HIDE_SUN_BELOW_DEG = 0;
-export const CLOUDS_SHOW_SUN_ABOVE_DEG = 2;
+// Keep the sunlit cloud tops through twilight. Hide them locally at night.
+export const CLOUDS_HIDE_SUN_BELOW_DEG = -6;
+export const CLOUDS_SHOW_SUN_ABOVE_DEG = -4;
 
 /** Whether the sun is up enough for the cinematic clouds; NaN keeps `current`. */
 export function cloudsSunlitAt(sunElevation, current = true) {
@@ -177,17 +172,15 @@ const cinematic = (mobile) => ({
       : [
           {
             clouds: {
-              // 'low' looks the same here and costs about 1 ms less than
-              // 'medium' (clouds cost about 3 ms a frame at 1280×800).
               qualityPreset: 'low',
-              coverage: 0.2,
+              coverage: LOCAL_CLOUD_COVERAGE,
               // No cloud shadows on the ground: dark patches over the map
               // read as features (and cost nothing measurable either way).
               shadows: false,
               // The two cumulus layers start at 1,500 m instead of 750 and
               // 1,000 m, above the city views (Austin's 600 m, Manhattan's
               // 900 m): clouds fill the sky without hiding the streets.
-              cloudLayers: [{ altitude: 1500 }, { altitude: 1800 }],
+              cloudLayers: CUMULUS_BASES.map((altitude) => ({ altitude })),
             },
           },
           { lensFlare: {} },
@@ -229,7 +222,7 @@ const PLANS = {
  * - `photoreal`: the default plugin's addDefaultPhotorealScene (sky, sun,
  *   aerial perspective, lens flare, AgX tone mapping, SMAA);
  * - `cinematic` (the app's default): photoreal plus volumetric clouds for
- *   low views over low ground (cloudsVisibleAt), ACES tone mapping, brighter stars, no sun shadow
+ *   mountain and coastal views, ACES tone mapping, brighter stars, no sun shadow
  *   maps, and atmosphere lighting of the globe from space (`globeLighting`,
  *   see globeLightingAt), a brighter atmosphere (ATMOSPHERE_LUMINANCE_SCALE)
  *   and stars only at night or from space (starsVisibleAt). On a mobile-optimized

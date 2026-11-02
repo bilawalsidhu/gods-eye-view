@@ -128,26 +128,21 @@ test('from space the globe is lit by the atmosphere; near the ground the tiles k
   });
 });
 
-test('the clouds show only below their tops, switching in motion too', () => {
+test('cumulus rises over mountain terrain and leaves the orbital view clear', () => {
   const view = fakeView(0);
   const look = warmCinematic(view);
   const clouds = view.added.find(({ desc }) => Object.hasOwn(desc, 'clouds'));
-  assert.equal(look.frame(900, true), false, 'shown at street level');
-  assert.equal(look.frame(20_000, true), true);
+  const layers = [{ altitude: 1500 }, { altitude: 1800 }];
+  const pass = { cloudLayers: layers };
+  clouds.ref = { raw: pass };
+  assert.equal(look.frame(4350, false, 3100), true);
+  assert.deepEqual(layers, [{ altitude: 6000 }, { altitude: 6300 }]);
+  assert.equal(look.frame(4350, false, 3100), false);
+  look.frame(8_000_000, true, 3100);
+  assert.deepEqual(layers, [{ altitude: 1500 }, { altitude: 1800 }]);
   assert.deepEqual(clouds.updates, [{ visible: false }]);
-  assert.equal(look.frame(3_800, true), false, 'hysteresis');
-  assert.equal(
-    view.atmosphere.overlay.value,
-    null,
-    'no ghost of the last clouds',
-  );
-  assert.equal(view.atmosphere.shadowLength.value, null);
-  assert.equal(look.frame(3_000, true), true);
+  look.frame(900, false, 0);
   assert.deepEqual(clouds.updates.at(-1), { visible: true });
-  assert.equal(view.atmosphere.overlay.value, 'overlay', 'put back');
-  assert.equal(view.atmosphere.shadowLength.value, 'shafts');
-  assert.equal(look.frame(3_000, false, 2_100), true, 'over high ground');
-  assert.deepEqual(clouds.updates.at(-1), { visible: false });
 });
 
 test('globe lighting switches on only at rest, and off even in motion', () => {
@@ -156,14 +151,34 @@ test('globe lighting switches on only at rest, and off even in motion', () => {
   const aerial = view.added.find(({ desc }) =>
     Object.hasOwn(desc, 'aerialPerspective'),
   );
-  look.frame(20_000, true); // the clouds hide on the way up
-  assert.equal(look.frame(2_300_000, true), false, 'a flight through space');
+  look.frame(20_000, true);
+  look.frame(2_300_000, true);
   assert.deepEqual(aerial.updates, []);
   assert.equal(look.frame(8_000_000, false), true, 'at rest');
   assert.equal(look.frame(500_000, true), true, 'coming down');
   assert.deepEqual(aerial.updates.at(-1), {
     aerialPerspective: { irradiance: false },
   });
+});
+
+test('daylight inspection restores live exposure, tone mapping and time when left', () => {
+  const view = fakeView(0);
+  const look = warmCinematic(view);
+  const tone = view.added.find(({ desc }) =>
+    Object.hasOwn(desc, 'toneMapping'),
+  );
+  const fuji = { lat: 35.2599, lng: 138.6574 };
+  look.frame(6508, false, 2600, fuji, true);
+  assert.equal(view.toneMappingExposure, 10);
+  assert.equal(tone.updates.at(-1).toneMapping.mode, 7);
+  assert.ok(
+    Math.abs(view.atmosphere.date.getTime() / 3_600_000 + fuji.lng / 15 - 13) <
+      1e-6,
+  );
+  look.frame(6508, false, 2600, fuji, false);
+  assert.equal(view.toneMappingExposure, 1);
+  assert.equal(tone.updates.at(-1).toneMapping.mode, 6);
+  assert.equal(view.atmosphere.date.getTime(), 0);
 });
 
 test('the sun follows the wall clock, a minute at most behind, only on drawn frames', () => {
@@ -361,13 +376,16 @@ test('the cinematic clouds hide after sunset at the camera', () => {
   const place = { lat: 40.7, lng: -74 };
   assert.equal(look.frame(900, false, 0, place), true, 'the stars hide');
   assert.deepEqual(clouds.updates, []);
-  elevation = -1;
+  elevation = -8;
   assert.equal(look.frame(900, false, 0, place), true);
   assert.deepEqual(clouds.updates, [{ visible: false }]);
-  elevation = 1;
+  elevation = -5;
   look.frame(900, false, 0, place);
   assert.deepEqual(clouds.updates, [{ visible: false }], 'hysteresis');
-  elevation = 3;
+  assert.equal(view.atmosphere.overlay.value, null);
+  look.frame(8_000_000, false, 0, place);
+  assert.deepEqual(clouds.updates.at(-1), { visible: false });
+  elevation = -2;
   look.frame(900, false, 0, place);
   assert.deepEqual(clouds.updates.at(-1), { visible: true });
 });

@@ -116,6 +116,8 @@ export async function createNavaraGlobe({
     const plugin = new DefaultPlugin();
     view.addPlugin(plugin);
     await view.init();
+    const automaticLandscape =
+      !effects && new URLSearchParams(search).get('sun') !== 'live';
     const plan = navaraScenePlan(effects ?? resolveNavaraLook(search), {
       mobile: Boolean(view.isMobileOptimized?.()),
     });
@@ -172,12 +174,22 @@ export async function createNavaraGlobe({
         if (!moving && !groundSettled && engine.surface.tilesLoaded())
           readGround();
         const placed = readCameraPlace(camera);
+        const landscape =
+          placed &&
+          lookCarto.height < 100_000 &&
+          plan.globeLighting &&
+          automaticLandscape &&
+          (engine.maps.baseKind === 'sentinel2' ||
+            engine.maps.baseKind === 'esri-imagery');
+        if (container.hasAttribute('data-terrain-daylight') !== landscape)
+          container.toggleAttribute('data-terrain-daylight', landscape);
         if (
           look.frame(
             placed ? lookCarto.height : Number.NaN,
             moving,
             ground,
             placed ? lookPlace : null,
+            landscape,
           )
         )
           engine.render.request('navara-look');
@@ -206,6 +218,7 @@ export async function createNavaraGlobe({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      container.removeAttribute('data-terrain-daylight');
       removeLook();
       removePostSampling();
       engine.destroy();

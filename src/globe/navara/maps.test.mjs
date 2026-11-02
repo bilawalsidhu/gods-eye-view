@@ -90,6 +90,21 @@ test('setBaseImagery builds Navara raster layers for OSM and Esri, one at a time
   assert.ok(view.frames > 0);
 });
 
+test('Sentinel-2 uses the EOX mosaic with attribution and a capped source zoom', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  await maps.setBaseImagery({ kind: 'sentinel2' });
+  assert.equal(maps.baseKind, 'sentinel2');
+  assert.match(view.sources[0].desc.url, /s2cloudless-2020_3857/);
+  assert.equal(view.sources[0].desc.maxZoom, 14);
+  assert.match(
+    view.shown[0].attributionHtml,
+    /modified Copernicus Sentinel data 2020/,
+  );
+  await maps.setBaseImagery({ kind: 'osm' });
+  assert.equal(maps.baseKind, 'osm');
+});
+
 test('the same imagery source again keeps the live layer', async () => {
   const view = fakeView();
   const { maps } = createNavaraMaps(view);

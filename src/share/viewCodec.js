@@ -111,6 +111,7 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'bing-labels',
     'esri-imagery',
     'osm',
+    'sentinel2',
   ]),
   hudVariant: Object.freeze(['tactical', 'operator', 'minimal', 'cyber']),
   detectionMode: Object.freeze(['OFF', 'SPARSE', 'BALANCED', 'DENSE']),

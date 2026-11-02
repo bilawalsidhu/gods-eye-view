@@ -47,7 +47,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
-    'f47a7f78f13b1f79978fa524fad2618e32bd813e1a5dfd746bf35d29909fc91b',
+    // EOX Sentinel-2 joins the set_map_stack enum.
+    'c245fc20cb7927181d7dec212ec60279aaa1fdeb494720a7d2ff11e00008a6c6',
   );
 });
 
@@ -116,6 +117,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
   // layerManifest.test.mjs; the two shipped right-rail panels are additive.
   const property = (name) =>
     legacy.find((tool) => tool.name === name).parameters.properties;
+  assert.equal(property('set_map_stack').stack.enum.pop(), 'sentinel2');
   delete property('control_cockpit').voicePanel;
   delete property('set_layer_visibility').layerId.enum;
   delete property('show_data_layers_menu').layerId.enum;
