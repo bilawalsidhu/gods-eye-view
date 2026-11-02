@@ -296,7 +296,6 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
     sinceDays: 0,
   }),
   radio: Object.freeze({ filter: 'all', volume: 0.8 }),
-  'osm-overlays': Object.freeze({ seamap: true, snowmap: true }),
 });
 
 /** The frozen meaning of an omitted option; unlisted options are always written. */

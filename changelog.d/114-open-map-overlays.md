@@ -1,4 +1,3 @@
-- Add Open Map Overlays (Infrastructure ▸ Open Map Overlays): OpenSeaMap sea
-  marks and OpenSnowMap ski pistes as two toggleable raster overlays. They
-  drape on the globe stacks and on Google 3D, and share links keep the row and
-  both chips (Tom-Neverwinter, #114).
+- Add Sea Marks (OpenSeaMap) and Ski Pistes (OpenSnowMap) as two raster
+  overlay layers under Infrastructure. They drape on the globe stacks and on
+  Google 3D, and share links keep each one (Tom-Neverwinter, #114).

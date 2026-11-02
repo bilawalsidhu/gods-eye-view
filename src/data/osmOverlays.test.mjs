@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   OSM_OVERLAYS,
-  applyOsmOverlayParams,
-  createOsmOverlaysLayer,
-  osmOverlaysHiddenReason,
+  createOsmOverlayLayer,
+  createOsmOverlayLayers,
+  osmOverlayHiddenReason,
 } from './osmOverlays.js';
 import { NO_IMAGERY_HOST } from '../maps/imageryHost.js';
 
@@ -49,15 +49,15 @@ function fakeMapStack() {
   };
 }
 
-function setup() {
+function setup(overlay = OSM_OVERLAYS[0]) {
   const globe = fakeCollection();
   const viewer = {
     imageryLayers: globe,
     scene: { globe: { show: true }, requestRender() {} },
   };
   const created = [];
-  const layer = createOsmOverlaysLayer({
-    createProvider: (overlay) => ({ overlay }),
+  const layer = createOsmOverlayLayer(overlay, {
+    createProvider: (descriptor) => ({ descriptor }),
     createImageryLayer: (provider) => {
       const imagery = { provider, destroyed: false };
       created.push(imagery);
@@ -70,10 +70,10 @@ function setup() {
   return { layer, viewer, globe, created, mapStack };
 }
 
-test('OSM_OVERLAYS: exactly the two shipped overlays, each with a tile template and credit', () => {
+test('OSM_OVERLAYS: the two shipped layers, each with a tile template and credit', () => {
   assert.deepEqual(
-    OSM_OVERLAYS.map((o) => o.key),
-    ['seamap', 'snowmap'],
+    OSM_OVERLAYS.map((o) => o.id),
+    ['sea-marks', 'ski-pistes'],
   );
   for (const overlay of OSM_OVERLAYS) {
     assert.match(overlay.urlTemplate, /^https:\/\/.*\{z\}.*\{x\}.*\{y\}/);
@@ -83,77 +83,64 @@ test('OSM_OVERLAYS: exactly the two shipped overlays, each with a tile template 
   assert.match(OSM_OVERLAYS[1].credit, /www\.opensnowmap\.org/);
 });
 
-test('osmOverlaysHiddenReason: only when enabled, something chosen and no imagery host', () => {
-  const both = { seamap: true, snowmap: true };
-  assert.equal(osmOverlaysHiddenReason(false, both, 'none'), null);
-  assert.equal(
-    osmOverlaysHiddenReason(true, { seamap: false, snowmap: false }, 'none'),
-    null,
+test('createOsmOverlayLayers builds one independent layer per overlay', () => {
+  const layers = createOsmOverlayLayers();
+  assert.deepEqual(
+    layers.map((layer) => [layer.id, layer.name]),
+    [
+      ['sea-marks', 'Sea Marks'],
+      ['ski-pistes', 'Ski Pistes'],
+    ],
   );
-  assert.equal(osmOverlaysHiddenReason(true, both, 'globe'), null);
-  assert.equal(osmOverlaysHiddenReason(true, both, 'tileset'), null);
-  assert.equal(osmOverlaysHiddenReason(true, both, 'none'), NO_IMAGERY_HOST);
+  assert.notEqual(createOsmOverlayLayers()[0], layers[0]);
+  assert.throws(() => createOsmOverlayLayer({ id: 'other' }), /Unknown/);
 });
 
-test('applyOsmOverlayParams: flips only known keys with boolean values, reports whether anything changed', () => {
-  const current = { seamap: true, snowmap: true };
-  const a = applyOsmOverlayParams(current, { seamap: false });
-  assert.deepEqual(a.next, { seamap: false, snowmap: true });
-  assert.equal(a.changed, true);
-
-  const b = applyOsmOverlayParams(current, { seamap: true });
-  assert.deepEqual(b.next, current);
-  assert.equal(b.changed, false);
-
-  const c = applyOsmOverlayParams(current, {
-    unknownKey: false,
-    snowmap: 'nope',
-  });
-  assert.deepEqual(c.next, current);
-  assert.equal(c.changed, false);
-  assert.equal(applyOsmOverlayParams(current, null).changed, false);
+test('osmOverlayHiddenReason: only when enabled with no imagery host', () => {
+  assert.equal(osmOverlayHiddenReason(false, 'none'), null);
+  assert.equal(osmOverlayHiddenReason(true, 'globe'), null);
+  assert.equal(osmOverlayHiddenReason(true, 'tileset'), null);
+  assert.equal(osmOverlayHiddenReason(true, 'none'), NO_IMAGERY_HOST);
 });
 
-test('layer owns no imagery until enabled and destroys what it created on disable', () => {
-  const { layer, globe, created } = setup();
+test('a layer owns no imagery until enabled and destroys it on disable', () => {
+  const { layer, globe, created } = setup(OSM_OVERLAYS[1]);
   assert.equal(created.length, 0);
-  assert.equal(globe.layers.length, 0);
 
   layer.enable();
-  assert.equal(globe.layers.length, 2);
-  assert.deepEqual(layer.getStats(), { count: 2, error: null });
-
-  layer.setParams({ snowmap: false });
   assert.equal(globe.layers.length, 1);
-  assert.equal(globe.layers[0].provider.overlay.key, 'seamap');
-  assert.equal(created[1].destroyed, true);
+  assert.equal(globe.layers[0].provider.descriptor.id, 'ski-pistes');
+  assert.deepEqual(layer.getStats(), { count: 1, error: null });
 
   layer.disable();
   assert.equal(globe.layers.length, 0);
-  assert.ok(created.every((imagery) => imagery.destroyed));
+  assert.equal(created[0].destroyed, true);
   assert.deepEqual(layer.diagnostics(), { host: 'none', ownedCount: 0 });
   assert.deepEqual(layer.getStats(), { count: 0, error: null });
+
+  layer.enable();
+  assert.equal(created.length, 2, 're-enabling creates a fresh imagery layer');
 });
 
-test('overlays follow a map-stack switch from the globe onto the Google 3D tileset and back', () => {
+test('the overlay follows a map-stack switch onto the Google 3D tileset and back', () => {
   const { layer, viewer, globe, mapStack } = setup();
   layer.enable();
-  const before = [...globe.layers];
+  const [imagery] = globe.layers;
 
   const tileset = { imageryLayers: fakeCollection() };
   viewer.scene.globe.show = false;
   mapStack.tileset = tileset;
   mapStack.emit();
   assert.equal(globe.layers.length, 0);
-  assert.deepEqual(tileset.imageryLayers.layers, before);
-  assert.ok(globe.removed.every(({ destroy }) => destroy === false));
-  assert.equal(layer.getStats().error, null);
+  assert.deepEqual(tileset.imageryLayers.layers, [imagery]);
+  assert.equal(globe.removed[0].destroy, false);
   assert.equal(layer.diagnostics().host, 'tileset');
+  assert.equal(layer.getStats().error, null);
 
   viewer.scene.globe.show = true;
   mapStack.tileset = null;
   mapStack.emit();
-  assert.deepEqual(globe.layers, before);
+  assert.deepEqual(globe.layers, [imagery]);
   assert.equal(tileset.imageryLayers.layers.length, 0);
 });
 
@@ -166,39 +153,15 @@ test('with no surface to drape on the row explains itself, and recovers when one
 
   viewer.scene.globe.show = true;
   mapStack.emit();
-  assert.equal(globe.layers.length, 2);
+  assert.equal(globe.layers.length, 1);
   assert.equal(layer.getStats().error, null);
 });
 
-test('destroy removes owned imagery, unsubscribes from the map stack and resets params', () => {
+test('destroy removes owned imagery and unsubscribes from the map stack', () => {
   const { layer, globe, created, mapStack } = setup();
   layer.enable();
-  layer.setParams({ seamap: false });
   layer.destroy();
   assert.equal(globe.layers.length, 0);
-  assert.ok(created.every((imagery) => imagery.destroyed));
+  assert.equal(created[0].destroyed, true);
   assert.equal(mapStack.subscribers.size, 0);
-  assert.deepEqual(layer.getParams(), { seamap: true, snowmap: true });
-});
-
-test('each catalog gets its own instance', () => {
-  const a = createOsmOverlaysLayer();
-  const b = createOsmOverlaysLayer();
-  a.setParams({ seamap: false });
-  assert.deepEqual(b.getParams(), { seamap: true, snowmap: true });
-});
-
-test('chips translate their labels and toggle one overlay each', () => {
-  const { layer } = setup();
-  assert.deepEqual(layer.getRowControls(), { chips: [], legend: [] });
-  layer.enable();
-  const { chips } = layer.getRowControls();
-  assert.deepEqual(
-    chips.map((chip) => [chip.id, chip.active, chip.params]),
-    [
-      ['seamap', true, { seamap: false }],
-      ['snowmap', true, { snowmap: false }],
-    ],
-  );
-  assert.match(chips[0].label, /Sea Marks/);
 });

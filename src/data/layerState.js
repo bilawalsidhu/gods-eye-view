@@ -430,14 +430,6 @@ const OPTION_GROUPS = Object.freeze({
     // MAX_SINCE_DAYS in streetLevel/policy.js (pinned by layerState.test).
     boundedIntegerOption('sinceDays', 's', 0, { min: 0, max: 36500 }),
   ]),
-  // Two independently toggleable open-data raster overlays (#10) sharing one
-  // owner, the same "one master row, several booleans" shape as `cctv`/`radio`.
-  // Both default on: switching the row on with nothing chosen would show
-  // nothing and read as broken.
-  'osm-overlays': Object.freeze([
-    booleanOption('seamap', 's', true),
-    booleanOption('snowmap', 'n', true),
-  ]),
   radio: Object.freeze([
     Object.freeze({
       key: 'filter',
@@ -647,12 +639,6 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
-    id: 'osm-overlays',
-    token: '6',
-    disposition: 'enabled+options',
-    optionOwner: 'osm-overlays',
-  }),
-  Object.freeze({
     id: 'radio',
     token: 'r',
     disposition: 'enabled+options',
@@ -680,6 +666,8 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'satellites',
   }),
+  Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'street-level',
     token: '0',

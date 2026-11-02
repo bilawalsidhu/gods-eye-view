@@ -1,12 +1,10 @@
 import * as Cesium from 'cesium';
-import { msg, t } from '../i18n/index.js';
 import { NO_IMAGERY_HOST, resolveImageryHost } from '../maps/imageryHost.js';
 
 /**
  * @file Open-data raster overlays: OpenSeaMap sea marks and OpenSnowMap ski
- * pistes (#10). Two independently toggleable overlays sharing one
- * config-driven layer, the same "small array of descriptors" shape as the
- * map stacks.
+ * pistes (#10). Each overlay is its own layer with its own row under
+ * Infrastructure; both are built from the descriptors below.
  *
  * OpenRailwayMap and OpenInfraMap, also named in #10, are deliberately not
  * included:
@@ -25,14 +23,13 @@ import { NO_IMAGERY_HOST, resolveImageryHost } from '../maps/imageryHost.js';
  * @module data/osmOverlays
  */
 
-export const OSM_OVERLAYS_LAYER_ID = 'osm-overlays';
-
-/** @type {ReadonlyArray<{key:string,label:string,icon:string,urlTemplate:string,credit:string,maximumLevel:number}>} */
+/** @type {ReadonlyArray<{id:string,name:string,icon:string,source:string,urlTemplate:string,credit:string,maximumLevel:number}>} */
 export const OSM_OVERLAYS = Object.freeze([
   Object.freeze({
-    key: 'seamap',
-    label: msg('Sea Marks'),
+    id: 'sea-marks',
+    name: 'Sea Marks',
     icon: '⚓',
+    source: 'OpenSeaMap',
     urlTemplate: 'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
     // Chart tiles CC BY-SA 2.0; the underlying data is OpenStreetMap (ODbL).
     credit:
@@ -40,9 +37,10 @@ export const OSM_OVERLAYS = Object.freeze([
     maximumLevel: 18,
   }),
   Object.freeze({
-    key: 'snowmap',
-    label: msg('Ski Pistes'),
+    id: 'ski-pistes',
+    name: 'Ski Pistes',
     icon: '⛷',
+    source: 'OpenSnowMap',
     urlTemplate: 'https://www.opensnowmap.org/pistes/{z}/{x}/{y}.png',
     // OpenSnowMap asks for "(c)www.opensnowmap.org" wherever its tiles appear.
     credit:
@@ -51,71 +49,49 @@ export const OSM_OVERLAYS = Object.freeze([
   }),
 ]);
 
-const DEFAULT_PARAMS = Object.freeze(
-  Object.fromEntries(OSM_OVERLAYS.map((overlay) => [overlay.key, true])),
-);
-
-/**
- * Sanitize a candidate params object against the known overlay keys. Unknown
- * keys are ignored; a non-boolean value for a known key leaves that key
- * untouched rather than coercing it.
- * @param {object} current the live `{seamap, snowmap}` state
- * @param {object} candidate
- * @returns {{next: object, changed: boolean}}
- */
-export function applyOsmOverlayParams(current, candidate = {}) {
-  const next = { ...current };
-  let changed = false;
-  for (const overlay of OSM_OVERLAYS) {
-    if (!Object.hasOwn(candidate ?? {}, overlay.key)) continue;
-    const value = candidate[overlay.key];
-    if (typeof value !== 'boolean') continue;
-    if (next[overlay.key] !== value) changed = true;
-    next[overlay.key] = value;
-  }
-  return { next, changed };
-}
-
-/** Why an enabled overlay with something chosen is showing nothing, or null. */
-export function osmOverlaysHiddenReason(enabled, params, hostKind) {
-  if (!enabled || hostKind !== 'none') return null;
-  const anyChosen = OSM_OVERLAYS.some((overlay) =>
-    Boolean(params?.[overlay.key]),
-  );
-  return anyChosen ? NO_IMAGERY_HOST : null;
+/** Why an enabled overlay is showing nothing, or null. */
+export function osmOverlayHiddenReason(enabled, hostKind) {
+  return enabled && hostKind === 'none' ? NO_IMAGERY_HOST : null;
 }
 
 /**
- * Create one Open Map Overlays layer. Each application catalog gets its own
- * instance; the Cesium factories are injectable so tests run without WebGL.
+ * Create the layer for one overlay descriptor. Each application catalog gets
+ * its own instances; the Cesium factories are injectable so tests run without
+ * WebGL.
  */
-export function createOsmOverlaysLayer({
-  host = resolveImageryHost,
-  createProvider = (overlay) =>
-    new Cesium.UrlTemplateImageryProvider({
-      url: overlay.urlTemplate,
-      credit: overlay.credit,
-      maximumLevel: overlay.maximumLevel,
-    }),
-  createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
-} = {}) {
+export function createOsmOverlayLayer(
+  overlay,
+  {
+    host = resolveImageryHost,
+    createProvider = (descriptor) =>
+      new Cesium.UrlTemplateImageryProvider({
+        url: descriptor.urlTemplate,
+        credit: descriptor.credit,
+        maximumLevel: descriptor.maximumLevel,
+      }),
+    createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
+  } = {},
+) {
+  if (!OSM_OVERLAYS.includes(overlay))
+    throw new TypeError(`Unknown open map overlay: ${overlay?.id}`);
   let viewer = null;
   let mapStack = null;
   let unsubscribeMap = null;
   let enabled = false;
-  let params = { ...DEFAULT_PARAMS };
   let hostInfo = { collection: null, kind: 'none' };
-  /** Imagery layers this instance owns, by overlay key: `{ layer, collection }`. */
-  const owned = new Map();
+  /** The imagery layer this instance owns while enabled, and where it sits. */
+  let owned = null;
 
   const usable = (collection) => collection && !collection.isDestroyed?.();
 
-  function detach(entry, destroy) {
-    const { collection, layer } = entry;
+  function detach(destroy) {
+    if (!owned) return;
+    const { collection, layer } = owned;
     if (usable(collection) && collection.contains(layer))
       collection.remove(layer, destroy);
     else if (destroy && !layer.isDestroyed?.()) layer.destroy?.();
-    entry.collection = null;
+    owned.collection = null;
+    if (destroy) owned = null;
   }
 
   function resolveHost() {
@@ -127,48 +103,39 @@ export function createOsmOverlaysLayer({
     );
   }
 
-  /** Create, move or drop owned imagery layers so they match the wanted set. */
+  /** Create, move or drop the owned imagery layer to match the state. */
   function sync() {
     if (!viewer) return;
     hostInfo = enabled ? resolveHost() : { collection: null, kind: 'none' };
-    for (const overlay of OSM_OVERLAYS) {
-      const wanted = enabled && Boolean(params[overlay.key]);
-      let entry = owned.get(overlay.key);
-      if (!wanted) {
-        if (entry) {
-          detach(entry, true);
-          owned.delete(overlay.key);
+    if (!enabled) {
+      detach(true);
+    } else {
+      owned ||= {
+        layer: createImageryLayer(createProvider(overlay)),
+        collection: null,
+      };
+      if (owned.collection !== hostInfo.collection) {
+        detach(false);
+        if (usable(hostInfo.collection)) {
+          // Appended, so it draws above the map stack's base imagery.
+          hostInfo.collection.add(owned.layer);
+          owned.collection = hostInfo.collection;
         }
-        continue;
-      }
-      if (!entry) {
-        entry = {
-          layer: createImageryLayer(createProvider(overlay)),
-          collection: null,
-        };
-        owned.set(overlay.key, entry);
-      }
-      if (entry.collection === hostInfo.collection) continue;
-      detach(entry, false);
-      if (usable(hostInfo.collection)) {
-        // Appended, so it draws above the map stack's base imagery.
-        hostInfo.collection.add(entry.layer);
-        entry.collection = hostInfo.collection;
       }
     }
     viewer.scene?.requestRender?.();
   }
 
   return {
-    id: OSM_OVERLAYS_LAYER_ID,
-    name: 'Open Map Overlays',
-    icon: '🗺️',
-    source: 'OpenSeaMap / OpenSnowMap',
+    id: overlay.id,
+    name: overlay.name,
+    icon: overlay.icon,
+    source: overlay.source,
     updateInterval: 0,
     init(nextViewer) {
       viewer = nextViewer;
     },
-    /** Follow map-stack switches so the drapes move with the surface. */
+    /** Follow map-stack switches so the drape moves with the surface. */
     attachMapStackController(controller) {
       unsubscribeMap?.();
       unsubscribeMap = null;
@@ -189,33 +156,6 @@ export function createOsmOverlaysLayer({
     update() {
       return true;
     },
-    setParams(next = {}) {
-      const result = applyOsmOverlayParams(params, next);
-      if (result.changed) {
-        params = result.next;
-        sync();
-      }
-      return true;
-    },
-    getParams() {
-      return { ...params };
-    },
-    getRowControls() {
-      if (!enabled) return { chips: [], legend: [] };
-      return {
-        chips: OSM_OVERLAYS.map((overlay) => {
-          const active = Boolean(params[overlay.key]);
-          return {
-            id: overlay.key,
-            label: `${overlay.icon} ${t(overlay.label)}`,
-            active,
-            title: overlay.credit,
-            params: { [overlay.key]: !active },
-          };
-        }),
-        legend: [],
-      };
-    },
     getStats() {
       // Without a controller subscription the stats poll doubles as the
       // map-stack watch.
@@ -224,26 +164,27 @@ export function createOsmOverlaysLayer({
         if (next.collection !== hostInfo.collection) sync();
       }
       return {
-        count: enabled
-          ? OSM_OVERLAYS.filter((overlay) => params[overlay.key]).length
-          : 0,
-        error: osmOverlaysHiddenReason(enabled, params, hostInfo.kind),
+        count: enabled ? 1 : 0,
+        error: osmOverlayHiddenReason(enabled, hostInfo.kind),
       };
     },
     /** Owned layer count and host kind, for tests and live gates. */
     diagnostics() {
-      return { host: hostInfo.kind, ownedCount: owned.size };
+      return { host: hostInfo.kind, ownedCount: owned ? 1 : 0 };
     },
     destroy() {
       enabled = false;
-      for (const entry of owned.values()) detach(entry, true);
-      owned.clear();
+      detach(true);
       unsubscribeMap?.();
       unsubscribeMap = null;
       mapStack = null;
       viewer = null;
       hostInfo = { collection: null, kind: 'none' };
-      params = { ...DEFAULT_PARAMS };
     },
   };
+}
+
+/** One layer per overlay, in panel order. */
+export function createOsmOverlayLayers(options) {
+  return OSM_OVERLAYS.map((overlay) => createOsmOverlayLayer(overlay, options));
 }

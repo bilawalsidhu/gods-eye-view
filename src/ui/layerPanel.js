@@ -64,7 +64,8 @@ const PANEL_GROUPS = [
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
-      'osm-overlays',
+      'sea-marks',
+      'ski-pistes',
     ],
   },
   {
