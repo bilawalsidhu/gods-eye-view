@@ -1898,6 +1898,8 @@ limit, as well as when a tile decodes or the source resets.
 GBFS null or empty availability counts retain an unknown value through station
 parsing and rendering; they use the neutral station color rather than reporting
 an empty dock. Explicit zero and caller-supplied numeric fallbacks remain valid.
+A station whose `station_information` publishes no capacity takes bikes plus
+docks from each status poll (15 until its status arrives), not from the first.
 
 ## Terrain height cache bound
 
@@ -6370,6 +6372,12 @@ source loads the same bundled TeleGeography files. Disabling still removes all
 three Cesium data sources; enabling rebuilds from the accepted parsed cache,
 and destroying clears it. Load ownership prevents cancelled work from adding
 entities after teardown.
+
+Every Cesium entity from multipart cable or landing-point geometry stays tied
+to its source feature, including generated IDs and IDs that collide with
+Cesium's multipart suffixes. Each segment gets its own feature's styling, click
+destination and horizon-culling reference, and each source feature has one
+reference stem. The source collections are not modified.
 
 Natural Earth regions and neighborhood polygon lookup are package exports.
 Their existing lazy loaders, retry behavior, bundled datasets and attribution
