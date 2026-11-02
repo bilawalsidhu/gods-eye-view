@@ -32,7 +32,7 @@ try {
     const entry = [...document.scripts].find((script) =>
       /\/src\/main\.js(?:\?|$)/.test(script.src),
     );
-    const { application } = await import(entry.src);
+    const application = await (await import(entry.src)).application;
     window.__qaApplication = application;
     const app = window.__godsEyeView;
     window.__qaComponents = app;
