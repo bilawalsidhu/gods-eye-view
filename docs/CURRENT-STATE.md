@@ -1396,6 +1396,42 @@ By default the 250 cameras nearest downtown Vancouver and Victoria load.
 The Open Government Licence – British Columbia attribution is registered in the
 Data attribution popover.
 
+## NCDOT DriveNC CCTV source pack
+
+The CCTV catalog adds NCDOT DriveNC cameras for North Carolina. Keyless by
+default: the server reads the camera list the drivenc.gov map itself loads
+(`https://www.drivenc.gov/map/mapIcons/Cameras`, every camera's id and
+position, ~1,024 today), sorts it nearest Raleigh, Charlotte and Greensboro,
+and looks up only the cameras under the pack cap on their tooltip page
+(`/tooltip/Cameras/<id>`), which carries the NCDOT camera code and the
+still-view id. Lookups run eight at a time under a 30 s deadline, and each
+camera's code and view id are kept for the life of the process, so a
+15-minute catalog refresh asks only about cameras it has not seen. A camera
+whose tooltip does not answer is left out of that refresh and asked about
+again on the next. Frame URLs are built from the view id under
+`https://www.drivenc.gov/map/Cctv/`; they are never taken from upstream
+text, and the frame proxy pins that directory and follows redirects only
+within it. DriveNC's HLS streams need HTTP Basic credentials the site holds,
+so the pack is stills-only.
+
+Camera codes read `CCTV05-I40-273E_NC54` (division, road, mile marker with
+the side of the road, cross street) and become labels such as
+`I-40 MM 273 E at NC-54`; codes outside that pattern are kept as written,
+and the code itself is the unselected label. The N/S/E/W letter gives a
+low-confidence heading prior (it names the carriageway the camera sits
+beside, not where the pan-tilt-zoom head points); codes without one use the
+id-hash fallback.
+
+DriveNC runs the same TravelIQ platform as Ontario 511, so an operator with a
+free DriveNC developer key can set `DRIVENC_API_KEY` and the pack reads the
+keyed `api/v2/get/cameras` catalog in one request instead of the tooltip
+sweep, with the API's `Direction` field as a high-confidence heading. A key
+the API rejects is reported by name, never by value, and the keyless catalog
+loads instead. By default the 400 cameras nearest the three anchors load;
+`CCTV_DRIVENC_MAX_SOURCES` sets the pack cap (8–1200) and
+`CCTV_DRIVENC_ENABLED=0` turns the pack off. Frames are fetched at request
+time and never stored or recorded. Gate: `server/providers/cctv/drivenc.test.mjs`.
+
 ## Location control ownership
 
 City/POI rows, search/reset bindings, location readouts and the orbit indicator
@@ -4001,7 +4037,7 @@ its criteria cannot be silently ignored.
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Autostrada del Brennero (IT, A22 stills) + NCDOT DriveNC (NC) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                        | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
