@@ -304,35 +304,14 @@ the retrieval date (2026-07-30), exact download URL, license evidence, and the
 deterministic transform (`scripts/build-sf-neighborhoods.mjs`: `nhood` → `name`, ~2 m
 Douglas-Peucker simplification, 6-decimal rounding).
 
-### Pilot CCTV source packs (`config/`)
+### Local CCTV source packs (`config/`)
 
-`config/cctv_sources.shinjuku.json` is a **demo source pack** (3 cameras:
-Shinjuku Crossing, Shinjuku Station West, Shibuya Scramble) used for
-projection-pipeline testing. The feeds are Google-hosted sample MP4 videos
-(`storage.googleapis.com/gtv-videos-bucket/sample/`), not live public cameras.
-Camera poses (coordinates, heading, pitch, FOV, mount height) are fabricated
-priors placed at recognizable Tokyo intersections.
-
-Use the pack by setting:
-
-```bash
-CCTV_SOURCES_FILE=config/cctv_sources.shinjuku.json npm run dev
-```
-
-Or equivalently, via `./scripts/dev-cctv.sh`:
-
-```bash
-CCTV_SOURCES_FILE=config/cctv_sources.shinjuku.json ./scripts/dev-cctv.sh
-```
-
-The pack exercises the same CCTV registration and frustum-projection pipeline
-as live city packs without requiring network access to a camera catalog. It is
-**not** a live data source and carries no external attribution requirement. The
-sample videos are publicly available Google test media.
-
-`config/cctv_sources.austin.json` is the reference live pack. Custom source
-packs follow the same JSON schema (see either file); `CCTV_SOURCES_JSON`
-accepts inline JSON as an alternative to a file path.
+The server can read a local camera list from `CCTV_SOURCES_FILE` (default
+`config/cctv_sources.austin.json`, which ships empty) and inline JSON from
+`CCTV_SOURCES_JSON`; the two are merged, and inline entries win on a duplicate
+id. A non-empty local pack replaces the live open-data camera packs unless
+`CCTV_FORCE_AUSTIN=1` is set. The packs under `config/` show the schema, and a
+pack's cameras keep their own source's license and attribution.
 
 ---
 
