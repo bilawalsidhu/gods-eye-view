@@ -116,6 +116,9 @@ export const CORE_PHRASES = Object.freeze([
   // — camera verbs (tools #23/#24) —
   { phrase: 'Orbit around this area slowly', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'orbit' && a.speed === 'slow')] },
   { phrase: 'Pan left a bit', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'pan' && a.direction === 'left')] },
+  { phrase: 'Rotate the globe to the right', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'rotate_globe' && (a.direction === undefined || a.direction === 'right'))] },
+  { phrase: 'Keep spinning the Earth slowly to the left', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'rotate_globe' && a.direction === 'left' && a.speed === 'slow' && (a.mode === undefined || a.mode === 'continuous'))] },
+  { phrase: 'Turn the camera to look right', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'rotate' && a.direction === 'right')] },
   { phrase: 'Stop moving the camera', expect: 'move_camera', typedArgs: [where('move_camera', (a) => a.motion === 'stop')] },
   { phrase: 'Fly the route we just drew', expect: 'fly_route' },
 

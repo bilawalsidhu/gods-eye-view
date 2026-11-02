@@ -513,12 +513,13 @@ test('only the latest queued focus runs and an unchanged selection survives refr
 });
 test('classification display expands known codes without altering the source or guessing unknown meanings', async () => {
   for (const [code, label] of [
-    ['PTC', 'Potential tropical cyclone'],
+    ['PC', 'Potential tropical cyclone'],
+    ['PTC', 'Post-tropical cyclone'],
     ['HU', 'Hurricane'],
     ['TS', 'Tropical storm'],
     ['TD', 'Tropical depression'],
-    ['SS', 'Subtropical storm'],
-    ['SD', 'Subtropical depression'],
+    ['STS', 'Subtropical storm'],
+    ['STD', 'Subtropical depression'],
     ['EX', 'EX'],
     ['UNKNOWN', 'UNKNOWN'],
   ]) {

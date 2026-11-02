@@ -1,8 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createLocalGeoJsonLayer } from './localGeojson.js';
+import { localGeoJsonServices } from '../app/localGeojsonServices.js';
+import { createLocalGeoJsonLayer as createLayer } from './localGeojsonCore.js';
 import { getContextStore } from './contextStore.js';
+
+/** The catalog's services, with the overlay host each test supplies. */
+const createLocalGeoJsonLayer = (options) =>
+  createLayer(options, {
+    ...localGeoJsonServices,
+    overlayHost: options.overlayHost,
+  });
 
 const dataset = JSON.stringify({
   type: 'Feature', id: 'dam', properties: { name: 'Test dam' },
