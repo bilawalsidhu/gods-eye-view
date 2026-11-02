@@ -176,7 +176,6 @@ export async function createNavaraGlobe({
         const placed = readCameraPlace(camera);
         const landscape =
           placed &&
-          lookCarto.height < 100_000 &&
           plan.globeLighting &&
           automaticLandscape &&
           (engine.maps.baseKind === 'sentinel2' ||
