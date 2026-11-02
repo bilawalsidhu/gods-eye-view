@@ -6,6 +6,7 @@ import {
   SUPERSEDED_RESPONSE_MEMORY,
   shouldStopVoiceAfterRadioTool,
   responseInstructionForToolResult,
+  isGlobeViewRefusal,
   extractFunctionCalls,
   callDedupeKeys,
   parseArguments,
@@ -13,7 +14,7 @@ import {
 import { narrationLabel } from './speech.js';
 
 /** Out-of-band progress responses carry this metadata tag. */
-export const PROGRESS_RESPONSE_TAG = 'progress';
+const PROGRESS_RESPONSE_TAG = 'progress';
 
 /**
  * Speaks one code-authored progress line out of band. The line travels as
@@ -66,6 +67,11 @@ export class RealtimeTurns {
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
     this.supersededResponseIds = new Set();
+    this.globeRefusals = new Map();
+    this.globeAdmissionGates = new Map();
+    this.globeResets = new Map();
+    this.globeResponseRequests = new Map();
+    this.globeRequest = { failed: false, pending: new Set() };
     this.activeToolAbortControllers = new Set();
     this.narration = null;
     this.narrationSequence = 0;
@@ -138,6 +144,7 @@ export class RealtimeTurns {
       },
     };
     if (!this.sendRealtimeEvent(itemEvent, 'client.user_text')) return;
+    this.globeRequest = { failed: false, pending: new Set() };
     this.requestUserTextResponse();
   }
 
@@ -330,6 +337,7 @@ export class RealtimeTurns {
       this.userTurnPending = true;
       this.pendingResponseInstructions = null;
       this.cancelRadioHandoff({ abortTools: true });
+      this.globeRequest = { failed: false, pending: new Set() };
       this.setVoiceSpeaker('user');
       // Point-and-ask: read the pointer as speech starts (open mic), or reuse
       // the push-to-talk keydown snapshot, before the user audio commits.
@@ -384,6 +392,27 @@ export class RealtimeTurns {
     }
 
     const toolResponseId = payload.response_id || payload.response?.id || null;
+    // Follow-up responses retain reset ownership until fresh admitted input.
+    const arrivalRequest = this.globeRequest;
+    const globeRequest =
+      this.globeResponseRequests.get(toolResponseId) ?? arrivalRequest;
+    // Later siblings must wait for globe admission before they can mutate state.
+    // Other tool responses keep their existing concurrency.
+    let heldForAdmission = false;
+    while (toolResponseId && this.globeAdmissionGates.has(toolResponseId)) {
+      // Drop claimed duplicates before every wait, before their keys can expire.
+      if (
+        calls.every((call) =>
+          callDedupeKeys(call).some((key) => this.processedCalls.has(key)),
+        )
+      )
+        return;
+      heldForAdmission = true;
+      await this.globeAdmissionGates.get(toolResponseId).promise;
+      if (!this.ownsConversation(eventChannel) || this.isSessionEnding())
+        return;
+    }
+
     // A newer typed command superseded the response these calls belong to.
     // They are stale intent — dispatching one would let the old turn mutate
     // the map after the operator asked for something else.
@@ -394,7 +423,10 @@ export class RealtimeTurns {
     // hazard `callDedupeKeys` is written to avoid). So each refused call gets
     // a terminal output saying plainly that the turn moved on. No
     // `response.create` follows — the deferred typed turn is the single answer.
-    if (this.isSupersededResponse(toolResponseId)) {
+    if (
+      this.isSupersededResponse(toolResponseId) ||
+      (heldForAdmission && arrivalRequest !== this.globeRequest)
+    ) {
       this.pruneProcessedCalls();
       for (const call of calls) {
         const keys = callDedupeKeys(call);
@@ -429,7 +461,19 @@ export class RealtimeTurns {
       if (keys.some((key) => this.processedCalls.has(key))) continue;
       keys.forEach((key) => this.processedCalls.set(key, performance.now()));
 
+      if (this.globeRefusals.get(toolResponseId)?.blocking) {
+        this.sendToolOutput(call.call_id || call.id, {
+          ok: false,
+          action: call.name,
+          skipped: true,
+          error: 'Not run: this response must wait for the Globe View reply.',
+        });
+        continue;
+      }
+
       let result;
+      let globeAdmissionGate = null;
+      let globeResetGate = null;
       const resultChannel = this.dc;
       let radioHandoffEpochAtStart = this.radio.radioHandoffEpoch;
       let toolController = null;
@@ -443,6 +487,80 @@ export class RealtimeTurns {
         this.narration?.preamble();
       try {
         const parsedArguments = parseArguments(call.arguments);
+        if (
+          toolResponseId &&
+          call.name === 'move_camera' &&
+          String(parsedArguments.motion || '').toLowerCase() === 'rotate_globe'
+        ) {
+          let resolve;
+          const promise = new Promise((settle) => {
+            resolve = settle;
+          });
+          globeAdmissionGate = { promise, resolve };
+          this.globeAdmissionGates.set(toolResponseId, globeAdmissionGate);
+          // OpenAI delivers sibling calls concurrently. A reset dispatched
+          // first must finish before rotation evaluates the camera's fit.
+          // Hold later siblings at admission while this rotation waits.
+          const resets = this.globeResets.get(toolResponseId);
+          if (
+            resets ||
+            globeRequest.failed ||
+            globeRequest.pending.size ||
+            arrivalRequest !== this.globeRequest
+          ) {
+            while (resets?.pending.size || globeRequest.pending.size)
+              await Promise.all(
+                [
+                  ...new Set([
+                    ...(resets?.pending || []),
+                    ...globeRequest.pending,
+                  ]),
+                ].map((gate) => gate.promise),
+              );
+            if (!this.ownsConversation(eventChannel) || this.isSessionEnding())
+              return;
+            keys.forEach((key) =>
+              this.processedCalls.set(key, performance.now()),
+            );
+            const superseded =
+              this.isSupersededResponse(toolResponseId) ||
+              arrivalRequest !== this.globeRequest;
+            if (superseded || resets?.failed || globeRequest.failed) {
+              result = {
+                ok: false,
+                action: call.name,
+                reason: 'globe-reset-failed',
+                skipped: true,
+                ...(superseded ? { superseded: true } : {}),
+                error: superseded
+                  ? 'Superseded by a newer command from the operator — this call was not run.'
+                  : 'Not run: the Globe View reset/rotation sequence failed or was cancelled.',
+              };
+            }
+          }
+        }
+        if (toolResponseId && call.name === 'zoom_to_globe') {
+          let resolve;
+          const promise = new Promise((settle) => {
+            resolve = settle;
+          });
+          let resets = this.globeResets.get(toolResponseId);
+          if (!resets) {
+            resets = { pending: new Set(), failed: false };
+            this.globeResets.set(toolResponseId, resets);
+            // Retain settled outcomes for later siblings, without evicting an
+            // active reset that another response still needs to await.
+            for (const [id, record] of this.globeResets) {
+              if (this.globeResets.size <= SUPERSEDED_RESPONSE_MEMORY) break;
+              if (!record.pending.size && id !== toolResponseId)
+                this.globeResets.delete(id);
+            }
+          }
+          globeResetGate = { promise, resolve, resets, request: globeRequest };
+          resets.pending.add(globeResetGate);
+          globeRequest.pending.add(globeResetGate);
+        }
+
         const isRadioControlCall = call.name === 'control_radio';
         const isRadioVisibilityCall =
           call.name === 'set_layer_visibility' &&
@@ -499,7 +617,7 @@ export class RealtimeTurns {
             authorityDomain: radioAuthorityDomain,
           });
         }
-        result = await (this.actionExecutor || this.runner)(
+        result ??= await (this.actionExecutor || this.runner)(
           call.name,
           parsedArguments,
           {
@@ -515,7 +633,28 @@ export class RealtimeTurns {
                 radioHandoffEpochAtStart === this.radio.radioHandoffEpoch),
           },
         );
+        if (
+          globeAdmissionGate &&
+          this.globeResets.has(toolResponseId) &&
+          result?.reason === 'globe-view-required'
+        )
+          result = { ...result, reason: 'globe-reset-failed' };
         if (!this.ownsConversation(eventChannel)) return;
+        if (
+          isGlobeViewRefusal(result) &&
+          toolResponseId &&
+          arrivalRequest === this.globeRequest &&
+          !this.isSupersededResponse(toolResponseId)
+        ) {
+          this.globeRefusals.set(toolResponseId, {
+            result,
+            followupQueued: false,
+            blocking: !result.skipped,
+          });
+          while (this.globeRefusals.size > SUPERSEDED_RESPONSE_MEMORY) {
+            this.globeRefusals.delete(this.globeRefusals.keys().next().value);
+          }
+        }
         if (result?.ok && result.radioPlaybackRequested) {
           const sessionIsCurrent =
             this.activeToolAbortControllers.has(toolController) &&
@@ -595,6 +734,23 @@ export class RealtimeTurns {
             : {}),
         };
       } finally {
+        if (globeResetGate) {
+          const { resets, request } = globeResetGate;
+          if (result?.ok !== true || result.cancelled) {
+            resets.failed = true;
+            request.failed = true;
+          }
+          resets.pending.delete(globeResetGate);
+          request.pending.delete(globeResetGate);
+          globeResetGate.resolve();
+        }
+        if (globeAdmissionGate) {
+          if (
+            this.globeAdmissionGates.get(toolResponseId) === globeAdmissionGate
+          )
+            this.globeAdmissionGates.delete(toolResponseId);
+          globeAdmissionGate.resolve();
+        }
         if (toolController) {
           this.activeToolAbortControllers.delete(toolController);
           this.radio.releaseTool(toolController);
@@ -671,13 +827,38 @@ export class RealtimeTurns {
         });
       }
       if (!this.ownsConversation(eventChannel)) return;
-      // Keep the Radio handoff wording authoritative even when another tool
-      // result follows Radio in the same multi-intent response.
-      this.queueResponseCreate(
-        responseInstructionForToolResult(
-          this.radio.pendingRadioPlaybackResult || lastResult,
-        ),
-      );
+      const refusal = this.globeRefusals.get(toolResponseId);
+      // A newer turn may arrive during admission or the viewport-image await.
+      // Preserve its reply; neither the refusal map nor lastResult may revive
+      // an old refusal follow-up after supersession.
+      if (
+        (this.isSupersededResponse(toolResponseId) ||
+          arrivalRequest !== this.globeRequest) &&
+        (refusal || isGlobeViewRefusal(lastResult) || lastResult?.superseded)
+      ) {
+        // Complete an idle turn below, but leave a newer running tool's status
+        // authoritative while suppressing this obsolete refusal follow-up.
+        if (this.activeToolAbortControllers.size) return;
+      } else if (refusal) {
+        // Even an earlier sibling finishing late cannot replace the reset instruction.
+        if (!refusal.followupQueued) {
+          refusal.followupQueued = true;
+          this.queueResponseCreate({
+            instructions: responseInstructionForToolResult(refusal.result),
+            tool_choice: 'none',
+          });
+        }
+      } else {
+        // Keep Radio handoff wording authoritative for ordinary multi-tool replies.
+        const followupResult =
+          this.radio.pendingRadioPlaybackResult || lastResult;
+        const instructions = responseInstructionForToolResult(followupResult);
+        this.queueResponseCreate(
+          isGlobeViewRefusal(followupResult)
+            ? { instructions, tool_choice: 'none' }
+            : instructions,
+        );
+      }
     }
     this.setStatus('listening', t('Ask or command'));
   }
@@ -966,6 +1147,22 @@ export class RealtimeTurns {
       this.userTurnPending = false;
       this.activeResponseId =
         payload.response?.id || payload.response_id || null;
+      // Late calls retain only their globe reset/request ownership. Ordinary
+      // tool admission and concurrency continue to use their existing policy.
+      if (
+        this.activeResponseId &&
+        !this.globeResponseRequests.has(this.activeResponseId)
+      ) {
+        this.globeResponseRequests.set(
+          this.activeResponseId,
+          this.globeRequest,
+        );
+        while (this.globeResponseRequests.size > SUPERSEDED_RESPONSE_MEMORY)
+          this.globeResponseRequests.delete(
+            this.globeResponseRequests.keys().next().value,
+          );
+      }
+
       this.setVoiceSpeaker('ai');
       return;
     }
@@ -1045,7 +1242,8 @@ export class RealtimeTurns {
     const sent = this.sendRealtimeEvent(
       {
         type: 'response.create',
-        response: { instructions },
+        response:
+          typeof instructions === 'string' ? { instructions } : instructions,
       },
       'client.response_create.tool_followup',
     );
@@ -1057,6 +1255,20 @@ export class RealtimeTurns {
       controller.abort();
     this.activeToolAbortControllers.clear();
     this.radio.clearTools();
+    this.releaseGlobeResets();
+  }
+
+  releaseGlobeResets() {
+    for (const resets of this.globeResets.values()) {
+      if (!resets.pending.size) continue;
+      resets.failed = true;
+      for (const gate of resets.pending) {
+        gate.request.failed = true;
+        gate.request.pending.delete(gate);
+        gate.resolve();
+      }
+      resets.pending.clear();
+    }
   }
 
   reset() {
@@ -1068,6 +1280,13 @@ export class RealtimeTurns {
     this.pendingUserTextResponse = false;
     this.activeResponseId = null;
     this.supersededResponseIds.clear();
+    this.globeRefusals.clear();
+    for (const gate of this.globeAdmissionGates.values()) gate.resolve();
+    this.globeAdmissionGates.clear();
+    this.releaseGlobeResets();
+    this.globeResets.clear();
+    this.globeResponseRequests.clear();
+    this.globeRequest = { failed: false, pending: new Set() };
     this.narration?.cancel();
     this.assistantAudioPlaying = false;
     this.speechResponseIds.clear();

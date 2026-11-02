@@ -31,6 +31,8 @@ test('importing and constructing the package is inactive without browser globals
   const result = spawnSync(
     process.execPath,
     [
+      // Views are single-file components; Node needs the loader hosts use.
+      '--import=gods-eye-view/build/register-vue',
       '--input-type=module',
       '-e',
       `
@@ -217,6 +219,17 @@ test('the separate viewer export imports without constructing a browser viewer',
     await import('gods-eye-view/application/viewer');
   assert.equal(typeof createApplicationViewer, 'function');
   assert.throws(() => createApplicationViewer({}), /containers are required/);
+});
+
+test('the viewer gets the starry sky as an option, which keeps the Sun and Moon', async () => {
+  const { applicationViewerOptions } = await import('./viewer.js');
+  const { StarrySky } = await import('../sky/starrySky.js');
+  const creditContainer = {};
+  const options = applicationViewerOptions(creditContainer);
+  // CesiumWidget skips scene.sun and scene.moon when skyBox is false.
+  assert.ok(options.skyBox instanceof StarrySky);
+  assert.equal(options.creditContainer, creditContainer);
+  options.skyBox.destroy();
 });
 
 function pinchFixture({ zoomEventTypes } = {}) {
