@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { formatNumber, t } from '../../i18n/index.js';
+import { formatNumber, getLocale, isolate, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
@@ -407,7 +407,6 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.count === 1 ? t('FIRE') : t('FIRES');
     const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
     if (cell.newestAcqMs > 0) {
       const age = formatAgeLabel(nowMs - cell.newestAcqMs);
@@ -419,7 +418,12 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: 10,
       accent: candidate.accent || accentForSeverity('yellow'),
-      title: `${cell.count} ${noun}`,
+      // The count picks the plural form of the language ("حريقان (2)",
+      // "14 حريقًا", "14 ПОЖАРОВ"); the card shows it in capitals like the
+      // other card titles.
+      title: tn(cell.count, '{n} fire', '{n} fires', {
+        n: cell.count,
+      }).toLocaleUpperCase(getLocale()),
       details: [parts.join(' · ')],
       selected: false,
       priority: Number(cell.maxFrp) || 0,
@@ -513,7 +517,7 @@ export function createModel({
       lon >= 0
         ? t('{value}°E', { value: amount(lon) })
         : t('{value}°W', { value: amount(lon) });
-    return `${latPart} ${lonPart}`;
+    return `${isolate(latPart)} ${isolate(lonPart)}`;
   }
 
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */

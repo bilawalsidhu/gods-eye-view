@@ -42,7 +42,10 @@ export function createRocketLaunchesLayer({ services, source }) {
     parts.controls.methods,
     parts.lifecycle.methods,
     parts.ingestion.methods,
+    parts.panel.commands,
     {
+      subscribePanel: parts.panel.subscribePanel,
+      subscribeReplayOverlay: parts.overlays.subscribeReplayOverlay,
       satelliteParamsForSpaceMissions:
         parts.policyHelpers.satelliteParamsForSpaceMissions,
       satelliteParamsAfterSpaceMissions:
@@ -69,10 +72,6 @@ export function createRocketLaunchesLayer({ services, source }) {
       missionHoverPreviewRange: parts.panel.missionHoverPreviewRange,
       createMissionRosterPreviewOwnership:
         parts.panel.createMissionRosterPreviewOwnership,
-      bindMissionRosterItemKeyboardPreview:
-        parts.panel.bindMissionRosterItemKeyboardPreview,
-      captureMissionRosterFocus: parts.panel.captureMissionRosterFocus,
-      restoreMissionRosterFocus: parts.panel.restoreMissionRosterFocus,
       resolveMissionRosterPreviewLaunch:
         parts.panel.resolveMissionRosterPreviewLaunch,
       formatMissionEventTime: parts.policyHelpers.formatMissionEventTime,

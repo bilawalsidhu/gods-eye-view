@@ -9,6 +9,7 @@ import {
   spokenLabel,
 } from './speech.js';
 import { countWords, findHedges } from './speechLint.js';
+import { setLocale } from '../i18n/index.js';
 
 function envelope(name, result, args) {
   return attachVoiceResult(name, result, args);
@@ -458,4 +459,16 @@ test('labels are bounded and cleaned before they are spoken', () => {
     null,
     'background steps stay on screen',
   );
+});
+
+test('progress step labels join through the catalog colon', () => {
+  setLocale('fr');
+  try {
+    assert.equal(
+      progressStepLabel('resolve', 'Capitol'),
+      'Recherche de lieux\u202f: Capitol',
+    );
+  } finally {
+    setLocale('en');
+  }
 });
