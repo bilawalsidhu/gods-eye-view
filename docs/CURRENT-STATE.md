@@ -5086,6 +5086,8 @@ repointing `OVERPASS_UPSTREAMS` refetches instead of serving another instance's
 answers; untagged entries stop serving once an instance is configured.
 
 The shared transport guards `/api/overpass` and `/api/military-installations`.
+Both query handlers refuse cross-site and forwarded browser requests through
+the shared local-request gate, before any rate-limit, cache or upstream work.
 With no configured upstream, each route serves existing cache data (including
 expired entries, marked stale with the original cache/retrieval date) without
 refresh. An annotation miss returns HTTP 503, `OVERPASS_NOT_CONFIGURED`,
