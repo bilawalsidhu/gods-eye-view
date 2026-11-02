@@ -337,12 +337,12 @@ export function createWorldClock({
 
 /**
  * The page's world clock. Layers, the sky and a host all read this one. The
- * sky, satellites (and the launched missions flying on their time) and
- * launches have a time of their own and move with it; weather holds each
- * product it shows.
+ * sky and the HUD's clock show the world time; satellites (and the launched
+ * missions flying on their time) and launches have a time of their own and
+ * move with it; weather holds each product it shows.
  */
 export const worldClock = createWorldClock({
-  follow: ['sky', 'satellites', 'rocket-launches'],
+  follow: ['sky', 'hud', 'satellites', 'rocket-launches'],
 });
 
 /** The time layer `id` draws at on the page's clock. */

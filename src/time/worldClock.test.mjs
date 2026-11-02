@@ -67,7 +67,7 @@ test('layers named at creation follow from the start', () => {
 
 test('the page clock moves the layers with a time of their own', async () => {
   const { worldClock } = await import('./worldClock.js');
-  for (const id of ['sky', 'satellites', 'rocket-launches'])
+  for (const id of ['sky', 'hud', 'satellites', 'rocket-launches'])
     assert.equal(worldClock.follows(id), true, id);
   for (const id of ['flights', 'military', 'vessels', 'transit'])
     assert.equal(worldClock.follows(id), false, id);
