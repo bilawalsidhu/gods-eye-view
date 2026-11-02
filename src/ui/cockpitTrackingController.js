@@ -1,6 +1,7 @@
 /** Tracking identity, entry, exit and contact navigation for the Cockpit controller. */
 import { t } from '../i18n/index.js';
 import {
+  formatHeadingReadout,
   normalizeHeading,
   resolveTrackedAircraftInfo,
 } from '../cockpitMath.js';
@@ -49,18 +50,27 @@ export function toggleTrackedTr3b() {
   return true;
 }
 
+/**
+ * Publish which Cockpit surfaces are shown: the entry button, the TR-3B chip,
+ * the HUD with its exit and reset buttons and briefing card, and the Contact
+ * card. The views bind these; nothing else writes their visibility.
+ */
+export function publishPresenceView() {
+  const presence = this.presence;
+  this.publishPresence({
+    ...presence,
+    tr3b: presence.tr3b && { ...presence.tr3b },
+  });
+}
+
 export function syncTr3bToggle(info) {
-  if (!this.tr3bToggle) return;
   const icao24 = String(info?.icao24 || '').trim();
   const converted = !!icao24 && this.services.isTr3b(icao24);
   const signature = icao24 ? `${icao24}:${converted ? 1 : 0}` : '';
   if (this._tr3bSignature === signature) return;
   this._tr3bSignature = signature;
-  this.tr3bToggle.hidden = !icao24;
-  this.tr3bToggle.setAttribute('aria-pressed', converted ? 'true' : 'false');
-  this.tr3bToggle.title = converted
-    ? t('Restore real aircraft')
-    : t('Reclassify as TR-3B');
+  this.presence.tr3b = icao24 ? { converted } : null;
+  this.publishPresenceView();
 }
 
 export function syncEntry() {
@@ -70,14 +80,12 @@ export function syncEntry() {
   const trackedContact = !!(info && this.viewer.trackedEntity?.position);
   this.syncTr3bToggle(trackedContact ? info : null);
   const available = !!(this.isEntryAllowed() && trackedContact);
-  // Change-only DOM writes: this runs on a preUpdate cadence, and
-  // unconditional `hidden` assignments invalidate style/layout every frame
-  // even when nothing changed. (perf item 9)
-  if (this._entryAvailable === available) return;
-  this._entryAvailable = available;
-  if (this.entry) this.entry.hidden = !available;
-  if (this.mapViewButton) this.mapViewButton.hidden = true;
-  if (this.resetGlobeButton) this.resetGlobeButton.hidden = true;
+  // Change-only publishes: this runs on a preUpdate cadence, and a fresh
+  // presence every frame would re-render the views even when nothing
+  // changed. (perf item 9)
+  if (this.presence.entryAvailable === available) return;
+  this.presence.entryAvailable = available;
+  this.publishPresenceView();
 }
 
 export function navigateContext(direction, options = {}) {
@@ -154,7 +162,6 @@ export function enter() {
   this.surfaceWaitStartedMs = performance.now();
   this.surfaceAcquiring = false;
   this.surfaceFallback = false;
-  this.lastCompassSignature = '';
   this.cockpitAnchorValid = false;
   this.lastCameraUpdateMs = 0;
   this.active = true;
@@ -165,29 +172,22 @@ export function enter() {
   this.viewer.trackedEntity = undefined;
   this.viewer.scene.screenSpaceCameraController.enableInputs = false;
   document.body.classList.add('cockpit-mode');
-  // Activation writes entry/quick/map visibility directly, bypassing
-  // syncEntry's change-only cache — invalidate it so the exit-path
-  // syncEntry re-applies every write (notably re-hiding mapViewButton).
-  this._entryAvailable = undefined;
-  if (this.entry) this.entry.hidden = true;
-  if (this.tr3bToggle) {
-    this.tr3bToggle.hidden = true;
-    this._tr3bSignature = null;
-  }
-  if (this.mapViewButton) this.mapViewButton.hidden = false;
-  if (this.resetGlobeButton) this.resetGlobeButton.hidden = false;
-  if (this.hud) this.hud.hidden = false;
-  if (this.signalStream) this.signalStream.hidden = false;
-  this.hud?.classList.add('signals-active');
+  // Activation hides the entry and TR-3B chip; clearing the chip's signature
+  // lets the exit-path syncEntry publish it again.
+  this._tr3bSignature = null;
+  Object.assign(this.presence, {
+    active: true,
+    entryAvailable: false,
+    tr3b: null,
+  });
+  this.publishPresenceView();
   this.signalItems = [];
   this.signalSignatures.clear();
   this.showBriefPage(0);
   this.startBriefRotation();
   const trackLabel =
     info.callsign || info.registration || info.icao24 || t('AIRCRAFT');
-  const trackHeading = String(
-    Math.round(normalizeHeading(info.track ?? 0)),
-  ).padStart(3, '0');
+  const trackHeading = formatHeadingReadout(info.track ?? 0);
   this.pushCockpitSignal(
     'track',
     'track',
@@ -200,7 +200,11 @@ export function enter() {
   this.updateHud(info, performance.now(), true);
   this.setVisionMode(this.getInitialVisionMode());
   this.scheduleContextLayout();
-  this.mapViewButton?.focus({ preventScroll: true });
+  // The exit button shows when Vue flushes the presence; focus it after.
+  Promise.resolve().then(() => {
+    if (this.active && !this.destroyed)
+      this.mapViewButton?.focus({ preventScroll: true });
+  });
   this.onEntered?.();
   this.dispatchCockpitModeChanged(true, info);
   return true;
@@ -220,7 +224,6 @@ export function exit({ restoreTracking = true } = {}) {
   this.lastHudUpdateMs = 0;
   this.lastContextUpdateMs = 0;
   this.contextNavigationDeadlineMs = 0;
-  this.lastCompassSignature = '';
   this.stopBriefRotation();
   this.regionalBriefAbort?.abort();
   this.regionalBriefAbort = null;
@@ -228,14 +231,12 @@ export function exit({ restoreTracking = true } = {}) {
   this.regionalBriefSubjectId = null;
   document.body.classList.remove('cockpit-mode');
   this.onExited?.();
-  this.hud?.style.removeProperty('--cockpit-utility-top');
-  this.hud?.style.removeProperty('--cockpit-utility-max-height');
-  if (this.hud) this.hud.hidden = true;
-  if (this.route) this.route.hidden = true;
+  this.publishUtilityLayout(null);
+  this.presence.active = false;
+  this.publishPresenceView();
+  this.routeView.visible = false;
   this.clearPredictiveRoute();
   this.setVisionMode('optical');
-  if (this.signalStream) this.signalStream.hidden = true;
-  this.hud?.classList.remove('signals-active');
   this.viewer.scene.screenSpaceCameraController.enableInputs = true;
   if (entity && this.viewer.entities.contains(entity))
     entity.show = this.trackedEntityWasShown;
@@ -251,8 +252,15 @@ export function exit({ restoreTracking = true } = {}) {
       ? this.entry
       : this.entry || this.entryFocusOrigin;
   this.entryFocusOrigin = null;
-  if (!this.destroyed && restoreTarget?.isConnected && !restoreTarget.hidden) {
-    restoreTarget.focus({ preventScroll: true });
-  }
+  // The entry shows when Vue flushes the presence; read it after.
+  Promise.resolve().then(() => {
+    if (
+      !this.destroyed &&
+      !this.active &&
+      restoreTarget?.isConnected &&
+      !restoreTarget.hidden
+    )
+      restoreTarget.focus({ preventScroll: true });
+  });
   return true;
 }

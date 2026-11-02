@@ -18,7 +18,7 @@
  *    black sprite with a light ring is what a hot object looks like there.
  *  - `crt` (retro): saturated per-mode colours that survive posterisation,
  *    a size boost to out-shout the pixel grid, and a thinner halo.
- *  - `normal` (normal/anime/snow/unknown): every lookup returns the shipped
+ *  - `normal` (normal/anime/unknown): every lookup returns the shipped
  *    value — mode colour, shipped size, hairline edge only.
  *
  * Brackets are a different matter. The detection canvas composites ABOVE the

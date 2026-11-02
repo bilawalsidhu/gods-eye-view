@@ -172,16 +172,3 @@ export function gateVoiceVisualizerLevel(level, threshold) {
   if (cleanLevel <= cleanThreshold) return 0;
   return (cleanLevel - cleanThreshold) / (1 - cleanThreshold);
 }
-
-/**
- * Restores the CSS-owned standby baseline for every visualizer bar.
- * @param {Iterable<HTMLElement>|null|undefined} bars
- * @returns {void}
- */
-export function resetVoiceVisualizerBars(bars) {
-  if (!bars) return;
-  for (const bar of bars) {
-    bar.style.removeProperty('--audio-level');
-    bar.style.removeProperty('--audio-opacity');
-  }
-}

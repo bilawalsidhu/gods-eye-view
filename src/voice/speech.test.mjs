@@ -9,6 +9,7 @@ import {
   spokenLabel,
 } from './speech.js';
 import { countWords, findHedges } from './speechLint.js';
+import { setLocale } from '../i18n/index.js';
 
 function envelope(name, result, args) {
   return attachVoiceResult(name, result, args);
@@ -215,6 +216,34 @@ test('nearest-aircraft results name the aircraft, distance and altitude briefly'
     aircraft: { callsign: 'AAL1', distanceKm: 3.26 },
   });
   assert.equal(stale.say, 'Selected AAL1, 3.3 km from Austin, stale.');
+});
+
+test('nearest-aircraft results leave out an altitude the feed did not report', () => {
+  // gevActions sends `altitudeM: null` for an airborne military contact
+  // without a barometric altitude; that is unknown, not sea level.
+  const unknown = envelope('select_nearest_aircraft', {
+    ok: true,
+    location: 'Ramstein',
+    layerId: 'military',
+    feed: { state: 'nominal' },
+    aircraft: { callsign: 'RCH123', altitudeM: null, distanceKm: 8.2 },
+  });
+  assert.equal(unknown.say, 'Selected RCH123, 8.2 km from Ramstein.');
+  assert.deepEqual(unknown.display.lines, ['8.2\u00a0km from Ramstein']);
+
+  // A reported sea-level altitude is still spoken.
+  const seaLevel = envelope('select_nearest_aircraft', {
+    ok: true,
+    location: 'Ramstein',
+    layerId: 'military',
+    feed: { state: 'nominal' },
+    aircraft: { callsign: 'RCH123', altitudeM: 0, distanceKm: 8.2 },
+  });
+  assert.equal(seaLevel.say, 'Selected RCH123, 8.2 km from Ramstein, 0 feet.');
+  assert.deepEqual(seaLevel.display.lines, [
+    '8.2\u00a0km from Ramstein',
+    'Altitude 0 feet',
+  ]);
 });
 
 test('frame_overhead keeps the essential scope audible and lists referents', () => {
@@ -458,4 +487,16 @@ test('labels are bounded and cleaned before they are spoken', () => {
     null,
     'background steps stay on screen',
   );
+});
+
+test('progress step labels join through the catalog colon', () => {
+  setLocale('fr');
+  try {
+    assert.equal(
+      progressStepLabel('resolve', 'Capitol'),
+      'Recherche de lieux\u202f: Capitol',
+    );
+  } finally {
+    setLocale('en');
+  }
 });

@@ -40,7 +40,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 32);
+  assert.equal(first.layers.length, 33);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
@@ -61,6 +61,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     );
   assert.ok(first.get('fire-perimeters'));
   assert.ok(first.get('gnss-integrity'));
+  assert.ok(first.get('s2-ghostmaps'));
   assert.ok(first.get('transit'));
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
@@ -154,7 +155,7 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     surface: fixtureSurface(lifetime.signal),
   };
   const catalog = createApplicationCatalog(options);
-  assert.equal(catalog.layers.length, 32);
+  assert.equal(catalog.layers.length, 33);
   assert.deepEqual(catalog.get('street-level').providerIds, []);
   assert.equal(
     catalogControlServices(catalog).streetLevelLayer,
@@ -191,4 +192,43 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
       }),
     /Mapillary source/,
   );
+});
+
+test('a GNSS integrity source can set the layer evidence window', (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const gnssLayer = (descriptor) => {
+    const sources = fixtureSources([], []);
+    sources['gnss-integrity'] = {
+      getSnapshot: async () => ({}),
+      ...descriptor,
+    };
+    return createApplicationCatalog({
+      sources,
+      signal: lifetime.signal,
+      surface: fixtureSurface(lifetime.signal),
+    }).get('gnss-integrity');
+  };
+  const shows = (layer, minutes) => {
+    assert.equal(layer.provenance.window.minutes, minutes);
+    const { info, legend } = layer.getRowControls();
+    assert.match(info, new RegExp(`visited views over ${minutes} min`));
+    assert.match(legend[0].blurb, new RegExp(`over ${minutes} minutes`));
+  };
+  shows(gnssLayer({ windowMs: 65 * 60_000 }), 65);
+  shows(gnssLayer({}), 30);
+  for (const windowMs of [
+    undefined,
+    null,
+    NaN,
+    Infinity,
+    0,
+    -60_000,
+    '3600000',
+  ])
+    assert.equal(
+      gnssLayer({ windowMs }).provenance.window.minutes,
+      30,
+      `${String(windowMs)} falls back to the default`,
+    );
 });

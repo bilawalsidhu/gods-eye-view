@@ -1,3 +1,4 @@
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GevRealtimeController } from './realtimeController.js';
@@ -17,17 +18,7 @@ function fixture(t) {
     corrections = [],
     states = [];
   const controller = new GevRealtimeController({
-    ui: {
-      root: {
-        dataset: {},
-        classList: { remove() {} },
-        querySelectorAll: () => [],
-        remove() {},
-      },
-      status: {},
-      detail: {},
-      errorDetail: {},
-    },
+    ui: createTestVoiceUi(),
     runner: async () => ({ ok: false }),
     debugSink: null,
     onSessionEvent: (event) => states.push(event),

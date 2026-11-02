@@ -99,11 +99,8 @@ test('dataset URLs still name the complete bundled sources', () => {
   }
 });
 
-test('Acaray and Yacyreta retain matching OSM records in both bundled formats', () => {
+test('Acaray and Yacyreta retain unique OSM records in the current GeoJSONL bundle', () => {
   const folder = new URL('./local_data/dams/', import.meta.url);
-  const collection = JSON.parse(
-    readFileSync(new URL('dams.geojson', folder), 'utf8'),
-  );
   const lines = readFileSync(new URL('dams.geojsonl', folder), 'utf8')
     .trim()
     .split('\n')
@@ -116,10 +113,12 @@ test('Acaray and Yacyreta retain matching OSM records in both bundled formats', 
     assert.equal(matches.length, 1);
     assert.equal(matches[0].properties.name, name);
     assert.equal(matches[0].properties.source_version, version);
-    assert.deepEqual(
-      collection.features.filter((feature) => feature.id === id),
-      matches,
+    assert.equal(matches[0].properties.osm_id, id);
+    assert.match(
+      matches[0].properties.source_url,
+      /^https:\/\/www.openstreetmap.org\//,
     );
+    assert.ok(Array.isArray(matches[0].geometry.coordinates));
   }
 });
 

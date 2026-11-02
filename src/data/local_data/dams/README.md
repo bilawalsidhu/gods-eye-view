@@ -14,7 +14,7 @@ this derived database.
 
 The public-release snapshot removes contact-oriented fields and note values
 that contain email or phone identifiers. The runtime layer does not display or
-depend on those fields. Both `dams.geojson` and the runtime JSONL form carry the
+depend on those fields. Both `dams.geojsonl` and the runtime JSONL form carry the
 same privacy transform.
 
 
@@ -41,3 +41,5 @@ reconcile the shared source label and docs without replacing the regional list.
 Together the snapshots contain 706 OSM + 4,141 NVE + 121 IGN = 4,968 source
 features and 4,967 analyst records. Those are combined expectations, not the
 contents of this standalone OSM-only branch.
+
+depend on those fields.
