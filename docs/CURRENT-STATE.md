@@ -3436,7 +3436,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   operator-side; the final accounting records only comparable population
 >   reductions and deterministic Node allocation/solve measurements. Those
 >   allocation gates were calibrated on Node.js 24.14.x and run in CI on the
->   pinned Node.js 24.22.1 with the same ceilings; `package.json` permits
+>   pinned Node.js 24.22.2 with the same ceilings; `package.json` permits
 >   supported product runtimes on Node 24 or 26, while the allocation runner
 >   separately enforces Node 24 for these two calibrated probes. Each probe
 >   compiles synchronously and discards explicit-GC
@@ -6183,8 +6183,9 @@ The lockfile uses DOMPurify 3.4.17, protobufjs 8.8.0, PostCSS 8.5.28,
 source-map-js 1.2.2 and nanoid 3.3.19. Cesium remains on 1.138.0. Browser QA
 uses Puppeteer 25.10.0; image-processing tools use Sharp 0.35.5. QA scripts await Puppeteer's asynchronous
 executable-path lookup before testing or passing the path to Chrome. Supported Node versions remain
-Node 24 (24.14.0 or later) and 26.x; the Docker image and CI pin 24.22.1, the first 24.x release with
-the October 21, 2026 Node.js security fixes (including CVE-2026-111497). Use
+Node 24 (24.14.0 or later) and 26.x; the Docker image and CI pin 24.22.2,
+the current 24 LTS patch, which carries the October 21, 2026 Node.js security
+fixes first released in 24.22.1 (including CVE-2026-111497). Use
 `npm ci` to reproduce the checked-in dependency tree.
 
 ### Traffic city navigation
