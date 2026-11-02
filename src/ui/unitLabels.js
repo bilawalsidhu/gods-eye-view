@@ -68,10 +68,11 @@ export function formatScaleLabel(label) {
 /**
  * A legend range with its unit: "960 — 1050+ hPa". The unit stays with the
  * last number. In right-to-left text the unit is isolated as well, so a Latin
- * unit keeps its own order ("°C", not "C°").
+ * unit keeps its own order ("°C", not "C°"). Units a source supplied as data
+ * (`verbatim`) are shown as given.
  */
-export function formatScaleRange(low, high, units) {
-  const unit = unitLabel(units);
+export function formatScaleRange(low, high, units, verbatim = false) {
+  const unit = verbatim ? units || '' : unitLabel(units);
   const range = `${formatScaleLabel(low)} — ${formatScaleLabel(high)}`;
   return unit ? `${range}\u00a0${isolate(unit)}` : range;
 }

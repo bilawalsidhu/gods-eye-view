@@ -467,7 +467,8 @@ body.recording-mode .gev-pointer-reticle {
   min-height: 2rem;
   box-sizing: border-box;
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
+  /* background-color, so a .gev-field select keeps its chevron. */
+  background-color: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--glass-border);
   border-radius: 0.3rem;
   font: inherit;
@@ -504,7 +505,6 @@ body.recording-mode .gev-pointer-reticle {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
   padding: 0.55rem 0.75rem 3px 3px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -553,7 +553,7 @@ body.recording-mode .gev-pointer-reticle {
 #gev-voice-timeout-select {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 0 0.45rem;
+  padding: 0 22px 0 0.45rem;
 }
 #gev-voice-timeout-input {
   flex: 0 0 4.5rem;

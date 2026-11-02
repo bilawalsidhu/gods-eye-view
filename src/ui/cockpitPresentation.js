@@ -34,38 +34,9 @@ export const COCKPIT_GROUND_WAIT_TIMEOUT_MS = 5000;
 
 export const COCKPIT_BRIEF_ROTATE_MS = 9000;
 
-export const COCKPIT_BRIEF_CYCLE_OFF_HELP =
-  'Cycle briefing pages automatically every 9 seconds (Signals → News → Local). Pauses while you hover or focus the panel. Live signal data refreshes continuously either way.';
-
-export const COCKPIT_BRIEF_CYCLE_ON_HELP =
-  'Stop automatic page cycling. Previous, Next, and the SIG/NEWS/LOCAL tabs stay available.';
-
 export const COCKPIT_REGIONAL_REFRESH_MS = 5 * 60_000;
 
 export const COCKPIT_REGIONAL_REFRESH_DISTANCE_M = 25_000;
-
-export const COCKPIT_BRIEF_PAGES = [
-  {
-    id: 'signals',
-    kickerKey: msg('LIVE SIGNALS'),
-    subtitleKey: msg('OBSERVED / MAPPED PINGS'),
-    sourceKey: msg('SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS'),
-  },
-  {
-    id: 'news',
-    kickerKey: msg('REGIONAL NEWS'),
-    subtitleKey: msg('LATEST LOCATION-MATCHED REPORTING'),
-    sourceKey: msg('{source} · LOCATION QUERY · RECENT'),
-    sourceName: 'GOOGLE NEWS RSS', // i18n-ignore: provider name
-  },
-  {
-    id: 'local',
-    kickerKey: msg('LOCAL INFO'),
-    subtitleKey: msg('PLACE / CONDITIONS / POSITION'),
-    // Attribution stays English.
-    source: 'NATURAL EARTH · OPEN-METEO · UTC',
-  },
-];
 
 export function isRenderedOnScreen(element) {
   if (!element) return false;
@@ -168,107 +139,4 @@ export function formatCockpitWindDirection(value) {
   // 359.5° and above is north. Modulo keeps that from printing 360°.
   const degrees = Math.round(normalized) % 360;
   return `${compassPointLabel(labels[Math.round(normalized / 45) % labels.length])} · ${degrees}°`;
-}
-
-// Digit grouping and decimal marks (`26,175`, `26 175`, `26.175`) take a
-// narrow cell; a full digit cell would open a gap in the middle of a number.
-const ROLL_SEPARATOR = /^[,.\u00a0\u202f]$/;
-
-function rollTokenClass(character) {
-  return ROLL_SEPARATOR.test(character)
-    ? 'cockpit-roll-token is-separator'
-    : 'cockpit-roll-token';
-}
-
-export function setCockpitRollingValue(
-  element,
-  text,
-  numericValue,
-  { circularRange = null, immediate = false } = {},
-) {
-  if (!element) return;
-  const nextText = String(text);
-  const previousText = element.dataset.rollingText;
-  const previousValue = Number(element.dataset.rollingValue);
-  const nowMs = performance.now();
-  const lastRollMs = Number(element.dataset.rollingAt);
-  if (
-    !immediate &&
-    previousText !== undefined &&
-    previousText !== nextText &&
-    Number.isFinite(lastRollMs) &&
-    nowMs - lastRollMs < 220
-  ) {
-    return;
-  }
-  element.dataset.rollingText = nextText;
-  element.dataset.rollingAt = String(nowMs);
-  if (Number.isFinite(numericValue))
-    element.dataset.rollingValue = String(numericValue);
-  else delete element.dataset.rollingValue;
-  element.setAttribute('aria-label', nextText);
-
-  if (immediate || previousText === undefined || previousText === nextText) {
-    if (
-      previousText !== nextText ||
-      !element.querySelector('.cockpit-roll-token')
-    ) {
-      element.replaceChildren(
-        ...Array.from(nextText, (character) => {
-          const token = document.createElement('span');
-          token.className = rollTokenClass(character);
-          token.setAttribute('aria-hidden', 'true');
-          token.textContent = character;
-          return token;
-        }),
-      );
-    }
-    return;
-  }
-
-  let delta =
-    Number.isFinite(numericValue) && Number.isFinite(previousValue)
-      ? numericValue - previousValue
-      : 0;
-  if (Number.isFinite(circularRange) && circularRange > 0) {
-    const halfRange = circularRange / 2;
-    if (delta > halfRange) delta -= circularRange;
-    else if (delta < -halfRange) delta += circularRange;
-  }
-  const direction = delta < 0 ? 'down' : 'up';
-  const width = Math.max(previousText.length, nextText.length);
-  const from = previousText.padStart(width, ' ');
-  const to = nextText.padStart(width, ' ');
-  const fragment = document.createDocumentFragment();
-
-  for (let index = 0; index < width; index += 1) {
-    const previousCharacter = from[index];
-    const nextCharacter = to[index];
-    const token = document.createElement('span');
-    token.className = rollTokenClass(nextCharacter);
-    token.setAttribute('aria-hidden', 'true');
-
-    if (
-      previousCharacter === nextCharacter ||
-      !/\d/.test(previousCharacter) ||
-      !/\d/.test(nextCharacter)
-    ) {
-      token.textContent = nextCharacter === ' ' ? '\u00a0' : nextCharacter;
-      fragment.append(token);
-      continue;
-    }
-
-    token.classList.add('is-rolling', `roll-${direction}`);
-    const track = document.createElement('span');
-    track.className = 'cockpit-roll-track';
-    const first = document.createElement('span');
-    const second = document.createElement('span');
-    first.textContent = direction === 'up' ? previousCharacter : nextCharacter;
-    second.textContent = direction === 'up' ? nextCharacter : previousCharacter;
-    track.append(first, second);
-    token.append(track);
-    fragment.append(token);
-  }
-
-  element.replaceChildren(fragment);
 }

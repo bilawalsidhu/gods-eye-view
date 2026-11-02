@@ -73,7 +73,7 @@ html:lang(ar) :is(#intel-hud, #cockpit-hud) {
 @media (min-width: 961px) and (min-height: 650px) {
   html[dir='rtl'][data-ui-theme='cyber'] #right-context-rail {
     right: auto;
-    left: 62px;
+    left: calc(51px + var(--panel-rail-clearance));
   }
 }
 
@@ -150,7 +150,6 @@ html[dir='rtl']
     .cockpit-news-list li *,
     #radio-station-name,
     #radio-station-tags,
-    #context-radio-mini-station,
     .cockpit-radio-station
   ) {
   unicode-bidi: plaintext;
@@ -162,12 +161,10 @@ html[dir='rtl'] #bhote-koshi-event-panel [data-role='time'] {
   unicode-bidi: isolate;
 }
 
-/* Physical controls keep their left-to-right sense: the glyph-only media
-   transport (◀◀ ▶ ▶▶), FM seek down/up and the radio dial. The worded
-   PREV / PLAY / NEXT row follows the reading direction like any other
-   button row. */
-html[dir='rtl']
-  :is(.context-radio-mini-transport, .sdr-seek-row, .radio-tuner) {
+/* Physical controls keep their left-to-right sense: FM seek down/up and the
+   radio dial. The worded PREV / PLAY / NEXT row follows the reading
+   direction like any other button row. */
+html[dir='rtl'] :is(.sdr-seek-row, .radio-tuner) {
   direction: ltr;
 }
 

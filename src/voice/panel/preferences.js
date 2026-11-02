@@ -102,93 +102,88 @@ export function createVoicePreferences({ storage } = {}) {
 
 /** Mount-local controls, backed by an independently owned preference model. */
 export function bindPreferenceControls({ ui, preferences, copy, onChange }) {
-  const {
-    voicePreviewInput: preview,
-    voicePreviewNote: previewNote,
-    voiceTimeoutSelect: select,
-    voiceTimeoutInput: input,
-    voiceTimeoutNote: timeoutNote,
-  } = ui;
   let disposed = false;
   const initial = preferences.snapshot();
-  const displayed = parseMinutes(input?.value);
+  const displayed = parseMinutes(ui.state.preferences.timeoutMinutes);
   let custom =
     !PRESETS.includes(String(initial.minutes)) && initial.minutes > 0
       ? initial.minutes
       : displayed > 0
         ? displayed
         : 5;
+  // Every render republishes the fields, so a refused change shows the
+  // applied value again.
   function render(state) {
     if (disposed) return;
-    if (preview) preview.checked = state.previewEnabled;
-    if (previewNote)
-      previewNote.textContent = `${copy.previewNote}${state.previewPersisted === false ? ` ${copy.notSaved}` : ''}`;
-    if (timeoutNote)
-      timeoutNote.textContent = `${copy.timeoutNote}${state.timeoutPersisted === false ? ` ${copy.notSaved}` : ''}`;
     const value = String(state.minutes);
     const customSelected = state.minutes > 0 && !PRESETS.includes(value);
     if (customSelected) custom = state.minutes;
-    if (select)
-      select.value =
-        state.minutes === 0 ? '0' : customSelected ? 'custom' : value;
-    if (input) {
-      input.value = String(custom);
-      input.hidden = !customSelected;
-    }
+    ui.update('preferences', {
+      previewChecked: state.previewEnabled,
+      // Functions, so a locale change words the notes again.
+      previewNote: () =>
+        `${copy.previewNote}${state.previewPersisted === false ? ` ${copy.notSaved}` : ''}`,
+      timeoutNote: () =>
+        `${copy.timeoutNote}${state.timeoutPersisted === false ? ` ${copy.notSaved}` : ''}`,
+      timeoutChoice:
+        state.minutes === 0 ? '0' : customSelected ? 'custom' : value,
+      timeoutMinutes: String(custom),
+      timeoutInputHidden: !customSelected,
+      revision: ui.state.preferences.revision + 1,
+    });
   }
   const unsubscribe = preferences.subscribe((state) => {
     render(state);
     onChange?.(state);
   });
-  const previewChange = () => {
-    if (!disposed && !preferences.setPreviewEnabled(preview.checked).ok)
-      render(preferences.snapshot());
-  };
-  const selectChange = () => {
-    if (disposed) return;
-    const value = select.value;
-    if (value === 'custom') {
-      const parsed = parseMinutes(input?.value);
+  // A custom value may equal a preset: keep the person's explicit editor
+  // choice.
+  const showCustom = () =>
+    ui.update('preferences', {
+      timeoutChoice: 'custom',
+      timeoutMinutes: String(custom),
+      timeoutInputHidden: false,
+      revision: ui.state.preferences.revision + 1,
+    });
+  const offs = [
+    ui.on('preview-change', (checked) => {
+      if (!disposed && !preferences.setPreviewEnabled(checked).ok)
+        render(preferences.snapshot());
+    }),
+    ui.on('timeout-select', (value) => {
+      if (disposed) return;
+      if (value === 'custom') {
+        const parsed = parseMinutes(ui.state.preferences.timeoutMinutes);
+        if (parsed === undefined || parsed === 0) {
+          render(preferences.snapshot());
+          return;
+        }
+        custom = parsed;
+        preferences.setMinutes(parsed);
+        showCustom();
+      } else if (value === '0' || PRESETS.includes(value))
+        preferences.setMinutes(value);
+      else render(preferences.snapshot());
+    }),
+    ui.on('timeout-input', (value) => {
+      if (disposed) return;
+      const parsed = parseMinutes(value);
       if (parsed === undefined || parsed === 0) {
         render(preferences.snapshot());
         return;
       }
       custom = parsed;
       preferences.setMinutes(parsed);
-      // A custom value may equal a preset: retain the user's explicit editor choice.
-      select.value = 'custom';
-      if (input) input.hidden = false;
-    } else if (value === '0' || PRESETS.includes(value))
-      preferences.setMinutes(value);
-    else render(preferences.snapshot());
-  };
-  const inputChange = () => {
-    if (disposed) return;
-    const parsed = parseMinutes(input.value);
-    if (parsed === undefined || parsed === 0) {
-      render(preferences.snapshot());
-      return;
-    }
-    custom = parsed;
-    preferences.setMinutes(parsed);
-    if (select) select.value = 'custom';
-    input.hidden = false;
-  };
-  const bindings = [
-    [preview, previewChange],
-    [select, selectChange],
-    [input, inputChange],
+      showCustom();
+    }),
   ];
-  for (const [element, listener] of bindings)
-    element?.addEventListener('change', listener);
   render(initial);
   return {
     dispose() {
       if (disposed) return;
       disposed = true;
       unsubscribe();
-      for (const [element, listener] of bindings)
-        element?.removeEventListener('change', listener);
+      for (const off of offs) off();
     },
   };
 }

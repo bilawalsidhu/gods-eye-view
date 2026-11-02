@@ -107,7 +107,7 @@ probability of about 255 in 256 (many of them already fail as base64url).
 | 13  | thing                        | LEN   | none        | sub-message, see thing views                                      |
 | 14  | `style`                      | enum  | `normal`    | normal, retro, surveillance, thermal, anime, noir, snow (retired) |
 | 15  | `mapStack`                   | enum  | `photoreal` | photoreal, bing-aerial, bing-labels, esri-imagery, osm            |
-| 16  | `hudVariant`                 | enum  | style       | tactical, operator, minimal, cyber                                |
+| 16  | `hudVariant`                 | enum  | style       | tactical, operator (retired), minimal, cyber                      |
 | 17  | `bloomIntensity`             | uint  | style       |                                                                   |
 | 18  | `bloomVersion`               | uint  | 2           |                                                                   |
 | 19  | `sharpenIntensity`           | uint  | style       |                                                                   |
@@ -128,6 +128,9 @@ as LEN text in the same field, so the app can add a style or map before this
 table learns its code. A new style's settings are encoded against its own
 defaults, while a decoder that does not know the style uses Normal's; adding a
 style also extends the pinned style-defaults table.
+
+`hudVariant` code 1 (`operator`) is retired: the app no longer offers that
+layout and restores it as `tactical`. The code stays reserved.
 
 Flag bits (field 9): 0 `bloom`, 1 `sharpen`, 2 `hudVisible`, 3
 `celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on).

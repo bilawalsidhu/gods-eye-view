@@ -31,6 +31,8 @@ test('importing and constructing the package is inactive without browser globals
   const result = spawnSync(
     process.execPath,
     [
+      // Views are single-file components; Node needs the loader hosts use.
+      '--import=gods-eye-view/build/register-vue',
       '--input-type=module',
       '-e',
       `

@@ -349,7 +349,7 @@ test('camera updates retain a preload until the visible player loads', () => {
   assert.equal(frame.parent, root, 'keep the preload while the visible player starts');
   const card = root.children.find(node => node.tag === 'section');
   const body = card.children.find(node => node.className === 'bhote-embedded-callout-body');
-  const player = body.children.find(node => node.className === 'bhote-embedded-callout-player');
+  const player = body.children.find(node => node.className.split(' ').includes('bhote-embedded-callout-player'));
   player.children.find(node => node.tag === 'iframe').dispatchEvent(new Event('load'));
   assert.equal(frame.parent, null, 'visible player readiness releases the preload');
   media.destroy();

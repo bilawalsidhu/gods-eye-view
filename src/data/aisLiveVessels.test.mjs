@@ -35,6 +35,10 @@ import { ensureGeoidReady, geoidHeight } from './geoid.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
 import { applyVesselOverlayPolicy } from './vesselLabels.js';
 import { layerFeedState } from './manager.js';
+import {
+  presentSelectedVessel,
+  subscribeSelectedVessel,
+} from '../hudReadouts.js';
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42), null);
@@ -856,15 +860,6 @@ function makeTrailSpy() {
   };
 }
 
-function makeClassList(...initial) {
-  const classes = new Set(initial);
-  return {
-    add(value) { classes.add(value); },
-    remove(value) { classes.delete(value); },
-    contains(value) { return classes.has(value); },
-  };
-}
-
 function makeInteractionHandler() {
   return {
     click: null,
@@ -934,14 +929,20 @@ function installWireHarness(picked, stateOverrides = {}) {
   };
   const record = makeRecord();
   const trail = makeTrailSpy();
+  presentSelectedVessel({ text: `AIS: ${record.name}` });
+  let vesselReadout;
+  const stopReadout = subscribeSelectedVessel(
+    (readout) => (vesselReadout = readout),
+  );
   const hud = {
-    textContent: `AIS: ${record.name}`,
-    classList: makeClassList('active'),
+    get readout() {
+      return vesselReadout;
+    },
   };
 
   globalThis.window = windowTarget;
   globalThis.document = {
-    getElementById: (id) => (id === 'hud-ais-vessel' ? hud : null),
+    getElementById: () => null,
   };
   _setVesselStateForTest({
     records: [record],
@@ -966,6 +967,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     reinstalledHandlers,
     interactionHandlerFactory,
     cleanup() {
+      stopReadout();
       aisLiveVesselsLayer.destroy();
       if (hadWindow) globalThis.window = priorWindow;
       else delete globalThis.window;
@@ -1091,8 +1093,7 @@ test('vessel interaction wire: id-less 3D Tiles pick deselects and resets the HU
     harness.handler.click({ position: { x: 10, y: 20 } });
 
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
-    assert.equal(harness.hud.textContent, 'AIS: --');
-    assert.equal(harness.hud.classList.contains('active'), false);
+    assert.equal(harness.hud.readout, null);
     // Clicking away is a deliberate deselect, not the vessel aging out of the
     // feed. Consumers that keep a readout on screen (the Cockpit Contact
     // panel) tear down on 'deliberate' and hold last-known on 'evicted'.
@@ -1119,8 +1120,7 @@ test('vessel interaction wire: empty pick deselects and emits gev:entity-selecti
     harness.handler.click({ position: { x: 10, y: 20 } });
 
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
-    assert.equal(harness.hud.textContent, 'AIS: --');
-    assert.equal(harness.hud.classList.contains('active'), false);
+    assert.equal(harness.hud.readout, null);
     // Empty pick is a deliberate deselect — see the note above.
     assert.deepEqual(cleared, [{ layerId: 'ais-live-vessels', reason: 'deliberate' }]);
   } finally {
@@ -1133,8 +1133,7 @@ test('vessel interaction wire: Escape deselects the selected vessel', () => {
   try {
     harness.keyTarget.dispatch({ key: 'Escape' });
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
-    assert.equal(harness.hud.textContent, 'AIS: --');
-    assert.equal(harness.hud.classList.contains('active'), false);
+    assert.equal(harness.hud.readout, null);
   } finally {
     harness.cleanup();
   }

@@ -64,16 +64,31 @@ test('the Cyber cockpit keeps Data Layers on the left edge in every language', (
   assert.match(body, /right: auto;/);
 });
 
-test('the compact Radio window opens toward the screen in right-to-left', () => {
-  const layers = ruleBody(sheet('layers.css'), '.context-radio-mini');
-  assert.match(layers, /inset-inline-end: -38px;/);
-  assert.doesNotMatch(layers, /(?:^|\s)right:/);
-  const responsive = /\.context-radio-mini \{([^}]*)\}/.exec(
-    sheet('responsive.css'),
+test('the panel rails stay on the outer side of their stacks in right-to-left', () => {
+  const layers = sheet('layers.css');
+  // Each rail is placed against its stack's outer edge; a physical side
+  // would put it over the panels once the stacks swap sides.
+  const left = ruleBody(layers, '.gev-panel-rail--left');
+  assert.match(left, /inset-inline-end: calc\(100% \+ 6px\);/);
+  assert.doesNotMatch(left, /(?:^|\s)(?:left|right):/);
+  const right = ruleBody(layers, '.gev-panel-rail--right');
+  assert.match(right, /inset-inline-start: calc\(100% \+ 6px\);/);
+  assert.doesNotMatch(right, /(?:^|\s)(?:left|right):/);
+  // Their tips open toward the middle of the screen.
+  const kit = sheet('kit.css');
+  assert.match(
+    ruleBody(kit, '.ui-tooltip__tip--right'),
+    /inset-inline-start: calc\(100% \+ 10px\);/,
   );
-  assert.ok(responsive);
-  assert.match(responsive[1], /inset-inline-end: -38px;/);
-  assert.doesNotMatch(responsive[1], /(?:^|\s)right:/);
+  assert.match(
+    ruleBody(kit, '.ui-tooltip__tip--left'),
+    /inset-inline-end: calc\(100% \+ 10px\);/,
+  );
+  // Cyber's right stack keeps its rail clearance on the left edge.
+  assert.match(
+    sheet('rtl.css'),
+    /html\[dir='rtl'\]\[data-ui-theme='cyber'\] #right-context-rail \{\s*right: auto;\s*left: calc\(51px \+ var\(--panel-rail-clearance\)\);/,
+  );
 });
 
 test('phone top-bar actions mirror with the logo', () => {

@@ -28,9 +28,6 @@ export class DataLayerManager extends LayerLifecycle {
   _buildMetaText(layer) {
     return this._presentation.panel._buildMetaText(layer);
   }
-  _syncToggleButton(button, layer) {
-    return this._presentation.panel._syncToggleButton(button, layer);
-  }
   get _layerPanel() {
     return this._presentation._panel;
   }
