@@ -276,8 +276,9 @@ export function largestGeoJsonRing(geojson) {
  */
 export function createBhoteKoshiLocatorLayer({
   boundaryResolver = DEFAULT_BOUNDARY_RESOLVER,
+  createNativeRenderer,
   overlayHost = DEFAULT_OVERLAY_HOST,
-  requestRender = governorRequestRender,
+  requestRender: requestSceneRender = governorRequestRender,
   now = () => performance.now(),
   scheduleFrame = (callback) => requestAnimationFrame(callback),
   cancelFrame = (handle) => cancelAnimationFrame(handle),
@@ -285,6 +286,12 @@ export function createBhoteKoshiLocatorLayer({
   cancelDelay = (handle) => clearTimeout(handle),
 } = {}) {
   let _viewer = null;
+  let _engine = null;
+  let _native = null;
+  let _pausedApproach = null;
+  const cameraForScene = () => _engine?.camera ?? _viewer?.camera;
+  const creditTarget = () => _engine ?? _viewer;
+  const requestRender = reason => _engine?.kind === 'navara' ? _engine.render.request(reason) : requestSceneRender(reason);
   let _dataSource = null;
   let _enabled = false;
   let _boundaryReady = false;
@@ -332,7 +339,7 @@ export function createBhoteKoshiLocatorLayer({
     _removeTriggerMoveEnd = null;
     const wasInFlight = _triggerApproachInFlight;
     _triggerApproachInFlight = false;
-    if (wasInFlight) _viewer?.camera?.cancelFlight?.();
+    if (wasInFlight) cameraForScene()?.cancelFlight?.();
     if (!preserveCallout) _triggerCalloutStartedAt = Number.POSITIVE_INFINITY;
   }
 
@@ -349,6 +356,8 @@ export function createBhoteKoshiLocatorLayer({
   function removeDataSource() {
     stopAnimations();
     overlayHost.clearSource(BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID);
+    _native?.destroy();
+    _native = null;
     if (_dataSource && _viewer?.dataSources)
       _viewer.dataSources.remove(_dataSource, true);
     _dataSource = null;
@@ -618,9 +627,16 @@ export function createBhoteKoshiLocatorLayer({
     _removeTriggerMoveEnd = null;
     _triggerCalloutStartedAt = now();
     requestRender('bhote-koshi-trigger-record-reveal');
-    const camera = _viewer?.camera;
+    flyTriggerStage(attempt, 'flying', TRIGGER_APPROACH_DURATION_SEC);
+  }
+
+  function flyTriggerStage(attempt, phase, duration) {
+    const camera = cameraForScene();
     if (!camera?.flyTo) return;
-    const generation = _generation;
+    const orbit = phase === 'orbiting';
+    const pose = orbit ? TRIGGER_ORBIT_CAMERA : TRIGGER_APPROACH_CAMERA;
+    attempt.phase = phase;
+    attempt.endsAt = now() + duration * 1000;
     _triggerApproachInFlight = true;
     const finish = () => {
       if (_triggerApproachAttempt !== attempt) return;
@@ -628,46 +644,18 @@ export function createBhoteKoshiLocatorLayer({
       _triggerApproachInFlight = false;
     };
     camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        TRIGGER_APPROACH_CAMERA.lon,
-        TRIGGER_APPROACH_CAMERA.lat,
-        TRIGGER_APPROACH_CAMERA.alt,
-      ),
+      destination: Cesium.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.alt),
       orientation: {
-        heading: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.heading),
-        pitch: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.pitch),
-        roll: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.roll),
+        heading: Cesium.Math.toRadians(pose.heading),
+        pitch: Cesium.Math.toRadians(pose.pitch),
+        roll: Cesium.Math.toRadians(pose.roll),
       },
-      duration: TRIGGER_APPROACH_DURATION_SEC,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      duration,
+      easingFunction: orbit ? Cesium.EasingFunction.SINUSOIDAL_IN_OUT : Cesium.EasingFunction.CUBIC_IN_OUT,
       complete: () => {
-        if (_triggerApproachAttempt !== attempt || attempt.phase !== 'flying')
-          return;
-        if (
-          !_enabled ||
-          generation !== _generation ||
-          _presentation !== BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION
-        ) {
-          finish();
-          return;
-        }
-        attempt.phase = 'orbiting';
-        camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(
-            TRIGGER_ORBIT_CAMERA.lon,
-            TRIGGER_ORBIT_CAMERA.lat,
-            TRIGGER_ORBIT_CAMERA.alt,
-          ),
-          orientation: {
-            heading: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.heading),
-            pitch: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.pitch),
-            roll: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.roll),
-          },
-          duration: TRIGGER_ORBIT_DURATION_SEC,
-          easingFunction: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
-          complete: finish,
-          cancel: finish,
-        });
+        if (_triggerApproachAttempt !== attempt) return;
+        if (orbit || !_enabled || _presentation !== BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION) finish();
+        else flyTriggerStage(attempt, 'orbiting', TRIGGER_ORBIT_DURATION_SEC);
       },
       cancel: finish,
     });
@@ -681,7 +669,7 @@ export function createBhoteKoshiLocatorLayer({
     const attempt = { phase: 'armed' };
     _triggerApproachAttempt = attempt;
     const start = () => startTriggerApproach(attempt);
-    const camera = _viewer?.camera;
+    const camera = cameraForScene();
     if (
       !camera?.moveStart?.addEventListener ||
       !camera?.moveEnd?.addEventListener
@@ -1046,9 +1034,40 @@ export function createBhoteKoshiLocatorLayer({
     requestRender('bhote-koshi-locator-presentation');
   }
 
-  async function init(viewer) {
+  function connectDisplay() {
+    if (!_dataSource) return;
+    if (_viewer) _viewer.dataSources.add(_dataSource);
+    else if (_engine) _native = createNativeRenderer(_engine, _dataSource);
+    registerDynamicCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_CREDIT);
+    showOsmCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_LAYER_ID);
+  }
+
+  function attachRenderer(viewer, {engine = null} = {}) {
     _viewer = viewer;
+    _engine = engine;
+    if (!_enabled) return true;
+    connectDisplay();
+    publishOverlayEntries({moving: _placeRevealMoving});
+    if (_pausedApproach) {
+      const {phase, remaining} = _pausedApproach;
+      _pausedApproach = null;
+      if (phase === 'armed') armTriggerApproach();
+      else flyTriggerStage((_triggerApproachAttempt = {}), phase, remaining);
+    }
     return true;
+  }
+
+  function detachRenderer() {
+    const phase = _triggerApproachAttempt?.phase;
+    if (phase && phase !== 'finished') {
+      _pausedApproach = {phase, remaining: Math.max(0, (_triggerApproachAttempt.endsAt - now()) / 1000)};
+      clearTriggerApproach({preserveCallout: true});
+    }
+    _native?.destroy();
+    _native = null;
+    if (_viewer && _dataSource) _viewer.dataSources.remove(_dataSource, false);
+    hideOsmCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    _engine = _viewer = null;
   }
 
   async function enable(viewer, { signal } = {}) {
@@ -1062,9 +1081,7 @@ export function createBhoteKoshiLocatorLayer({
     const dataSource = new Cesium.CustomDataSource('bhote-koshi-locator');
     _dataSource = dataSource;
     renderPresentation();
-    viewer.dataSources.add(dataSource);
-    registerDynamicCredit(viewer, BHOTE_KOSHI_LOCATOR_CREDIT);
-    showOsmCredit(viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    connectDisplay();
     requestRender('bhote-koshi-locator-callout');
 
     try {
@@ -1100,7 +1117,8 @@ export function createBhoteKoshiLocatorLayer({
   }
 
   async function disable() {
-    hideOsmCredit(_viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    hideOsmCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    _pausedApproach = null;
     _enabled = false;
     _boundaryReady = false;
     _boundaryResolved = false;
@@ -1113,7 +1131,7 @@ export function createBhoteKoshiLocatorLayer({
 
   async function destroy() {
     await disable();
-    _viewer = null;
+    _viewer = _engine = null;
   }
 
   return {
@@ -1124,7 +1142,9 @@ export function createBhoteKoshiLocatorLayer({
     icon: '◎',
     source: 'OpenStreetMap + GeoPera',
     updateInterval: 0,
-    init,
+    init: attachRenderer,
+    attachRenderer,
+    detachRenderer,
     enable,
     disable,
     update: async () => true,

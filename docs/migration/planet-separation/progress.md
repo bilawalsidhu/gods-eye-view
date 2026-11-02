@@ -51,3 +51,7 @@ The geographic source survives an in-flight scene change. Navara shares one rout
 ### Directions and an active route flight
 
 One layer retains A/B, a pending route, maneuver selection and the flight trajectory. Both cameras apply the same route frames and floor policy. The release test placed A and B with real Navara clicks, received the previously pending route in Cesium, restored the selected step, then switched twice during FLY. The same motion ID advanced on each globe (about 60 metres in each timed sample). CLEAR released it. The route was requested once. Full tests, boundaries, release build and keyless headless round trip passed.
+
+### Nepal locator
+
+The locator owns its Nepal boundary, presentation clock and source graphics, and switches only their scene attachment. Navara draws map-colored clamped geometry and pulse markers. The release test compared the same viewport with the river visible and hidden: 374 additional cyan pixels on Navara, 413 on Cesium, and 353 after returning to Navara. Also corrected engine-specific color evaluation for TeleGeography and dynamic credit ownership per display. The cable round trip passed again.

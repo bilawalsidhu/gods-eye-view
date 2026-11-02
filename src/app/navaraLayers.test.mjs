@@ -43,6 +43,7 @@ test('the Navara mode registers migrated renderers once', async () => {
       .available()
       .map(({ id }) => id),
     [
+      'bhote-koshi-locator',
       'flights',
       'military',
       'local-adsb',

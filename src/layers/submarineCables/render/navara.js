@@ -1,5 +1,4 @@
 import * as geo from '../../../geo/index.js';
-import { Color } from 'three';
 import { isPointerFree } from '../../../data/inputOwnership.js';
 import {
   featureLabel,
@@ -201,7 +200,7 @@ export function createNavaraCables(engine, native, host) {
       layer.on('featureUpdated', ({ evaluator }) =>
         evaluator.evaluate(({ properties }) => {
           const css = properties?.color ?? BASE_CABLE_COLOR;
-          if (!colors.has(css)) colors.set(css, new Color(css));
+          if (!colors.has(css)) colors.set(css, new native.NavaraColor().setStyle(css));
           return { color: colors.get(css) };
         }),
       );

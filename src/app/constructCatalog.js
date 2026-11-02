@@ -164,9 +164,10 @@ export function createApplicationCatalog({
       [
         'bhote-koshi-locator',
         () =>
-          createBhoteKoshiLocatorLayer({
+          sessionModel('bhote-koshi-locator', () => createBhoteKoshiLocatorLayer({
             boundaryResolver: nepalBoundaryResolver,
-          }),
+            createNativeRenderer: (engine, data) => rendererFor('bhote-koshi-locator', engine, { data }),
+          })),
       ],
       ['flights', flights],
       ['military', military],

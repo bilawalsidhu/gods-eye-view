@@ -147,6 +147,9 @@ test('data credits go through the globe engine credits', async () => {
     engine.fake.credits.filter(({ html }) => html === 'D').length,
     1,
   );
+  const other = createFakeEngine();
+  registerDynamicCredit(other, { key: 'engine-dyn', html: 'D' });
+  assert.equal(other.fake.credits.filter(({ html }) => html === 'D').length, 1);
   engine.fake.resetCalls();
   assert.equal(showOsmCredit(engine, 'alpr', { openMapTiles: true }), true);
   const inline = engine.fake.credits.filter(({ onScreen }) => onScreen);
