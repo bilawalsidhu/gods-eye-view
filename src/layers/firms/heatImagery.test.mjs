@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHeatImagery } from './heatImagery.js';
+import { buildHeatRaster } from '../../data/firmsHeatRaster.js';
+import { HEAT_RASTER } from './policy.js';
 
 function harness() {
   const layers = [];
@@ -84,4 +86,27 @@ test('destroy removes the layer', () => {
   h.imagery.setRaster(raster);
   h.imagery.destroy();
   assert.equal(h.layers.length, 0);
+});
+
+test('the shipped raster paints a lone weak fire as a marker-sized spot', () => {
+  // A hot cluster elsewhere sets the scale, as Africa does on real data.
+  const fires = [{ lat: 0, lon: 0, frp: 5 }];
+  for (let i = 0; i < 40; i++) {
+    fires.push({ lat: -10 + (i % 5) * 0.1, lon: 25 + i * 0.05, frp: 300 });
+  }
+  const r = buildHeatRaster(fires, HEAT_RASTER);
+  const y = Math.floor((90 / 180) * r.height);
+  const painted = [];
+  for (let x = 0; x < r.width; x++) {
+    const lon = ((x + 0.5) / r.width) * 360 - 180;
+    if (Math.abs(lon) < 5 && r.rgba[(y * r.width + x) * 4 + 3] > 0) {
+      painted.push(x);
+    }
+  }
+  const kmPerPx = 40075 / r.width;
+  assert.ok(painted.length > 0, 'the weak fire still shows');
+  assert.ok(
+    painted.length * kmPerPx <= 80,
+    `spot ${Math.round(painted.length * kmPerPx)} km wide`,
+  );
 });

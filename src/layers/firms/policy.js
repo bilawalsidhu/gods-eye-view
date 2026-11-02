@@ -49,14 +49,17 @@ export const LOD_LEVELS = [
 ];
 
 /**
- * Global heat raster for the `heat` bands: ≈0.18° per pixel, Gaussian σ in
- * pixels. Built once per data refresh or filter change, never per camera move.
+ * Global heat raster for the `heat` bands: ≈0.09° (≈10 km) per pixel and a
+ * one-pixel Gaussian σ, so a lone fire is a spot about as wide as its marker
+ * at the 3,000 km hand-off and neighbours merge only when they really touch
+ * (2048 px with σ 3 smeared each fire over ~200 km). Built once per data
+ * refresh or filter change, never per camera move.
  */
 
 export const HEAT_RASTER = Object.freeze({
-  width: 2048,
-  height: 1024,
-  sigmaPx: 3,
+  width: 4096,
+  height: 2048,
+  sigmaPx: 1,
 });
 
 /**

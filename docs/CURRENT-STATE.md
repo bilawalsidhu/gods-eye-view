@@ -2185,9 +2185,10 @@ accents read that ramp; confidence and brightness do not affect the color.
 
 At far zoom (camera above ~3,000 km) the layer drapes a Snap Map–style
 heatmap instead of individual markers: the shown detections are binned on a
-global 2048 × 1024 grid, each weighted by its FRP in megawatts (so heat is
+global 4096 × 2048 grid (≈10 km per pixel), each weighted by its FRP in megawatts (so heat is
 radiated power, and raising the FRP slider does not dim areas where strong fires
-burn), Gaussian-blurred,
+burn), Gaussian-blurred by one pixel so each fire stays a spot about the size
+of its marker,
 normalized on a log scale against the 99.5th percentile and mapped through the
 same hues, from a bright red edge through orange and gold to a pale
 white-hot core. The edge starts more than half opaque, so regions far below
