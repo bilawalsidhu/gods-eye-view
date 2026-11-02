@@ -378,6 +378,14 @@ export function createTracking({
         flightState._trailPositions.push(geo.cartesian3.clone(fix.position));
       }
     }
+    _attachTrail();
+    const oldestFixEpochSec = history.length
+      ? history[0].timeMs / 1000
+      : Infinity;
+    _backfillTrail(icao24, flightState._trailBackfillToken, oldestFixEpochSec);
+  }
+
+  function _attachTrail() {
     if (!flightState._trail && flightState._renderer) {
       flightState._trail = flightState._renderer.trails.create({
         color: TRAIL_COLOR,
@@ -440,11 +448,6 @@ export function createTracking({
       });
     }
     _refreshTrailDisplay();
-
-    const oldestFixEpochSec = history.length
-      ? history[0].timeMs / 1000
-      : Infinity;
-    _backfillTrail(icao24, flightState._trailBackfillToken, oldestFixEpochSec);
   }
 
   /**
@@ -565,6 +568,13 @@ export function createTracking({
 
   function _destroyTrail() {
     _clearTrail();
+    _detachTrail();
+  }
+
+  function _detachTrail() {
+    if (flightState._trailHeadEntity)
+      flightState._renderer?.trails.removeHead(flightState._trailHeadEntity);
+    flightState._trailHeadEntity = null;
     if (flightState._trail) {
       flightState._trail.destroy();
       flightState._trail = null;
@@ -870,8 +880,11 @@ export function createTracking({
    * @param {string} icao24 - ICAO 24-bit transponder address to track.
    */
 
-  function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
-    _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
+  function _trackFlight(
+    icao24,
+    { origin = 'programmatic', resume = false, follow = true } = {},
+  ) {
+    if (!resume) _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
     const bb = flightState._billboards.get(icao24);
     const info = flightState.records.data.get(icao24);
@@ -998,14 +1011,20 @@ export function createTracking({
     refreshTrackedReadout(flightState._trackedEntity);
     // Camera follows the tracked entity (the renderer cancels any flight
     // first and applies the one exact tracked frame).
-    flightState._trackedCameraFrameStop = flightState._renderer.follow.start(
-      flightState._trackedEntity,
-    );
+    if (follow) {
+      flightState._trackedCameraFrameStop = flightState._renderer.follow.start(
+        flightState._trackedEntity,
+      );
+    }
 
     // Track-history trail (PRD F1): seed from local history + async backfill.
     // Ground traffic draws NO trail (a taxi path is noise, not a track) — if the
     // plane takes off while tracked, the on_ground→false transition in update()
     // starts one.
+    if (resume) {
+      _attachTrail();
+      return;
+    }
     parts.enrichment._requestTypeEnrichment(icao24, true); // tracked plane — front of the enrichment queue
     parts.enrichment._requestRouteEnrichment(icao24);
     // Round 2 (owner): grounded contacts get trails too — a landed-but-taxiing
@@ -1040,23 +1059,24 @@ export function createTracking({
    */
 
   function _onMilitaryActiveChange(active) {
-    if (!flightState._renderer?.fleet.attached()) return;
+    if (!flightState.enabled) return;
     if (active) {
-      for (const [icao24, bb] of flightState._billboards) {
+      for (const icao24 of flightState.records.data.keys()) {
         if (!isMilitaryIcao(icao24) || icao24 === flightState._trackedIcao)
           continue;
-        flightState._renderer.fleet.remove(bb);
+        const bb = flightState._billboards.get(icao24);
+        if (bb) flightState._renderer.fleet.remove(bb);
         flightState._billboards.delete(icao24);
         parts.rendering._releaseModel(icao24); // military-suppression: drop any 3D model too
-        flightState.records.data.delete(icao24);
+        flightState.records.forget(icao24);
         flightState._cullPositions.delete(icao24);
         flightState._positionHistory.delete(icao24);
         flightState._displayCourse.delete(icao24);
         flightState._groundSnap.forget(icao24);
         flightState.records.missingPolls.delete(icao24);
       }
-      flightState.feed._count = flightState._billboards.size;
-    } else if (flightState._renderer.fleet.visible()) {
+      flightState.feed._count = flightState.records.data.size;
+    } else {
       // Fire-and-forget refresh; only while the layer is actually enabled.
       // The query reads the renderer's camera (no viewer argument needed).
       void flightsLayer.update(null).catch((error) => {
@@ -1196,6 +1216,7 @@ export function createTracking({
     _backfillTrail,
     _clearTrail,
     _destroyTrail,
+    _detachTrail,
     _clearTracking,
     _militaryLayerSuppresses,
     _applyPendingTrackingRestore,

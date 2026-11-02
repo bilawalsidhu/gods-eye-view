@@ -5,7 +5,7 @@ import { ENRICH_AMBIENT_BUDGET_CEIL } from './policy.js';
 
 export function createFlightState({ source, services }) {
   const { createGroundSnap } = services.groundSnap;
-  const flightState = { lifetime: new AbortController() };
+  const flightState = { lifetime: new AbortController(), enabled: false };
   flightState.feed = createFlightFeed(source);
   flightState.records = new FlightRecords({
     ...services.geoid,
