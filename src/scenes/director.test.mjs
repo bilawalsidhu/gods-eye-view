@@ -1,4 +1,6 @@
 import { readShellSource } from '../testSupport/readShellSource.mjs';
+import { useStatusStore } from '../ui/stores/status.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 // Director-level pins for scene playback.
 //
 // scenePolicy.test.mjs pins the pure decisions; these pin the wiring, which is
@@ -712,6 +714,10 @@ test('a legacy three-shot Nepal browser project bootstraps to the current 25-sho
     assert.deepEqual(scene.shots.slice(0, 3).map(({ camera }) => camera), originalCameras);
     assert.equal(scene.appliedShotPacks[0].id, 'bhote-koshi-nepal-evidence-pack');
     assert.equal(scene.appliedShotPacks[0].version, 18);
+    // displayShotTitle trusts these bindings to localize the bootstrap shots.
+    for (const shot of scene.shots.slice(0, 8)) {
+      assert.equal(scene.appliedShotPacks[0].shotBindings[shot.title], shot.id);
+    }
     assert.equal(director._selectedSceneId, scene.id);
     assert.equal(director._selectedShotId, scene.shots[0].id);
   } finally {
@@ -1924,7 +1930,7 @@ test('invalid authored edits cannot persist an unreadable project over a good sa
   try {
     const before = localStorage.getItem('godsEyeView.sceneProject.v2');
     let notice;
-    director._toastStorageError = (message) => { notice = message; };
+    director._toastStorageError = (message) => { notice = message(); };
     director._project.scenes[0].shots[0].camera.lat = 91;
     director._saveProject();
     assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), before);
@@ -1991,6 +1997,9 @@ test('a capture, update or import that cannot be saved keeps the "Scene not save
       { prepared: { project: structuredClone(PROJECT_FIXTURE), assets: [] } },
     ), true);
     assert.match(status, /^Scene not saved/, 'failed import keeps the save failure');
+    const toast = useStatusStore(applicationPinia()).toast;
+    assert.equal(toast.visible, true);
+    assert.match(toast.text, /^Scene not saved/, 'the page toast says so too');
   } finally { console.warn = warn; await director.destroy(); restore(); }
 });
 
