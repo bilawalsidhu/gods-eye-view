@@ -29,6 +29,19 @@ function toFiveWordHudSummary(value) {
 }
 
 async function handleHudSummary(req, res) {
+  // Capability probe: lets the HUD skip its paid place lookups when there is
+  // no summary to feed them to.
+  if (req.method === 'GET' && req.url?.split('?')[0] === '/status') {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(
+      JSON.stringify({
+        configured: !keylessHudSummaryResponse(process.env.OPENAI_API_KEY),
+      }),
+    );
+    return;
+  }
   if (req.method !== 'POST') {
     res.statusCode = 405;
     res.setHeader('Content-Type', 'application/json');

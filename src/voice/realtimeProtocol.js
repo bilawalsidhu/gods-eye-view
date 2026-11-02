@@ -99,6 +99,18 @@ export function hasStructuredViewIdentity(result) {
   );
 }
 
+export function isGlobeViewRefusal(result) {
+  return (
+    result?.action === 'move_camera' &&
+    result.ok === false &&
+    [
+      'globe-view-required',
+      'globe-reset-unavailable',
+      'globe-reset-failed',
+    ].includes(result.reason)
+  );
+}
+
 export function responseInstructionForToolResult(result) {
   if (result?.action === 'control_radio' && result.radioPlaybackSuppressed) {
     if (result.audioState === 'paused') {
@@ -122,6 +134,20 @@ export function responseInstructionForToolResult(result) {
         ? 'If they asked what the aircraft is, speak its identityLine and add nothing; for any other question (altitude, speed, registration), answer from selected.properties.'
         : 'Be concise: useful names, place, layer and one or two notable properties.',
     ].join(' ');
+  }
+  if (isGlobeViewRefusal(result)) {
+    // A refusal is not a completed action. Keep tool text out of instructions.
+    if (result.reason === 'globe-reset-failed')
+      return 'The globe did not rotate after the Globe View reset attempt. Say so briefly. Do not retry, offer or perform another reset for this request.';
+    if (result.reason === 'globe-reset-unavailable')
+      return 'The globe did not rotate. Ask the user to zoom out further; the Globe View preset does not fit this viewport. Do not offer or perform a reset.';
+    return 'The globe did not rotate. Say "Globe rotation isn’t available from this view. You can say ‘Reset to Globe View and rotate the globe.’" The suggested command is not a user request. Do not ask a question, perform a reset, or call tools in this reply.';
+  }
+  if (
+    (result?.action ?? result?.tool) === 'zoom_to_globe' &&
+    (result.ok !== true || result.cancelled)
+  ) {
+    return 'The Globe View reset did not finish. Say so briefly; do not claim Globe View was reached. Do not retry the reset or rotate the globe for this request.';
   }
   if (result?.action === 'adjust_camera_zoom') {
     return result.ok

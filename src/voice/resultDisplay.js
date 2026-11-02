@@ -59,7 +59,7 @@ function notesOf(...values) {
   ];
 }
 
-export function analystNounFor(layerKeys) {
+function analystNounFor(layerKeys) {
   const keys = [...new Set(layerKeys.filter(Boolean))];
   if (keys.length !== 1) return 'results';
   const key = keys[0];

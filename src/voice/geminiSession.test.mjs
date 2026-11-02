@@ -3398,3 +3398,215 @@ test('a narration callback that submits a successor keeps the old packet tools f
   assert.deepEqual(h.calls, []);
   h.c.stop();
 });
+
+for (const reply of ['typed', 'push-to-talk', 'open-mic']) {
+  test(`globe refusal blocks queued and later tools until fresh ${reply} input`, async () => {
+    const names = [];
+    const h = harness({
+      runAction: async (name) => {
+        names.push(name);
+        return name === 'move_camera'
+          ? { ok: false, action: 'move_camera', reason: 'globe-view-required' }
+          : { ok: true, action: name };
+      },
+    });
+    try {
+      await h.c.start({ pushToTalk: reply === 'push-to-talk' });
+      establishToolInput(h, 'rotate the globe');
+      const ws = h.sockets[0];
+      ws.message({
+        toolCall: {
+          functionCalls: [
+            {
+              id: 'rotate',
+              name: 'move_camera',
+              args: { motion: 'rotate_globe' },
+            },
+            { id: 'queued-reset', name: 'zoom_to_globe', args: {} },
+          ],
+        },
+      });
+      await h.c.toolQueue;
+      assert.deepEqual(names, ['move_camera']);
+      const blocked = ws.sent
+        .flatMap((entry) => entry.toolResponse?.functionResponses || [])
+        .find((call) => call.id === 'queued-reset');
+      assert.equal(blocked.response.ok, false);
+      assert.match(blocked.response.error, /fresh user input/i);
+      assert.equal(blocked.response.skipped, true);
+      assert.match(blocked.response.responseGuidance, /did not run/i);
+      assert.doesNotMatch(
+        blocked.response.responseGuidance,
+        /confirm.*completed/i,
+      );
+      requestTool(ws, 'repeated-rotation', 'move_camera', {
+        motion: 'rotate_globe',
+      });
+      await h.c.toolQueue;
+      assert.deepEqual(names, ['move_camera']);
+      const repeated = toolResponses(ws).find(
+        (call) => call.id === 'repeated-rotation',
+      ).response;
+      assert.equal(repeated.ok, false);
+      assert.equal(repeated.skipped, true);
+      assert.match(repeated.responseGuidance, /did not run/i);
+      assert.doesNotMatch(
+        repeated.responseGuidance,
+        /confirm.*completed/i,
+      );
+
+      if (reply === 'typed') {
+        const stimuli = [
+          () => {},
+          () => ws.message({ serverContent: { interrupted: true } }),
+          () =>
+            ws.message({
+              serverContent: {
+                inputTranscription: { text: 'reset to globe view' },
+              },
+            }),
+          () => {
+            h.c.input.setMicrophoneEnabled(false);
+            h.c.input.setMicrophoneEnabled(true);
+          },
+        ];
+        for (const [i, stimulus] of stimuli.entries()) {
+          stimulus();
+          requestTool(ws, `unrequested-reset-${i}`, 'zoom_to_globe', {});
+          await h.c.toolQueue;
+          assert.deepEqual(names, ['move_camera']);
+        }
+      }
+      // Finish the refusal reply before admitting the actual next user input.
+      ws.message({ serverContent: { turnComplete: true } });
+      if (reply === 'typed')
+        assert.equal(h.c.sendTextCommand('reset to globe view'), true);
+      else if (reply === 'push-to-talk') {
+        h.c.input.pushToTalkKeyHeld = true;
+        h.c.input.spaceKeyHeld = true;
+        h.c.input.setMicrophoneEnabled(true);
+        h.c.input.setMicrophoneEnabled(false);
+      } else ws.message({ voiceActivity: { type: 'ACTIVITY_START' } });
+      requestTool(ws, 'accepted-reset', 'zoom_to_globe', {});
+      await h.c.toolQueue;
+      assert.deepEqual(names, ['move_camera', 'zoom_to_globe']);
+    } finally {
+      h.c.stop();
+    }
+  });
+}
+
+test('a cancelled globe reset skips queued rotation, preserves Stop and recovers on fresh input', async () => {
+  const calls = [];
+  let resets = 0;
+  const h = harness({
+    runAction: async (name, args) => {
+      calls.push(name === 'move_camera' ? args.motion : name);
+      return name === 'zoom_to_globe' && resets++ === 0
+        ? { ok: false, action: name, cancelled: true }
+        : { ok: true, action: name };
+    },
+  });
+  try {
+    await h.c.start();
+    establishToolInput(h, 'reset to globe view and rotate');
+    const ws = h.sockets[0];
+    ws.message({
+      toolCall: {
+        functionCalls: [
+          { id: 'reset-failed', name: 'zoom_to_globe', args: {} },
+          {
+            id: 'rotate-skipped',
+            name: 'move_camera',
+            args: { motion: 'rotate_globe' },
+          },
+          { id: 'stop-allowed', name: 'move_camera', args: { motion: 'stop' } },
+        ],
+      },
+    });
+    await h.c.toolQueue;
+    assert.deepEqual(calls, ['zoom_to_globe', 'stop']);
+    const skipped = toolResponses(ws).find(
+      (call) => call.id === 'rotate-skipped',
+    ).response;
+    assert.equal(skipped.ok, false);
+    assert.equal(skipped.reason, 'globe-reset-failed');
+    assert.equal(skipped.skipped, true);
+    assert.equal(
+      toolResponses(ws).find((call) => call.id === 'stop-allowed').response.ok,
+      true,
+    );
+
+    ws.message({ serverContent: { turnComplete: true } });
+    establishToolInput(h, 'reset to globe view and rotate');
+    ws.message({
+      toolCall: {
+        functionCalls: [
+          { id: 'reset-success', name: 'zoom_to_globe', args: {} },
+          {
+            id: 'rotate-success',
+            name: 'move_camera',
+            args: { motion: 'rotate_globe' },
+          },
+        ],
+      },
+    });
+    await h.c.toolQueue;
+    assert.deepEqual(calls, [
+      'zoom_to_globe',
+      'stop',
+      'zoom_to_globe',
+      'rotate_globe',
+    ]);
+  } finally {
+    h.c.stop();
+  }
+});
+
+test('cancelling a queued globe reset also skips its dependent rotation', async () => {
+  const blocker = deferred();
+  const calls = [];
+  const h = harness({
+    runAction: async (name, args) => {
+      calls.push(name === 'move_camera' ? args.motion : name);
+      return args.motion === 'pan'
+        ? blocker.promise
+        : { ok: true, action: name };
+    },
+  });
+  try {
+    await h.c.start();
+    establishToolInput(h, 'pan, reset to globe view and rotate');
+    const ws = h.sockets[0];
+    ws.message({
+      toolCall: {
+        functionCalls: [
+          {
+            id: 'blocker',
+            name: 'move_camera',
+            args: { motion: 'pan', direction: 'left' },
+          },
+          { id: 'reset-cancelled', name: 'zoom_to_globe', args: {} },
+          {
+            id: 'rotate-after-cancel',
+            name: 'move_camera',
+            args: { motion: 'rotate_globe' },
+          },
+        ],
+      },
+    });
+    await tick();
+    ws.message({ toolCallCancellation: { ids: ['reset-cancelled'] } });
+    blocker.resolve({ ok: true, action: 'move_camera' });
+    await h.c.toolQueue;
+    assert.deepEqual(calls, ['pan']);
+    const skipped = toolResponses(ws).find(
+      (call) => call.id === 'rotate-after-cancel',
+    ).response;
+    assert.equal(skipped.reason, 'globe-reset-failed');
+    assert.equal(skipped.skipped, true);
+  } finally {
+    blocker.resolve({ ok: true });
+    h.c.stop();
+  }
+});

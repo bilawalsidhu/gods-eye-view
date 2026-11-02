@@ -42,17 +42,11 @@
   max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
 }
 #weather-panel.collapsed #weather-panel-body,
 #weather-panel[hidden],
 .weather-readout[hidden] {
   display: none !important;
-}
-#weather-panel.collapsed .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.8px;
 }
 #weather-panel.collapsed .panel-header {
   margin-bottom: 2px;
@@ -133,7 +127,6 @@
   margin-left: auto;
   text-align: right;
 }
-.rail-card-badge,
 .rail-card-line,
 .rail-timeline-readout {
   font-family: var(--font-mono);
@@ -304,9 +297,6 @@ html:not([lang='en']) .rail-card-zero::after {
   outline: 1px solid var(--accent);
   outline-offset: 3px;
 }
-.rail-card-badge {
-  text-transform: uppercase;
-}
 .rail-card-compact {
   grid-column: 1 / -1;
   min-width: 0;
@@ -362,22 +352,9 @@ html:not([lang='en']) .rail-card-setting {
   font: 8px var(--font-mono);
   white-space: nowrap;
 }
-.rail-card-setting-range {
-  width: 100%;
-  min-width: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-.rail-card-setting-range:focus-visible {
-  outline: 2px solid var(--text-primary);
-  outline-offset: 3px;
-}
 .rail-card-setting-range-value {
   flex: 0 0 4ch;
   white-space: nowrap;
-  color: var(--text-primary);
-  font: 9px var(--font-mono);
-  text-align: right;
 }
 .rail-card-result {
   display: grid;
