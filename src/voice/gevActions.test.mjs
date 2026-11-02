@@ -3948,7 +3948,7 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
 });
 
-test('set_panel_open accepts the Authoring name for the scene panel', async () => {
+test('set_panel_open accepts Authoring and explicit Utilities requests', async () => {
   const calls = [];
   const runner = createGevActionRunner({
     viewer: {
@@ -3969,4 +3969,10 @@ test('set_panel_open accepts the Authoring name for the scene panel', async () =
     assert.equal(result.panelId, 'scene-panel');
   }
   assert.deepEqual(calls.at(-1), ['scene-panel', false, { explicit: true }]);
+  for (const panel of ['Utilities', 'utilities-panel']) {
+    const result = await runner('set_panel_open', { panelId: panel, open: true });
+    assert.equal(result.ok, true);
+    assert.equal(result.panelId, 'utilities-panel');
+    assert.deepEqual(calls.at(-1), ['utilities-panel', false, { explicit: true }]);
+  }
 });

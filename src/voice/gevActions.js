@@ -99,6 +99,8 @@ const PANEL_ALIASES = new Map([
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],
   ['context right panel', 'global-context-panel'],
+  ['utilities', 'utilities-panel'],
+  ['utilities panel', 'utilities-panel'],
   ['authoring', 'scene-panel'],
   ['scenes', 'scene-panel'],
   ['scene', 'scene-panel'],
@@ -120,6 +122,7 @@ const PANEL_ALIASES = new Map([
 
 const PANEL_IDS = new Set([
   'data-panel',
+  'utilities-panel',
   'location-bar',
   'control-panel',
   'cctv-panel',

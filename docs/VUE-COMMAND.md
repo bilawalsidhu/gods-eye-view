@@ -1,5 +1,24 @@
 # GEV COMMAND on Vue / Pinia
 
+## Utilities follow-up — 2026-11-02
+
+A guarded update detected the concurrent Vue/Pinia work at `a0c2998a` and
+preserved that implementation, its history and its fixture screenshots.
+The follow-up adds only the explicit `utilities-panel` target to the shared
+panel schema/dispatcher and its instructions/tests; Directions keeps its
+existing reveal route. No console presentation, account controls, transcripts,
+geometry, locale state or panel ownership is replaced.
+
+On this combined runtime, Linux/Node 24.22.1 passed 10,012 ordinary tests with
+zero failures and 31 explicit platform/optional-integration skips, then all
+15 allocation assertions. The focused agent/HUD/panel/schema selection passed
+508 tests with 24 deferred #1488 joint cases. Build, formatting, all eleven
+locale catalogs, import/package boundaries, changelog and token-ledger checks
+passed. The browser evidence recorded below remains tied to its original
+runtime; it was not rerun for the additive Utilities tool target. Live OAuth
+and model-use release gates remain open.
+
+
 Integration candidate for #1331, 2026-11-02. Base: upstream main
 `151ce3dee72426193a85af71105ddcf62b7f2c28`, including the Vue migration
 #1499 (`accfa1fa855d8dd0a2a655ccaac226a38d59fabd`). The existing PR remains

@@ -28,7 +28,7 @@ function fixture(id = 'utilities-panel') {
 }
 const args = { layerId: 'directions' };
 
-test('Utilities uses the existing Directions reveal without enlarging the voice schema', () => {
+test('Utilities supports both the Directions reveal and explicit panel opening', () => {
   const index = indexToolsByName(GEV_ACTION_SCHEMAS);
   assert.equal(
     prepareToolCall({ name: 'show_data_layers_menu', arguments: args }, index)
@@ -43,12 +43,9 @@ test('Utilities uses the existing Directions reveal without enlarging the voice 
       },
       index,
     ).ok,
-    false,
+    true,
   );
-  assert.match(
-    buildAgentInstructions(),
-    /open Utilities.*drawing\/import tools.*show_data_layers_menu/,
-  );
+  assert.match(buildAgentInstructions(), /Utilities.*set_panel_open/);
 });
 
 test('readback names the actual panel on both old and integrated shells', () => {

@@ -47,8 +47,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // is consolidated without changing either feature's arguments.
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
-    // COMMAND keeps the additive Street Level target from its reviewed branch.
-    '1c04da2c039cd728465730ea14624842bf2b183d022b15890c79a7c142832653',
+    '149d53166c36fc17c75631e0a15e04271b0e24562fa73db1b74612d6b653f671',
   );
 });
 
@@ -138,6 +137,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
     (id) =>
       ![
         'street-level-panel',
+        'utilities-panel',
         'weather-panel',
         'recent-imagery-panel',
         'voice-settings',
