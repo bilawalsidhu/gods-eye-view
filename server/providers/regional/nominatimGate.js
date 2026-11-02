@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { readResponseJsonCapped } from '../common/http.js';
 
 /**
@@ -50,8 +49,33 @@ const DEFAULT_BACKOFF_MS = 60_000;
 const BLOCKED_BACKOFF_MS = 3_600_000;
 /** Pause after a server error or a failed retry. */
 const OUTAGE_BACKOFF_MS = 30_000;
+/** How old an unfinished dispatch must be before the next lock owner reclaims it. */
+const DISPATCH_RECLAIM_MS = 10 * 60_000;
 
 const DISABLED_VALUES = new Set(['', 'off', 'none', 'disabled', '0']);
+
+/**
+ * node:sqlite, loaded on first public-instance use. Node 24 still flags it
+ * experimental and prints that once per process; only that one warning is
+ * dropped, and only while the module loads.
+ */
+let sqlite = null;
+function sqliteModule() {
+  if (sqlite) return sqlite;
+  const emitWarning = process.emitWarning;
+  process.emitWarning = function (warning, ...rest) {
+    const type = typeof rest[0] === 'string' ? rest[0] : rest[0]?.type;
+    if (type === 'ExperimentalWarning' && /SQLite/.test(String(warning)))
+      return;
+    return emitWarning.call(this, warning, ...rest);
+  };
+  try {
+    sqlite = process.getBuiltinModule('node:sqlite');
+  } finally {
+    process.emitWarning = emitWarning;
+  }
+  return sqlite;
+}
 
 /**
  * Read the search endpoint setting.
@@ -257,8 +281,11 @@ export function createGateStateStore({
   const dispatchMarkerPrefix = file ? `${path.basename(file)}.dispatch.` : null;
 
   // A crash or persistence failure during dispatch must never reopen admission
-  // using an older timestamp. Only this dispatch removes its own marker after
-  // persisting the post-invocation deadline; there is no timed stale reclaim.
+  // using an older timestamp. A dispatch removes its own marker after
+  // persisting the post-invocation deadline. A marker is only ever seen under
+  // the lock after its owner left the lock, so one that names a start older
+  // than DISPATCH_RECLAIM_MS (far beyond any request's timeout) is reclaimed
+  // by the next lock owner, which restarts spacing from its own clock.
   function pendingDispatches({ strict = false } = {}) {
     if (!file) return [];
     try {
@@ -271,6 +298,26 @@ export function createGateStateStore({
       if (strict) throw error;
       return [];
     }
+  }
+
+  /**
+   * Under the lock: remove dispatch markers whose start is older than
+   * DISPATCH_RECLAIM_MS and report whether any were. Any other marker (newer,
+   * or naming no start) still refuses admission.
+   */
+  function reclaimDispatches(at) {
+    const names = pendingDispatches({ strict: true });
+    for (const name of names) {
+      const since = /^since-(\d+)$/.exec(
+        name.slice(dispatchMarkerPrefix.length).split('.', 1)[0],
+      );
+      const started = since ? Number(since[1]) : NaN;
+      if (!Number.isSafeInteger(started) || at - started < DISPATCH_RECLAIM_MS)
+        throw new Error('unfinished durable Nominatim dispatch');
+    }
+    for (const name of names)
+      fs.unlinkSync(path.join(path.dirname(file), name));
+    return names.length > 0;
   }
 
   /**
@@ -411,7 +458,7 @@ export function createGateStateStore({
     const waitMs = Number.isFinite(lockWaitMs)
       ? Math.max(0, Math.floor(lockWaitMs))
       : 500;
-    const database = new DatabaseSync(`${file}.lock.sqlite`, {
+    const database = new (sqliteModule().DatabaseSync)(`${file}.lock.sqlite`, {
       timeout: waitMs,
     });
     let transactionOpen = false;
@@ -505,8 +552,7 @@ export function createGateStateStore({
       try {
         let result;
         withLock(() => {
-          if (pendingDispatches({ strict: true }).length)
-            throw new Error('unfinished durable Nominatim dispatch');
+          const reclaimed = reclaimDispatches(clock());
           const disk = readDisk({ strict: true });
           if (disk) memory = merge(memory, disk);
           const pauses = pendingPauses({ strict: true });
@@ -518,6 +564,11 @@ export function createGateStateStore({
             ),
           });
           const at = clock();
+          if (reclaimed) {
+            state.nextStartAt = Math.max(state.nextStartAt, at + minSpacingMs);
+            writeDisk(state);
+            memory = state;
+          }
           if (at > latestStartAt) {
             result = { status: 'abandoned' };
             return;
@@ -538,7 +589,7 @@ export function createGateStateStore({
                 : { status: 'wait', waitMs: state.nextStartAt - at };
             return;
           }
-          const marker = `${file}.dispatch.${process.pid}.${process.hrtime.bigint()}`;
+          const marker = `${file}.dispatch.since-${at}.${process.pid}.${process.hrtime.bigint()}`;
           fs.writeFileSync(marker, '', { flag: 'wx' });
           const next = {
             day,

@@ -90,6 +90,13 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
     'credentials are never serialized into browser assets',
   );
   assert.equal(
+    createBrowserViteConfig({ photonUrl: 'http://localhost:2322/api/' }).define[
+      'import.meta.env.PHOTON_URL'
+    ],
+    'null',
+    'plain http would be blocked by connect-src, so it is refused here',
+  );
+  assert.equal(
     createBrowserViteConfig({ mapillaryToken: 'MLY|1|abc' }).define[
       'import.meta.env.MAPILLARY_CLIENT_TOKEN'
     ],

@@ -3,6 +3,10 @@ import {
   containsAnchor,
   pointInRing,
 } from '../../../src/data/adminBoundaries.js';
+import {
+  douglasPeucker,
+  ringAreaM2,
+} from '../../../src/sources/featureGeometry.js';
 
 /**
  * Which Nominatim results may answer which voice ask, and how their polygons
@@ -231,11 +235,6 @@ function adminLevelFits(kind, row) {
 const BUILDING_MAX_AREA_M2 = 150_000;
 
 /** Approximate area (m²) of a [lon, lat] ring. */
-function ringAreaM2(ring) {
-  const lat0 = ring[0][1];
-  const k = 111_320 * 111_320 * Math.cos((lat0 * Math.PI) / 180);
-  return ringArea(ring) * k;
-}
 
 /** Whether a result's class/type suits the ask kind. */
 export function acceptsOutlineClass(kind, osmClass, osmType) {
@@ -358,12 +357,6 @@ function cleanRing(ring) {
 }
 
 /** Planar ring area in squared degrees (only used to rank parts). */
-function ringArea(ring) {
-  let sum = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
-    sum += (ring[j][0] - ring[i][0]) * (ring[j][1] + ring[i][1]);
-  return Math.abs(sum / 2);
-}
 
 /** Polygon/MultiPolygon GeoJSON → `[[outer, ...holes], …]`, largest first. */
 function polygonsFromGeoJson(geometry) {
@@ -387,7 +380,7 @@ function polygonsFromGeoJson(geometry) {
     if (!outer) return null;
     const holes = polygon.slice(1).map(cleanRing);
     if (holes.some((hole) => !hole)) return null;
-    polygons.push({ rings: [outer, ...holes], area: ringArea(outer) });
+    polygons.push({ rings: [outer, ...holes], area: ringAreaM2(outer) });
   }
   polygons.sort((a, b) => b.area - a.area);
   return polygons.map((entry) => entry.rings);
@@ -396,37 +389,7 @@ function polygonsFromGeoJson(geometry) {
 /** Iterative Douglas–Peucker on a closed ring (keeps it closed, ≥ 4 points). */
 function simplifyClosedRing(ring, tolerance) {
   if (ring.length <= 8 || tolerance <= 0) return ring;
-  const keep = new Uint8Array(ring.length);
-  keep[0] = keep[ring.length - 1] = 1;
-  const stack = [[0, ring.length - 1]];
-  const tol2 = tolerance * tolerance;
-  while (stack.length) {
-    const [start, end] = stack.pop();
-    const [ax, ay] = ring[start];
-    const [bx, by] = ring[end];
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len2 = dx * dx + dy * dy;
-    let best = -1;
-    let bestD = tol2;
-    for (let i = start + 1; i < end; i++) {
-      const [px, py] = ring[i];
-      let t = len2 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
-      t = Math.max(0, Math.min(1, t));
-      const ex = ax + t * dx - px;
-      const ey = ay + t * dy - py;
-      const d = ex * ex + ey * ey;
-      if (d > bestD) {
-        bestD = d;
-        best = i;
-      }
-    }
-    if (best > 0) {
-      keep[best] = 1;
-      stack.push([start, best], [best, end]);
-    }
-  }
-  const out = ring.filter((_point, index) => keep[index]);
+  const out = douglasPeucker(ring, tolerance);
   return out.length >= 4 ? out : ring;
 }
 
@@ -480,7 +443,7 @@ function ringsIntersect(a, b) {
 function simplifiedTopologyFits(polygons) {
   for (const [outer, ...holes] of polygons) {
     for (const ring of [outer, ...holes]) {
-      if (ringArea(ring) === 0) return false;
+      if (ringAreaM2(ring) === 0) return false;
       for (let i = 1; i < ring.length; i++)
         for (let j = i + 2; j < ring.length; j++) {
           if (i === 1 && j === ring.length - 1) continue;

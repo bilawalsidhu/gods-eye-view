@@ -757,3 +757,30 @@ test('an asynchronous caption-conversion throw rolls back multipart world geomet
   renderer.remove(anno);
   renderer.destroy();
 });
+
+test('a deadline passed during caption conversion leaves a drawn pending point', async (t) => {
+  installBrowserGlobals(t);
+  let now = 0;
+  t.mock.method(globalThis.performance, 'now', () => now);
+  const { viewer, frames } = fakeViewer(-99, 31);
+  const { store, renderer } = hybridWithBoard(viewer);
+  // Unlabeled: the conversion empties the screen group rather than relabelling it.
+  const anno = { ...buildingAnnotation('late-timeout'), ring: null };
+  renderer.add(anno);
+  anno.ring = buildingAnnotation('geometry').ring;
+  const completion = renderer.update(anno);
+  for (let frame = 0; frame < 8; frame += 1) frames.emit();
+  // The clock passes the deadline while the conversion presents the board.
+  const publish = store.publish;
+  store.publish = (board) => {
+    now = 1e9;
+    return publish(board);
+  };
+  assert.equal((await completion).status, 'timeout');
+  store.publish = publish;
+  const live = annotationGroups(store).filter((mark) => !mark.className?.includes('gev-out'));
+  assert.equal(live.length, 1);
+  assert.ok(childrenWithClass(live[0], 'gev-anno-ring').length > 0, 'the pending point still draws');
+  renderer.remove(anno);
+  renderer.destroy();
+});

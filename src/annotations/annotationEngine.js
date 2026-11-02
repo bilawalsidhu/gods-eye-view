@@ -411,6 +411,8 @@ export function createAnnotationEngine({
     const results = [];
     const ids = [];
     const installations = [];
+    // Result slots an installation settles; only these are re-validated after the await.
+    const installed = new Set();
     const trackBuildingInstall = (
       anno,
       resolved,
@@ -423,6 +425,7 @@ export function createAnnotationEngine({
       ensureTicking();
       const index = results.length;
       results.push(null);
+      installed.add(index);
       const record = beginBuildingInstall(anno);
       installations.push(
         Promise.resolve(completion)
@@ -589,6 +592,7 @@ export function createAnnotationEngine({
                 }
                 const index = results.length;
                 results.push(null);
+                installed.add(index);
                 anno.pendingOutline = true;
                 installations.push(
                   Promise.resolve(completion)
@@ -642,11 +646,12 @@ export function createAnnotationEngine({
                 );
                 continue;
               }
+              // Remove before delete: a failed cleanup stays addressable through the old slot.
+              removeRendered(dup);
               annotations.delete(dup.id);
               annotations.set(anno.id, anno);
               syncAnnotationHold();
               try {
-                removeRendered(dup);
                 renderer.add(anno);
               } catch (swapError) {
                 // Same contract as the fresh path: a renderer/WebGL throw must
@@ -690,6 +695,7 @@ export function createAnnotationEngine({
               if (record) {
                 const index = results.length;
                 results.push(null);
+                installed.add(index);
                 installations.push(
                   (async () => {
                     do {
@@ -788,7 +794,7 @@ export function createAnnotationEngine({
         await Promise.all(installations);
         for (let index = 0; index < results.length; index += 1) {
           const result = results[index];
-          if (!result?.ok) continue;
+          if (!result?.ok || !installed.has(index)) continue;
           const current = annotations.get(result.id);
           if (
             !current ||

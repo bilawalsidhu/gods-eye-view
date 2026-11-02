@@ -283,14 +283,10 @@ function decodeLayers(bytes, z, x, y, layerNames, parsedTile = null) {
 
 function decodeSharedOpenFreeMapTile(bytes, z, x, y) {
   const tile = new VectorTile(new PbfReader(bytes));
-  const base = decodeLayers(
-    bytes,
-    z,
-    x,
-    y,
-    ['transportation', 'landuse'],
-    tile,
-  );
+  // Each layer is decoded when a consumer first selects it, so installations
+  // never pay for roads, nor outlines for either.
+  let roads = null;
+  let military = null;
   const projections = new Map();
   let baseBytes = 0;
   let projectionBytes = 0;
@@ -309,7 +305,26 @@ function decodeSharedOpenFreeMapTile(bytes, z, x, y) {
   };
 
   return {
-    ...base,
+    get roads() {
+      return (roads ??= decodeLayers(
+        bytes,
+        z,
+        x,
+        y,
+        ['transportation'],
+        tile,
+      ).roads);
+    },
+    get military() {
+      return (military ??= decodeLayers(
+        bytes,
+        z,
+        x,
+        y,
+        ['landuse'],
+        tile,
+      ).military);
+    },
     project,
     bindSharedCacheEntry(resize, initialBytes) {
       resizeCacheEntry = resize;

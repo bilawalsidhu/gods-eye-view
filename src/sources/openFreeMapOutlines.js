@@ -189,7 +189,7 @@ function decodePolygons(
   if (layer.length > LAYER_FEATURE_LIMIT)
     throw new Error('Vector tile feature limit exceeded');
   const extent = layer.extent || 4096;
-  // The cut lines are the layer's extreme coordinates beyond the tile core.
+  // Cut lines: the layer's extreme coordinates, at or past the tile edge.
   let minX = 0;
   let minY = 0;
   let maxX = extent;
@@ -204,12 +204,14 @@ function decodePolygons(
       }
   const [westCut, northCut] = pixelToLonLat(minX, minY, extent, z, x, y);
   const [eastCut, southCut] = pixelToLonLat(maxX, maxY, extent, z, x, y);
+  // A side with no buffer was cut at the tile edge itself, so a polygon that
+  // touches it is a fragment too.
   const eps = 1e-9;
   const onCut = ([lon, lat]) =>
-    (minX < 0 && Math.abs(lon - westCut) < eps) ||
-    (maxX > extent && Math.abs(lon - eastCut) < eps) ||
-    (minY < 0 && Math.abs(lat - northCut) < eps) ||
-    (maxY > extent && Math.abs(lat - southCut) < eps);
+    Math.abs(lon - westCut) < eps ||
+    Math.abs(lon - eastCut) < eps ||
+    Math.abs(lat - northCut) < eps ||
+    Math.abs(lat - southCut) < eps;
   const out = [];
   for (let i = 0; i < layer.length; i++) {
     const feature = layer.feature(i);
@@ -305,36 +307,69 @@ const STREET_WORDS = Object.freeze({
   pl: 'place',
   ct: 'court',
   sq: 'square',
+  nw: 'northwest',
+  ne: 'northeast',
+  sw: 'southwest',
+  se: 'southeast',
+});
+
+const STREET_TYPES = new Set(Object.values(STREET_WORDS));
+const DIRECTION_LETTERS = Object.freeze({
   n: 'north',
   s: 'south',
   e: 'east',
   w: 'west',
 });
-
 const DIRECTIONS = new Set(['north', 'south', 'east', 'west']);
+const QUADRANTS = new Set(['northwest', 'northeast', 'southwest', 'southeast']);
 
 /** Comparable street name: the shared place-name fold, abbreviations expanded. */
 export function normalizeStreetName(value) {
-  return foldPlaceName(String(value ?? '').split(',')[0])
+  const words = foldPlaceName(String(value ?? '').split(',')[0])
     .split(' ')
     .filter(Boolean)
-    .map((word) => STREET_WORDS[word] || word)
+    .map((word) => STREET_WORDS[word] || word);
+  // A lone letter is a direction only as the prefix or suffix of a name it
+  // qualifies ("N Lamar Blvd", "Main St S"); "E St NW" is the street named E.
+  const named = words.some(
+    (word) =>
+      !DIRECTION_LETTERS[word] &&
+      !DIRECTIONS.has(word) &&
+      !QUADRANTS.has(word) &&
+      !STREET_TYPES.has(word),
+  );
+  return words
+    .map((word, i) =>
+      named && (i === 0 || i === words.length - 1)
+        ? DIRECTION_LETTERS[word] || word
+        : word,
+    )
     .join(' ');
 }
 
 /**
  * Whether a tile street name answers the asked street. Exact after
  * normalization; otherwise the same name with only a leading direction added
- * ("North Congress Avenue" for "Congress Avenue") — never a different street
- * that merely shares a word.
+ * ("North Congress Avenue" for "Congress Avenue"), or a quadrant suffix the
+ * ask leaves unsaid ("E Street Northwest" for "E Street") — never a different
+ * street that merely shares a word.
  */
 export function streetNameMatches(candidate, asked) {
   const want = normalizeStreetName(asked);
   if (!want) return false;
+  const answers = (have) => {
+    if (have === want) return true;
+    const [first, ...rest] = have.split(' ');
+    return DIRECTIONS.has(first) && rest.join(' ') === want;
+  };
   const have = normalizeStreetName(candidate);
-  if (have === want) return true;
-  const [first, ...rest] = have.split(' ');
-  return DIRECTIONS.has(first) && rest.join(' ') === want;
+  if (answers(have)) return true;
+  const words = have.split(' ');
+  return (
+    QUADRANTS.has(words.at(-1)) &&
+    !QUADRANTS.has(want.split(' ').at(-1)) &&
+    answers(words.slice(0, -1).join(' '))
+  );
 }
 
 const lengthM = (line) => {
@@ -423,6 +458,7 @@ export function buildingFromTiles(
 ) {
   let containing = null;
   let fragmentContains = false;
+  let nearestFragmentM = Infinity;
   let nearest = null;
   for (const tile of tiles || []) {
     for (const building of tile?.buildings || []) {
@@ -451,9 +487,11 @@ export function buildingFromTiles(
         const area = ringAreaM2(building.rings[0]);
         if (!containing || area < containing.area)
           containing = { building, area };
-      } else if (!building.clipped) {
+      } else {
         const distance = distanceToPolygonM(lon, lat, building.rings);
-        if (
+        if (building.clipped)
+          nearestFragmentM = Math.min(nearestFragmentM, distance);
+        else if (
           distance <= maxDistanceM &&
           (!nearest || distance < nearest.distance)
         )
@@ -461,9 +499,13 @@ export function buildingFromTiles(
       }
     }
   }
-  // The point is on a building only seen in pieces: no neighbour stands in.
+  // The point is on, or nearest to, a building only seen in pieces: no
+  // farther neighbour stands in. A complete copy from a neighbouring tile is
+  // never farther than its fragment, so the centimetre tolerance keeps it.
+  const fragmentNearer =
+    fragmentContains || nearestFragmentM + 0.01 < (nearest?.distance ?? 0);
   const pick =
-    containing?.building || (fragmentContains ? null : nearest?.building);
+    containing?.building || (fragmentNearer ? null : nearest?.building);
   if (!pick) return null;
   const polygons = [pick.rings].map((part) =>
     part.map((ring) => closeRing(ring.map((p) => [p[0], p[1]]))),
@@ -504,12 +546,14 @@ function groundsKey(value) {
     .trim();
 }
 
-const GROUNDS_WORDS_RE =
-  /\b(?:grounds|campus|compound|premises|property|site|area|complex)\b/g;
-
 /** Words that describe grounds rather than name the place. */
-const GROUNDS_SUFFIX_RE =
-  /(?:\s+(?:grounds|campus|compound|premises|property|site|area|complex))+$/;
+const GROUNDS_WORDS =
+  'grounds|campus|compound|premises|property|site|area|complex';
+
+/** Grounds words wherever they stand, any case (the outline rung cuts these). */
+export const GROUNDS_WORDS_RE = new RegExp(`\\b(?:${GROUNDS_WORDS})\\b`, 'gi');
+
+const GROUNDS_SUFFIX_RE = new RegExp(`(?:\\s+(?:${GROUNDS_WORDS}))+$`);
 
 /**
  * Area classes an unnamed tile feature may answer for a grounds ask, from the

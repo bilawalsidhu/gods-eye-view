@@ -719,6 +719,11 @@ test('names are normalized Unicode-aware so small differences share an entry', (
     'non-Latin names survive',
   );
   assert.equal(normalizePlaceName('Ｃｅｎｔｒａｌ　Ｐａｒｋ'), 'central park');
+  // One key with the bundled place packs and tile street matching.
+  assert.equal(
+    normalizePlaceName('Saint Paul'),
+    normalizePlaceName('St. Paul'),
+  );
 });
 
 test('small view changes reuse one cached outline', async (t) => {

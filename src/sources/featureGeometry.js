@@ -97,7 +97,8 @@ export function simplifyRing(ring, tolM) {
   return out.length >= 4 ? out : ring;
 }
 
-function douglasPeucker(points, tol) {
+/** Douglas-Peucker on [lon, lat] points with a tolerance in degrees. */
+export function douglasPeucker(points, tol) {
   const n = points.length;
   if (n < 3) return points.slice();
   // Iterative, index-based (no per-call array slicing / recursion), so a large

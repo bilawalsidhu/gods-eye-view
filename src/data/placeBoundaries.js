@@ -42,7 +42,7 @@ import {
   rank,
 } from './adminBoundaries.js';
 import { loadBundledJson } from './bundledJson.js';
-import { foldPlaceName } from './placeNames.js';
+import { normalizePlaceName } from './placeNames.js';
 import { createRetryableLoader } from './retryableLoad.js';
 import * as placeFiles from './local_data/us_census_places/files.js';
 import * as neighborhoodFiles from './local_data/wof_neighborhoods/files.js';
@@ -76,15 +76,7 @@ export function exactPlaceName(value) {
     .trim();
 }
 
-/**
- * Fold a name for matching (see `foldPlaceName`), with "saint" and "sainte"
- * shortened the way US place names abbreviate them.
- */
-export function normalizePlaceName(value) {
-  return foldPlaceName(value)
-    .replace(/\bsaint\b/g, 'st')
-    .replace(/\bsainte\b/g, 'ste');
-}
+export { normalizePlaceName };
 
 /** Index keys of a name: as spelled (`=`-prefixed), then folded. */
 function nameVariants(value) {

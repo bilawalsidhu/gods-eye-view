@@ -32,3 +32,13 @@ export function foldPlaceName(value) {
     .trim()
     .replace(/^the /, '');
 }
+
+/**
+ * Fold a name for matching (see `foldPlaceName`), with "saint" and "sainte"
+ * shortened the way US place names abbreviate them.
+ */
+export function normalizePlaceName(value) {
+  return foldPlaceName(value)
+    .replace(/\bsaint\b/g, 'st')
+    .replace(/\bsainte\b/g, 'ste');
+}

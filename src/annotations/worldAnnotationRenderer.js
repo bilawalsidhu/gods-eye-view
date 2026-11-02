@@ -1,4 +1,5 @@
 import { recordWorkSlice } from '../sources/phaseTiming.js';
+import { ringCentroid } from '../sources/featureGeometry.js';
 import * as Cesium from 'cesium';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 
@@ -741,14 +742,7 @@ function decimateRing(ring, n) {
  * while scheduling the expensive scene picks across rendered frames.
  */
 function groundProbePositions(ring) {
-  let clon = 0;
-  let clat = 0;
-  for (const [lon, lat] of ring) {
-    clon += lon;
-    clat += lat;
-  }
-  clon /= ring.length;
-  clat /= ring.length;
+  const { lon: clon, lat: clat } = ringCentroid(ring);
   const latS = 111320;
   const lonS = latS * Math.cos(Cesium.Math.toRadians(clat));
   let maxR = 0;

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { foldPlaceName } from '../../../src/data/placeNames.js';
+import { normalizePlaceName as foldName } from '../../../src/data/placeNames.js';
 
 const DAY_MS = 86_400_000;
 
@@ -17,13 +17,14 @@ export const NOMINATIM_CACHE_TTL_MS = Object.freeze({
 
 /**
  * Comparable form of a place name for matching results to the ask: the
- * shared fold (see `foldPlaceName`), bounded in length.
+ * shared place-name key (see `normalizePlaceName` in placeNames.js, so
+ * "St. Paul" and "Saint Paul" agree), bounded in length.
  *
  * @param {string} value
  * @returns {string}
  */
 export function normalizePlaceName(value) {
-  return foldPlaceName(value).slice(0, 200);
+  return foldName(value).slice(0, 200);
 }
 
 /**

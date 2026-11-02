@@ -8,6 +8,7 @@ import { containsAnchor } from '../data/adminBoundaries.js';
 import { lonLatToTile } from '../data/tomtomTiles.js';
 import {
   BUILDING_MAX_DISTANCE_M,
+  GROUNDS_WORDS_RE,
   OUTLINE_TILE_ZOOM,
   STREET_RADIUS_M,
   boxAround,
@@ -47,10 +48,6 @@ const GROUNDS_MIN_AREA_M2 = 20_000;
 /** Words that point at the thing rather than name it. */
 const DEICTIC_RE =
   /^(?:(?:this|that|the|my)\s+)?(?:building|house|structure|tower|place|one|thing|spot|here|there|it)$/i;
-
-/** Words that describe grounds rather than belong to the name searched. */
-const GROUNDS_WORDS_RE =
-  /\b(?:grounds|compound|campus|premises|property|site|area|complex)\b/gi;
 
 /** Whether the ask names a thing (vs. "this building" at a pointer). */
 export function isNamedAsk(target) {

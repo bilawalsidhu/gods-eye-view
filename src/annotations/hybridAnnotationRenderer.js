@@ -186,12 +186,14 @@ export function createHybridAnnotationRenderer(
               if (entry.screenProxy) screen.remove(entry.screenProxy);
               entry.screenProxy = null;
             } else {
+              // The caption conversion already reshaped the group; redraw the pending point.
               const pending = liveProxy(anno, {
                 ring: null,
                 pendingOutline: true,
               });
-              screen.update(pending);
+              if (entry.screenProxy) screen.remove(entry.screenProxy);
               entry.screenProxy = pending;
+              screen.add(pending);
             }
             if (workTrace) workTrace.rendererStatus = 'timeout';
             return { ...result, status: 'timeout' };

@@ -25,7 +25,11 @@ export function escapeFsDenyPath(path) {
 
 const REPO_ROOT_GLOB = escapeFsDenyPath(REPO_ROOT);
 
-/** Browser-safe form of the optional Photon endpoint build input. */
+/**
+ * Browser-safe form of the optional Photon endpoint build input. Only https
+ * is accepted: the page's connect-src allows no plain-http origin, so an
+ * http endpoint would only fail later, silently, in the browser.
+ */
 function photonEndpointSetting(value) {
   if (value === undefined) return undefined;
   const text = String(value ?? '').trim();
@@ -34,7 +38,7 @@ function photonEndpointSetting(value) {
   try {
     const url = new URL(text);
     if (
-      !['http:', 'https:'].includes(url.protocol) ||
+      url.protocol !== 'https:' ||
       url.username ||
       url.password ||
       url.search ||

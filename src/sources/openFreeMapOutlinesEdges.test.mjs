@@ -156,6 +156,69 @@ test('a clipped fragment is never the building, and no neighbour stands in', () 
   );
 });
 
+test('a nearer cut fragment stops a farther whole building standing in', () => {
+  // About 110 m on a side, 2 m east of the point.
+  const fragment = {
+    rings: [square(0.00002, 0, 0.001)],
+    clipped: true,
+    heightM: null,
+  };
+  // Whole, about 30 m west of the point.
+  const neighbour = {
+    rings: [square(-0.0004, 0.00045, 0.0001)],
+    clipped: false,
+    heightM: null,
+  };
+  const point = { lat: 0.0005, lon: 0 };
+  assert.equal(
+    buildingFromTiles([{ buildings: [fragment, neighbour] }], point),
+    null,
+  );
+  // The fragment's complete copy from the neighbouring tile is the answer.
+  const complete = { ...fragment, clipped: false };
+  assert.deepEqual(
+    buildingFromTiles(
+      [{ buildings: [fragment, neighbour] }, { buildings: [complete] }],
+      point,
+    )?.polygons,
+    [fragment.rings],
+  );
+  // A fragment farther than the whole building does not block it.
+  assert.ok(
+    buildingFromTiles([{ buildings: [fragment, neighbour] }], {
+      ...point,
+      lon: -0.00028,
+    }),
+  );
+});
+
+test('grounds touching an unbuffered tile edge are cut, not complete', () => {
+  // One tile at z0 whose park layer has no buffer: the cut is the edge itself.
+  const decode = (coordinates) =>
+    decodeOpenFreeMapOutlineTile(null, 0, 0, 0, {
+      layers: {
+        park: {
+          length: 1,
+          extent: 4096,
+          feature: () => ({
+            properties: { class: 'park', name: 'Edge Park' },
+            loadGeometry: () => [[{ x: 0, y: 2048 }]],
+            toGeoJSON: () => ({
+              geometry: { type: 'Polygon', coordinates },
+            }),
+          }),
+        },
+      },
+    });
+  const ask = { lat: 0.005, lon: -179.995, name: 'Edge Park' };
+  const cut = decode([square(-180, 0, 0.01)]);
+  assert.equal(cut.areas[0].clipped, true);
+  assert.equal(enclosingAreaFromTiles([cut], ask), null);
+  const inside = decode([square(-179.999, 0, 0.01)]);
+  assert.equal(inside.areas[0].clipped, false);
+  assert.ok(enclosingAreaFromTiles([inside], ask));
+});
+
 test('a point in a courtyard is not inside the building', () => {
   const block = {
     rings: [square(0, 0, 0.001), square(0.0004, 0.0004, 0.0002).reverse()],

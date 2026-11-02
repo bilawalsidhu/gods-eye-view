@@ -466,7 +466,8 @@
       "server/providers/regional/outlineSelect.js",
       "src/localRequestGate.mjs",
       "src/data/adminBoundaries.js",
-      "src/data/placeNames.js"
+      "src/data/placeNames.js",
+      "src/sources/featureGeometry.js"
     ],
     "external": []
   },

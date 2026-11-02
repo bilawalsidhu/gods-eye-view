@@ -1249,3 +1249,56 @@ test('recaption inherits outline credit from borrowed geometry rather than its n
   assert.equal(engine.list()[0].ring, ring);
   engine.clear();
 });
+
+test('a building install in the batch does not re-judge marks that never installed', async (t) => {
+  installAnimationFrameStubs(t);
+  const h = controlledBuildingRenderer();
+  const engine = createAnnotationEngine({
+    viewer: {},
+    renderer: h.renderer,
+    resolveTarget: async ({ target }) =>
+      target === 'Tower' ? { ...BUILDING_FP, lon: -97.7 } : { ...FIXED_POINT },
+  });
+  // The recolour replaces the first point within the same batch; without the
+  // building that point's result stays ok, so the building must not change it.
+  const batch = engine.annotate([
+    { type: 'point', target: 'Capitol', label: 'Capitol' },
+    { type: 'area', target: 'Tower', label: 'Tower' },
+    { type: 'point', target: 'Capitol', label: 'Capitol', color: 'amber' },
+  ]);
+  await flushMicrotasks();
+  h.pending[0].finish();
+  const completed = await batch;
+  assert.deepEqual(completed.results.map((result) => result.ok), [true, true, true]);
+  assert.equal(completed.drawn, 3);
+});
+
+test('plain recaption keeps the old mark addressable when its removal throws', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer } = fakeRenderer();
+  const engine = createAnnotationEngine({
+    viewer: {}, renderer, resolveTarget: async () => ({ ...FIXED_POINT }),
+  });
+  await engine.annotate([{ type: 'point', target: 'Capitol', label: 'Capitol' }]);
+  const old = engine.list()[0];
+  const removals = [];
+  let fail = true;
+  renderer.remove = (anno) => {
+    removals.push(anno.id);
+    if (anno.id === old.id && fail) throw new Error('old route removal failed');
+  };
+  const swap = await engine.annotate([
+    { type: 'point', target: 'Capitol', label: 'Capitol', color: 'amber' },
+  ]);
+  assert.equal(swap.drawn, 0);
+  assert.deepEqual(engine.list().map((anno) => anno.id), [old.id], 'failed cleanup remains reachable');
+  assert.equal(engine.list()[0].cleanupPending, true);
+  fail = false;
+  const attempts = removals.filter((id) => id === old.id).length;
+  engine.clear();
+  assert.ok(
+    removals.filter((id) => id === old.id).length > attempts,
+    'the old route is retried on the next clear',
+  );
+  assert.equal(engine.count(), 0);
+});

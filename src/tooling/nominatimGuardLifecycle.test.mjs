@@ -407,6 +407,38 @@ test('a persistence failure after fetch invocation aborts it and blocks restarts
   assert.equal(calls.length, 1);
   assert.deepEqual(markers(), orphan);
   assert.equal(createGateStateStore({ file }).count('2026-09-29'), 1);
+  // Long past any request's timeout, the next lock owner reclaims it.
+  clock += 10 * 60_000;
+  const resumed = make(async (url) => {
+    calls.push(url);
+    return json([]);
+  });
+  assert.deepEqual(
+    await resumed.requestJson((endpoint) => `${endpoint}?q=z`),
+    [],
+  );
+  assert.equal(calls.length, 2);
+  assert.deepEqual(markers(), []);
+  assert.equal(createGateStateStore({ file }).count('2026-09-29'), 2);
+});
+
+test('a dispatch marker that names no start keeps refusing', async (t) => {
+  const file = path.join(tempDir(t), 'state.json');
+  fs.writeFileSync(`${file}.dispatch.123.456`, '');
+  const gate = createNominatimGate({
+    settings: PUBLIC,
+    usage: createGateStateStore({ file, onError: () => {} }),
+    now: () => Date.UTC(2026, 8, 29, 12),
+    sleep: async () => {},
+    fetchImpl: async () =>
+      assert.fail('no request while a dispatch is unfinished'),
+  });
+  await assert.rejects(
+    gate.requestJson((endpoint) => `${endpoint}?q=x`),
+    {
+      code: 'NOMINATIM_STATE_UNAVAILABLE',
+    },
+  );
 });
 
 test('parseable but invalid public usage state fails closed', async (t) => {

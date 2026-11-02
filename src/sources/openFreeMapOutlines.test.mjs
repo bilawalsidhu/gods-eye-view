@@ -71,6 +71,21 @@ test('street names compare with abbreviations and a leading direction only', () 
   assert.ok(streetNameMatches('ถนนสุขุมวิท', 'ถนนสุขุมวิท'));
 });
 
+test('a lone letter is a direction only beside a name; quadrants may go unsaid', () => {
+  assert.equal(normalizeStreetName('N Lamar Blvd'), 'north lamar boulevard');
+  assert.equal(normalizeStreetName('Main St S'), 'main street south');
+  assert.equal(normalizeStreetName('E St NW'), 'e street northwest');
+  assert.ok(!streetNameMatches('East Street', 'E Street'));
+  assert.ok(!streetNameMatches('E Street', 'East Street'));
+  assert.ok(streetNameMatches('North Lamar Boulevard', 'N Lamar Blvd'));
+  assert.ok(streetNameMatches('E Street Northwest', 'E Street'));
+  assert.ok(streetNameMatches('E St NW', 'E Street'));
+  assert.ok(streetNameMatches('E St NW', 'E Street Northwest'));
+  assert.ok(!streetNameMatches('E St NE', 'E Street Northwest'));
+  assert.ok(!streetNameMatches('E Street', 'E Street Northwest'));
+  assert.ok(!streetNameMatches('F Street Northwest', 'E Street'));
+});
+
 test('same-name segments merge into polylines around the point (Congress Avenue)', () => {
   const street = streetFromTiles(TILES, {
     name: 'Congress Avenue',
