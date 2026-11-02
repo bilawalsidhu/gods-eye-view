@@ -865,6 +865,7 @@
   "server/providers/cyclones.js",
   "server/providers/firePerimeters.js",
   "src/data/cyclonesProxy.test.mjs",
+  "src/data/cyclonesGdacs.test.mjs",
   "src/data/firePerimetersProxy.test.mjs",
   "server/providers/gnssIntegrity.js",
   "src/data/gnssIntegrityProxy.test.mjs",

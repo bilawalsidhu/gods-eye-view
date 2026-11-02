@@ -548,7 +548,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   const controls = h.layer.getRowControls();
   assert.equal(controls.readout, true);
   assert.deepEqual(controls.chips, []);
-  assert.equal(controls.summary.coverage, 'Atlantic · E/C Pacific');
+  assert.equal(controls.summary.coverage, 'Worldwide');
   assert.equal(controls.summary.actions[0].href, storm().advisoryUrl);
   assert.equal(controls.summary.lines.length, 3);
   assert.deepEqual(controls.summary.settings, []);
@@ -557,7 +557,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   ]);
   assert.match(controls.summary.compact, /2 active storms · .* selected/);
   assert.equal(controls.summary.sections, undefined);
-  assert.match(controls.list.ariaLabel, /NHC/);
+  assert.match(controls.list.ariaLabel, /cyclone advisories/);
   assert.equal(controls.list.items.length, 2);
   assert.equal(controls.list.items[0].active, true);
   assert.match(controls.info, /awaiting advisory 10/);
@@ -599,7 +599,7 @@ test('empty successful coverage, unavailable source and stale advisory are diffe
   h.layer.enable();
   await h.layer.update();
   assert.equal(h.layer.getStats().empty, true);
-  assert.match(h.layer.getRowControls().summary.detail, /No active NHC\/CPHC/);
+  assert.match(h.layer.getRowControls().summary.detail, /No active cyclones/);
   next = { ...snapshot(), stale: true };
   await h.layer.update();
   assert.match(h.layer.getRowControls().summary.status, /stale/);
@@ -673,4 +673,155 @@ test('external cancellation and acquisition failure cannot install or retain unl
   assert.match(h.layer.getStats().error, /Network/);
   assert.ok(h.cleared > 0);
   h.layer.destroy();
+});
+
+const gdacsStorm = (cone = null) => ({
+  ...storm('gdacs-1001346'),
+  provider: 'gdacs',
+  name: 'Murasu',
+  classification: 'CY',
+  basin: 'IO',
+  windKt: 65,
+  pressureHpa: null,
+  advisoryNumber: '6',
+  geometryStatus: 'current',
+  geometryAdvisoryNumber: '6',
+  forecastPoints: [
+    {
+      position: { longitude: 80.9, latitude: 14.3 },
+      tauHours: 0,
+      windKt: 65,
+      gustKt: 80,
+    },
+    {
+      position: { longitude: 80.2, latitude: 15.3 },
+      tauHours: 12,
+      windKt: 65,
+      gustKt: 80,
+    },
+  ],
+  track: {
+    type: 'LineString',
+    coordinates: [
+      [80.9, 14.3],
+      [80.2, 15.3],
+    ],
+  },
+  cone,
+  advisoryUrl:
+    'https://www.gdacs.org/report.aspx?eventid=1001346&episodeid=6&eventtype=TC',
+  outlookUrl: null,
+});
+test('a GDACS storm is named as an estimate, links its report and omits a missing cone', async () => {
+  const h = harness({
+    getSnapshot: async () => ({
+      ...snapshot([gdacsStorm()]),
+      providers: { nhc: 'unavailable', gdacs: 'available' },
+    }),
+  });
+  h.layer.enable();
+  await h.layer.update();
+  const controls = h.layer.getRowControls();
+  assert.match(
+    controls.summary.detail,
+    /^Murasu · Cyclone · GDACS episode 6 · issued /,
+  );
+  assert.deepEqual(controls.summary.actions, [
+    { id: 'advisory', label: 'GDACS report ↗', href: gdacsStorm().advisoryUrl },
+  ]);
+  assert.deepEqual(
+    controls.summary.lines.map((line) => line.id),
+    ['position', 'intensity', 'geometry', 'caveat'],
+  );
+  assert.match(
+    controls.info,
+    /GDACS automatic estimate, not an official warning/,
+  );
+  assert.match(controls.info, /no cone supplied/);
+  assert.equal(controls.summary.status, 'Some cyclone sources unavailable');
+  assert.deepEqual(
+    controls.legend.map((entry) => entry.label),
+    ['Advisory center / forecast track'],
+  );
+  assert.match(controls.list.items[0].text, /^Murasu · Cyclone · 65\skt$/);
+  h.layer.destroy();
+  const coned = harness({
+    getSnapshot: async () =>
+      snapshot([
+        gdacsStorm({
+          type: 'Polygon',
+          coordinates: [
+            [
+              [80.9, 14],
+              [81.5, 16],
+              [79, 16],
+              [80.9, 14],
+            ],
+          ],
+        }),
+      ]),
+  });
+  coned.layer.enable();
+  await coned.layer.update();
+  assert.equal(coned.layer.getRowControls().legend.length, 2);
+  assert.match(coned.layer.getRowControls().info, /Track and cone match/);
+  coned.layer.destroy();
+});
+
+test('a pending GDACS episode asks once more after a minute; disable cancels it', async () => {
+  const timers = [];
+  let calls = 0;
+  let pending = true;
+  const layer = createCyclonesLayer({
+    feed: {
+      getSnapshot: async () => {
+        calls++;
+        return snapshot([
+          pending
+            ? {
+                ...gdacsStorm(),
+                geometryStatus: 'pending',
+                geometryAdvisoryNumber: null,
+                forecastPoints: [],
+                track: null,
+              }
+            : gdacsStorm(),
+        ]);
+      },
+    },
+    createRendering: () => ({
+      setSnapshot: async () => true,
+      setSelection() {},
+      clear() {},
+      destroy() {},
+      getDiagnostics: () => ({}),
+    }),
+    setTimer: (callback, ms) => timers.push({ callback, ms }) - 1,
+    clearTimer: (id) => {
+      timers[id] = null;
+    },
+  });
+  layer.init({ camera: {} });
+  layer.enable();
+  await layer.update();
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 65_000);
+  assert.equal(layer.getDiagnostics().timerActive, true);
+  pending = false;
+  timers[0].callback();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 2);
+  assert.equal(
+    layer.getDiagnostics().timerActive,
+    false,
+    'no repeat once current',
+  );
+  assert.equal(timers.length, 1);
+  pending = true;
+  await layer.update();
+  assert.equal(layer.getDiagnostics().timerActive, true);
+  layer.disable();
+  assert.equal(timers[1], null);
+  assert.equal(layer.getDiagnostics().timerActive, false);
+  layer.destroy();
 });

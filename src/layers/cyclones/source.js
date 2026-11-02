@@ -45,16 +45,21 @@ const position = (value) => {
   };
 };
 
-function officialLink(value, outlook = false) {
+function officialLink(value, outlook = false, provider = 'nhc') {
   if (value === null) return null;
   const url = new URL(text(value, 256));
-  if (
-    url.origin !== 'https://www.nhc.noaa.gov' ||
-    url.username ||
-    url.password ||
-    url.hash
-  )
-    throw malformed();
+  if (url.username || url.password || url.hash) throw malformed();
+  if (provider === 'gdacs') {
+    if (
+      outlook ||
+      url.origin !== 'https://www.gdacs.org' ||
+      url.pathname !== '/report.aspx' ||
+      !/^\?eventid=\d{1,9}&episodeid=\d{1,9}&eventtype=TC$/.test(url.search)
+    )
+      throw malformed();
+    return url.href;
+  }
+  if (url.origin !== 'https://www.nhc.noaa.gov') throw malformed();
   if (
     outlook
       ? !/^\/gtwo\.php\?basin=(?:atlc|epac|cpac)&fdays=7$/.test(
@@ -122,8 +127,11 @@ export function validateCycloneSnapshot(value) {
   const seen = new Set(),
     budget = { coordinates: 0, points: 0 };
   const storms = value.storms.map((raw) => {
+    const provider = raw?.provider;
     if (
-      !/^(?:al|ep|cp)\d{6}$/.test(raw?.id) ||
+      !(provider === 'nhc'
+        ? /^(?:al|ep|cp)\d{6}$/.test(raw.id)
+        : provider === 'gdacs' && /^gdacs-\d{1,9}$/.test(raw.id)) ||
       seen.has(raw.id) ||
       !['current', 'pending', 'unavailable'].includes(raw.geometryStatus)
     )
@@ -164,14 +172,27 @@ export function validateCycloneSnapshot(value) {
       (track || cone || forecastPoints.length)
     )
       throw malformed();
+    // NHC always publishes a cone with its track; GDACS may not.
     if (
       raw.geometryStatus === 'current' &&
-      (!track || !cone || !forecastPoints.length)
+      (!track || (!cone && provider === 'nhc') || !forecastPoints.length)
     )
       throw malformed();
-    if (raw.basin !== raw.id.slice(0, 2).toUpperCase()) throw malformed();
+    if (
+      provider === 'nhc'
+        ? raw.basin !== raw.id.slice(0, 2).toUpperCase()
+        : !['IO', 'WP', 'SH'].includes(raw.basin)
+    )
+      throw malformed();
+    if (
+      provider === 'gdacs' &&
+      raw.windsPending !== undefined &&
+      typeof raw.windsPending !== 'boolean'
+    )
+      throw malformed();
     return {
       id: raw.id,
+      provider,
       name: text(raw.name, 80),
       classification: text(raw.classification, 16),
       basin: raw.basin,
@@ -185,16 +206,26 @@ export function validateCycloneSnapshot(value) {
         directionDegrees: number(raw.movement?.directionDegrees, 0, 360),
         speedKt: number(raw.movement?.speedKt, 0, 200),
       },
-      advisoryUrl: officialLink(raw.advisoryUrl),
-      outlookUrl: officialLink(raw.outlookUrl, true),
+      advisoryUrl: officialLink(raw.advisoryUrl, false, provider),
+      outlookUrl: officialLink(raw.outlookUrl, true, provider),
       geometryStatus: raw.geometryStatus,
       geometryAdvisoryNumber,
       forecastPoints,
       track,
       cone,
+      ...(provider === 'gdacs'
+        ? { windsPending: raw.windsPending === true }
+        : {}),
     };
   });
   if (value.unavailable && storms.length) throw malformed();
+  const states = ['available', 'stale', 'unavailable'];
+  if (
+    value.providers !== undefined &&
+    (!states.includes(value.providers?.nhc) ||
+      !states.includes(value.providers?.gdacs))
+  )
+    throw malformed();
   return {
     schemaVersion: 1,
     source: text(value.source),
@@ -204,6 +235,9 @@ export function validateCycloneSnapshot(value) {
     stale: value.stale,
     unavailable: value.unavailable,
     reason: value.reason === null ? null : text(value.reason, 240),
+    providers: value.providers
+      ? { nhc: value.providers.nhc, gdacs: value.providers.gdacs }
+      : null,
     storms,
   };
 }

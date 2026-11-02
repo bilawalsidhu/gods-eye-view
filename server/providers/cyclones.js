@@ -1,4 +1,5 @@
 import { readResponseTextCapped } from './common/http.js';
+import { createGdacsCyclones } from './cyclonesGdacs.js';
 
 const STATUS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 const GIS =
@@ -7,7 +8,7 @@ const HOUR = 3600_000;
 // Data, not UI copy: src/layers/cyclones/index.js keeps the same English in
 // msg() and translates it when shown (likewise 'Cyclone data unavailable').
 const COVERAGE =
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.';
+  'NOAA NHC/CPHC advisories for the Atlantic and eastern/central North Pacific; GDACS automatic estimates from JTWC advisories for the North Indian Ocean, western North Pacific and Southern Hemisphere.';
 const LAYERS = [
   { id: 5, cap: 512 * 1024, count: 500, kind: 'points' },
   { id: 6, cap: 512 * 1024, count: 32, kind: 'track' },
@@ -114,6 +115,7 @@ export function parseCycloneStatus(payload, now = Date.now()) {
     const positionAt = iso(raw.lastUpdate, now);
     return {
       id: raw.id,
+      provider: 'nhc',
       name: text(raw.name),
       classification: text(raw.classification, 16),
       basin: raw.id.slice(0, 2).toUpperCase(),
@@ -260,12 +262,16 @@ export function attachCycloneGeometry(storms, collections) {
 /** Fixed official endpoints; one shared bounded refresh, no user destinations. */
 export function cycloneProxy({
   fetchImpl = fetch,
+  fetchGdacs = createGdacsCyclones({ fetchImpl }),
   now = () => Date.now(),
   timeoutMs = 12_000,
 } = {}) {
   let cache = null;
   let operation = null;
   let attemptedAt = -Infinity;
+  // Each provider keeps its own last good snapshot, so one outage leaves the
+  // other provider's storms current.
+  const lastGood = { nhc: null, gdacs: null };
   async function upstream(url, cap, signal) {
     signal.throwIfAborted();
     const response = await fetchImpl(url, {
@@ -286,7 +292,7 @@ export function cycloneProxy({
     signal.throwIfAborted();
     return result;
   }
-  async function refresh(signal) {
+  async function refreshNhc(signal) {
     let storms = parseCycloneStatus(
       await upstream(STATUS_URL, 128 * 1024, signal),
       now(),
@@ -323,13 +329,69 @@ export function cycloneProxy({
         }));
       }
     }
+    return storms;
+  }
+  // A last good snapshot serves until it, or any storm in it, is 12 hours old.
+  function usable(entry) {
+    return entry &&
+      now() - entry.fetchedAt <= 12 * HOUR &&
+      entry.storms.every(
+        (storm) => now() - Date.parse(storm.issuedAt) <= 12 * HOUR,
+      )
+      ? entry
+      : null;
+  }
+  async function refresh(signal) {
+    const results = await Promise.allSettled([
+      refreshNhc(signal),
+      // GDACS stops well inside the refresh deadline, leaving the browser's
+      // 15-second request room on a cold dev server; anything slower
+      // arrives a minute later.
+      fetchGdacs({
+        now: now(),
+        signal,
+        timeoutMs: Math.max(1, timeoutMs - 4000),
+      }),
+    ]);
     signal.throwIfAborted();
-    cache = { storms, fetchedAt: now() };
+    const providers = {};
+    const parts = [];
+    ['nhc', 'gdacs'].forEach((provider, index) => {
+      const result = results[index];
+      if (result.status === 'fulfilled')
+        lastGood[provider] = { storms: result.value, fetchedAt: now() };
+      const entry = usable(lastGood[provider]);
+      providers[provider] =
+        result.status === 'fulfilled'
+          ? 'available'
+          : entry
+            ? 'stale'
+            : 'unavailable';
+      if (entry) parts.push(entry);
+    });
+    if (!parts.length) throw invalid();
+    const storms = parts.flatMap((entry) => entry.storms);
+    cache = {
+      storms,
+      // The oldest part dates the snapshot; the refresh time drives the TTL.
+      fetchedAt: Math.min(...parts.map((entry) => entry.fetchedAt)),
+      refreshedAt: now(),
+      // A GDACS episode still downloading is asked for again after the
+      // one-minute failure cooldown rather than after five minutes.
+      ttl: storms.some(
+        (storm) =>
+          storm.provider === 'gdacs' &&
+          (storm.geometryStatus === 'pending' || storm.windsPending),
+      )
+        ? 60_000
+        : 300_000,
+      providers,
+    };
     return cache;
   }
   async function acquire(signal) {
     signal.throwIfAborted();
-    if (cache && now() - cache.fetchedAt < 300_000) return cache;
+    if (cache && now() - cache.refreshedAt < cache.ttl) return cache;
     if (operation?.controller.signal.aborted) operation = null;
     if (!operation) {
       if (now() - attemptedAt < 60_000) throw new Error('cyclone_retry_later');
@@ -363,20 +425,33 @@ export function cycloneProxy({
     }
   }
   function describe(value, stale = false) {
+    // Serving the whole cache after a failed refresh makes every part stale.
+    const providers = value
+      ? Object.fromEntries(
+          Object.entries(value.providers).map(([provider, state]) => [
+            provider,
+            stale && state === 'available' ? 'stale' : state,
+          ]),
+        )
+      : { nhc: 'unavailable', gdacs: 'unavailable' };
+    const states = Object.values(providers);
     return {
       schemaVersion: 1,
-      source: 'NOAA NHC / CPHC',
+      source: 'NOAA NHC / CPHC · GDACS',
       attribution:
-        'NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center',
+        'NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center; GDACS (Global Disaster Alert and Coordination System, © European Union, CC BY 4.0), redrawn from JTWC advisories',
       coverage: COVERAGE,
       fetchedAt: value?.fetchedAt ?? null,
-      stale: stale || !value,
+      stale: !value || states.includes('stale'),
       unavailable: !value,
       reason: !value
         ? 'Cyclone data unavailable'
-        : stale
+        : states.includes('stale')
           ? 'Cached cyclone advisory; upstream unavailable'
-          : null,
+          : states.includes('unavailable')
+            ? 'Some cyclone sources unavailable'
+            : null,
+      providers,
       storms: value?.storms ?? [],
     };
   }

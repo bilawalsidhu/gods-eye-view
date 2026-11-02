@@ -33,7 +33,7 @@ const utc = (value) =>
     ? `${formatUtcDayMonth(value).replace('-', '-\u2060')}\u00a0${isolate(value.slice(11, 16))}\u00a0UTC`
     : t('Unavailable');
 const COVERAGE = msg(
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.',
+  'NOAA NHC/CPHC advisories for the Atlantic and eastern/central North Pacific; GDACS automatic estimates from JTWC advisories for the North Indian Ocean, western North Pacific and Southern Hemisphere.',
 );
 // The server sends the same English coverage (server/providers/cyclones.js);
 // data stays English and is translated here, where it is shown.
@@ -41,12 +41,20 @@ const coverageText = (coverage) =>
   !coverage || coverage === COVERAGE ? t(COVERAGE) : translateKnown(coverage);
 const ADVISORIES_UNAVAILABLE = msg('Cyclone advisories unavailable');
 // Reason the server gives with an unavailable snapshot, translated when shown.
-const SERVER_REASONS = new Set([msg('Cyclone data unavailable')]);
+const SERVER_REASONS = new Set([
+  msg('Cyclone data unavailable'),
+  msg('Some cyclone sources unavailable'),
+]);
 const errorText = (error) =>
   error && (SERVER_REASONS.has(error) ? t(error) : translateKnown(error));
 // NHC's Tropical Cyclone Status JSON reference: PTC is post-tropical, PC is a
-// potential tropical cyclone, and subtropical systems are STS and STD.
+// potential tropical cyclone, and subtropical systems are STS and STD. GDACS
+// storms at hurricane strength are TY in the western Pacific and CY elsewhere;
+// TC is a GDACS storm whose strength is not known.
 const CLASSIFICATION_NAMES = Object.freeze({
+  TY: msg('Typhoon'),
+  CY: msg('Cyclone'),
+  TC: msg('Tropical cyclone'),
   PC: msg('Potential tropical cyclone'),
   PTC: msg('Post-tropical cyclone'),
   HU: msg('Hurricane'),
@@ -61,6 +69,8 @@ const classificationName = (code) =>
     : code;
 const number = (value, unit) =>
   value === null ? t('Unavailable') : formatQuantity(value, unit);
+// Just past the server's one-minute retry for a pending GDACS episode.
+const GDACS_FOLLOW_UP_MS = 65_000;
 
 /** Advisory status and coherent forecast geometry; selected through the shared row list. */
 export function createCyclonesLayer({
@@ -71,6 +81,8 @@ export function createCyclonesLayer({
   createRendering = createCycloneRendering,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   openLink = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
+  setTimer = (callback, ms) => globalThis.setTimeout(callback, ms),
+  clearTimer = (id) => globalThis.clearTimeout(id),
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Cyclones require a snapshot source');
@@ -88,8 +100,30 @@ export function createCyclonesLayer({
     loading = false,
     error = null,
     destroyed = false,
-    runNavigation = null;
+    runNavigation = null,
+    followUp = null;
   const notify = () => listener?.();
+  function cancelFollowUp() {
+    if (followUp !== null) clearTimer(followUp);
+    followUp = null;
+  }
+  // The server is still downloading a GDACS episode; ask once more when its
+  // one-minute retry allows, instead of waiting for the five-minute poll.
+  function scheduleFollowUp() {
+    cancelFollowUp();
+    if (
+      !snapshot?.storms.some(
+        (storm) =>
+          storm.provider === 'gdacs' &&
+          (storm.geometryStatus === 'pending' || storm.windsPending),
+      )
+    )
+      return;
+    followUp = setTimer(() => {
+      followUp = null;
+      if (enabled && !destroyed && !request) void layer.update();
+    }, GDACS_FOLLOW_UP_MS);
+  }
   const selected = () =>
     snapshot?.storms.find((storm) => storm.id === selectedId) || null;
   function select(id) {
@@ -201,7 +235,7 @@ export function createCyclonesLayer({
     id: 'weather-cyclones',
     name: 'Cyclone advisories',
     icon: '◉',
-    source: 'NOAA NHC / CPHC',
+    source: 'NOAA NHC / CPHC · GDACS',
     updateInterval: 300_000,
     init(nextViewer) {
       viewer = nextViewer;
@@ -226,6 +260,7 @@ export function createCyclonesLayer({
     },
     disable() {
       enabled = false;
+      cancelFollowUp();
       unregisterPickOwner('weather-cyclones');
       removeSelection();
       request?.abort();
@@ -274,6 +309,7 @@ export function createCyclonesLayer({
           return false;
         snapshot = next;
         error = null;
+        scheduleFollowUp();
         if (!snapshot.storms.some((storm) => storm.id === selectedId))
           select(
             selectionIntent === 'cleared'
@@ -343,24 +379,32 @@ export function createCyclonesLayer({
       const storm = selected();
       const empty =
         snapshot && !snapshot.unavailable && snapshot.storms.length === 0;
+      const gdacs = storm?.provider === 'gdacs';
       const geometry =
         storm &&
         (coherentCycloneGeometry(storm)
-          ? t('Track and cone match this advisory')
+          ? storm.cone
+            ? t('Track and cone match this advisory')
+            : t('Track matches this advisory; no cone supplied')
           : storm.geometryStatus === 'pending'
             ? t('Track/cone awaiting advisory {number}', {
                 number: storm.advisoryNumber,
               })
             : t('Track/cone unavailable'));
+      const partial =
+        snapshot?.providers &&
+        Object.values(snapshot.providers).includes('unavailable');
       const status =
         errorText(error) ||
         (snapshot?.stale
           ? t('Cached advisory · stale source')
-          : loading
-            ? t('Loading advisories…')
-            : storm && !coherentCycloneGeometry(storm)
-              ? geometry
-              : null);
+          : partial
+            ? t('Some cyclone sources unavailable')
+            : loading
+              ? t('Loading advisories…')
+              : storm && !coherentCycloneGeometry(storm)
+                ? geometry
+                : null);
       const stormCount = snapshot?.storms.length || 0;
       const activeStorms = tn(
         stormCount,
@@ -376,15 +420,27 @@ export function createCyclonesLayer({
             pressure: number(storm.pressureHpa, 'hPa'),
           })
         : '';
+      const caveat = gdacs
+        ? t('GDACS automatic estimate, not an official warning')
+        : '';
+      const values = storm && {
+        name: storm.name,
+        classification: classificationName(storm.classification),
+        number: storm.advisoryNumber,
+        time: utc(storm.issuedAt),
+      };
       const detail = storm
-        ? t('{name} · {classification} · Advisory {number} · issued {time}', {
-            name: storm.name,
-            classification: classificationName(storm.classification),
-            number: storm.advisoryNumber,
-            time: utc(storm.issuedAt),
-          })
+        ? gdacs
+          ? t(
+              '{name} · {classification} · GDACS episode {number} · issued {time}',
+              values,
+            )
+          : t(
+              '{name} · {classification} · Advisory {number} · issued {time}',
+              values,
+            )
         : empty
-          ? t('No active NHC/CPHC systems')
+          ? t('No active cyclones')
           : stormCount
             ? activeStorms
             : loading
@@ -393,8 +449,8 @@ export function createCyclonesLayer({
       const controls = {
         readout: true,
         summary: {
-          label: t('Cyclones · NHC / CPHC'),
-          coverage: t('Atlantic · E/C Pacific'),
+          label: t('Cyclones · NHC / CPHC · GDACS'),
+          coverage: t('Worldwide'),
           compact: stormCount
             ? storm
               ? t('{storms} · {name} selected', {
@@ -407,7 +463,7 @@ export function createCyclonesLayer({
             ? [
                 {
                   id: 'advisory',
-                  label: t('Official advisory ↗'),
+                  label: gdacs ? t('GDACS report ↗') : t('Official advisory ↗'),
                   href: storm.advisoryUrl,
                 },
               ]
@@ -425,6 +481,7 @@ export function createCyclonesLayer({
                   text: intensity,
                 },
                 { id: 'geometry', text: geometry, muted: true },
+                ...(gdacs ? [{ id: 'caveat', text: caveat, muted: true }] : []),
               ]
             : [],
           detail,
@@ -432,7 +489,7 @@ export function createCyclonesLayer({
           units: 'kt',
         },
         list: {
-          ariaLabel: t('Active NHC and CPHC cyclone advisories'),
+          ariaLabel: t('Active cyclone advisories'),
           items: (snapshot?.storms || []).map((item, index) => ({
             id: item.id,
             ordinal: index + 1,
@@ -450,17 +507,21 @@ export function createCyclonesLayer({
                 label: t('Advisory center / forecast track'),
                 color: '#7fe6ed',
               },
-              {
-                label: t('Center-track uncertainty cone'),
-                color: '#7fe6ed44',
-              },
+              ...(storm.cone
+                ? [
+                    {
+                      label: t('Center-track uncertainty cone'),
+                      color: '#7fe6ed44',
+                    },
+                  ]
+                : []),
             ]
           : [],
         info: storm
-          ? `${detail}\n${position}\n${intensity}\n${geometry}${status && status !== geometry ? '\n' + status : ''}\n${coverageText(snapshot.coverage)}`
+          ? `${detail}\n${position}\n${intensity}\n${geometry}${caveat ? '\n' + caveat : ''}${status && status !== geometry ? '\n' + status : ''}\n${coverageText(snapshot.coverage)}`
           : `${detail}${status ? '\n' + status : ''}\n${coverageText(snapshot?.coverage)}`,
         infoTitle: t(
-          'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisory context. The cone describes forecast center-track uncertainty, not storm size or the full hazard area. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory.',
+          'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories for the Atlantic and eastern/central North Pacific; elsewhere GDACS automatic estimates redrawn from JTWC advisories, which are not official warnings. The cone describes forecast center-track uncertainty, not storm size or the full hazard area. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or your national weather service.',
         ),
       };
       return controls;
@@ -507,7 +568,7 @@ export function createCyclonesLayer({
         loading,
         error,
         stale: Boolean(snapshot?.stale),
-        source: 'NOAA NHC / CPHC',
+        source: 'NOAA NHC / CPHC · GDACS',
         advisoryAt: storm?.issuedAt || null,
         empty: Boolean(
           snapshot && !snapshot.unavailable && !snapshot.storms.length,
@@ -523,7 +584,7 @@ export function createCyclonesLayer({
         selectionActive: clickHandler !== null,
         selectedId,
         selectionIntent,
-        timerActive: false,
+        timerActive: followUp !== null,
       };
     },
     destroy() {

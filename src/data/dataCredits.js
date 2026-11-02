@@ -413,7 +413,11 @@ export const DATA_CREDITS = [
   },
   {
     key: 'weather-cyclones',
-    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
+    html:
+      'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. ' +
+      'Other basins: <a href="https://www.gdacs.org/" target="_blank" rel="noopener">GDACS</a> (Global Disaster Alert and Coordination System), © European Union, ' +
+      '<a href="https://commission.europa.eu/legal-notice_en#copyright-notice" target="_blank" rel="noopener">CC BY 4.0</a>; ' +
+      'tracks and cones redrawn from its automatic estimates of JTWC advisories, not official warnings. Forecast center uncertainty, not storm size.',
   },
   {
     key: 'weather-lightning',

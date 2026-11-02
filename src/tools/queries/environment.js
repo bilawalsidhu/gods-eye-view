@@ -171,8 +171,9 @@ export const getCyclones = defineTool({
   name: 'get_cyclones',
   title: 'Tropical cyclones',
   description:
-    'Active tropical cyclones from the NOAA National Hurricane Center and ' +
-    'Central Pacific Hurricane Center, optionally limited to an area.',
+    'Active tropical cyclones worldwide, optionally limited to an area: NOAA ' +
+    'NHC/CPHC advisories, and elsewhere GDACS automatic estimates from JTWC ' +
+    'advisories, which are not official warnings.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA },
@@ -200,6 +201,10 @@ export const getCyclones = defineTool({
       )
       .map((storm) => ({
         id: storm.id,
+        provider: storm.provider ?? 'nhc',
+        ...(storm.provider === 'gdacs'
+          ? { caveat: 'GDACS automatic estimate, not an official warning' }
+          : {}),
         name: storm.name,
         classification: storm.classification,
         basin: storm.basin,

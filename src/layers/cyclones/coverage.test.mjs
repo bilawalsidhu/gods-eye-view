@@ -5,7 +5,7 @@ import { setLocale, t } from '../../i18n/index.js';
 
 // The exact string the server sends (COVERAGE in server/providers/cyclones.js).
 const SERVER_COVERAGE =
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.';
+  'NOAA NHC/CPHC advisories for the Atlantic and eastern/central North Pacific; GDACS automatic estimates from JTWC advisories for the North Indian Ocean, western North Pacific and Southern Hemisphere.';
 const time = '2026-09-16T03:00:00.000Z';
 const storm = {
   id: 'ep152026',
