@@ -124,12 +124,12 @@ export function createApplicationCatalog({
       ),
     );
     const military = once(() =>
-      createApplicationMilitary({
+      sessionModel('military', () => createApplicationMilitary({
         surface,
         source: sources.military,
         militaryRegistry,
         resolveAsset,
-      }),
+      })),
     );
     const vessels = once(() =>
       createApplicationVessels({

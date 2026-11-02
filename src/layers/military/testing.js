@@ -36,6 +36,7 @@ export function createTesting({
     models = [],
     modelCollection = null,
   }) {
+    flightState.enabled = billboardCollection?.show !== false;
     // The production renderer over the test's viewer and (fake) collections.
     flightState._renderer = services.renderer.create({
       viewer,

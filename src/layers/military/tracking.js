@@ -502,6 +502,14 @@ export function createTracking({
         );
       }
     }
+    _attachTrail();
+    const oldestFixEpochSec = history.length
+      ? history[0].timeMs / 1000
+      : Infinity;
+    _backfillTrail(icao24, flightState._trailBackfillToken, oldestFixEpochSec);
+  }
+
+  function _attachTrail() {
     if (!flightState._trail && flightState._renderer) {
       flightState._trail = flightState._renderer.trails.create({
         color: TRAIL_COLOR,
@@ -568,11 +576,6 @@ export function createTracking({
       });
     }
     _refreshTrailDisplay();
-
-    const oldestFixEpochSec = history.length
-      ? history[0].timeMs / 1000
-      : Infinity;
-    _backfillTrail(icao24, flightState._trailBackfillToken, oldestFixEpochSec);
   }
 
   /**
@@ -703,6 +706,13 @@ export function createTracking({
 
   function _destroyTrail() {
     _clearTrail();
+    _detachTrail();
+  }
+
+  function _detachTrail() {
+    if (flightState._trailHeadEntity)
+      flightState._renderer?.trails.removeHead(flightState._trailHeadEntity);
+    flightState._trailHeadEntity = null;
     if (flightState._trail) {
       flightState._trail.destroy();
       flightState._trail = null;
@@ -830,8 +840,8 @@ export function createTracking({
    * @param {string} icao24 - ICAO hex identifier of the aircraft to track
    */
 
-  function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
-    _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
+  function _trackFlight(icao24, { origin = 'programmatic', resume = false, follow = true } = {}) {
+    if (!resume) _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
     const bb = flightState._billboards.get(icao24);
     const info = flightState.records.data.get(icao24);
@@ -958,9 +968,15 @@ export function createTracking({
     refreshTrackedReadout(flightState._trackedEntity);
     // Camera follows the tracked entity (the renderer cancels any flight
     // first and applies the one exact tracked frame).
-    flightState._trackedCameraFrameStop = flightState._renderer.follow.start(
-      flightState._trackedEntity,
-    );
+    if (follow) {
+      flightState._trackedCameraFrameStop = flightState._renderer.follow.start(
+        flightState._trackedEntity,
+      );
+    }
+    if (resume) {
+      _attachTrail();
+      return;
+    }
 
     // Track-history trail (PRD F2): seed from local history + async backfill.
     // Ground traffic draws NO trail — if the plane takes off while tracked, the
@@ -1108,6 +1124,8 @@ export function createTracking({
     _appendTrailFix,
     _refreshTrailDisplay,
     _startTrail,
+    _attachTrail,
+    _detachTrail,
     _backfillTrail,
     _clearTrail,
     _destroyTrail,
