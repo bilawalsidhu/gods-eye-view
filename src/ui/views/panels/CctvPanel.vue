@@ -32,8 +32,9 @@ const frameData = computed(() =>
 <RailPanel id="cctv-panel" start-collapsed :title="t('CCTV')" sideways scroll rail-scroller>
     <div class="cyber-panel-body ui-scroll" data-rail-scroller>
     <div id="cctv-frame-wrap" :class="['cctv-frame-wrap', { loading: frame?.wrapLoading, 'has-frame': frame?.hasFrame }]">
-      <span class="cctv-frame-caption" aria-hidden="true">{{ t('ACQUIRING FRAME') }}</span>
-      <img id="cctv-frame" alt="CCTV feed frame" :class="{ active: frame?.hasFrame }" :src="frame?.src || undefined" :hidden="live" v-bind="frameData" />
+      <span class="cctv-frame-caption" aria-hidden="true" :hidden="view?.embedded">{{ t('ACQUIRING FRAME') }}</span>
+      <img id="cctv-frame" alt="CCTV feed frame" :class="{ active: frame?.hasFrame }" :src="frame?.src || undefined" :hidden="live || view?.embedded" v-bind="frameData" />
+      <div id="cctv-embed-host"></div>
       <canvas id="cctv-video" class="cctv-frame" :hidden="!live"></canvas>
     </div>
     <UiBadge id="cctv-source-badge" role="status" aria-live="polite" :data-frame-state="sourceBadge?.state">{{ sourceBadge?.label ?? t('SOURCE · UNKNOWN') }}</UiBadge>
@@ -53,7 +54,7 @@ const frameData = computed(() =>
       <UiButton class="scene-btn" :pressed="Boolean(view?.autoHop.active)" pressed-class="active" id="cctv-auto-hop-btn" :disabled="view?.toggleDisabled">{{ view?.autoHop.text ?? t('AUTO HOP OFF') }}</UiButton>
     </div>
     <div class="cctv-controls">
-      <UiButton class="scene-btn" :pressed="Boolean(view?.projection.active)" pressed-class="active" id="cctv-projection-btn" :disabled="view?.toggleDisabled">{{ view?.projection.text ?? t('PROJECTION ON') }}</UiButton>
+      <UiButton class="scene-btn" :pressed="Boolean(view?.projection.active)" pressed-class="active" id="cctv-projection-btn" :disabled="view?.projection.disabled ?? view?.toggleDisabled">{{ view?.projection.text ?? t('PROJECTION ON') }}</UiButton>
       <UiBadge id="cctv-quality-chip" class="gev-status-badge--box" :data-cal-badge="view?.quality.calBadge">{{ view?.quality.label ?? t('CAL · {badge}', { badge: '--' }) }}</UiBadge>
     </div>
     <div class="cctv-calibration-block">

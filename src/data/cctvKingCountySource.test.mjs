@@ -195,13 +195,15 @@ test('King County model and manufacturer survive the /api/cctv/sources boundary 
   const root = mkdtempSync(path.join(tmpdir(), 'gev-kingcounty-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   // No file/env catalog, so the live packs load; every pack but King County
-  // sees an upstream failure and contributes nothing.
+  // sees an upstream failure; static Paraguay packs are disabled here.
   withEnv(t, {
     CCTV_SOURCES_FILE: undefined,
     CCTV_SOURCES_JSON: undefined,
     CCTV_FORCE_AUSTIN: undefined,
     CCTV_PREFER_AUSTIN: undefined,
     CCTV_KINGCOUNTY_ENABLED: undefined,
+    CCTV_ENCARNACION_ENABLED: '0',
+    CCTV_ALTO_PARANA_ENABLED: '0',
     CCTV_KINGCOUNTY_MAX_SOURCES: undefined,
     CCTV_MAX_SOURCES: undefined,
   });

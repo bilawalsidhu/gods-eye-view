@@ -454,6 +454,7 @@ async function main() {
       ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage',
       '--disable-web-security',
+      '--disable-backgrounding-occluded-windows',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       '--window-size=1280,800',

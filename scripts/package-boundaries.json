@@ -350,8 +350,11 @@
       "scripts/google-server-key.mjs",
       "src/data/cctvFootprint.js",
       "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "server/providers/cctv/encarnacion.js",
+      "server/providers/cctv/altoParana.js"
     ],
     "external": []
   },
@@ -773,7 +776,10 @@
       "src/ui/vueRuntime.js",
       "src/ui/stores/cctv.js",
       "src/ui/stores/status.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -1107,7 +1113,10 @@
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1847,7 +1856,9 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -2694,7 +2705,6 @@
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
       "src/ui/mobileShell.js",
-      "src/exclusiveSurfaces.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
@@ -3125,7 +3135,6 @@
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
       "src/ui/stores/providerSettings.js",
-      "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js",
@@ -3157,7 +3166,10 @@
       "src/ui/kit/UiBadge.vue",
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": [
       "hls.js",
@@ -3756,7 +3768,9 @@
       "src/layers/wind/inspectionMarker.js",
       "src/ui/stores/bhoteKoshiPanel.js",
       "src/hudReadouts.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js"
     ],
     "external": [
       "hls.js",
@@ -4095,7 +4109,7 @@
   },
   "cctv-types-source": {
     "exports": ["./sources/cctv-types"],
-    "modules": ["src/sources/cctvTypes.js"],
+    "modules": ["src/sources/cctvTypes.js", "src/sources/youtube.js"],
     "external": []
   },
   "regional-source": {

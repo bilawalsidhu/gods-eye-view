@@ -166,6 +166,10 @@ export function _settleCctvFrame(token, src, ok) {
 export function presentCctvSourceBadge(activeCamera, enabled, frame) {
   if (!enabled || !activeCamera)
     return { label: t('SOURCE · UNKNOWN'), state: 'idle' };
+  if (activeCamera.feedType === 'embed')
+    return { label: t('PUBLIC PLAYER · EXTERNAL'), state: 'external' };
+  if (activeCamera.noFeed || activeCamera.feedType === 'none')
+    return { label: t('NO PUBLIC FEED'), state: 'no-feed' };
   if (frame.loading && !frame.hasFrame)
     return { label: t('FRAME · LOADING'), state: 'loading' };
   if (frame.error && !frame.hasFrame)

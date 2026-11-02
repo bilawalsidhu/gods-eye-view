@@ -194,6 +194,9 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
     CCTV_TFL_ENABLED: undefined,
     CCTV_DRIVEBC_ENABLED: undefined,
     CCTV_DRIVEBC_MAX_SOURCES: undefined,
+    // This fixture exercises the remote catalog with only DriveBC available.
+    CCTV_ENCARNACION_ENABLED: '0',
+    CCTV_ALTO_PARANA_ENABLED: '0',
   });
   const requested = [];
   t.mock.method(globalThis, 'fetch', async (url) => {
@@ -240,6 +243,10 @@ test('default caps of the original packs fit inside the default catalog cap', ()
   assert.ok(
     packs <= DEFAULT_CCTV_MAX_SOURCES,
     `default packs (${packs}) would be thinned by the catalog cap (${DEFAULT_CCTV_MAX_SOURCES})`,
+  );
+  assert.ok(
+    packs + 4 <= DEFAULT_CCTV_MAX_SOURCES,
+    'the four Paraguay cameras also fit beside the original packs',
   );
   assert.ok(
     DEFAULT_CCTV_MAX_SOURCES <= CCTV_MAX_SOURCES_CEILING,
