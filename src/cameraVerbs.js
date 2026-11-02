@@ -1746,8 +1746,13 @@ export function flyRoute(
   const speed = ROUTE_M_S[String(args.speed || 'normal').toLowerCase()]
     ? String(args.speed || 'normal').toLowerCase()
     : 'normal';
+  // A route hidden from Draw's list is not on screen, so it is not flown.
   const routes = (annoList || []).filter(
-    (a) => a.type === 'route' && Array.isArray(a.path) && a.path.length >= 2,
+    (a) =>
+      a.type === 'route' &&
+      !a.hidden &&
+      Array.isArray(a.path) &&
+      a.path.length >= 2,
   );
   if (!routes.length) {
     return {

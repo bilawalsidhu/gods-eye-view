@@ -380,7 +380,9 @@ export function bindRadioControls() {
     window,
     'gev:cockpit-context-expanded',
     () => {
+      // Contact takes the room the open left panel had.
       this.actions.setPanelCollapsed('data-panel', true);
+      this.actions.setPanelCollapsed('utilities-panel', true);
     },
     tunerListenerOptions,
   );
