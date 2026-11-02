@@ -3,6 +3,7 @@
 // dynamic import() so Navara stays out of the Cesium-mode bundle.
 
 import ThreeView, {
+  Color as NavaraColor,
   MeshDesc,
   EffectDesc,
   Effect as NavaraEffect,
@@ -205,6 +206,7 @@ export async function createNavaraGlobe({
   return {
     view,
     engine,
+    NavaraColor,
     MeshDesc,
     EffectDesc,
     NavaraEffect,

@@ -120,6 +120,10 @@ export async function registerNavaraLayerRenderers() {
         return (engine, options) => createWeatherNavaraRenderer(engine, navaraViews.get(engine), options);
       },
     ])),
+    'bhote-koshi-locator': async () => {
+      const { drawStorySource } = await import('../layers/shared/render/navaraStory.js');
+      return (engine, { data }) => drawStorySource(engine, navaraViews.get(engine), data);
+    },
     directions: async () => {
       const { createDirectionsNavaraRenderer } = await import('../layers/directions/render/navara.js');
       return (engine) => createDirectionsNavaraRenderer(engine, navaraViews.get(engine));
@@ -258,6 +262,7 @@ export async function createNavaraScene({
     view: globe.view,
     alignDaylightToRestoredView: globe.alignDaylightToRestoredView,
     MeshDesc: globe.MeshDesc,
+    NavaraColor: globe.NavaraColor,
     EffectDesc: globe.EffectDesc,
     NavaraEffect: globe.NavaraEffect,
     DrapedMesh: globe.DrapedMesh,

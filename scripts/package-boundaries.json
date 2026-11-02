@@ -3679,6 +3679,7 @@
       "src/layers/shared/render/navaraStems.js",
       "src/layers/submarineCables/render/navara.js",
       "src/layers/directions/render/navara.js",
+      "src/layers/shared/render/navaraStory.js",
       "src/layers/weather/render/navara.js",
       "src/layers/weather/render/navaraSurface.js",
       "src/layers/wind/render/navara.js",

@@ -645,8 +645,8 @@ export const BHOTE_KOSHI_LOCATOR_CREDIT = {
     '(CC BY-NC 4.0)',
 };
 
-/** @type {Set<string>} Keys of dynamic credits already registered this session. */
-const _dynamicCreditKeys = new Set();
+/** Keys registered in each globe's attribution display. */
+const dynamicCreditKeys = new WeakMap();
 
 /**
  * Register a conditional credit at the moment its data source activates.
@@ -660,9 +660,11 @@ export function registerDynamicCredit(target, credit) {
   const credits = creditsOf(target);
   if (!credits) return false;
   if (!credit?.key || !credit?.html) return false;
-  if (_dynamicCreditKeys.has(credit.key)) return true;
+  let keys = dynamicCreditKeys.get(target);
+  if (!keys) dynamicCreditKeys.set(target, (keys = new Set()));
+  if (keys.has(credit.key)) return true;
   credits.addStatic(credit.html, { onScreen: false });
-  _dynamicCreditKeys.add(credit.key);
+  keys.add(credit.key);
   return true;
 }
 
