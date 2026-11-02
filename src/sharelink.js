@@ -522,6 +522,12 @@ export class ShareLinkManager {
     }
   }
 
+  /** Save the current view before leaving the page. */
+  flush() {
+    clearTimeout(this._debounceTimer);
+    this._updateHash();
+  }
+
   _scheduleUpdate() {
     if (this._destroyed || this._initialRestorePending) return;
     clearTimeout(this._debounceTimer);

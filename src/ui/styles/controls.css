@@ -824,6 +824,15 @@
 }
 
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
+#globe-engine-control label {
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#globe-engine:focus-visible {
+  outline: 2px solid currentColor;
+}
+
 .map-source-section {
   display: grid;
   gap: 6px;
