@@ -37,7 +37,7 @@ import {
   DEFAULT_HUD_LAYOUT,
   normalizeHudLayout,
 } from './hudLayouts.js';
-import { formatNumber, msg, t } from './i18n/index.js';
+import { formatNumber, msg, onLocaleChange, t } from './i18n/index.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
 import { subscribeSelectedVessel } from './hudReadouts.js';
@@ -283,7 +283,28 @@ export class IntelHUD {
     );
     this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
+    this._offLocale = onLocaleChange(() => this._relocalize());
     this._startTimers();
+  }
+
+  /**
+   * Show the HUD's own words in the new locale. The deterministic summary
+   * is composed again; the AI reply does not depend on the locale, so the
+   * next tick shows the one already received rather than asking again.
+   */
+  _relocalize() {
+    this._present({
+      mode: MODE_LABELS[this._currentStyle]
+        ? t(MODE_LABELS[this._currentStyle])
+        : this._currentStyle.toUpperCase(),
+      summaryLabel: t('SUMMARY'),
+      rec: t('REC'),
+      ...(this._view.vessel.active
+        ? {}
+        : { vessel: { active: false, text: t('AIS: --') } }),
+    });
+    if (this._visible && this._latestMetrics) this._updateCameraData();
+    this._setSummaryText(this._composeSummary(), false);
   }
 
   /**
@@ -1081,5 +1102,6 @@ export class IntelHUD {
     this._dataManagerUnsubscribe?.();
     this._vesselUnsubscribe?.();
     this._summaryRequest?.abort();
+    this._offLocale();
   }
 }

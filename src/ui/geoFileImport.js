@@ -4,14 +4,7 @@ import {
   MAX_IMPORTED_FILES,
   loadGeoFile,
 } from '../data/geoFileImport.js';
-import {
-  formatNumber,
-  msg,
-  registerUnsavedWork,
-  t,
-  tn,
-  translateKnown,
-} from '../i18n/index.js';
+import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
 import { flyToDataSource } from './flyToDataSource.js';
 
 // One color per file, in import order, from the whiteboard palette.
@@ -55,11 +48,6 @@ export function initGeoFileImport({
   let hint = '';
   const lifetime = new AbortController();
   let removeMapSource;
-  // Imports live for the page session: switching language (a reload) asks
-  // first while any are on the map.
-  const unregisterUnsavedWork = registerUnsavedWork(() =>
-    !destroyed && imports.length ? msg('imported map files') : null,
-  );
 
   const listen = (target, type, listener, options) => {
     if (!target?.addEventListener) return;
@@ -395,7 +383,6 @@ export function initGeoFileImport({
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      unregisterUnsavedWork();
       disconnect();
       lifetime.abort();
       removeMapSource?.();

@@ -22,10 +22,18 @@ export function createRealtimeSession({
     sendMapEvent: (event) => controller.notifyMapEvent(event),
     ignoreButtonClick: () => Boolean(controller.spaceKeyHeld),
     bindControls() {
-      // Kept as the remover; a full stop releases it.
-      controller.tierHandler = controller.ui.on('tier', () =>
+      // Kept as the remover; a full stop releases it. The cost readout and
+      // tier toggle are worded again in a new locale.
+      const offTier = controller.ui.on('tier', () =>
         controller.toggleVoiceTier(),
       );
+      const offLocale = controller.ui.on('locale', () =>
+        controller.syncCostUi(),
+      );
+      controller.tierHandler = () => {
+        offTier();
+        offLocale();
+      };
       controller.syncCostUi();
       controller.bindPushToTalkShortcut();
     },

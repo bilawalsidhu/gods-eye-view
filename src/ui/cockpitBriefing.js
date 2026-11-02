@@ -8,7 +8,11 @@ import {
   formatCockpitCoordinate,
   formatCockpitWindDirection,
 } from './cockpitPresentation.js';
-import { COCKPIT_BRIEF_PAGES, CYCLE_HELP_KEYS } from './cockpitBriefPages.js';
+import {
+  COCKPIT_BRIEF_PAGES,
+  CYCLE_HELP_KEYS,
+  createBriefState,
+} from './cockpitBriefPages.js';
 
 // regionalModel.weatherCodeLabel is shared with node code and returns
 // English; translate it here.
@@ -58,15 +62,41 @@ export function showBriefPage(index, { manual = false } = {}) {
   this.scheduleContextLayout();
 }
 
+// The state is the accessible name; the help is the tooltip.
+function cycleWords(enabled) {
+  return {
+    autoRotate: enabled,
+    autoLabel: enabled ? t('CYCLE ON') : t('CYCLE OFF'),
+    autoHelp: t(CYCLE_HELP_KEYS[enabled ? 'on' : 'off']),
+  };
+}
+
+/**
+ * Word the briefing again in the current locale: its page, cycle toggle and
+ * whatever the regional card shows.
+ */
+export function relocalizeBrief() {
+  if (this.destroyed) return;
+  if (this.brief.news.state === null) {
+    const { news, local } = createBriefState();
+    this.brief.news = news;
+    this.brief.local = { ...local, coordinates: this.brief.local.coordinates };
+  }
+  Object.assign(this.brief, cycleWords(this.briefAutoRotateEnabled));
+  this.showBriefPage(this.briefPageIndex);
+  if (this.regionalBrief)
+    this.renderRegionalBrief(this.regionalBrief, this.lastAircraftInfo);
+  else if (this.brief.news.state)
+    this.renderRegionalBriefStatus(
+      this.brief.news.state,
+      this.lastAircraftInfo,
+    );
+}
+
 export function setBriefAutoRotate(enabled) {
   if (this.destroyed) return;
   this.briefAutoRotateEnabled = Boolean(enabled);
-  // The state is the accessible name; the help is the tooltip.
-  Object.assign(this.brief, {
-    autoRotate: this.briefAutoRotateEnabled,
-    autoLabel: this.briefAutoRotateEnabled ? t('CYCLE ON') : t('CYCLE OFF'),
-    autoHelp: t(CYCLE_HELP_KEYS[this.briefAutoRotateEnabled ? 'on' : 'off']),
-  });
+  Object.assign(this.brief, cycleWords(this.briefAutoRotateEnabled));
   this.publishBriefView();
   if (this.briefAutoRotateEnabled) this.startBriefRotation({ reset: true });
   else this.stopBriefRotation();

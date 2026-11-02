@@ -415,23 +415,26 @@ export class GevRealtimeController extends RealtimeFacade {
     });
     this.updateVoiceButtonLabel();
     const shownStatus = STATUS_STATES.has(status) ? status : 'idle';
-    this.ui.update('status', { text: voiceStatusLabel(shownStatus) });
-    const resolvedDetail =
-      status === 'listening' && this.pushToTalkMode
-        ? this.pushToTalkKeyHeld
+    this.ui.update('status', { text: () => voiceStatusLabel(shownStatus) });
+    // Words are given as functions, so a locale change words them again.
+    const holdToTalk = status === 'listening' && this.pushToTalkMode;
+    const held = this.pushToTalkKeyHeld;
+    const resolvedDetail = () =>
+      holdToTalk
+        ? held
           ? t('Release Space to send')
           : t('Hold Space to talk')
         : detail;
-    const primaryDetail =
+    const primaryDetail = () =>
       status === 'error'
         ? t('VOICE UNAVAILABLE')
-        : resolvedDetail ||
+        : resolvedDetail() ||
           (status === 'idle' ? t('VOICE STANDBY') : t('VOICE ACTIVE'));
     this.ui.update('detail', { text: primaryDetail, title: primaryDetail });
     this.ui.update('error', {
-      text:
+      text: () =>
         status === 'error'
-          ? resolvedDetail || t('Voice session could not be started.')
+          ? resolvedDetail() || t('Voice session could not be started.')
           : '',
     });
     if (status === 'idle' || status === 'connecting' || status === 'error') {

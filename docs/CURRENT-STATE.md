@@ -3854,10 +3854,10 @@ Shipped locales: **en** (source and fallback), **de**, **es**, **fr**, **it**, *
   select `zh-Hant`. Explicit `Hans` selects `zh-CN` regardless of region. `?lang=` is not stored, and share links drop
   it, so a recipient keeps their own language. The globe picker in the
   bottom-right corner (`src/ui/localePicker.js`) stores the choice, drops
-  `?lang=` (keeps it only when storage is blocked) and reloads. It asks first
-  when the reload would lose work registered with `registerUnsavedWork`:
-  unsaved keys or CCTV calibration, Draw marks, imported map files, the open
-  cockpit, a voice session.
+  `?lang=` (keeps it only when storage is blocked) and switches in place:
+  views re-render, code that published translated text words it again through
+  `onLocaleChange`, and `<html lang>`/`dir` and the page's `data-i18n` markup
+  follow. Nothing is lost; a toast already on screen keeps its words.
 - **Gate.** `npm run i18n` (and `src/i18n/catalog.test.mjs` under `npm test`)
   extracts every message and fails on missing, empty, unused,
   placeholder-mismatched, still-English (plural forms included) or

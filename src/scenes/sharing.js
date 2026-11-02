@@ -196,7 +196,7 @@ export function createSceneSharing(director) {
     const scene = director._getSelectedScene(),
       shot = scene?.shots.find((s) => s.id === director._selectedShotId);
     if (!scene || !shot) {
-      director._updateStatus(t('Select a scene and shot first'));
+      director._updateStatus(() => t('Select a scene and shot first'));
       return;
     }
     const owner = open(t('Edit scene details'));
@@ -340,7 +340,7 @@ export function createSceneSharing(director) {
         director._selectedSceneId,
       );
     } catch {
-      director._updateStatus(t('Select a scene first'));
+      director._updateStatus(() => t('Select a scene first'));
       return;
     }
     const owner = open(t('Share selected scene'));

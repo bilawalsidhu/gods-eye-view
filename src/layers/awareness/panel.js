@@ -2,7 +2,12 @@ import {
   formatAwarenessLabel,
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
-import { formatNumber, t, translateKnown } from '../../i18n/index.js';
+import {
+  formatNumber,
+  onLocaleChange,
+  t,
+  translateKnown,
+} from '../../i18n/index.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 
@@ -73,6 +78,12 @@ export function createPanel({ state: layerState, parts }) {
   /** The panel shows layer views from the first enable or result onwards. */
   function ensurePanel() {
     layerState.panelShown = true;
+    // A shown view is worded again in a new locale.
+    layerState.offPanelLocale ??= onLocaleChange(() => {
+      const kind = layerState.panelView?.kind;
+      if (kind === 'results') renderResults();
+      else if (kind === 'standby') hidePanel();
+    });
   }
 
   function hidePanel() {
@@ -92,6 +103,8 @@ export function createPanel({ state: layerState, parts }) {
   /** Clear the panel when the layer is destroyed. */
   function clearPanel() {
     if (layerState.panelShown) publish({ kind: 'empty' });
+    layerState.offPanelLocale?.();
+    layerState.offPanelLocale = null;
     layerState.panelShown = false;
     layerState.panelView = null;
     layerState.panelSignature = '';

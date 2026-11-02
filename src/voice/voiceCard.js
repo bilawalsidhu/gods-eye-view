@@ -40,6 +40,10 @@ export class VoiceCardControls {
     this.hideTimer = null;
     this.destroyed = false;
     if (!ui) return;
+    // The card's labels are worded again in a new locale.
+    this.offLocale = ui.on('locale', () => {
+      if (!this.destroyed) this.render();
+    });
     this.offDismiss = ui.on('card-dismiss', () =>
       this.handle({ type: 'dismiss' }),
     );
@@ -142,5 +146,6 @@ export class VoiceCardControls {
     this.destroyed = true;
     this.cancelIdle();
     this.offDismiss?.();
+    this.offLocale?.();
   }
 }

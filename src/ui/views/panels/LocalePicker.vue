@@ -3,6 +3,7 @@ import {
   computed,
   nextTick,
   onBeforeUnmount,
+  onMounted,
   shallowRef,
   useTemplateRef,
 } from 'vue';
@@ -23,6 +24,8 @@ import { vClassToggle } from '../../rail/classToggle.js';
 const props = defineProps({
   current: { type: String, required: true },
   onSelect: { type: Function, required: true },
+  /** Focus the button once drawn: the picker is drawn again after a choice. */
+  focus: { type: Boolean, default: false },
   locales: { type: Array, default: () => LOCALES },
   nativeNames: { type: Object, default: () => LOCALE_NAMES },
   searchThreshold: { type: Number, default: LOCALE_SEARCH_THRESHOLD },
@@ -73,9 +76,11 @@ const focusTarget = () => search.value || listbox.value;
 const activeDescendant = computed(() =>
   view.value.active ? ids.option(view.value.active) : undefined,
 );
-const buttonLabel = t('Language: {language}', {
-  language: props.nativeNames[props.current] || props.current,
-});
+const buttonLabel = computed(() =>
+  t('Language: {language}', {
+    language: props.nativeNames[props.current] || props.current,
+  }),
+);
 
 let swallowSpaceKeyup = false;
 
@@ -88,7 +93,7 @@ function close({ restoreFocus = false } = {}) {
   if (restoreFocus) button.value?.focus({ preventScroll: true });
 }
 
-// The shell may ask before switching; the list is closed on screen first.
+// The list is closed on screen before the shell switches.
 async function choose(code) {
   close({ restoreFocus: true });
   if (code === props.current) return;
@@ -173,6 +178,9 @@ function onFocusOut(event) {
   if (model.open && next && !root.value?.contains(next)) close();
 }
 
+onMounted(() => {
+  if (props.focus) button.value?.focus({ preventScroll: true });
+});
 onBeforeUnmount(() => close());
 
 defineExpose({ open, close, isOpen: () => model.open });

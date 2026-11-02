@@ -32,7 +32,9 @@ import { createBriefState } from './cockpitBriefPages.js';
 import {
   createInstrumentState,
   createRouteState,
+  createVisionState,
 } from './cockpitInstrumentState.js';
+import { onLocaleChange } from '../i18n/index.js';
 import {
   publishBriefView,
   showBriefPage,
@@ -43,6 +45,7 @@ import {
   maybeRefreshRegionalBrief,
   renderRegionalBriefStatus,
   renderRegionalBrief,
+  relocalizeBrief,
 } from './cockpitBriefing.js';
 import {
   handleSignalClick,
@@ -189,7 +192,7 @@ export class CockpitViewController {
     this.scratchAnchorCartographic = new Cesium.Cartographic();
     this.scratchCameraCartographic = new Cesium.Cartographic();
     this.scratchTargetCartographic = new Cesium.Cartographic();
-    this._listenerRemovers = [];
+    this._listenerRemovers = [onLocaleChange(() => this.relocalize())];
 
     // Camera mutations belong before scene update/culling. Changing the camera
     // from preRender makes 3D Tiles discover a new view after traversal and can
@@ -356,6 +359,9 @@ export class CockpitViewController {
   renderRegionalBriefStatus(status, info) {
     return renderRegionalBriefStatus.call(this, status, info);
   }
+  relocalizeBrief() {
+    return relocalizeBrief.call(this);
+  }
   renderRegionalBrief(payload, info) {
     return renderRegionalBrief.call(this, payload, info);
   }
@@ -389,6 +395,36 @@ export class CockpitViewController {
 
   handleSignalClick(event) {
     return handleSignalClick.call(this, event);
+  }
+
+  /**
+   * Word every Cockpit surface again in the current locale. In flight the
+   * last reading is shown again; otherwise the surfaces go back to their
+   * placeholders, which the next entry replaces.
+   */
+  relocalize() {
+    if (this.destroyed) return;
+    this.relocalizeBrief();
+    this.publishVision(createVisionState(this.visionMode));
+    this.routeSignature = null;
+    if (this.active && this.lastAircraftInfo) {
+      this.rewordingSignals = true;
+      try {
+        this.updateHud(this.lastAircraftInfo, performance.now(), true);
+      } finally {
+        this.rewordingSignals = false;
+      }
+      return;
+    }
+    this.instruments = createInstrumentState();
+    this.publishInstrumentsView();
+    this.routeView = createRouteState();
+    this.publishRouteView();
+    this.contextView = {
+      ...createContextState(),
+      weather: this.contextView.weather,
+    };
+    this.publishContextView();
   }
 
   /** Revoke new work before the shell awaits layer restoration. */

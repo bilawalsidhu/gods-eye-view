@@ -9,8 +9,8 @@ import UiButton from './UiButton.vue';
 const props = defineProps({
   /** The panel's id, which PanelChrome finds the button by. */
   target: { type: String, required: true },
-  /** The panel's name in "Expand {name}", already translated. */
-  name: { type: String, default: () => t('panel') },
+  /** The panel's name in "Expand {name}", already translated; "panel" when unset. */
+  name: { type: String, default: null },
   collapsed: { type: Boolean, required: true },
   /** A right-rail panel opens and closes sideways: ◀ / ▶, not + / −. */
   sideways: { type: Boolean, default: false },
@@ -29,7 +29,7 @@ const label = computed(() => {
       ? props.words.expandLabel
       : props.words.collapseLabel;
   const key = props.collapsed ? msg('Expand {name}') : msg('Collapse {name}');
-  return t(key, { name: props.name });
+  return t(key, { name: props.name ?? t('panel') });
 });
 const title = computed(() => {
   if (props.words)

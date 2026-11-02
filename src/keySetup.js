@@ -26,7 +26,7 @@ import {
  * gev-provider-settings store.
  */
 
-import { t, msg, tn, registerUnsavedWork } from './i18n/index.js';
+import { t, msg, tn, onLocaleChange } from './i18n/index.js';
 
 /**
  * Chip label — pure, exported for tests (keySetup.test.mjs pins the English).
@@ -284,16 +284,10 @@ export async function initKeySetup({
       auth: { ...state.auth },
     });
   };
-  // Switching language (a reload) asks first while any field holds a key.
-  const unregisterUnsavedWork = registerUnsavedWork(() =>
-    Object.values(fields).some((value) => String(value ?? '').trim())
-      ? msg('unsaved provider keys')
-      : null,
-  );
   const destroy = () => {
     if (disposed) return;
     disposed = true;
-    unregisterUnsavedWork();
+    offLocale();
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
     open = false;
@@ -323,6 +317,11 @@ export async function initKeySetup({
     state.auth = { ...state.auth, mode: readStoredCloudVoiceAuthMode() };
     publish();
   };
+
+  // The chip and rows are translated here; show them again in a new locale.
+  const offLocale = onLocaleChange(() => {
+    if (status) render(status);
+  });
 
   const visible = () =>
     root.isConnected &&

@@ -42,11 +42,10 @@ import {
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
 import {
-  describeUnsavedWork,
   getLocale,
-  msg,
-  persistLocaleAndReload,
-  registerUnsavedWork,
+  onLocaleChange,
+  persistLocale,
+  setLocale,
   t,
 } from '../i18n/index.js';
 import { applyLocaleChoice } from './localePicker.js';
@@ -721,61 +720,48 @@ export class StyleManager extends ShellFacade {
 
   /**
    * Publishes the language picker, which ProviderSettingsView renders. A
-   * choice reloads the page; _confirmLocaleReload asks first when that would
-   * lose work.
+   * choice switches the page's language in place and is kept for the next
+   * visit; the Display panel's label column is sized again for it.
    * @returns {void}
    */
   _initLocaleSelector() {
-    // Work this shell can see that a reload drops. Other modules register
-    // their own (registerUnsavedWork in src/i18n/index.js).
-    this._unsavedWorkChecks = [
-      registerUnsavedWork(() =>
-        this.services?.cctvLayer
-          ?.getUIState?.()
-          ?.cameras?.some((camera) => camera.calDirty)
-          ? msg('unsaved CCTV calibration')
-          : null,
-      ),
-      registerUnsavedWork(() =>
-        this.cockpitView?.active ? msg('the open cockpit') : null,
-      ),
-    ];
+    this._lifetime.own(
+      onLocaleChange(() => nextTick(() => this._sizeDisplayLabelColumn())),
+    );
     // A host that does not initialize Core's locale shows no picker.
     if (this._localePickerEnabled === false) return;
+    this._publishLocalePicker();
+  }
+
+  /**
+   * @param {{focus?: boolean}} [options] Focus the picker's button, as after
+   *   a choice: the picker is drawn again for the new language.
+   */
+  _publishLocalePicker({ focus = false } = {}) {
     useLocaleStore(applicationPinia()).publishPicker({
       current: getLocale(),
       onSelect: (locale) => this._chooseLocale(locale),
+      focus,
     });
   }
 
   /**
    * Switch to `locale`: nothing for the active language, otherwise store it
-   * and reload once _confirmLocaleReload agrees.
+   * and apply it to the page.
    * @param {string} locale
-   * @returns {'unchanged'|'declined'|'switched'}
+   * @returns {'unchanged'|'switched'}
    */
   _chooseLocale(locale) {
     return applyLocaleChoice(locale, {
       current: getLocale(),
-      confirmSwitch: () => this._confirmLocaleReload(),
-      switchLocale: (next) => persistLocaleAndReload(next),
+      switchLocale: (next) => {
+        setLocale(persistLocale(next));
+        // Focus once, as the redrawn picker mounts; a later remount leaves
+        // focus where it is.
+        this._publishLocalePicker({ focus: true });
+        void nextTick(() => this._publishLocalePicker());
+      },
     });
-  }
-
-  /**
-   * Switching language reloads the page. While that would lose work the page
-   * cannot restore, ask first.
-   * @returns {boolean} true to switch.
-   */
-  _confirmLocaleReload() {
-    const lost = describeUnsavedWork();
-    if (!lost.length || typeof globalThis.confirm !== 'function') return true;
-    return globalThis.confirm(
-      t(
-        'Switching language reloads the page. This will be lost: {items}. Switch anyway?',
-        { items: lost.join(', ') },
-      ),
-    );
   }
 
   /**
@@ -1801,8 +1787,6 @@ export class StyleManager extends ShellFacade {
     this._shareState.destroy();
     this._locationNavigation.destroy();
     this._lifetime.destroy();
-    for (const unregister of this._unsavedWorkChecks?.splice(0) ?? [])
-      unregister();
     useLocaleStore(applicationPinia()).publishPicker(null);
     this._recording.destroy();
     this._mobileShell?.destroy();

@@ -27,12 +27,12 @@ const setFilter = (select) => {
 // its own frames.
 const sdrConnected = computed(() => sdr.value?.connectionActive ?? null);
 // The collapse button keeps Radio's own wording, not "Expand RADIO".
-const radioWords = {
+const radioWords = computed(() => ({
   expandLabel: t('Expand Radio section'),
   collapseLabel: t('Collapse Radio section'),
   expandTitle: t('Expand Radio'),
   collapseTitle: t('Collapse Radio'),
-};
+}));
 </script>
 
 <template>

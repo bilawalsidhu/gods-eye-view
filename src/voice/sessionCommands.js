@@ -3,7 +3,7 @@ import { createVoiceSession } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
-import { msg, registerUnsavedWork, t } from '../i18n/index.js';
+import { t } from '../i18n/index.js';
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
@@ -74,12 +74,13 @@ export function createVoiceCommands({
         })),
       }),
       value: provider,
-      title: [
-        t('Changing provider reconnects voice if it is on.'),
-        capabilities.advisoryLimit,
-      ]
-        .filter(Boolean)
-        .join(' '),
+      title: () =>
+        [
+          t('Changing provider reconnects voice if it is on.'),
+          capabilities.advisoryLimit,
+        ]
+          .filter(Boolean)
+          .join(' '),
     });
     ui.update('root', { provider });
   }
@@ -91,8 +92,8 @@ export function createVoiceCommands({
   ui.update('tier', { hidden: !capabilities.costControls });
   ui.update('cost', { hidden: !capabilities.costControls });
   if (!capabilities.pushToTalk) {
-    ui.update('button', { label: t('Toggle voice control') });
-    ui.update('help', { text: t('Activate to toggle voice') });
+    ui.update('button', { label: () => t('Toggle voice control') });
+    ui.update('help', { text: () => t('Activate to toggle voice') });
   }
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
@@ -105,17 +106,17 @@ export function createVoiceCommands({
       ...(event.state === 'error' && { errorDismissed: false }),
     });
     // States are machine values; only the label is translated.
-    ui.update('status', { text: voiceStatusLabel(event.state) });
+    ui.update('status', { text: () => voiceStatusLabel(event.state) });
     // The portable session reports 'Voice off' in English: show the idle
     // label instead. Other details are provider messages, shown as they come.
     const idle = event.state === 'idle';
     const detail = event.detail === 'Voice off' ? '' : event.detail;
     ui.update('detail', {
-      text: detail || (idle ? t('Voice off') : t('Voice active')),
+      text: () => detail || (idle ? t('Voice off') : t('Voice active')),
     });
     ui.update('button', { pressed: session.isActive() });
     ui.update('error', {
-      text:
+      text: () =>
         event.state === 'error'
           ? event.detail || t('Voice could not be started.')
           : '',
@@ -169,10 +170,6 @@ export function createVoiceCommands({
     card?.outline(event);
     session.sendMapEvent({ type: 'map_annotation_outline', ...event });
   });
-  // A reload (the language switch) ends the conversation: ask first.
-  const unregisterUnsavedWork = registerUnsavedWork(() =>
-    session.isActive() ? msg('the active voice session') : null,
-  );
   const buttonHandler = () => {
     if (adapter.ignoreButtonClick?.()) return;
     if (session.isActive()) {
@@ -188,7 +185,6 @@ export function createVoiceCommands({
     cleaned = true;
     offButton();
     offProvider?.();
-    unregisterUnsavedWork();
     annotationUnsubscribe?.();
     updateStatus();
     updateCard?.();

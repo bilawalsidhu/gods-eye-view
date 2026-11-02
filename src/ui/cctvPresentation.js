@@ -1,4 +1,4 @@
-import { t, tn } from '../i18n/index.js';
+import { getLocale, msg, t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
@@ -184,11 +184,18 @@ export function _renderCctvState(state) {
     const outside = enabled ? Math.max(0, catalogCount - cameras.length) : 0;
     let picker = this._picker;
     // The index keeps its identity until the view or the active camera
-    // changes, so an unchanged list keeps its options.
-    if (!picking && (picker?.source !== cameras || picker.outside !== outside))
+    // changes, so an unchanged list keeps its options; a new locale words
+    // the closing line again.
+    if (
+      !picking &&
+      (picker?.source !== cameras ||
+        picker.outside !== outside ||
+        picker.locale !== getLocale())
+    )
       picker = {
         source: cameras,
         outside,
+        locale: getLocale(),
         options: cameras.map((camera) => pickerOption(camera)),
         note: outside ? outsideNoteText(outside) : '',
       };
@@ -305,19 +312,23 @@ export function _typeCctvSummary(text) {
 export function _publishCctvChip(patch) {
   const current = this._cctvChip ?? {
     visible: false,
-    label: t('loading frames'),
+    labelKey: msg('loading frames'),
     immediate: false,
     progress: '0/0',
     stopped: false,
   };
+  // The chip keeps its English key, so a new locale shows it again; the
+  // view gets the label alone.
   const next = { ...current, ...patch };
+  next.label = t(next.labelKey);
   if (
     this._cctvChip &&
     Object.keys(next).every((key) => next[key] === current[key])
   )
     return;
   this._cctvChip = next;
-  this.statusStore.publishCctv(next);
+  const { labelKey, ...chip } = next;
+  this.statusStore.publishCctv(chip);
 }
 
 export function _updateCctvSyncChip(loading, enabled) {
@@ -334,7 +345,7 @@ export function _updateCctvSyncChip(loading, enabled) {
     // during a grid load, and flapping it would read as a slot machine.
     this._publishCctvChip({
       visible: true,
-      label: t('loading frames'),
+      labelKey: msg('loading frames'),
       progress: `${loaded}/${total}`,
     });
     return;
@@ -345,7 +356,7 @@ export function _updateCctvSyncChip(loading, enabled) {
     this._cctvChipWasBusy = false;
     this._publishCctvChip({
       visible: true,
-      label: t('camera grid ready'),
+      labelKey: msg('camera grid ready'),
       progress: `${total}/${total}`,
     });
     clearTimeout(this._cctvChipHideTimer);

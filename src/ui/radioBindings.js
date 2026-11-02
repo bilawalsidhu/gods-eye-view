@@ -134,6 +134,8 @@ export function bindRadioControls() {
     return true;
   };
   this._refreshRadioTunerBand = refreshTunerBand;
+  this._refreshRadioTunerText = () =>
+    tunerPreview({ coordinate: this._radioTunerCoordinate, syncStatic: false });
   const beginTuner = () => {
     if (this._radioTunerDragging || !this._radioTunerView.available)
       return false;

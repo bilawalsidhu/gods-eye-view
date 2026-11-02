@@ -1,3 +1,11 @@
+- The language picker switches language in place instead of reloading the
+  page. Views re-render; code that publishes translated text words it again
+  through `onLocaleChange` (`src/i18n/index.js`), and `<html lang>`/`dir` and
+  the page's `data-i18n` markup follow. `persistLocale` replaces
+  `persistLocaleAndReload`, and `registerUnsavedWork` and the switch's
+  unsaved-work prompt are removed, since a switch no longer loses anything
+  (samehkhamis, #0000).
+
 - The application views translate their text with `t()` as they render,
   so it follows the active locale; they no longer carry `data-i18n*`
   attributes, and `npm run i18n` rejects those in a Vue template. The boot

@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 import {
   internetRadioAudioActive,
   localSdrCardView,
@@ -62,6 +62,7 @@ export class LocalSdrControls {
       feeds?.subscribe?.(() => this._scheduleRender()) || null;
     // One request, no polling: learn whether the server has decoder feeds.
     void feeds?.probe?.()?.catch?.(() => {});
+    this._offLocale = onLocaleChange(() => this._scheduleRender());
     this._render();
   }
 
@@ -200,6 +201,7 @@ export class LocalSdrControls {
     this._receiverUnsubscribe?.();
     this._radioUnsubscribe?.();
     this._feedsUnsubscribe?.();
+    this._offLocale?.();
     this._feedsUnsubscribe = null;
     this._receiverUnsubscribe = null;
     this._radioUnsubscribe = null;

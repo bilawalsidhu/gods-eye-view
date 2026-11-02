@@ -22,6 +22,7 @@ import { _initCctvPanel } from './cctvBindings.js';
 import { useCctvStore } from './stores/cctv.js';
 import { useStatusStore } from './stores/status.js';
 import { applicationPinia } from './vueRuntime.js';
+import { onLocaleChange } from '../i18n/index.js';
 
 /**
  * Own camera-panel interaction and presentation; receive the camera port and
@@ -59,6 +60,14 @@ export class CctvControls {
     this._calibrationEdit = null;
     this._actionGeneration = 0;
     this._initCctvPanel();
+    // The panel and the grid chip hold translated text; show it again in a
+    // new locale, from a fresh layer state when there is one (its summary is
+    // worded by the layer).
+    this._offLocale = onLocaleChange(() => {
+      const state = this.cctv?.getUIState?.() ?? this._cctvState;
+      if (state) this._renderCctvState(state);
+      if (this._cctvChip) this._publishCctvChip({});
+    });
     if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
       this._videoVisibilityObserver = new MutationObserver(() =>
         this._renderCctvState(this._cctvState),
@@ -136,6 +145,7 @@ export class CctvControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._offLocale();
     this._cctvVideoSurface?.stop();
     this._videoVisibilityObserver?.disconnect();
     this._actionGeneration++;

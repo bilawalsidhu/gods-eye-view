@@ -7,10 +7,10 @@ import { markRaw, shallowRef } from 'vue';
  * picker; a host that does not initialize Core's locale never does.
  */
 export const useLocaleStore = defineStore('gev-locale', () => {
-  /** `{current, onSelect}`, or null while no picker is shown. */
+  /** `{current, onSelect, focus}`, or null while no picker is shown. */
   const picker = shallowRef(null);
 
-  /** @param {?{current: string, onSelect: (locale: string) => void}} next */
+  /** @param {?{current: string, onSelect: (locale: string) => void, focus?: boolean}} next */
   function publishPicker(next) {
     picker.value = next && markRaw(next);
   }

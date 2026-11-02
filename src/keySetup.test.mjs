@@ -8,7 +8,6 @@ import {
   initKeySetup,
 } from './keySetup.js';
 import { createPinia } from 'pinia';
-import { describeUnsavedWork } from './i18n/index.js';
 import { useProviderSettingsStore } from './ui/stores/providerSettings.js';
 
 const freshStore = () => useProviderSettingsStore(createPinia());
@@ -128,32 +127,4 @@ test('aborting pending setup removes its surface and ignores a late response', a
   resolveResponse({ ok: true, json: async () => ({ keys: [] }) });
   assert.equal(await pending, null);
   assert.equal(store.view.available, false);
-});
-
-test('a pasted, unsaved key makes the language switch ask first until teardown', async () => {
-  const store = freshStore();
-  const root = { dataset: {} };
-  const controller = new AbortController();
-  const setup = await initKeySetup({
-    documentRef: {
-      getElementById: (id) => (id === 'key-setup' ? root : null),
-      addEventListener() {},
-      removeEventListener() {},
-    },
-    signal: controller.signal,
-    store,
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({ keys: [], setCount: 0, total: 1 }),
-    }),
-  });
-  assert.ok(setup);
-  assert.deepEqual(describeUnsavedWork(), []);
-  store.controls.setField('GOOGLE_MAPS_API_KEY', '   ');
-  assert.deepEqual(describeUnsavedWork(), []);
-  store.controls.setField('GOOGLE_MAPS_API_KEY', 'AIza-pasted');
-  assert.deepEqual(describeUnsavedWork(), ['unsaved provider keys']);
-  // The field still holds the key, so only teardown dropping the check clears it.
-  controller.abort();
-  assert.deepEqual(describeUnsavedWork(), []);
 });

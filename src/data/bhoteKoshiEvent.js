@@ -25,7 +25,7 @@ import {
 } from './bhoteKoshiEmbeddedMedia.js';
 import { acquireImageryComparison } from '../maps/imageryComparison.js';
 import { createImagerySplit } from '../ui/imagerySplit.js';
-import { formatDate, t, tn, msg } from '../i18n/index.js';
+import { formatDate, t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 
@@ -1006,8 +1006,10 @@ export function createBhoteKoshiEventLayer({
   let _panelRefs = null;
   let _panelOwner = null;
   let _panelPublished = '';
-  // The dates and field reports, which stay as they were when the panel opened.
+  // The dates and field reports, which stay as they were when the panel
+  // opened, until a locale change words them again.
   let _panelFixed = null;
+  let _offPanelLocale = null;
   let _splitControl = null;
   let _beforeLayer = null;
   let _afterLayer = null;
@@ -2604,9 +2606,9 @@ export function createBhoteKoshiEventLayer({
       id: 'bhote-koshi-split-line',
       handleClass: 'bhote-koshi-split-handle',
       cssProperty: '--bhote-koshi-split',
-      beforeTitle: imageryEndpointText(event.imagery.before),
-      afterTitle: imageryEndpointText(event.imagery.after),
-      ariaLabel: t('Historical reference and post-event image divider'),
+      beforeTitle: () => imageryEndpointText(event.imagery.before),
+      afterTitle: () => imageryEndpointText(event.imagery.after),
+      ariaLabel: () => t('Historical reference and post-event image divider'),
       formatValueText: (beforePercent, afterPercent) =>
         t(
           'A historical reference {before} percent, B post-event {after} percent',
@@ -2664,6 +2666,19 @@ export function createBhoteKoshiEventLayer({
       refs,
       ..._panelFixed,
     });
+  }
+
+  /**
+   * Word the panel again in the current locale: fresh records, written by
+   * the same syncs that keep them current.
+   */
+  function relocalizePanel() {
+    if (!_panelRefs || !_event) return;
+    _panelRefs = createPanelRecords(_event);
+    _panelFixed = null;
+    writeCinematicButton();
+    syncPanel();
+    syncPresentationMode();
   }
 
   function syncCinematicButton() {
@@ -3517,6 +3532,8 @@ export function createBhoteKoshiEventLayer({
         ),
       );
       publishPanel();
+      _offPanelLocale?.();
+      _offPanelLocale = onLocaleChange(relocalizePanel);
       syncPresentationMode();
       overlayHost.setVisible(
         BHOTE_KOSHI_OVERLAY_SOURCE_ID,
@@ -3613,6 +3630,8 @@ export function createBhoteKoshiEventLayer({
       panelStore.connect(null);
       panelStore.publish(null);
     }
+    _offPanelLocale?.();
+    _offPanelLocale = null;
     _panelOwner = null;
     _panelRefs = null;
     _panelPublished = '';

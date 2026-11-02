@@ -38,7 +38,7 @@ const shows = computed(
 );
 const pano = computed(() => view.value?.filter.pano ?? 'all');
 
-const renderModeOptions = [
+const renderModeOptions = computed(() => [
   {
     value: 'letterbox',
     label: t('FIT'),
@@ -55,12 +55,12 @@ const renderModeOptions = [
       title: t('Fill: fill the frame edge to edge, cropping the photo'),
     },
   },
-];
-const panoOptions = [
+]);
+const panoOptions = computed(() => [
   { value: 'all', label: t('ALL'), attrs: { 'data-sl-pano': 'all' } },
   { value: 'pano', label: '360°', attrs: { 'data-sl-pano': 'pano' } },
   { value: 'flat', label: t('FLAT'), attrs: { 'data-sl-pano': 'flat' } },
-];
+]);
 
 // The image line and OPEN keep what they last showed while hidden.
 const image = shallowRef({

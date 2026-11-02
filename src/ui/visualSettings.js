@@ -3,7 +3,7 @@ import { STYLE_STATUS_LABELS } from './visualPresets.js';
 import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import { useDisplayStore } from './stores/display.js';
 import { applicationPinia } from './vueRuntime.js';
-import { t } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
   VisualEffects,
@@ -180,6 +180,15 @@ export class VisualSettings {
       readDisplayPortalActive,
     });
     this._lifetime = new UiLifetime();
+    // The display, the active style and the style sliders carry translated
+    // text; publish them again in a new locale.
+    this._lifetime.own(
+      onLocaleChange(() => {
+        this._publishActiveStyle();
+        this._publishDisplay();
+        this._refreshParameters();
+      }),
+    );
     // The active style's published parameter rows; null while it has none.
     this._parameters = null;
     this._parametersToken = store.connect({

@@ -1,5 +1,5 @@
 import { mapStackChipModels } from '../mapStackChips.js';
-import { t } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 
 /**
  * Own Map Source presentation and selection without constructing map providers.
@@ -77,6 +77,9 @@ export function createMapSourceControls({
     render(controller.getState());
     onStateChanged();
   });
+  // The chips' names and hints are translated; read them again in a new
+  // locale.
+  const offLocale = onLocaleChange(refresh);
   refresh();
   return {
     render,
@@ -87,6 +90,7 @@ export function createMapSourceControls({
       destroyed = true;
       generation++;
       unsubscribe?.();
+      offLocale();
     },
   };
 }

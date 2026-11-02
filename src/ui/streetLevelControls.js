@@ -5,7 +5,7 @@ import {
 } from './streetLevelPresentation.js';
 import { useStreetLevelStore } from './stores/streetLevel.js';
 import { applicationPinia } from './vueRuntime.js';
-import { t, translateKnown } from '../i18n/index.js';
+import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
 
 const RENDER_MODE_KEY = 'gev:street-level:render-mode';
 /** <body> classes of the modes that hide every panel; an expanded photo leaves with them. */
@@ -55,6 +55,10 @@ export class StreetLevelControls {
     this._resizeQueued = false;
     this._elements = this._collect();
     this._bind();
+    // The presentation holds translated text; present it again in a new locale.
+    this._offLocale = onLocaleChange(() => {
+      if (this._state) this.render(this._state);
+    });
   }
 
   _collect() {
@@ -351,6 +355,7 @@ export class StreetLevelControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._offLocale();
     this._exitExpanded();
     // Its `toggle` is not heard once destroyed: a popover left on the wrap
     // would hide the viewer even inside the panel.

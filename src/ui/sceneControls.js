@@ -1,5 +1,5 @@
 /** Own Scene panel listeners and presentation through project reads and actions. */
-import { t, msg } from '../i18n/index.js';
+import { t, msg, onLocaleChange } from '../i18n/index.js';
 import { sceneButtonsDisabled, scenePercent } from './scenePresentation.js';
 import { useSceneStore } from './stores/scenes.js';
 import { applicationPinia } from './vueRuntime.js';
@@ -59,6 +59,13 @@ export class SceneControls {
         this.run(this.actions.reviewImport ? 'reviewImport' : 'import', file),
     });
     this.presentPanel({});
+    // Scene and shot titles are shown translated; the select and the list
+    // show them again.
+    this.offLocale = onLocaleChange(() => {
+      this.presentPanel({ playLabel: t('PLAY', { context: 'scene' }) });
+      this.renderSceneSelect();
+      this.renderShotList();
+    });
     if (subscribe)
       this.unsubscribe = subscribe((notification) =>
         this.present(notification),
@@ -264,6 +271,7 @@ export class SceneControls {
     this.actionGeneration++;
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.offLocale();
     this.setPlaybackKeyboardEnabled(false);
     // The panel keeps its last status and buttons, without shots or the
     // runtime chip.

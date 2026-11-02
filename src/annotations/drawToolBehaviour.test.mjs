@@ -6,7 +6,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { initDrawTool } from './drawTool.js';
-import { describeUnsavedWork } from '../i18n/index.js';
 import {
   isPointerFree,
   pointerOwner,
@@ -237,29 +236,6 @@ const LEFT_CLICK = Cesium.ScreenSpaceEventType.LEFT_CLICK;
 const LEFT_DOUBLE_CLICK = Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK;
 
 /* ── the tests ─────────────────────────────────────────────────────────── */
-
-// First in the file: tools left by later tests would answer the same registry.
-test('a lasting mark or a half-drawn shape makes the language switch ask first', async () => {
-  const h = harness();
-  try {
-    let marks = [];
-    h.annotations.list = () => marks;
-    assert.deepEqual(describeUnsavedWork(), [], 'an empty board loses nothing');
-    marks = [{ id: 'a', ttlMs: 8000, expiring: false }];
-    assert.deepEqual(describeUnsavedWork(), [], 'a fading mark is not work');
-    marks = [{ id: 'b', ttlMs: null, expiring: false }];
-    assert.deepEqual(describeUnsavedWork(), ['drawings on the map']);
-    marks = [];
-    h.act('toggleDraw');
-    h.tool.addVertex(-97.75, 30.26);
-    assert.deepEqual(describeUnsavedWork(), ['drawings on the map'], 'a shape in progress');
-    marks = [{ id: 'c', ttlMs: null, expiring: false }];
-    await h.tool.destroy();
-    assert.deepEqual(describeUnsavedWork(), [], 'a destroyed tool unregisters');
-  } finally {
-    h.restore();
-  }
-});
 
 test('turning Draw on takes a lease and turning it off gives it back', async () => {
   const h = harness();

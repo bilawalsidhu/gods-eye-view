@@ -9,7 +9,14 @@
  * rail-card blocks and cards. Source toggles live on the data-panel row.
  */
 import { h, render as renderVue } from 'vue';
-import { formatNumber, msg, t, tn, translateKnown } from '../i18n/index.js';
+import {
+  formatNumber,
+  msg,
+  onLocaleChange,
+  t,
+  tn,
+  translateKnown,
+} from '../i18n/index.js';
 import { createImagerySplit } from './imagerySplit.js';
 import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
@@ -936,6 +943,8 @@ export function createRecentImageryPanel({
       render();
     }
   });
+  // The readout's text is translated here; show it again in a new locale.
+  const offLocale = onLocaleChange(render);
   render();
 
   return {
@@ -945,6 +954,7 @@ export function createRecentImageryPanel({
       if (destroyed) return;
       destroyed = true;
       unsubscribe();
+      offLocale();
       layer.setToolHandler?.(null);
       split?.destroy();
       split = null;

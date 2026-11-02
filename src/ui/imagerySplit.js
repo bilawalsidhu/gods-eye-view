@@ -1,3 +1,4 @@
+import { onLocaleChange } from '../i18n/index.js';
 import { useImagerySplitStore } from './stores/imagerySplit.js';
 import { applicationPinia } from './vueRuntime.js';
 
@@ -16,6 +17,9 @@ function defaultViewportWidth() {
   );
 }
 
+// A title or label given as a function is worded when published.
+const worded = (text) => (typeof text === 'function' ? text() : text);
+
 function defaultValueText(beforePercent, afterPercent) {
   return `A ${beforePercent} percent, B ${afterPercent} percent`;
 }
@@ -30,7 +34,9 @@ function defaultValueText(beforePercent, afterPercent) {
  * `onChange` reports pointer and keyboard changes so the owner can mirror
  * them, and `requestRender` fires whenever the clamped value actually
  * changes. `destroy` is idempotent: it withdraws the line, clears the CSS
- * property and restores the scene split captured at creation once.
+ * property and restores the scene split captured at creation once. The
+ * titles and label may be functions, which are called again after a locale
+ * change, like `formatValueText`.
  */
 export function createImagerySplit({
   scene,
@@ -72,9 +78,9 @@ export function createImagerySplit({
         handleClass: handleClass ?? null,
         beforeLabel,
         afterLabel,
-        beforeTitle: beforeTitle ?? null,
-        afterTitle: afterTitle ?? null,
-        ariaLabel: ariaLabel ?? null,
+        beforeTitle: worded(beforeTitle) ?? null,
+        afterTitle: worded(afterTitle) ?? null,
+        ariaLabel: worded(ariaLabel) ?? null,
         valueNow: beforePercent,
         valueText: formatValueText(beforePercent, 100 - beforePercent),
       },
@@ -144,6 +150,7 @@ export function createImagerySplit({
   };
 
   apply(initialValue, { render: false });
+  const offLocale = onLocaleChange(publish);
 
   return {
     getValue() {
@@ -166,6 +173,7 @@ export function createImagerySplit({
       pointerId = null;
       captor = null;
       destroyed = true;
+      offLocale();
       store.withdraw(key);
       if (cssProperty) cssTarget.style.removeProperty(cssProperty);
       if (scene && restoreValue != null) scene.splitPosition = restoreValue;

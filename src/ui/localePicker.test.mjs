@@ -194,22 +194,16 @@ test('the search field appears only above the threshold', () => {
   );
 });
 
-test('choosing the current language changes nothing; another asks, then switches', () => {
+test('choosing the current language changes nothing; another switches', () => {
   const calls = [];
-  const actions = (answer) => ({
+  const actions = {
     current: 'ru',
-    confirmSwitch: () => {
-      calls.push('confirm');
-      return answer;
-    },
     switchLocale: (locale) => calls.push(`switch:${locale}`),
-  });
-  assert.equal(applyLocaleChoice('ru', actions(true)), 'unchanged');
-  assert.deepEqual(calls, [], 'no prompt, no reload');
-  assert.equal(applyLocaleChoice('es', actions(false)), 'declined');
-  assert.deepEqual(calls, ['confirm']);
-  assert.equal(applyLocaleChoice('es', actions(true)), 'switched');
-  assert.deepEqual(calls, ['confirm', 'confirm', 'switch:es']);
+  };
+  assert.equal(applyLocaleChoice('ru', actions), 'unchanged');
+  assert.deepEqual(calls, []);
+  assert.equal(applyLocaleChoice('es', actions), 'switched');
+  assert.deepEqual(calls, ['switch:es']);
 });
 
 test('navigation keys move without wrapping', () => {

@@ -22,7 +22,7 @@ Every other language is one flat JSON file, `src/i18n/locales/<code>.json`, keye
 
 A `tn()` entry is keyed by the English plural form and holds one string per `Intl.PluralRules` category of that language. A missing entry falls back to English.
 
-The page picks its language from `?lang=`, then the choice stored by the language picker (the globe button in the bottom-right corner), then the browser languages, then English. `?lang=` is not stored, and copied share links leave it out. Switching reloads the page.
+The page picks its language from `?lang=`, then the choice stored by the language picker (the globe button in the bottom-right corner), then the browser languages, then English. `?lang=` is not stored, and copied share links leave it out. Switching applies at once, without a reload.
 
 ## The check
 

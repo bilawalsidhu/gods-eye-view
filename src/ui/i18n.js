@@ -1,5 +1,11 @@
+import { watch } from 'vue';
 import { createI18n } from 'vue-i18n';
-import { bindLocale, getCatalog, getLocale } from '../i18n/index.js';
+import {
+  bindLocale,
+  getCatalog,
+  getLocale,
+  notifyLocaleChange,
+} from '../i18n/index.js';
 import { DEFAULT_LOCALE, LOCALES } from '../i18n/locale.js';
 
 let pageI18n = null;
@@ -42,5 +48,12 @@ export function applicationI18n() {
     return installed;
   };
   bindLocale(pageI18n.global.locale);
+  // Code that translated text itself shows it again, whichever way the
+  // locale changed (setLocale or the ref).
+  watch(
+    () => getLocale(),
+    () => notifyLocaleChange(),
+    { flush: 'sync' },
+  );
   return pageI18n;
 }

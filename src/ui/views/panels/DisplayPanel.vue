@@ -39,20 +39,20 @@ const celestialTitle = computed(() =>
 );
 const models3dOn = computed(() => models3d.value?.pressed ?? true);
 const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
-const modelsOptions = [
+const modelsOptions = computed(() => [
   { value: 'proximity', label: t('Proximity'), attrs: { id: 'models3d-mode-proximity', 'data-mode': 'proximity' } },
   { value: 'all', label: t('All'), attrs: { id: 'models3d-mode-all', 'data-mode': 'all' } },
-];
+]);
 const drawShape = computed(() => draw.value?.shape ?? 'area');
-const drawShapeOptions = [
+const drawShapeOptions = computed(() => [
   { value: 'area', label: t('Area'), attrs: { 'data-shape': 'area' } },
   { value: 'line', label: t('Line'), attrs: { 'data-shape': 'line' } },
   { value: 'pin', label: t('Pin'), attrs: { 'data-shape': 'pin' } },
-];
-const allocationOptions = [
+]);
+const allocationOptions = computed(() => [
   { value: 'ELASTIC', label: t('Elastic'), attrs: { id: 'detection-allocation-elastic', 'data-allocation': 'ELASTIC' } },
   { value: 'WEIGHTED', label: t('Weighted'), attrs: { id: 'detection-allocation-weighted', 'data-allocation': 'WEIGHTED' } },
-];
+]);
 </script>
 
 <template>

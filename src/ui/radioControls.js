@@ -6,6 +6,7 @@ import {
 } from './radioPresentation.js';
 import { useRadioStore } from './stores/radio.js';
 import { applicationPinia } from './vueRuntime.js';
+import { onLocaleChange } from '../i18n/index.js';
 
 /**
  * Own Radio interaction, the tuner and the subscription; receive playback and
@@ -49,7 +50,16 @@ export class RadioControls {
     this._radioTunerSelectedId = null;
     this._radioTunerBandPinnedForNavigation = false;
     this._refreshRadioTunerBand = null;
+    this._refreshRadioTunerText = null;
     bindRadioControls.call(this);
+    // The panel carries translated text; present it again in a new locale,
+    // from a fresh layer state when there is one (its category labels are
+    // worded by the layer).
+    this._offLocale = onLocaleChange(() => {
+      const state = this.radio.getUIState?.() ?? this._radioState;
+      if (state) this._renderRadioState(state);
+      this._refreshRadioTunerText?.();
+    });
   }
 
   listen(target, type, handler, options = {}) {
@@ -133,6 +143,7 @@ export class RadioControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._offLocale();
     this.listeners.abort();
     if (this._storeToken) this.store.detach(this._storeToken);
     this._radioUnsubscribe?.();

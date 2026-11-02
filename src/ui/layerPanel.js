@@ -16,6 +16,7 @@ import {
   formatNumber,
   getLocale,
   msg,
+  onLocaleChange,
   t,
   translateKnown,
 } from '../i18n/index.js';
@@ -369,6 +370,13 @@ export class LayerPanel {
         info: false,
       });
     }
+    // The rows carry text this panel translates; show it in a new locale.
+    this._removers.push(
+      onLocaleChange(() => {
+        this._paint();
+        this._refreshWeatherPanel();
+      }),
+    );
     this._paint();
     this._refreshWeatherPanel();
   }

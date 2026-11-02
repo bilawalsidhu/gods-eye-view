@@ -1930,7 +1930,7 @@ test('invalid authored edits cannot persist an unreadable project over a good sa
   try {
     const before = localStorage.getItem('godsEyeView.sceneProject.v2');
     let notice;
-    director._toastStorageError = (message) => { notice = message; };
+    director._toastStorageError = (message) => { notice = message(); };
     director._project.scenes[0].shots[0].camera.lat = 91;
     director._saveProject();
     assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), before);

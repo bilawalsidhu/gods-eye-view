@@ -56,7 +56,10 @@ export function renderRadioState(state) {
   // The options change only with the categories; until they first do, the
   // markup's own option stands.
   const categorySignature = categories
-    .map((category) => `${category.id}:${category.count}:${category.color}`)
+    .map(
+      (category) =>
+        `${category.id}:${category.label}:${category.count}:${category.color}`,
+    )
     .join('|');
   if (categorySignature !== (this._radioCategorySignature ?? '')) {
     this._radioCategorySignature = categorySignature;

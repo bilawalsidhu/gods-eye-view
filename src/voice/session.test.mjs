@@ -9,7 +9,6 @@ import { createVoiceSession } from './session.js';
 import { createRealtimeSession } from './realtimeSession.js';
 import { realtimeSessionEvent } from './realtimeEvents.js';
 import { createVoiceCommands } from './sessionCommands.js';
-import { describeUnsavedWork } from '../i18n/index.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 
 function deferred() {
@@ -294,20 +293,15 @@ test('common button and annotation bindings work with an alternate adapter and c
     assert.equal(ui.state.help.text, 'Activate to toggle voice');
     assert.equal(ui.state.status.text, 'LISTENING');
     assert.equal(ui.state.detail.text, 'Ready');
-    // Switching language (a reload) asks first during a session.
-    assert.deepEqual(describeUnsavedWork(), ['the active voice session']);
     subscribed({ status: 'resolved' });
     assert.deepEqual(events, [
       { type: 'map_annotation_outline', status: 'resolved' },
     ]);
     click();
     assert.equal(controls.state, 'idle');
-    assert.deepEqual(describeUnsavedWork(), []);
     click();
     await new Promise((done) => setTimeout(done, 0));
-    assert.deepEqual(describeUnsavedWork(), ['the active voice session']);
     lifetime.abort();
-    assert.deepEqual(describeUnsavedWork(), [], 'disposal unregisters');
     assert.equal(subscribed, null);
     assert.equal(removed, 1);
     click();

@@ -68,7 +68,7 @@ export function createVoicePanelHost({
     };
     const renderActivity = () => {
       ui.update('preferences', {
-        timeoutStatus:
+        timeoutStatus: () =>
           nativeProvider === 'openai' || nativeProvider === 'gemini'
             ? ''
             : t('Automatic stop is unavailable for this voice connection.'),
@@ -234,9 +234,14 @@ export function createVoicePanelHost({
       card,
       getPreviewEnabled: () => preferences.snapshot().previewEnabled,
       getCockpitActive: () => readCockpitState()?.active === true,
+      // Getters, so the panel words them in the current locale.
       copy: {
-        previewEmpty: t('Voice replies appear here.'),
-        previewDisabled: t('Preview is off.'),
+        get previewEmpty() {
+          return t('Voice replies appear here.');
+        },
+        get previewDisabled() {
+          return t('Preview is off.');
+        },
       },
       onPresentationIntent: remember,
     });
@@ -245,8 +250,12 @@ export function createVoicePanelHost({
       preferences,
       copy: {
         previewNote: '',
-        timeoutNote: t('These preferences stay in this browser.'),
-        notSaved: t('Your choice applies now, but could not be saved.'),
+        get timeoutNote() {
+          return t('These preferences stay in this browser.');
+        },
+        get notSaved() {
+          return t('Your choice applies now, but could not be saved.');
+        },
       },
       onChange: (state) => {
         if (!owns()) return;

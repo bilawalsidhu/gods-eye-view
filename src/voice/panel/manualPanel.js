@@ -59,9 +59,10 @@ export function createManualVoicePanel({
       selected: view,
     });
     card?.setPresented?.(open && view === 'preview' && !suppressed());
+    const previewOn = enabled();
     ui.update('previewEmpty', {
       hidden: ui.state.card.visible,
-      text: enabled() ? copy.previewEmpty : copy.previewDisabled,
+      text: () => (previewOn ? copy.previewEmpty : copy.previewDisabled),
     });
     if (restoreFocus) void ui.focus(['settingsButton', 'button']);
   };

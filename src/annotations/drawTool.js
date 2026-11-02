@@ -49,7 +49,7 @@ import {
   removeLastVertex,
 } from './drawMode.js';
 
-import { msg, registerUnsavedWork, t, translateKnown } from '../i18n/index.js';
+import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
 /** The id this tool claims the pointer under. */
 const DRAW_POINTER_OWNER = 'draw';
 const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
@@ -107,17 +107,6 @@ export function initDrawTool({
     target.addEventListener(type, listener, options);
     domListeners.push([target, type, listener, options]);
   };
-  // The board lives only in memory: switching language (a reload) asks first
-  // while it holds a lasting mark or a shape is half drawn.
-  const unregisterUnsavedWork = registerUnsavedWork(() => {
-    if (destroyed) return null;
-    const lasting = (annotations.list?.() || []).some(
-      (mark) => mark && mark.ttlMs == null && !mark.expiring,
-    );
-    return lasting || session?.vertices?.length > 0
-      ? msg('drawings on the map')
-      : null;
-  });
 
   const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
   // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
@@ -129,10 +118,17 @@ export function initDrawTool({
   );
 
   const present = () => publish({ active, shape, color, label, hint });
+  // The hint is kept as the call that words it, so a language switch can
+  // word it again.
+  let hintText = () => '';
   const setHint = (text) => {
-    hint = text;
+    hintText = text;
+    hint = text();
     present();
   };
+  const offLocale = onLocaleChange(() => {
+    if (!destroyed) setHint(hintText);
+  });
 
   // ---- preview ---------------------------------------------------------
   const vertexPositions = () =>
@@ -167,7 +163,7 @@ export function initDrawTool({
     previewEntities.length = 0;
     if (!session) {
       previewLine.show = false;
-      setHint(drawHint(null));
+      setHint(() => drawHint(null));
       viewer.scene.requestRender();
       return;
     }
@@ -193,7 +189,7 @@ export function initDrawTool({
         }),
       );
     }
-    setHint(drawHint(session));
+    setHint(() => drawHint(session));
     viewer.scene.requestRender();
   };
 
@@ -216,14 +212,14 @@ export function initDrawTool({
     // A click that changed nothing still deserves an answer when the reason is
     // a limit rather than the harmless tail of a double-click.
     if (reason === 'full')
-      setHint(
+      setHint(() =>
         t(
           'That shape already has {count} points — finish it or press Backspace.',
           { count: MAX_VERTICES },
         ),
       );
     else if (reason === 'invalid')
-      setHint(t('That point is off the globe — click on the world.'));
+      setHint(() => t('That point is off the globe — click on the world.'));
   };
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
@@ -241,7 +237,7 @@ export function initDrawTool({
     if (reason !== 'ok') {
       // 'too-few' is just "keep clicking" and the hint already says so;
       // a degenerate or off-globe shape needs to be told why it was refused.
-      if (reason !== 'too-few') setHint(drawHint(session));
+      if (reason !== 'too-few') setHint(() => drawHint(session));
       return null;
     }
     const spec = finishSpec(session, { label, color });
@@ -260,11 +256,12 @@ export function initDrawTool({
         flyTo: false,
       });
       if (destroyed || attempt !== generation) return result;
-      if (result?.drawn === 0) setHint(t('That shape could not be placed.'));
+      if (result?.drawn === 0)
+        setHint(() => t('That shape could not be placed.'));
       return result;
     } catch (error) {
       if (destroyed || attempt !== generation) return null;
-      setHint(
+      setHint(() =>
         t('Could not place the shape: {error}', {
           error: error?.message || error,
         }),
@@ -286,7 +283,7 @@ export function initDrawTool({
     if (session) session = createDrawSession(shape);
     annotations.clear();
     syncPreview();
-    if (!destroyed && !active) setHint(t('Board cleared.'));
+    if (!destroyed && !active) setHint(() => t('Board cleared.'));
   };
 
   // ---- keys: only while drawing, never while typing in another field ----
@@ -354,7 +351,7 @@ export function initDrawTool({
         // Somebody else is using the pointer — possibly an older instance of
         // this same tool that has not finished tearing down. Say so instead of
         // half-starting.
-        setHint(
+        setHint(() =>
           t('{owner} is using the pointer — close it first.', {
             owner: translateKnown(pointerOwnerName(pointerOwner())),
           }),
@@ -459,7 +456,7 @@ export function initDrawTool({
     },
     clearDraw: clearAll,
   });
-  setHint(drawHint(null));
+  setHint(() => drawHint(null));
 
   const api = {
     get active() {
@@ -521,7 +518,7 @@ export function initDrawTool({
       generation += 1;
       if (active) setActive(false);
       destroyed = true;
-      unregisterUnsavedWork();
+      offLocale();
       disconnect();
       releaseSceneHandler();
       releasePointer(lease);

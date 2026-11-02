@@ -363,12 +363,10 @@ export class RealtimeInput {
   updateVoiceButtonLabel() {
     if (!this.ui) return;
     // The mic button's caption; the first-run tip names it the same way.
-    this.ui.update('mic', { text: t('MIC') });
+    this.ui.update('mic', { text: () => t('MIC') });
+    const { pushToTalkMode, pushToTalkKeyHeld } = this;
     this.ui.update('help', {
-      text: resolveVoiceControlHint(
-        this.pushToTalkMode,
-        this.pushToTalkKeyHeld,
-      ),
+      text: () => resolveVoiceControlHint(pushToTalkMode, pushToTalkKeyHeld),
     });
   }
 

@@ -61,7 +61,7 @@ const removeTitle = (title) =>
         <span data-key-setup-chip-label>{{ chip ? chip.label : t('POWER UP') }}</span>
       </button>
     </Teleport>
-    <LocalePicker v-if="picker" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" />
+    <LocalePicker v-if="picker" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" :focus="picker.focus" />
   </div>
   <aside v-if="available" id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" :hidden="dialog.hidden" v-class-toggle="{ visible: dialog.visible }" :data-ready="view?.ready ? 'true' : undefined" @transitionend="controls?.transitionEnd()">
     <div class="key-setup-scanline" aria-hidden="true"></div>

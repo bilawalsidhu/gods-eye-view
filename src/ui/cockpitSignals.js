@@ -41,6 +41,15 @@ export function pushCockpitSignal(key, tone, title, detail, target = null) {
   const signature = `${title}|${detail}|${target?.layerId || ''}|${target?.id || ''}`;
   if (this.signalSignatures.get(key) === signature) return;
   this.signalSignatures.set(key, signature);
+  // A locale change words the signal again where it stands.
+  const shown = this.rewordingSignals
+    ? this.signalItems.find((item) => item.key === key)
+    : null;
+  if (shown) {
+    Object.assign(shown, { title, detail });
+    this.publishCockpitSignals();
+    return;
+  }
   this.signalItems.unshift({
     key,
     tone,

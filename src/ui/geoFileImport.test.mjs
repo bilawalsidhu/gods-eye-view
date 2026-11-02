@@ -9,7 +9,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { initGeoFileImport, summarize } from './geoFileImport.js';
 import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
-import { describeUnsavedWork } from '../i18n/index.js';
 
 class FakeClassList {
   constructor() {
@@ -148,19 +147,6 @@ const ROW_ACTIONS = {
   remove: 'removeGeoImport',
 };
 const press = (t, row, name) => t.act(ROW_ACTIONS[name], row.id);
-
-// Runs first: tools left by later tests would answer the same registry.
-test('imported files make the language switch ask first', async () => {
-  const t = setup();
-  assert.deepEqual(describeUnsavedWork(), []);
-  await t.tool.importFiles([file('a.geojson')]);
-  assert.deepEqual(describeUnsavedWork(), ['imported map files']);
-  t.tool.remove(t.tool.list()[0].id);
-  assert.deepEqual(describeUnsavedWork(), [], 'nothing left to lose');
-  await t.tool.importFiles([file('b.kml')]);
-  t.tool.destroy();
-  assert.deepEqual(describeUnsavedWork(), [], 'destroy unregisters');
-});
 
 test('returns null without its markup or viewer', () => {
   const document = { getElementById: () => null };

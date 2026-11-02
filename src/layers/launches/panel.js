@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { t } from '../../i18n/index.js';
+import { onLocaleChange, t } from '../../i18n/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
   MISSION_GLOBE_VIEW_RANGE_M,
@@ -436,12 +436,20 @@ export function createPanel({ state: layerState, services, parts, source }) {
         preview: scheduleMissionRosterPreview,
         clear: clearMissionRosterPreviewState,
       });
+    // The roster and mission are worded again in a new locale.
+    layerState._offMissionLocale = onLocaleChange(() => {
+      renderMissionRoster();
+      updateMissionTelemetry(true, false);
+      publishPanel();
+    });
     publishPanel();
   }
 
   /** Stop presenting; the components return to their initial markup. */
   function clearMissionPanel() {
     layerState._missionPanelReady = false;
+    layerState._offMissionLocale?.();
+    layerState._offMissionLocale = null;
     layerState._missionRosterPreviewOwnership = null;
     layerState._missionRosterView = null;
     layerState._missionRosterSignature = null;

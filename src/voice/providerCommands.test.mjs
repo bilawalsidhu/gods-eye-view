@@ -10,7 +10,6 @@ import { createVoiceCommands as createCommands } from './commands.js';
 import { createGevActionRunner } from './gevActions.js';
 import { createPointerTracker } from './pointerContext.js';
 import { createReferentRegistry } from './referents.js';
-import { describeUnsavedWork, t as translate } from '../i18n/index.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 
 const PROVIDER_KEY = 'gev.voice.provider';
@@ -749,15 +748,11 @@ for (const emitsIdle of [false, true]) {
 }
 
 test('outer destruction disposes the runner once and removes each provider binding', async (t) => {
-  const priorUnsaved = describeUnsavedWork();
   const f = compositionFixture(t);
   await f.facade.start();
   f.select('gemini');
   await settle();
   assert.equal(f.annotations.size, 1);
-  assert.ok(
-    describeUnsavedWork().includes(translate('the active voice session')),
-  );
   const oldCardEvents = f.views[0].cardView.events.length;
   for (const callback of f.annotations) callback({ id: 'fixture-outline' });
   assert.equal(f.views[0].cardView.outlines.length, 0);
@@ -771,7 +766,6 @@ test('outer destruction disposes the runner once and removes each provider bindi
   assert.equal(f.facade.signal.aborted, true);
   assert.equal(f.facade.disposed, true);
   assert.equal(f.annotations.size, 0);
-  assert.deepEqual(describeUnsavedWork(), priorUnsaved);
   const finalEvents = f.events.length;
   const starts = f.instances.map((instance) => instance.starts.length);
   for (const [index, view] of f.views.entries()) {

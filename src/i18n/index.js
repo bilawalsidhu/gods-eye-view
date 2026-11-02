@@ -53,6 +53,37 @@ let pageLocale = { value: DEFAULT_LOCALE };
 export function bindLocale(locale) {
   locale.value = pageLocale.value;
   pageLocale = locale;
+  bound = true;
+}
+
+let bound = false;
+const localeListeners = new Set();
+
+/**
+ * Call `listener` after the active locale changes, so code that shows text it
+ * translated itself (a status line, a count, a time) shows it again. Text a
+ * Vue view translates while rendering follows the locale without this.
+ * @param {() => void} listener
+ * @returns {() => void} Stops listening.
+ */
+export function onLocaleChange(listener) {
+  if (typeof listener !== 'function') return () => {};
+  localeListeners.add(listener);
+  return () => localeListeners.delete(listener);
+}
+
+/**
+ * Tell the listeners the locale changed. setLocale does this for an unbound
+ * locale; the owner of a bound ref calls it when the ref changes.
+ */
+export function notifyLocaleChange() {
+  for (const listener of [...localeListeners]) {
+    try {
+      listener();
+    } catch (error) {
+      console.error('[i18n] locale listener failed', error);
+    }
+  }
 }
 
 /** The catalog for a locale; null for English and unknown codes. */
@@ -74,8 +105,9 @@ export function getLocale() {
 }
 
 /**
- * Switch the active locale. Pure state change: call applyDocumentLanguage /
- * applyDocumentTranslations to reflect it in the DOM.
+ * Switch the active locale. Views re-render and onLocaleChange listeners
+ * word their text again; the application keeps <html lang>/<html dir> and
+ * the page's data-i18n markup in step.
  * @returns {string} The locale actually applied (normalized).
  */
 export function setLocale(locale) {
@@ -83,6 +115,7 @@ export function setLocale(locale) {
   if (normalized !== pageLocale.value) {
     pageLocale.value = normalized;
     formatterCache.clear();
+    if (!bound) notifyLocaleChange();
   }
   return normalized;
 }
@@ -276,75 +309,57 @@ const DOCUMENT_TRANSLATION_TARGETS = Object.freeze([
   ['data-i18n-placeholder', 'placeholder'],
 ]);
 
+// Per element, the English source a pass read and the text it wrote, so a
+// later pass in another locale, English included, starts from the source
+// rather than from that text. Text that code wrote since is the new source.
+const documentSources = new WeakMap();
+
 /**
- * Translate every opted-in element in `doc`. Runs once at boot; switching
- * locale reloads the page.
+ * Translate every opted-in element in `doc` into the active locale. Runs at
+ * boot and again after every locale change (the page's own markup, such as
+ * a host's, is not rendered by a view).
  * @param {Document|Element} doc
  * @returns {number} Count of element/attribute writes performed.
  */
 export function applyDocumentTranslations(doc) {
   if (typeof doc?.querySelectorAll !== 'function') return 0;
-  if (!CATALOGS[getLocale()]) return 0;
   let applied = 0;
   for (const [marker, attribute] of DOCUMENT_TRANSLATION_TARGETS) {
     for (const element of doc.querySelectorAll(`[${marker}]`)) {
-      const source = attribute
-        ? element.getAttribute(attribute)
-        : normalizeMarkupText(element.textContent);
+      const read = () =>
+        attribute
+          ? element.getAttribute(attribute)
+          : normalizeMarkupText(element.textContent);
+      let sources = documentSources.get(element);
+      if (!sources) documentSources.set(element, (sources = {}));
+      const shown = read();
+      const known = sources[marker];
+      const source = known && shown === known.written ? known.source : shown;
+      sources[marker] = { source, written: shown };
       if (!source) continue;
       const context = attribute
         ? null
         : element.getAttribute?.('data-i18n-context');
       const text = context ? t(source, { context }) : t(source);
-      if (text === source) continue;
+      if (text === shown) continue;
       if (attribute) element.setAttribute(attribute, text);
       else element.textContent = text;
+      sources[marker].written = read();
       applied += 1;
     }
   }
   return applied;
 }
 
-const unsavedWorkChecks = new Set();
-
 /**
- * Name work that switching language would lose: the switch reloads the page,
- * and the language switch asks first while any check reports something.
- * @param {() => string|null|undefined} check Returns a msg() label (e.g.
- *   msg('unsaved CCTV calibration')) while there is such work, else nothing.
- * @returns {() => void} Removes the check.
+ * Store a locale choice for the next visit and keep the address in step
+ * without reloading: ?lang is dropped once the choice is stored, or carries
+ * the choice where storage is blocked (share links drop it:
+ * ShareLinkManager.copyLink). The hash is kept exactly. setLocale applies
+ * the choice to the page.
+ * @returns {string} The normalized locale.
  */
-export function registerUnsavedWork(check) {
-  if (typeof check !== 'function') return () => {};
-  unsavedWorkChecks.add(check);
-  return () => unsavedWorkChecks.delete(check);
-}
-
-/**
- * What a reload would lose right now, translated, without repeats.
- * @returns {string[]}
- */
-export function describeUnsavedWork() {
-  const labels = new Set();
-  for (const check of unsavedWorkChecks) {
-    try {
-      const label = check();
-      if (typeof label === 'string' && label) labels.add(t(label));
-    } catch {
-      // A failing check must not block the switch.
-    }
-  }
-  return [...labels];
-}
-
-/**
- * Persist a locale choice, then reload preserving window.location.hash exactly
- * and stripping ?lang from the search string, so the stored choice applies.
- * Where storage is blocked, ?lang carries the choice instead (share links
- * drop it: ShareLinkManager.copyLink).
- * @returns {boolean} true when a reload was triggered.
- */
-export function persistLocaleAndReload(
+export function persistLocale(
   locale,
   {
     location = globalThis.location,
@@ -354,28 +369,13 @@ export function persistLocaleAndReload(
 ) {
   const normalized = normalizeLocale(locale) || DEFAULT_LOCALE;
   const stored = writeStoredLocale(normalized, storage);
-  if (!location || typeof location.assign !== 'function') return false;
-  let target = location.href;
   try {
-    // Without storage the choice only survives in the URL, so keep it there.
     const url = new URL(location.href);
     if (stored) url.searchParams.delete('lang');
     else url.searchParams.set('lang', normalized);
-    target = url.href;
+    if (url.href !== location.href) history?.replaceState?.(null, '', url.href);
   } catch {
-    // Keep the current href.
+    // Without a location or history the stored choice still applies.
   }
-  // location.assign() to the identical URL does not navigate, so strip ?lang
-  // in place and force a real reload instead.
-  try {
-    history?.replaceState?.(null, '', target);
-  } catch {
-    // replaceState is best-effort; the reload below still applies.
-  }
-  if (typeof location.reload === 'function') {
-    location.reload();
-  } else {
-    location.assign(target);
-  }
-  return true;
+  return normalized;
 }

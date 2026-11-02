@@ -180,18 +180,14 @@ export function typeaheadIndex(options, buffer, fromIndex) {
 }
 
 /**
- * What choosing a language does. The current one changes nothing; another one
- * switches after `confirmSwitch()` agrees (it asks when a reload loses work).
+ * What choosing a language does: the current one changes nothing, another
+ * one switches.
  * @param {string} locale
- * @param {{current: string, confirmSwitch: () => boolean, switchLocale: (locale: string) => void}} actions
- * @returns {'unchanged'|'declined'|'switched'}
+ * @param {{current: string, switchLocale: (locale: string) => void}} actions
+ * @returns {'unchanged'|'switched'}
  */
-export function applyLocaleChoice(
-  locale,
-  { current, confirmSwitch, switchLocale },
-) {
+export function applyLocaleChoice(locale, { current, switchLocale }) {
   if (locale === current) return 'unchanged';
-  if (!confirmSwitch()) return 'declined';
   switchLocale(locale);
   return 'switched';
 }

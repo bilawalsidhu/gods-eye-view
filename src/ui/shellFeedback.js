@@ -8,7 +8,7 @@ import {
   reduceLoadingFeedback,
   reduceTrafficSyncFeedback,
 } from '../loadingFeedback.js';
-import { getLocale, t, msg } from '../i18n/index.js';
+import { getLocale, msg, onLocaleChange, t } from '../i18n/index.js';
 import { localizeLayerName } from './layerPanel.js';
 import { translateFeedError } from './statusText.js';
 import { useStatusStore } from './stores/status.js';
@@ -127,6 +127,11 @@ export class ShellFeedback {
     this.readLayers = readLayers;
     this.store = store;
     this.destroyed = false;
+    // The chips keep the English they were given, to show it again in a new
+    // locale.
+    this._loadingSource = { label: msg('LOADING LIVE DATA'), detail: '' };
+    this._trafficLabel = msg('syncing road network');
+    this._offLocale = onLocaleChange(() => this._relocalize());
     this._loadingFeedbackState = createLoadingFeedbackState();
     this._trafficSyncFeedbackState = createTrafficSyncFeedbackState();
     this._loadingFeedbackEvent = null;
@@ -184,6 +189,7 @@ export class ShellFeedback {
     // signal rather than another animated loading stage. The progress is
     // written on every change INCLUDING the empty settled value: the reducer
     // clears it once the sync lands.
+    if (presentation.label) this._trafficLabel = presentation.label;
     this._publishTraffic({
       visible: presentation.visible,
       ...(presentation.label && {
@@ -228,6 +234,7 @@ export class ShellFeedback {
       this._publishLoading({ hidden: true, state: null });
       return;
     }
+    this._loadingSource = presentation;
     const localized = localizeLoadingPresentation(presentation);
     // The LABEL flaps ("LOADING LIVE DATA" -> "LOAD COMPLETE") only when it
     // changes, which matters here: this runs on every 60 ms and 500 ms tick.
@@ -239,6 +246,19 @@ export class ShellFeedback {
       label: localized.label,
       detail: localized.detail,
     });
+  }
+
+  /** Show the chips' last text in the current locale. */
+  _relocalize() {
+    if (this.destroyed) return;
+    if (this._loadingSource) {
+      const { label, detail } = localizeLoadingPresentation(
+        this._loadingSource,
+      );
+      this._publishLoading({ label, detail });
+    }
+    if (this._trafficLabel)
+      this._publishTraffic({ label: localizeStatusLabel(this._trafficLabel) });
   }
 
   _publishLoading(patch) {
@@ -329,6 +349,7 @@ export class ShellFeedback {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._offLocale();
     this._stopLoadingFeedbackTicker();
     clearInterval(this._trafficChipTicker);
     this._trafficChipTicker = null;

@@ -1,5 +1,5 @@
 import { locationMiniStatus } from '../locationStatus.js';
-import { t } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 import { localizePlaceName } from './placeNames.js';
 
 const POI_KEYS = ['Q', 'W', 'E', 'R', 'T'];
@@ -55,6 +55,15 @@ export class LocationControls {
     this.removers = [];
     this.frame = null;
     this.destroyed = false;
+    // City names and the status lines are translated here; show them again
+    // in a new locale.
+    this.removers.push(
+      onLocaleChange(() => {
+        if (this._statusRecord !== undefined)
+          this.renderStatus(this._statusRecord);
+        else this.present();
+      }),
+    );
     this.rowGeneration = 0;
     this.activeCity = null;
     this.poiCity = null;
@@ -182,6 +191,7 @@ export class LocationControls {
   }
   renderStatus(record) {
     if (this.destroyed) return;
+    this._statusRecord = record;
     // A preset city shows its name in the UI language; the record stays English.
     const state = record?.city?.name
       ? {

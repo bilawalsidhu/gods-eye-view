@@ -1,5 +1,5 @@
 import { nextTick } from 'vue';
-import { t } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 import { useVoiceStore } from '../ui/stores/voice.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 
@@ -73,30 +73,32 @@ function initialState(panel) {
       hidden: true,
       options: [],
       value: '',
-      title: t('Changing provider reconnects voice if it is on.'),
+      title: () => t('Changing provider reconnects voice if it is on.'),
     },
     tier: {
       hidden: false,
-      text: t('STD'),
+      text: () => t('STD'),
       pressed: false,
-      title: t('Voice model tier — applies next session'),
+      title: () => t('Voice model tier — applies next session'),
     },
     cost: {
       hidden: false,
       text: '~$0.00',
       level: 'ok',
-      title: t('Estimated session cost'),
+      title: () => t('Estimated session cost'),
     },
     costWarning: { hidden: true, text: '', level: null, title: null },
     button: {
-      label: t('Voice control — activate to toggle voice; hold Space to speak'),
+      label: () =>
+        t('Voice control — activate to toggle voice; hold Space to speak'),
       pressed: null,
     },
-    mic: { text: t('ON/OFF') },
-    status: { text: voiceStatusLabel('idle') },
-    detail: { text: t('VOICE STANDBY'), title: null },
+    mic: { text: () => t('ON/OFF') },
+    status: { text: () => voiceStatusLabel('idle') },
+    detail: { text: () => t('VOICE STANDBY'), title: null },
     help: {
-      text: t('Hold Space to speak · tap Space to activate focused controls'),
+      text: () =>
+        t('Hold Space to speak · tap Space to activate focused controls'),
     },
     error: { text: '' },
     voicePanel: {
@@ -107,14 +109,17 @@ function initialState(panel) {
       settingsExpanded: false,
       selected: 'preview',
     },
-    previewEmpty: { hidden: false, text: t('Voice replies appear here.') },
+    previewEmpty: {
+      hidden: false,
+      text: () => t('Voice replies appear here.'),
+    },
     preferences: {
       previewChecked: true,
       previewNote: '',
       timeoutChoice: '5',
       timeoutMinutes: '5',
       timeoutInputHidden: false,
-      timeoutNote: t('These preferences stay in this browser.'),
+      timeoutNote: () => t('These preferences stay in this browser.'),
       timeoutStatus: '',
       // Bumped by every owner write of the fields, so the view restores a
       // refused edit but leaves a draft alone across other renders.
@@ -164,7 +169,30 @@ export function createVoiceControl({
 } = {}) {
   const id = ++controlCount;
   const listeners = new Map();
+  // The fields given as functions, by part: they are called again when the
+  // locale changes, so the control's words follow the language.
+  const wording = new Map();
+  const word = (part, patch) => {
+    let fields = wording.get(part);
+    let worded = patch;
+    for (const [field, value] of Object.entries(patch)) {
+      if (typeof value !== 'function') {
+        fields?.delete(field);
+        continue;
+      }
+      if (!fields) wording.set(part, (fields = new Map()));
+      fields.set(field, value);
+      if (worded === patch) worded = { ...patch };
+      worded[field] = value();
+    }
+    return worded;
+  };
   let state = initialState(Boolean(panel));
+  for (const [part, value] of Object.entries(state))
+    if (part !== 'card' && value && typeof value === 'object')
+      state[part] = word(part, value);
+  // The default card's labels follow the locale until a card replaces it.
+  let defaultCard = true;
   // Each bar's `--audio-level` and `--audio-opacity`, or null at rest.
   let bars = null;
   let removed = false;
@@ -191,15 +219,21 @@ export function createVoiceControl({
     get state() {
       return state;
     },
-    /** Merge `patch` into one part of the control. */
+    /**
+     * Merge `patch` into one part of the control. A field given as a
+     * function is shown as what it returns, and called again when the
+     * locale changes; give translated words that way.
+     */
     update(part, patch) {
       if (removed) return;
-      state = { ...state, [part]: { ...state[part], ...patch } };
+      state = { ...state, [part]: { ...state[part], ...word(part, patch) } };
       publish();
     },
     /** Replace one part of the control. */
     replace(part, value) {
       if (removed) return;
+      wording.delete(part);
+      if (part === 'card') defaultCard = false;
       state = { ...state, [part]: value };
       publish();
     },
@@ -207,7 +241,8 @@ export function createVoiceControl({
      * Listen for an interaction the view reports: `button`, `tier`,
      * `provider-change`, `settings-button`, `settings-close`, `tab`,
      * `tab-keydown`, `panel-keydown`, `pointerenter`, `pointerleave`,
-     * `preview-change`, `timeout-select`, `timeout-input`, `card-dismiss`.
+     * `preview-change`, `timeout-select`, `timeout-input`, `card-dismiss`;
+     * and `locale` after a locale change, for an owner's own words.
      * @returns {() => void} Removes the listener.
      */
     on(name, listener) {
@@ -268,9 +303,21 @@ export function createVoiceControl({
         store.publishBars(null);
       }
       removed = true;
+      offLocale();
       listeners.clear();
     },
   };
+  const offLocale = onLocaleChange(() => {
+    if (removed) return;
+    for (const [part, fields] of wording) {
+      const patch = {};
+      for (const [field, value] of fields) patch[field] = value();
+      state = { ...state, [part]: { ...state[part], ...patch } };
+    }
+    if (defaultCard) state = { ...state, card: initialCard() };
+    publish();
+    ui.emit('locale');
+  });
   store.connect(ui);
   store.publishBars(null);
   publish();

@@ -120,8 +120,11 @@ export function bindPreferenceControls({ ui, preferences, copy, onChange }) {
     if (customSelected) custom = state.minutes;
     ui.update('preferences', {
       previewChecked: state.previewEnabled,
-      previewNote: `${copy.previewNote}${state.previewPersisted === false ? ` ${copy.notSaved}` : ''}`,
-      timeoutNote: `${copy.timeoutNote}${state.timeoutPersisted === false ? ` ${copy.notSaved}` : ''}`,
+      // Functions, so a locale change words the notes again.
+      previewNote: () =>
+        `${copy.previewNote}${state.previewPersisted === false ? ` ${copy.notSaved}` : ''}`,
+      timeoutNote: () =>
+        `${copy.timeoutNote}${state.timeoutPersisted === false ? ` ${copy.notSaved}` : ''}`,
       timeoutChoice:
         state.minutes === 0 ? '0' : customSelected ? 'custom' : value,
       timeoutMinutes: String(custom),
