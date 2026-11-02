@@ -612,6 +612,7 @@ async function main() {
       if (models3dButton) {
         if (!models3dButton.classList.contains('active')) models3dButton.click();
         models3dButton.click(); // → OFF: both layers must follow the one control
+        await new Promise((resolve) => setTimeout(resolve)); // the view renders
         models3dOff.button = models3dButton.classList.contains('active');
         models3dOff.fl = fl.getParams().models3d;
         models3dOff.mil = mil.getParams().models3d;

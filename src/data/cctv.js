@@ -47,6 +47,8 @@ export const prioritizeActiveCctvGeometryRecord =
 export const processGeometryBatch = layer.processGeometryBatch;
 export const hideCctvRecordVisuals = layer.hideCctvRecordVisuals;
 export const refreshCoverageStyles = layer.refreshCoverageStyles;
+export const refreshHorizonCulling = layer.refreshHorizonCulling;
+export const _viewRecordIdsForTest = layer._viewRecordIdsForTest;
 export const clearProbeClampOnDeactivation =
   layer.clearProbeClampOnDeactivation;
 export const cctvRecordNeedsActivation = layer.cctvRecordNeedsActivation;
