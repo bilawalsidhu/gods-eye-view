@@ -621,6 +621,151 @@ export function cctvUpstreamUserAgent(url) {
   }
 }
 
+/** Read one bounded JPEG part from an open MJPEG response, then stop the stream. */
+async function readFirstMjpegFrame(upstream, maxBytes) {
+  const mediaType = cctvLiveMediaType(
+    'mjpeg',
+    upstream.headers.get('content-type'),
+  );
+  const boundary = parseMediaType(mediaType)?.params.get('boundary') || '';
+  if (
+    !boundary ||
+    !upstream.body ||
+    !Number.isSafeInteger(maxBytes) ||
+    maxBytes < 4
+  ) {
+    try {
+      await upstream.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    return null;
+  }
+
+  const nextBoundary = Buffer.from('\r\n--' + boundary, 'latin1');
+  const opening = Buffer.from('--' + boundary + '\r\n', 'latin1');
+  const headerTerminator = Buffer.from('\r\n\r\n', 'ascii');
+  const jpegStart = Buffer.from([0xff, 0xd8]);
+  const jpegEnd = Buffer.from([0xff, 0xd9]);
+  const maxHeaderBytes = 8 * 1024;
+  const maxBufferedBytes =
+    opening.length + headerTerminator.length + maxHeaderBytes + maxBytes;
+  let reader;
+  let buffer = Buffer.alloc(0);
+  let parsedHeaders = false;
+  let bodyStart = -1;
+  let declaredLength = null;
+
+  try {
+    reader = upstream.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return null;
+
+      const chunk = Buffer.from(value);
+      const room = Math.max(0, maxBufferedBytes - buffer.length);
+      const included = chunk.subarray(0, room);
+      const overflow = included.length < chunk.length;
+      buffer = Buffer.concat(
+        [buffer, included],
+        buffer.length + included.length,
+      );
+
+      if (buffer.length < opening.length) {
+        if (overflow) return null;
+        continue;
+      }
+      if (!buffer.subarray(0, opening.length).equals(opening)) return null;
+
+      if (!parsedHeaders) {
+        const headerEnd = buffer.indexOf(headerTerminator, opening.length);
+        if (headerEnd < 0) {
+          if (buffer.length - opening.length > maxHeaderBytes || overflow)
+            return null;
+          continue;
+        }
+        if (headerEnd - opening.length > maxHeaderBytes) return null;
+
+        const headerText = buffer
+          .subarray(opening.length, headerEnd)
+          .toString('latin1');
+        const headers = new Map();
+        for (const line of headerText.split('\r\n')) {
+          const colon = line.indexOf(':');
+          if (colon <= 0) return null;
+          const name = line.slice(0, colon).trim().toLowerCase();
+          if (!name || headers.has(name)) return null;
+          headers.set(name, line.slice(colon + 1).trim());
+        }
+        if (cctvRasterImageType(headers.get('content-type')) !== 'image/jpeg')
+          return null;
+
+        const length = headers.get('content-length');
+        if (length !== undefined) {
+          if (!/^\d+$/.test(length)) return null;
+          declaredLength = Number(length);
+          if (
+            !Number.isSafeInteger(declaredLength) ||
+            declaredLength < jpegStart.length + jpegEnd.length ||
+            declaredLength > maxBytes
+          )
+            return null;
+        }
+        bodyStart = headerEnd + headerTerminator.length;
+        parsedHeaders = true;
+      }
+
+      const available = buffer.length - bodyStart;
+      if (declaredLength !== null) {
+        const nextPart = buffer.indexOf(nextBoundary, bodyStart);
+        if (nextPart >= bodyStart && nextPart - bodyStart < declaredLength)
+          return null;
+        if (available >= declaredLength) {
+          const frame = buffer.subarray(bodyStart, bodyStart + declaredLength);
+          if (
+            frame.subarray(0, jpegStart.length).equals(jpegStart) &&
+            frame.subarray(-jpegEnd.length).equals(jpegEnd)
+          )
+            return Buffer.from(frame);
+          return null;
+        }
+      } else if (available >= jpegStart.length) {
+        const frameStart = buffer.subarray(
+          bodyStart,
+          bodyStart + jpegStart.length,
+        );
+        if (!frameStart.equals(jpegStart)) return null;
+        const nextPart = buffer.indexOf(nextBoundary, bodyStart);
+        const end = buffer.indexOf(jpegEnd, bodyStart + jpegStart.length);
+        if (
+          nextPart >= bodyStart &&
+          (end < 0 || end + jpegEnd.length > nextPart)
+        )
+          return null;
+        if (end >= 0) {
+          const frameLength = end + jpegEnd.length - bodyStart;
+          if (frameLength > maxBytes) return null;
+          return Buffer.from(buffer.subarray(bodyStart, end + jpegEnd.length));
+        }
+        if (available > maxBytes) return null;
+      }
+      if (overflow) return null;
+    }
+  } finally {
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* already closed or aborted */
+      }
+      try {
+        reader.releaseLock();
+      } catch {
+        /* already released */
+      }
+    }
+  }
+}
 /**
  * Fetch one upstream CCTV image within the frame-refresh budget.
  *
@@ -660,10 +805,7 @@ export async function fetchCctvImageFromUpstream(
       fetchImpl,
     );
     if (!upstream) return null;
-    const contentType = cctvRasterImageType(
-      upstream.headers.get('content-type'),
-    );
-    if (!upstream.ok || !contentType) {
+    if (!upstream.ok) {
       try {
         await upstream.body?.cancel();
       } catch {
@@ -671,9 +813,24 @@ export async function fetchCctvImageFromUpstream(
       }
       return null;
     }
-    const body = await readCappedResponseBytes(upstream, maxBytes);
+    const upstreamType = upstream.headers.get('content-type');
+    const contentType = cctvRasterImageType(upstreamType);
+    if (contentType) {
+      const body = await readCappedResponseBytes(upstream, maxBytes);
+      if (!body) return null;
+      return { ok: true, body, contentType };
+    }
+    if (!cctvLiveMediaType('mjpeg', upstreamType)) {
+      try {
+        await upstream.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return null;
+    }
+    const body = await readFirstMjpegFrame(upstream, maxBytes);
     if (!body) return null;
-    return { ok: true, body, contentType };
+    return { ok: true, body, contentType: 'image/jpeg' };
   } catch {
     return null;
   } finally {

@@ -1341,24 +1341,8 @@ video; camera poses use the existing low-confidence heading prior.
 
 ## Taiwan CCTV source pack
 
-The CCTV catalog includes Taiwan national freeway cameras from the Freeway
-Bureau, MOTC. One keyless request reads the daily MOTC 2.0 `CCTV.xml` table
-(~1,800 cameras); the request refuses redirects, has a 15-second deadline and a
-6 MiB response cap, and uses the shared 15-minute cache and fair catalog
-allocation. A failed download serves the last good table (up to a day old),
-or an empty pack, and is not retried for an hour: the catalog host does not
-answer from some networks outside Taiwan, and without the backoff every refresh
-there would wait out the connect timeout. The table
-publishes MJPEG stream URLs; each is mapped to the same camera server's
-single-JPEG path for the same camera number, and only those exact HTTPS pairs
-on the four `freeway.gov.tw` camera servers are registered with the frame
-proxy. Camera keys come from the server and camera number, because published
-CCTV IDs contain Chinese place names and a few repeat across cameras. Poses use
-the low-confidence heading prior. `CCTV_TAIWAN_ENABLED=0` disables the pack;
-`CCTV_TAIWAN_MAX_SOURCES` sets its cap (default 600, bounded to 1–2000), and
-`CCTV_TAIWAN_URL` overrides the table URL.
-Gate: `src/data/cctvTaiwan.test.mjs`.
-
+The CCTV catalog includes Taiwan national freeway cameras from the Freeway Bureau, MOTC. The app first reads the daily MOTC 2.0 CCTV.xml table with a keyless HTTPS request, a 15-second deadline, a 6 MiB response cap, and the shared 15-minute cache. If that catalog is unreachable and no last-good source list exists, the loader uses the Highway Bureau’s public provincial-road CCTV XML feed at https://cctv-maintain.thb.gov.tw/opendataCCTVs.xml. The fallback is capped by the same Taiwan source limit and hourly retry backoff; its MJPEG feeds are restricted to the eight cctv-ss01 through cctv-ss08.thb.gov.tw HTTPS servers. The frame proxy returns one bounded JPEG from each stream, not an unbounded video response. The Highway Bureau open-data page states XML downloads are free and asks users to attribute the source; the app credits Highway Bureau, MOTC. These are provincial-road cameras, not a replacement for the national freeway cameras. CCTV_TAIWAN_ENABLED=0 disables both feeds; CCTV_TAIWAN_MAX_SOURCES sets the shared cap (default 600, bounded to 1–2000), and CCTV_TAIWAN_URL overrides the Freeway Bureau table URL.
+Gate: src/data/cctvTaiwan.test.mjs and src/data/cctvProxy.test.mjs.
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the
