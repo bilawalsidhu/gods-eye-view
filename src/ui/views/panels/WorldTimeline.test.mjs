@@ -299,3 +299,115 @@ test('paused just before the end, play carries on rather than restarting', async
   worldClock.pause();
   assert.ok(worldClock.now() >= end - 4_000, 'not back to the start');
 });
+
+test('the track zooms around the handle, follows it, and shows it all again', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const start = now - 26 * 86_400_000;
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    // A month of launches and three hours of lightning, sharing one track.
+    coverage: () => ({
+      start,
+      end: now,
+      marks: [start, now - 3 * 3_600_000, now - 2 * 3_600_000, now - 3_600_000],
+    }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const track = bar().querySelector('.world-timeline-track');
+  const input = bar().querySelector('input[type=range]');
+  const length = () => Number(input.max) - Number(input.min);
+  const full = length();
+  assert.equal(bar().querySelectorAll('.world-timeline-tick').length, 4);
+
+  // Live, the handle is at the end: zooming in keeps the view on now.
+  for (let i = 0; i < 10; i++) {
+    track.dispatchEvent(new WheelEvent('wheel', { deltaY: -200, cancelable: true }));
+    await nextTick();
+  }
+  assert.ok(length() < full / 100, 'zoomed in');
+  assert.ok(Number(input.max) >= now, 'still ending at now');
+  assert.equal(track.classList.contains('is-zoomed'), true);
+  assert.equal(bar().querySelectorAll('.world-timeline-tick').length, 3, 'only the ticks in view');
+
+  // A seek off the view takes the view along.
+  worldClock.seek(start + 86_400_000);
+  await nextTick();
+  assert.ok(Number(input.min) <= start + 86_400_000 && Number(input.max) >= start + 86_400_000);
+  assert.ok(length() < full / 100, 'at the same zoom');
+
+  // Minus widens, zero and a double-click show it all.
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: '-' }));
+  await nextTick();
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: '0' }));
+  await nextTick();
+  assert.ok(Math.abs(length() - full) < 1_000, 'all of it');
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
+  await nextTick();
+  assert.ok(length() < full);
+  track.dispatchEvent(new MouseEvent('dblclick'));
+  await nextTick();
+  assert.equal(track.classList.contains('is-zoomed'), false);
+});
+
+test('zoomed, a scrub near now stays off live, and the view keeps a still handle', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const start = now - 26 * 86_400_000;
+  let end = now;
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({ start, end, marks: [start, now - 3_600_000] }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const track = bar().querySelector('.world-timeline-track');
+  const input = bar().querySelector('input[type=range]');
+  // Ten notches of a line-mode wheel, as Firefox sends them.
+  for (let i = 0; i < 10; i++) {
+    track.dispatchEvent(new WheelEvent('wheel', { deltaY: -12, deltaMode: 1, cancelable: true }));
+    await nextTick();
+  }
+  assert.ok(Number(input.max) - Number(input.min) < 6 * 3_600_000, 'lines zoom like pixels');
+  // A sideways swipe leaves the zoom alone.
+  const sideways = new WheelEvent('wheel', { deltaX: 50, deltaY: 1, cancelable: true });
+  track.dispatchEvent(sideways);
+  assert.equal(sideways.defaultPrevented, false);
+
+  // Twenty minutes back is near now on a month, not on a few hours.
+  input.value = String(now - 20 * 60_000);
+  input.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(worldClock.isLive(), false);
+  assert.ok(Math.abs(worldClock.now() - (now - 20 * 60_000)) < 1_000);
+
+  // The span running on past the paused handle takes the view back to it.
+  end = now + 86_400_000;
+  worldClock.coverageChanged();
+  await nextTick();
+  const at = worldClock.now();
+  assert.ok(Number(input.min) <= at && Number(input.max) >= at, 'handle in view');
+
+  // With a modifier, plus is the browser's zoom.
+  const browserZoom = new KeyboardEvent('keydown', { key: '+', ctrlKey: true, cancelable: true });
+  input.dispatchEvent(browserZoom);
+  assert.equal(browserZoom.defaultPrevented, false);
+
+  // A double-click puts back the time its first press moved.
+  track.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  input.value = String(at - 3_600_000);
+  input.dispatchEvent(new Event('input'));
+  track.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  await nextTick();
+  assert.equal(track.classList.contains('is-zoomed'), false);
+  assert.ok(Math.abs(worldClock.now() - at) < 1_000, 'time as it was');
+});

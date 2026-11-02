@@ -128,9 +128,22 @@ body.cockpit-mode #world-timeline {
    range input on top for dragging and the keyboard. */
 #world-timeline .world-timeline-track {
   position: relative;
+  /* Two fingers pinch the track, not the page. */
+  touch-action: none;
   flex: 1 1 auto;
   min-width: 80px;
   height: 24px;
+}
+
+/* Zoomed, the track's ends fade, as it goes on past them. */
+#world-timeline .world-timeline-track.is-zoomed::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(123, 189, 211, 0.22) 12px,
+    rgba(123, 189, 211, 0.22) calc(100% - 12px),
+    transparent
+  );
 }
 
 #world-timeline .world-timeline-track::before {

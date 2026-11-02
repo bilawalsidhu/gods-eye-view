@@ -48,9 +48,9 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       marks: covered.marks,
     });
   };
-  const nearNow = (ms, span) =>
+  const nearNow = (ms, length) =>
     Math.abs(ms - worldClock.wallNow()) <=
-    Math.max(LIVE_EDGE_MS, span ? (span.end - span.start) * LIVE_EDGE : 0);
+    Math.max(LIVE_EDGE_MS, length * LIVE_EDGE);
   // Whether the track ends at now (and moves on with it), not past it.
   const endsAtNow = (covered) =>
     covered.end - worldClock.wallNow() <= LIVE_EDGE_MS;
@@ -146,9 +146,15 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       worldClock.play({ rate: rate(), continuous: true });
     },
     goLive: () => worldClock.goLive(),
-    /** Scrub to `ms`: playback stops where the hand puts it; at now, live. */
-    scrub(ms) {
-      if (nearNow(ms, time.value.span)) {
+    /**
+     * Scrub to `ms`: playback stops where the hand puts it; at now, live.
+     * How near now counts as now goes by `length`, the stretch the track
+     * shows, all of the span unless it is zoomed.
+     */
+    scrub(ms, length) {
+      const span = time.value.span;
+      length ??= span ? span.end - span.start : 0;
+      if (nearNow(ms, length)) {
         worldClock.goLive();
         return;
       }
