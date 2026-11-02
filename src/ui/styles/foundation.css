@@ -122,6 +122,19 @@ body {
   left: 0;
 }
 
+.globe-renderer,
+.engine-switch-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.engine-switch-frame {
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* Unified world-overlay host: detection uses one host-owned blend surface
    beneath the shared text/card canvas; both share one frame path. The root
    holds ONLY the card canvas — it is a stacking context (z-index below), and

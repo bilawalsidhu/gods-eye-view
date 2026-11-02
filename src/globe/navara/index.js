@@ -16,6 +16,7 @@ import {
   forEachLuminanceUniform,
   keepCascadedLightIds,
   navaraHooks,
+  setRenderLoopEnabled,
 } from './internals.js';
 import { buildNavaraLook } from './look.js';
 import { createNavaraSharpen } from './sharpen.js';
@@ -201,6 +202,7 @@ export async function createNavaraGlobe({
     NavaraEffect,
     DrapedMesh,
     setupMaterialForDrape,
+    setRenderLoop: (enabled) => setRenderLoopEnabled(view, enabled),
     destroy() {
       if (destroyed) return;
       destroyed = true;

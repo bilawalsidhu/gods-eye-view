@@ -153,7 +153,7 @@ export class ShareRestoration {
     this.shareLinkManager = shareLinkManager;
     this._initialShareState = shareLinkManager.parseInitialHash();
   }
-  start() {
+  start({ engineSwitch = false } = {}) {
     // Restore from URL hash if present
     const savedState = this._initialShareState;
     this._initialShareRestorePromise = savedState
@@ -169,6 +169,7 @@ export class ShareRestoration {
         this.navigation._beginDeferredNavigation('shared view', {
           cancelPendingSelection: false,
         });
+      const delay = engineSwitch ? 0 : 1500;
       this._initialShareRestoreTimeout = setTimeout(() => {
         this._initialShareRestoreTimeout = null;
         if (this._disposed) return;
@@ -178,11 +179,12 @@ export class ShareRestoration {
           this.navigation._reassertNavigationHandoff(generation);
         void this._runShareRestore(savedState, {
           applyCamera,
+          instant: engineSwitch,
           navigationToken: generation,
           layersPromise: this._layerStateRestorePromise,
           settle: (result) => this._settleInitialShareRestore(result),
         });
-      }, 1500);
+      }, delay);
     } else {
       this.syncShareState();
       if (this.shareLinkManager?.rejectedShareCode)
@@ -236,7 +238,7 @@ export class ShareRestoration {
    */
   async _runShareRestore(
     state,
-    { applyCamera, navigationToken, layersPromise, settle },
+    { applyCamera, instant = false, navigationToken, layersPromise, settle },
   ) {
     const generation = this._shareRestoreGeneration;
     const current = () =>
@@ -244,6 +246,7 @@ export class ShareRestoration {
     try {
       const share = await this.shareLinkManager.applyState(state, {
         applyCamera,
+        instant,
         navigationToken,
       });
       const layers = await (layersPromise || Promise.resolve([]));

@@ -177,7 +177,7 @@ export async function registerNavaraLayerRenderers() {
  * credits in its own attribution UI.
  */
 export async function createNavaraScene({
-  operations,
+  container = document.getElementById('cesiumContainer'),
   cesiumToken,
   credits,
   MapController,
@@ -191,7 +191,7 @@ export async function createNavaraScene({
   const createNavaraGlobe = await loadNavaraGlobe();
   signal.throwIfAborted();
   const globe = await createNavaraGlobe({
-    container: document.getElementById('cesiumContainer'),
+    container,
     // The cinematic look unless `?look=photoreal|minimal` asks otherwise.
     search: globalThis.location?.search ?? '',
   });
@@ -241,8 +241,8 @@ export async function createNavaraScene({
     viewer: null,
     engine,
     tileset: null,
+    setRenderLoop: globe.setRenderLoop,
     mapStackController,
-    operations,
   };
 }
 
