@@ -128,3 +128,59 @@ test('finite video feeds retain looping while live HLS does not loop', async () 
     }
   }
 });
+
+test('HLS can become playable after 30 seconds, while finite videos keep their deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let failures = 0;
+  const source = video();
+  source.canPlayType = () => 'probably';
+  const playback = attachCctvVideo(source, '/api/cctv/media/a', 'hls', {
+    loadHls: async () => ({ default: { isSupported: () => false } }),
+    fetchImpl: async () => {},
+    onFailure: () => failures++,
+  });
+  await playback.ready;
+  t.mock.timers.tick(36000);
+  assert.equal(
+    failures,
+    0,
+    'a buffering live stream must survive the old deadline',
+  );
+  source.dispatchEvent(new Event('canplay'));
+  t.mock.timers.tick(60000);
+  assert.equal(failures, 0, 'playable stream clears startup timeout');
+  playback.dispose();
+  const finite = attachCctvVideo(video(), '/api/cctv/media/b', 'mp4', {
+    onFailure: () => failures++,
+  });
+  await finite.ready;
+  t.mock.timers.tick(30000);
+  assert.equal(failures, 1);
+  finite.dispose();
+});
+
+test('unavailable HLS still fails once at 60 seconds and disposal cancels startup', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let failures = 0;
+  const start = () => {
+    const source = video();
+    source.canPlayType = () => 'probably';
+    return attachCctvVideo(source, '/api/cctv/media/a', 'hls', {
+      loadHls: async () => ({ default: { isSupported: () => false } }),
+      fetchImpl: async () => {},
+      onFailure: () => failures++,
+    });
+  };
+  const live = start();
+  await live.ready;
+  t.mock.timers.tick(60000);
+  assert.equal(failures, 1);
+  t.mock.timers.tick(60000);
+  assert.equal(failures, 1);
+  live.dispose();
+  const cancelled = start();
+  await cancelled.ready;
+  cancelled.dispose();
+  t.mock.timers.tick(60000);
+  assert.equal(failures, 1);
+});
