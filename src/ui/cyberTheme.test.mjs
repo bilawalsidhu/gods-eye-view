@@ -780,7 +780,16 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /flex: 1 1 auto;/);
   assert.match(cyberStyles, /#left-panel-stack:has/);
   assert.match(cyberStyles, /left: calc\(54px \+ var\(--panel-rail-clearance\)\);/);
-  assert.match(cyberStyles, /right: calc\(62px \+ var\(--panel-rail-clearance\)\);/);
+  assert.match(cyberStyles, /right: calc\(51px \+ var\(--panel-rail-clearance\)\);/);
+  // Each side's edge line shows only beside an open panel.
+  assert.match(
+    cyberStyles,
+    /#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed, \[hidden\]\)\) \{\s*border-left-color:/,
+  );
+  assert.match(
+    cyberStyles,
+    /#right-context-rail:has\(> \[data-panel-id\]:not\(\.collapsed, \[hidden\]\)\) \{\s*border-right-color:/,
+  );
   assert.match(cyberStyles, /bottom: calc\(2vh \+ 13rem\);/);
   assert.doesNotMatch(cyberStyles, /NAV 01  \/\/  COMMAND BUS  \/\/  VIS 03/);
   assert.match(cyberStyles, /data-layer-id='satellites'/);

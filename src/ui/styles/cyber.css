@@ -1661,7 +1661,20 @@
     left: calc(54px + var(--panel-rail-clearance));
     width: 300px;
     padding-left: 10px;
-    border-left: 1px solid rgba(196, 84, 84, 0.72);
+    border-left: 1px solid transparent;
+  }
+
+  /* An edge line marks each side's open panel, mirrored left and right. */
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    #left-panel-stack:has(> [data-panel-id]:not(.collapsed, [hidden])) {
+    border-left-color: rgba(196, 84, 84, 0.72);
+  }
+
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    #right-context-rail:has(> [data-panel-id]:not(.collapsed, [hidden])) {
+    border-right-color: rgba(196, 84, 84, 0.72);
   }
 
   :root[data-ui-theme='cyber']
@@ -1740,8 +1753,11 @@
   :root[data-ui-theme='cyber'] #right-context-rail {
     --right-display-collapsed-width: var(--cyber-panel-collapsed-width);
     --right-context-collapsed-width: var(--cyber-panel-collapsed-width);
-    right: calc(62px + var(--panel-rail-clearance));
-    width: 312px;
+    /* The edge line and its gap keep the panels where they were. */
+    right: calc(51px + var(--panel-rail-clearance));
+    width: 323px;
+    padding-right: 10px;
+    border-right: 1px solid transparent;
   }
 
   /* The map rails now use one visible expanded width. Keeping the rail itself
