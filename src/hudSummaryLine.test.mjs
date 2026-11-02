@@ -185,6 +185,7 @@ for (const [locale, summary, places] of [
   ['es', 'Tráfico aéreo nominal sobre Madrid', ['Madrid']],
   ['de', 'Fallback Daten über Berlin', ['Berlin']],
   ['ja', 'Live Flights Plaza周辺', ['Live Flights Plaza']],
+  ['es', 'Estación Loading Dock Madrid', ['Estación Loading Dock']],
 ]) {
   test(`a ${locale} word that is not an echo is shown: ${summary}`, async (t) => {
     const { hud, shown } = createHud(
@@ -196,3 +197,49 @@ for (const [locale, summary, places] of [
     assert.ok(shown().includes(summary), shown());
   });
 }
+
+test('a language switch drops the reply in flight and asks again', async (t) => {
+  const { hud, sent, shown } = createHud(t, {});
+  let answer;
+  hud.summaryService.summarize = (context, { signal }) => {
+    sent.push(context);
+    return new Promise((resolve, reject) => {
+      answer = () =>
+        resolve({
+          ok: true,
+          status: 200,
+          data: {
+            error: null,
+            summary: 'Остин рейсы частично',
+            feedState: 'partial',
+          },
+        });
+      signal.addEventListener('abort', () =>
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+      );
+    });
+  };
+  const pending = hud._updateSummary(false, true);
+  while (!answer) await new Promise((resolve) => setImmediate(resolve));
+  setLocale('es');
+  answer();
+  await pending;
+  assert.ok(!shown().includes('Остин'), shown());
+  assert.equal(shown(), hud._composeSummary());
+
+  hud.summaryService.summarize = async (context) => {
+    sent.push(context);
+    return {
+      ok: true,
+      status: 200,
+      data: {
+        error: null,
+        summary: 'Austin vuelos parciales',
+        feedState: 'partial',
+      },
+    };
+  };
+  await hud._updateSummary(false);
+  assert.equal(sent.at(-1).locale, 'es');
+  assert.ok(shown().startsWith('PARCIAL | Austin vuelos parciales'), shown());
+});

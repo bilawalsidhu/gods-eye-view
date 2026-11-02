@@ -132,7 +132,8 @@ function withProvenance(text, provenance) {
 /**
  * The English a summary outside English must not carry: feed-state ids and
  * translated layers' English names. A state word the locale keeps in English
- * (de FALLBACK) and a layer name inside a place label (Radio City) are fine.
+ * (de FALLBACK) and words inside a place label (Radio City, Loading Dock) are
+ * fine.
  */
 function summaryEnglishWords(context) {
   const places = [
@@ -144,7 +145,9 @@ function summaryEnglishWords(context) {
     .toLowerCase();
   return [
     ...Object.keys(FEED_STATE_LABELS).filter(
-      (state) => t(FEED_STATE_LABELS[state]).toLowerCase() !== state,
+      (state) =>
+        t(FEED_STATE_LABELS[state]).toLowerCase() !== state &&
+        !places.includes(state),
     ),
     ...(context.translatedLayerNames || []).filter(
       (name) => !places.includes(name.toLowerCase()),
@@ -323,11 +326,15 @@ export class IntelHUD {
   }
 
   /**
-   * Show the HUD's own words in the new locale. The deterministic summary
-   * is composed again; the AI reply does not depend on the locale, so the
-   * next tick shows the one already received rather than asking again.
+   * Show the HUD's own words in the new locale. The AI reply is written in
+   * the locale too, so the one received is dropped like a camera move drops
+   * it: a request in flight is aborted and the next tick asks again.
    */
   _relocalize() {
+    this._markSummaryDirty();
+    this._lastSummarySignature = null;
+    this._lastSummaryText = null;
+    this._summaryRequest?.abort();
     this._present({
       mode: MODE_LABELS[this._currentStyle]
         ? t(MODE_LABELS[this._currentStyle])

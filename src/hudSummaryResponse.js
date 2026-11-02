@@ -165,7 +165,7 @@ export function hudSummaryInstructions(locale) {
   const length = hudSummaryIsUnspaced(tag)
     ? ` Instead of five words, write one phrase of at most ${HUD_SUMMARY_MAX_UNSPACED_CHARS} characters.`
     : '';
-  return `${HUD_SUMMARY_INSTRUCTIONS} Write the summary in ${language} (${tag}), not English, giving places their usual ${language} names and layers the names in enabledLayerLabels; feedState stays the English value.${length}`;
+  return `${HUD_SUMMARY_INSTRUCTIONS} Write the summary in ${language} (${tag}), not English. Give places their usual names in that language and layers the names in enabledLayerLabels; feedState stays the English value.${length}`;
 }
 
 /**
