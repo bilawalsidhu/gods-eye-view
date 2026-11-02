@@ -1078,3 +1078,20 @@ test('a new viewer lifetime drops the previous view-target getter', () => {
   interruptCameraMotion('test-cleanup');
   second.restore();
 });
+
+test('a route hidden from Draw is not flown; the newest visible one is', () => {
+  const viewer = createTickableViewer();
+  initCameraVerbs(viewer.viewer, () => null);
+  const route = (label, hidden) => ({
+    type: 'route',
+    label,
+    hidden,
+    path: TWO_TURN_ROUTE.map(([lon, lat]) => ({ lon, lat, height: 0 })),
+  });
+  const onlyHidden = flyRoute([route('hidden walk', true)]);
+  assert.equal(onlyHidden.ok, false, 'a board of hidden routes has none to fly');
+  const started = flyRoute([route('shown walk', false), route('hidden walk', true)]);
+  assert.equal(started.ok, true);
+  assert.match(JSON.stringify(started), /shown walk/, 'the visible route is flown');
+  interruptCameraMotion?.('test');
+});

@@ -5,6 +5,7 @@ import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
+  governorRequestRender,
 } from '../renderGovernor.js';
 import {
   isRateLimitedOutcome,
@@ -201,8 +202,11 @@ export function createAnnotationEngine({
   // World annotations carry persistent per-frame scene animation (pulsing
   // live colors, camera-scaled rings, route-flow uniforms in the renderer),
   // so the scene must render continuously while any mark exists. (perf wave 2)
+  // Only a mark someone can see needs every frame drawn: a board of marks
+  // hidden from Draw's list lets the scene idle.
   function syncAnnotationHold() {
-    if (annotations.size > 0) holdContinuousRender('annotations');
+    const visible = [...annotations.values()].some((anno) => !anno.hidden);
+    if (visible) holdContinuousRender('annotations');
     else releaseContinuousRender('annotations');
   }
 
@@ -250,6 +254,9 @@ export function createAnnotationEngine({
       if (changed) {
         renderer.sync(annotations);
         syncAnnotationHold();
+        // The frame that takes a just-hidden mark off: with every mark hidden
+        // the hold is gone, and nothing else would draw it.
+        governorRequestRender('annotations');
       }
       if (expired) notifyChange();
       // Stop once the board is STABLE — persistent marks (persist=true is the default)
@@ -811,6 +818,11 @@ export function createAnnotationEngine({
    *  degenerate geocode stacks on one point (several Capitol monuments) would erase each other. */
   function findDuplicate(anno) {
     if (!anno.anchor) return null;
+    // A shape drawn by hand is always new: each click is meant, and every
+    // shape is unnamed until its row names it, so two nearby pins would
+    // otherwise read as one and the second would replace or vanish into the
+    // first.
+    if (anno.manual) return null;
     const near = (a, b) =>
       a &&
       b &&
@@ -1017,6 +1029,11 @@ export function createAnnotationEngine({
     anno.hidden = Boolean(hidden);
     // Skip the fade-in, so showing it again is immediate.
     anno.bornAt = Math.min(anno.bornAt, performance.now() - 260);
+    // Take it off (or put it back) now, not when its alpha next changes: a
+    // mark hidden before its first frame has no alpha change to wait for.
+    renderer.sync(annotations);
+    syncAnnotationHold();
+    governorRequestRender('annotations');
     ensureTicking();
     notifyChange();
     return true;
@@ -1043,6 +1060,7 @@ export function createAnnotationEngine({
     } catch (error) {
       rollbackRendererState(anno);
       annotations.delete(id);
+      renderer.sync(annotations);
       syncAnnotationHold();
       notifyChange();
       throw error;

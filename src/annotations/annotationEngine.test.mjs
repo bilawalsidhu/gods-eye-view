@@ -987,3 +987,108 @@ test('a drawn line that rounds up to the next unit is labelled in it, not as 100
   assert.deepEqual(labels, ['990 m', '1.0 km', '9.9 km', '10 km']);
   engine.destroy();
 });
+
+test('hand-drawn marks: two unnamed pins close together are two pins, whatever their colours', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer } = fakeRenderer();
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const pin = (lon, color) => ({ type: 'pin', manual: true, latitude: 30.27, longitude: lon, label: '', color });
+  await engine.annotate([pin(-97.74, 'primary')], { persist: true });
+  await engine.annotate([pin(-97.7402, 'primary')], { persist: true });
+  await engine.annotate([pin(-97.7404, 'red')], { persist: true });
+  assert.deepEqual(
+    engine.list().map(({ color }) => color),
+    ['primary', 'primary', 'red'],
+    'no drawn pin is dropped or replaced by the next',
+  );
+});
+
+test('hand-drawn marks: hiding a mark before its first frame takes it off at once', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  let syncs = 0;
+  const renderer = { add() {}, update() {}, remove() {}, sync() { syncs += 1; }, destroy() {} };
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  await engine.annotate([{ type: 'pin', manual: true, latitude: 1, longitude: 1 }], { persist: true });
+  const [mark] = engine.list();
+  const before = syncs;
+  engine.setHidden(mark.id, true);
+  assert.ok(syncs > before, 'the renderer hears about it now');
+  assert.ok(
+    !getRenderGovernorDiagnostics().holds.includes('annotations'),
+    'and the render hold goes with the last visible mark',
+  );
+});
+
+test('hand-drawn marks: with every mark hidden the scene idles, and showing one wakes it', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  let renders = 0;
+  installRenderGovernor({ scene: { requestRenderMode: true, requestRender: () => (renders += 1) } });
+  const { renderer } = fakeRenderer();
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  await engine.annotate([
+    { type: 'pin', manual: true, latitude: 1, longitude: 1 },
+    { type: 'pin', manual: true, latitude: 2, longitude: 2 },
+  ], { persist: true });
+  const [first, second] = engine.list();
+  const held = () => getRenderGovernorDiagnostics().holds.includes('annotations');
+  assert.ok(held(), 'visible marks keep the scene drawing');
+  engine.setHidden(first.id, true);
+  assert.ok(held(), 'one visible mark is enough');
+  const before = renders;
+  engine.setHidden(second.id, true);
+  assert.equal(held(), false, 'every mark hidden: the scene idles');
+  assert.ok(renders > before, 'after one last frame that takes them off');
+  engine.setHidden(second.id, false);
+  assert.ok(held(), 'showing one wakes it again');
+});
+
+test('hand-drawn marks: a restyle the renderer cannot draw takes the mark off and says so', async (t) => {
+  installAnimationFrameStubs(t);
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const { renderer, failAddOnce } = throwingRendererHarness();
+  let syncs = 0;
+  renderer.sync = () => (syncs += 1);
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  await engine.annotate([{ type: 'pin', manual: true, latitude: 1, longitude: 1 }], { persist: true });
+  const [mark] = engine.list();
+  let changes = 0;
+  engine.onChange(() => (changes += 1));
+  const before = syncs;
+  failAddOnce();
+  assert.throws(() => engine.restyle(mark.id, { color: 'red' }), /WebGL context lost/);
+  assert.equal(engine.list().length, 0, 'no ghost row is left behind');
+  assert.equal(changes, 1, 'the list hears about it');
+  assert.ok(syncs > before, 'and the renderer is told');
+});
+
+test('hand-drawn marks: a mark shown again right after it was drawn appears at once, not fading in', async (t) => {
+  _resetRenderGovernorForTest();
+  t.after(() => _resetRenderGovernorForTest());
+  const queued = [];
+  const raf = globalThis.requestAnimationFrame;
+  const caf = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => queued.push(callback);
+  globalThis.cancelAnimationFrame = () => {};
+  t.after(() => {
+    globalThis.requestAnimationFrame = raf;
+    globalThis.cancelAnimationFrame = caf;
+  });
+  const tick = () => queued.splice(0).forEach((callback) => callback());
+  const { renderer } = fakeRenderer();
+  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  await engine.annotate([{ type: 'pin', manual: true, latitude: 1, longitude: 1 }], { persist: true });
+  const [mark] = engine.list();
+  engine.setHidden(mark.id, true);
+  tick();
+  assert.equal(mark.alpha, 0);
+  engine.setHidden(mark.id, false);
+  tick();
+  assert.equal(mark.alpha, 1, 'no fade-in after a hide');
+});
