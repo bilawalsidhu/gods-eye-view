@@ -3,6 +3,7 @@ import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
 import { presentCctvCalibration } from './cctvCalibration.js';
+import { roundHeadingDegrees } from '../data/headingDegrees.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -107,7 +108,7 @@ function metaText(state, enabled, activeCamera, catalogCount) {
         '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
         {
           city: activeCamera.city,
-          heading: `${Math.round(activeCamera.headingDeg)}°`,
+          heading: `${roundHeadingDegrees(Number(activeCamera.headingDeg)) ?? 0}°`,
           fov: `${Math.round(activeCamera.fovDeg)}°`,
           range: Math.round(activeCamera.rangeM),
           projection: projLabel,

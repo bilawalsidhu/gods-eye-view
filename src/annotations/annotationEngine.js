@@ -1573,8 +1573,11 @@ function greatCircleM(a, b) {
 
 function formatDistance(m) {
   if (!Number.isFinite(m)) return null;
-  if (m >= 1000) return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
-  return `${Math.round(m / 10) * 10} m`;
+  // Round before each unit cut: 996 m was printed as "1000 m" and
+  // 9,960 m as "10.0 km".
+  const tens = Math.round(m / 10) * 10;
+  if (tens < 1000) return `${tens} m`;
+  return `${(m / 1000).toFixed(Math.round(m / 100) >= 100 ? 0 : 1)} km`;
 }
 
 function composeRouteLabel(baseLabel, distM, durS, mode, fallback) {

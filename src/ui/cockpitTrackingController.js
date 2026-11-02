@@ -1,6 +1,7 @@
 /** Tracking identity, entry, exit and contact navigation for the Cockpit controller. */
 import { t } from '../i18n/index.js';
 import {
+  formatHeadingReadout,
   normalizeHeading,
   resolveTrackedAircraftInfo,
 } from '../cockpitMath.js';
@@ -186,9 +187,7 @@ export function enter() {
   this.startBriefRotation();
   const trackLabel =
     info.callsign || info.registration || info.icao24 || t('AIRCRAFT');
-  const trackHeading = String(
-    Math.round(normalizeHeading(info.track ?? 0)),
-  ).padStart(3, '0');
+  const trackHeading = formatHeadingReadout(info.track ?? 0);
   this.pushCockpitSignal(
     'track',
     'track',
