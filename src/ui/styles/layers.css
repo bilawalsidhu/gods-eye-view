@@ -3,7 +3,7 @@
   position: fixed;
   top: var(--left-stack-safe-top, var(--left-stack-top));
   bottom: var(--left-stack-safe-bottom, 4vh);
-  left: var(--left-stack-x);
+  inset-inline-start: var(--left-stack-x);
   z-index: 100;
   width: 360px;
   display: flex;
@@ -84,27 +84,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.5) rgba(255, 255, 255, 0.04);
   scrollbar-gutter: stable;
-}
-
-.data-toggle-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.data-toggle-list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 999px;
-}
-
-.data-toggle-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 212, 255, 0.65),
-    rgba(0, 212, 255, 0.2)
-  );
-  border-radius: 999px;
 }
 
 .data-layer-group-heading {
@@ -197,11 +177,11 @@
 #right-context-rail #weather-panel.collapsed,
 #right-context-rail #recent-imagery-panel.collapsed {
   width: var(--right-display-collapsed-width);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail > #pp-toggles.collapsed {
   width: var(--right-display-collapsed-width);
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row {
   width: 100%;
@@ -240,7 +220,7 @@
   width: var(--right-context-collapsed-width);
   /* Keep the compact Context tab on the rail edge rather than leaving it
      stranded at the rail's expanded-width origin. */
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 #right-context-rail
   #global-context-panel.collapsed
@@ -259,6 +239,42 @@
 }
 #right-context-rail.layout-exclusive > [data-panel-id].collapsed {
   display: none;
+}
+#left-panel-stack.layout-exclusive > [data-panel-id].collapsed {
+  display: none;
+}
+
+/* Panel rails (src/ui/panelNavigation.js). Each rail lives inside its stack,
+   so it shows and hides with the stack, and floats in the screen-edge gutter.
+   The stack's layout offsets it back to its resting top, so it holds still
+   when an opened panel moves the stack. */
+.gev-panel-rail {
+  position: absolute;
+  top: var(--panel-rail-offset, 0px);
+  z-index: 1;
+  pointer-events: auto;
+  transition: top var(--transition-fast);
+}
+/* Each rail keeps its outer edge at the screen-side clearance, so a rail that
+   widens (labelled pills while its side has no open panel) grows toward the
+   middle of the screen. Collapsed, it sits 6px outside its stack. */
+.gev-panel-rail--left {
+  inset-inline-start: calc(-1 * var(--panel-rail-clearance));
+}
+.gev-panel-rail--right {
+  inset-inline-end: calc(-1 * var(--panel-rail-clearance));
+}
+body.mobile-shell #left-panel-stack > .gev-panel-rail,
+body.mobile-shell #right-context-rail > .gev-panel-rail,
+body.cockpit-mode .gev-panel-rail {
+  display: none;
+}
+/* Clean view and recording hide the panels one by one, not their stacks. */
+body.ui-clean-view .gev-panel-rail,
+body.recording-mode .gev-panel-rail {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 #right-context-rail.layout-focus > [data-panel-id].collapsed {
   display: block;
@@ -281,8 +297,6 @@
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed) {
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.4) transparent;
 }
 #right-context-rail.layout-focus
   > #weather-panel:not(.collapsed)
@@ -385,7 +399,7 @@
   gap: 10px;
   padding: 1px 3px 7px;
   border-bottom: 1px solid rgba(34, 230, 230, 0.14);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 #space-mission-panel-host .space-mission-roster-header > div {
   display: grid;
@@ -415,8 +429,6 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding-right: 3px;
-  scrollbar-color: rgba(34, 230, 230, 0.38) transparent;
-  scrollbar-width: thin;
 }
 #space-mission-panel-host .space-mission-roster-item {
   position: relative;
@@ -431,7 +443,7 @@
   border-radius: 4px;
   color: #d8ffff;
   background: rgba(42, 113, 171, 0.045);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   text-align: left;
   cursor: pointer;
   transition:

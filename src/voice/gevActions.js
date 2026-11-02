@@ -9,6 +9,8 @@ import { resolveDeicticArgs } from './deixis.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
+import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import * as Cesium from 'cesium';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
@@ -772,10 +774,9 @@ export function createGevActionRunner({
             cancelled: true,
           };
         const doc = globalThis.document;
-        const panel = doc?.getElementById?.('key-setup');
-        const button = open
-          ? doc?.getElementById?.('key-setup-chip')
-          : panel?.querySelector?.('[data-key-setup-close]');
+        // The setup owner (src/keySetup.js) publishes the dialog and takes
+        // its open and close requests.
+        const settings = useProviderSettingsStore(applicationPinia());
         const concealed =
           open &&
           [
@@ -784,11 +785,7 @@ export function createGevActionRunner({
             'cockpit-mode',
             'scene-playback-mode',
           ].some((mode) => doc?.body?.classList?.contains(mode));
-        if (
-          concealed ||
-          panel?.dataset?.ready !== 'true' ||
-          typeof button?.click !== 'function'
-        ) {
+        if (concealed || settings.view?.ready !== true || !settings.controls) {
           const error = concealed
             ? 'Provider Settings is hidden in the current view. Leave that view before opening it.'
             : 'Provider Settings is unavailable in this runtime.';
@@ -802,11 +799,11 @@ export function createGevActionRunner({
             say: error,
           };
         }
-        button.click();
-        // Opening unhides immediately; closing removes visible before its fade ends.
-        const applied = open
-          ? !panel.hidden
-          : !panel.classList.contains('visible');
+        if (open) settings.controls.open();
+        else settings.controls.close();
+        // Opening unhides at once; closing drops visible before its fade ends.
+        const dialog = settings.view.dialog;
+        const applied = open ? !dialog.hidden : !dialog.visible;
         const say = applied
           ? `Provider Settings is ${open ? 'open' : 'closed'}.`
           : 'Provider Settings did not change.';
@@ -815,12 +812,22 @@ export function createGevActionRunner({
           action: name,
           panelId,
           applied,
-          open: applied ? open : !panel.hidden,
+          open: applied ? open : !dialog.hidden,
           say,
           ...(!applied ? { error: say } : {}),
         };
       }
-      setPanelOpen(styleManager, panelId, open);
+      if (!setPanelOpen(styleManager, panelId, open)) {
+        const say = 'There is no panel to open here.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          say,
+          error: say,
+        };
+      }
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
@@ -3146,13 +3153,14 @@ function normalizeAircraftClassFilter(value) {
   return raw.replace(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
 }
 
+/**
+ * @returns {boolean} Whether a shell took the change: its panel chrome owns
+ *   panel state, so without one there is no panel to open.
+ */
 function setPanelOpen(styleManager, panelId, open) {
-  if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
-    styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
-  } else {
-    const panel = document.getElementById(panelId);
-    if (panel) panel.classList.toggle('collapsed', !open);
-  }
+  if (typeof styleManager?.setPanelCollapsed !== 'function') return false;
+  styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
+  return true;
 }
 
 function normalizeContextMode(value) {
