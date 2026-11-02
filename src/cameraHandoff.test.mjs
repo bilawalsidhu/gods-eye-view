@@ -42,10 +42,10 @@ function ordered(source, needles, label) {
 test('Cockpit takeover invalidates deferred work before camera cancellation', () => {
   const enter = cockpitEnter.toString();
   ordered(enter, [
-    'if (!info || !entity?.position) return false;',
+    'if (!info || !entity) return false;',
     'this.onCameraTakeover?.();',
-    'this.viewer.camera.cancelFlight();',
-    'this.viewer.trackedEntity = undefined;',
+    'this.host.camera.cancelFlight();',
+    'this.host.release();',
   ], 'Cockpit takeover');
   assert.match(
     ui,

@@ -94,7 +94,6 @@ test('the viewer-only actions are one exported list of real tools', () => {
     'clear_annotations',
     'fly_route',
     'move_camera',
-    'control_cockpit',
     'set_context_mode',
     'control_radio',
     'control_cctv',
@@ -103,6 +102,24 @@ test('the viewer-only actions are one exported list of real tools', () => {
   const tools = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));
   for (const name of VIEWER_ONLY_ACTIONS)
     assert.ok(tools.has(name), `${name} is a voice tool`);
+});
+
+test('Navara enters cockpit on the tracked aircraft without starting Contacts', async () => {
+  const engine = engineOverAustin({ kind: 'navara' });
+  const runner = runnerOn(engine, {
+    styleManager: {
+      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: '507c84' }),
+      setContextMode: () => assert.fail('the selected flight already owns the camera'),
+      controlCockpit: (action, { rollbackTarget }) => {
+        assert.equal(action, 'enter');
+        assert.equal(rollbackTarget.id, '507c84');
+        return { ok: true, state: { active: true } };
+      },
+    },
+  });
+  const result = await runner('control_cockpit', { action: 'enter' });
+  assert.equal(result.ok, true);
+  assert.equal(result.state.active, true);
 });
 
 test('without a viewer the viewer-only actions refuse with a structured result', async () => {

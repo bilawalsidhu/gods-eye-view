@@ -587,3 +587,12 @@ test('session bookkeeping ignores programmatic origins, non-visibility events, a
   }), false);
   assert.equal(snapshot.userAdded.size, 0);
 });
+
+test('direct aircraft entry on Navara needs an enabled feed and an idle Context', () => {
+  const input = { standaloneAircraft: true, contextMode: null, flightsEnabled: true };
+  assert.equal(cockpitEntryAllowed(input), true);
+  assert.equal(cockpitEntryAllowed({ ...input, flightsEnabled: false, militaryEnabled: true }), true);
+  assert.equal(cockpitEntryAllowed({ ...input, flightsEnabled: false }), false);
+  assert.equal(cockpitEntryAllowed({ ...input, contextModeChanging: true }), false);
+  assert.equal(cockpitEntryAllowed({ ...input, contextMode: 'space-missions' }), false);
+});

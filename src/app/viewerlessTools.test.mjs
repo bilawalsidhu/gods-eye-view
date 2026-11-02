@@ -119,7 +119,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
   registry.register('navara', { satellites: () => ({}), flights: () => ({}) });
   assert.equal(
     navaraModeNotice(createLayerAvailability('navara', { registry })).detail,
-    'Data layers: Live Flights, Satellites; the other layers, cockpit and director are unavailable',
+    'Data layers: Live Flights, Satellites; the other layers and director are unavailable',
   );
   // The governor drives the engine's continuous rendering.
   assert.equal(isRenderGovernorInstalled(engine), true);

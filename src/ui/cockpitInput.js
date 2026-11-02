@@ -49,7 +49,7 @@ export function onKeyDown(event) {
   if (key === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey) {
     if (!this.active) {
       const cockpitAttempt = !!(
-        this.readAircraftInfo() && this.viewer.trackedEntity?.position
+        this.readAircraftInfo() && this.host.current()
       );
       if (!cockpitAttempt) return;
     }
