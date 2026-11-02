@@ -102,7 +102,7 @@ test('the cinematic look: photoreal plus clouds and ACES, no sun shadow maps, no
     useNormalBuffer: false,
     albedoScale: 2,
   });
-  assert.equal(clouds.clouds.coverage, 0.22);
+  assert.equal(clouds.clouds.coverage, 0.36);
   assert.equal(clouds.clouds.shadows, false, 'no cloud shadow maps');
   assert.ok(
     clouds.clouds.cloudLayers.every(({ altitude }) => altitude >= 1000),
