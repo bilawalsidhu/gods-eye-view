@@ -111,3 +111,38 @@ test('the Space Missions counter reads as a number pair in right-to-left', () =>
   assert.match(counters[1], /\[data-mission-index\]/);
   assert.match(counters[2], /direction: ltr;/);
 });
+
+test('select chevrons and legend ranges follow the field and the ramp in right-to-left', () => {
+  const field = sheet('form-field.css');
+  assert.match(
+    ruleBody(field, 'select.gev-field'),
+    /padding-inline-end: 22px;/,
+  );
+  assert.match(
+    ruleBody(field, 'select.gev-field--compact'),
+    /padding-inline-end: 18px;/,
+  );
+  // Selects that set their own padding keep the chevron's room at the end.
+  for (const [name, selector, inline] of [
+    ['radio.css', '#radio-filter', '8px 24px'],
+    ['radio.css', '.sdr-gain-row select', '7px 22px'],
+    ['voice-card.css', '#gev-voice-timeout-select', '0.45rem 22px'],
+  ]) {
+    const body = ruleBody(sheet(name), selector);
+    assert.match(body, new RegExp(`padding-inline: ${inline};`));
+    assert.doesNotMatch(body, /(?:^|\s)padding(?:-right)?:/);
+  }
+  const rtl = sheet('rtl.css');
+  assert.match(
+    ruleBody(rtl, "html[dir='rtl'] select.gev-field"),
+    /background-position: left 8px center;/,
+  );
+  assert.match(
+    ruleBody(rtl, "html[dir='rtl'] select.gev-field--compact"),
+    /background-position: left 6px center;/,
+  );
+  assert.match(
+    ruleBody(rtl, "html[dir='rtl'] .rail-card-scale"),
+    /direction: ltr;/,
+  );
+});

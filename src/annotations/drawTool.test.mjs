@@ -112,10 +112,11 @@ test('the DISPLAY rail styles live in their current owner, not the shim', () => 
   // these rules lived in the root style.css. That file is an import shim now,
   // and putting rules back into it would silently undo the split.
   const shim = read('style.css');
-  assert.ok(
-    shim.split('\n').length < 40,
-    'style.css is an import shim, not a stylesheet',
-  );
+  const rules = shim
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => line.trim() && !/^@import '[^']+';$/.test(line.trim()));
+  assert.deepEqual(rules, [], 'style.css is an import shim, not a stylesheet');
   assert.doesNotMatch(
     shim,
     /draw-hint|pp-text-input/,

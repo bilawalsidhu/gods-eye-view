@@ -49,7 +49,8 @@
 #radio-filter {
   /* Radio owns its compact density and arrow space; shared fields paint the
      palette and disabled state, including this intentional theme exception. */
-  padding: 7px 24px 7px 8px;
+  padding-block: 7px;
+  padding-inline: 8px 24px;
   border-radius: 5px;
   font: 9px/1.2 var(--font-mono);
   --gev-field-border-color: rgba(65, 220, 231, 0.28);
@@ -1128,7 +1129,8 @@ html:not([lang='en']) .data-row-list-text {
 .sdr-gain-row select {
   flex: 1;
   min-width: 0;
-  padding: 5px 22px 5px 7px;
+  padding-block: 5px;
+  padding-inline: 7px 22px;
 }
 .sdr-adsb-stats {
   display: grid;

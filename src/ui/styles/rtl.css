@@ -205,3 +205,18 @@ html[dir='rtl']
 html[dir='rtl'] #radio-tuner-value {
   unicode-bidi: plaintext;
 }
+
+/* The select chevron sits at the end of the field, where the text stops
+   (form-field.css pads that side through padding-inline-end). */
+html[dir='rtl'] select.gev-field {
+  background-position: left 8px center;
+}
+html[dir='rtl'] select.gev-field--compact {
+  background-position: left 6px center;
+}
+
+/* A legend's range is printed under its colour ramp, which always runs low
+   to high from left to right; the numbers keep that order. */
+html[dir='rtl'] .rail-card-scale {
+  direction: ltr;
+}

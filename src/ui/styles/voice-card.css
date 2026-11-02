@@ -553,7 +553,8 @@ body.recording-mode .gev-pointer-reticle {
 #gev-voice-timeout-select {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 0 22px 0 0.45rem;
+  padding-block: 0;
+  padding-inline: 0.45rem 22px;
 }
 #gev-voice-timeout-input {
   flex: 0 0 4.5rem;
