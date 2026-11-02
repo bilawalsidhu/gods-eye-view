@@ -4,9 +4,9 @@ Thanks for being here. God's Eye View is an open foundation for live spatial int
 
 ## Getting set up
 
-Use Node.js 24.14.x or 26.x (also enforced by `package.json`). Prefer 24.22.1 or
-later: earlier releases lack the October 21, 2026 security fixes, including
-CVE-2026-111497 (a Brotli decoder flaw that can lead to remote code execution).
+Use Node.js 24 (24.14.0 or later) or 26.x (also enforced by `package.json`).
+Prefer 24.22.1 or later: earlier releases lack the October 21, 2026 security
+fixes, including CVE-2026-111497 (a Brotli decoder flaw).
 
 ```bash
 git clone https://github.com/bilawalsidhu/gods-eye-view.git
