@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Dark Sci-Fi Background -->
+    <path
+        android:fillColor="#050B14"
+        android:pathData="M0,0h320v180h-320z" />
+
+    <!-- Outer Glow / Border -->
+    <path
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="2"
+        android:pathData="M8,8h304v164h-304z" />
+
+    <!-- Inner Decorative Grid Lines -->
+    <path
+        android:strokeColor="#1E3A5F"
+        android:strokeWidth="1"
+        android:pathData="M24,8v164 M296,8v164 M8,30h304 M8,150h304" />
+
+    <!-- Title Badge -->
+    <path
+        android:fillColor="#0A192F"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="1"
+        android:pathData="M60,65h200v50h-200z" />
+
+    <!-- Accent Indicator -->
+    <path
+        android:fillColor="#00F0FF"
+        android:pathData="M70,80h10v20h-10z" />
+
+</vector>
