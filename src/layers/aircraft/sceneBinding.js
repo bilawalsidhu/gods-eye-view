@@ -58,6 +58,7 @@ export function createAircraftSceneBinding({
         parts.snapshots.presentRecords();
         if (flightState._trackedIcao) {
           parts.tracking._trackFlight(flightState._trackedIcao, {
+            origin: 'share-restore',
             resume: true,
             follow: resumeFollow,
           });

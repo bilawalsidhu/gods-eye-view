@@ -86,7 +86,13 @@ export class LayerBindings {
     if (this.viewer)
       this._navigationOwnerChangedRemover =
         this.viewer.trackedEntityChanged.addEventListener((entity) => {
-          if (entity && !this._disposed)
+          // Rebinding the session's aircraft is part of the pending share
+          // restoration, not a new navigation that supersedes that restore.
+          if (
+            entity &&
+            !this._disposed &&
+            entity.gevSelectionOrigin !== 'share-restore'
+          )
             this._stampNavigation({ cancelPendingSelection: false });
         });
     // Vessel/installation focus flies without ever assigning a tracked entity,
