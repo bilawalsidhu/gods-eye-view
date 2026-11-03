@@ -6,11 +6,12 @@ export function worldToWindowCoordinates(scene, position, result) {
     result,
   );
 }
-const occluder = new Cesium.EllipsoidalOccluder(
-  Cesium.Ellipsoid.WGS84,
-  new Cesium.Cartesian3(),
-);
+let occluder;
 export function horizonOccluder(camera) {
+  occluder ??= new Cesium.EllipsoidalOccluder(
+    Cesium.Ellipsoid.WGS84,
+    new Cesium.Cartesian3(),
+  );
   occluder.cameraPosition = camera.positionWC;
   return occluder;
 }
