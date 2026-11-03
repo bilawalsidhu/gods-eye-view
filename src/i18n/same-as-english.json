@@ -508,7 +508,9 @@
     "ΔE",
     "ΔN",
     "Ⅱ PAUSE",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "Latitude",
+    "Longitude"
   ],
   "it": [
     "1090 MHz",
@@ -858,7 +860,9 @@
     "{value} KM/H",
     "{value} KM/S",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "Latitude",
+    "Longitude"
   ],
   "ru": [
     "AIS: --",

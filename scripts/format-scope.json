@@ -1240,5 +1240,12 @@
   "src/voice/imageryActions.test.mjs",
   "src/voice/osmActions.test.mjs",
   "src/voice/realtimeProtocol.test.mjs",
-  "src/layers/awareness/rangeRing.test.mjs"
+  "src/layers/awareness/rangeRing.test.mjs",
+  "src/ui/focusReturn.test.mjs",
+  "src/ui/objectInspection.test.mjs",
+  "src/ui/objectInspectionPanel.test.mjs",
+  "scripts/qa-object-inspection.mjs",
+  "scripts/qa-vessel-selection.mjs",
+  "src/data/flights.test.mjs",
+  "src/data/militaryFlights.test.mjs"
 ]

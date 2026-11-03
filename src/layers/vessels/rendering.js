@@ -17,8 +17,6 @@ import {
   DEFAULT_ACTIVE_LABELS,
   VISIBILITY_UPDATE_MS,
   FOCUS_UPDATE_MS,
-  LABEL_GRID_PX,
-  CARD_MIN_SEP_PX,
 } from './policy.js';
 
 export function createRendering({
@@ -275,13 +273,12 @@ export function createRendering({
     const scene = state.viewer?.scene;
     const camera = state.viewer?.camera;
     if (regularPass) {
-      // Candidate construction stays on the original 800 ms selector cadence.
-      // The 80 ms focus-only pass below never allocates label candidates.
+      // Keep icon visibility/rotation on the existing cadence. Details are
+      // published only for the selected vessel, without an ambient cohort.
       const poseSig = camera ? cameraPoseSignature(camera) : '';
       const doRotations = force || poseSig !== vesselState._lastCamPoseSig;
       if (doRotations) vesselState._lastCamPoseSig = poseSig;
       const occluder = makeOccluder();
-      const labelCandidates = [];
       for (const record of state.records.all) {
         const visual = getVisual(record);
         const visible = isVisible(visual.surfacePosition, occluder);
@@ -302,9 +299,8 @@ export function createRendering({
             }
           }
         }
-        if (visible) labelCandidates.push(record);
       }
-      updateClusteredLabels(labelCandidates);
+      updateClusteredLabels();
     }
     if (focusPass && scene && camera) {
       const result = applyVesselFocusDeemphasis({
@@ -408,85 +404,22 @@ export function createRendering({
   }
 
   /**
-   * Source selector for the shared world-overlay pipeline: the
-   * grid declutter picks which vessels get cards — one winner per screen-space
-   * grid cell, priority-ranked, capped — and publishes presentation entries to
-   * the host, which owns projection, final placement, fade and paint. Runs on the
-   * throttled visibility pass and forced refreshes, never per frame. The
-   * selected vessel always gets its full-detail card, even when horizon-culled
-   * from the ambient candidates; its protected entry bypasses ambient quotas.
-   * @param {Array<Object>} records - Horizon-visible vessel records.
+   * Publish details only for the inspected vessel. Unselected vessels retain
+   * their clickable map icons without name/speed/type cards. Selection changes
+   * force this pass immediately; clearing selection publishes an empty set.
    */
-
-  function updateClusteredLabels(records) {
-    const viewer = state.viewer;
-    const scene = viewer?.scene;
+  function updateClusteredLabels() {
     const selected = state.selectedRecord;
     const entries = selected
       ? [components.cards.buildSelectedVesselCard(selected)]
       : [];
-    const maxLabels = labelRowLimit();
-
-    if (!scene || !records.length || maxLabels <= 0) {
-      state.activeLabelCount = entries.length;
-      publishVesselOverlayEntries(entries);
-      return;
-    }
-
-    const cells = new Map();
-    for (const record of records) {
-      const visual = getVisual(record);
-      if (record === selected) continue;
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        visual.position,
-      );
-      if (!screen) continue;
-      const key = `${Math.floor(screen.x / LABEL_GRID_PX)}:${Math.floor(screen.y / LABEL_GRID_PX)}`;
-      const candidate = {
-        record,
-        score: labelPriority(record, selected),
-        x: screen.x,
-        y: screen.y,
-      };
-      const existing = cells.get(key);
-      if (!existing || candidate.score > existing.score) {
-        cells.set(key, candidate);
-      }
-    }
-
-    // Greedy min-separation pass over the priority-ranked cell winners: the
-    // selected card's anchor seeds the accepted set so ambient cards keep clear.
-    const accepted = [];
-    if (selected) {
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        getVisual(selected).billboard?.position || getVisual(selected).position,
-      );
-      if (screen) accepted.push({ x: screen.x, y: screen.y });
-    }
-    const ranked = [...cells.values()].sort((a, b) => b.score - a.score);
-    for (const candidate of ranked) {
-      if (entries.length >= maxLabels) break;
-      if (
-        !components.cards.cardScreenSeparated(
-          accepted,
-          candidate,
-          CARD_MIN_SEP_PX,
-        )
-      )
-        continue;
-      accepted.push({ x: candidate.x, y: candidate.y });
-      entries.push(components.cards.buildVesselCard(candidate.record));
-    }
     state.activeLabelCount = entries.length;
     publishVesselOverlayEntries(entries);
   }
 
   /**
-   * Publish a complete, bounded source snapshot to the shared host. The source
-   * selector remains authoritative for the 118 px grid and 150 px separation;
-   * the host then composes this demand with sibling ambient-card sources.
+   * Publish the selected detail card (or an empty snapshot) to the shared
+   * host. Existing protected placement and sibling collision policy stay intact.
    * @param {Object[]} entries Formatted vessel card entries.
    */
 

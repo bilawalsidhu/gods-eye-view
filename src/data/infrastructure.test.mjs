@@ -196,6 +196,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'infrastructureOverlayEntry.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
+    'selectionCameraPolicy.js',
   ]);
   assert.deepEqual(
     entry.imports,
