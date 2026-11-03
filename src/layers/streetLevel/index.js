@@ -100,9 +100,14 @@ export function createStreetLevelLayer({
       waitingForView: () => waitingForView,
       notify,
       actions: {
-        /** `{frame: false}` opens it without moving the camera. */
+        /**
+         * `{frame: false}` opens it without moving the camera. A provider
+         * switched off (or a layer turned off) answers late: ignored.
+         */
         openImage: (imageId, options) =>
-          openImage(entry.def.id, imageId, options),
+          state.enabled && entry.on
+            ? openImage(entry.def.id, imageId, options)
+            : Promise.resolve(false),
         /** This provider's image nearest a point the user picked on the map. */
         openNearest: (point) =>
           layer.openNearest(point, {
@@ -115,6 +120,8 @@ export function createStreetLevelLayer({
          */
         reportError: (message) => {
           if (message) {
+            // Another source owns the panel now; its late failure is not news.
+            if (!state.enabled || !entry.on) return;
             state.street.error = entry.reportedError = message;
           } else {
             if (!entry.reportedError) return;
