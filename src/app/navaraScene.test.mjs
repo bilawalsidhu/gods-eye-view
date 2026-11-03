@@ -204,3 +204,59 @@ test('Navara keeps attribution for every available W1/W2 source and excludes una
     keys.map((key) => `Credit ${key}`),
   );
 });
+
+test('parking or tearing down the Navara scene releases a running camera verb', async (t) => {
+  const { initCameraVerbs, moveCamera, getActiveCameraMotion } =
+    await import('../cameraVerbs.js');
+  const { createRendererCache } =
+    await import('../standalone/rendererCache.js');
+  for (const end of ['park', 'teardown']) {
+    const dom = installDom();
+    t.after(dom.restore);
+    // The renderer cache's own host element (parking needs one).
+    const element = () => ({
+      className: '',
+      prepend() {},
+      remove() {},
+    });
+    globalThis.document.createElement = element;
+    dom.container.prepend = () => {};
+    const engine = createFakeEngine({
+      kind: 'navara',
+      canvas: new EventTarget(),
+    });
+    const cache = createRendererCache();
+    const cleanups = [];
+    await createApplicationScene({
+      engineKind: 'navara',
+      requestServices,
+      googleApiKey: '',
+      credits: [],
+      loaderStatus: { textContent: '' },
+      signal: new AbortController().signal,
+      defer: (dispose) => cleanups.push(dispose),
+      rendererCache: cache,
+      loadNavaraGlobe: async () => async () => ({
+        engine,
+        setRenderLoop() {},
+        destroy: () => engine.destroy(),
+      }),
+    });
+    initCameraVerbs(engine);
+    assert.equal(
+      moveCamera({ motion: 'pan', direction: 'left', mode: 'continuous' }).ok,
+      true,
+    );
+    assert.equal(getActiveCameraMotion()?.rig, 'engine');
+    // An engine switch parks the renderer (its scene's suspend); a page
+    // teardown disposes it.
+    if (end === 'park') cache.retain('navara');
+    while (cleanups.length) await cleanups.pop()();
+    if (end === 'teardown') cache.clear();
+    assert.equal(getActiveCameraMotion(), null, end);
+    engine.fake.resetCalls();
+    if (!engine.isDestroyed()) engine.fake.frames(3);
+    assert.equal(engine.fake.callsOf('camera.setView').length, 0, end);
+    if (end === 'park') cache.clear();
+  }
+});
