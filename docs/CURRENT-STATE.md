@@ -905,9 +905,13 @@ its entities and request lifecycle; the application supplies the overlay host
 and snapshot source. The standalone adapter reads the USGS daily feed and adds
 the EMSC SeismicPortal events USGS does not report (an EMSC event within 90 s
 and 150 km, or 5 minutes and 25 km, of a USGS event and within 1.0 of its
-magnitude is the same event). EMSC is paged past 2,000 events and given up on
-after 15 s, so a stalled EMSC never holds back USGS; either catalog alone still
-yields a snapshot. It keeps M2.5+ filtering, static discs, magnitude labels and
+magnitude is the same event). EMSC is paged past 2,000 events. Each catalog
+has a 15 s request deadline, so either catalog alone can yield a snapshot
+when its peer fails or stalls. Such snapshots report partial coverage and name
+the missing catalog in layer stats and earthquake tool responses; their counts
+are lower bounds. `getSnapshot()` keeps its array contract, while
+`getSnapshotWithStatus()` adds per-request coverage metadata. EMSC query
+start times use minute buckets matching the refresh cadence. It keeps M2.5+ filtering, static discs, magnitude labels and
 analyst records. Disabling or destroying the layer cancels pending work and
 ignores late results.
 

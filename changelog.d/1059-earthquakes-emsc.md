@@ -5,4 +5,6 @@
   Norway (with Svalbard and Jan Mayen) had 285 such events in EMSC against 32
   in USGS. EMSC events within 90 s and 150 km, or 5 minutes and 25 km, of a
   USGS event are treated as duplicates; quarry blasts and explosions are
-  excluded. Either catalog alone still yields a snapshot (trygvehhh, #1059).
+  excluded. Either catalog alone still yields a snapshot, with a missing-source
+  warning and lower-bound counts. Both feeds have bounded request deadlines;
+  EMSC queries share minute buckets (trygvehhh, #1059).

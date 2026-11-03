@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEarthquakesLayer } from './index.js';
-import { createUsgsEarthquakeSource } from './source.js';
+import { createEarthquakeSource, createUsgsEarthquakeSource } from './source.js';
+import { layerFeedState } from '../../data/feedState.js';
 function harness(source) {
   const sources = [];
   const events = [];
@@ -87,4 +88,37 @@ test('USGS body completion honors cancellation even with an uncooperative transp
   await assert.rejects(source.getSnapshot({ signal: abort.signal }), {
     name: 'AbortError',
   });
+});
+
+
+test('partial catalog coverage is visible in layer stats until both sources recover', async () => {
+  for (const missing of ['USGS', 'EMSC']) {
+    let unavailable = true;
+    const source = createEarthquakeSource({
+      ...Object.fromEntries(['USGS', 'EMSC'].map((name) => [name.toLowerCase(), {
+        async getSnapshot() {
+          if (unavailable && name === missing) throw new Error('offline');
+          return name === missing ? [] : [row];
+        },
+      }])),
+    });
+    const h = harness(source);
+    try {
+      assert.equal(await h.layer.update(h.viewer), true);
+      const stats = h.layer.getStats();
+      assert.equal(stats.count, 1);
+      assert.equal(stats.complete, false);
+      assert.equal(stats.partial, true);
+      assert.deepEqual(stats.missingSources, [missing]);
+      assert.match(stats.error, new RegExp(missing));
+      assert.equal(layerFeedState(stats), 'degraded');
+      unavailable = false;
+      assert.equal(await h.layer.update(h.viewer), true);
+      assert.equal(h.layer.getStats().error, null);
+      assert.equal(h.layer.getStats().complete, true);
+      assert.equal(layerFeedState(h.layer.getStats()), 'nominal');
+    } finally {
+      h.layer.destroy();
+    }
+  }
 });

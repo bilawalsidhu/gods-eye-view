@@ -10,6 +10,7 @@ import {
   EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
   createEarthquakeOverlayEntry,
   createEarthquakesLayer,
+  createUsgsEarthquakeSource,
   mapAnalystRecord,
   selectEarthquakeOverlayCohort,
 } from './earthquakes.js';
@@ -347,7 +348,7 @@ test('malformed earthquake refresh preserves entities, overlays, count and times
   const viewer = { dataSources: {
     add(source) { dataSources.push(source); }, remove() { return true; },
   } };
-  const layer = createEarthquakesLayer({ overlayHost: {
+  const layer = createEarthquakesLayer({ source: createUsgsEarthquakeSource(), overlayHost: {
     setEntries(...args) { publications.push(args); }, setVisible() {}, clearSource() {},
   } });
   const good = { id: 'good', geometry: { type: 'Point', coordinates: [10, 20, 5] },

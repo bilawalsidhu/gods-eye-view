@@ -13,20 +13,27 @@ export const EMSC_PAGE_SIZE = 2000;
 export const EMSC_MAX_PAGES = 5;
 /** An EMSC request that has not answered by now is given up on. */
 export const EMSC_TIMEOUT_MS = 15_000;
+export const USGS_TIMEOUT_MS = 15_000;
 /** Request and validate a complete USGS snapshot before it can replace displayed events. */
 export function createUsgsEarthquakeSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  timeoutMs = USGS_TIMEOUT_MS,
 } = {}) {
   return {
     async getSnapshot({ signal } = {}) {
       signal?.throwIfAborted();
-      const response = await fetchImpl(API_URL, { signal });
-      if (!response.ok) throw new Error(`USGS HTTP ${response.status}`);
-      const payload = await response.json();
-      signal?.throwIfAborted();
-      const rows = normalizeEarthquakeSnapshot(payload);
-      if (!rows) throw new Error('Malformed USGS response');
-      return rows;
+      const request = withTimeout(signal, timeoutMs, 'USGS');
+      try {
+        const response = await fetchImpl(API_URL, { signal: request.signal });
+        if (!response.ok) throw new Error(`USGS HTTP ${response.status}`);
+        const payload = await response.json();
+        request.signal.throwIfAborted();
+        const rows = normalizeEarthquakeSnapshot(payload);
+        if (!rows) throw new Error('Malformed USGS response');
+        return rows;
+      } finally {
+        request.done();
+      }
     },
   };
 }
@@ -34,13 +41,14 @@ export function createUsgsEarthquakeSource({
 /**
  * The EMSC event query for M2.5+ earthquakes over the 24 hours before
  * `nowMs`, newest first. `page` 0 is the first EMSC_PAGE_SIZE events; FDSN's
- * `offset` counts from 1.
+ * `offset` counts from 1. Minute buckets match the refresh cadence and let
+ * calls within a refresh period share upstream cache entries.
  */
 export function emscQueryUrl(nowMs, page = 0) {
   const params = new URLSearchParams({
     format: 'json',
     minmag: '2.5',
-    starttime: new Date(nowMs - DAY_MS).toISOString().slice(0, 19),
+    starttime: new Date(Math.floor(nowMs / 60_000) * 60_000 - DAY_MS).toISOString().slice(0, 19),
     orderby: 'time',
     limit: String(EMSC_PAGE_SIZE),
   });
@@ -49,11 +57,11 @@ export function emscQueryUrl(nowMs, page = 0) {
 }
 
 /** `signal` or `timeoutMs`, whichever aborts first; `done` clears the timer. */
-function withTimeout(signal, timeoutMs) {
+function withTimeout(signal, timeoutMs, provider = 'EMSC') {
   const controller = new AbortController();
   const abort = () => controller.abort(signal.reason);
   const timer = setTimeout(
-    () => controller.abort(new Error('EMSC request timed out')),
+    () => controller.abort(new Error(`${provider} request timed out`)),
     timeoutMs,
   );
   if (signal?.aborted) abort();
@@ -121,15 +129,15 @@ export function createEmscEarthquakeSource({
 
 /**
  * USGS plus the EMSC events USGS does not report. Either catalog alone still
- * yields a snapshot; only both failing is an error.
+ * yields a snapshot; only both failing is an error. getSnapshot retains the
+ * array API; getSnapshotWithStatus also reports missing source coverage.
  */
 export function createEarthquakeSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   usgs = createUsgsEarthquakeSource({ fetchImpl }),
   emsc = createEmscEarthquakeSource({ fetchImpl }),
 } = {}) {
-  return {
-    async getSnapshot({ signal } = {}) {
+  async function getSnapshotWithStatus({ signal } = {}) {
       const [usgsResult, emscResult] = await Promise.allSettled([
         usgs.getSnapshot({ signal }),
         emsc.getSnapshot({ signal }),
@@ -137,10 +145,20 @@ export function createEarthquakeSource({
       signal?.throwIfAborted();
       if (usgsResult.status === 'rejected' && emscResult.status === 'rejected')
         throw usgsResult.reason;
-      return mergeEarthquakeSnapshots(
+      const rows = mergeEarthquakeSnapshots(
         usgsResult.status === 'fulfilled' ? usgsResult.value : [],
         emscResult.status === 'fulfilled' ? emscResult.value : [],
       );
+      const missingSources = [
+        ...(usgsResult.status === 'rejected' ? ['USGS'] : []),
+        ...(emscResult.status === 'rejected' ? ['EMSC'] : []),
+      ];
+      return { rows, complete: missingSources.length === 0, missingSources };
+  }
+  return {
+    getSnapshotWithStatus,
+    async getSnapshot(options) {
+      return (await getSnapshotWithStatus(options)).rows;
     },
   };
 }

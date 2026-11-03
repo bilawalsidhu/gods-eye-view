@@ -26,7 +26,13 @@ export const getEarthquakes = defineTool({
       ? await resolveArea(args.area, { services, signal })
       : null;
     const minimum = args.min_magnitude ?? 2.5;
-    const events = (await services.earthquakes.getSnapshot({ signal }))
+    const source = services.earthquakes;
+    const snapshot = source.getSnapshotWithStatus
+      ? await source.getSnapshotWithStatus({ signal })
+      : { rows: await source.getSnapshot({ signal }), complete: true, missingSources: [] };
+    const missing = snapshot.missingSources || [];
+    const partial = snapshot.complete === false;
+    const events = snapshot.rows
       .filter(
         (event) => event.mag >= minimum && (!area || areaContains(area, event)),
       )
@@ -37,7 +43,7 @@ export const getEarthquakes = defineTool({
       ? `; strongest M${events[0].mag.toFixed(1)}${events[0].place ? ` ${events[0].place}` : ''}`
       : '';
     return {
-      summary: `${countNoun(events.length, 'earthquake')} of M${minimum}+ in the last 24 hours${where}${strongest}.`,
+      summary: `${partial ? 'At least ' : ''}${countNoun(events.length, 'earthquake')} of M${minimum}+ in the last 24 hours${where}${strongest}${partial ? ` (partial coverage; no data from ${missing.join(', ')})` : ''}.`,
       data: {
         view: suggestView(
           services,
@@ -50,6 +56,8 @@ export const getEarthquakes = defineTool({
               },
         ),
         ...result,
+        complete: !partial && !result.truncated,
+        missing_sources: missing,
         rows: result.rows.map((event) => ({
           id: event.usgsId ?? event.stableId,
           magnitude: event.mag,

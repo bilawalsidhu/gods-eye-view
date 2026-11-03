@@ -32,6 +32,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
+  let _missingSources = [];
 
   const layer = {
     id: 'earthquakes',
@@ -49,6 +50,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _missingSources = [];
       _enabled = false;
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
       console.log('[Data:Earthquakes] Initialized');
@@ -77,7 +79,10 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       const request = new AbortController();
       _request = request;
       try {
-        const rows = await source.getSnapshot({ signal: request.signal });
+        const snapshot = source.getSnapshotWithStatus
+          ? await source.getSnapshotWithStatus({ signal: request.signal })
+          : { rows: await source.getSnapshot({ signal: request.signal }), missingSources: [] };
+        const { rows } = snapshot;
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
 
@@ -159,7 +164,10 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
 
         _count = count;
         _lastUpdate = Date.now();
-        _lastError = null;
+        _missingSources = snapshot.missingSources || [];
+        _lastError = _missingSources.length
+          ? `Partial earthquake coverage: no data from ${_missingSources.join(', ')}`
+          : null;
         console.log(`[Data:Earthquakes] Updated: ${_count} events (M2.5+)`);
         return true;
       } catch (e) {
@@ -187,6 +195,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _missingSources = [];
     },
 
     /**
@@ -242,6 +251,9 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         count: _count,
         lastUpdate: _lastUpdate,
         error: _lastError,
+        complete: _lastUpdate !== null && !_lastError,
+        partial: _missingSources.length > 0,
+        missingSources: [..._missingSources],
       };
     },
   };

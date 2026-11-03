@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createEarthquakeSource } from '../../layers/earthquakes/source.js';
 import {
   catalogForSurface,
   composeCatalog,
@@ -870,4 +871,33 @@ test('installation names wait for the name pack, briefly', async (t) => {
   assert.equal(slow.data.rows[0].name, 'Military area');
   assert.equal(slow.data.names_pending, true);
   assert.match(slow.summary, /site names are still loading\)\.$/);
+});
+
+
+test('earthquake tools preserve partial and empty coverage rather than claim exact totals', async () => {
+  for (const missing of ['USGS', 'EMSC']) {
+    for (const rows of [[], [{ stableId: 'fixture', mag: 3, lat: 0, lon: 0, time: 0 }]]) {
+      let unavailable = true;
+      const earthquakes = createEarthquakeSource({
+        ...Object.fromEntries(['USGS', 'EMSC'].map((name) => [name.toLowerCase(), {
+          async getSnapshot() {
+            if (unavailable && name === missing) throw new Error('offline');
+            return name === missing ? [] : rows;
+          },
+        }])),
+      });
+      const catalog = catalogWith({ earthquakes });
+      const partial = await catalog.call('get_earthquakes', {});
+      assert.equal(partial.data.complete, false);
+      assert.deepEqual(partial.data.missing_sources, [missing]);
+      assert.match(partial.summary, /^At least /);
+      assert.match(partial.summary, new RegExp(`no data from ${missing}`));
+      assert.equal(partial.data.total, rows.length);
+      unavailable = false;
+      const recovered = await catalog.call('get_earthquakes', {});
+      assert.equal(recovered.data.complete, true);
+      assert.deepEqual(recovered.data.missing_sources, []);
+      assert.doesNotMatch(recovered.summary, /At least|partial coverage/);
+    }
+  }
 });
