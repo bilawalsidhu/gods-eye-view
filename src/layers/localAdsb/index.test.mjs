@@ -612,6 +612,30 @@ test('markers drop when the position is 60 s old and records when silent 60 s', 
   assert.deepEqual(layer.getDetectableObjects(), []);
 });
 
+test('selectById selects a heard aircraft by the id its position rows carry, like a click', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, calls } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  const [row] = layer.getAllPositions();
+  assert.equal(row.id, 'abc123');
+  assert.equal(layer.selectById(row.id), true);
+  assert.equal(layer.selectById(' ABC123 '), true, 'any case, trimmed');
+  assert.equal(layer.selectById('local-adsb:abc123'), true, 'the marker id');
+  assert.deepEqual(calls.selected, [
+    'local-adsb:abc123',
+    'local-adsb:abc123',
+    'local-adsb:abc123',
+  ]);
+  for (const missing of ['ffffff', '', null, undefined, 'local-adsb:'])
+    assert.equal(layer.selectById(missing), false, String(missing));
+  await layer.disable();
+  assert.equal(layer.selectById('abc123'), false, 'nothing while off');
+  assert.equal(calls.selected.length, 3);
+});
+
 test('selecting a marker publishes the readout card and eviction clears it', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
@@ -1170,14 +1194,24 @@ test('globe handoff retains the receiver, feed, trail fixes and selection', asyn
   const receiver = fakeReceiver({ aircraft: [record()] });
   const feeds = fakeFeeds();
   let closes = 0;
-  receiver.destroy = () => { closes++; };
+  receiver.destroy = () => {
+    closes++;
+  };
   const clock = { now: 100_000 };
   const { layer, calls } = await enabledLayer(receiver, clock, feeds);
   t.after(() => layer.destroy());
   assert.ok(layer.selectAircraft('abc123'));
   layer.detachRenderer();
   clock.now += 1000;
-  receiver.set({ aircraft: [record({ lon: 0.001, lastPositionAt: clock.now, lastMessageAt: clock.now })] });
+  receiver.set({
+    aircraft: [
+      record({
+        lon: 0.001,
+        lastPositionAt: clock.now,
+        lastMessageAt: clock.now,
+      }),
+    ],
+  });
   await layer.update();
   assert.equal(layer.getAnalystRecords()[0].icao24, 'abc123');
   layer.attachRenderer(fakeViewer().viewer);

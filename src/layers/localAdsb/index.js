@@ -529,6 +529,14 @@ export function createLocalAdsbLayer({
     return true;
   }
 
+  function selectById(id) {
+    if (!enabled || id === null || id === undefined) return false;
+    let icao = String(id).trim().toLowerCase();
+    if (icao.startsWith(ENTITY_PREFIX)) icao = icao.slice(ENTITY_PREFIX.length);
+    if (!icao) return false;
+    return selectMarker(`${ENTITY_PREFIX}${icao}`);
+  }
+
   /**
    * Join the engine's selection dispatcher with this layer's own click rule
    * (`lookUnder`): a click on a local aircraft — on top, or under picks no
@@ -653,7 +661,8 @@ export function createLocalAdsbLayer({
         installFrame();
         sync();
         const selected = getSelectedEntityContext();
-        if (restore && (!selected || selected.id === restore)) selectMarker(restore);
+        if (restore && (!selected || selected.id === restore))
+          selectMarker(restore);
       }
       return true;
     },
@@ -777,13 +786,16 @@ export function createLocalAdsbLayer({
 
     /**
      * Select a heard aircraft's marker and publish its readout card, exactly
-     * as a click does. The camera does not follow it.
-     * @param {string} icao Lowercase ICAO hex.
+     * as a click does; the selection hook other selectable layers expose
+     * (vessels' selectById). The camera does not follow it.
+     * @param {string} id The ICAO hex of a getAllPositions row, in any case,
+     *   or the marker id (`local-adsb:<icao>`).
      * @returns {boolean} Whether a fresh marker was selected.
      */
-    selectAircraft(icao) {
-      return enabled && selectMarker(`${ENTITY_PREFIX}${icao}`);
-    },
+    selectById,
+
+    /** The same as selectById, by ICAO hex. */
+    selectAircraft: (icao) => selectById(icao),
 
     /**
      * Snapshot loaded locally received aircraft as plain JSON-safe records for the analyst
