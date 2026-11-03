@@ -61,3 +61,48 @@ test('a bundled file delivered between planets keeps multipart IDs and is read o
   assert.equal(reads, 1);
   layer.destroy();
 });
+
+test('a released scene stops waiting for a stalled dataset load, which stays in the session', async (t) => {
+  let deliver;
+  t.mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    text: () =>
+      new Promise((resolve) => {
+        deliver = resolve;
+      }),
+  }));
+  const captures = [];
+  const layer = createInfrastructureSessionLayer(
+    { id: 'local-dams', name: 'Dams', url: '/dams' },
+    {},
+    () => ({
+      show: (data) => captures.push(data),
+      hide() {},
+      destroy() {},
+      lod() {},
+    }),
+  );
+  layer.init(null, { engine: {} });
+  const enabled = layer.enable();
+  await new Promise(setImmediate);
+  layer.detachRenderer();
+  const scene = new AbortController();
+  const attaching = layer.attachRenderer(null, {
+    engine: {},
+    signal: scene.signal,
+  });
+  scene.abort();
+  await attaching;
+  layer.detachRenderer();
+  deliver(
+    JSON.stringify({
+      type: 'Feature',
+      id: 'd',
+      properties: { name: 'Dam' },
+      geometry: { type: 'Point', coordinates: [10, 20] },
+    }),
+  );
+  await enabled;
+  assert.equal(captures.length, 0);
+  assert.equal(layer.getAnalystRecords().length, 1);
+});

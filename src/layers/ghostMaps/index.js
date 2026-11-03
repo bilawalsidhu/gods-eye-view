@@ -159,7 +159,10 @@ export function createGhostMapsLayer({
 
   const notifyRow = () => _rowListener?.();
   const render = () => _display?.requestRender();
-  const canSelect = () => overlayHost && picking && (screenSpaceEventHandlerFactory || createRenderer);
+  const canSelect = () =>
+    overlayHost &&
+    picking &&
+    (screenSpaceEventHandlerFactory || createRenderer);
 
   function wanted(product) {
     return _selection ? _selection.has(product.id) : product.defaultOn;
@@ -207,7 +210,8 @@ export function createGhostMapsLayer({
       entries.clear();
       signal.throwIfAborted();
       const features = parsed.features.map((feature) => ({
-        ...feature, anchor: anchorOf(feature.geometries[0]),
+        ...feature,
+        anchor: anchorOf(feature.geometries[0]),
       }));
       return { version: product.version, urls, features, paint: null };
     } catch (error) {
@@ -219,7 +223,12 @@ export function createGhostMapsLayer({
   async function paint(id, item, signal) {
     while (_display && !signal.aborted && !item.removed) {
       const owner = _display;
-      const next = owner.draw(id, item.features, PRODUCT_COLORS[id] || ACCENT, markerImage);
+      const next = owner.draw(
+        id,
+        item.features,
+        PRODUCT_COLORS[id] || ACCENT,
+        markerImage,
+      );
       try {
         await next.ready;
         if (owner === _display && !signal.aborted && !item.removed) {
@@ -477,15 +486,33 @@ export function createGhostMapsLayer({
       if (viewer || options.engine) return this.attachRenderer(viewer, options);
     },
 
-    attachRenderer(viewer, { engine = null } = {}) {
+    attachRenderer(viewer, { engine = null, signal = null } = {}) {
       if (_display) throw new Error('GhostMaps display is already attached');
       _display = viewer
-        ? createGhostMapsCesiumRenderer(viewer, screenSpaceEventHandlerFactory, markerImage)
+        ? createGhostMapsCesiumRenderer(
+            viewer,
+            screenSpaceEventHandlerFactory,
+            markerImage,
+          )
         : createRenderer(engine);
       if (!_enabled) return;
       installClickHandler();
       publishCard();
-      return Promise.all([..._loaded].map(([id, item]) => paint(id, item, _lifetime.signal)));
+      // A paint that outlives its scene destroys what it drew (see paint).
+      // The parsed products stay loaded for the next scene.
+      const paintSignal = signal
+        ? AbortSignal.any([_lifetime.signal, signal])
+        : _lifetime.signal;
+      const painted = Promise.all(
+        [..._loaded].map(([id, item]) => paint(id, item, paintSignal)),
+      );
+      if (!signal) return painted;
+      // Released scene: stop waiting; the paints keep their own clean-up.
+      const released = new Promise((resolve) => {
+        if (signal.aborted) resolve();
+        else signal.addEventListener('abort', resolve, { once: true });
+      });
+      return Promise.race([painted, released]);
     },
 
     detachRenderer() {

@@ -1,3 +1,4 @@
+import { waitForSignal } from '../sources/requestDeadline.js';
 import * as Cesium from 'cesium';
 import { isPointerFree } from './inputOwnership.js';
 import {
@@ -3521,10 +3522,19 @@ export function createBhoteKoshiEventLayer({
   // the release that follows it owns whatever it had already created.
   let _attachGeneration = 0;
 
+  // Settle when `promise` does, or as soon as the scene signal aborts. The
+  // promise keeps running; the stale checks then ignore what it brings.
+  function untilSceneReleased(promise, signal) {
+    return waitForSignal(promise, signal).catch((error) => {
+      if (!signal?.aborted) throw error;
+    });
+  }
+
   async function attachRenderer(viewer, { engine = null, signal = null } = {}) {
     const generation = ++_attachGeneration;
     const current = () =>
       generation === _attachGeneration && signal?.aborted !== true;
+    const stack = _mapStackController;
     _viewer = viewer;
     _engine = engine;
     if (!_viewer && _engine) _native = createNativeRenderer(engine);
@@ -3539,10 +3549,13 @@ export function createBhoteKoshiEventLayer({
             ? 'preserve'
             : 'esri',
       });
-      await _comparisonLease.ready;
+      // The incoming map can take long to switch; a released scene stops
+      // waiting (its release returns the lease).
+      await untilSceneReleased(_comparisonLease.ready, signal);
       if (!current()) return;
     }
-    await createImagery(_event, current);
+    // createImagery checks `current` itself before it adds anything.
+    await untilSceneReleased(createImagery(_event, current), signal);
     if (!current()) return;
     if (_floodDataSource) {
       if (_native) _nativeFlood = _native.draw(_floodDataSource);
@@ -3552,8 +3565,21 @@ export function createBhoteKoshiEventLayer({
     registerDynamicCredit(engine ?? viewer, BHOTE_KOSHI_CREDIT);
     _scenePathPositionCache.clear();
     _lastCinematicProgress = null;
-    await syncTerrainComparison();
-    if (!current()) return;
+    const terrain = syncTerrainComparison();
+    await untilSceneReleased(terrain, signal);
+    if (!current()) {
+      // The release already cleared the comparison terrain; one this
+      // attachment set afterwards is removed when it lands, unless a newer
+      // attachment owns the same map stack again.
+      terrain.then(
+        () => {
+          if (stack && stack !== _mapStackController)
+            stack.clearTerrainComparison?.();
+        },
+        () => {},
+      );
+      return;
+    }
     createSplitControl(_event);
     syncPresentationMode();
     attachCameraInputRelease();
