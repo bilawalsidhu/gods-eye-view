@@ -562,7 +562,7 @@
   "Radio volume": "مستوى صوت الراديو",
   "Radio off": "الراديو متوقف",
   "STATION SITE": "موقع المحطة",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "يتصل التطبيق مباشرةً بمحطة البث بعد الضغط على «تشغيل»، فيظهر لها عنوان IP الخاص بك.",
+  "Audio connects directly to the broadcaster when you press play, choose a station on the globe or ask voice to play. Your IP is visible to that broadcaster.": "يتصل التطبيق مباشرةً بمحطة البث عند الضغط على «تشغيل» أو اختيار محطة على الكرة الأرضية أو طلب التشغيل بالصوت، فيظهر لها عنوان IP الخاص بك.",
   "LOADING": "جارٍ التحميل",
   "DEGRADED": "متدهور",
   "STALE": "متقادم",
@@ -1146,7 +1146,6 @@
   "OCEANIA": "أوقيانوسيا",
   "NORTHERN OCEANIC GRID": "الشبكة المحيطية الشمالية",
   "SOUTHERN OCEANIC GRID": "الشبكة المحيطية الجنوبية",
-  "{state} {layers}": "{state}: {layers}",
   "view band|STREET": "شارع",
   "view band|CITY": "مدينة",
   "view band|METRO": "حضري",
@@ -3223,5 +3222,7 @@
   "Audio": "الصوت",
   "UTILITIES": "الأدوات",
   "Exit cockpit to fly to a drawing": "اخرج من القمرة للانتقال إلى رسم",
-  "Directions, drawing and your own files": "الاتجاهات والرسم وملفاتك الخاصة"
+  "Directions, drawing and your own files": "الاتجاهات والرسم وملفاتك الخاصة",
+  "Sea Marks": "علامات بحرية",
+  "Ski Pistes": "مسارات التزلج"
 }

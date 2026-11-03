@@ -331,7 +331,6 @@
   "STALE": "DESATUALIZADO",
   "PARTIAL": "PARCIAL",
   "FALLBACK": "ALTERNATIVO",
-  "{state} {layers}": "{state}: {layers}",
   "view band|STREET": "RUA",
   "view band|CITY": "CIDADE",
   "view band|METRO": "METRÓPOLE",
@@ -2821,7 +2820,7 @@
   "Radio volume": "Volume do rádio",
   "STATION SITE": "SITE DA ESTAÇÃO",
   "DIRECTORY: RADIO BROWSER": "DIRETÓRIO: RADIO BROWSER",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "O áudio conecta direto à emissora depois que você aperta \"Ouvir\". Seu IP fica visível para essa emissora.",
+  "Audio connects directly to the broadcaster when you press play, choose a station on the globe or ask voice to play. Your IP is visible to that broadcaster.": "O áudio conecta direto à emissora quando você aperta \"Ouvir\", escolhe uma estação no globo ou pede por voz. Seu IP fica visível para essa emissora.",
   "Local RTL-SDR receiver": "Receptor RTL-SDR local",
   "LOCAL RTL-SDR": "RTL-SDR LOCAL",
   "Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.": "Chrome/Edge · WebUSB · um sintonizador local compartilhado entre o FM e a camada ADS-B local.",
@@ -3013,5 +3012,7 @@
   "Audio": "Áudio",
   "UTILITIES": "UTILITÁRIOS",
   "Exit cockpit to fly to a drawing": "Saia da cabine para voar até um desenho",
-  "Directions, drawing and your own files": "Rotas, desenho e seus próprios arquivos"
+  "Directions, drawing and your own files": "Rotas, desenho e seus próprios arquivos",
+  "Sea Marks": "Sinais marítimos",
+  "Ski Pistes": "Pistas de esqui"
 }
