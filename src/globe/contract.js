@@ -269,6 +269,27 @@
  *   mode the cockpit draws its own cloud pass.
  * @property {() => { coverage: number | null }} [cloudCover] The cover last
  *   set (a copy).
+ * @property {(options: Partial<ContactSonar>) => void} [setContactSonar]
+ *   Optional, with contactSonar (capability `contactSonar`): the Cyber HUD
+ *   sonar's treatment of contacts (sprite and point movers): while
+ *   `enabled`, each contact's colour moves toward the scanner tint and its
+ *   alpha scales by its factor, from its anchor's place on screen against the
+ *   sweep (src/cyberSonar.js createCyberSonarSampler maths); with the sweep
+ *   off (`active` false) every contact takes the neutral factor. Positions
+ *   and picks are unchanged. Omitted fields keep their value; a bad value
+ *   throws a TypeError. Takes effect on the next drawn frame (a call outside
+ *   a frame requests one). Off until set. Cesium has none: in Cesium mode
+ *   src/cyberSonarScene.js adapts Cesium's own draw commands.
+ * @property {() => ContactSonar} [contactSonar] The sonar last set (a copy).
+ *
+ * @typedef {object} ContactSonar
+ * @property {boolean} enabled The Cyber contact treatment applies.
+ * @property {boolean} active The sweep runs (else the neutral factor).
+ * @property {number} angleDeg The sweep's heading, clockwise from screen up.
+ * @property {number} range The keyhole radius in percent (100: the smaller
+ *   of 40 % of the width and 52 % of the height).
+ * @property {number} opacity The factor outside the sweep, percent (0..100).
+ * @property {number} sector The sector's width in degrees (0..360].
  *
  * @typedef {{ intensity: number, uniforms: Record<string, number> }} StyleState
  *
@@ -695,6 +716,10 @@ const OPTIONAL_SHAPE = {
     'render.setCloudCover': isFunction,
     'render.cloudCover': isFunction,
   },
+  contactSonar: {
+    'render.setContactSonar': isFunction,
+    'render.contactSonar': isFunction,
+  },
 };
 
 /** The optional capability flags, e.g. 'visualStyles'. */
@@ -875,4 +900,44 @@ export function mergeCloudCover(current, { coverage } = {}) {
       `Cloud coverage must be null or a number in 0..1: ${coverage}`,
     );
   return { coverage: coverage === undefined ? current.coverage : coverage };
+}
+
+/** The contact sonar an engine starts with (GlobeRender.contactSonar): off. */
+export const CONTACT_SONAR_INITIAL = Object.freeze({
+  enabled: false,
+  active: false,
+  angleDeg: 0,
+  range: 100,
+  opacity: 84,
+  sector: 24,
+});
+
+/**
+ * GlobeRender.setContactSonar's argument merged onto `current`: a new
+ * state, or a TypeError for a non-boolean flag, a non-finite angle, a range
+ * that is not positive, an opacity outside 0..100 or a sector outside
+ * (0, 360].
+ */
+export function mergeContactSonar(current, options = {}) {
+  const next = { ...current };
+  for (const key of ['enabled', 'active']) {
+    if (options[key] === undefined) continue;
+    if (!isBoolean(options[key]))
+      throw new TypeError(`Sonar ${key} must be a boolean: ${options[key]}`);
+    next[key] = options[key];
+  }
+  const numbers = {
+    angleDeg: () => true,
+    range: (value) => value > 0,
+    opacity: (value) => value >= 0 && value <= 100,
+    sector: (value) => value > 0 && value <= 360,
+  };
+  for (const [key, valid] of Object.entries(numbers)) {
+    const value = options[key];
+    if (value === undefined) continue;
+    if (!isNumber(value) || !valid(value))
+      throw new TypeError(`Sonar ${key} is out of range: ${value}`);
+    next[key] = value;
+  }
+  return next;
 }

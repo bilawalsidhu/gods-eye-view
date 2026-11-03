@@ -314,11 +314,46 @@ test('setCloudCover hands changed covers to the clouds port and draws a frame', 
   assert.equal(destroyed, 1);
 });
 
+test('setContactSonar hands changes to the sonar port, asking a frame only outside one', () => {
+  const view = fakeView();
+  const shown = [];
+  let destroyed = 0;
+  const engine = createNavaraEngine(view, {
+    hooks,
+    sonar: { set: (state) => shown.push(state), destroy: () => destroyed++ },
+  });
+  assertGlobeEngine(engine);
+  assert.equal(engineCapabilities(engine).contactSonar, true);
+  assert.equal(engine.render.contactSonar().enabled, false);
+  engine.render.setContactSonar({ enabled: true, active: true });
+  assert.deepEqual(view.calls.at(-1), ['forceUpdate']);
+  assert.equal(shown.length, 1);
+  // Inside a drawn frame the change shows in that frame: no other frame.
+  engine.frames.preRender.addEventListener(() =>
+    engine.render.setContactSonar({ angleDeg: 45 }),
+  );
+  const calls = view.calls.length;
+  view.emit('preRender', 1);
+  view.emit('postRender', 2);
+  assert.equal(shown.at(-1).angleDeg, 45);
+  assert.equal(
+    view.calls.slice(calls).filter(([name]) => name === 'forceUpdate').length,
+    0,
+  );
+  assert.throws(
+    () => engine.render.setContactSonar({ opacity: 120 }),
+    TypeError,
+  );
+  engine.destroy();
+  assert.equal(destroyed, 1);
+});
+
 test('without a styles port the engine has no visualStyles capability', () => {
   const { engine } = setup();
   assert.equal(engineCapabilities(engine).visualStyles, false);
   assert.equal(engineCapabilities(engine).bloom, false);
   assert.equal(engineCapabilities(engine).cloudCover, false);
+  assert.equal(engineCapabilities(engine).contactSonar, false);
   assert.equal(engine.render.setStyle, undefined);
   assert.equal(engine.render.setBloom, undefined);
 });

@@ -15,6 +15,7 @@
 import { withFrameUpdates } from './frameDescriptor.js';
 import { EffectDesc, Pass as NavaraPass } from '@navaramap/three';
 import { GevOverlayPass } from './overlayPass.js';
+import { sonarUniformsFor } from './sonar.js';
 import { RGBADepthPacking, Scene } from 'three';
 
 export const OVERLAY_EFFECT_KEY = 'gevOverlay';
@@ -110,6 +111,8 @@ export function createNavaraOverlay(view, { beforeSharpen = false } = {}) {
       uGevDisplayBlend: { value: 0 },
       tGevSceneDepth: { value: null },
       uGevResolution: { value: [0, 0] },
+      // The Cyber sonar's, shared by the view's overlays (sonar.js).
+      ...sonarUniformsFor(view),
     },
     attach(context) {
       ctx = context;

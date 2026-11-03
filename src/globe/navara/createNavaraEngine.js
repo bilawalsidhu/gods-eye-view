@@ -10,11 +10,13 @@ import * as geo from '../../geo/index.js';
 import {
   BLOOM_INITIAL,
   CLOUD_COVER_INITIAL,
+  CONTACT_SONAR_INITIAL,
   SHARPEN_INITIAL,
   STYLE_INITIAL,
   createEngineEvent,
   mergeBloom,
   mergeCloudCover,
+  mergeContactSonar,
   mergeSharpen,
   mergeStyle,
 } from '../contract.js';
@@ -96,6 +98,7 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   sharpen?: { set: (state: { enabled: boolean, amount: number }) => void, destroy: () => void },
  *   bloom?: { set: (state: { enabled: boolean, strength: number }) => void, destroy: () => void },
  *   clouds?: { set: (state: { coverage: number | null }) => void, destroy: () => void },
+ *   sonar?: { set: (state: import('../contract.js').ContactSonar) => void, destroy: () => void },
  *   styles?: { names: readonly string[], uniformNames: (name: string) => string[], defaults: (name: string) => Record<string, number>, set: (name: string, state: { intensity: number, uniforms: Record<string, number> }) => void, destroy: () => void },
  * }} options `hooks` are internals.js; `container` defaults to the
  *   canvas's parent; `sharpen` draws render.setSharpen (sharpen.js; without
@@ -105,7 +108,9 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   draws render.setBloom (bloom.js; without it no bloom capability), also
  *   destroyed with the engine; `clouds` draws render.setCloudCover
  *   (cockpitClouds.js; without it, as on a look without clouds, no
- *   cloudCover capability), destroyed with the engine;
+ *   cloudCover capability), destroyed with the engine; `sonar` draws
+ *   render.setContactSonar (sonar.js; without it no contactSonar
+ *   capability), destroyed with the engine;
  *   `appClock` (the engine clock's time) defaults to the page's app clock;
  *   `movers` is engine.movers on the view's three runtime (movers/index.js;
  *   without it createSet throws), `lines` engine.lines (lines/index.js;
@@ -127,6 +132,7 @@ export function createNavaraEngine(
     styles: stylesPort = null,
     bloom: bloomPort = null,
     clouds: cloudsPort = null,
+    sonar: sonarPort = null,
   } = {},
 ) {
   if (!view?.camera?.raw)
@@ -185,12 +191,16 @@ export function createNavaraEngine(
   });
   // Defined below, with the surface and input it needs.
   let groundFloor = null;
+  // Between the view's preRender and postRender: a change made then shows
+  // in the frame being drawn and asks for no other.
+  let drawing = false;
   const handlers = {
     preUpdate: (time) => {
       engineClock.beginFrame();
       frames.preUpdate.raiseEvent(time);
     },
     preRender: (time) => {
+      drawing = true;
       model.sync();
       // After the user's camera is read, before anything draws.
       followStep.raiseEvent();
@@ -198,6 +208,7 @@ export function createNavaraEngine(
       frames.preRender.raiseEvent(time);
     },
     postRender: (time) => {
+      drawing = false;
       model.afterFrame();
       frames.postRender.raiseEvent(time);
     },
@@ -351,6 +362,22 @@ export function createNavaraEngine(
         cloudCover: () => ({ ...cloudCover }),
       }
     : {};
+  let contactSonar = { ...CONTACT_SONAR_INITIAL };
+  const sonarRender = sonarPort
+    ? {
+        setContactSonar(options) {
+          const next = mergeContactSonar(contactSonar, options);
+          const changed = Object.keys(next).some(
+            (key) => next[key] !== contactSonar[key],
+          );
+          contactSonar = next;
+          if (!changed || destroyed) return;
+          sonarPort.set({ ...next });
+          if (!drawing) view.forceUpdate();
+        },
+        contactSonar: () => ({ ...contactSonar }),
+      }
+    : {};
   return {
     kind: 'navara',
     host: { container: container ?? canvas.parentElement, canvas, size },
@@ -382,6 +409,7 @@ export function createNavaraEngine(
       ...styleRender,
       ...bloomRender,
       ...cloudRender,
+      ...sonarRender,
     },
     surface,
     input: input.input,
@@ -405,6 +433,7 @@ export function createNavaraEngine(
       stylesPort?.destroy();
       bloomPort?.destroy();
       cloudsPort?.destroy();
+      sonarPort?.destroy();
       moversPort?.destroy();
       linesPort?.destroy();
     },

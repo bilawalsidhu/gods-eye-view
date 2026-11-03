@@ -25,6 +25,7 @@ import { createNavaraSharpen } from './sharpen.js';
 import { createNavaraStyles } from './stylePasses.js';
 import { createNavaraBloom } from './bloom.js';
 import { createNavaraCloudCover } from './cockpitClouds.js';
+import { createNavaraSonar } from './sonar.js';
 import { retroShader } from '../../styles/retro.js';
 import { nightVisionShader } from '../../styles/surveillance.js';
 import { thermalShader } from '../../styles/thermal.js';
@@ -161,6 +162,7 @@ export async function createNavaraGlobe({
       sharpen: createNavaraSharpen(view),
       bloom: createNavaraBloom(view),
       clouds: createNavaraCloudCover(look),
+      sonar: createNavaraSonar(view),
       styles: createNavaraStyles(view, {
         shaders: STYLE_SHADERS,
         onStarsDimmed: (amount) => look.setStarsDimmed(amount),
