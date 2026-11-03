@@ -67,3 +67,7 @@ The city road source, flow requests, vehicle identities and simulation phase sur
 ### Street Level
 
 Coverage, sequence, attribution, photo hosts and filters now share the same owner. The release checks used physical Navara line clicks on fixture-backed KartaView and Panoramax coverage. The same mounted photo and all 36 KartaView or 73 Panoramax sequence images survived Navara → Cesium → Navara. Google Street View still requires an eligible Google map and a configured key; these tests used neither.
+
+### Radio and Recent Imagery
+
+Radio kept one playing audio element, the selected broadcaster, volume and the original 750-station directory through Navara → Cesium → Navara. The fixture observed one play and one directory fetch. Recent Imagery retained both pinned dates and the original STAC search. Release screenshots sampled the expected red and green rasters on opposite sides on each engine. Box selection, divider dragging, a failed image replacement and cleanup also passed.

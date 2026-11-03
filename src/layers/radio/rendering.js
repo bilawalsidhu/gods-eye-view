@@ -46,7 +46,7 @@ export function createRendering({
 
   function publishRadioOverlayEntries() {
     layerState._overlayPublishTimer = null;
-    if (!parts.interaction.radioPresentationAllowed()) {
+    if (!parts.renderer?.ready || !parts.interaction.radioPresentationAllowed()) {
       parts.clustering.resetRadioClusterOverlayIdentities();
       layerState._overlayDiagnostics =
         parts.clustering.emptyRadioOverlayDiagnostics();
@@ -257,7 +257,12 @@ export function createRendering({
       layerState._selectedId = null;
     }
 
-    parts.renderer?.clearStations();
+    drawStations(stations);
+  }
+
+  function drawStations(stations) {
+    if (!parts.renderer?.ready) return;
+    parts.renderer.clearStations();
     layerState._renderById.clear();
     for (const station of stations) {
       const position = markerPosition(station);
@@ -278,5 +283,6 @@ export function createRendering({
     scheduleRadioOverlayPublish,
     updateRenderVisibility,
     reconcileStations,
+    drawStations,
   };
 }

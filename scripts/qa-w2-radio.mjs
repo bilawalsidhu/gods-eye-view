@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
-import { stations } from './fixtures/w2/radio.mjs';
+import { stations, installRadioFixture } from './fixtures/w2/radio.mjs';
 import { watchW1Page, redact } from './qa-browserEvidence.mjs';
 
 const args = process.argv.slice(2);
@@ -50,71 +50,7 @@ watchW1Page(page, report, {
   preview: args.includes('--preview'),
 });
 await page.setViewport({ width: 1440, height: 900 });
-await page.evaluateOnNewDocument((stations) => {
-  localStorage.clear();
-  localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
-  window.__qaRadio = {
-    stations,
-    generation: 1,
-    plays: [],
-    delay: 0,
-    response: 'normal',
-    pending: null,
-  };
-  HTMLMediaElement.prototype.play = function () {
-    window.__qaRadio.plays.push(this.src);
-    if (window.__qaRadio.delayPlay) {
-      window.__qaRadio.delayPlay = false;
-      return new Promise((resolve) => {
-        window.__qaRadio.releasePlay = () => {
-          this.dispatchEvent(new Event('playing'));
-          resolve();
-        };
-      });
-    }
-    queueMicrotask(() => this.dispatchEvent(new Event('playing')));
-    return Promise.resolve();
-  };
-  const fetch = window.fetch.bind(window);
-  window.fetch = async (input, init) => {
-    const address = String(
-      typeof input === 'string' || input instanceof URL ? input : input.url,
-    );
-    if (address.includes('/api/radio/stations')) {
-      const qa = window.__qaRadio;
-      const response = {
-        stations: qa.response === 'empty' ? [] : qa.stations,
-        updatedAt: new Date().toISOString(),
-        stale: false,
-        degraded: false,
-        acceptedGeneration: qa.generation,
-        catalogInstance: 'w2-radio-fixture',
-      };
-      const mode = qa.response;
-      const delay = qa.delay;
-      qa.delay = 0;
-      if (delay)
-        await new Promise((resolve) => {
-          qa.pending = resolve;
-        });
-      init?.signal?.throwIfAborted();
-      return new Response(
-        mode === 'failure' ? '{}' : JSON.stringify(response),
-        {
-          status: mode === 'failure' ? 503 : 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    }
-    if (address.includes('/api/radio/click/'))
-      return new Response(null, { status: 204 });
-    if (address.includes('/api/flights')) return new Response('{"states":[]}');
-    if (address.includes('/api/military')) return new Response('{"ac":[]}');
-    if (address.includes('/api/vessels'))
-      return new Response('{"connected":false,"vessels":[]}');
-    return fetch(input, init);
-  };
-}, stations);
+await installRadioFixture(page);
 
 async function frames(count = 4) {
   await page.evaluate(

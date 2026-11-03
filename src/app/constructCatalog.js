@@ -249,7 +249,7 @@ export function createApplicationCatalog({
       ['cctv', () => createApplicationCctv({ surface, source: sources.cctv })],
       [
         'radio',
-        () => createApplicationRadio({ surface, source: sources.radio }),
+        () => sessionModel('radio', () => createApplicationRadio({ surface, source: sources.radio })),
       ],
       [
         'transit',
@@ -266,9 +266,9 @@ export function createApplicationCatalog({
       [
         'recent-imagery',
         () =>
-          createApplicationRecentImagery({
+          sessionModel('recent-imagery', () => createApplicationRecentImagery({
             source: sources['recent-imagery'],
-          }),
+          })),
       ],
       ['ais-live-vessels', vessels],
       ['military-installations', installations],

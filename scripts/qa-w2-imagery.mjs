@@ -1,3 +1,4 @@
+import {switchGlobe} from './qa-switch-globe.mjs';
 import fs from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
@@ -220,6 +221,27 @@ try {
   await sleep(2500);
   image = await capture('ab');
   check('A/B dates on opposite sides', red(image.left) && green(image.right));
+  if (args.includes('--switch')) {
+    const first = await page.evaluate(() => {
+      window.qaImageryOwner = window.__gevRecentImagery.layer;
+      return window.qaImageryOwner.diagnostics().pins;
+    });
+    const reads = () => report.requests.filter(r => r.host === 'cmr.earthdata.nasa.gov').length;
+    const expectedReads = reads();
+    const initial = await page.evaluate(() => window.__godsEyeView.engine.kind);
+    for (const kind of [initial === 'navara' ? 'cesium' : 'navara', initial]) {
+      await switchGlobe(page, kind);
+      const state = await page.evaluate(() => ({
+        same: window.__gevRecentImagery.layer === window.qaImageryOwner,
+        ...window.qaImageryOwner.diagnostics(),
+      }));
+      check(kind+' holds both original pins',state.same && state.mode === 'ab' && state.pins.a === first.a && state.pins.b === first.b);
+      await sleep(1800);
+      const pixels=await capture('switch-'+kind);
+      check(kind+' renders both pinned dates',red(pixels.left) && green(pixels.right));
+      check(kind+' reuses the STAC search', reads() === expectedReads);
+    }
+  }
   await page.evaluate(() => window.__gevRecentImagery.layer.swapSides());
   image = await capture('swap');
   check('swap reverses dates', green(image.left) && red(image.right));
