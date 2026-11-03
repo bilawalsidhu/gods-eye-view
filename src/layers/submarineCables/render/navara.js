@@ -4,6 +4,7 @@ import {
   featureLabel,
   featureReference,
   normalizeFeatures,
+  splitFeatureAtAntimeridian,
 } from '../geometry.js';
 import {
   BASE_CABLE_COLOR,
@@ -97,7 +98,9 @@ export function createNavaraCables(engine, native, host) {
     if (next === dataset) return;
     if (dataset) hide();
     try {
-      const cables = normalizeFeatures(next.cables, 'cable'),
+      const cables = normalizeFeatures(next.cables, 'cable').map(
+          splitFeatureAtAntimeridian,
+        ),
         landings = normalizeFeatures(next.landingPoints, 'landing');
       const shapes = [],
         colors = new Map();
@@ -200,7 +203,8 @@ export function createNavaraCables(engine, native, host) {
       layer.on('featureUpdated', ({ evaluator }) =>
         evaluator.evaluate(({ properties }) => {
           const css = properties?.color ?? BASE_CABLE_COLOR;
-          if (!colors.has(css)) colors.set(css, new native.NavaraColor().setStyle(css));
+          if (!colors.has(css))
+            colors.set(css, new native.NavaraColor().setStyle(css));
           return { color: colors.get(css) };
         }),
       );
