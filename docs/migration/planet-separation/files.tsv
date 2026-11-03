@@ -36,6 +36,7 @@ build/vueLoader.js	DELIVERY			Сохранить API и загрузку асс�
 build/vueOptions.js	DELIVERY			Сохранить API и загрузку ассетов/конфигов; проверить сборки, лицензии и запуск	vite-build
 changelog.d/1014-director-callback-failures.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1078-firms-ipv4-fallback.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1093-multipart-cable-feature-ownership.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1209-layer-errors-english-in-data.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1344-inline-panel-visibility.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1374-director-seek-visibility.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -43,6 +44,7 @@ changelog.d/1401-geocode-place-region.md	VERIFY			Сохранить истор�
 changelog.d/1402-terrain-429-pause.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1404-perimeters-stale.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1405-traffic-layer-stale.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1427-military-installations-cross-site-gate.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1430-traditional-chinese.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1432-vessel-course-north.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1433-awareness-marker-kilometre.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -54,6 +56,7 @@ changelog.d/1443-replay-countdown-ten.md	VERIFY			Сохранить истор�
 changelog.d/1444-replay-speed-countdown.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1445-annotation-label-units.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1446-draw-area-units.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1447-bikeshare-derived-capacity.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1448-local-adsb-geom-rate.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1449-cable-tool-duplicates.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1450-directions-ten-km.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -61,28 +64,37 @@ changelog.d/1451-alpr-direction-north.md	VERIFY			Сохранить истор�
 changelog.d/1452-transit-heading-north.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1453-satellite-launch-year.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1454-voice-context-heading-north.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1457-dock-icon-only-wings.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1458-node-24-22-1-security-release.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1459-hud-place-lookups.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1462-voice-alias-hint-budget.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1463-dev-tool-updates.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1466-panel-chrome-consistency.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1467-remove-operator-hud-layout.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1468-remove-snow-preset.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1469-utilities-panel.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1470-ukrainian.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1471-context-panel-cleanup.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1472-authoring-panel.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1473-italian.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1474-radio-next-no-autoplay.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1475-brazilian-portuguese.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1476-french.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1477-german.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1478-japanese.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1479-arabic.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1485-cctv-view-thinning.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/1488-hud-summary-language.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1491-gnss-source-window.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1494-weather-product-display.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1499-vue-and-pinia.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1500-vue-loader-cache.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/1501-rail-pills.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/210-contributor-docs-refresh.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/842-voice-outlines.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/871-vessels-idle-render.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/956-a22-brennero-webcams.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+changelog.d/980-codespaces-setup.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 changelog.d/README.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 compose.yaml	DELIVERY			Сохранить API и загрузку ассетов/конфигов; проверить сборки, лицензии и запуск	—
 config/cctv_sources.austin.json	DELIVERY			Сохранить API и загрузку ассетов/конфигов; проверить сборки, лицензии и запуск	—
@@ -257,6 +269,7 @@ docs/migration/phase3/w1/military-models.jpg	VERIFY			Сохранить ист�
 docs/migration/phase3/w1/rocket-launches.jpg	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 docs/migration/phase3/w1/satellites.jpg	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 docs/migration/phase3/w1/vessels.jpg	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
+docs/migration/planet-separation/	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 docs/migration/renderer-isolation.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 docs/opensky-auth.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
 docs/panel-surfaces.md	VERIFY			Сохранить историю; обновить только действующее описание при изменении контракта	—
@@ -308,10 +321,12 @@ public/visual-presets.svg	DELIVERY			Сохранить данные, лицен
 scripts/assemble-changelog.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/build-admin-packs.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/build-bright-stars.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
+scripts/build-census-places.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/build-military-names.py	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/build-milky-way.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/build-panel.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/build-sf-neighborhoods.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
+scripts/build-wof-neighborhoods.py	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/check-import-directions.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/check-layer-state-tokens.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/check-main-chunk.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
@@ -320,6 +335,9 @@ scripts/dev-cctv.sh	VERIFY			Использовать как ограничен�
 scripts/dev-fresh.sh	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/dev-secure.sh	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/docker-start.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
+scripts/files-registry.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
+scripts/files-registry.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+scripts/fixtures/ghostmaps-scenes.kmz	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/fixtures/street-level/kartaView.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/fixtures/street-level/mapillaryGraph.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/fixtures/street-level/panoramax.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
@@ -353,7 +371,10 @@ scripts/military-names.sql	VERIFY			Использовать как ограни
 scripts/module-analysis.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/next-layer-state-token.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/opensky-import-client.sh	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
+scripts/pack_geometry.py	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/package-boundaries.json	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
+scripts/parity-evidence.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
+scripts/parity-evidence.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 scripts/pinokio-environment.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	standalone-key-setup
 scripts/pinokio-install.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/pinokio-preflight.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
@@ -365,8 +386,10 @@ scripts/project-root.mjs	VERIFY			Использовать как огранич
 scripts/qa-action-buttons.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-admin-outlines.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-air-quality.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-all-layer-switches.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-alpr-journey.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-anime-sky.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-app-once.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-application.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-attribution-b12.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-browserEvidence.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -374,18 +397,23 @@ scripts/qa-cables-overlay.mjs	VERIFY			Зафиксировать исходны
 scripts/qa-cables-render-probe.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-cables-shot.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-camera-controls.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-cctv-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-cctv-v2.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-chrome.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-cockpit-plates.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-cockpit-utility.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-contact-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-context-arrivals.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-directions-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-directions.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-director-camera.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-director-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-director-interactions.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-director-packs.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-director-sharing.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-director-timing.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-draw-tool.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-edge-cctv-occlusion.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-emergency-squawk.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-engine-bench.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-engine-notice.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -394,6 +422,7 @@ scripts/qa-engine-switch.mjs	VERIFY			Зафиксировать исходны�
 scripts/qa-enrich-ambient.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-failstate-b10.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-final-polish-credits.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-fire-camera-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-firms-glow-metrics.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-firms.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-firstrun-mutations.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -413,13 +442,16 @@ scripts/qa-gbfs-names.mjs	VERIFY			Зафиксировать исходный �
 scripts/qa-geo-import-large.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-geo-import-regressions.mjs	VERIFY		cesium	Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-geo-import.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-ghostmaps-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-ghostmaps.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-globe-contract.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-gnss.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-ground-layer-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-heading-b3.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-heading-navara.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-height-datum.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-infra-lod.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-infrastructure-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-installation-navigation.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-installation-polish.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-installation-stencil-entry.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -431,9 +463,11 @@ scripts/qa-label-readability.mjs	VERIFY			Зафиксировать исход�
 scripts/qa-labels.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-launches-compare.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-launches.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-layer-handoff.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-layer-panel.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-layer-token-twochar.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-layer-visibility.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-local-adsb-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-location-controls.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-map-policy.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-map-policy.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -443,12 +477,16 @@ scripts/qa-map-startup.mjs	VERIFY			Зафиксировать исходный 
 scripts/qa-map-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-military-names.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-navara-look.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-nepal-event-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-nepal-locator-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-nepal-media-playback.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-openfreemap-same-tile.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-overlay-baseline.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-overlay-engines.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-overpass-offload.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-perf.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-post-sampling.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-radio-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-radio.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-recent-imagery.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-satellites-compare.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -458,12 +496,17 @@ scripts/qa-scene-dialog-file-drop.mjs	VERIFY			Зафиксировать исх
 scripts/qa-scope-hud.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-segmented-controls.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-sky-model-lighting.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-space-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-sprites-b5.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-status-badges.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-street-level-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-street-level.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	street-level-layer
+scripts/qa-submarine-cables-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-surface-heights.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-switch-globe.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-terrain-429.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-traffic-baseline.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-traffic-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-traffic-jamviz-ab.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-traffic-motion.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-traffic-navigation.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -477,6 +520,7 @@ scripts/qa-transit-recovery.mjs	VERIFY			Зафиксировать исходн
 scripts/qa-transit-scenes.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	transit-layer
 scripts/qa-transit.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-ui-disposal.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-urban-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-vessel-cards.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-vessel-datum.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-vessels-engines.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -486,6 +530,7 @@ scripts/qa-visual-input.mjs	VERIFY			Зафиксировать исходный
 scripts/qa-voice-auth-focus.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-voice-auth.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-voice-bench.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-voice-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-voice-routing.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-voice-wav.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-w1-baseline-pixels.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
@@ -508,11 +553,14 @@ scripts/qa-w2-layers.mjs	VERIFY			Зафиксировать исходный с
 scripts/qa-w2-radio.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-w2-sprite-alpha.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-w2-transit.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-weather-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-weather-journey.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-weather-perf.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-weather-swap.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-weather-teardown.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 scripts/qa-wind-canvas.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa-wind-engine-switch.mjs	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
+scripts/qa/appSessionHarness.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/qa/navara-contract.html	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/qa/navaraContractPage.js	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/qa/tileCache.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
@@ -535,6 +583,7 @@ scripts/voice-bench/report.mjs	VERIFY			Использовать как огра
 scripts/voice-bench/stub.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/voice-bench/toolFormats.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
 scripts/voice-turn-spans.mjs	VERIFY			Использовать как ограничение, fixture или gate; обновлять только изменившийся контракт	—
+scripts/wof-open-licenses.json	VERIFY			Зафиксировать исходный сценарий; повторить с fixtures и пустыми ключами	—
 server/mcp/panelKey.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	—
 server/mcp/plugin.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	—
 server/mcp/server.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	—
@@ -617,6 +666,9 @@ server/providers/regional.js	PLATFORM			Сохранить контракт да
 server/providers/regional/briefing.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
 server/providers/regional/http.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
 server/providers/regional/news.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
+server/providers/regional/nominatimCache.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
+server/providers/regional/nominatimGate.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
+server/providers/regional/outlineSelect.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
 server/providers/regional/place.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
 server/providers/regional/query.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
 server/providers/regional/weather-effects.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	regional-provider
@@ -653,6 +705,9 @@ src/annotations/annotationEngine.js	AUTHOR		cesium	Разобрать прямо
 src/annotations/annotationEngine.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/annotations/annotationResolver.js	AUTHOR			Сохранить документ, время и права инструмента; переподключить draw/camera/pick	application-components
 src/annotations/annotationResolver.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/annotations/annotationSession.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/annotations/drawMarks.js	AUTHOR			Сохранить документ, время и права инструмента; переподключить draw/camera/pick	application
+src/annotations/drawMarks.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/annotations/drawMode.js	AUTHOR			Сохранить документ, время и права инструмента; переподключить draw/camera/pick	application-components
 src/annotations/drawMode.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/annotations/drawTool.js	AUTHOR		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
@@ -661,12 +716,18 @@ src/annotations/drawToolBehaviour.test.mjs	AUTHOR		cesium	Сохранить п�
 src/annotations/hybridAnnotationRenderer.js	AUTHOR			Сохранить документ, время и права инструмента; переподключить draw/camera/pick	application-components
 src/annotations/hybridAnnotationRenderer.test.mjs	AUTHOR		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/annotations/index.js	AUTHOR			Сохранить документ, время и права инструмента; переподключить draw/camera/pick	application-components
+src/annotations/outlineIdentity.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/annotations/outlineRungs.js	AUTHOR			Сохранить документ, время и права инструмента; переподключить draw/camera/pick	application-components
+src/annotations/outlineRungs.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/annotations/outlineRungsFallback.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/annotations/placeOutline.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/annotations/regionRing.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/annotations/resolver.js	AUTHOR		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/annotations/resolverEngine.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/annotations/screenAnnotationRenderer.js	AUTHOR		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/annotations/screenAnnotationRenderer.test.mjs	AUTHOR		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/annotations/worldAnnotationRenderer.js	AUTHOR		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
+src/annotations/worldAnnotationRenderer.test.mjs	AUTHOR		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/application.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application
 src/app/application.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/atmosphereCompat.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	viewer
@@ -677,7 +738,9 @@ src/app/constructCatalog.js	SESSION			Разделить владельцев с
 src/app/constructCatalog.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/controls.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
 src/app/controls.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/app/controlsSceneFailure.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/data.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
+src/app/debugHandleSwitch.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/embed.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
 src/app/embed.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/engineChoice.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
@@ -729,6 +792,13 @@ src/app/operations.test.mjs	SESSION			Сохранить проверку; до�
 src/app/qaProbe.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
 src/app/qaProbe.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/scene.js	SESSION		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
+src/app/sceneHost.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
+src/app/sceneHost.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/app/sceneParts.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
+src/app/sessionDiagnostics.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
+src/app/sessionDiagnostics.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/app/sessionVoice.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
+src/app/shellPart.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
 src/app/sourceComposition.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
 src/app/sourceComposition.test.mjs	SESSION			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/app/sources.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
@@ -838,6 +908,7 @@ src/data/bhoteKoshiEvidenceFit.test.mjs	LAYER	bhote-koshi-2026/bhote-koshi-locat
 src/data/bhoteKoshiEvidencePublisher.test.mjs	LAYER	bhote-koshi-2026/bhote-koshi-locator		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/bhoteKoshiFloodPath.js	LAYER	bhote-koshi-2026/bhote-koshi-locator		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	scenes
 src/data/bhoteKoshiIncidentPlaces.js	LAYER	bhote-koshi-2026/bhote-koshi-locator		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	scenes
+src/data/bhoteKoshiLocator.edgeCases.test.mjs	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/bhoteKoshiLocator.js	LAYER	bhote-koshi-2026/bhote-koshi-locator	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/data/bhoteKoshiLocator.test.mjs	LAYER	bhote-koshi-2026/bhote-koshi-locator	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/bhoteKoshiPanelView.test.mjs	LAYER	bhote-koshi-2026/bhote-koshi-locator		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -845,6 +916,7 @@ src/data/bhoteKoshiShotPaths.js	AUTHOR	bhote-koshi-2026/bhote-koshi-locator		С�
 src/data/bhoteKoshiShotPaths.test.mjs	AUTHOR	bhote-koshi-2026/bhote-koshi-locator		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/bikeshare.js	LAYER	bikeshare		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/data/bikeshare.test.mjs	LAYER	bikeshare	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/boundaryLabels.test.mjs	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/bundledJson.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	viewer
 src/data/bundledJson.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/cameraArrival.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	ui-shell
@@ -956,6 +1028,8 @@ src/data/fixtures/firms-viirs-noaa20-sample.csv	LAYER			Отделить ист�
 src/data/fixtures/ofm-austin-12-935-1686.pbf	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
 src/data/fixtures/ofm-austin-14-3743-6745.pbf	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
 src/data/fixtures/ofm-camp-mabry-12-935-1685.pbf	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
+src/data/fixtures/ofm-outlines-austin-14-3743-6745.pbf	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
+src/data/fixtures/ofm-outlines-austin-14-3743-6746.pbf	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
 src/data/fixtures/osm-alpr-austin-11-467-843.pbf	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
 src/data/fixtures/tomtom-flow-austin-12-935-1686.pbf	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
 src/data/fixtures/traffic-road-access.json	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
@@ -1004,10 +1078,12 @@ src/data/layerSnapshot.test.mjs	LAYER			Сохранить проверку; д�
 src/data/layerState.js	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	ui-shell
 src/data/layerState.test.mjs	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	—
 src/data/layerStateCoordinator.js	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	ui-shell
+src/data/layerStateHandoff.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/layerStateTokenLedger.test.mjs	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	—
 src/data/layerStateTokenReservations.json	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	ui-shell
 src/data/lifecycle.js	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	application-components
 src/data/lifecycleEngine.test.mjs	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	—
+src/data/lifecycleScene.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/localGeojson.analyst.test.mjs	TOOLS		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/localGeojson.test.mjs	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/localGeojsonCore.js	LAYER		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	infrastructure
@@ -1015,6 +1091,7 @@ src/data/localGeojsonLifecycle.test.mjs	LAYER		cesium	Сохранить про�
 src/data/localGeojsonLod.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	infrastructure
 src/data/localGeojsonLod.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/localReceiversProxy.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/local_data/	LAYER			Сохранить данные, лицензию и атрибуцию; проверить доступ из сборок и владельца выгрузки	—
 src/data/local_data/cctv_ground_heights/README.md	LAYER			Сохранить данные, лицензию и атрибуцию; проверить доступ из сборок и владельца выгрузки	—
 src/data/local_data/cctv_ground_heights/cctv_ground_heights.json	LAYER			Сохранить данные, лицензию и атрибуцию; проверить доступ из сборок и владельца выгрузки	—
 src/data/local_data/dams/README.md	LAYER			Сохранить данные, лицензию и атрибуцию; проверить доступ из сборок и владельца выгрузки	—
@@ -1054,6 +1131,7 @@ src/data/militaryAwareness.js	LAYER	military-awareness		Отделить ист�
 src/data/militaryAwareness.test.mjs	LAYER	military-awareness	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/militaryAwarenessEngine.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	ui-shell
 src/data/militaryAwarenessEngine.test.mjs	LAYER	military-awareness		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/militaryFlights.edgeCases.test.mjs	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/militaryFlights.js	LAYER	military		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/data/militaryFlights.test.mjs	LAYER	military	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/militaryInstallationData.js	LAYER	military-installations		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	installations-layer
@@ -1077,16 +1155,21 @@ src/data/nearbyModelHandoff.test.mjs	LAYER		cesium	Сохранить прове
 src/data/neighborhoodPolygons.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	geography
 src/data/neighborhoodPolygons.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/overpassProxy.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/packGeometry.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/pickRegistry.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	application-components
 src/data/pickRegistry.test.mjs	NAV			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/pickedContext.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	application-components
 src/data/pickedContext.test.mjs	NAV			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/placeBoundaries.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
+src/data/placeBoundaries.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/placeNames.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	regional-provider
 src/data/placeProviderPayloads.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	place-providers
 src/data/pointerOwnerNames.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	application-components
 src/data/radio.js	LAYER	radio		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/data/radio.test.mjs	LAYER	radio		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/radioCountry.js	LAYER	radio		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	radio-provider
 src/data/radioCountry.test.mjs	LAYER	radio		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/data/radioNextState.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/radioProxy.test.mjs	LAYER	radio		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/regional-calendar-evidence.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/data/regionalBrief.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
@@ -1311,6 +1394,8 @@ src/globe/navara/emptySceneRender.js	PLANET		three	Локализовать на
 src/globe/navara/emptySceneRender.test.mjs	PLANET		three	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/globe/navara/followGestures.js	PLANET			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/globe/navara/followGestures.test.mjs	PLANET			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/globe/navara/frameDescriptor.js	PLANET			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/globe/navara/frameDescriptor.test.mjs	PLANET			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/globe/navara/groundFloor.js	PLANET			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/globe/navara/groundFloor.test.mjs	PLANET			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/globe/navara/index.js	PLANET		@navaramap/three,@navaramap/three-default-plugin	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
@@ -1376,6 +1461,7 @@ src/hudPageVisibility.test.mjs	OVERLAY			Сохранить проверку; д
 src/hudPlaceLookup.js	OVERLAY			Оставить политику общей; переподключить проекцию, глубину и picking по поколению	application-components
 src/hudReadouts.js	OVERLAY			Оставить политику общей; переподключить проекцию, глубину и picking по поколению	application-components
 src/hudSummaryGate.test.mjs	OVERLAY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/hudSummaryLine.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/hudSummaryResponse.js	OVERLAY			Оставить политику общей; переподключить проекцию, глубину и picking по поколению	openai-provider
 src/hudSummaryResponse.test.mjs	OVERLAY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/i18n/ar-display.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -1418,10 +1504,13 @@ src/keyboardFocusStyles.test.mjs	VERIFY			Сохранить проверку; �
 src/keylessGeocoder.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	place-search
 src/keylessGeocoder.test.mjs	NAV			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/airQuality/airQualityLocale.test.mjs	LAYER	air-quality		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/airQuality/edgeCases.test.mjs	LAYER	air-quality		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/airQuality/index.js	LAYER	air-quality	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/layers/airQuality/model.js	LAYER	air-quality		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/airQuality/model.test.mjs	LAYER	air-quality		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/airQuality/ownership.test.mjs	LAYER	air-quality		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/airQuality/render/cesium.js	LAYER	air-quality	cesium	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/airQuality/render/navara.js	LAYER	air-quality		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/airQuality/source.js	LAYER	air-quality		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/airQuality/source.test.mjs	LAYER	air-quality		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/aircraft/classification.js	LAYER	flights/military/local-adsb		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	aircraft-mechanics
@@ -1434,9 +1523,11 @@ src/layers/aircraft/render/cesium.test.mjs	LAYER	flights/military/local-adsb	ces
 src/layers/aircraft/render/contract.js	LAYER	flights/military/local-adsb		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	—
 src/layers/aircraft/render/navara.js	LAYER	flights/military/local-adsb		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/aircraft/render/navara.test.mjs	LAYER	flights/military/local-adsb	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/aircraft/sceneBinding.js	LAYER	flights/military/local-adsb		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	civil-flights
 src/layers/alpr/assets/alpr-marker-normal.png	LAYER	alpr-cameras		Сохранить данные, лицензию и атрибуцию; проверить доступ из сборок и владельца выгрузки	—
 src/layers/alpr/assets/alpr-marker-selected-brackets.png	LAYER	alpr-cameras		Сохранить данные, лицензию и атрибуцию; проверить доступ из сборок и владельца выгрузки	—
 src/layers/alpr/assets/alpr-marker-selected.png	LAYER	alpr-cameras		Сохранить данные, лицензию и атрибуцию; проверить доступ из сборок и владельца выгрузки	—
+src/layers/alpr/edgeCases.test.mjs	LAYER	alpr-cameras		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/alpr/floors.js	LAYER	alpr-cameras		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	alpr-cameras
 src/layers/alpr/index.js	LAYER	alpr-cameras		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	alpr-cameras
 src/layers/alpr/model.js	LAYER	alpr-cameras		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	alpr-cameras
@@ -1458,6 +1549,7 @@ src/layers/awareness/anchor.test.mjs	LAYER	military-awareness	cesium	Сохра�
 src/layers/awareness/controls.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	awareness-layer
 src/layers/awareness/dependencies.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	awareness-layer
 src/layers/awareness/directionOverlay.test.mjs	LAYER	military-awareness	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/awareness/edgeCases.test.mjs	LAYER	military-awareness		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/awareness/focus.js	LAYER	military-awareness	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	awareness-layer
 src/layers/awareness/history.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	awareness-layer
 src/layers/awareness/index.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	awareness-layer
@@ -1471,13 +1563,17 @@ src/layers/awareness/presentation.js	LAYER	military-awareness		Отделить 
 src/layers/awareness/presentation.test.mjs	LAYER	military-awareness		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/awareness/queries.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	awareness-layer
 src/layers/awareness/queries.test.mjs	LAYER	military-awareness	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/awareness/render/cesium.js	LAYER	military-awareness	cesium	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	awareness-layer
+src/layers/awareness/render/navara.js	LAYER	military-awareness		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/awareness/rendering.js	LAYER	military-awareness	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	awareness-layer
 src/layers/awareness/state.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	awareness-layer
 src/layers/awareness/subject.js	LAYER	military-awareness	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	awareness-layer
 src/layers/awareness/testing.js	LAYER	military-awareness		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	awareness-layer
+src/layers/bhoteKoshi/render/navara.js	LAYER	bhote-koshi-2026/bhote-koshi-locator	three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/bikeshare/barcelonaSystems.test.mjs	LAYER	bikeshare		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/bikeshare/brPbscCities.test.mjs	LAYER	bikeshare		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/bikeshare/controls.js	LAYER	bikeshare		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	bikeshare-layer
+src/layers/bikeshare/edgeCases.test.mjs	LAYER	bikeshare		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/bikeshare/failureReporting.test.mjs	LAYER	bikeshare	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/bikeshare/index.js	LAYER	bikeshare		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	bikeshare-layer
 src/layers/bikeshare/ingestion.js	LAYER	bikeshare		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	bikeshare-layer
@@ -1562,14 +1658,18 @@ src/layers/cyclones/index.js	LAYER	weather-cyclones	cesium	Разобрать п
 src/layers/cyclones/index.test.mjs	LAYER	weather-cyclones		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/cyclones/labels.js	LAYER	weather-cyclones		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/cyclones/labels.test.mjs	LAYER	weather-cyclones	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/cyclones/render/navara.js	LAYER	weather-cyclones		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/cyclones/rendering.js	LAYER	weather-cyclones		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/cyclones/rendering.test.mjs	LAYER	weather-cyclones	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/cyclones/source.js	LAYER	weather-cyclones		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/cyclones/source.test.mjs	LAYER	weather-cyclones		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/directions/edgeCases.test.mjs	LAYER	directions		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/directions/index.js	LAYER	directions	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
+src/layers/directions/render/navara.js	LAYER	directions		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/directions/source.js	LAYER	directions		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/directions/source.test.mjs	LAYER	directions		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/directions/statusLocale.test.mjs	LAYER	directions		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/earthquakes/edgeCases.test.mjs	LAYER	earthquakes		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/earthquakes/index.js	LAYER	earthquakes		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	earthquakes
 src/layers/earthquakes/model.js	LAYER	earthquakes		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	earthquakes
 src/layers/earthquakes/ownership.test.mjs	LAYER	earthquakes		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -1587,6 +1687,7 @@ src/layers/earthquakes/source.js	LAYER	earthquakes		Отделить источ�
 src/layers/feedDegradationI18n.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/firms/anchors.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
 src/layers/firms/cards.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
+src/layers/firms/edgeCases.test.mjs	LAYER	local-firms		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/firms/index.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
 src/layers/firms/ingestion.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
 src/layers/firms/lifecycle.js	LAYER	local-firms		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	fire-layer
@@ -1640,23 +1741,33 @@ src/layers/flights/tracking.js	LAYER	flights		Отделить источник/
 src/layers/flights/trackingRefresh.test.mjs	LAYER	flights		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/ghostMaps/catalog.js	LAYER	s2-ghostmaps		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/ghostMaps/catalog.test.mjs	LAYER	s2-ghostmaps		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/ghostMaps/edgeCases.test.mjs	LAYER	s2-ghostmaps		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/ghostMaps/index.js	LAYER	s2-ghostmaps	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/layers/ghostMaps/kml.js	LAYER	s2-ghostmaps		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/ghostMaps/lifecycle.test.mjs	LAYER	s2-ghostmaps	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/ghostMaps/records.js	LAYER	s2-ghostmaps		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/ghostMaps/records.test.mjs	LAYER	s2-ghostmaps		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/ghostMaps/render/cesium.js	LAYER	s2-ghostmaps	cesium	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/ghostMaps/render/navara.js	LAYER	s2-ghostmaps		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/ghostMaps/source.js	LAYER	s2-ghostmaps		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
+src/layers/gnss/edgeCases.test.mjs	LAYER	gnss-integrity		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/gnss/index.js	LAYER	gnss-integrity	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	application-components
 src/layers/gnss/ownership.test.mjs	LAYER	gnss-integrity	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/gnss/records.js	LAYER	gnss-integrity		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/gnss/records.test.mjs	LAYER	gnss-integrity		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/gnss/render/cesium.js	LAYER	gnss-integrity	cesium	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/gnss/render/navara.js	LAYER	gnss-integrity		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/gnss/source.js	LAYER	gnss-integrity		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/gnss/source.test.mjs	LAYER	gnss-integrity		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/gnss/sourceErrorLocale.test.mjs	LAYER	gnss-integrity	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/infrastructure/index.js	LAYER	local-dams/local-datacenters		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
+src/layers/infrastructure/render/navara.js	LAYER	local-dams/local-datacenters		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/infrastructure/session.test.mjs	LAYER	local-dams/local-datacenters		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/installations/classLabel.js	LAYER	military-installations		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	installations-layer
 src/layers/installations/classLabel.packClasses.test.mjs	LAYER	military-installations		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/installations/controls.js	LAYER	military-installations		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	installations-layer
 src/layers/installations/controls.test.mjs	LAYER	military-installations		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/installations/edgeCases.test.mjs	LAYER	military-installations		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/installations/index.js	LAYER	military-installations		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	installations-layer
 src/layers/installations/ingestion.js	LAYER	military-installations		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	installations-layer
 src/layers/installations/ingestion.test.mjs	LAYER	military-installations		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -1691,6 +1802,7 @@ src/layers/installations/unnamedInstallationTitle.test.mjs	LAYER	military-instal
 src/layers/installations/viewport.js	LAYER	military-installations		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	installations-layer
 src/layers/launches/camera.js	LAYER	rocket-launches		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	launches-layer
 src/layers/launches/controls.js	LAYER	rocket-launches		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	launches-layer
+src/layers/launches/edgeCases.test.mjs	LAYER	rocket-launches		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/launches/hover.test.mjs	LAYER	rocket-launches	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/launches/index.js	LAYER	rocket-launches		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	launches-layer
 src/layers/launches/ingestion.js	LAYER	rocket-launches		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	launches-layer
@@ -1724,6 +1836,7 @@ src/layers/launches/testing.js	LAYER	rocket-launches		Отделить исто�
 src/layers/localAdsb/card.i18n.test.mjs	LAYER	local-adsb		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/localAdsb/card.js	LAYER	local-adsb		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/localAdsb/card.test.mjs	LAYER	local-adsb		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/localAdsb/edgeCases.test.mjs	LAYER	local-adsb	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/localAdsb/enrichment.js	LAYER	local-adsb		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/localAdsb/feedNames.js	LAYER	local-adsb		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application
 src/layers/localAdsb/feeds.js	LAYER	local-adsb		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
@@ -1771,6 +1884,8 @@ src/layers/perimeters/index.js	LAYER	fire-perimeters	cesium	Разобрать �
 src/layers/perimeters/ownership.test.mjs	LAYER	fire-perimeters		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/perimeters/records.js	LAYER	fire-perimeters		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/perimeters/records.test.mjs	LAYER	fire-perimeters		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/perimeters/render/cesium.js	LAYER	fire-perimeters	cesium	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/perimeters/render/navara.js	LAYER	fire-perimeters		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/perimeters/source.js	LAYER	fire-perimeters		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/perimeters/source.test.mjs	LAYER	fire-perimeters		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/radio/catalogModel.js	LAYER	radio		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	radio-layer
@@ -1826,6 +1941,7 @@ src/layers/recentImagery/thumbnails.js	LAYER	recent-imagery		Отделить и
 src/layers/recentImagery/thumbnails.test.mjs	LAYER	recent-imagery		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/satellites/catalog.js	LAYER	satellites		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	satellites-layer
 src/layers/satellites/controls.js	LAYER	satellites		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	satellites-layer
+src/layers/satellites/edgeCases.test.mjs	LAYER	satellites		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/satellites/index.js	LAYER	satellites		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	satellites-layer
 src/layers/satellites/ingestion.js	LAYER	satellites		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	satellites-layer
 src/layers/satellites/ingestion.test.mjs	LAYER	satellites		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -1850,14 +1966,22 @@ src/layers/satellites/tracking.js	LAYER	satellites		Отделить источ�
 src/layers/shared/color.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	civil-flights
 src/layers/shared/color.test.mjs	LAYER		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/shared/render/engineView.js	LAYER			Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
+src/layers/shared/render/groundRing.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/shared/render/navaraCellGeometry.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/shared/render/navaraGroundCells.js	LAYER		postprocessing,three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/shared/render/navaraGroundGeometry.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/shared/render/navaraGroundGeometry.test.mjs	LAYER		three	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/shared/render/navaraGroundGrid.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/shared/render/navaraGroundOrder.test.mjs	LAYER			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/shared/render/navaraGroundPicks.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/shared/render/navaraGroundSurface.js	LAYER		three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/shared/render/navaraPolygons.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/shared/render/navaraStems.js	LAYER		three/addons/lines/LineMaterial.js,three/addons/lines/LineSegments2.js,three/addons/lines/LineSegmentsGeometry.js	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/shared/render/navaraStory.js	LAYER			Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/streetLevel/cameraFraming.js	LAYER	street-level	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	street-level-layer
 src/layers/streetLevel/cameraFraming.test.mjs	LAYER	street-level	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/streetLevel/credits.js	LAYER	street-level	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	street-level-layer
+src/layers/streetLevel/edgeCases.test.mjs	LAYER	street-level	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/streetLevel/filter.js	LAYER	street-level		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	street-level-layer
 src/layers/streetLevel/filter.test.mjs	LAYER	street-level		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/streetLevel/glyphs.js	LAYER	street-level		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	street-level-layer
@@ -1922,6 +2046,7 @@ src/layers/streetLevel/providers/panoramax/viewer.js	LAYER	street-level		Отд�
 src/layers/streetLevel/providers/panoramax/viewer.test.mjs	LAYER	street-level		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/streetLevel/registry.js	LAYER	street-level		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	street-level-layer
 src/layers/streetLevel/registry.test.mjs	LAYER	street-level		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/streetLevel/render/navara.js	LAYER	street-level		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/streetLevel/selection.js	LAYER	street-level	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	street-level-layer
 src/layers/streetLevel/selection.test.mjs	LAYER	street-level	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/streetLevel/sequenceCones.js	LAYER	street-level	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	street-level-layer
@@ -1939,6 +2064,7 @@ src/layers/streetLevel/viewerHost.js	LAYER	street-level		Отделить ист
 src/layers/streetLevel/viewerHost.test.mjs	LAYER	street-level		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/submarineCables/bundledSource.js	LAYER	telegeography-submarine-cables		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	bundled-cables
 src/layers/submarineCables/bundledSource.test.mjs	LAYER	telegeography-submarine-cables		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/submarineCables/edgeCases.test.mjs	LAYER	telegeography-submarine-cables		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/submarineCables/geometry.js	LAYER	telegeography-submarine-cables		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	submarine-cables
 src/layers/submarineCables/index.js	LAYER	telegeography-submarine-cables		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	submarine-cables
 src/layers/submarineCables/ingestion.js	LAYER	telegeography-submarine-cables	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	submarine-cables
@@ -1946,7 +2072,10 @@ src/layers/submarineCables/interaction.js	LAYER	telegeography-submarine-cables	c
 src/layers/submarineCables/lifecycle.js	LAYER	telegeography-submarine-cables		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	submarine-cables
 src/layers/submarineCables/overlay.js	LAYER	telegeography-submarine-cables		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	submarine-cables
 src/layers/submarineCables/policy.js	LAYER	telegeography-submarine-cables	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	submarine-cables
+src/layers/submarineCables/render/navara.js	LAYER	telegeography-submarine-cables		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/submarineCables/rendering.js	LAYER	telegeography-submarine-cables	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	submarine-cables
+src/layers/submarineCables/session.js	LAYER	telegeography-submarine-cables		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	submarine-cables
+src/layers/submarineCables/session.test.mjs	LAYER	telegeography-submarine-cables		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/submarineCables/state.js	LAYER	telegeography-submarine-cables	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	submarine-cables
 src/layers/submarineCables/surface.js	LAYER	telegeography-submarine-cables	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	submarine-cables
 src/layers/traffic/animation.js	LAYER	traffic	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	traffic-layer
@@ -1957,6 +2086,7 @@ src/layers/traffic/flowDecode.js	LAYER	traffic		Отделить источни�
 src/layers/traffic/flowSource.js	LAYER	traffic		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	traffic-layer
 src/layers/traffic/footprint.js	LAYER	traffic	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	traffic-layer
 src/layers/traffic/footprint.test.mjs	LAYER	traffic	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/traffic/handoff.test.mjs	LAYER	traffic	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/traffic/index.js	LAYER	traffic		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	traffic-layer
 src/layers/traffic/ingestion.js	LAYER	traffic		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	traffic-layer
 src/layers/traffic/lifecycle.js	LAYER	traffic	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	traffic-layer
@@ -1964,6 +2094,7 @@ src/layers/traffic/model.js	LAYER	traffic	cesium	Разобрать прямой
 src/layers/traffic/motion.test.mjs	LAYER	traffic	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/traffic/navigation.test.mjs	LAYER	traffic	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/traffic/policy.js	LAYER	traffic	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	traffic-layer
+src/layers/traffic/render/navara.js	LAYER	traffic		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/traffic/renderDemand.test.mjs	LAYER	traffic		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/traffic/rendering.js	LAYER	traffic	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	traffic-layer
 src/layers/traffic/retention.js	LAYER	traffic	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	traffic-layer
@@ -1980,6 +2111,7 @@ src/layers/traffic/surface.test.mjs	LAYER	traffic	cesium	Сохранить пр
 src/layers/traffic/timing.js	LAYER	traffic	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	traffic-layer
 src/layers/traffic/viewport.js	LAYER	traffic	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	traffic-layer
 src/layers/transit/controls.js	LAYER	transit		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
+src/layers/transit/edgeCases.test.mjs	LAYER	transit		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/transit/height.js	LAYER	transit		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/transit/index.js	LAYER	transit		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/transit/ingestion.js	LAYER	transit		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
@@ -2010,6 +2142,7 @@ src/layers/transit/viewport.js	LAYER	transit		Отделить источник/
 src/layers/transit/vocabulary.test.mjs	LAYER	transit		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/vessels/cameraArea.js	LAYER	ais-live-vessels		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	vessel-layer
 src/layers/vessels/cards.js	LAYER	ais-live-vessels		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	vessel-layer
+src/layers/vessels/edgeCases.test.mjs	LAYER	ais-live-vessels		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/vessels/evidence.js	LAYER	ais-live-vessels		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	vessel-layer
 src/layers/vessels/icons.js	LAYER	ais-live-vessels		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	vessel-layer
 src/layers/vessels/index.js	LAYER	ais-live-vessels		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	vessel-layer
@@ -2050,6 +2183,8 @@ src/layers/weather/infraredImage.js	LAYER	weather-radar/weather-satellite/weathe
 src/layers/weather/infraredImage.test.mjs	LAYER	weather-radar/weather-satellite/weather-lightning		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/weather/rasterTiles.js	LAYER	weather-radar/weather-satellite/weather-lightning		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/weather/rasterTiles.test.mjs	LAYER	weather-radar/weather-satellite/weather-lightning	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/weather/render/navara.js	LAYER	weather-radar/weather-satellite/weather-lightning		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/weather/render/navaraSurface.js	LAYER	weather-radar/weather-satellite/weather-lightning	postprocessing,three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/weather/rendering.js	LAYER	weather-radar/weather-satellite/weather-lightning		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/weather/shellFixture.mjs	LAYER	weather-radar/weather-satellite/weather-lightning	cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	—
 src/layers/weather/shellRendering.js	LAYER	weather-radar/weather-satellite/weather-lightning		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
@@ -2057,6 +2192,7 @@ src/layers/weather/shellRendering.test.mjs	LAYER	weather-radar/weather-satellite
 src/layers/weather/source.js	LAYER	weather-radar/weather-satellite/weather-lightning		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/weather/source.test.mjs	LAYER	weather-radar/weather-satellite/weather-lightning		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/weather/weather.test.mjs	LAYER	weather-radar/weather-satellite/weather-lightning	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/wind/edgeCases.test.mjs	LAYER	wind		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/wind/fieldUnavailableLocale.test.mjs	LAYER	wind		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/wind/fields.js	LAYER	wind		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/wind/fields.test.mjs	LAYER	wind		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2074,6 +2210,8 @@ src/layers/wind/presentation.js	LAYER	wind		Отделить источник/з
 src/layers/wind/presentation.test.mjs	LAYER	wind		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/wind/relief.js	LAYER	wind		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/wind/relief.test.mjs	LAYER	wind		Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/layers/wind/render/flowMesh.js	LAYER	wind	three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
+src/layers/wind/render/navara.js	LAYER	wind		Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/layers/wind/rendering.js	LAYER	wind		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
 src/layers/wind/rendering.test.mjs	LAYER	wind	cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/layers/wind/source.js	LAYER	wind		Отделить источник/записи от представления; проверить модель без сцены и повторное подключение	application-components
@@ -2163,6 +2301,7 @@ src/renderGovernor.test.mjs	VERIFY			Сохранить проверку; доб
 src/rightRailPolicy.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	context-controls
 src/rightRailPolicy.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/routeCinematics.test.mjs	VERIFY		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/sceneAttachEngine.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/sceneCommandRelease.js	AUTHOR			Проверить освобождение управления у режиссёра при отмене и смене сцены	application-components
 src/sceneCommandRelease.test.mjs	AUTHOR			Проверить освобождение управления у режиссёра при отмене и смене сцены	—
 src/scenes/bootstrapTitleProvenance.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2170,6 +2309,7 @@ src/scenes/cameraMotion.js	AUTHOR			Сохранить документ, вре�
 src/scenes/cameraMotion.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/scenes/dataPacks/controller.js	AUTHOR			Сохранить документ, время и права инструмента; переподключить draw/camera/pick	scenes
 src/scenes/dataPacks/geometry.js	AUTHOR		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	scenes
+src/scenes/dataPacks/navara.js	AUTHOR		cesium,three	Локализовать нативные ресурсы в адаптере; проверять attach/detach, отмену и освобождение	application-components
 src/scenes/dataPacks/presentation.js	AUTHOR		cesium	Разобрать прямой SDK импорт: вынести отрисовку в адаптер, заменить чистую математику общей; сохранить внешний API	scenes
 src/scenes/dataPacks/presentation.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/scenes/dataPacks/presentationView.test.mjs	AUTHOR			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2229,6 +2369,7 @@ src/search/index.js	NAV			Перенести выбор и команды кам
 src/search/nominatim.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	place-search
 src/search/nominatim.test.mjs	NAV			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/search/offlineGeocoders.test.mjs	NAV			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/search/photonSetting.test.mjs	NAV			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/search/placeSearch.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	place-search
 src/search/placeSearch.test.mjs	NAV			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/search/presetGeocoder.js	NAV			Перенести выбор и команды камеры на стабильную цель; проверить прерывание и ввод	place-search
@@ -2285,14 +2426,21 @@ src/sources/live/vessels.js	PLATFORM			Сохранить контракт да�
 src/sources/militaryTileGeometry.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	installations-layer
 src/sources/militaryTileGeometry.test.mjs	PLATFORM		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/sources/nominatim.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	place-search
+src/sources/nominatimOutlines.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	application-components
+src/sources/nominatimOutlines.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/sources/nominatimStatus.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	place-search
 src/sources/openFreeMap.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	installations-layer
 src/sources/openFreeMap.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/sources/openFreeMapOutlines.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	application-components
+src/sources/openFreeMapOutlines.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/sources/openFreeMapOutlinesEdges.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/sources/overpass.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	overpass-provider
 src/sources/overpassFeatures.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	application-components
 src/sources/overpassFeatures.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/sources/overpassFeaturesRecords.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	application-components
 src/sources/overpassRoads.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	traffic-layer
 src/sources/phaseTiming.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	installations-layer
+src/sources/phaseTiming.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/sources/protocols.test.mjs	PLATFORM			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/sources/radioBrowser.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	radio-provider
 src/sources/rateLimit.js	PLATFORM			Сохранить контракт данных, таймауты и права; исключить зависимость сети от прикрепления сцены	place-providers
@@ -2310,11 +2458,15 @@ src/sources/windBody.js	PLATFORM			Сохранить контракт данн�
 src/splitFlap.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/splitFlap.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/standalone/application.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
+src/standalone/applicationSwitch.test.mjs	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	—
 src/standalone/catalog.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
 src/standalone/controls.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
 src/standalone/data.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
+src/standalone/engineSwitch.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
+src/standalone/engineSwitch.test.mjs	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	—
 src/standalone/errors.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
 src/standalone/layerSources.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	application-components
+src/standalone/layerSources.test.mjs	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	—
 src/standalone/placeSearch.js	SESSION			Разделить владельцев сессии и сцены; проверить handoff, отмену и порядок teardown	—
 src/standalone/rendererCache.js	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	—
 src/standalone/rendererCache.test.mjs	SESSION			Разделить срок жизни менеджера/намерения и ресурсы сцены; проверить отмену и стабильность сессии	—
@@ -2340,6 +2492,7 @@ src/testSupport/hudReadouts.mjs	VERIFY			Сохранить проверку; д
 src/testSupport/kartaViewFakes.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/panelState.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/panoramaxFixtures.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/testSupport/radioLayerHarness.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/readLayerSource.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/readRealtimeSource.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/readShellSource.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2347,6 +2500,7 @@ src/testSupport/readStylesheet.mjs	VERIFY			Сохранить проверку;
 src/testSupport/registerDom.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/shareViewFixtures.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/streetLevelFakes.mjs	VERIFY		cesium	Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/testSupport/stubMgrs.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/viewerEngine.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/voiceUi.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/testSupport/voiceView.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2374,6 +2528,9 @@ src/tooling/mapillaryProvider.test.mjs	VERIFY			Сохранить провер�
 src/tooling/mediaProviders.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/navaraAssets.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/navaraDependencies.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/tooling/nominatimGuardLifecycle.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/tooling/nominatimLockOwnership.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/tooling/nominatimOutlineRoute.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/nominatimSearchRoute.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/packageBoundaries.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tooling/panelBuild.test.mjs	VERIFY			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2436,6 +2593,7 @@ src/tools/queries/events.js	TOOLS			Протестировать общую ко
 src/tools/queries/events.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tools/queries/hazards.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	tools
 src/tools/queries/hazards.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/tools/queries/hud-caption-feed-state.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tools/queries/imagery.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	tools
 src/tools/queries/imagery.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/tools/queries/infrastructure.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	tools
@@ -2634,6 +2792,8 @@ src/ui/panelRailCatalog.js	UI			Сохранить контроллер и со�
 src/ui/panelRailGeometry.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	panel-rail-layout
 src/ui/panelRails.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	panel-rail-layout
 src/ui/panelRails.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/ui/pendingVisualSettings.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	ui-shell
+src/ui/pendingVisualSettings.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/placeNames.js	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	location-controls
 src/ui/placeNames.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/providerSettings.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2703,6 +2863,7 @@ src/ui/shellFeedback.js	UI			Сохранить контроллер и сост
 src/ui/shellFeedbackStatusLocalization.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/shellLifecycle.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/shellLifetime.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/ui/shellSceneSwap.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/shellToasts.i18n.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/sidePanelDisclosure.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/stateOwners.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
@@ -2828,6 +2989,10 @@ src/ui/views/panels/CockpitSignalList.vue	UI			Сохранить контрол
 src/ui/views/panels/CockpitUtilityControls.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/DataPacks.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/DisplayPanel.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
+src/ui/views/panels/DrawControls.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
+src/ui/views/panels/DrawMarkList.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/ui/views/panels/DrawMarkList.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
+src/ui/views/panels/DrawSwatches.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/GeoImport.test.mjs	UI			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/ui/views/panels/GeoImport.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
 src/ui/views/panels/GlobeActions.vue	UI			Сохранить контроллер и состояние в сессии; графические команды провести через порт	application
@@ -2955,6 +3120,9 @@ src/voice/realtimeTypedSend.test.mjs	TOOLS			Сохранить проверку
 src/voice/realtimeViewport.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/referents.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/resultDisplay.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
+src/voice/sceneRunner.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	application-components
+src/voice/sceneRunner.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
+src/voice/sceneVoice.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/session.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
 src/voice/session.test.mjs	TOOLS			Сохранить проверку; добавить двойной прогон или безсценовую проверку для изменяемого шва	—
 src/voice/sessionCommands.js	TOOLS			Протестировать общую команду/запрос, наличие возможности, отмену и формат ответа	voice-connection
