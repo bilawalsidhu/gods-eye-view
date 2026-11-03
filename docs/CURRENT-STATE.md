@@ -3122,9 +3122,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   take over under the Cockpit cap of 60. Loading/capped contacts remain 2D,
 >   out-of-range contacts use rotation-free dots, and exit restores map treatment.
 >   Its Radio popover exposes compact power,
->   transport, station, and volume controls. Cockpit Previous/Next preserves
->   selection, autoplay, and broadcaster fallback audio without starting the
->   map-view station flights that compete with the first-person camera. These
+>   transport, station, and volume controls. Cockpit Previous/Next changes the
+>   selection without starting the map-view station flights that compete with
+>   the first-person camera; like the Context Previous/Next buttons, it plays
+>   (with broadcaster fallback) only while a stream is already active. These
 >   are a Cockpit-only accordion:
 >   each static header uses the left accordion's label and divider with a dedicated
 >   directional-chevron disclosure button and no full-row hover treatment. Only one
@@ -3287,7 +3288,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   outlasts its retries, the proxy pauses upstream calls for the `Retry-After`
 >   (60 seconds when none, at most 10 minutes). A request whose points are all
 >   cached, fresh or stale, is still served; a request with any uncached point
->   gets 502 and the page uses its geoid fallback for that chunk. Each request
+>   gets 502, whose `partial` lists the real heights it has (null for the rest)
+>   when it has any, and the page keeps those and uses its geoid fallback only
+>   for the points without one. The same holds when the upstream answers a
+>   point with a null height. Each request
 >   that was waiting on the upstream when the 429 came back logs one warning;
 >   requests refused during the pause do not log. Client geoid
 >   fallbacks wait 60 seconds before retrying and self-heal to Re:Earth on the
@@ -3950,7 +3954,7 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
 
 - **Keys are the English text.** `t('Save keys')`, `tn(count, '{count} camera',
-  '{count} cameras')`, and `msg('Live Flights')` for text stored in data and
+'{count} cameras')`, and `msg('Live Flights')` for text stored in data and
   translated later. Markup opts in with `data-i18n` (element text) and
   `data-i18n-title` / `-aria-label` / `-placeholder` (that attribute's English
   value). English has no catalog; every other locale is
@@ -4044,6 +4048,8 @@ its criteria cannot be silently ignored.
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL) | `src/layers/gnss/` via `src/app/layers/gnss.js` | `/api/gnss-integrity` | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window) |
 | S2 GhostMaps 👻 (`s2-ghostmaps`) | S2 Underground's public GhostMaps repository on GitHub (KMZ intel products, keyless, CC BY-NC-SA 4.0) | `src/layers/ghostMaps/` via `src/app/layers/ghostMaps.js` | `/api/ghostmaps/catalog`, `/api/ghostmaps/events` (server-sent events), `/api/ghostmaps/file/{product}` | branch head checked every 15 s; new commits pushed to the page; 5 min catalog backstop |
+| Sea Marks ⚓ (`sea-marks`) | OpenSeaMap seamark raster tiles (keyless; CC BY-SA 2.0 tiles, OSM data ODbL) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
+| Ski Pistes ⛷ (`ski-pistes`) | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download) | `src/data/osmOverlays.js` | — (browser-direct tiles) | on view (Cesium tile requests; no polling) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
@@ -4069,7 +4075,6 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 `scripts/qa-gnss.mjs` covers live freshness, bands, built primitives, camera/globe
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
-
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
@@ -4236,8 +4241,7 @@ that does not answer in 20 s is asked once more, and one that is not a line
 list is not cached. A click on a line reaches
 `handlePick(id, {groundPoint})`, and the provider asks the core
 (`actions.openNearest`) for its nearest showable photo within 50 m, without
-framing: many photos are archived (their file answers 409, while a HEAD says
-200) or have no file, so the six nearest are probed at once with a GET cut
+framing: many photos are archived (their file answers 409, while a HEAD says 200) or have no file, so the six nearest are probed at once with a GET cut
 off at the headers, and where all are gone the panel says KartaView's photos
 there are archived. Only a definite answer (403/404/409/410, or 200) is
 remembered; a storage timeout or 5xx is asked again. The open photo's
@@ -4768,10 +4772,12 @@ accepted snapshot, and feed telemetry before re-initialization; monotonic
 ownership tokens plus the session boundary keep late callbacks from a retired
 session inert.
 A tuner drag resolves previews against the single accepted snapshot captured at
-pointer-down, even while a newer catalog is admitted. Release starts playback
-only when the current same-ID record still exactly matches the frozen
-presentation and stream metadata; removal or replacement reports the channel as
-unavailable and never silently retargets the drag. A cold degraded fallback may
+pointer-down, even while a newer catalog is admitted. Like Previous/Next,
+release starts playback only if a stream was active when the drag began;
+otherwise it just selects the station. It commits only when the current same-ID
+record still exactly matches the frozen presentation and stream metadata.
+Removal or replacement reports the channel as unavailable and never silently
+retargets the drag. A cold degraded fallback may
 still populate the directory and globe, but its null accepted generation cannot
 populate or begin the tuner.
 
@@ -4948,7 +4954,9 @@ before the later control succeeds, only its playback handoff is suppressed; its
 result reads enabled state from the manager and audio state from the Radio
 module. Voice Pause is a playback-only no-op while the layer is disabled; it
 never enables Radio and reports a fulfilled-false pause as failure. A
-newer-response or user-origin Stop still cancels stale handoff work.
+newer-response or user-origin Stop still cancels stale handoff work, as do a
+user Pause, a user Previous/Next that only selects another station, and a tuner
+release onto a station the directory removed or changed mid-drag.
 Only a newer user turn or session teardown aborts the complete active-tool set.
 A cancelled turn cannot publish a late Radio playback request. Dedicated Radio
 controls and generic layer-visibility commands both forward cancellation.
@@ -5437,8 +5445,11 @@ and unreachable upstream (502/504) separately from road geometry.
 ### AI HUD Summary (June 2026)
 
 - HUD `SUMMARY` readout requests a five-word intelligence-style summary from `/api/openai/hud-summary` (model `OPENAI_HUD_SUMMARY_MODEL`, default `gpt-5-nano`, minimal reasoning).
-- Input is the live basemap label context (place/street/nearby-place labels + enabled layers) — the model is instructed not to infer from coordinates.
-- Output is sanitized to exactly five words; falls back to the deterministic telemetry summary on error/timeout (5s abort); typewriter animation on update.
+- Input: place/street/nearby-place labels, enabled layers and `feedProvenance`, with layer names as the user sees them; outside English the narration note and per-layer state ids are left out (`overall` carries the state). No model call without a place, street or nearby-place label: the deterministic line is shown.
+- Language: the HUD sends `locale` (part of the dedupe signature); the proxy keeps a shipped locale, English otherwise. Switching language in place drops the reply and aborts the request in flight, so the next tick asks again.
+- Reply: `{summary, feedState}` (`text.format` JSON schema, `feedState` a snapshot state or null). A view that is not nominal needs the matching `feedState`. The HUD adds its own translated tag, state first and layer names last (`STALE | … | LIVE FLIGHTS`), so the warning is never clipped. Outside English a reply falls back when it carries a feed-state id, a translated layer's English name or id, only Latin letters in a non-Latin language, or, with every feed healthy, the UNAVAILABLE word. `get_hud_caption` uses the same check and tag order, in English, and returns `feedState`.
+- The model is asked for at most five words; the proxy keeps up to 80 characters, or 20 for Japanese and Chinese, cut at a word boundary unless the first word is longer. It does not count words, since the model reads a name like Rue de Rivoli as one. Errors and the 5 s timeout fall back to the deterministic line; a camera move during typing shows that line instead of the fragment.
+- `partial` is a feed state of its own, ranked between `fallback` and `nominal`, so one partial layer, or partial plus nominal, reads partial, not off or nominal (HUD, voice view state, `analyst_query`, `brief`, the agent world packet). Its narration note says coverage is incomplete rather than not live.
 - A summary asked for before the camera starts moving never paints over the next view: `moveStart` marks the summary dirty and bumps its revision, as `moveEnd` does, aborts the request in flight and stops a reply still typing; neither a reply nor a fallback line (on an error, the 5 s timeout, the abort, or a failed context build) paints once the revision has moved. A dropped request forgets its signature and a timeout counts as a failure, so the next 15 s tick asks again even over the same place. An interrupted typewriter reply also forgets its signature; fully displayed answers remain reusable.
 
 ### Place-search providers
@@ -5462,13 +5473,36 @@ must match exactly, so `12junk, 34oops` and `austin, tx` both reach the
 geocoders instead of being answered from the bundle. Degrees/minutes/seconds and
 grid references are not parsed. An answer either provider gives is exact, so
 nearby-landmark recovery stands aside for it — otherwise a typed coordinate
-could be replaced by whatever Places finds near the current view. The portable `./search` export
+could be replaced by whatever Places finds near the current view. The portable `./search` export uses
 Google first when configured, Photon/OpenStreetMap as fallback (including Google
 transport failures or declined requests), and the local `/api/geocode` route
-over Nominatim as a last resort when neither answers. That route keeps to the
-public instance's usage policy: an identifying `User-Agent` and `Referer`, at
-most one request per second shared with the cockpit's reverse lookups, answers
-cached for five minutes, one upstream call shared between identical searches
+over Nominatim as a last resort when neither answers and an operator explicitly
+configures `NOMINATIM_URL`. Unset, empty and invalid values disable Nominatim.
+`GET /api/geocode/status` answers `{configured}`; the browser asks once per
+page, and when Nominatim is not configured neither the last-resort search nor
+the voice outline client asks `/api/geocode`, so a default install sends no
+lookup it would refuse. A missing or failed probe leaves the capability unknown
+and lookups proceed as before.
+Explicit public-service configuration retains an identifying `User-Agent` and `Referer`, at
+least 1.1 seconds between public search and outline starts, a shared durable
+per-install daily allowance and pause state that fail closed when unusable.
+The shared state lock covers actual fetch invocation and recording the next
+start. An unfinished dispatch marker (`state.json.dispatch.since-<ms>.*`, left
+by a crash or a persistence failure) disables further public requests for ten
+minutes after the start it names, far beyond any request's 9-second timeout.
+A marker exists only inside the lock, so the next lock owner after that window
+removes it and restarts spacing from its own clock; the count was persisted
+before the interrupted invocation. A marker naming no start keeps refusing
+until removed by hand. These controls do not establish an application-wide
+public-service allowance or authorize its use. For manual recovery, stop every
+process sharing the state file before removing only a confirmed orphan marker,
+and preserve the state file's count, pause and next start.
+`stats().persistence.dispatchPending` exposes the marker; an unlocked status
+read can also briefly see a live dispatch. Do not reset usage state to restore
+access.
+Answers are cached
+for 30 days (search), 90 days (outline) or 24 hours (genuine no result),
+one upstream call shared between identical searches
 already in flight, a queue bounded at four waiting searches (a burst past it is
 refused with 429 and `Retry-After`, never held), and a queued search dropped
 once its caller has given up rather than spending a slot on an answer nobody
@@ -5539,7 +5573,7 @@ request viewbox and continues searching without that geographic preference.
 
 - Runtime entry: `src/main.js` calls `initAnnotations({ viewer, tileset })`, exposes `window.__gevAnnotations`, and passes the engine into the voice action runner.
 - Engine contract: `src/annotations/annotationEngine.js` owns annotation state, TTL/fade lifecycle, concurrent anchor resolution, duplicate detection keyed on geometry, cancellation on clear/newer generations, and a hard cap of 120 live marks. Deferred outline upgrades drain FIFO at concurrency 2; queued work retains the owning abort controller and is discarded on a generation change before it can fetch.
-- Resolver contract: `src/annotations/annotationResolver.js` converts names/coords/screen pixels into world anchors and optional geometry. The resolver is type-aware: Google Geocode/Places gives a centroid + scope, operator-configured OSM/Overpass supplies admin/place/footprint/street/enclosing-area geometry, route requests use `/api/route`, and ambiguous/far results are rejected or recovered near the current view instead of drawing misleading blobs. Only explicitly country/state/county-scoped asks bypass near-view recovery and proximity gating; state scope requires a leading `state of …`/`the state of …` phrase, while bare names, proper names ending in “State,” and administrative geocode result types alone remain guarded. Overpass throttles remain distinct from normal transients: `Retry-After` is honored for one retry, and a repeated throttle ends only that mark's outline upgrade.
+- Resolver contract: `src/annotations/resolver.js` converts names, coordinates and screen pixels into world anchors and optional geometry. Google Geocode/Places supplies a centroid and scope; route requests use `/api/route`; ambiguous or distant results are rejected or recovered near the current view instead of drawing misleading blobs. Outline resolution keeps this order: bundled admin/place/neighborhood/Natural Earth geometry; OpenFreeMap street or pointed-building geometry where applicable; the configured OSM/Overpass admin/place/footprint/street/enclosing-area ladder; guarded Nominatim for eligible named cities, admin units, landmarks, buildings and grounds; then an OpenFreeMap building fallback that accepts a named building only when its resolved anchor lies in the selected filled footprint. Pointed-at building requests retain nearby selection within 40 m. Tile building and grounds answers also need the tile holding the anchor: when that tile fails to load and only neighbours arrive, no neighbouring building or area stands in. Tile grounds answer a named grounds ask only from an area of the same name, or, when the ask's head noun names a kind of grounds (school, university/college, hospital, cemetery, stadium, zoo; "campus" alone names none), from the part of the smallest unnamed area of that class that holds the anchor (a class word elsewhere in a name, as in "University Avenue Park", does not count); a differently named area never answers. If no rung can supply honest geometry, the mark remains a point or reports the capability unavailable. A real polygon, definitive miss, configured-ladder approximation, rate limit or transient result keeps its existing finality; Nominatim is only tried after higher-priority configured sources cannot answer. Building tile selection returns the selected component and its holes; a shared vector feature ID does not establish that unrelated components are one building. Other trusted multi-part outlines and holes are retained in `anno.polygons`, with `ring` anchored to the part whose filled area contains the resolved point, outside its holes, when possible. Guarded Nominatim keeps every accepted result for an ask, ranks an exact name first, then a name holding every asked word, then a partial match; a partial landmark match whose name lacks the ask's last word is refused unless that word appears in the result's address or type (the place around a feature, such as a park around its zoo, is not the feature, while "Space Needle Seattle" still finds the Space Needle). A building word ("Burj Khalifa Tower") also passes on a single-structure result (one a building ask would accept), never on a campus, zoo or district. Each ask is answered with the cached result among the best-named ones whose filled area holds the resolved anchor (read across the antimeridian), else the first; a worse name never wins by containment alone. Nominatim name checks use the bundled packs' place-name key, so "St. Paul" and "Saint Paul" agree there. A street ribbon that holds neither its ring mean nor the anchor is centred on the street's nearest point to the anchor when the street runs within 100 m of it. In tile street names a lone letter is a direction only beside another name word ("N Lamar Blvd"), so "E Street" is not "East Street", and a quadrant ("E St NW", "SE Main St") may go unsaid in the ask, which then takes only the quadrant of the matching street nearest the point. A building or area cut at the tile edge is not complete (past a tile buffer any vertex on the cut line marks it; on an unbuffered edge, an edge running along the boundary does, not a corner that merely touches it): a cut building nearer the point than any whole one leaves the point, and a cut area does not answer grounds. Missing capability never invents a radius outline. Only explicitly country/state/county-scoped asks bypass near-view recovery and proximity gating; state scope requires a leading `state of …`/`the state of …` phrase, while bare names, proper names ending in “State,” and administrative geocode result types alone remain guarded. Overpass throttles remain distinct from normal transients: `Retry-After` is honored for one retry, and a repeated throttle ends only that mark's outline upgrade.
 - With no detailed-feature capability, annotations retain their pins and say
   "Detailed outline unavailable"; location focus reports the same result without
   retrying. Missing capability never synthesizes an outline from a radius.
@@ -5578,6 +5612,28 @@ request viewbox and continues searching without that geographic preference.
   Berlin inside Brandenburg). Each pack loads on the first ask that needs it,
   never at start-up; the analyst region lookup uses the same packs. Gate:
   `scripts/qa-admin-outlines.mjs`.
+- Bundled place and neighborhood outlines (`src/data/placeBoundaries.js`):
+  US Census places (`src/data/local_data/us_census_places/`, one file per
+  state, public domain, `scripts/build-census-places.mjs`) and Who's On First
+  neighborhoods (`src/data/local_data/wof_neighborhoods/`, quadtree tiles,
+  per-source licences, `scripts/build-wof-neighborhoods.py`). After the admin
+  packs, an area ask named at or near the view is drawn from, in order, a
+  Census place ("Austin"; a state qualifier narrows the search to that state
+  wherever the camera is: "Springfield, Illinois"), the San Francisco DataSF
+  pack, then WOF ("Notting Hill", "Le Marais"). "Near" reaches half the view
+  radius. A district ask takes a neighborhood first and a place only when the
+  view is inside it; without an entity kind, the candidate holding the view
+  wins, else the nearer. "City of X" asks for an incorporated place; when
+  several places still fit and nothing decides, the geocoder answers.
+  Compound, grounds, monument and "around" asks skip these, as do names that
+  end like a landmark ("Central Park") unless asked as a district, and a
+  qualified neighborhood ("Williamsburg, Virginia") goes to the geocoder. A
+  geocoded city or neighborhood is drawn from the same packs when one carries
+  the name and holds the point, before any boundary lookup. Only the index and
+  the state files or tiles around the point are fetched (files under 4 KB are
+  inlined into the bundle), and the recently used ones are kept (12 state
+  files, 24 tiles). Gate:
+  `node scripts/qa-voice-routing.mjs --layer behavior --behavior outlines`.
 - Renderer contract: `src/annotations/hybridAnnotationRenderer.js` routes draped `area`/`route` geometry to world-space Cesium rendering and reticles/pins/arrows/callouts to the screen-space SVG renderer. Area labels are screen-space callouts so all captions share one visual language; progressive outline upgrades convert the existing screen group in place when the anchor snaps to the resolved centroid.
 - Tooling: voice has `annotate_map` and `clear_annotations` tools. Annotations accumulate and persist by default; clearing is explicit only. Partial failures, approximate synthesized zones, and route fallbacks are returned as structured tool results so the voice layer can be honest.
 - Console/dev API: `window.__gevAnnotations.tour()`, `.demo()`, `.annotate()`, `.clear()`, `.count()`, and `.list()` are the deterministic no-mic test surface.
@@ -5725,7 +5781,6 @@ Vite's development filesystem deny list excludes local `.gev-logs/` and
 `.gev-cache/` contents and the package checkout's root `dist/`, while allowing
 dependency `dist/` assets. Checkout glob characters are escaped. This does not
 apply to `public/` assets or built-preview serving.
-
 
 - Recommended launcher: `./scripts/dev-fresh.sh` (also: `dev-secure.sh` for stricter bindings, `dev-cctv.sh` for CCTV source-pack tuning)
 - A successful Pinokio install writes the owner-only `pinokio/.installed`
@@ -6089,8 +6144,14 @@ easier to meet (detection is now on more often), but does not create it.
   Only eligible road geometry receives dots;
   reverse one-way lines are reversed. The shared tile source caps each view at
   16 tiles per pass (32 OpenFreeMap tiles total), four concurrent requests and 4 MiB per response. OpenFreeMap retains
-  up to 192 decoded tiles/64 MiB (four times body bytes as a storage estimate);
-  other tile sources retain the 64-tile/24 MiB defaults. Identical source-version/XYZ
+  up to 192 decoded tiles/32 MiB in one shared decoded cache (four times body
+  bytes as a storage estimate); traffic and installations each keep their own
+  slice of those tiles within 12 MiB and outlines within 8 MiB, charged at the
+  slice's estimated object size. The charged budgets total 64 MiB, the budget
+  of the single OpenFreeMap source traffic and installations shared before;
+  they are estimates, not a measured heap bound, and each consumer slice is a
+  copy (`structuredClone`) made once per cached tile. Other tile sources retain
+  the 64-tile/24 MiB defaults. Identical source-version/XYZ
   requests share one download/decode, with independent caller cancellation. Parsed road views have a separate 24 MiB/64-entry cap; incomplete
   views are not retained as complete snapshots. Buffer geometry is clipped and sub-12 m line slivers dropped; tile
   road fragments are not stitched. Roads preserve bends and insert

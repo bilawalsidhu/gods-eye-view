@@ -78,6 +78,8 @@ export function createState({ services }) {
 
   layerState._tuningStartStationId = null;
 
+  layerState._tuningResumesPlayback = false;
+
   layerState._tuningResolutionSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
 
   layerState._tuningStationById = new Map();
