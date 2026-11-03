@@ -160,7 +160,12 @@ test('answers are compacted: centres, kept tags, truncation and counts', () => {
 
 function mount(
   fetchPayload,
-  { featuresCache, configured = () => true, upstreamTag } = {},
+  {
+    featuresCache,
+    configured = () => true,
+    upstreamTag,
+    upstreamBudgetMs,
+  } = {},
 ) {
   const routes = new Map();
   const writes = [];
@@ -181,11 +186,17 @@ function mount(
       cacheRoot: null,
       configured,
       ...(upstreamTag ? { upstreamTag } : {}),
+      ...(upstreamBudgetMs ? { upstreamBudgetMs } : {}),
       featuresCache: featuresCache || memoryCache(),
     },
   );
   let client = 0;
-  const start = (search, route = '/api/osm/features') => {
+  const start = (
+    search,
+    route = '/api/osm/features',
+    headers = {},
+    from = null,
+  ) => {
     let req;
     let res;
     const promise = new Promise((resolve) => {
@@ -193,8 +204,8 @@ function mount(
       req = Object.assign(new EventEmitter(), {
         method: 'GET',
         url: `/?${search}`,
-        headers: {},
-        socket: { remoteAddress: `10.9.0.${client}` },
+        headers,
+        socket: { remoteAddress: from || `10.9.0.${client}` },
       });
       res = Object.assign(new EventEmitter(), {
         writableEnded: false,
@@ -202,10 +213,13 @@ function mount(
           res.status = status;
           res.headers = headers;
         },
+        setHeader(name, value) {
+          res.headers = { ...(res.headers || {}), [name]: value };
+        },
         end(body) {
           res.writableEnded = true;
           resolve({
-            status: res.status,
+            status: res.status ?? res.statusCode,
             headers: res.headers,
             body: JSON.parse(body),
           });
@@ -220,20 +234,18 @@ function mount(
       },
     };
   };
-  const request = (search, route = '/api/osm/features') =>
-    start(search, route).promise;
+  const request = (search, route = '/api/osm/features', headers, from) =>
+    start(search, route, headers, from).promise;
   return { request, start, writes };
 }
 
-test('the route answers, caches, and runs one upstream query at a time', async () => {
-  let release;
+test('the route answers, caches, and shares upstream slots fairly', async () => {
+  const release = [];
   let upstream = 0;
   const { request, writes } = mount(async (body) => {
     upstream += 1;
     assert.match(decodeURIComponent(body), /^data=\[out:json\]/);
-    await new Promise((r) => {
-      release = r;
-    });
+    await new Promise((r) => release.push(r));
     return {
       status: 200,
       body: JSON.stringify({
@@ -241,21 +253,79 @@ test('the route answers, caches, and runs one upstream query at a time', async (
       }),
     };
   });
-  const first = request('preset=hospital&bbox=0,0,2,2');
-  await new Promise((r) => setTimeout(r, 5));
-  const other = await request('preset=school&bbox=0,0,2,2');
-  assert.equal(other.status, 503, 'a second, different search waits its turn');
-  release();
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+  const first = request(
+    'preset=hospital&bbox=0,0,2,2',
+    undefined,
+    {},
+    '10.1.0.1',
+  );
+  await tick();
+  const sameClient = await request(
+    'preset=school&bbox=0,0,2,2',
+    undefined,
+    {},
+    '10.1.0.1',
+  );
+  assert.equal(
+    sameClient.status,
+    503,
+    "one client's second search waits for its first",
+  );
+  const shared = request(
+    'preset=hospital&bbox=0,0,2,2',
+    undefined,
+    {},
+    '10.1.0.2',
+  );
+  const second = request(
+    'preset=school&bbox=0,0,2,2',
+    undefined,
+    {},
+    '10.1.0.3',
+  );
+  await tick();
+  assert.equal(
+    upstream,
+    2,
+    'another client runs alongside; the same search is shared',
+  );
+  const third = await request(
+    'preset=pharmacy&bbox=0,0,2,2',
+    undefined,
+    {},
+    '10.1.0.4',
+  );
+  assert.equal(third.status, 503, 'the global cap holds');
+  release.forEach((r) => r());
   const answered = await first;
   assert.equal(answered.status, 200);
   assert.equal(answered.body.count, 1);
+  assert.equal((await shared).status, 200);
+  assert.equal((await second).status, 200);
   const again = await request('preset=hospital&bbox=0,0,2,2');
   assert.equal(again.headers['X-OSM-Cache'], 'HIT');
-  assert.equal(upstream, 1);
-  assert.equal(writes.length, 1);
+  assert.equal(upstream, 2);
+  assert.equal(writes.length, 2);
   const refused = await request('preset=hospital&bbox=0,0,9,9');
   assert.equal(refused.status, 400);
   assert.equal(refused.body.code, 'AREA_TOO_LARGE');
+});
+
+test('a hung Overpass is cut off by the overall budget, across every endpoint', async () => {
+  const { request } = mount(
+    (_body, _max, { signal }) =>
+      new Promise((_, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        }),
+      ),
+    { upstreamBudgetMs: 30 },
+  );
+  const started = Date.now();
+  const answer = await request('preset=hospital&bbox=0,0,2,2');
+  assert.ok(Date.now() - started < 1000);
+  assert.equal(answer.status, 504);
 });
 
 test('a cached answer is served only by the Overpass instance that gave it', async () => {
@@ -285,6 +355,31 @@ test('a cached answer is served only by the Overpass instance that gave it', asy
     2,
     'the new instance is asked, not the old answer served',
   );
+});
+
+test('a cross-site page cannot spend the operator Overpass', async () => {
+  let upstream = 0;
+  const { request } = mount(async () => {
+    upstream += 1;
+    return { status: 200, body: JSON.stringify({ elements: [] }) };
+  });
+  for (const headers of [
+    { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' },
+    { 'sec-fetch-site': 'cross-site' },
+    { origin: 'https://evil.example' },
+  ]) {
+    const refused = await request('preset=hospital&bbox=0,0,2,2', undefined, {
+      host: 'localhost:5173',
+      ...headers,
+    });
+    assert.equal(refused.status, 403, JSON.stringify(headers));
+  }
+  assert.equal(upstream, 0, 'no cross-site request reaches Overpass');
+  const own = await request('preset=hospital&bbox=0,0,2,2', undefined, {
+    host: 'localhost:5173',
+    'sec-fetch-site': 'same-origin',
+  });
+  assert.equal(own.status, 200);
 });
 
 test('an upstream refusal is not an empty answer', async () => {

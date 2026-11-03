@@ -32,6 +32,8 @@ export const OSM_FEATURE_LIMITS = Object.freeze({
   maxResponseBytes: 16 * 1024 * 1024,
   /** Per-upstream wait: a busy Overpass answers these in 10–30 s. */
   upstreamTimeoutMs: 40_000,
+  /** The whole search, across every configured endpoint in turn. */
+  upstreamBudgetMs: 45_000,
 });
 
 /** Tags a returned feature keeps, besides the preset's own. */

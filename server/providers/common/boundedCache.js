@@ -121,9 +121,15 @@ export function createBoundedCache({
       } catch {
         return;
       }
-      await schedulePrune();
+      // In the background: an answer never waits on a 400-file directory scan.
+      // `prune()` returns the pending pass for callers that need it done.
+      schedulePrune();
     },
-    prune: schedulePrune,
+    /** Run a prune and wait until no pass is running or queued. */
+    async prune() {
+      schedulePrune();
+      while (pruning) await pruning;
+    },
     get memorySize() {
       return memory.size;
     },

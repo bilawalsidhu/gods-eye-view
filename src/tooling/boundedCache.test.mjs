@@ -46,9 +46,11 @@ test('the disk keeps to its entry and byte quotas and drops expired files', asyn
     now: () => clock,
   });
   for (let i = 0; i < 12; i += 1) await cache.set(`k${i}`, 'x'.repeat(100));
+  await cache.prune();
   let files = await fsp.readdir(dir);
   assert.ok(files.length <= 5, `${files.length} files`);
   await cache.set('big', 'y'.repeat(20_000));
+  await cache.prune();
   const sizes = await Promise.all(
     (await fsp.readdir(dir)).map(
       async (name) => (await fsp.stat(path.join(dir, name))).size,
@@ -61,6 +63,7 @@ test('the disk keeps to its entry and byte quotas and drops expired files', asyn
     await fsp.utimes(path.join(dir, name), past, past);
   clock = Date.now();
   await cache.set('fresh', 'z');
+  await cache.prune();
   files = await fsp.readdir(dir);
   assert.equal(files.length, 1);
   assert.equal(await cache.get('k0'), undefined);

@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
+import { admitSameSite } from '../common/same-site.js';
 import { createBoundedCache } from '../common/boundedCache.js';
 import {
   compileOsmFeatureQuery,
@@ -14,6 +15,8 @@ import { fetchOverpassPayload, overpassPayloadIsData } from './transport.js';
 
 /** Places of interest change slowly: answers are kept a day. */
 const OSM_FEATURES_TTL_MS = 86_400_000;
+/** Upstream searches at once, across all clients (one per client). */
+const OSM_MAX_RUNNING = 2;
 /** Cache-key version; nothing cached under another version is reused. */
 const CACHE_VERSION = 'v2';
 
@@ -34,10 +37,14 @@ function createOverpassAnswerer({
   cache,
   maxResponseBytes,
   upstreamTimeoutMs,
+  upstreamBudgetMs,
+  maxRunning = OSM_MAX_RUNNING,
 }) {
   const inFlight = new Map();
+  // One search per client, a few in all: one client can't hold the route.
+  const runningBy = new Map();
   let running = 0;
-  return async function answer(key, ql, summarize, signal = null) {
+  return async function answer(key, ql, summarize, signal = null, owner = '') {
     signal?.throwIfAborted?.();
     const held = await cache.get(key);
     signal?.throwIfAborted?.();
@@ -49,16 +56,21 @@ function createOverpassAnswerer({
       operation = null;
     }
     if (!operation) {
-      if (running >= 1)
+      if (runningBy.get(owner) || running >= maxRunning)
         return {
           ...jsonError(
             503,
-            'Another map search is running — try again shortly.',
+            runningBy.get(owner)
+              ? 'Your previous map search is still running — try again shortly.'
+              : 'Another map search is running — try again shortly.',
           ),
           retryAfter: '3',
         };
       running += 1;
+      runningBy.set(owner, (runningBy.get(owner) || 0) + 1);
       const controller = new AbortController();
+      // The whole search, every configured endpoint in turn, gets one budget.
+      const budget = AbortSignal.timeout(upstreamBudgetMs);
       operation = { controller, waiters: 0, settled: false, promise: null };
       const owned = operation;
       owned.promise = (async () => {
@@ -69,7 +81,7 @@ function createOverpassAnswerer({
             {
               simplify: keepBody,
               timeoutMs: upstreamTimeoutMs,
-              signal: controller.signal,
+              signal: AbortSignal.any([controller.signal, budget]),
             },
           );
           if (!overpassPayloadIsData(payload))
@@ -95,10 +107,15 @@ function createOverpassAnswerer({
           controller.signal.throwIfAborted();
           return { status: 200, body, cache: 'MISS' };
         } catch {
-          return jsonError(502, 'OpenStreetMap search failed.');
+          return budget.aborted && !controller.signal.aborted
+            ? jsonError(504, 'OpenStreetMap took too long to answer.')
+            : jsonError(502, 'OpenStreetMap search failed.');
         } finally {
           owned.settled = true;
           running -= 1;
+          const left = (runningBy.get(owner) || 1) - 1;
+          if (left > 0) runningBy.set(owner, left);
+          else runningBy.delete(owner);
           if (inFlight.get(key) === owned) inFlight.delete(key);
         }
       })();
@@ -161,6 +178,7 @@ export function installOsmFeaturesRoute(
     // Keys each answer to the instance that gave it, as the other Overpass
     // caches do, so repointing OVERPASS_UPSTREAMS never serves the old one's.
     upstreamTag = resolveOverpassUpstreamTag,
+    upstreamBudgetMs = OSM_FEATURE_LIMITS.upstreamBudgetMs,
     cacheRoot = path.join(process.cwd(), '.gev-cache'),
     featuresCache = createBoundedCache({
       dir: cacheRoot ? path.join(cacheRoot, 'osm-features') : null,
@@ -177,11 +195,14 @@ export function installOsmFeaturesRoute(
     cache: featuresCache,
     maxResponseBytes: OSM_FEATURE_LIMITS.maxResponseBytes,
     upstreamTimeoutMs: OSM_FEATURE_LIMITS.upstreamTimeoutMs,
+    upstreamBudgetMs,
   });
 
   middlewares.use('/api/osm/features', async (req, res) => {
     const send = sender(res);
     if (req.method !== 'GET') return send(jsonError(405, 'Method Not Allowed'));
+    // Quota-bearing: a page elsewhere must not spend the operator's Overpass.
+    if (admitSameSite(req, res)) return undefined;
     if (!configured())
       return send(
         jsonError(503, 'Place search needs a configured Overpass server.', {
@@ -213,6 +234,7 @@ export function installOsmFeaturesRoute(
         compiled.ql,
         (parsed) => summarizeOsmFeatures(parsed, compiled),
         controller.signal,
+        clientKey(req),
       );
       if (!controller.signal.aborted) send(answer);
     } catch {
