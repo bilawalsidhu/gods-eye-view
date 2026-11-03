@@ -8,6 +8,7 @@ import { t } from '../i18n/index.js';
 import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { isScreenScene } from './screenScene.js';
 
 /** A label whose detailed outline could not be resolved. */
 function outlineUnavailableLabel(label) {
@@ -67,7 +68,7 @@ function markScale(h) {
 }
 
 export function createScreenAnnotationRenderer(
-  viewer,
+  target,
   {
     overlayPaintRect = getOverlayPaintRect,
     activeTrackedReadoutId = getActiveTrackedReadoutId,
@@ -78,11 +79,9 @@ export function createScreenAnnotationRenderer(
   const arrowMarkers = new Map();
   let viewBox = null;
 
-  const scene = viewer.scene;
-  const occluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    scene.camera.positionWC,
-  );
+  // What the board is drawn over: a Cesium viewer or an engine's screen
+  // scene (src/annotations/screenScene.js).
+  const view = isScreenScene(target) ? target : screenSceneFromViewer(target);
   const records = new Map(); // anno.id -> { key, anno, group, parts }
   const leaving = new Map(); // key -> a removed mark's record while it fades out
   const byKey = new Map(); // key -> record, live or fading
@@ -121,7 +120,7 @@ export function createScreenAnnotationRenderer(
   // Re-project every annotation each rendered frame so marks stay glued to the
   // world. postRender runs after the camera/tiles update, so positions are exact.
   const onPostRender = () => projectAll();
-  scene.postRender.addEventListener(onPostRender);
+  const offPostRender = view.onFrame(onPostRender);
 
   function color(anno) {
     return PALETTE[anno.color] || PALETTE.primary;
@@ -141,11 +140,8 @@ export function createScreenAnnotationRenderer(
       return cached.h;
     }
     try {
-      if (
-        scene.clampToHeightSupported &&
-        typeof scene.clampToHeight === 'function'
-      ) {
-        const c = scene.clampToHeight(
+      if (view.clampToHeightSupported()) {
+        const c = view.clampToHeight(
           Cesium.Cartesian3.fromDegrees(lon, lat, 0),
         );
         if (c) {
@@ -369,20 +365,15 @@ export function createScreenAnnotationRenderer(
       groundHeight(lon, lat),
     );
     // Reject points behind the camera (they produce wrapped/extreme coords).
-    Cesium.Cartesian3.subtract(world, scene.camera.positionWC, scratchDir);
-    if (Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0)
+    Cesium.Cartesian3.subtract(world, view.cameraPosition(), scratchDir);
+    if (Cesium.Cartesian3.dot(scratchDir, view.cameraDirection()) <= 0)
       return null;
     // Reject points beyond the globe horizon.
-    if (!occluder.isPointVisible(world)) return null;
-    const win = Cesium.SceneTransforms.worldToWindowCoordinates(
-      scene,
-      world,
-      scratch,
-    );
+    if (!view.horizonVisible(world)) return null;
+    const win = view.worldToWindow(world, scratch);
     if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y)) return null;
     // Reject absurd off-screen projections (anchor not in view).
-    const w = scene.canvas.clientWidth || scene.canvas.width;
-    const h = scene.canvas.clientHeight || scene.canvas.height;
+    const { width: w, height: h } = view.size();
     if (
       !allowOffscreen &&
       (win.x < -w || win.x > 2 * w || win.y < -h || win.y > 2 * h)
@@ -422,31 +413,22 @@ export function createScreenAnnotationRenderer(
     let top = painted?.y;
     let bottom = painted ? painted.y + painted.h : undefined;
 
-    const ent = viewer.trackedEntity;
-    const now = Cesium.JulianDate.now();
-    const world =
-      typeof ent?.gevDisplayPosition === 'function'
-        ? ent.gevDisplayPosition()
-        : null;
-    const win = world
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          world,
-          _scratchTrackedWin,
-        )
-      : null;
+    // The followed subject's own graphic, where the globe draws one.
+    const subject = view.trackedSubject();
+    const world = subject?.world ?? null;
+    const win = world ? view.worldToWindow(world, _scratchTrackedWin) : null;
 
     // Billboard box — centered on the anchor, magnified by scaleByDistance.
-    const bb = ent?.billboard;
+    const bb = subject?.billboard;
     if (bb && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
-      const baseW = bb.width?.getValue?.(now) ?? 28;
-      const baseH = bb.height?.getValue?.(now) ?? 28;
+      const baseW = bb.width ?? 28;
+      const baseH = bb.height ?? 28;
       let scale = 1;
-      const sbd = bb.scaleByDistance?.getValue?.(now);
+      const sbd = bb.scaleByDistance;
       if (sbd)
         scale = nearFarValue(
           sbd,
-          Cesium.Cartesian3.distance(scene.camera.positionWC, world),
+          Cesium.Cartesian3.distance(view.cameraPosition(), world),
         );
       const hw = (baseW * scale) / 2;
       const hh = (baseH * scale) / 2;
@@ -477,14 +459,11 @@ export function createScreenAnnotationRenderer(
     }
     projGen += 1; // new frame: entries touched below are "hot" and survive trimming
     const trackedRect = trackedEntityRect();
-    occluder.cameraPosition = scene.camera.positionWC;
-    const h = scene.canvas.clientHeight || scene.canvas.height;
-    const w = scene.canvas.clientWidth || scene.canvas.width;
+    view.beginFrame();
+    const { width: w, height: h } = view.size();
     viewBox = `0 0 ${w} ${h}`;
     // Shrink point-marker geometry as the camera pulls back (declutter the blob).
-    const mScale = markScale(
-      viewer.camera.positionCartographic?.height ?? 1000,
-    );
+    const mScale = markScale(view.cameraHeight() ?? 1000);
 
     for (const rec of records.values()) {
       const { anno, group, parts } = rec;
@@ -821,7 +800,7 @@ export function createScreenAnnotationRenderer(
 
   function destroy() {
     try {
-      scene.postRender.removeEventListener(onPostRender);
+      offPostRender();
     } catch {
       /* torn down */
     }
@@ -1025,4 +1004,59 @@ function placeCalloutsAboveVoicePreview(callouts, width, height) {
 /** Record the arrowhead marker for a color, unless one is already defined. */
 function ensureArrowMarker(markers, key, c) {
   if (!markers.has(key)) markers.set(key, c);
+}
+
+/**
+ * A Cesium viewer as the board's screen scene (src/annotations/screenScene.js):
+ * Cesium's own window transform and ellipsoid occluder, and the viewer's
+ * tracked entity as the followed subject.
+ */
+export function screenSceneFromViewer(viewer) {
+  const scene = viewer.scene;
+  const occluder = new Cesium.EllipsoidalOccluder(
+    Cesium.Ellipsoid.WGS84,
+    scene.camera.positionWC,
+  );
+  return {
+    onFrame(listener) {
+      scene.postRender.addEventListener(listener);
+      return () => scene.postRender.removeEventListener(listener);
+    },
+    beginFrame() {
+      occluder.cameraPosition = scene.camera.positionWC;
+    },
+    cameraPosition: () => scene.camera.positionWC,
+    cameraDirection: () => scene.camera.directionWC,
+    cameraHeight: () => viewer.camera.positionCartographic?.height,
+    horizonVisible: (world) => occluder.isPointVisible(world),
+    worldToWindow: (world, result) =>
+      Cesium.SceneTransforms.worldToWindowCoordinates(scene, world, result),
+    size: () => ({
+      width: scene.canvas.clientWidth || scene.canvas.width,
+      height: scene.canvas.clientHeight || scene.canvas.height,
+    }),
+    clampToHeightSupported: () =>
+      Boolean(scene.clampToHeightSupported) &&
+      typeof scene.clampToHeight === 'function',
+    clampToHeight: (position) => scene.clampToHeight(position),
+    trackedSubject() {
+      const ent = viewer.trackedEntity;
+      if (!ent) return null;
+      const now = Cesium.JulianDate.now();
+      const bb = ent.billboard;
+      return {
+        world:
+          typeof ent.gevDisplayPosition === 'function'
+            ? ent.gevDisplayPosition()
+            : null,
+        billboard: bb
+          ? {
+              width: bb.width?.getValue?.(now),
+              height: bb.height?.getValue?.(now),
+              scaleByDistance: bb.scaleByDistance?.getValue?.(now),
+            }
+          : null,
+      };
+    },
+  };
 }

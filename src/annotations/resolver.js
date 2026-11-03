@@ -2397,6 +2397,7 @@ export function createAnnotationResolver({
    * the tiles for that spot aren't loaded we fall back to the ellipsoid (0).
    */
   function sampleGroundHeight(viewer, lon, lat) {
+    if (isGlobeEngine(viewer)) return engineGroundHeight(viewer, lon, lat);
     const scene = viewer?.scene;
     if (!scene) return 0;
     try {
@@ -2419,6 +2420,29 @@ export function createAnnotationResolver({
       geo.cartographic.fromDegrees(lon, lat),
     );
     return Number.isFinite(globeHeight) && globeHeight > 0 ? globeHeight : 0;
+  }
+
+  /** sampleGroundHeight on a globe engine: the rendered surface, else terrain. */
+  function engineGroundHeight(engine, lon, lat) {
+    try {
+      if (engine.surface.clampToHeightSupported) {
+        const clamped = engine.surface.clampToHeight(
+          geo.cartesian3.fromDegrees(lon, lat, 0),
+        );
+        const h = clamped && geo.cartographic.fromCartesian(clamped)?.height;
+        if (Number.isFinite(h)) return h;
+      }
+    } catch {
+      /* tiles not ready — fall through */
+    }
+    try {
+      const h = engine.surface.terrainHeightSupported
+        ? engine.surface.terrainHeight(geo.cartographic.fromDegrees(lon, lat))
+        : undefined;
+      return Number.isFinite(h) && h > 0 ? h : 0;
+    } catch {
+      return 0;
+    }
   }
 
   function shortLabel(formattedAddress) {

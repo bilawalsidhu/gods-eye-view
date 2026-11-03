@@ -468,7 +468,7 @@ export function attachViewerlessTools(
   defer(() => styleManager._clearPersistentStatusNotice?.());
   // The page session's annotation board, Draw and Import on this engine
   // (src/app/navaraTools.js).
-  const tools = { engine, view: navaraViews.get(engine) };
+  const tools = { engine, views: navaraViews.get(engine) };
   const context = { operations, placeSearch, layerSession, styleManager };
   const annotations = attachNavaraAnnotations(tools, context, {
     signal,
