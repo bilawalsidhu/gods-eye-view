@@ -1,6 +1,6 @@
 import { SceneDirector } from '../scenes/director.js';
 import { createSessionAnnotations } from '../annotations/index.js';
-import { initDrawTool } from '../annotations/drawTool.js';
+import { createSessionDrawTool } from '../annotations/drawTool.js';
 import { createGeoFileImport } from '../ui/geoFileImport.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
@@ -161,18 +161,20 @@ export function createApplicationTools({
     const token = displayStore.connect(actions);
     return () => displayStore.detach(token);
   };
-  // UTILITIES ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
-  // while a session is open, so its teardown belongs to the application
-  // lifetime rather than to whoever last pressed the button. A row's fly-to
-  // goes through the shell's navigation policy, as Import's does.
-  const drawTool = initDrawTool({
-    viewer,
-    annotations,
-    navigation: styleManager,
-    publish: (view) => displayStore.publishDraw(view),
-    connect: connectDisplay,
-  });
-  defer(() => drawTool?.destroy());
+  // UTILITIES ▸ Draw: the same whiteboard, drawn by hand. The marks and the
+  // chosen shape belong to the page session; the tool claims this viewer's
+  // pointer while a sketch is open, so an engine switch ends the sketch. A
+  // row's fly-to goes through the shell's navigation policy, as Import's does.
+  const drawTool = sessionTool(layerSession, 'draw', defer, () =>
+    createSessionDrawTool({
+      annotations,
+      navigation: styleManager,
+      publish: (view) => displayStore.publishDraw(view),
+      connect: connectDisplay,
+    }),
+  );
+  drawTool?.attachScene({ viewer, navigation: styleManager });
+  defer(() => drawTool?.detachScene());
   // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
   // own data source. They live for the page session: an engine switch takes
   // them off this viewer, and the next Cesium viewer reads them again. The

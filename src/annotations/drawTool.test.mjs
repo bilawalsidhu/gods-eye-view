@@ -23,21 +23,22 @@ test('the application composition wires the draw tool and owns its teardown', ()
   const tools = read('src/app/tools.js');
   const engineAt = tools.indexOf('const annotations = sessionAnnotations({');
   const drawAt = tools.indexOf(
-    'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    navigation: styleManager,\n    publish: (view) => displayStore.publishDraw(view),',
+    "const drawTool = sessionTool(layerSession, 'draw', defer, () =>\n    createSessionDrawTool({\n      annotations,\n      navigation: styleManager,\n      publish: (view) => displayStore.publishDraw(view),",
   );
   assert.ok(engineAt >= 0, 'the session annotation board is missing');
   assert.ok(
     drawAt > engineAt,
-    'initDrawTool must follow the annotation board and receive it',
+    'the draw tool must follow the annotation board and receive it',
   );
   assert.match(
     tools,
-    /import \{ initDrawTool \} from '\.\.\/annotations\/drawTool\.js';/,
+    /import \{ createSessionDrawTool \} from '\.\.\/annotations\/drawTool\.js';/,
   );
-  // The tool holds a pointer claim, DOM listeners and a data source, so the
-  // application lifetime disposes it — not whoever last pressed the button.
-  const deferAt = tools.indexOf('defer(() => drawTool?.destroy());');
-  assert.ok(deferAt > drawAt, 'the shell must defer the draw tool teardown');
+  // The tool holds a pointer claim, DOM listeners and a data source on the
+  // viewer, so the viewer's attachment ends it — not whoever last pressed the
+  // button; the session tool ends with the page.
+  const detachAt = tools.indexOf('defer(() => drawTool?.detachScene());');
+  assert.ok(detachAt > drawAt, 'the scene must end the draw tool');
 });
 
 test('the engine resolves manual geometry before any name resolution', () => {
