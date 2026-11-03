@@ -28,7 +28,8 @@ function harness() {
       }
       const kind = Object.keys(config)[0];
       const desc = new (kinds.get(kind))(view, {}, config);
-      assert.equal(desc.getPassKey(), 'transparent');
+      // Depth-tested against the scene: the frame must not paint through walls.
+      assert.equal(desc.getPassKey(), 'opaque');
       const object = desc.createMesh();
       scene.add(object);
       const handle = {

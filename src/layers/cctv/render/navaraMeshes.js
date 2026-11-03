@@ -46,8 +46,12 @@ export function createCctvNavaraMeshes(engine, { view, MeshDesc }) {
           super(owner, ctx, config);
           this.cctv = config[KIND];
         }
+        // The opaque scene draws after the scene depth is copied into its
+        // target, so walls and terrain hide the frame and volume; Navara's
+        // transparent pass runs after the effects without that depth and
+        // painted them through (scripts/qa-edge-cctv-occlusion.mjs).
         getPassKey() {
-          return 'transparent';
+          return 'opaque';
         }
         createMesh() {
           return this.cctv.group;
