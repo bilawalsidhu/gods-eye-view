@@ -4,10 +4,7 @@ import {
   militaryNamesInView,
   nameMilitaryFragment,
 } from '../../data/militaryNames.js';
-import {
-  createOpenFreeMapSource,
-  decodeOpenFreeMapMilitaryTile,
-} from '../../sources/openFreeMap.js';
+import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
 import {
   mergeMilitaryFragments,
   militaryNameInView,
@@ -170,7 +167,7 @@ export function createInstallationSource({
   loadNames = loadMilitaryNames,
   mapTiles = createOpenFreeMapSource({
     fetchImpl: tileFetchImpl,
-    decode: decodeOpenFreeMapMilitaryTile,
+    selectDecoded: ({ military }) => ({ military }),
   }),
 } = {}) {
   let overpassUnavailable = false;

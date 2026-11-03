@@ -25,11 +25,11 @@ import * as Cesium from 'cesium';
  * follows DATA_SOURCES.md (live sources, then bundled snapshots).
  * @type {{ key: string, html: string }[]}
  */
-const OSM_CREDIT = {
+export const OSM_CREDIT = {
   key: 'openstreetmap',
   html: 'Map and place data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>)',
 };
-const OPENMAPTILES_CREDIT = {
+export const OPENMAPTILES_CREDIT = {
   key: 'openfreemap',
   html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
 };
@@ -149,6 +149,20 @@ export const DATA_CREDITS = [
   {
     key: 'usgs',
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
+  },
+  {
+    key: 'openseamap',
+    html:
+      'Sea marks overlay: ' +
+      '<a href="https://www.openseamap.org" target="_blank" rel="noopener">© OpenSeaMap contributors</a> (CC BY-SA 2.0) · ' +
+      'Data © OpenStreetMap contributors (ODbL)',
+  },
+  {
+    key: 'opensnowmap',
+    html:
+      'Ski pistes overlay: ' +
+      '<a href="https://www.opensnowmap.org" target="_blank" rel="noopener">© www.opensnowmap.org</a> (CC BY-SA) · ' +
+      'Data © OpenStreetMap contributors (ODbL)',
   },
   {
     key: 'nasa-gibs',
@@ -538,13 +552,24 @@ export const NATURAL_EARTH_CREDIT = {
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
 
-/** Registered when the first bundled US county outline resolves (public
- * domain — credited as a courtesy). */
+/** Registered when the first bundled US county or place outline resolves
+ * (public domain — credited as a courtesy). */
 export const US_CENSUS_CREDIT = {
   key: 'us-census-counties',
   html:
-    'US county boundaries from the ' +
+    'US county and place boundaries from the ' +
     '<a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">U.S. Census Bureau</a> (public domain)',
+};
+
+/** Registered when the first bundled Who's On First neighborhood outline
+ * resolves. The link leads to the pack's per-source credits and licences and
+ * says how the boundaries were modified. */
+export const WOF_CREDIT = {
+  key: 'wof-neighborhoods',
+  html:
+    'Neighborhood boundaries: ' +
+    '<a href="https://whosonfirst.org/docs/licenses/" target="_blank" rel="noopener">Who\'s On First</a> and contributors, simplified (' +
+    '<a href="https://github.com/bilawalsidhu/gods-eye-view/blob/main/src/data/local_data/wof_neighborhoods/ATTRIBUTION.md" target="_blank" rel="noopener">sources and licences</a>)',
 };
 
 /**

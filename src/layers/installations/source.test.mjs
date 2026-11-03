@@ -11,6 +11,7 @@ import {
   MILITARY_TILE_MIN_ZOOM,
 } from './source.js';
 import {
+  clearSharedOpenFreeMapTiles,
   decodeOpenFreeMapMilitaryTile,
   decodeOpenFreeMapTile,
 } from '../../sources/openFreeMap.js';
@@ -333,6 +334,7 @@ test('the military-only decoder keeps Camp Mabry and skips road geometry', () =>
 });
 
 test('installation API transports never receive vector-tile URLs', async (t) => {
+  t.after(clearSharedOpenFreeMapTiles);
   const calls = [];
   const tileFetch = async (url) => {
     calls.push(url);
@@ -351,6 +353,7 @@ test('installation API transports never receive vector-tile URLs', async (t) => 
   };
   t.mock.method(globalThis, 'fetch', tileFetch);
   for (const tileFetchImpl of [undefined, tileFetch]) {
+    clearSharedOpenFreeMapTiles();
     const source = createInstallationSource({
       tileFetchImpl,
       fetchImpl: async (url) => {

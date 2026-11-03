@@ -247,7 +247,19 @@ test('the Norwegian supplement names unnamed mapped areas and places sites with 
   );
   assert.deepEqual(pack.classes, overture.classes);
   const packKeys = new Set(overture.records.map((r) => r[0]));
-  for (const [osmKey, , lon, lat, west, south, east, north, , area, qid] of pack.records) {
+  for (const [
+    osmKey,
+    ,
+    lon,
+    lat,
+    west,
+    south,
+    east,
+    north,
+    ,
+    area,
+    qid,
+  ] of pack.records) {
     assert.match(qid, /^Q\d+$/);
     assert.ok(lon >= 4 && lon <= 31.5 && lat >= 57.9 && lat <= 71.2);
     assert.ok(west <= lon && lon <= east && south <= lat && lat <= north);
