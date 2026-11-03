@@ -8,20 +8,22 @@ export function createLifecycle({
   const { holdContinuousRender, releaseContinuousRender } = services.render;
 
   const methods = {
-    init(viewer, { engine = null } = {}) {
-      layerState._engine = engine;
-      layerState._renderer = services.renderer.create({ viewer, engine });
-      layerState._viewer = layerState._renderer.view;
-      layerState._declutterOccluder = getRenderer().occluder();
-      layerState._enabled = false;
-      parts.panel.createMissionPanel();
-      parts.overlays.createReplayVehicleOverlay();
-      layerState._dataSource = getRenderer().createDataSource();
+    init(viewer, options) {
       layerState._count = 0;
       layerState._lastUpdate = null;
       layerState._stale = false;
       layerState._lastError = null;
       layerState._orbitMatches = 0;
+      this.attachRenderer(viewer, options);
+    },
+    attachRenderer(viewer, { engine = null, waitForCameraRestore = false } = {}) {
+      layerState._engine = engine;
+      layerState._renderer = services.renderer.create({ viewer, engine });
+      layerState._viewer = layerState._renderer.view;
+      layerState._declutterOccluder = getRenderer().occluder();
+      parts.panel.createMissionPanel();
+      parts.overlays.createReplayVehicleOverlay();
+      layerState._dataSource = getRenderer().createDataSource();
       parts.overlays.clearMissionOverlaySources();
       const enabled = () => layerState._enabled && layerState._dataSource?.show;
       layerState._clickHandler = getRenderer().listenClick(
@@ -53,6 +55,52 @@ export function createLifecycle({
         parts.rendering.updateMissionFrame,
       );
       parts.launchPad.initLaunchPadZonePrimitive();
+      if (layerState._enabled) {
+        holdContinuousRender('rocket-launches');
+        layerState._dataSource.show = true;
+        layerState._orbitMatches = 0;
+        for (const launch of layerState._launches) parts.rendering.addLaunchEntity(launch, layerState._renderedTleText);
+        parts.selection.showSelectedMission();
+      }
+      layerState._restoringViewport = true;
+      if (!waitForCameraRestore) this.resumeViewport();
+    },
+
+    resumeViewport() {
+      if (!layerState._restoringViewport) return;
+      layerState._restoringViewport = false;
+      if (layerState._enabled && layerState._replayCameraLaunchId) {
+        parts.replay.startMissionReplay(layerState._replayCameraLaunchId, { resuming: true });
+      } else if (layerState._enabled && layerState._missionZoomAnchorId) {
+        const launch = layerState._launches.find(item => item.id === layerState._missionZoomAnchorId);
+        if (launch) parts.selection.startMissionZoomAnchor(launch, layerState._missionZoomRange);
+      }
+      layerState._resumeRenderer?.();
+      layerState._waitForRenderer = layerState._resumeRenderer = null;
+    },
+
+    detachRenderer() {
+      if (!layerState._renderer) return;
+      layerState._waitForRenderer ??= new Promise(resolve => { layerState._resumeRenderer = resolve; });
+      layerState._replayCameraToken++;
+      layerState._replayCameraRemover?.();
+      layerState._missionZoomAnchorRemover?.();
+      layerState._replayCameraRemover = layerState._missionZoomAnchorRemover = null;
+      layerState._clickHandler?.destroy();
+      layerState._moveHandler?.destroy();
+      layerState._declutterHandler?.();
+      layerState._clickHandler = layerState._moveHandler = layerState._declutterHandler = null;
+      parts.launchPad.destroyLaunchPadZonePrimitive();
+      parts.orbitRendering.removeMissionOrbitPrimitives();
+      parts.overlays.clearMissionOverlaySources();
+      parts.overlays.destroyReplayVehicleOverlay();
+      layerState._missionOverlayRecords.clear();
+      layerState._satelliteTelemetry.clear();
+      layerState._replayTracks.clear();
+      layerState._renderer.removeDataSource(layerState._dataSource);
+      layerState._renderer.destroy();
+      layerState._dataSource = layerState._renderer = layerState._engine = layerState._viewer = null;
+      if (layerState._enabled) releaseContinuousRender('rocket-launches');
     },
 
     async enable() {
@@ -116,6 +164,8 @@ export function createLifecycle({
     },
 
     async destroy(viewer) {
+      layerState._resumeRenderer?.();
+      layerState._waitForRenderer = layerState._resumeRenderer = null;
       layerState._sourceController.abort();
       releaseContinuousRender('rocket-launches'); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;

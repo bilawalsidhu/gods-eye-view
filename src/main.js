@@ -141,7 +141,10 @@ async function reconcile(remember = false) {
             id, { entry: entry.module.attachRenderer ? entry : null, enabled: manager.isEffectivelyEnabled(id) },
           ]))
         : null;
-      if (layerSession.handoffLayers) manager.layers.get('directions')?.module.suspendCamera?.();
+      if (layerSession.handoffLayers) {
+        manager.layers.get('directions')?.module.suspendCamera?.();
+        manager.layers.get('satellites')?.module.suspendCamera?.();
+      }
       renderers.retain(kind);
       await application.destroy();
       await start(pageEngineKind(), true, cockpit);

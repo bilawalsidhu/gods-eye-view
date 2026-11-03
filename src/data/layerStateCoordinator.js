@@ -491,7 +491,7 @@ export class LayerStateCoordinator {
     const model = this.dataManager.layers.get(selected.layerId)?.module;
     if (
       model?.attachRenderer &&
-      model.getParams?.()[selected.optionKey] === selected.targetId &&
+      String(model.getParams?.()[selected.optionKey]) === String(selected.targetId) &&
       model.hasContact?.(selected.targetId) === true
     ) return selected;
     return null;

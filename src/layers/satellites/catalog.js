@@ -61,6 +61,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
    */
 
   async function _loadDenseCatalog({ signal = null } = {}) {
+    if (layerState._waitForRenderer) await layerState._waitForRenderer;
     if (!layerState._viewer || !layerState._pointCollection)
       return { status: 'source-unavailable', reason: 'layer-unavailable' };
     layerState._denseLoadController?.abort();
@@ -103,6 +104,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       let added = 0;
 
       for (let start = 0; start < entries.length; start += DENSE_CREATE_CHUNK) {
+        if (layerState._waitForRenderer) await layerState._waitForRenderer;
         loadSignal.throwIfAborted();
         if (
           token !== layerState._denseLoadToken ||

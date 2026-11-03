@@ -75,7 +75,12 @@ export function createSelection({
       stopMissionZoomAnchor();
       layerState._viewer.selectedEntity = undefined;
     }
+    showSelectedMission();
+  }
+
+  function showSelectedMission() {
     if (!layerState._dataSource) return;
+    const launchId = layerState._selectedLaunchId;
     for (const entity of layerState._dataSource.entities.values) {
       const relatedId = entityLaunchId(entity);
       entity.show = launchId
@@ -107,6 +112,7 @@ export function createSelection({
       Number(initialRange) || MISSION_GLOBE_VIEW_RANGE_M,
     );
     layerState._missionZoomAnchorId = launch.id;
+    layerState._missionZoomRange = range;
     layerState._viewer.camera.lookAt(
       target,
       getRenderer().range(0, parts.camera.missionZoomPitch(range), range),
@@ -219,6 +225,7 @@ export function createSelection({
     focusFullGlobe,
     entityLaunchId,
     setSelectedMission,
+    showSelectedMission,
     stopMissionZoomAnchor,
     startMissionZoomAnchor,
     focusMission,

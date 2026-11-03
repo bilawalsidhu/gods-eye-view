@@ -625,7 +625,7 @@ export class StyleManager extends ShellFacade {
     this._publishActiveStyle();
     this._updateLocationMiniStatus();
 
-    this._shareRestoration.start({ engineSwitch });
+    this._shareRestoration.start({ engineSwitch, retainScene: Boolean(this._layerSession?.handoffLayers) });
 
     // Keep the parameter panel from overlapping toggle controls.
     this._layoutRightPanels();
@@ -976,7 +976,7 @@ export class StyleManager extends ShellFacade {
       },
     });
     if (this._layerSession?.handoffLayers)
-      this._contextControls.resumeScene(this._layerSession.contacts);
+      this._contextControls.resumeScene(this._layerSession.contextScene);
     // The Contacts layer publishes its panel; the view calls its navigation.
     contextStore.connectAwareness(militaryAwarenessLayer);
     // A panel left by an earlier shell must not outlive its layer.
@@ -1856,15 +1856,15 @@ export class StyleManager extends ShellFacade {
     // re-enable a mode's entry layer and republish `_contextMode` while the
     // rest of teardown is tearing those very layers down.
     this._contextControls.stop();
-    this._navigation.destroy();
+    this._navigation.destroy({ retainScene: Boolean(this._layerSession?.handoffLayers) });
     // Close camera-entry seams synchronously. Context restoration may await
     // layer work, so leaving these listeners attached until afterward lets a
     // focus event release tracking or start a flight during teardown.
     if (this._layerSession && !this._layerSession.lifetime.signal.aborted &&
-        this._contextControls.canRetainContacts()) {
-      this._layerSession.contacts = this._contextControls.captureScene();
+        this._contextControls.canRetainScene()) {
+      this._layerSession.contextScene = this._contextControls.captureScene();
     } else {
-      if (this._layerSession) this._layerSession.contacts = null;
+      if (this._layerSession) this._layerSession.contextScene = null;
       await this._contextControls.restoreForDisposal();
     }
     // IR boost teardown BEFORE detaching the data manager: restore fog and

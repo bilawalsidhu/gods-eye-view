@@ -155,7 +155,7 @@ export class ShareRestoration {
     this.shareLinkManager = shareLinkManager;
     this._initialShareState = shareLinkManager.parseInitialHash();
   }
-  start({ engineSwitch = false } = {}) {
+  start({ engineSwitch = false, retainScene = false } = {}) {
     // Restore from URL hash if present
     const savedState = this._initialShareState;
     this._initialShareRestorePromise = savedState
@@ -181,12 +181,13 @@ export class ShareRestoration {
           Number.isInteger(generation) &&
           this.navigation._reassertNavigationHandoff(generation, {
             trackingOrigin: engineSwitch ? 'share-restore' : 'tool',
-            keepTracking: Boolean(retained),
+            keepTracking: retainScene || Boolean(retained),
           });
         void this._runShareRestore(savedState, {
           applyCamera,
           instant: engineSwitch,
           retained,
+          retainScene,
           navigationToken: generation,
           layersPromise: this._layerStateRestorePromise,
           settle: (result) => this._settleInitialShareRestore(result),
@@ -245,7 +246,7 @@ export class ShareRestoration {
    */
   async _runShareRestore(
     state,
-    { applyCamera, instant = false, retained, navigationToken, layersPromise, settle },
+    { applyCamera, instant = false, retained, retainScene = false, navigationToken, layersPromise, settle },
   ) {
     const generation = this._shareRestoreGeneration;
     const current = () =>
@@ -258,6 +259,7 @@ export class ShareRestoration {
       });
       const layers = await (layersPromise || Promise.resolve([]));
       if (!current()) return;
+      if (retainScene && !retained) retained = this._layerStateCoordinator?.retainedTrackingTarget();
       const tracking =
         share.camera === 'applied'
           ? (retained && this._layerStateCoordinator.resumeRetainedTracking(retained)) ||
