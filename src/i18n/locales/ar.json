@@ -1146,7 +1146,6 @@
   "OCEANIA": "أوقيانوسيا",
   "NORTHERN OCEANIC GRID": "الشبكة المحيطية الشمالية",
   "SOUTHERN OCEANIC GRID": "الشبكة المحيطية الجنوبية",
-  "{state} {layers}": "{state}: {layers}",
   "view band|STREET": "شارع",
   "view band|CITY": "مدينة",
   "view band|METRO": "حضري",

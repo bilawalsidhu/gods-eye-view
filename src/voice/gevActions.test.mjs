@@ -5675,3 +5675,20 @@ test('set_panel_open reaches the Utilities panel by its name, Draw or Import', a
   }
   assert.deepEqual(calls.at(-1), ['utilities-panel', false, { explicit: true }]);
 });
+
+test('a partial analyst card shows one partial chip', () => {
+  const card = presentResult('analyst_query', {
+    ok: true,
+    action: 'analyst_query',
+    count: 3,
+    feedState: 'partial',
+    partial: true,
+    unanswered: ['vessels'],
+    summary: '3 contacts',
+    scopeLabel: 'within 5 km of X',
+    display: { scope: 'within 5 km of X' },
+    coverage: {},
+  });
+  const labels = card.display.chips.map((chip) => chip.label);
+  assert.equal(new Set(labels).size, labels.length, JSON.stringify(labels));
+});
