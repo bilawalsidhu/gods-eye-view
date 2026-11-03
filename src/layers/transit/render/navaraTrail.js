@@ -232,7 +232,7 @@ function descriptor(EffectDesc, NavaraEffect) {
       });
       return new NavaraEffect(this.view.camera.raw, this.effect);
     }
-    update() {
+    updateFrame() {
       if (!this.effect) return;
       const { state, displayT, active, color, pixelRatio } = this.owner;
       const camera = this.view.camera.raw;

@@ -12,6 +12,7 @@
 // FIRMS opts into a separate native-stage overlay before sharpening/AA.
 // Only that stage owns an encoded-RGBA8 blend target; W1 stays in place.
 
+import { withFrameUpdates } from './frameDescriptor.js';
 import { EffectDesc, Pass as NavaraPass } from '@navaramap/three';
 import { GevOverlayPass } from './overlayPass.js';
 import { RGBADepthPacking, Scene } from 'three';
@@ -20,7 +21,7 @@ export const OVERLAY_EFFECT_KEY = 'gevOverlay';
 const PRE_SHARPEN_KEY = 'gevPreSharpenOverlay';
 const registeredViews = new WeakMap();
 
-class GevOverlayEffectDesc extends EffectDesc {
+class GevOverlayEffectDesc extends withFrameUpdates(EffectDesc) {
   static key = OVERLAY_EFFECT_KEY;
   // Navara takes the first existing anchor, so the latest pass comes first.
   static insertAfter = ['fxaa', 'smaa', 'gevSharpen', 'toneMapping'];
@@ -56,7 +57,7 @@ class GevOverlayEffectDesc extends EffectDesc {
 
   // Each drawn frame: the scene depth the overlays test against, then each
   // overlay's own per-frame work (pixel footprint, origin, viewport).
-  update(time) {
+  updateFrame(time) {
     const mrt = this.find('mrt');
     this.overlay.uniforms.tGevSceneDepth.value =
       mrt?.depthBufferPacking === RGBADepthPacking ? mrt.depthBuffer : null;

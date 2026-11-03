@@ -9,6 +9,7 @@
 // asks for one frame (view.forceUpdate); per-frame work runs only on frames
 // the view draws anyway (S5), so an idle view stays idle.
 
+import { withFrameUpdates } from '../frameDescriptor.js';
 import {
   MeshDesc,
   PickableInstancedMeshWrapper,
@@ -25,7 +26,7 @@ import { createNavaraOverlay } from '../overlay.js';
 const DESC_NAME = 'gevMoverSet';
 const registered = new WeakSet();
 
-class GevMoverSetDesc extends MeshDesc {
+class GevMoverSetDesc extends withFrameUpdates(MeshDesc) {
   constructor(view, ctx, config) {
     super(view, ctx, config);
     this.gev = config[DESC_NAME];
@@ -59,7 +60,7 @@ class GevMoverSetDesc extends MeshDesc {
     return group;
   }
 
-  update(time) {
+  updateFrame(time) {
     updateMover(this.gev.readFrameCamera, this.ctx, this.gev.mover, time);
   }
 

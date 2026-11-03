@@ -3616,6 +3616,7 @@
       "src/geo/developerError.js",
       "src/time/clock.js",
       "src/globe/navara/overlay.js",
+      "src/globe/navara/frameDescriptor.js",
       "src/globe/cesium/clock.js",
       "src/globe/pickDelivery.js",
       "src/globe/navara/clock.js",

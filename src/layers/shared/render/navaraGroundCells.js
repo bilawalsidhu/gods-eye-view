@@ -244,7 +244,7 @@ function groundEffectClass(EffectDesc, NavaraEffect) {
       });
       return new NavaraEffect(this.view.camera.raw, this.effect);
     }
-    update() {
+    updateFrame() {
       const state = this.owner.state,
         camera = this.view.camera.raw;
       if (!this.effect || !state || !camera) return;

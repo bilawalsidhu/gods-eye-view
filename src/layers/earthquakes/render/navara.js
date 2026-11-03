@@ -230,7 +230,7 @@ function groundEffectClass(EffectDesc, NavaraEffect) {
       });
       return new NavaraEffect(this.view.camera.raw, this.effect);
     }
-    update() {
+    updateFrame() {
       const state = this.owner.state,
         camera = this.view.camera.raw,
         mrt = this.find('mrt');
