@@ -4202,6 +4202,7 @@
       "src/voice/session.js",
       "src/voice/control.js",
       "src/voice/chatControl.js",
+      "src/voice/cloudVoiceAuth.js",
       "src/voice/geminiTextChat.js",
       "src/voice/textChat.js",
       "src/voice/textProtocol.js",

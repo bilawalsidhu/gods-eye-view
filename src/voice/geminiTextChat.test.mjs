@@ -177,6 +177,58 @@ test('composite chat never starts Live and the next keyboard start resets its mo
   adapter.stop({ removeUi: true });
 });
 
+test('Gemini composite: chat Stop keeps the conversation and voice start ends chat', async () => {
+  const { createGeminiSession } = await import('./geminiSession.js');
+  const requests = [];
+  const signals = [];
+  const adapter = createGeminiSession({
+    emit: () => {},
+    runAction: (_name, _args, options) => {
+      signals.push(options.signal);
+      return new Promise(() => {});
+    },
+    ui: createTestVoiceUi(),
+    fetchImpl: async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      return requests.length === 1
+        ? final()
+        : Response.json({
+            content: {
+              role: 'model',
+              parts: [{ functionCall: { name: 'fly_to', args: {} } }],
+            },
+          });
+    },
+    getUserMedia: () => {
+      throw Error('No microphone');
+    },
+    createAudio: () => {
+      throw Error('No audio');
+    },
+  });
+  await adapter.start({ textOnly: true });
+  adapter.sendText('First');
+  for (let i = 0; i < 5; i++) await tick();
+  adapter.sendText('Second');
+  for (let i = 0; i < 5 && !signals[0]; i++) await tick();
+  assert.equal(adapter.cancelTurn(), true);
+  assert.equal(signals[0].aborted, true);
+  assert.equal(adapter.sendText('Third'), true);
+  for (let i = 0; i < 5 && !signals[1]; i++) await tick();
+  assert.deepEqual(
+    requests[2].contents
+      .filter((item) => item.parts[0].text)
+      .map((item) => item.parts[0].text),
+    ['First', 'Done', 'Third'],
+  );
+  // Starting voice retires the typed turn in progress.
+  adapter.controller.start = async () => {};
+  await adapter.controller.input.start({ pushToTalk: true });
+  assert.equal(signals[1].aborted, true);
+  assert.equal(adapter.cancelTurn(), false);
+  adapter.stop({ removeUi: true });
+});
+
 test('failed Radio startup cancels its stream before releasing the mute', async () => {
   const actions = [];
   let count = 0;
@@ -307,7 +359,8 @@ for (const intent of ['pause', 'off'])
     assert.equal(plays, 0);
   });
 
-test('a tool deadline reports one error, aborts work and admits a successor', async () => {
+test('a tool deadline reports one error, aborts work and admits a successor', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const events = [];
   let actionSignal,
     requests = 0;
@@ -331,7 +384,9 @@ test('a tool deadline reports one error, aborts work and admits a successor', as
   });
   chat.start();
   chat.sendText('Go');
-  await new Promise((resolve) => setTimeout(resolve, 70));
+  for (let i = 0; i < 5 && !actionSignal; i++) await tick();
+  assert.equal(actionSignal.aborted, false);
+  t.mock.timers.tick(30);
   assert.equal(actionSignal.aborted, true);
   assert.equal(events.filter((e) => e.state === 'error').length, 1);
   assert.equal(requests, 1);

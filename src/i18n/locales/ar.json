@@ -3286,5 +3286,12 @@
   "The selected AI provider is shared by voice and chat.": "مزوّد الذكاء الاصطناعي المختار مشترك بين الصوت والدردشة.",
   "Show quick commands": "إظهار الأوامر السريعة",
   "Chat replies are silent. No microphone access is needed.": "ردود الدردشة صامتة. لا حاجة إلى الوصول إلى الميكروفون.",
-  "Chat": "الدردشة"
+  "Chat": "الدردشة",
+  "Attach layer": "إرفاق الطبقة",
+  "Typed chat uses your OpenAI API key. ChatGPT sign-in covers voice only.": "تستخدم الدردشة الكتابية مفتاح OpenAI API الخاص بك. تسجيل الدخول إلى ChatGPT يشمل الصوت فقط.",
+  "Typed chat is unavailable while GEV_PREFER_CODEX_OAUTH requires ChatGPT OAuth.": "الدردشة الكتابية غير متاحة بينما يفرض GEV_PREFER_CODEX_OAUTH استخدام ChatGPT OAuth.",
+  "That request needed too many steps. Changes already made to the map stay in place.": "تطلّب هذا الطلب خطوات كثيرة جدًا. تبقى التغييرات التي أُجريت على الخريطة كما هي.",
+  "That request needed too many steps. Try a simpler request.": "تطلّب هذا الطلب خطوات كثيرة جدًا. جرّب طلبًا أبسط.",
+  "The provider rejected the API key. Check it in Provider Settings.": "رفض المزوّد مفتاح API. تحقّق منه في إعدادات المزوّد.",
+  "Too many chat requests. Try again in {seconds} s.": "طلبات دردشة كثيرة جدًا. حاول مجددًا بعد {seconds} ث."
 }

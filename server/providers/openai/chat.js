@@ -1,4 +1,6 @@
 import { createTextChatHandler } from '../common/textChat.js';
+import { preferCodexOAuth } from './codex-auth.js';
+import { OPENAI_DEFAULT_PER_MIN } from './rate-limit.js';
 import { invalidCalls } from '../common/textTools.js';
 import { textInstructions } from '../common/textInstructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
@@ -66,12 +68,27 @@ export function createOpenAiChatHandler({
   tools = GEV_REALTIME_TOOLS,
   resolveApiKey = () => process.env.OPENAI_API_KEY,
   resolveChatModel = () => process.env.OPENAI_CHAT_MODEL || 'gpt-4.1-mini',
+  resolveProviderRateLimit = () => process.env.GEV_RATELIMIT_OPENAI_PER_MIN,
+  environment = process.env,
   ...options
 } = {}) {
   return createTextChatHandler({
     ...options,
     provider: 'openai',
     resolveApiKey,
+    resolveProviderRateLimit,
+    providerPerMin: OPENAI_DEFAULT_PER_MIN,
+    // Chat can only bill the API key, which this operator lock forbids.
+    refuse() {
+      let error =
+        'ChatGPT OAuth is required by GEV_PREFER_CODEX_OAUTH, and typed OpenAI chat needs an API key.';
+      try {
+        if (!preferCodexOAuth(environment)) return null;
+      } catch (invalid) {
+        error = invalid.message;
+      }
+      return { error, code: 'CODEX_OAUTH_REQUIRED' };
+    },
     prepare(input) {
       const model = String(resolveChatModel()).trim();
       if (

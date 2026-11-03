@@ -134,6 +134,10 @@ function initialState(panel) {
       quickChecked: true,
       // The latest reply, shown above the minimized bar.
       miniReply: '',
+      // A reply is typing out; the conversation is busy for screen readers.
+      revealing: false,
+      // Says chat bills the OpenAI key while voice uses ChatGPT sign-in.
+      authNote: '',
       suggestions: [],
       attachments: [],
       attachMenuOpen: false,

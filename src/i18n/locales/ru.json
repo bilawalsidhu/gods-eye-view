@@ -3146,5 +3146,12 @@
   "The selected AI provider is shared by voice and chat.": "Выбранный провайдер ИИ используется для голоса и чата.",
   "Show quick commands": "Показывать быстрые команды",
   "Chat replies are silent. No microphone access is needed.": "Ответы в чате беззвучны. Доступ к микрофону не требуется.",
-  "Chat": "Чат"
+  "Chat": "Чат",
+  "Attach layer": "Прикрепить слой",
+  "Typed chat uses your OpenAI API key. ChatGPT sign-in covers voice only.": "Текстовый чат использует ваш ключ API OpenAI. Вход в ChatGPT действует только для голоса.",
+  "Typed chat is unavailable while GEV_PREFER_CODEX_OAUTH requires ChatGPT OAuth.": "Текстовый чат недоступен, пока GEV_PREFER_CODEX_OAUTH требует ChatGPT OAuth.",
+  "That request needed too many steps. Changes already made to the map stay in place.": "Этот запрос потребовал слишком много шагов. Уже внесённые изменения карты сохранятся.",
+  "That request needed too many steps. Try a simpler request.": "Этот запрос потребовал слишком много шагов. Попробуйте запрос попроще.",
+  "The provider rejected the API key. Check it in Provider Settings.": "Провайдер отклонил ключ API. Проверьте его в настройках провайдера.",
+  "Too many chat requests. Try again in {seconds} s.": "Слишком много запросов чата. Повторите через {seconds} с."
 }

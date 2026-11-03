@@ -23,8 +23,9 @@ test('lastSentence keeps only the final sentence across scripts', () => {
 function fixture({ textOnly = false } = {}) {
   const ui = createTestVoiceUi({ panel: true });
   const listeners = new Set();
+  const mode = { textOnly };
   const session = {
-    adapter: { getStartOptions: () => ({ textOnly }) },
+    adapter: { getStartOptions: () => ({ textOnly: mode.textOnly }) },
     subscribe(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -32,7 +33,7 @@ function fixture({ textOnly = false } = {}) {
   };
   const emit = (event) => listeners.forEach((fn) => fn(event));
   const unbind = bindVoiceMiniPreview({ ui, session });
-  return { ui, emit, unbind, listeners };
+  return { ui, emit, unbind, listeners, mode };
 }
 
 test('voice preview shows the last user and assistant sentence', () => {
@@ -87,6 +88,18 @@ test('typed chat turns do not reach the voice preview', () => {
     text: 'Typed reply.',
     final: true,
   });
+  assert.deepEqual(f.ui.state.mini, { user: '', assistant: '' });
+  assert.equal(f.ui.state.root.voiceExchange, false);
+});
+
+test('a new session clears the preview even while the adapter still reports chat', () => {
+  const f = fixture();
+  f.emit({ type: 'transcript', role: 'user', text: 'Show live flights.' });
+  assert.equal(f.ui.state.mini.user, 'Show live flights.');
+  // Voice -> chat -> voice: the next start's connecting can arrive before
+  // the adapter has left typed mode.
+  f.mode.textOnly = true;
+  f.emit({ type: 'state', state: 'connecting' });
   assert.deepEqual(f.ui.state.mini, { user: '', assistant: '' });
   assert.equal(f.ui.state.root.voiceExchange, false);
 });

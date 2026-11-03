@@ -85,7 +85,6 @@
   overflow: hidden;
   color: var(--text-primary);
   background: rgba(7, 22, 31, 0.97);
-  backdrop-filter: blur(24px);
   border: 1px solid rgba(54, 220, 255, 0.3);
   border-radius: 0.9rem;
   box-shadow: 0 1rem 3rem #0008;
@@ -180,6 +179,12 @@
 }
 #gev-chat-empty p {
   margin: 0 0 1rem;
+}
+#gev-chat-auth-note {
+  margin: 0;
+  padding: 0 1rem 0.3rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
 }
 #gev-chat-empty button {
   border: 1px solid var(--glass-border);
@@ -468,6 +473,19 @@
   color: var(--text-primary);
   background: #10232d;
   font: inherit;
+}
+#gev-chat-layer-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+#gev-chat-layer-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#gev-chat-attach-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 #gev-chat-attach-menu p {
   margin-bottom: 0;
@@ -1052,7 +1070,19 @@
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
   mask-composite: exclude;
-  animation: gev-border-orbit 4s linear infinite;
+}
+/* The edge orbits only while voice is live or a chat reply is on its way;
+   an idle or minimized chat keeps it still. Touch screens and reduced
+   motion keep it still too. */
+@media (prefers-reduced-motion: no-preference) and (pointer: fine) {
+  #command-dock
+    > #gev-voice-control:is(
+      [data-assistant-mode='voice'],
+      [data-assistant-mode='chat'][data-chat-busy='true']
+    )
+    > .gev-active-border {
+    animation: gev-border-orbit 4s linear infinite;
+  }
 }
 @keyframes gev-border-orbit {
   to {
@@ -1433,6 +1463,13 @@ body[data-assistant-docked='true'] #right-context-rail {
   background: var(--assistant-glass);
   border-color: var(--assistant-glass-border);
   box-shadow: var(--assistant-glass-shadow);
+}
+/* The mini reply sits inside the chat panel, whose own blur makes it the
+   backdrop root: a blur on the reply could not reach the map. */
+:root:not([data-ui-theme='cyber'])
+  #command-dock
+  #gev-voice-control
+  :is(#gev-chat-panel, #gev-voice-panel, #gev-voice-panel[data-minimized]) {
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   backdrop-filter: blur(24px) saturate(1.4);
 }

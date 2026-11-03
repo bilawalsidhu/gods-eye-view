@@ -1,5 +1,6 @@
 import { bindChatAttachments } from './chatAttachments.js';
 import { bindChatPreferences } from './chatPreferences.js';
+import { readStoredCloudVoiceAuthMode } from './cloudVoiceAuth.js';
 import { t } from '../i18n/index.js';
 
 /**
@@ -21,6 +22,8 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
   let latestReply;
   let typingFrame = 0;
   let lastTypingTime = 0;
+  // Set by Stop until the cancelled turn reports its end or the next send.
+  let stopping = false;
   const isTyped = () => Boolean(session.adapter.getStartOptions?.().textOnly);
   const chat = () => ui.state.chat;
   // Chat Settings are still chat: the dock keeps its chat state.
@@ -81,11 +84,19 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
   }
   // Layout moves (yielding to a dock tray, say) pass `focus: false`, so they
   // never take focus from what the user is typing in.
+  // ChatGPT sign-in covers OpenAI voice only; typed chat still uses the key.
+  const authNote = () =>
+    ui.state.root.provider === 'openai' &&
+    readStoredCloudVoiceAuthMode() === 'oauth'
+      ? t(
+          'Typed chat uses your OpenAI API key. ChatGPT sign-in covers voice only.',
+        )
+      : '';
   function open({ focus = true } = {}) {
     leaveChatSettings();
     if (!isTyped() && session.isActive()) session.stop();
     onOpen?.();
-    ui.update('chat', { open: true, minimized: false, rows: 2 });
+    ui.update('chat', { open: true, minimized: false, rows: 2, authNote });
     sync();
     if (focus) void ui.focus(['chatInput']);
   }
@@ -110,6 +121,20 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
     return entry;
   }
   const preview = (text) => ui.update('chat', { miniReply: text });
+  // The reveal writes only the message list each frame. The minimized bar's
+  // reply and the log's busy state change once, as the reveal starts and
+  // ends, so the frames do not republish the whole control.
+  function startReveal() {
+    if (typingFrame) return;
+    ui.update('chat', { revealing: true });
+    typingFrame = requestAnimationFrame(animateReply);
+  }
+  function endReveal() {
+    ui.update('chat', {
+      revealing: false,
+      ...(latestReply && { miniReply: latestReply.entry.text }),
+    });
+  }
   function animateReply(time) {
     if (disposed) return;
     const elapsed = Math.min(100, time - (lastTypingTime || time - 16));
@@ -122,26 +147,35 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
         Math.ceil(remaining / 40),
       );
       reply.entry.text = reply.text.slice(0, reply.entry.text.length + step);
-      if (reply === latestReply) preview(reply.entry.text);
       if (reply.entry.text === reply.text) typing.delete(reply);
     }
     publishMessages();
     typingFrame = typing.size ? requestAnimationFrame(animateReply) : 0;
-    if (!typingFrame) lastTypingTime = 0;
+    if (!typingFrame) {
+      lastTypingTime = 0;
+      endReveal();
+    }
   }
   function finishTyping() {
+    const revealing = Boolean(typingFrame);
     if (typingFrame) cancelAnimationFrame(typingFrame);
     typingFrame = 0;
     lastTypingTime = 0;
     for (const reply of typing) reply.entry.text = reply.text;
     if (typing.size) publishMessages();
     typing.clear();
+    if (revealing) endReveal();
   }
   const unsubscribe = session.subscribe((event) => {
     if (disposed) return;
     const typed = isTyped();
     if (event.type === 'state') sync();
-    if (event.type === 'transcript' && event.role === 'assistant' && typed) {
+    if (
+      event.type === 'transcript' &&
+      event.role === 'assistant' &&
+      typed &&
+      !stopping
+    ) {
       const id = event.itemId || event.responseId || 'current';
       let reply = replies.get(id);
       if (!reply) {
@@ -152,12 +186,12 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
       reply.text = event.final ? event.text : reply.text + event.text;
       if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         reply.entry.text = reply.text;
-        preview(reply.text);
+        if (event.final) preview(reply.text);
         typing.delete(reply);
         publishMessages();
       } else {
         typing.add(reply);
-        if (!typingFrame) typingFrame = requestAnimationFrame(animateReply);
+        startReveal();
       }
     }
     if (event.type === 'action-call' && busy) {
@@ -167,14 +201,19 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
     if (typed && event.type === 'completion' && !event.intermediate) {
       busy = false;
       const completed = event.status === 'completed';
-      setStatus(() =>
-        completed
-          ? t('Silent chat · microphone off')
-          : t('Reply interrupted. You can try again.'),
-      );
-      if (!completed) {
-        finishTyping();
-        preview(t('Reply interrupted. You can try again.'));
+      // A turn the person stopped keeps its "Reply stopped." status.
+      if (stopping) stopping = false;
+      else {
+        setStatus(() =>
+          completed
+            ? t('Silent chat · microphone off')
+            : t('Reply interrupted. You can try again.'),
+        );
+        if (!completed) {
+          finishTyping();
+          preview(t('Reply interrupted. You can try again.'));
+        } else if (latestReply && !typing.has(latestReply))
+          preview(latestReply.entry.text);
       }
       sync();
     }
@@ -242,8 +281,10 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
     const attempt = ++revision;
     busy = true;
     connecting = true;
+    stopping = false;
     finishTyping();
     replies.clear();
+    latestReply = undefined;
     sync();
     setStatus(() => t('Connecting…'));
     preview(t('Connecting…'));
@@ -312,13 +353,21 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
       }
     }),
     ui.on('chat-submit', () => void submit()),
+    // Stop ends only the reply in flight: the session and conversation stay.
+    // An adapter without turn cancellation ends the session instead.
     ui.on('chat-stop', () => {
       if (!busy) return;
       finishTyping();
-      session.stop();
+      const cancelTurn = session.adapter.cancelTurn?.bind(session.adapter);
+      if (cancelTurn && !connecting) {
+        stopping = true;
+        busy = false;
+        cancelTurn();
+      } else session.stop();
       if (disposed) return;
       setStatus(() => t('Reply stopped.'));
       preview(t('Reply stopped.'));
+      sync();
     }),
     ui.on('chat-prompt', (text) => {
       setDraft(text);

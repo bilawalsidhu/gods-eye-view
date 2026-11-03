@@ -47,6 +47,8 @@ export function createRealtimeSession({
       chat.stop({ ...settings, preserveStatus: true });
       controller.stop(settings);
     },
+    // Chat Stop: abort the reply in progress, keep the conversation.
+    cancelTurn: () => textOnly && chat.cancelTurn(),
     sendText: (text) =>
       textOnly ? chat.sendText(text) : controller.sendTextCommand(text),
     sendMapEvent: (event) =>

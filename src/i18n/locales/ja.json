@@ -2936,5 +2936,12 @@
   "The selected AI provider is shared by voice and chat.": "選んだ AI プロバイダーは音声とチャットで共通です。",
   "Show quick commands": "クイックコマンドを表示",
   "Chat replies are silent. No microphone access is needed.": "チャットの応答は音声なしです。マイクへのアクセスは不要です。",
-  "Chat": "チャット"
+  "Chat": "チャット",
+  "Attach layer": "レイヤーを添付",
+  "Typed chat uses your OpenAI API key. ChatGPT sign-in covers voice only.": "テキストチャットは OpenAI API キーを使用します。ChatGPT のサインインは音声のみが対象です。",
+  "Typed chat is unavailable while GEV_PREFER_CODEX_OAUTH requires ChatGPT OAuth.": "GEV_PREFER_CODEX_OAUTH が ChatGPT OAuth を必須にしている間、テキストチャットは使えません。",
+  "That request needed too many steps. Changes already made to the map stay in place.": "このリクエストは手順が多すぎました。地図に加えた変更はそのまま残ります。",
+  "That request needed too many steps. Try a simpler request.": "このリクエストは手順が多すぎました。より簡単なリクエストを試してください。",
+  "The provider rejected the API key. Check it in Provider Settings.": "プロバイダーが API キーを拒否しました。プロバイダー設定で確認してください。",
+  "Too many chat requests. Try again in {seconds} s.": "チャットのリクエストが多すぎます。{seconds} 秒後にもう一度お試しください。"
 }

@@ -66,6 +66,14 @@ export function bindChatAttachments({ ui, dataManager, onChange, setStatus }) {
         setStatus(error.message);
       }
     }),
+    // Escape closes the menu and returns to its Attach button.
+    ui.on('chat-attach-keydown', (event) => {
+      if (event.key !== 'Escape' || !ui.state.chat.attachMenuOpen) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      ui.element('chatPanel')?.querySelector?.('#gev-chat-attach')?.focus?.();
+    }),
     ui.on('chat-file-button', () => {
       if (!locked) ui.element('chatFile')?.click();
     }),
@@ -82,10 +90,14 @@ export function bindChatAttachments({ ui, dataManager, onChange, setStatus }) {
             );
           if (file.size > 10000)
             throw new Error(t('Each file must be 10 KB or smaller.'));
-          const content = new TextDecoder('utf-8', { fatal: true }).decode(
-            await file.arrayBuffer(),
-          );
+          const bytes = await file.arrayBuffer();
           if (disposed) return;
+          let content = '';
+          try {
+            content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+          } catch {
+            // Not UTF-8: the decoder's own message is not the person's words.
+          }
           if (!content.trim() || /[\u0000-\u0008\u000e-\u001f]/.test(content))
             throw new Error(t('Choose a non-empty UTF-8 text file.'));
           add(`file:${file.name}`, { kind: 'file', name: file.name, content });

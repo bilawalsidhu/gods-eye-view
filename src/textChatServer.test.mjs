@@ -83,7 +83,7 @@ const providers = {
     }),
   },
 };
-async function fixture(t, provider, fetchImpl) {
+async function fixture(t, provider, fetchImpl, overrides = {}) {
   const calls = [];
   const handler = provider.create({
     tools,
@@ -91,12 +91,14 @@ async function fixture(t, provider, fetchImpl) {
     resolveRateLimit: () => '0',
     resolveHost: () => '',
     resolveAllowedHosts: () => '',
+    environment: {},
     fetchImpl:
       fetchImpl ||
       (async (url, options) => {
-        calls.push({ url, body: JSON.parse(options.body) });
+        calls.push({ url, body: JSON.parse(options.body), options });
         return Response.json(provider.reply(true));
       }),
+    ...overrides,
   });
   const server = http.createServer((req, res) => void handler(req, res));
   server.listen(0, '127.0.0.1');
@@ -109,6 +111,24 @@ async function fixture(t, provider, fetchImpl) {
   return {
     calls,
     origin,
+    raw: (options, body) =>
+      new Promise((resolve, reject) => {
+        const request = http.request(origin, options, (response) => {
+          let text = '';
+          response.setEncoding('utf8');
+          response.on('data', (chunk) => (text += chunk));
+          response.on('end', () =>
+            resolve({
+              status: response.statusCode,
+              headers: response.headers,
+              body: text ? JSON.parse(text) : null,
+            }),
+          );
+        });
+        request.on('error', reject);
+        if (body === undefined) request.end();
+        else request.end(body);
+      }),
     send: (input) =>
       fetch(origin, {
         method: 'POST',
@@ -190,38 +210,50 @@ for (const [name, provider] of Object.entries(providers)) {
       );
     }
   });
-  test(`${name} client disconnect aborts upstream and cancels a late body`, async (t) => {
-    let finish,
-      signal,
-      cancelled = 0,
-      ready;
-    const acquired = new Promise((resolve) => (ready = resolve));
-    const f = await fixture(t, provider, (_url, options) => {
-      signal = options.signal;
-      ready();
-      return new Promise((resolve) => (finish = resolve));
-    });
-    const request = http.request(f.origin, {
-      method: 'POST',
-      headers: { Origin: f.origin, 'Content-Type': 'application/json' },
-    });
-    request.on('error', () => {});
-    request.end(JSON.stringify(provider.input));
-    await acquired;
-    const aborted = once(signal, 'abort');
-    request.destroy();
-    await aborted;
-    assert.equal(signal.aborted, true);
-    finish({
-      body: {
-        cancel: async () => {
-          cancelled++;
+  test(
+    `${name} client disconnect aborts upstream and cancels a late body`,
+    {
+      timeout: 5000,
+    },
+    async (t) => {
+      let finish,
+        signal,
+        cancelled = 0,
+        ready;
+      const acquired = new Promise((resolve) => (ready = resolve));
+      // A deadline this far out cannot be what aborts the upstream call.
+      const f = await fixture(
+        t,
+        provider,
+        (_url, options) => {
+          signal = options.signal;
+          ready();
+          return new Promise((resolve) => (finish = resolve));
         },
-      },
-    });
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.ok(cancelled > 0);
-  });
+        { timeoutMs: 1e9 },
+      );
+      const request = http.request(f.origin, {
+        method: 'POST',
+        headers: { Origin: f.origin, 'Content-Type': 'application/json' },
+      });
+      request.on('error', () => {});
+      request.end(JSON.stringify(provider.input));
+      await acquired;
+      const aborted = once(signal, 'abort');
+      request.destroy();
+      await aborted;
+      assert.equal(signal.aborted, true);
+      finish({
+        body: {
+          cancel: async () => {
+            cancelled++;
+          },
+        },
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.ok(cancelled > 0);
+    },
+  );
   test(`${name} invalid upstream content still returns reported usage`, async (t) => {
     const f = await fixture(t, provider, async () =>
       Response.json({
@@ -232,6 +264,246 @@ for (const [name, provider] of Object.entries(providers)) {
     const response = await f.send();
     assert.equal(response.status, 502);
     assert.equal((await response.json()).usage.totalTokens, 10);
+  });
+  test(`${name} route refuses bad methods, media types and bodies before upstream`, async (t) => {
+    const f = await fixture(t, provider, undefined, { timeoutMs: 2000 });
+    const json = { Origin: f.origin, 'Content-Type': 'application/json' };
+    const get = await f.raw({ method: 'GET', headers: { Origin: f.origin } });
+    assert.equal(get.status, 405);
+    assert.equal(get.headers.allow, 'POST');
+    const text = await f.raw(
+      {
+        method: 'POST',
+        headers: { Origin: f.origin, 'Content-Type': 'text/plain' },
+      },
+      JSON.stringify(provider.input),
+    );
+    assert.equal(text.status, 415);
+    // The declared length alone refuses; the short body never completes it.
+    const declared = await f.raw(
+      { method: 'POST', headers: { ...json, 'Content-Length': 600 * 1024 } },
+      '{}',
+    );
+    assert.equal(declared.status, 413);
+    const streamed = await f.raw(
+      { method: 'POST', headers: { ...json, 'Transfer-Encoding': 'chunked' } },
+      JSON.stringify({ ...provider.input, padding: 'x'.repeat(600 * 1024) }),
+    );
+    assert.equal(streamed.status, 413);
+    assert.equal(f.calls.length, 0);
+  });
+  test(`${name} route names a missing key without calling upstream`, async (t) => {
+    const f = await fixture(t, provider, undefined, {
+      resolveApiKey: () => ' ',
+    });
+    const response = await f.send();
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), {
+      error: 'Add an API key in Provider Settings',
+      code: 'API_KEY_MISSING',
+    });
+    assert.equal(f.calls.length, 0);
+  });
+  test(
+    `${name} upstream deadline answers 504 and aborts the call`,
+    {
+      timeout: 5000,
+    },
+    async (t) => {
+      let signal;
+      const f = await fixture(
+        t,
+        provider,
+        (_url, options) => {
+          signal = options.signal;
+          return new Promise(() => {});
+        },
+        { timeoutMs: 50 },
+      );
+      const response = await f.send();
+      assert.equal(response.status, 504);
+      assert.equal(signal.aborted, true);
+    },
+  );
+  test(`${name} route refuses redirects and unexpected destinations`, async (t) => {
+    const f = await fixture(t, provider);
+    assert.equal((await f.send()).status, 200);
+    assert.equal(f.calls[0].options.redirect, 'error');
+    const moved = await fixture(t, provider, async () => {
+      const response = Response.json(provider.reply());
+      Object.defineProperty(response, 'url', {
+        value: 'https://example.test/',
+      });
+      return response;
+    });
+    assert.equal((await moved.send()).status, 502);
+    const redirected = await fixture(t, provider, async () => {
+      const response = Response.json(provider.reply());
+      Object.defineProperty(response, 'redirected', { value: true });
+      return response;
+    });
+    assert.equal((await redirected.send()).status, 502);
+  });
+  test(`${name} route caps the upstream response and never echoes the key`, async (t) => {
+    const large = await fixture(t, provider, async () =>
+      Response.json({ ...provider.reply(), padding: 'x'.repeat(600 * 1024) }),
+    );
+    assert.equal((await large.send()).status, 502);
+    const echo = provider.reply();
+    if (name === 'gemini')
+      echo.candidates[0].content.parts = [{ text: 'key fixture-only' }];
+    else
+      echo.choices[0].message = {
+        role: 'assistant',
+        content: 'key fixture-only',
+      };
+    const echoed = await fixture(t, provider, async () => Response.json(echo));
+    const response = await echoed.send();
+    assert.equal(response.status, 502);
+    assert.ok(!(await response.text()).includes('fixture-only'));
+  });
+  test(`${name} upstream 429 and 503 keep their status and a sane Retry-After`, async (t) => {
+    for (const [status, retryAfter, expected] of [
+      [429, '7', '7'],
+      [503, '7200', '3600'],
+      [429, 'Wed, 21 Oct 2015 07:28:00 GMT', undefined],
+      [500, '7', undefined],
+    ]) {
+      const f = await fixture(t, provider, async () =>
+        Response.json({}, { status, headers: { 'Retry-After': retryAfter } }),
+      );
+      const response = await f.send();
+      assert.equal(response.status, status === 500 ? 502 : status);
+      assert.equal(response.headers.get('retry-after') ?? undefined, expected);
+      assert.deepEqual(await response.json(), {
+        error: 'Could not connect. Try again.',
+        ...(status === 429 ? { code: 'RATE_LIMITED' } : {}),
+      });
+    }
+  });
+  test(`${name} rejected key cools down until it changes or the window ends`, async (t) => {
+    for (const status of [401, 403]) {
+      let clock = 1_000_000;
+      let key = 'fixture-only';
+      let upstream = 0;
+      const f = await fixture(
+        t,
+        provider,
+        async () => {
+          upstream++;
+          return Response.json({}, { status });
+        },
+        { now: () => clock, resolveApiKey: () => key },
+      );
+      assert.equal((await f.send()).status, 502);
+      const cooling = await f.send();
+      assert.equal(cooling.status, 502);
+      assert.equal(cooling.headers.get('retry-after'), '60');
+      assert.equal(upstream, 1, 'a rejected key must not reach upstream again');
+      key = 'replacement-key';
+      assert.equal((await f.send()).status, 502);
+      assert.equal(upstream, 2, 'a new key is tried at once');
+      clock += 59_000;
+      assert.equal((await f.send()).status, 502);
+      assert.equal(upstream, 2);
+      clock += 1_000;
+      assert.equal((await f.send()).status, 502);
+      assert.equal(upstream, 3, 'the cooldown ends after a minute');
+    }
+  });
+  test(`${name} an invalid-key 400 cools down like 401, and every refusal names the key`, async (t) => {
+    let upstream = 0;
+    let body = {
+      error: {
+        code: 400,
+        status: 'INVALID_ARGUMENT',
+        details: [{ reason: 'API_KEY_INVALID' }],
+      },
+    };
+    const f = await fixture(t, provider, async () => {
+      upstream++;
+      return Response.json(body, { status: 400 });
+    });
+    const first = await f.send();
+    assert.equal(first.status, 502);
+    assert.equal((await first.json()).code, 'API_KEY_REJECTED');
+    const cooling = await f.send();
+    assert.equal((await cooling.json()).code, 'API_KEY_REJECTED');
+    assert.equal(upstream, 1, 'the rejected key is not sent again');
+    // Any other 400 is a plain failure and does not cool the key down.
+    body = { error: { code: 400, status: 'INVALID_ARGUMENT' } };
+    const plain = await fixture(t, provider, async () => {
+      upstream++;
+      return Response.json(body, { status: 400 });
+    });
+    const other = await plain.send();
+    assert.equal(other.status, 502);
+    assert.equal((await other.json()).code, undefined);
+    await plain.send();
+    assert.equal(upstream, 3);
+  });
+  test(`${name} throttled replies say they are rate limited`, async (t) => {
+    const local = await fixture(t, provider, undefined, {
+      resolveRateLimit: () => '1',
+    });
+    await local.send();
+    const limited = await local.send();
+    assert.equal(limited.status, 429);
+    assert.equal((await limited.json()).code, 'RATE_LIMITED');
+    const upstream = await fixture(t, provider, async () =>
+      Response.json({}, { status: 429, headers: { 'Retry-After': '7' } }),
+    );
+    const busy = await upstream.send();
+    assert.equal(busy.status, 429);
+    assert.equal(busy.headers.get('retry-after'), '7');
+    assert.equal((await busy.json()).code, 'RATE_LIMITED');
+  });
+  test(`${name} chat throttle follows the provider throttle unless set`, async (t) => {
+    const burst = async (overrides, count) => {
+      const f = await fixture(t, provider, undefined, overrides);
+      const statuses = [];
+      for (let i = 0; i < count; i++) statuses.push((await f.send()).status);
+      return { statuses, calls: f.calls.length, last: f };
+    };
+    const unset = await burst(
+      {
+        resolveRateLimit: () => undefined,
+        resolveProviderRateLimit: () => undefined,
+      },
+      31,
+    );
+    assert.equal(
+      unset.calls,
+      30,
+      'the default cap is the provider default, 30',
+    );
+    assert.equal(unset.statuses.at(-1), 429);
+    const follows = await burst(
+      { resolveRateLimit: () => '', resolveProviderRateLimit: () => '2' },
+      3,
+    );
+    assert.deepEqual(follows.statuses, [200, 200, 429]);
+    const own = await burst(
+      { resolveRateLimit: () => '3', resolveProviderRateLimit: () => '2' },
+      4,
+    );
+    assert.deepEqual(own.statuses, [200, 200, 200, 429]);
+    const off = await burst(
+      { resolveRateLimit: () => '0', resolveProviderRateLimit: () => '2' },
+      4,
+    );
+    assert.deepEqual(off.statuses, [200, 200, 200, 200]);
+    const capped = await fixture(t, provider, undefined, {
+      resolveRateLimit: () => '1',
+    });
+    assert.equal((await capped.send()).status, 200);
+    const refused = await capped.send();
+    assert.equal(refused.status, 429);
+    assert.equal(refused.headers.get('retry-after'), '60');
+    assert.deepEqual(await refused.json(), {
+      error: 'Could not connect. Try again.',
+      code: 'RATE_LIMITED',
+    });
   });
 }
 
@@ -256,6 +528,63 @@ test('every spoken phrase chat rewrites still occurs in the voice directives', (
     assert.ok(voice.includes(spoken), `voice directives lost "${spoken}"`);
     assert.ok(!text.includes(spoken), `chat still says "${spoken}"`);
     assert.ok(text.includes(written), `chat lacks "${written}"`);
+  }
+});
+
+test('chat throttles read their own variables and fall back per provider', async (t) => {
+  const names = [
+    'GEV_RATELIMIT_OPENAI_CHAT_PER_MIN',
+    'GEV_RATELIMIT_OPENAI_PER_MIN',
+    'GEV_RATELIMIT_GEMINI_CHAT_PER_MIN',
+    'GEV_RATELIMIT_GEMINI_PER_MIN',
+  ];
+  const saved = Object.fromEntries(names.map((key) => [key, process.env[key]]));
+  t.after(() => {
+    for (const [key, value] of Object.entries(saved))
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+  });
+  const allowed = async (provider, count) => {
+    const f = await fixture(t, provider, undefined, {
+      resolveRateLimit: undefined,
+    });
+    let ok = 0;
+    for (let i = 0; i < count; i++) if ((await f.send()).status === 200) ok++;
+    return ok;
+  };
+  for (const key of names) delete process.env[key];
+  process.env.GEV_RATELIMIT_OPENAI_PER_MIN = '2';
+  process.env.GEV_RATELIMIT_GEMINI_PER_MIN = '3';
+  assert.equal(await allowed(providers.openai, 5), 2);
+  assert.equal(await allowed(providers.gemini, 5), 3);
+  process.env.GEV_RATELIMIT_OPENAI_CHAT_PER_MIN = '4';
+  process.env.GEV_RATELIMIT_GEMINI_CHAT_PER_MIN = '0';
+  assert.equal(await allowed(providers.openai, 6), 4);
+  assert.equal(await allowed(providers.gemini, 6), 6);
+});
+
+test('the ChatGPT OAuth lock refuses OpenAI chat but not Gemini chat', async (t) => {
+  for (const [value, code] of [
+    ['true', 'CODEX_OAUTH_REQUIRED'],
+    ['maybe', 'CODEX_OAUTH_REQUIRED'],
+    ['false', undefined],
+  ]) {
+    const environment = { GEV_PREFER_CODEX_OAUTH: value };
+    const openai = await fixture(t, providers.openai, undefined, {
+      environment,
+    });
+    const response = await openai.send();
+    const body = await response.json();
+    assert.equal(response.status, code ? 503 : 200);
+    assert.equal(body.code, code);
+    if (code) {
+      assert.equal(typeof body.error, 'string');
+      assert.equal(openai.calls.length, 0, 'the API key must not be billed');
+    }
+    const gemini = await fixture(t, providers.gemini, undefined, {
+      environment,
+    });
+    assert.equal((await gemini.send()).status, 200);
   }
 });
 

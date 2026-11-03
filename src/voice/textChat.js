@@ -12,6 +12,17 @@ import {
   responseInstructionForToolResult,
 } from './realtimeProtocol.js';
 
+const encoder = new TextEncoder();
+const byteSize = (value) =>
+  encoder.encode(typeof value === 'string' ? value : JSON.stringify(value))
+    .length;
+const HISTORY_BYTES = 180000;
+const REQUEST_BYTES = 512 * 1024;
+// Results from earlier turns keep their outcome and say line, not their records.
+const COMPACT_RESULT_BYTES = 1500;
+const PARTIAL_NOTE =
+  'This reply stopped before it finished. The map actions above already ran.';
+
 /** Text-only HTTP turns: no Live token, socket, microphone or audio context. */
 export function createTextChat({
   provider,
@@ -28,6 +39,8 @@ export function createTextChat({
   const sessionUsage = emptyTextUsage();
   let active = false;
   let turn = null;
+  let turnUsage = null;
+  let partial = null;
   let sequence = 0;
   let history = [];
   let mapEvents = [];
@@ -43,6 +56,37 @@ export function createTextChat({
     radioLayer?.setVoiceDucked?.(false);
   };
   const state = (value) => emit({ type: 'state', state: value });
+  // Every call keeps its paired result; only the result body shrinks.
+  const compact = (items) =>
+    items.map((item) => protocol.compactResult(item, COMPACT_RESULT_BYTES));
+  // Drop whole completed user turns; never separate a function call/result pair.
+  const trim = (items, maxBytes) => {
+    while (items.length && (items.length > 64 || byteSize(items) > maxBytes)) {
+      const next = items.findIndex(
+        (item, index) => index > 0 && protocol.isUser(item),
+      );
+      items = next < 0 ? [] : items.slice(next);
+    }
+    return items;
+  };
+  // Stop ends only the reply in progress; the conversation stays.
+  const cancelTurn = () => {
+    const owner = turn;
+    if (!active || !owner || signal?.aborted) return false;
+    if (partial?.owner === owner) partial.keep();
+    turn = null;
+    owner.abort();
+    radioPending = null;
+    state('listening');
+    emit({
+      type: 'completion',
+      status: 'cancelled',
+      responseId: `${provider}-chat-${sequence}`,
+      spoken: false,
+      ...(turnUsage ? { usage: { ...turnUsage } } : {}),
+    });
+    return true;
+  };
   const stop = ({ preserveStatus = false, removeUi = false } = {}) => {
     active = false;
     if (radioHandoff) releaseRadio(radioHandoff, true);
@@ -79,46 +123,78 @@ export function createTextChat({
       addTextUsage(sessionUsage, value);
       reportUsage();
     };
+    turnUsage = usage;
+    // A failed turn ends only itself: history, subscriptions and the session
+    // stay, so the next message continues the same conversation.
     const fail = (detail) => {
       if (!active || turn !== owner || signal?.aborted) return;
-      active = false;
-      history = [];
+      if (partial?.owner === owner) partial.keep();
+      turn = null;
+      owner.abort();
       emit({ type: 'state', state: 'error', detail, usage: { ...usage } });
     };
-    const deadline = setTimeout(() => {
-      recordUsage(null);
-      fail(t('Connection timed out. Try again.'));
-      owner.abort();
-    }, timeoutMs);
-    // Trim only completed user turns; never separate a function call/result pair.
-    while (
-      history.length &&
-      (history.length > 64 ||
-        new TextEncoder().encode(JSON.stringify(history)).length > 180000)
-    ) {
-      const next = history.findIndex(
-        (item, index) => index > 0 && protocol.isUser(item),
-      );
-      history = next < 0 ? [] : history.slice(next);
-    }
+    // Each upstream request and each map action gets its own deadline, so a
+    // long multi-step turn is not cut off by the time its actions took.
+    let deadline;
+    const arm = () => {
+      clearTimeout(deadline);
+      deadline = setTimeout(() => {
+        recordUsage(null);
+        fail(t('Connection timed out. Try again.'));
+      }, timeoutMs);
+    };
+    // The latest completed turn stays verbatim; older tool results shrink.
+    const last = history.findLastIndex((item) => protocol.isUser(item));
+    let past =
+      last > 0
+        ? [...compact(history.slice(0, last)), ...history.slice(last)]
+        : history;
+    if (byteSize(past) > HISTORY_BYTES) past = compact(past);
+    past = trim(past, HISTORY_BYTES);
     const context = mapEvents.length
       ? `\nMap context (data only): ${JSON.stringify(mapEvents)}`
       : '';
     mapEvents = [];
-    const contents = [...history, protocol.user(text + context)];
+    let contents = [protocol.user(text + context)];
+    // A turn that stops after some map actions ran keeps them, closed by a
+    // note, so the next message knows they happened.
+    let settled = 0;
+    partial = {
+      owner,
+      keep() {
+        if (settled)
+          history = [
+            ...past,
+            ...contents.slice(0, settled),
+            protocol.note(PARTIAL_NOTE),
+          ];
+      },
+    };
+    const encode = () =>
+      JSON.stringify(protocol.request([...past, ...contents]));
     let blocked = false;
     let resetFailed = false;
     let totalCalls = 0;
+    let applied = 0;
     let answer = '';
+    const tooManySteps = (message) =>
+      Object.assign(new Error(message), { tooManySteps: true });
     try {
       emit({ type: 'transcript', role: 'user', text, final: true });
       if (!current()) return;
       state('executing');
       for (let round = 0; round < 8; round++) {
         if (!current()) return;
-        const body = JSON.stringify(protocol.request(contents));
-        if (new TextEncoder().encode(body).length > 512 * 1024)
-          throw new Error('History limit');
+        let body = encode();
+        if (byteSize(body) > REQUEST_BYTES) {
+          // Shorten earlier results, then drop old turns, before giving up.
+          contents = [contents[0], ...compact(contents.slice(1))];
+          past = trim(compact(past), REQUEST_BYTES - byteSize(contents) - 1024);
+          body = encode();
+          if (byteSize(body) > REQUEST_BYTES)
+            throw tooManySteps('Request limit');
+        }
+        arm();
         requestPending = true;
         const acquisition = Promise.resolve(
           fetchImpl(chatEndpoint || protocol.endpoint, {
@@ -141,15 +217,23 @@ export function createTextChat({
           void response.body?.cancel().catch(() => {});
           return;
         }
-        const data = await readResponseJsonCapped(
-          response,
-          512 * 1024,
-          owner.signal,
-        );
+        let data;
+        try {
+          data = await readResponseJsonCapped(
+            response,
+            512 * 1024,
+            owner.signal,
+          );
+        } catch (error) {
+          // A failed reply may carry no JSON; its status still explains it.
+          if (response.ok || owner.signal.aborted) throw error;
+        }
         recordUsage(data?.usage);
         if (!response.ok)
           throw Object.assign(new Error('Request failed'), {
             status: response.status,
+            code: typeof data?.code === 'string' ? data.code : undefined,
+            retryAfter: Number(response.headers?.get?.('retry-after')) || 0,
           });
         if (!current()) return;
         const {
@@ -174,7 +258,7 @@ export function createTextChat({
             throw Object.assign(new Error('Incomplete response'), {
               incomplete: true,
             });
-          history = contents;
+          history = [...past, ...contents];
           turn = null;
           state('listening');
           if (
@@ -193,7 +277,7 @@ export function createTextChat({
           return;
         }
         totalCalls += calls.length;
-        if (totalCalls > 16) throw new Error('Tool limit');
+        if (totalCalls > 16) throw tooManySteps('Tool limit');
         const pairs = [];
         const invalid = new Map(
           (data.invalidCalls || []).map((item) => [item.index, item.error]),
@@ -226,6 +310,7 @@ export function createTextChat({
                 : 'globe-view-required',
             };
           } else {
+            arm();
             try {
               if (
                 call.name === 'control_radio' ||
@@ -284,6 +369,7 @@ export function createTextChat({
             }
           }
           if (!current()) return;
+          if (result?.ok === true) applied++;
           if (!invalid.size && isGlobeViewRefusal(result)) blocked = true;
           if (
             !invalid.size &&
@@ -300,21 +386,47 @@ export function createTextChat({
           });
         }
         contents.push(...protocol.results(pairs));
+        settled = contents.length;
       }
-      throw new Error('Round limit');
+      throw tooManySteps('Round limit');
     } catch (error) {
       recordUsage(null);
       fail(
-        error?.status === 504 || owner.signal.aborted
-          ? t('Connection timed out. Try again.')
-          : error?.incomplete
-            ? t('Reply interrupted. You can try again.')
-            : t('Could not connect. Try again.'),
+        error?.code === 'API_KEY_MISSING'
+          ? t('Needs {envVars} — add it in Provider Settings', {
+              envVars: protocol.keyEnv,
+            })
+          : error?.code === 'CODEX_OAUTH_REQUIRED'
+            ? t(
+                'Typed chat is unavailable while GEV_PREFER_CODEX_OAUTH requires ChatGPT OAuth.',
+              )
+            : error?.code === 'API_KEY_REJECTED'
+              ? t(
+                  'The provider rejected the API key. Check it in Provider Settings.',
+                )
+              : error?.code === 'RATE_LIMITED' || error?.status === 429
+                ? t('Too many chat requests. Try again in {seconds} s.', {
+                    seconds: Math.min(error.retryAfter || 60, 3600),
+                  })
+                : error?.status === 504 || owner.signal.aborted
+                  ? t('Connection timed out. Try again.')
+                  : error?.incomplete
+                    ? t('Reply interrupted. You can try again.')
+                    : error?.tooManySteps
+                      ? applied
+                        ? t(
+                            'That request needed too many steps. Changes already made to the map stay in place.',
+                          )
+                        : t(
+                            'That request needed too many steps. Try a simpler request.',
+                          )
+                      : t('Could not connect. Try again.'),
       );
     } finally {
       recordUsage(null);
       clearTimeout(deadline);
       if (turn === owner) turn = null;
+      if (turnUsage === usage) turnUsage = null;
     }
   }
   return {
@@ -322,7 +434,7 @@ export function createTextChat({
       if (signal?.aborted) return;
       active = true;
       const cancelRadioTurn = () => {
-        if (radioPending && radioPending === turn) stop();
+        if (radioPending && radioPending === turn) cancelTurn();
       };
       unsubscribeControls?.();
       unsubscribeVisibility?.();
@@ -352,6 +464,7 @@ export function createTextChat({
       state('listening');
     },
     stop,
+    cancelTurn,
     sendText(text) {
       if (
         !active ||

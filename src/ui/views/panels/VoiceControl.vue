@@ -88,7 +88,8 @@ const frameStyle = (panel) => ({
       <ChatPanel v-if="view.panel" :view="view" />
       <VoiceVisualizer />
       <div class="gev-chat-thinking" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div id="gev-assistant-phase" role="status" aria-live="polite">{{ view.phase.text }}</div>
+      <!-- Chat announces its phase in its own status line (#gev-chat-status); in chat mode this one stays silent. -->
+      <div id="gev-assistant-phase" role="status" :aria-live="view.root.assistantMode === 'chat' ? 'off' : 'polite'" :aria-hidden="view.root.assistantMode === 'chat' ? 'true' : undefined">{{ view.phase.text }}</div>
       <div class="gev-voice-readout">
         <div id="gev-voice-detail" :title="optional(view.detail.title)">{{ view.detail.text }}</div>
       </div>

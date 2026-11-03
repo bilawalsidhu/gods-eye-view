@@ -2,7 +2,9 @@
 export const textProtocols = {
   gemini: {
     endpoint: '/api/gemini/chat',
+    keyEnv: 'GEMINI_API_KEY',
     user: (text) => ({ role: 'user', parts: [{ text }] }),
+    note: (text) => ({ role: 'model', parts: [{ text }] }),
     isUser: (item) =>
       item.role === 'user' &&
       item.parts.some((part) => typeof part.text === 'string'),
@@ -40,10 +42,32 @@ export const textProtocols = {
         })),
       },
     ],
+    compactResult: (item, maxBytes) =>
+      item.role === 'user' && item.parts.some((part) => part.functionResponse)
+        ? {
+            ...item,
+            parts: item.parts.map((part) =>
+              part.functionResponse
+                ? {
+                    ...part,
+                    functionResponse: {
+                      ...part.functionResponse,
+                      response: boundedToolResult(
+                        part.functionResponse.response,
+                        maxBytes,
+                      ),
+                    },
+                  }
+                : part,
+            ),
+          }
+        : item,
   },
   openai: {
     endpoint: '/api/openai/chat',
+    keyEnv: 'OPENAI_API_KEY',
     user: (content) => ({ role: 'user', content }),
+    note: (content) => ({ role: 'assistant', content }),
     isUser: (item) => item.role === 'user',
     request: (messages) => ({ messages }),
     decode(data) {
@@ -75,6 +99,19 @@ export const textProtocols = {
         tool_call_id: call.id,
         content: JSON.stringify(result),
       })),
+    compactResult(item, maxBytes) {
+      if (item.role !== 'tool') return item;
+      let result;
+      try {
+        result = JSON.parse(item.content);
+      } catch {
+        result = { ok: false, error: 'Tool result could not be read' };
+      }
+      return {
+        ...item,
+        content: JSON.stringify(boundedToolResult(result, maxBytes)),
+      };
+    },
   },
 };
 

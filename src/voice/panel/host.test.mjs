@@ -472,6 +472,25 @@ test('native connecting phases retain output observation; idle starts before fir
   assert.equal(adapter.stops, 1);
 });
 
+test('the voice inactivity timeout never ends a typed chat session', async (t) => {
+  const f = mounted(t, { native: true });
+  const adapter = f.instances[0];
+  adapter.getStartOptions = () => ({ textOnly: true });
+  await f.commands.session.start({ textOnly: true });
+  adapter.controller.handleMessage({});
+  f.clock.advance(600000);
+  assert.equal(adapter.stops, 0);
+  assert.equal(f.commands.session.isActive(), true);
+  // A quiet voice session started afterwards still times out.
+  f.commands.session.stop();
+  const stops = adapter.stops;
+  adapter.getStartOptions = () => ({});
+  await f.commands.session.start();
+  adapter.controller.handleMessage({});
+  f.clock.advance(600000);
+  assert.equal(adapter.stops, stops + 1);
+});
+
 async function directActions(
   t,
   { storage = null, delayExit = false, exposePanel = true } = {},
@@ -1132,6 +1151,17 @@ test('closing chat Settings ends a typed session', async (t) => {
   await f.settle();
   assert.equal(f.commands.session.isActive(), false);
   assert.equal($('#gev-chat-panel').hidden, true);
+});
+
+test('opening chat stops a live voice session', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.commands.session.start();
+  await f.settle();
+  assert.equal(f.commands.session.isActive(), true);
+  $('#gev-chat-button').click();
+  await f.settle();
+  assert.equal(f.commands.session.isActive(), false);
+  assert.equal($('#gev-chat-panel').hidden, false);
 });
 
 test('the mic button closes chat and minimize collapses voice to a bar', async (t) => {

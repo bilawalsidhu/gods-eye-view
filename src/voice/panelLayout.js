@@ -145,6 +145,8 @@ function layOut({ ui, name, minimize, restore }) {
   let lastHeight = 0;
   let animateNext = false;
   let heightAnimation = null;
+  // What the last placement depended on, short of measuring.
+  let placedInputs = '';
   const animateHeight = (from, to) => {
     if (view.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     heightAnimation?.cancel();
@@ -155,12 +157,35 @@ function layOut({ ui, name, minimize, restore }) {
       ],
       { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
     );
+    // Frames skipped while it runs are placed once it ends.
+    if (heightAnimation) heightAnimation.onfinish = schedule;
   };
   const place = () => {
     const minimized = Boolean(panel.dataset.minimized);
     // Minimized bars always sit centred above the dock; only an expanded
     // docked panel takes the right lane.
-    const inLane = isDocked() && !minimized && !isMobile();
+    const mobile = isMobile();
+    const inLane = isDocked() && !minimized && !mobile;
+    // The height animation resizes the panel every frame. While it runs and
+    // nothing it was placed for has changed, leave the placement as it is;
+    // it is placed again when the animation finishes.
+    const inputs = [
+      minimized,
+      isDocked(),
+      mobile,
+      panel.hidden,
+      root.dataset?.chatOpen,
+      root.dataset?.assistantMode,
+      view.innerWidth,
+      view.innerHeight,
+    ].join('|');
+    if (
+      heightAnimation?.playState === 'running' &&
+      !animateNext &&
+      inputs === placedInputs
+    )
+      return;
+    placedInputs = inputs;
     panel.dataset.placement = inLane ? 'docked' : 'compact';
     syncRail();
     if (lifetime.signal.aborted) return;
@@ -174,7 +199,7 @@ function layOut({ ui, name, minimize, restore }) {
     const expanding = !appearing && wasMinimized && !minimized;
     seen = true;
     wasMinimized = minimized;
-    if (!isDocked() && !isMobile()) {
+    if (!isDocked() && !mobile) {
       // A panel opened or switched to while the trays hold the centre
       // starts as its bar.
       if (appearing && !minimized && (ui.state.layout.yielded || trayOpen())) {
@@ -198,6 +223,7 @@ function layOut({ ui, name, minimize, restore }) {
       top: box.top + (root.clientTop || 0),
     };
     const anchorBottom = anchor.top + (root.clientHeight || box.height);
+    let measured = null;
     const w = view.innerWidth,
       h = view.innerHeight;
     if (inLane) {
@@ -227,7 +253,7 @@ function layOut({ ui, name, minimize, restore }) {
         .getElementById?.('command-dock')
         ?.getBoundingClientRect();
       panel.style.removeProperty('height');
-      if (isMobile() && !minimized) panel.style.width = `${w - 16}px`;
+      if (mobile && !minimized) panel.style.width = `${w - 16}px`;
       else panel.style.removeProperty('width');
       const rect = panel.getBoundingClientRect();
       const centre = dockRect?.width
@@ -253,13 +279,16 @@ function layOut({ ui, name, minimize, restore }) {
       panel.style.left = `${x - anchor.left}px`;
       panel.style.top = 'auto';
       panel.style.bottom = `${anchorBottom - (y + rect.height)}px`;
+      measured = rect.height;
     }
     panel.style.transform = 'none';
     // Grow from the panel shown before (chat and voice swap), or from this
     // panel's last height when its view changes. A running animation is
     // mid-flight, so its frames are not recorded as the panel's height.
     if (heightAnimation?.playState === 'running' && !animateNext) return;
-    const height = panel.getBoundingClientRect().height;
+    // A centred panel was measured above; placing it moves it but keeps its
+    // size. The lane's height is set here, so it is measured again.
+    const height = measured ?? panel.getBoundingClientRect().height;
     const previous = handoffs.get(root);
     const from = minimized
       ? 0
@@ -314,7 +343,23 @@ function layOut({ ui, name, minimize, restore }) {
         .map((item) => item.id),
     );
   let railOpen = expandedRailPanels();
-  const railChanges = new MutationObserver(() => {
+  // Rail panels open and close through their own class, so only the rail's
+  // direct children are watched, each as it joins the rail.
+  const watchedRailPanels = new WeakSet();
+  const watchRailPanels = () => {
+    for (const item of rail?.children ?? []) {
+      if (watchedRailPanels.has(item)) continue;
+      watchedRailPanels.add(item);
+      railChanges.observe(item, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+    }
+  };
+  const railChanges = new MutationObserver((records) => {
+    if (records.some((record) => record.type === 'childList'))
+      watchRailPanels();
+    if (!records.some((record) => record.type === 'attributes')) return;
     const next = expandedRailPanels();
     const opened = [...next].some((id) => !railOpen.has(id));
     railOpen = next;
@@ -326,12 +371,10 @@ function layOut({ ui, name, minimize, restore }) {
     )
       minimize();
   });
-  if (rail)
-    railChanges.observe(rail, {
-      attributes: true,
-      attributeFilter: ['class'],
-      subtree: true,
-    });
+  if (rail) {
+    railChanges.observe(rail, { childList: true });
+    watchRailPanels();
+  }
   // Reaching for a wing's button steps a centred panel down to its bar,
   // which then rests above the tray.
   const reachWing = ({ target }) => {

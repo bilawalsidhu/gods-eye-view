@@ -4,6 +4,9 @@ import { textInstructions } from '../common/textInstructions.js';
 import { GEV_REALTIME_TOOLS } from '../openai/tools.js';
 import { normalizeGeminiModel } from './config.js';
 
+// The Gemini token route's throttle default (GEV_RATELIMIT_GEMINI_PER_MIN).
+export const GEMINI_DEFAULT_PER_MIN = 30;
+
 const object = (value) =>
   value && typeof value === 'object' && !Array.isArray(value);
 const keys = (value, allowed) =>
@@ -80,12 +83,15 @@ export function createGeminiChatHandler({
   resolveChatModel = () =>
     process.env.GEMINI_CHAT_MODEL || 'gemini-3.5-flash-lite',
   resolveApiKey = () => process.env.GEMINI_API_KEY,
+  resolveProviderRateLimit = () => process.env.GEV_RATELIMIT_GEMINI_PER_MIN,
   ...options
 } = {}) {
   return createTextChatHandler({
     ...options,
     provider: 'gemini',
     resolveApiKey,
+    resolveProviderRateLimit,
+    providerPerMin: GEMINI_DEFAULT_PER_MIN,
     prepare(input) {
       const model = normalizeGeminiModel(resolveChatModel());
       if (!model || /live|audio|tts/i.test(model)) return { errorStatus: 503 };

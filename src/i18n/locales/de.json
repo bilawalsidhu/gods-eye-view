@@ -3006,5 +3006,12 @@
   "The selected AI provider is shared by voice and chat.": "Der gewählte KI-Anbieter gilt für Sprache und Chat.",
   "Show quick commands": "Schnellbefehle anzeigen",
   "Chat replies are silent. No microphone access is needed.": "Chat-Antworten sind stumm. Kein Mikrofonzugriff nötig.",
-  "Chat": "Chat"
+  "Chat": "Chat",
+  "Attach layer": "Ebene anhängen",
+  "Typed chat uses your OpenAI API key. ChatGPT sign-in covers voice only.": "Der Text-Chat nutzt deinen OpenAI-API-Schlüssel. Die ChatGPT-Anmeldung gilt nur für Sprache.",
+  "Typed chat is unavailable while GEV_PREFER_CODEX_OAUTH requires ChatGPT OAuth.": "Der Text-Chat ist nicht verfügbar, solange GEV_PREFER_CODEX_OAUTH ChatGPT OAuth vorschreibt.",
+  "That request needed too many steps. Changes already made to the map stay in place.": "Diese Anfrage brauchte zu viele Schritte. Bereits vorgenommene Kartenänderungen bleiben erhalten.",
+  "That request needed too many steps. Try a simpler request.": "Diese Anfrage brauchte zu viele Schritte. Versuche eine einfachere Anfrage.",
+  "The provider rejected the API key. Check it in Provider Settings.": "Der Anbieter hat den API-Schlüssel abgelehnt. Prüfe ihn in den Anbieter-Einstellungen.",
+  "Too many chat requests. Try again in {seconds} s.": "Zu viele Chat-Anfragen. In {seconds} s erneut versuchen."
 }

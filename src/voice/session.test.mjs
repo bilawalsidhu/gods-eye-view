@@ -650,3 +650,53 @@ test('OpenAI composite starts HTTP chat without Realtime and restores voice keyb
   assert.equal(adapter.sendText('Hello'), 'voice');
   adapter.stop();
 });
+
+test('OpenAI composite chat Stop cancels only the reply in progress', async () => {
+  const requests = [];
+  let pendingSignal;
+  const controller = {
+    _input: {},
+    _radio: {},
+    isActive: () => true,
+    start: async () => {},
+    stop: () => {},
+    sendTextCommand: () => 'voice',
+    notifyMapEvent: () => 'voice-event',
+  };
+  const adapter = createRealtimeSession({
+    emit: () => {},
+    runAction: async () => ({ ok: true }),
+    createController: () => controller,
+    fetchImpl: (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      if (requests.length !== 2)
+        return Response.json({
+          content: { role: 'assistant', content: 'Hello' },
+          finishReason: 'stop',
+        });
+      pendingSignal = options.signal;
+      return new Promise(() => {});
+    },
+  });
+  const settle = async () => {
+    for (let i = 0; i < 5; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+  };
+  await adapter.start({ textOnly: true });
+  adapter.sendText('First');
+  await settle();
+  adapter.sendText('Second');
+  await settle();
+  assert.equal(adapter.cancelTurn(), true);
+  assert.equal(pendingSignal.aborted, true);
+  assert.equal(adapter.sendText('Third'), true);
+  await settle();
+  assert.deepEqual(
+    requests[2].messages.map((m) => m.content),
+    ['First', 'Hello', 'Third'],
+  );
+  adapter.stop();
+  await controller._input.start({ pushToTalk: true });
+  assert.equal(adapter.cancelTurn(), false);
+  adapter.stop();
+});

@@ -2936,5 +2936,12 @@
   "The selected AI provider is shared by voice and chat.": "语音和聊天共用所选的 AI 服务商。",
   "Show quick commands": "显示快捷命令",
   "Chat replies are silent. No microphone access is needed.": "聊天回复不播放声音，无需访问麦克风。",
-  "Chat": "聊天"
+  "Chat": "聊天",
+  "Attach layer": "附加图层",
+  "Typed chat uses your OpenAI API key. ChatGPT sign-in covers voice only.": "文字聊天使用你的 OpenAI API 密钥。ChatGPT 登录仅适用于语音。",
+  "Typed chat is unavailable while GEV_PREFER_CODEX_OAUTH requires ChatGPT OAuth.": "GEV_PREFER_CODEX_OAUTH 要求使用 ChatGPT OAuth 时，文字聊天不可用。",
+  "That request needed too many steps. Changes already made to the map stay in place.": "此请求所需步骤过多。已对地图做出的更改会保留。",
+  "That request needed too many steps. Try a simpler request.": "此请求所需步骤过多。请尝试更简单的请求。",
+  "The provider rejected the API key. Check it in Provider Settings.": "提供商拒绝了 API 密钥。请在提供商设置中检查。",
+  "Too many chat requests. Try again in {seconds} s.": "聊天请求过多。请在 {seconds} 秒后重试。"
 }

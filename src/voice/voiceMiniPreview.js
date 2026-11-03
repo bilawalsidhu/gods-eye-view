@@ -52,8 +52,10 @@ export function bindVoiceMiniPreview({ ui, session }) {
   };
   clear();
   return session.subscribe((event) => {
-    if (session.adapter?.getStartOptions?.().textOnly) return;
+    // Any new session starts empty, even one whose start is still reported
+    // as typed chat while voice takes over.
     if (event.type === 'state' && event.state === 'connecting') clear();
+    if (session.adapter?.getStartOptions?.().textOnly) return;
     if (event.type !== 'transcript' || !event.text) return;
     if (event.role === 'user') show('user', event.text);
     if (event.role !== 'assistant') return;
