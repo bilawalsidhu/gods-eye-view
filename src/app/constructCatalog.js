@@ -224,11 +224,12 @@ export function createApplicationCatalog({
       [
         'street-level',
         () =>
-          createApplicationStreetLevel({
+          sessionModel('street-level', () => createApplicationStreetLevel({
             surface,
+            nativeRenderer:engine=>rendererFor('street-level',engine),
             sources: { mapillary: sources.mapillary },
             providers: streetLevelProviders,
-          }),
+          })),
       ],
       ['satellites', satellites],
       [

@@ -147,6 +147,16 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
         },
 
         /** Clear lines and cones, forget refusals. */
+        refreshCoverage: () => parts.coverage.refresh(),
+        detachMap() {
+          parts.coverage.releaseGraphics();
+          parts.sequences.releaseCollection(state.viewer);
+          state.viewer = null;
+        },
+        repaintMap() {
+          parts.coverage.rebuild();
+          parts.sequences.rerender();
+        },
         deactivate() {
           parts.coverage.detach();
           parts.coverage.clear();

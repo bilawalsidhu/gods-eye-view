@@ -126,6 +126,10 @@ export async function registerNavaraLayerRenderers() {
       const { drawStorySource } = await import('../layers/shared/render/navaraStory.js');
       return (engine, { data }) => drawStorySource(engine, navaraViews.get(engine), data);
     },
+    'street-level': async () => {
+      const { createStreetMap } = await import('../layers/streetLevel/render/navara.js');
+      return engine => createStreetMap(engine, navaraViews.get(engine));
+    },
     traffic: async () => {
       const { createTrafficNavaraRenderer } = await import('../layers/traffic/render/navara.js');
       return engine => createTrafficNavaraRenderer(engine, navaraViews.get(engine));

@@ -63,3 +63,7 @@ The event pack, historical image pair, paused/playing timeline, player host and 
 ### Traffic
 
 The city road source, flow requests, vehicle identities and simulation phase survive a switch. The incoming scene waits for the restored camera before querying its viewport or refreshing local surface heights. A release round trip in Austin retained 1,093 moving vehicles and 35 congestion corridors with fixture-backed live flow. The independent simulation case retained 620 vehicles. Both captures compared visible traffic against disabled traffic over the same streets.
+
+### Street Level
+
+Coverage, sequence, attribution, photo hosts and filters now share the same owner. The release checks used physical Navara line clicks on fixture-backed KartaView and Panoramax coverage. The same mounted photo and all 36 KartaView or 73 Panoramax sequence images survived Navara → Cesium → Navara. Google Street View still requires an eligible Google map and a configured key; these tests used neither.
