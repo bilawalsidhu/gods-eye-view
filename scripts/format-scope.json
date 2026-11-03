@@ -413,6 +413,7 @@
   "src/layers/droneAirspace/source.test.mjs",
   "src/layers/droneAirspace/cards.test.mjs",
   "src/layers/droneAirspace/ownership.test.mjs",
+  "src/layers/droneAirspace/docs.test.mjs",
   "src/data/firmsHeatmap.js",
   "src/data/fireAnchors.js",
   "src/layers/firms/anchors.js",
