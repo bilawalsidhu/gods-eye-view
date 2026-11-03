@@ -51,7 +51,7 @@ function install(options = {}, hook = 'configureServer') {
 }
 
 for (const hook of ['configureServer', 'configurePreviewServer']) {
-  test(`${hook}: paging stops at five pages and normalizes the combined snapshot`, async () => {
+  test(`${hook}: paging follows offsets and normalizes the combined snapshot`, async () => {
     const calls = [];
     const request = install(
       {
@@ -62,7 +62,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
           assert.equal(options.redirect, 'error');
           return Response.json({
             features: [feature(calls.length)],
-            exceededTransferLimit: true,
+            exceededTransferLimit: calls.length < 3,
           });
         },
       },
@@ -71,14 +71,83 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     const res = await request('/?url=https://invalid.example&resultOffset=999');
     assert.equal(res.status, 200);
     assert.equal(res.body.fetchedAt, 1234);
-    assert.equal(res.body.rows.length, 5);
-    assert.equal(calls.length, 5);
+    assert.equal(res.body.rows.length, 3);
+    assert.equal(calls.length, 3);
     assert.equal(calls[0].searchParams.get('where'), "TYPE_CODE IN ('P','R')");
     assert.equal(calls[0].searchParams.get('f'), 'geojson');
     assert.equal(calls[0].searchParams.has('resultOffset'), false);
     assert.equal(calls[1].searchParams.get('resultOffset'), '1');
   });
 }
+
+/**
+ * Serve one good snapshot, then let the upstream answer `bad` after the TTL:
+ * the bad answer must not replace it, so the client gets the last good rows
+ * marked stale, and a cold proxy answers 502 rather than caching the bad one.
+ */
+async function assertRejectedSnapshot(bad) {
+  let now = 1000;
+  let broken = false;
+  let calls = 0;
+  const request = install({
+    now: () => now,
+    fetchImpl: async () => {
+      calls += 1;
+      return broken ? bad(calls) : Response.json({ features: [feature(7)] });
+    },
+  });
+  const first = await request();
+  assert.equal(first.status, 200);
+  broken = true;
+  now += 3_600_001;
+  const stale = await request();
+  assert.equal(stale.status, 200);
+  assert.equal(stale.headers['X-Data-Stale'], 'true');
+  assert.equal(stale.body.stale, true);
+  assert.equal(stale.body.fetchedAt, first.body.fetchedAt);
+  assert.deepEqual(
+    stale.body.rows.map((row) => row.stableId),
+    ['7'],
+  );
+  calls = 0;
+  const cold = install({ fetchImpl: async () => bad(++calls) });
+  const res = await cold();
+  assert.equal(res.status, 502);
+  assert.equal(res.body.error, 'drone_airspace_unavailable');
+}
+
+test('an empty upstream snapshot keeps the last good one', () =>
+  assertRejectedSnapshot(() => Response.json({ features: [] })));
+
+test('a page whose every feature is invalid keeps the last good one', () =>
+  assertRejectedSnapshot(() =>
+    Response.json({
+      features: [
+        {
+          ...feature(8),
+          properties: { ...feature(8).properties, TYPE_CODE: 'W' },
+        },
+        { ...feature(9), geometry: null },
+      ],
+    }),
+  ));
+
+test('paging that exhausts its page limit still flagged keeps the last good one', () =>
+  assertRejectedSnapshot((call) =>
+    Response.json({
+      features: [feature(100 + call)],
+      exceededTransferLimit: true,
+    }),
+  ));
+
+test('a flagged page that adds no features keeps the last good one', () =>
+  assertRejectedSnapshot((call) =>
+    Response.json(
+      call % 2
+        ? { features: [feature(100 + call)], exceededTransferLimit: true }
+        : { features: [], properties: { exceededTransferLimit: true } },
+    ),
+  ));
 
 test('a cached snapshot is reused until TTL, then refreshed', async () => {
   let now = 1000;

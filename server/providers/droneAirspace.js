@@ -61,8 +61,12 @@ export function droneAirspaceProxy({
     return readResponseJsonCapped(response, cap, signal);
   }
 
+  // A snapshot is accepted only once the service says it is complete. A page
+  // limit reached while still flagged, a flagged page that adds nothing, or
+  // no valid zone at all is a failed refresh, so the last good snapshot stays.
   async function fetchZones() {
     const features = [];
+    let complete = false;
     for (let page = 0; page < MAX_PAGES; page++) {
       const url =
         page === 0 ? API_URL : `${API_URL}&resultOffset=${features.length}`;
@@ -70,10 +74,15 @@ export function droneAirspaceProxy({
       if (!Array.isArray(payload?.features))
         throw new Error('invalid_snapshot');
       features.push(...payload.features);
-      if (!exceededTransferLimit(payload) || !payload.features.length) break;
+      if (!exceededTransferLimit(payload)) {
+        complete = true;
+        break;
+      }
+      if (!payload.features.length) break;
     }
+    if (!complete) throw new Error('incomplete_snapshot');
     const rows = normalizeDroneAirspaceSnapshot({ features });
-    if (!rows) throw new Error('invalid_snapshot');
+    if (!rows?.length) throw new Error('invalid_snapshot');
     return { fetchedAt: now(), rows };
   }
 

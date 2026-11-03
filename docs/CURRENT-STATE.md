@@ -4100,7 +4100,9 @@ Fire Perimeters uses capped, timed server reads with stale-on-error caching and 
 Prohibited & Restricted Airspace is off by default (share-link token `8`) and sits in
 Infrastructure. The proxy pages `TYPE_CODE IN ('P','R')` from the FAA SUA
 FeatureServer, caps the body, and reuses a one-hour snapshot, serving the last
-good payload as stale when a refresh fails. Client-supplied URLs are rejected.
+good payload as stale when a refresh fails. An answer with no valid zone, or
+paging that ends while the service still flags more records, counts as a
+failed refresh. Client-supplied URLs are rejected.
 Polygons keep holes; pick ownership is deliberately unregistered so sibling
 cards still work over a zone. The row legend and selected card state that the
 layer is informational only and not a substitute for B4UFLY / LAANC.
