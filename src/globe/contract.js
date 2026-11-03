@@ -248,6 +248,17 @@
  *   Every style starts at intensity 0 with its shader's defaults.
  * @property {(name: string) => StyleState} [style] The style's state last
  *   set (a copy).
+ * @property {(options: { enabled?: boolean, strength?: number }) => void} [setBloom]
+ *   Optional, with bloom (capability `bloom`): a glow around the bright parts
+ *   of the final frame, before the visual styles. `strength` is the app's
+ *   Bloom slider normalized to 0..1 (src/bloom.js
+ *   bloomStrengthFromIntensity); at or under 0.06 nothing glows, as with
+ *   Cesium's bloom stage, whose easing the engine follows. Omitted fields
+ *   keep their value; a non-boolean `enabled` or a strength outside 0..1
+ *   throws a TypeError. Off at strength 0 until set. Cesium has none: in
+ *   Cesium mode the app drives the scene's own bloom stage.
+ * @property {() => { enabled: boolean, strength: number }} [bloom] The bloom
+ *   last set (a copy).
  *
  * @typedef {{ intensity: number, uniforms: Record<string, number> }} StyleState
  *
@@ -666,6 +677,10 @@ const OPTIONAL_SHAPE = {
     'render.setStyle': isFunction,
     'render.style': isFunction,
   },
+  bloom: {
+    'render.setBloom': isFunction,
+    'render.bloom': isFunction,
+  },
 };
 
 /** The optional capability flags, e.g. 'visualStyles'. */
@@ -806,4 +821,25 @@ export function mergeStyle(current, { intensity, uniforms } = {}, names = []) {
     next[name] = value;
   }
   return { intensity: intensity ?? current.intensity, uniforms: next };
+}
+
+/** The bloom an engine starts with (GlobeRender.bloom). */
+export const BLOOM_INITIAL = Object.freeze({ enabled: false, strength: 0 });
+
+/**
+ * GlobeRender.setBloom's argument merged onto `current`: a new state, or a
+ * TypeError for a non-boolean `enabled` or a strength outside 0..1.
+ */
+export function mergeBloom(current, { enabled, strength } = {}) {
+  if (enabled !== undefined && !isBoolean(enabled))
+    throw new TypeError(`Bloom enabled must be a boolean: ${enabled}`);
+  if (
+    strength !== undefined &&
+    !(isNumber(strength) && strength >= 0 && strength <= 1)
+  )
+    throw new TypeError(`Bloom strength must be a number in 0..1: ${strength}`);
+  return {
+    enabled: enabled ?? current.enabled,
+    strength: strength ?? current.strength,
+  };
 }

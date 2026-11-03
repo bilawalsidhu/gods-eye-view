@@ -2771,7 +2771,66 @@ export function createContractSuite(
   const capabilities = engineCapabilities(engine);
   if (capabilities.visualStyles)
     checks.push(...styleChecks(engine.render, settle));
+  if (capabilities.bloom) checks.push(...bloomChecks(engine.render, settle));
   return checks.map(([name, run]) => ({ name, run }));
+}
+
+// The optional bloom capability (render.setBloom).
+function bloomChecks(render, settle) {
+  return [
+    [
+      'render.setBloom (bloom): merges, copies, rejects bad values, draws',
+      async () => {
+        const previous = render.bloom();
+        ensure(
+          typeof previous.enabled === 'boolean' &&
+            Number.isFinite(previous.strength),
+          `bloom() ${JSON.stringify(previous)} is not { enabled, strength }`,
+        );
+        const same = (expected, label) => {
+          const actual = render.bloom();
+          ensure(
+            actual.enabled === expected.enabled &&
+              actual.strength === expected.strength,
+            `${label}: ${JSON.stringify(actual)} is not ${JSON.stringify(expected)}`,
+          );
+        };
+        try {
+          render.setBloom({ enabled: true, strength: 0.8 });
+          same({ enabled: true, strength: 0.8 }, 'after enabling');
+          render.bloom().strength = 0;
+          same({ enabled: true, strength: 0.8 }, 'bloom() is a copy');
+          // A frame with the bloom on draws without errors.
+          await settle(2);
+          render.setBloom({ strength: 0.05 });
+          same({ enabled: true, strength: 0.05 }, 'in the dead zone');
+          render.setBloom({ enabled: false });
+          same({ enabled: false, strength: 0.05 }, 'after disabling');
+          for (const bad of [
+            { enabled: 1 },
+            { strength: -0.1 },
+            { strength: 1.5 },
+            { strength: Number.NaN },
+          ]) {
+            let error = null;
+            try {
+              render.setBloom(bad);
+            } catch (caught) {
+              error = caught;
+            }
+            ensure(
+              error instanceof TypeError,
+              `setBloom(${JSON.stringify(bad)}) did not throw a TypeError`,
+            );
+          }
+          same({ enabled: false, strength: 0.05 }, 'after rejected values');
+        } finally {
+          render.setBloom(previous);
+          await settle(1);
+        }
+      },
+    ],
+  ];
 }
 
 // The optional visualStyles capability (render.setStyle).

@@ -264,10 +264,39 @@ test('setStyle hands changed style states to the styles port and draws a frame',
   assert.equal(port.destroyed, 1);
 });
 
+test('setBloom hands changed states to the bloom port and draws a frame', () => {
+  const view = fakeView();
+  const shown = [];
+  let destroyed = 0;
+  const engine = createNavaraEngine(view, {
+    hooks,
+    bloom: { set: (state) => shown.push(state), destroy: () => destroyed++ },
+  });
+  assertGlobeEngine(engine);
+  assert.equal(engineCapabilities(engine).bloom, true);
+  assert.deepEqual(engine.render.bloom(), { enabled: false, strength: 0 });
+  engine.render.setBloom({ strength: 0.5 });
+  engine.render.setBloom({ enabled: true });
+  assert.deepEqual(view.calls.at(-1), ['forceUpdate']);
+  const calls = view.calls.length;
+  engine.render.setBloom({ enabled: true, strength: 0.5 });
+  assert.equal(view.calls.length, calls, 'an unchanged state draws nothing');
+  assert.throws(() => engine.render.setBloom({ strength: 3 }), TypeError);
+  assert.deepEqual(shown, [
+    { enabled: false, strength: 0.5 },
+    { enabled: true, strength: 0.5 },
+  ]);
+  engine.destroy();
+  engine.destroy();
+  assert.equal(destroyed, 1);
+});
+
 test('without a styles port the engine has no visualStyles capability', () => {
   const { engine } = setup();
   assert.equal(engineCapabilities(engine).visualStyles, false);
+  assert.equal(engineCapabilities(engine).bloom, false);
   assert.equal(engine.render.setStyle, undefined);
+  assert.equal(engine.render.setBloom, undefined);
 });
 
 test("the camera starts from Navara's drawn camera and pushes poses with setCamera", () => {

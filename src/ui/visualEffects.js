@@ -53,7 +53,8 @@ export class VisualEffects {
   /**
    * @param {object} options - Viewer, render ownership callbacks and optional clocks.
    * Without a viewer, `engine` (the globe engine) draws the sharpening
-   * through render.setSharpen. Construction is inert; initStyles and
+   * through render.setSharpen, and the styles and bloom through
+   * render.setStyle and render.setBloom when it has them. Construction is inert; initStyles and
    * initPostProcess retain startup ordering.
    */
   constructor({
@@ -76,8 +77,11 @@ export class VisualEffects {
       typeof engine?.render?.setSharpen === 'function' ? engine.render : null;
     // Without a viewer, an engine that draws the styles itself
     // (render.setStyle) gets them through stand-in stages (initStyles).
+    const capabilities = engineCapabilities(engine);
     this.engineStyles =
-      !viewer && engineCapabilities(engine).visualStyles ? engine.render : null;
+      !viewer && capabilities.visualStyles ? engine.render : null;
+    // Likewise the bloom (render.setBloom) for Cesium's bloom stage.
+    this.engineBloom = !viewer && capabilities.bloom ? engine.render : null;
     this.requestRender = requestRender;
     this.holdRender = holdRender;
     this.releaseRender = releaseRender;
@@ -136,7 +140,16 @@ export class VisualEffects {
   }
 
   initPostProcess(sharpenIntensity = this.sharpenIntensity) {
-    if (!this.viewer || this.stopped || this.sharpenStage) return;
+    if (this.stopped || this.sharpenStage) return;
+    // An engine that blooms starts from this owner's bloom (off), whatever
+    // a previous owner left on it.
+    if (!this.viewer) {
+      this.engineBloom?.setBloom({
+        enabled: false,
+        strength: bloomStrengthFromIntensity(this.bloomIntensity),
+      });
+      return;
+    }
     this.bloomStage = this.viewer.scene.postProcessStages.bloom;
     const names = [
       'glowOnly',
@@ -195,16 +208,24 @@ export class VisualEffects {
   }
 
   syncBloomEnabled() {
-    if (this.stopped || !this.bloomStage) return;
-    this.bloomStage.enabled =
+    if (this.stopped) return;
+    const enabled =
       this.bloomEnabled &&
       bloomStrengthFromIntensity(this.bloomIntensity) > 0.06;
+    if (this.bloomStage) this.bloomStage.enabled = enabled;
+    this.engineBloom?.setBloom({ enabled });
   }
 
   applyBloomIntensity(intensity) {
     if (this.stopped) return;
     this.bloomIntensity = clampBloomIntensity(intensity);
     this.requestRender('bloom');
+    if (this.engineBloom) {
+      this.engineBloom.setBloom({
+        strength: bloomStrengthFromIntensity(this.bloomIntensity),
+      });
+      this.syncBloomEnabled();
+    }
     if (!this.bloomStage) return;
     const rawStrength = bloomStrengthFromIntensity(this.bloomIntensity);
     const strength = rawStrength <= 0.06 ? 0.0 : (rawStrength - 0.06) / 0.94;

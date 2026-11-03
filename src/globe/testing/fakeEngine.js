@@ -22,9 +22,11 @@ import {
   INPUT_TYPES,
   MODIFIERS,
   normalizeInputOptions,
+  BLOOM_INITIAL,
   SHARPEN_INITIAL,
   STYLE_INITIAL,
   createEngineEvent,
+  mergeBloom,
   mergeSharpen,
   mergeStyle,
 } from '../contract.js';
@@ -229,6 +231,19 @@ function rectangleFromCartographics(points) {
   return { west, south, east, north };
 }
 
+// render.setBloom/bloom when asked; nothing otherwise.
+function fakeBloom(enabled, record) {
+  if (!enabled) return {};
+  let bloom = { ...BLOOM_INITIAL };
+  return {
+    setBloom(options) {
+      record('render.setBloom', [options]);
+      bloom = mergeBloom(bloom, options);
+    },
+    bloom: () => ({ ...bloom }),
+  };
+}
+
 // render.visualStyles/setStyle/style for `visualStyles` ({ name: uniform
 // names }); nothing without it.
 function fakeStyles(visualStyles, record) {
@@ -264,7 +279,7 @@ function fakeStyles(visualStyles, record) {
  *   longitude?: number, latitude?: number, altitude?: number,
  *   container?: object, canvas?: object, nowMs?: number,
  *   appClock?: import('../../time/clock.js').AppClock,
- *   visualStyles?: Record<string, string[]> }} [options]
+ *   visualStyles?: Record<string, string[]>, bloom?: boolean }} [options]
  *   Canvas size in CSS px, angles in radians; `container`/`canvas` stand in
  *   for the host elements (DOM mocks for shell tests). The initial pose looks straight
  *   down from `altitude` metres (10 000 km). The engine clock reads
@@ -272,7 +287,8 @@ function fakeStyles(visualStyles, record) {
  *   `nowMs` (2026-01-01T00:00Z) and moves only with `fake.frame(dt)` and
  *   `fake.advanceTime(ms)` (a given appClock keeps its own wall clock).
  *   `visualStyles` ({ style: its uniform names }) adds the optional
- *   visualStyles capability (render.setStyle), each uniform starting at 0.
+ *   visualStyles capability (render.setStyle), each uniform starting at 0;
+ *   `bloom: true` the optional bloom capability (render.setBloom).
  * @returns {import('../contract.js').GlobeEngine & { fake: object }}
  */
 export function createFakeEngine(options = {}) {
@@ -959,6 +975,7 @@ export function createFakeEngine(options = {}) {
       },
       sharpen: () => ({ ...sharpen }),
       ...fakeStyles(options.visualStyles, record),
+      ...fakeBloom(options.bloom, record),
     },
     surface: {
       sampleHeight(position, exclude) {
