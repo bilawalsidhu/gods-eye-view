@@ -43,6 +43,17 @@ class GevOverlayEffectDesc extends EffectDesc {
     );
   }
 
+  onDestroy() {
+    // Navara removes the pass from its composer; our pass owns its GPU target
+    // and context event handlers until it is explicitly disposed.
+    const pass = this.raw?.rawPass;
+    try {
+      super.onDestroy();
+    } finally {
+      pass?.dispose();
+    }
+  }
+
   // Each drawn frame: the scene depth the overlays test against, then each
   // overlay's own per-frame work (pixel footprint, origin, viewport).
   update(time) {
