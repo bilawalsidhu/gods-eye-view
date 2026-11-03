@@ -8,7 +8,12 @@ export function createRendererCache() {
     const host = document.getElementById('cesiumContainer');
     let entry = idle.get(kind);
     idle.delete(kind);
-    if (entry?.lost) {
+    // loseContext() takes effect before its queued DOM event is delivered.
+    // Check the existing context too, before resuming a parked render loop.
+    const canvas = entry?.scene.engine.host.canvas;
+    const context =
+      canvas?.getContext?.('webgl2') ?? canvas?.getContext?.('webgl');
+    if (entry && (entry.lost || context?.isContextLost())) {
       entry.dispose();
       entry = null;
     }
