@@ -44,6 +44,27 @@ pinching traverses globe and street scales with fewer gestures. Cesium retains
 its distance-aware zoom, collision handling and minimum/maximum distance limits.
 Fine-pointer desktop mouse and trackpad sensitivity is unchanged.
 
+User zoom is capped at 40,000 km (or a stricter host limit). Explicit camera
+flight, share-link and story destinations can go farther; from there, user zoom
+can't climb any higher and zooms in gradually from the current height, with no
+jump to the cap. Cesium can still use the limit when it computes an automatic
+bounding-sphere framing distance.
+Above 300 km, outward movement from the controller's configured zoom bindings
+(wheel, pinch distance and unmodified right-drag by default) pitches the camera
+down towards 8° below the Earth's limb. Large steps reach the limb immediately;
+the remaining margin eases into place, including after zooming stops or reaches
+the ceiling. Continuous outward inertia remains guarded without a time cutoff.
+Two-finger tilts, modifier-specific tilts and other camera gestures cancel the
+correction. A two-finger gesture counts as a pinch zoom only while the finger
+spacing changes more than the fingers move up or down, so spacing drift during
+a tilt is ignored. Explicit navigation handoffs, including toolbar tilt,
+cancel it before animation begins. Zooming in, disabled zoom/input, non-3D modes, tracked
+transforms and flights also cancel it; external pose changes cancel stationary
+settling. Oblique views below 300 km are left alone.
+
+`QA_BASE_URL=http://localhost:4173 node scripts/qa-zoom-out-guard.mjs` exercises
+the real browser controller at desktop and phone widths with keyless fixtures.
+
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
 Duplicate names require a geocoded containment anchor; when several entries for
