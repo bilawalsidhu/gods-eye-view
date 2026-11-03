@@ -217,6 +217,129 @@ test('dependent voice navigation waits for the destination viewport to arrive', 
   assert.equal(result.arrived, true);
 });
 
+// "fly to London and tilt the camera" arrives as two sibling calls.
+// Run at once, the tilt's navigation cancelled the flight; with a geocoded
+// place, the late flight replaced the tilt.
+function tiltAfterFlightHarness() {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const harness = createVoiceNavigationHarness();
+  const { viewer, styleManager } = harness;
+  const flights = [];
+  viewer.camera.flyTo = (options) => {
+    harness.order.push('fly');
+    flights.push(options);
+  };
+  styleManager.runImmediateLocationNavigation = (navigate) => (
+    styleManager.runImmediateNavigation('location', navigate)
+  );
+  return { ...harness, flights };
+}
+
+const settledYet = (promise) => {
+  let settled = false;
+  promise.then(() => { settled = true; });
+  return () => settled;
+};
+
+test('a tilt in the same reply as a fly-to waits for the flight to land', async () => {
+  const { viewer, styleManager, order, flights } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  const fly = await runner('fly_to_location', { locationId: 'austin' });
+  assert.equal(fly.ok, true);
+  const tilt = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  const tiltDone = settledYet(tilt);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(tiltDone(), false, 'the tilt must wait while the camera flies');
+  assert.equal(
+    order.slice(order.indexOf('fly')).includes('cancel'),
+    false,
+    'the tilt must not cancel the flight',
+  );
+  flights[0].complete();
+  const result = await tilt;
+  assert.equal(result.ok, true);
+  assert.equal(result.motion, 'tilt');
+});
+
+test('a tilt waits through a geocoded fly-to search, then for its flight', async () => {
+  const { viewer, styleManager } = tiltAfterFlightHarness();
+  let finishSearch;
+  let landFlight;
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+      finishSearch = () => {
+        landFlight = options.onComplete;
+        resolve({ label: query, navigationMode: 'city-overview' });
+      };
+    }),
+  });
+  const fly = runner('fly_to_location', { query: 'Somewhere Far' });
+  const tilt = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  const tiltDone = settledYet(tilt);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(tiltDone(), false, 'the tilt must wait for the place lookup');
+  finishSearch();
+  assert.equal((await fly).ok, true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(tiltDone(), false, 'the tilt must wait for the flight too');
+  landFlight();
+  assert.equal((await tilt).ok, true);
+});
+
+test('a tilt waiting on a flight that never lands is not run', async () => {
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  await runner('fly_to_location', { locationId: 'austin' });
+  const tilt = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  flights[0].cancel();
+  const result = await tilt;
+  assert.equal(result.ok, false);
+  assert.match(result.error, /did not arrive/);
+});
+
+test('a tilt beside a fly-to that found nothing is not run', async () => {
+  const { viewer, styleManager } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+    searchNavigation: async () => null,
+  });
+  const fly = runner('fly_to_location', { query: 'Nowhere' });
+  const tilt = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  assert.equal((await fly).ok, false);
+  // Nothing flew: the tilt answers at once and honestly, never at the old view.
+  const result = await tilt;
+  assert.equal(result.ok, false);
+  assert.match(result.error, /did not arrive/);
+  // A later, separate tilt is not held by the failed lookup.
+  assert.equal((await runner('move_camera', { motion: 'tilt', pitchDeg: -45 })).ok, true);
+});
+
+test('a tilt with no voice flight pending runs at once', async () => {
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  await runner('fly_to_location', { locationId: 'austin' });
+  flights[0].complete();
+  const result = await runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
+  assert.equal(result.ok, true);
+});
+
 test('nearest-aircraft voice action serializes layer enable, arrival, refresh, airborne query, and selection', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const { viewer, styleManager } = createVoiceNavigationHarness();

@@ -276,6 +276,10 @@ export function createGevActionRunner({
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
+  // The latest voice flight. A tilt in the same reply as "fly to X" waits for
+  // it to land: run at once, its navigation cancelled the flight, or the
+  // flight (still geocoding) then replaced the tilt.
+  let voiceFlight = null;
   let analystEngine;
   const resolveRegionRing = (name, signal) =>
     annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
@@ -1103,7 +1107,10 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      return flyToRequestedLocation(viewer, args, {
+      const flight = trackVoiceFlight();
+      voiceFlight = flight;
+      const flown = flyToRequestedLocation(viewer, args, {
+        onFlightEnd: flight.settle,
         onProgress: reportProgress,
         placeSearch,
         searchNavigation,
@@ -1131,6 +1138,14 @@ export function createGevActionRunner({
           if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
         },
       });
+      // No flight started (not found, refused, cancelled): nothing to wait for.
+      flown.then(
+        (result) => {
+          if (result?.ok !== true) flight.settle('failed');
+        },
+        () => flight.settle('failed'),
+      );
+      return flown;
     }
 
     if (name === 'adjust_camera_zoom') {
@@ -1173,6 +1188,23 @@ export function createGevActionRunner({
     }
 
     if (name === 'move_camera') {
+      if (
+        String(args.motion || '').toLowerCase() === 'tilt' &&
+        voiceFlight &&
+        !voiceFlight.done
+      ) {
+        const status = await waitForVoiceFlight(voiceFlight, runOptions.signal);
+        if (!current())
+          return { ok: false, action: 'move_camera', cancelled: true };
+        if (status !== 'arrived')
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion: 'tilt',
+            error:
+              'Not run: the flight this tilt was waiting for did not arrive.',
+          };
+      }
       return moveCamera(args, (navigate, releaseOptions) =>
         runManagedVoiceNavigation(
           styleManager,
@@ -2690,6 +2722,42 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
 }
 
 /** Run one validated voice camera mutation through the UI-owned authority seam. */
+/** A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once. */
+function trackVoiceFlight() {
+  let resolve;
+  const flight = {
+    done: false,
+    ended: new Promise((settle) => {
+      resolve = settle;
+    }),
+    settle: (status) => {
+      if (flight.done) return;
+      flight.done = true;
+      resolve(status);
+    },
+  };
+  return flight;
+}
+
+/** Longest a tilt waits for a flight (geocode plus flight) before giving up. */
+const VOICE_FLIGHT_WAIT_MS = 30_000;
+
+/** Wait for a voice flight to end; 'timeout' or 'aborted' if it does not. */
+function waitForVoiceFlight(flight, signal) {
+  if (signal?.aborted) return Promise.resolve('aborted');
+  return new Promise((resolve) => {
+    const finish = (status) => {
+      clearTimeout(timer);
+      signal?.removeEventListener?.('abort', onAbort);
+      resolve(status);
+    };
+    const onAbort = () => finish('aborted');
+    const timer = setTimeout(() => finish('timeout'), VOICE_FLIGHT_WAIT_MS);
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    flight.ended.then(finish);
+  });
+}
+
 function runManagedVoiceNavigation(
   styleManager,
   noun,
@@ -3252,6 +3320,7 @@ async function flyToRequestedLocation(
     runImmediate = null,
     beginDeferred = null,
     reassertDeferred = null,
+    onFlightEnd = null,
   } = {},
 ) {
   const requestedRangeM = Number(args.rangeM);
@@ -3275,12 +3344,19 @@ async function flyToRequestedLocation(
           settleArrival = resolve;
         })
       : null;
-  const arrivalHooks = arrival
-    ? {
-        onComplete: () => settleArrival?.('arrived'),
-        onCancel: () => settleArrival?.('cancelled'),
-      }
-    : {};
+  const arrivalHooks =
+    arrival || onFlightEnd
+      ? {
+          onComplete: () => {
+            settleArrival?.('arrived');
+            onFlightEnd?.('arrived');
+          },
+          onCancel: () => {
+            settleArrival?.('cancelled');
+            onFlightEnd?.('cancelled');
+          },
+        }
+      : {};
   const afterArrival = async (result, label) => {
     if (!arrival || result?.ok !== true) return result;
     onProgress('fly', label);
