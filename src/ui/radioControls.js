@@ -166,7 +166,7 @@ export class RadioControls {
     document
       .getElementById('title-bar')
       ?.classList.remove('radio-broadcasting');
-    // The Navara engine's stand-in radio layer has no tuner.
+    // A catalog without the radio layer supplies a stand-in with no tuner.
     this.radio.endTuning?.();
   }
 }

@@ -82,7 +82,7 @@ export class LayerBindings {
       window,
       this._worldRequestFocusHandler,
     );
-    // Entity tracking is the viewer's (no viewer on the Navara engine).
+    // Cesium's trackedEntity changes announce navigation through this event.
     if (this.viewer)
       this._navigationOwnerChangedRemover =
         this.viewer.trackedEntityChanged.addEventListener((entity) => {

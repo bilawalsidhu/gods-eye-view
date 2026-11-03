@@ -57,8 +57,8 @@ export function createEngineSwitch({
 }) {
   // The engine whose session is live, null while none is.
   let current = kind;
-  // The engine whose application exists or is starting: what a history visit
-  // would leave.
+  // The engine attached to the application or starting to attach: what a
+  // history visit would leave.
   let live = kind;
   // The last engine that started successfully: the rollback target.
   let working = kind;

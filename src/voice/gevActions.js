@@ -238,7 +238,7 @@ const FRAME_TARGETS = new Map([
 /** A tool's required capability is missing from the attached scene. */
 export const UNAVAILABLE_ON_ENGINE = 'UNAVAILABLE_ON_ENGINE';
 
-/** What each refused tool is, for the refusal's message. */
+/** Feature labels for capability refusals; these actions can run on either engine. */
 export const UNAVAILABLE_FEATURES = Object.freeze({
   control_scene: 'The scene director',
   annotate_map: 'Map annotation',
