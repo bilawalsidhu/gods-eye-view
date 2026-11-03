@@ -88,3 +88,7 @@ Abra o navegador no endere√ßo mostrado (geralmente http://localhost:4173).
 ## ü§ù Cr√©ditos
 - Projeto original criado por **[Bilawal Sidhu](https://github.com/bilawalsidhu)** e **[Sameh Khamis](https://github.com/samehkhamis)**.
 - Tradu√ß√£o e documenta√ß√£o deste fork feita por **[Walney Moreira Klein](https://github.com/WalneyNF)**.
+### ???? IntegraÁ„o experimental: Habblaud Geo Mission 0.3
+
+Este fork brasileiro prioriza **PortuguÍs (Brasil)** e oferece uma ponte com o [Habblaud Geo Mission](https://github.com/WalneyNF/habblaud/tree/feature/geo-mission-public): o globo incorporado expıe a posiÁ„o atual da c‚mera (n„o o GPS do usu·rio) para cadastrar favoritos. A integraÁ„o usa mensagens entre janelas com validaÁ„o de origem na Central e preserva os controles de camadas. Veja o [manual de presets](docs/HABBLAUD-PRESETS.md) e os demais documentos da integraÁ„o. O uso È local e experimental; dados e provedores externos est„o sujeitos ‡s suas licenÁas e permissıes.
+

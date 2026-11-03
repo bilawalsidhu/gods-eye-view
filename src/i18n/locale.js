@@ -5,7 +5,7 @@
 export const LOCALE_STORAGE_KEY = 'gev:locale:v1';
 
 /** Source language and fallback. */
-export const DEFAULT_LOCALE = 'en';
+export const DEFAULT_LOCALE = 'pt-BR'; // Fork brasileiro: padrão português, usuário pode escolher outro idioma.
 
 /** Shipped locales; order does not matter. Adding one: docs/TRANSLATORS.md. */
 //Walney - 27/10/2026
@@ -86,10 +86,8 @@ export function resolveLocale({
   if (fromQuery) return fromQuery;
   const stored = readStoredLocale(storage);
   if (stored) return stored;
-  for (const candidate of Array.isArray(languages) ? languages : []) {
-    const normalized = normalizeLocale(candidate);
-    if (normalized) return normalized;
-  }
+  // Fork brasileiro: sem preferência explícita, usar pt-BR independentemente
+  // do idioma do navegador. ?lang= e escolha salva continuam prioritários.
   return DEFAULT_LOCALE;
 }
 

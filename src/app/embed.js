@@ -258,8 +258,14 @@ export function installViews({
   // Views apply one at a time, in the order they arrive.
   let queue = ready;
   const onMessage = (event) => {
-    if (event.source !== peer || event.data?.type !== EMBED_VIEW_MESSAGE)
+    if (event.source !== peer) return;
+    if (event.data?.type === 'gev:camera-request') {
+      const c = viewer.camera;
+      const pos = c.positionCartographic;
+      if (pos) post({type:'gev:camera-response', id:event.data.id ?? null, camera:{lat:Cesium.Math.toDegrees(pos.latitude),lon:Cesium.Math.toDegrees(pos.longitude),alt:pos.height,heading:Cesium.Math.toDegrees(c.heading),pitch:Cesium.Math.toDegrees(c.pitch)}}, event.origin && event.origin !== 'null' ? event.origin : '*');
       return;
+    }
+    if (event.data?.type !== EMBED_VIEW_MESSAGE) return;
     const { id = null } = event.data;
     const replyOrigin =
       isEmbeddedInline() || !event.origin || event.origin === 'null'
