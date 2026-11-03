@@ -306,7 +306,7 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
     'this._navigation.stop();',
   ], 'dispose invalidation');
   // An engine switch retires the outgoing globe's navigation the same way.
-  const detach = body(ui, /async detachScene\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/, 'detach');
+  const detach = body(ui, /async _detachScene\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/, 'detach');
   ordered(detach, [
     'this._navigation.setScene(',
     'this._layerBindings.stop();',
@@ -321,7 +321,7 @@ test('teardown synchronously closes immediate camera entry points', () => {
     'this._disposed = true;',
     'await this.detachScene(',
   ], 'synchronous teardown barrier');
-  const detach = body(ui, /async detachScene\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/, 'detach');
+  const detach = body(ui, /async _detachScene\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/, 'detach');
   ordered(detach, [
     'this._layerBindings.stop();',
     'await this._contextControls.restoreForDisposal();',

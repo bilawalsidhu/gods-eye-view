@@ -708,49 +708,61 @@ export class StyleManager extends ShellFacade {
     if (this._disposed) return;
     if (this._scene.engine)
       throw new Error('The shell is attached to a globe already');
-    const previousServices = this.services;
-    this.services = { ...this.services, ...services };
-    this._scene = { viewer, engine, mapStackController };
-    const {
-      flightsLayer,
-      militaryFlightsLayer,
-      satellitesLayer,
-      aisLiveVesselsLayer,
-      militaryAwarenessLayer,
-      rocketLaunchesLayer,
-    } = this.services;
-    this._navigation.tracking = {
-      flightsLayer,
-      militaryFlightsLayer,
-      satellitesLayer,
-      aisLiveVesselsLayer,
-      militaryAwarenessLayer,
-      rocketLaunchesLayer,
-    };
-    this._navigation.setScene({ viewer, engine });
-    this._locationNavigation.attachScene({ viewer, engine });
-    this.hud.attachEngine(engine, { viewer });
-    this.shareLinkManager.attachEngine(engine);
-    this._displayBindings.attachViewer(viewer);
-    this._buildSceneControls();
-    this._buildSceneCockpit();
-    this._shareRestoration.attachLinks(this.shareLinkManager);
-    this._initSceneOverlays();
-    this._initMapStackControl();
-    this._refreshLayerControls(previousServices);
-    this._initCameraOrientationControls();
-    this._initHudScene();
-    this._initCockpitDisplayPortal();
-    this._applyGlobalPostDefaults();
-    this._startAnimationLoop();
-    this._publishActiveStyle();
-    this._shareRestoration.start({
-      engineSwitch,
-      retainScene: Boolean(this._layerSession?.handoffLayers),
-    });
-    this._layerBindings.observeCamera();
-    this._layoutRightPanels();
-    this._syncCctvPanelViewport();
+    // An attachment that fails part-way releases what it built: the shell
+    // stays detached, ready for the working engine.
+    try {
+      const previousServices = this.services;
+      this.services = { ...this.services, ...services };
+      this._scene = { viewer, engine, mapStackController };
+      const {
+        flightsLayer,
+        militaryFlightsLayer,
+        satellitesLayer,
+        aisLiveVesselsLayer,
+        militaryAwarenessLayer,
+        rocketLaunchesLayer,
+      } = this.services;
+      this._navigation.tracking = {
+        flightsLayer,
+        militaryFlightsLayer,
+        satellitesLayer,
+        aisLiveVesselsLayer,
+        militaryAwarenessLayer,
+        rocketLaunchesLayer,
+      };
+      this._navigation.setScene({ viewer, engine });
+      this._locationNavigation.attachScene({ viewer, engine });
+      this.hud.attachEngine(engine, { viewer });
+      this.shareLinkManager.attachEngine(engine);
+      this._displayBindings.attachViewer(viewer);
+      this._buildSceneControls();
+      this._buildSceneCockpit();
+      this._shareRestoration.attachLinks(this.shareLinkManager);
+      this._initSceneOverlays();
+      this._initMapStackControl();
+      this._refreshLayerControls(previousServices);
+      this._initCameraOrientationControls();
+      this._initHudScene();
+      this._initCockpitDisplayPortal();
+      this._applyGlobalPostDefaults();
+      this._startAnimationLoop();
+      this._publishActiveStyle();
+      this._shareRestoration.start({
+        engineSwitch,
+        retainScene: Boolean(this._layerSession?.handoffLayers),
+      });
+      this._layerBindings.observeCamera();
+      this._layoutRightPanels();
+      this._syncCctvPanelViewport();
+    } catch (error) {
+      void this.detachScene().catch((cleanupError) =>
+        console.error(
+          'The shell could not leave a failed globe:',
+          cleanupError,
+        ),
+      );
+      throw error;
+    }
   }
 
   /**
@@ -759,7 +771,15 @@ export class StyleManager extends ShellFacade {
    * the open panels stay. `handoff` keeps the selection and a retainable
    * Context mode for the next globe.
    */
-  async detachScene({
+  detachScene(options = {}) {
+    // One detach at a time: a second request joins the one under way.
+    this._sceneDetach ??= this._detachScene(options).finally(() => {
+      this._sceneDetach = null;
+    });
+    return this._sceneDetach;
+  }
+
+  async _detachScene({
     handoff = Boolean(this._layerSession?.handoffLayers),
   } = {}) {
     if (!this._scene.engine && !this._scene.viewer) return;

@@ -129,10 +129,8 @@ export function createSceneHost({ onError = null } = {}) {
           for (const part of [...parts])
             await attachPart(part, target, current);
         } catch (error) {
-          const errors = await release(current, {
-            handoff: false,
-            failed: true,
-          });
+          // The parts keep their own handoff choice; `failed` names why.
+          const errors = await release(current, { failed: true });
           attachment = null;
           scene = null;
           state = 'detached';
