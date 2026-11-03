@@ -48,6 +48,10 @@ const ONCE = {
 };
 const PITCH_MIN = Cesium.Math.toRadians(-89);
 const PITCH_MAX = Cesium.Math.toRadians(-5);
+/** A bare "tilt the camera" / "oblique view" settles here. */
+const TILT_DEFAULT_PITCH_DEG = -45;
+/** °/s for a tilt to a requested angle; short ones keep the once duration. */
+const TILT_TO_DEG_S = 30;
 
 /* ── Route dolly: cinematic tuning ──────────────────────────────────────────
  * Every knob an owner may want to retune lives in this block. The shaping is
@@ -1052,7 +1056,9 @@ export function interruptCameraMotion(reason = 'interrupt') {
   if (
     wasActive &&
     !tracking &&
-    (_active.kind === 'orbit' || _active.kind === 'route')
+    (_active.kind === 'orbit' ||
+      _active.kind === 'route' ||
+      (_active.kind === 'tilt' && _active.hpr))
   )
     clearLookAt();
   // Instant, not eased: the user grabbed the camera, or the flight is over.
@@ -1104,7 +1110,7 @@ function onTick() {
   let scale = 1;
   if (m.mode === 'once') {
     m.elapsed = (m.elapsed || 0) + dt;
-    const t = Math.min(1, m.elapsed / ONCE.durationS);
+    const t = Math.min(1, m.elapsed / (m.durationS || ONCE.durationS));
     scale = 1 - (1 - t) * (1 - t); // ease-out progress share
     if (t >= 1) {
       interruptCameraMotion('once-complete');
@@ -1173,18 +1179,13 @@ function onTick() {
       else if (m.direction === 'right') cam.moveRight(step);
       else if (m.direction === 'up') cam.moveUp(step);
       else cam.moveDown(step);
-    } else if (
-      m.kind === 'tilt' ||
-      m.kind === 'rotate' ||
-      m.kind === 'rotate_globe'
-    ) {
+    } else if (m.kind === 'tilt') {
+      tickTilt(cam, m, scale, dt);
+    } else if (m.kind === 'rotate' || m.kind === 'rotate_globe') {
       const degS = TILT_DEG_S[m.speed];
       const stepRad =
         m.mode === 'once'
-          ? Cesium.Math.toRadians(
-              m.kind === 'tilt' ? ONCE.tiltDeg : ONCE.rotateDeg,
-            ) *
-            (scale - (m.lastScale || 0))
+          ? Cesium.Math.toRadians(ONCE.rotateDeg) * (scale - (m.lastScale || 0))
           : Cesium.Math.toRadians(degS) * dt;
       m.lastScale = scale;
       if (m.kind === 'rotate_globe') {
@@ -1218,16 +1219,6 @@ function onTick() {
           return;
         }
         cam.rotate(m.rotationAxis, angle);
-      } else if (m.kind === 'tilt') {
-        const up = m.direction === 'up';
-        // Clamp pitch to [-89°, -5°]: never through the ground, never at the sky.
-        const next = cam.pitch + (up ? stepRad : -stepRad);
-        if (next > PITCH_MAX || next < PITCH_MIN) {
-          interruptCameraMotion('tilt-clamp');
-          return;
-        }
-        if (up) cam.lookUp(stepRad);
-        else cam.lookDown(stepRad);
       } else if (m.direction === 'left') cam.lookLeft(stepRad);
       else cam.lookRight(stepRad);
     } else if (m.kind === 'route') {
@@ -1250,6 +1241,67 @@ function onTick() {
   } catch {
     interruptCameraMotion('tick-error');
   }
+}
+
+/**
+ * One frame of tilt. With a ground pivot the camera swings about it (lookAt),
+ * so the place under the crosshair stays centred; without one it looks up or
+ * down in place. Pitch is clamped to [-89°, -5°] only in the direction of
+ * travel: a top-down view sits at -90°, below the limit, and must still be
+ * able to tilt up out of it.
+ */
+function tickTilt(cam, m, scale, dt) {
+  let step;
+  if (m.mode === 'once') {
+    step = m.tiltRad * (scale - (m.lastScale || 0));
+    m.lastScale = scale;
+  } else {
+    step =
+      Cesium.Math.toRadians(TILT_DEG_S[m.speed]) *
+      dt *
+      (m.direction === 'up' ? 1 : -1);
+  }
+  const from = m.hpr ? m.hpr.pitch : cam.pitch;
+  const next = from + step;
+  const limited =
+    step > 0
+      ? Math.min(next, Math.max(from, PITCH_MAX))
+      : Math.max(next, Math.min(from, PITCH_MIN));
+  if (m.hpr) {
+    m.hpr.pitch = limited;
+    cam.lookAt(m.target, m.hpr);
+    // A once motion that just completed released the lookAt frame before
+    // this last step re-took it.
+    if (_active !== m) clearLookAt();
+  } else {
+    cam.lookUp(limited - from);
+  }
+  if (limited !== next) interruptCameraMotion('tilt-clamp');
+}
+
+/** Ground pivot for a tilt: heading, pitch and range in the target's own frame. */
+function tiltPivot(cam, target) {
+  const local = Cesium.Matrix4.multiplyByPoint(
+    Cesium.Matrix4.inverseTransformation(
+      Cesium.Transforms.eastNorthUpToFixedFrame(target),
+      new Cesium.Matrix4(),
+    ),
+    cam.positionWC,
+    new Cesium.Cartesian3(),
+  );
+  const range = Cesium.Cartesian3.magnitude(local);
+  if (!(range > 1) || local.z <= 0) return null;
+  // Near straight overhead the offset's heading is float noise (it flipped a
+  // north-up London view to south); keep the camera's own.
+  const heading =
+    Math.hypot(local.x, local.y) > range * 0.01
+      ? Math.atan2(-local.x, -local.y)
+      : cam.heading;
+  return new Cesium.HeadingPitchRange(
+    heading,
+    -Math.asin(Math.min(1, local.z / range)),
+    range,
+  );
 }
 
 /** Rigid origin-centred rotation stays outside the actual ellipsoid's bounding sphere. */
@@ -1421,6 +1473,9 @@ export function initCameraVerbs(
   _trackingRemover = viewer.trackedEntityChanged?.addEventListener((entity) => {
     if (entity && _active?.kind === 'rotate_globe')
       interruptCameraMotion('globe-camera-owner-changed');
+    // A pivoting tilt's lookAt would fight the follow camera every frame.
+    else if (entity && _active?.kind === 'tilt' && _active.hpr)
+      interruptCameraMotion('tilt-camera-owner-changed');
   });
   for (const rm of _inputRemovers) rm();
   _inputRemovers = [];
@@ -1472,9 +1527,32 @@ export function moveCamera(args = {}, runNavigation = null) {
       error: `Unknown motion "${args.motion}" — use orbit, pan, tilt, rotate, rotate_globe, or stop.`,
     };
   }
+  // Tilt to an angle: the one asked for, or a default oblique view when a
+  // bare "tilt the camera" names neither angle nor direction.
+  let tiltToPitch = null;
+  if (motion === 'tilt') {
+    // Only a real number or numeric text: Number('') and Number(null) are 0,
+    // which would swing the camera to the horizon.
+    const raw = args.pitchDeg;
+    const requested =
+      typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '')
+        ? Number(raw)
+        : NaN;
+    // The camera never looks above the horizon, so a positive angle can only
+    // mean the same angle below it ("tilt 45 degrees" sent as 45).
+    if (Number.isFinite(requested))
+      tiltToPitch = Cesium.Math.clamp(
+        Cesium.Math.toRadians(-Math.abs(requested)),
+        PITCH_MIN,
+        PITCH_MAX,
+      );
+    else if (direction === null)
+      tiltToPitch = Cesium.Math.toRadians(TILT_DEFAULT_PITCH_DEG);
+  }
   if (
     motion !== 'orbit' &&
     motion !== 'rotate_globe' &&
+    tiltToPitch === null &&
     !['left', 'right', 'up', 'down'].includes(direction)
   ) {
     return {
@@ -1501,7 +1579,19 @@ export function moveCamera(args = {}, runNavigation = null) {
       error: 'rotate_globe needs left or right.',
     };
   }
-  if (motion === 'tilt') {
+  if (motion === 'tilt' && tiltToPitch !== null) {
+    if (
+      Math.abs(tiltToPitch - _viewer.camera.pitch) < Cesium.Math.toRadians(0.5)
+    ) {
+      return {
+        ok: true,
+        action: 'move_camera',
+        motion,
+        pitchDeg: Math.round(Cesium.Math.toDegrees(tiltToPitch)),
+        unchanged: true,
+      };
+    }
+  } else if (motion === 'tilt') {
     // Honest limits: at the clamp a tilt is a no-op — say so instead of
     // reporting success and letting the model gaslight itself (field test).
     const pitch = _viewer.camera.pitch;
@@ -1615,6 +1705,30 @@ export function moveCamera(args = {}, runNavigation = null) {
       speed,
       mode,
     };
+    if (motion === 'tilt') {
+      const cam = _viewer.camera;
+      // Swing about the ground under the crosshair so the place stays
+      // centred. The follow camera owns a tracked view's frame.
+      const target = _viewer.trackedEntity ? null : _getTarget?.(_viewer);
+      const pivot = target ? tiltPivot(cam, target) : null;
+      if (pivot) {
+        state.target = target;
+        state.hpr = pivot;
+      }
+      const from = pivot ? pivot.pitch : cam.pitch;
+      if (tiltToPitch !== null) {
+        state.mode = 'once';
+        state.direction = tiltToPitch > from ? 'up' : 'down';
+        state.tiltRad = tiltToPitch - from;
+        state.durationS = Math.max(
+          ONCE.durationS,
+          Math.abs(Cesium.Math.toDegrees(state.tiltRad)) / TILT_TO_DEG_S,
+        );
+      } else {
+        state.tiltRad =
+          Cesium.Math.toRadians(ONCE.tiltDeg) * (direction === 'up' ? 1 : -1);
+      }
+    }
     if (motion === 'rotate_globe') {
       // Convert an inherited ground-target frame without changing the world
       // pose. Rotation must pivot about Earth, never the previous local target.
@@ -1699,7 +1813,10 @@ export function moveCamera(args = {}, runNavigation = null) {
       motion,
       direction: state.direction,
       speed,
-      mode,
+      mode: state.mode,
+      ...(tiltToPitch !== null && {
+        pitchDeg: Math.round(Cesium.Math.toDegrees(tiltToPitch)),
+      }),
     };
   };
   const preserveCameraFlight =

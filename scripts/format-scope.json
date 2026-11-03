@@ -1108,6 +1108,7 @@
   "scripts/qa-status-badges.mjs",
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
+  "src/cameraTilt.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs",
   "src/hudDms.test.mjs",
   "src/hudSummaryGate.test.mjs",

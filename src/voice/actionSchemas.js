@@ -749,6 +749,11 @@ const schemas = [
           type: 'string',
           enum: ['once', 'continuous'],
         },
+        pitchDeg: {
+          type: 'number',
+          minimum: -90,
+          maximum: 90,
+        },
       },
       required: ['motion'],
     },
