@@ -2772,7 +2772,54 @@ export function createContractSuite(
   if (capabilities.visualStyles)
     checks.push(...styleChecks(engine.render, settle));
   if (capabilities.bloom) checks.push(...bloomChecks(engine.render, settle));
+  if (capabilities.cloudCover)
+    checks.push(...cloudCoverChecks(engine.render, settle));
   return checks.map(([name, run]) => ({ name, run }));
+}
+
+// The optional cloudCover capability (render.setCloudCover).
+function cloudCoverChecks(render, settle) {
+  return [
+    [
+      'render.setCloudCover (cloudCover): sets, copies, gives back, rejects bad values',
+      async () => {
+        const previous = render.cloudCover();
+        try {
+          render.setCloudCover({ coverage: 0.7 });
+          ensure(render.cloudCover().coverage === 0.7, 'coverage not set');
+          render.cloudCover().coverage = 0;
+          ensure(
+            render.cloudCover().coverage === 0.7,
+            'cloudCover() is a copy',
+          );
+          await settle(2);
+          render.setCloudCover({});
+          ensure(render.cloudCover().coverage === 0.7, 'omitted keeps it');
+          render.setCloudCover({ coverage: null });
+          ensure(render.cloudCover().coverage === null, 'null: the engine own');
+          for (const bad of [-0.1, 1.2, Number.NaN, '0.5']) {
+            let error = null;
+            try {
+              render.setCloudCover({ coverage: bad });
+            } catch (caught) {
+              error = caught;
+            }
+            ensure(
+              error instanceof TypeError,
+              `setCloudCover(${bad}) did not throw a TypeError`,
+            );
+          }
+          ensure(
+            render.cloudCover().coverage === null,
+            'after rejected values',
+          );
+        } finally {
+          render.setCloudCover(previous);
+          await settle(1);
+        }
+      },
+    ],
+  ];
 }
 
 // The optional bloom capability (render.setBloom).
