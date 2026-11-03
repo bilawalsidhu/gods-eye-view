@@ -201,6 +201,16 @@ function encode(state) {
   return params.toString();
 }
 
+// The ledger as published before the USGS water layers took 9, 00 and 01: the
+// allocation scenarios below start from it so "next free token 9" still holds.
+const PRE_USGS_RESERVATIONS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(LAYER_STATE_TOKEN_RESERVATIONS).filter(
+      ([id]) => !id.startsWith('local-usgs-'),
+    ),
+  ),
+);
+
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
   assert.equal(REGISTERED_LAYER_IDS.length, 36);
@@ -247,14 +257,14 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(nextLayerStateToken(), '00');
   assert.equal(
     nextLayerStateToken({
-      ...LAYER_STATE_TOKEN_RESERVATIONS,
+      ...PRE_USGS_RESERVATIONS,
       alpha: '9',
       bravo: '00',
     }),
     '01',
   );
   const digitsExhausted = {
-    ...LAYER_STATE_TOKEN_RESERVATIONS,
+    ...PRE_USGS_RESERVATIONS,
     ...Object.fromEntries([...'9'].map((digit) => [`prior-${digit}`, digit])),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
@@ -342,8 +352,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9', competing: '9' },
+        { ...PRE_USGS_RESERVATIONS, merged: '9' },
+        { ...PRE_USGS_RESERVATIONS, merged: '9', competing: '9' },
       ),
     /next free token 00/,
   );
@@ -501,7 +511,7 @@ test('unknown enabled-layer tokens reject the payload instead of becoming an emp
 });
 
 test('malformed enabled-layer lists reject the entire payload', () => {
-  for (const value of ['.c', 'c.', 'c..e', 'c.c', '00', 'c.00']) {
+  for (const value of ['.c', 'c.', 'c..e', 'c.c', '02', 'c.02']) {
     assert.equal(
       decodeLayerStateParams(new URLSearchParams(`v=2&l=${value}`)),
       null,
@@ -535,6 +545,20 @@ test('USGS water layers have stable enabled-only share tokens', () => {
     ['5', 'local-usgs-water'],
     ['6', 'local-usgs-lakes'],
     ['7', 'local-usgs-springs'],
+  ]) {
+    const decoded = decodeLayerStateParams(
+      new URLSearchParams(`v=2&l=${token}`),
+    );
+    assert.deepEqual(decoded.enabledLayerIds, [id]);
+    assert.ok(encode(decoded).includes(`l=${token}`));
+  }
+});
+
+test('USGS water layers have stable enabled-only share tokens', () => {
+  for (const [token, id] of [
+    ['9', 'local-usgs-water'],
+    ['00', 'local-usgs-lakes'],
+    ['01', 'local-usgs-springs'],
   ]) {
     const decoded = decodeLayerStateParams(
       new URLSearchParams(`v=2&l=${token}`),
