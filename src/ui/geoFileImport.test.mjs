@@ -329,14 +329,19 @@ test('the application composition wires the import and owns its teardown', () =>
     'utf8',
   );
   const drawAt = tools.indexOf('const drawTool = initDrawTool({');
-  const importAt = tools.indexOf('const geoFileImport = initGeoFileImport({');
+  const importAt = tools.indexOf(
+    "const geoFileImport = sessionTool(layerSession, 'geoImport', defer, () =>",
+  );
   assert.ok(importAt > drawAt && drawAt >= 0);
   // Fly-to goes through the application shell's navigation policy.
   assert.match(
     tools.slice(importAt, importAt + 200),
     /navigation: styleManager/,
   );
-  assert.ok(tools.indexOf('defer(() => geoFileImport?.destroy());') > importAt);
+  // The session owns the files; this viewer only their drawing.
+  assert.ok(
+    tools.indexOf('defer(() => geoFileImport?.detachScene());') > importAt,
+  );
   // The list renders from the store and its controls answer through it.
   assert.match(
     tools.slice(importAt, importAt + 400),
@@ -622,5 +627,60 @@ test('a refusal shows its counts in the languageâ€™s numerals, not the browserâ€
     out.error,
     'That file has 60,000 map objects; the limit is 50,000.',
   );
+  t.tool.destroy();
+});
+
+test('an engine switch keeps the files and draws them again on the next viewer', async () => {
+  const t = setup();
+  await t.tool.importFiles([file('a.geojson'), file('b.geojson')]);
+  const [a, b] = rows(t);
+  press(t, b, 'toggle');
+  t.tool.detachScene();
+  // The drawing left the viewer; the list and its rows stayed.
+  assert.equal(t.removed.length, 2);
+  assert.deepEqual(t.revoked.sort(), ['a.geojson', 'b.geojson']);
+  assert.deepEqual(
+    rows(t).map((row) => row.id),
+    [a.id, b.id],
+  );
+  assert.equal(t.viewer.container.listeners.length, 0);
+  assert.equal(t.document.listeners.length, 0);
+  assert.equal(t.tool.flyTo(a.id), false);
+  const refused = await t.tool.importFiles([file('c.geojson')]);
+  assert.equal(refused[0].ok, false);
+  assert.equal(t.tool.list().length, 2);
+
+  // The next viewer reads the kept files again, as they were.
+  const next = {
+    container: new FakeElement('div', 'cesiumContainer'),
+    scene: { requestRender() {} },
+    dataSources: {
+      added: [],
+      add: async (ds) => next.dataSources.added.push(ds),
+      remove() {},
+    },
+  };
+  t.loads.length = 0;
+  t.tool.attachScene({ viewer: next });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(
+    t.loads.map(({ file, opts }) => [file.name, opts.viewer === next]),
+    [
+      ['a.geojson', true],
+      ['b.geojson', true],
+    ],
+  );
+  assert.equal(next.dataSources.added.length, 2);
+  assert.equal(next.dataSources.added[1].show, false, 'b stays hidden');
+  assert.deepEqual(
+    t.tool.list().map(({ id, visible }) => [id, visible]),
+    [
+      [a.id, true],
+      [b.id, false],
+    ],
+  );
+  assert.ok(next.container.listeners.length > 0);
+  assert.equal(t.tool.diagnostics().drawn, 2);
   t.tool.destroy();
 });

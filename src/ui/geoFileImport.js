@@ -21,19 +21,37 @@ function localizedValues(values) {
 }
 
 /**
- * Run the Import control.
- * @param {{viewer: object, load?: Function, document?: Document,
- *   publish?: Function, connect?: Function}} deps
+ * Run the Import control on one viewer: the session's control (see
+ * createGeoFileImport) attached to `viewer`. Null without a viewer or the
+ * Import markup.
+ */
+export function initGeoFileImport({ viewer, ...options }) {
+  if (!viewer) return null;
+  const tool = createGeoFileImport(options);
+  tool?.attachScene({ viewer });
+  return tool;
+}
+
+/**
+ * The Import control for the page session.
+ * @param {{load?: Function, document?: Document, publish?: Function,
+ *   connect?: Function}} deps
  *   `load(file, {viewer, color})` defaults to `loadGeoFile`; tests pass a double.
  *   `publish({rows, hint})` hands the file list and hint to the view that
  *   renders them. `connect(actions)` answers the view's pick and row buttons
  *   and returns their disconnect.
+ *
+ * The imported files belong to the session; their drawing belongs to the
+ * attached Cesium viewer. `attachScene({ viewer })` draws them (a file kept
+ * while no viewer was attached is read again from its bytes) and listens for
+ * drops and camera gestures there; `detachScene()` takes them off the viewer
+ * and keeps the list. Without a viewer (an engine without Cesium) the list
+ * stays, and import and fly-to wait for one.
  * @returns {{destroy: Function, importFiles: Function, list: Function,
  *   setVisible: Function, flyTo: Function, remove: Function,
- *   diagnostics: Function}|null}
+ *   diagnostics: Function, attachScene: Function, detachScene: Function}|null}
  */
-export function initGeoFileImport({
-  viewer,
+export function createGeoFileImport({
   load = loadGeoFile,
   document: doc = globalThis.document,
   flyToSource = flyToDataSource,
@@ -42,13 +60,13 @@ export function initGeoFileImport({
   subscribeMapSource = null,
   publish = () => {},
   connect = () => () => {},
-}) {
+} = {}) {
   // A page without the Import control (the Utilities panel omitted, in
   // LayerPanelsView) has no file import.
-  if (!viewer || !doc?.getElementById('geo-import-button')) return null;
+  if (!doc?.getElementById('geo-import-button')) return null;
 
   const imports = [];
-  const listeners = [];
+  let listeners = [];
   let queue = Promise.resolve();
   let seq = 0;
   let colorAt = 0;
@@ -57,7 +75,9 @@ export function initGeoFileImport({
   let cameraIntent = 0;
   let hint = '';
   const lifetime = new AbortController();
-  let removeMapSource;
+  // The attached viewer and the lifetime of that attachment.
+  let viewer = null;
+  let scene = null;
 
   const listen = (target, type, listener, options) => {
     if (!target?.addEventListener) return;
@@ -68,13 +88,13 @@ export function initGeoFileImport({
     hint = text || '';
     present();
   };
-  const render = () => viewer.scene?.requestRender?.();
+  const render = () => viewer?.scene?.requestRender?.();
   let groundTimer,
     groundQueued = false,
     groundAgain = false;
-  const groundRemovers = [];
+  let groundRemovers = [];
   const scheduleGround = () => {
-    if (destroyed || !imports.length) return;
+    if (destroyed || !viewer || !imports.length) return;
     if (groundQueued) {
       groundAgain = true;
       return;
@@ -82,17 +102,19 @@ export function initGeoFileImport({
     clearTimeout(groundTimer);
     groundTimer = setTimeout(() => {
       groundQueued = true;
+      const attached = scene;
       queue = queue
         .catch(() => {})
         .then(async () => {
           try {
             for (const item of imports) {
-              if (destroyed) return;
-              if (item.visible) await item.refreshGround?.(lifetime.signal);
+              if (destroyed || scene !== attached) return;
+              if (item.visible)
+                await item.refreshGround?.(attached.controller.signal);
             }
             render();
           } catch {
-            if (!destroyed)
+            if (!destroyed && scene === attached)
               setHint(
                 t(
                   'Ground heights could not be refreshed. Try the file again when the map has loaded.',
@@ -108,15 +130,10 @@ export function initGeoFileImport({
         });
     }, 200);
   };
-  removeMapSource = subscribeMapSource?.(scheduleGround);
   const ownEvent = (event, listener) => {
     const remove = event?.addEventListener?.(listener);
     if (remove) groundRemovers.push(remove);
   };
-  ownEvent(viewer.camera?.moveEnd, scheduleGround);
-  ownEvent(viewer.scene?.globe?.tileLoadProgressEvent, (pending) => {
-    if (!pending) scheduleGround();
-  });
 
   /** Publish the file list and hint; the view renders them. */
   function present() {
@@ -124,8 +141,6 @@ export function initGeoFileImport({
       rows: imports.map((item) => ({
         id: item.id,
         name: item.name,
-        // KML and KMZ draw with their own styles; their swatch says so
-        // instead of claiming a color the globe does not show.
         ownStyles: item.ownStyles,
         color: item.color,
         title: `${item.name} — ${item.format.toUpperCase()}, ${tn(
@@ -166,16 +181,15 @@ export function initGeoFileImport({
     const item = find(id);
     if (!item) return false;
     item.visible = Boolean(visible);
-    item.dataSource.show = item.visible;
+    if (item.dataSource) item.dataSource.show = item.visible;
     if (item.visible) scheduleGround();
     present();
     render();
     return true;
   }
 
-  // Not viewer.flyTo: it frames ground-clamped points underground until the
-  // destination's terrain has loaded (see ./flyToDataSource.js).
   const fly = (item) => {
+    if (!viewer || !item.dataSource) return false;
     if (!item.visible) setVisible(item.id, true);
     flyToSource(viewer, item.dataSource, { ground });
     return true;
@@ -187,7 +201,7 @@ export function initGeoFileImport({
    */
   function flyTo(id) {
     const item = find(id);
-    if (!item) return false;
+    if (!item || !viewer || !item.dataSource) return false;
     if (typeof navigation?.runImmediateNavigation === 'function')
       return (
         navigation.runImmediateNavigation('file', () => fly(item)) !== false
@@ -209,15 +223,38 @@ export function initGeoFileImport({
       : true;
   };
 
+  /** Take one file's drawing off the viewer; the file stays in the list. */
+  function undraw(item, from = viewer) {
+    if (item.dataSource) from?.dataSources?.remove?.(item.dataSource, true);
+    item.revoke?.();
+    item.dataSource = null;
+    item.revoke = null;
+    item.refreshGround = null;
+  }
+
   /** Remove one imported file from the globe and the list. */
   function remove(id) {
     const at = imports.findIndex((item) => item.id === id);
     if (at < 0) return false;
     const [item] = imports.splice(at, 1);
-    viewer.dataSources?.remove?.(item.dataSource, true);
-    item.revoke?.();
+    undraw(item);
     present();
     render();
+    return true;
+  }
+
+  /** Read a file for the attached viewer. Null once that viewer went. */
+  async function draw(item, attached, loaded) {
+    item.dataSource = loaded.dataSource;
+    item.revoke = loaded.revoke;
+    item.refreshGround = loaded.refreshGround;
+    item.dataSource.show = item.visible;
+    await attached.viewer.dataSources.add(item.dataSource);
+    if (destroyed || scene !== attached) {
+      undraw(item, attached.viewer);
+      return false;
+    }
+    loaded.mount?.();
     return true;
   }
 
@@ -230,20 +267,33 @@ export function initGeoFileImport({
   function importFiles(files) {
     const list = [...(files || [])];
     if (destroyed || !list.length) return Promise.resolve([]);
-    // Capture the user's intent when the files are chosen, including time
-    // spent waiting for an earlier batch. Later navigation must still win.
+    if (!viewer) {
+      // Import draws on the Cesium globe; this engine has none.
+      const error = t('Action unavailable or cancelled');
+      setHint(error);
+      return Promise.resolve(
+        list.map((file) => ({
+          name: String(file?.name || 'file'),
+          ok: false,
+          error,
+        })),
+      );
+    }
     const generation = beginAutoFly();
     const intent = ++cameraIntent;
-    const run = queue.then(() => importBatch(list, generation, intent));
+    const attached = scene;
+    const run = queue.then(() =>
+      importBatch(list, generation, intent, attached),
+    );
     queue = run.catch(() => {});
     return run;
   }
 
-  async function importBatch(list, generation, intent) {
+  async function importBatch(list, generation, intent, attached) {
     const outcomes = [];
     if (destroyed || !list.length) return outcomes;
     for (const file of list) {
-      if (destroyed) break;
+      if (destroyed || scene !== attached) break;
       const fileName = String(file?.name || 'file');
       if (imports.length >= MAX_IMPORTED_FILES) {
         outcomes.push({
@@ -259,7 +309,11 @@ export function initGeoFileImport({
       const color = COLORS[colorAt % COLORS.length];
       let loaded;
       try {
-        loaded = await load(file, { viewer, color, signal: lifetime.signal });
+        loaded = await load(file, {
+          viewer: attached.viewer,
+          color,
+          signal: attached.controller.signal,
+        });
       } catch (error) {
         outcomes.push({
           name: fileName,
@@ -274,7 +328,7 @@ export function initGeoFileImport({
         });
         continue;
       }
-      if (destroyed) {
+      if (destroyed || scene !== attached) {
         loaded.revoke?.();
         break;
       }
@@ -289,17 +343,13 @@ export function initGeoFileImport({
         removed: loaded.removed || 0,
         color,
         visible: true,
-        dataSource: loaded.dataSource,
-        revoke: loaded.revoke,
-        refreshGround: loaded.refreshGround,
+        // The bytes, so a later viewer can read the file again.
+        file,
+        dataSource: null,
+        revoke: null,
+        refreshGround: null,
       };
-      await viewer.dataSources.add(item.dataSource);
-      if (destroyed) {
-        viewer.dataSources.remove?.(item.dataSource, true);
-        item.revoke?.();
-        break;
-      }
-      loaded.mount?.();
+      if (!(await draw(item, attached, loaded))) break;
       imports.push(item);
       present();
       render();
@@ -309,8 +359,6 @@ export function initGeoFileImport({
         id: item.id,
         removed: item.removed,
       });
-      // Fly to the first file of a batch that lands, so a drop shows its
-      // result, unless something else took the camera meanwhile.
       if (
         outcomes.filter((o) => o.ok).length === 1 &&
         intent === cameraIntent &&
@@ -318,12 +366,37 @@ export function initGeoFileImport({
       )
         fly(item);
     }
-    if (!destroyed) setHint(summarize(outcomes));
+    if (!destroyed && scene === attached) setHint(summarize(outcomes));
     return outcomes;
   }
 
-  // ---- controls ----------------------------------------------------------
-  // The view opens the picker; its pick and the row buttons call these.
+  // Draw the files kept while no viewer was attached, as they were.
+  async function redraw(attached) {
+    for (const item of [...imports]) {
+      if (destroyed || scene !== attached) return;
+      if (item.dataSource || !imports.includes(item)) continue;
+      try {
+        const loaded = await load(item.file, {
+          viewer: attached.viewer,
+          color: item.color,
+          signal: attached.controller.signal,
+        });
+        if (destroyed || scene !== attached || !imports.includes(item)) {
+          loaded.revoke?.();
+          return;
+        }
+        await draw(item, attached, loaded);
+      } catch {
+        if (destroyed || scene !== attached) return;
+        setHint(`${item.name}: ${t('That file could not be read.')}`);
+      }
+    }
+    if (!destroyed && scene === attached) {
+      present();
+      render();
+    }
+  }
+
   const disconnect = connect({
     importGeoFiles: (files) => void importFiles(files),
     toggleGeoImport: (id) => setVisible(id, !find(id)?.visible),
@@ -331,45 +404,83 @@ export function initGeoFileImport({
     removeGeoImport: remove,
   });
 
-  // ---- drop onto the globe ----------------------------------------------
-  const container = viewer.container;
   const gesture = () => {
     cameraIntent += 1;
   };
-  listen(viewer.scene?.canvas || container, 'pointerdown', gesture, {
-    passive: true,
-  });
-  listen(viewer.scene?.canvas || container, 'wheel', gesture, {
-    passive: true,
-  });
   const hasFiles = (event) =>
     [...(event.dataTransfer?.types || [])].includes('Files');
   const setDragging = (on) =>
     doc.body?.classList?.toggle('gev-geo-import-drag', on);
-  listen(container, 'dragenter', (event) => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    dragDepth += 1;
-    setDragging(true);
-  });
-  listen(doc, 'dragover', (event) => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-  });
-  listen(container, 'dragleave', (event) => {
-    if (!hasFiles(event)) return;
-    dragDepth = Math.max(0, dragDepth - 1);
-    if (!dragDepth) setDragging(false);
-  });
-  listen(doc, 'drop', (event) => {
-    if (!hasFiles(event)) return;
-    event.preventDefault();
+
+  function detachScene() {
+    if (!scene) return;
+    const previous = scene;
+    scene = null;
+    previous.controller.abort();
+    clearTimeout(groundTimer);
+    for (const remove of groundRemovers.splice(0)) remove();
+    for (const [target, type, listener, options] of listeners.splice(0))
+      target.removeEventListener(type, listener, options);
     dragDepth = 0;
     setDragging(false);
-    const files = [...(event.dataTransfer?.files || [])];
-    if (files.length) void importFiles(files);
-  });
+    for (const item of imports) undraw(item, previous.viewer);
+    viewer = null;
+  }
+
+  function attachScene({
+    viewer: next = null,
+    navigation: nextNavigation = navigation,
+    subscribeMapSource: nextMapSource = subscribeMapSource,
+  } = {}) {
+    if (destroyed) return;
+    detachScene();
+    if (!next) return;
+    viewer = next;
+    // The shell and the map sources of this attachment.
+    navigation = nextNavigation;
+    const offMapSource = nextMapSource?.(scheduleGround);
+    if (typeof offMapSource === 'function') groundRemovers.push(offMapSource);
+    const attached = (scene = { viewer, controller: new AbortController() });
+    ownEvent(viewer.camera?.moveEnd, scheduleGround);
+    ownEvent(viewer.scene?.globe?.tileLoadProgressEvent, (pending) => {
+      if (!pending) scheduleGround();
+    });
+    const container = viewer.container;
+    listen(viewer.scene?.canvas || container, 'pointerdown', gesture, {
+      passive: true,
+    });
+    listen(viewer.scene?.canvas || container, 'wheel', gesture, {
+      passive: true,
+    });
+    listen(container, 'dragenter', (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth += 1;
+      setDragging(true);
+    });
+    listen(doc, 'dragover', (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    });
+    listen(container, 'dragleave', (event) => {
+      if (!hasFiles(event)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth) setDragging(false);
+    });
+    listen(doc, 'drop', (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      setDragging(false);
+      const files = [...(event.dataTransfer?.files || [])];
+      if (files.length) void importFiles(files);
+    });
+    if (imports.some((item) => !item.dataSource)) {
+      const run = queue.then(() => redraw(attached));
+      queue = run.catch(() => {});
+    }
+  }
 
   present();
 
@@ -387,26 +498,24 @@ export function initGeoFileImport({
     setVisible,
     flyTo,
     remove,
+    attachScene,
+    detachScene,
     diagnostics: () => ({
       files: imports.length,
+      drawn: imports.filter((item) => item.dataSource).length,
       entities: imports.reduce((n, item) => n + item.entityCount, 0),
       listeners: listeners.length,
+      attached: Boolean(viewer),
       destroyed,
     }),
     destroy() {
       if (destroyed) return;
+      const last = viewer;
+      detachScene();
       destroyed = true;
       disconnect();
       lifetime.abort();
-      removeMapSource?.();
-      clearTimeout(groundTimer);
-      for (const remove of groundRemovers) remove();
-      for (const item of imports.splice(0)) {
-        viewer.dataSources?.remove?.(item.dataSource, true);
-        item.revoke?.();
-      }
-      for (const [target, type, listener, options] of listeners.splice(0))
-        target.removeEventListener(type, listener, options);
+      for (const item of imports.splice(0)) undraw(item, last);
       setDragging(false);
       setHint('');
       if (globalThis.window?.__gevGeoImport === handle)
