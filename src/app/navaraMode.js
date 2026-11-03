@@ -408,10 +408,10 @@ export async function createNavaraScene({
 
 /**
  * The tools without a viewer (the experimental Navara engine), attached to
- * one Navara scene: the render governor on the engine, hidden-tab handling,
- * the imagery box, the engine notice and voice on the engine. The shell
- * shows which features are unavailable. Returns its annotations (none) and
- * voice.
+ * one Navara scene: the render governor, hidden-tab handling, imagery box,
+ * engine notice, annotations, Draw, Import, scope mask and voice. The shared
+ * tools keep their session state across engines. Returns the annotation
+ * board (null without a Navara view) and voice commands.
  */
 export function attachViewerlessTools(
   { engine, mapStackController = null },
@@ -497,8 +497,8 @@ export function attachViewerlessTools(
   attachNavaraDraw(tools, { ...context, annotations }, { signal, defer });
   attachNavaraGeoImport(tools, context, { signal, defer });
   attachNavaraScopeMask(tools, context, { signal, defer });
-  // Voice on the engine (phase 3, Task 9): the W1 tools drive the engine;
-  // the Director uses the shared session; viewer-only tools declare availability.
+  // Voice uses the engine and shared session services; each action checks
+  // the capabilities it needs on the attached scene.
   const voiceCommands = attachSessionVoice({
     layerSession,
     voice,

@@ -1,8 +1,8 @@
 // engine.lines on Navara: each line is a ribbon (lineMesh.js) in gev's
 // overlay (overlay.js: drawn after tone mapping, so its colour is exact). Geodesic arcs are densified on the CPU (src/globe/lines.js)
 // since the ribbon draws straight segments. Every change asks for one frame;
-// nothing animates on its own, so an idle view stays idle. Lines are not
-// pickable on Navara yet (trails never take a click; see phase 3 Task 4).
+// nothing animates on its own, so an idle view stays idle. Shown lines with
+// a pickId participate in the engine's CPU picks; trails omit a pickId.
 
 import { createLineRegistry, densifyGeodesic } from '../../lines.js';
 import { createLineMesh } from './lineMesh.js';

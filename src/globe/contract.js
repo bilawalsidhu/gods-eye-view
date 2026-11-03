@@ -1,5 +1,5 @@
 // The engine-neutral globe contract. The application shell talks to a globe
-// engine (Cesium today, Navara next) only through these small capability
+// engine (Cesium or Navara) only through these small capability
 // objects. Positions are src/geo values in Earth-fixed metres, angles are
 // radians and screen coordinates are CSS pixels from the canvas's top-left
 // corner. This module and src/globe/testing/** never import cesium, three or

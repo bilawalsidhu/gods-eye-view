@@ -110,7 +110,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
   assert.equal(tools.annotations, null);
   assert.ok(tools.voiceCommands, 'voice runs on the engine');
   assert.equal(window.__gevVoiceCommands, tools.voiceCommands);
-  // The W1 tools drive the engine; the viewer-only ones refuse.
+  // View queries use the engine, and scene commands use the shared Director.
   const view = await voice.runner('get_current_view_state');
   assert.equal(view.ok, true);
   const scene = await voice.runner('control_scene', {

@@ -29,10 +29,9 @@ import {
  * handle belong to the application; the tools bound to one globe (render
  * governor, release trim, scope mask, imagery box, tracking and visibility
  * listeners, embedded views, the debug handle's globe fields) attach to each
- * engine the page shows (src/app/sceneParts.js). Without a viewer (the
- * experimental Navara engine) the viewer-bound tools are not attached and
- * their handles are null; voice runs on the engine there
- * (src/app/navaraMode.js).
+ * engine the page shows (src/app/sceneParts.js). Navara attaches the shared
+ * annotation board, Draw, Import, scope mask and voice through its engine
+ * adapters (src/app/navaraMode.js); the Director follows the attached engine.
  */
 export async function createApplicationTools({
   scene,
