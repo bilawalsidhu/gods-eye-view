@@ -477,10 +477,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   bottom: calc(2vh + 6.5rem);
 }
 
-#intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 9rem);
-}
-
 @media (max-width: 900px) {
   body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
   body:not(.ui-clean-view):not(.recording-mode):has(

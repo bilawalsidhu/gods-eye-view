@@ -247,10 +247,6 @@ body.recording-mode #cesium-credits {
   bottom: calc(2vh + 7.5rem);
 }
 
-#intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 11.5rem);
-}
-
 @media (max-width: 980px) {
   #command-dock {
     grid-template-areas:
@@ -280,10 +276,6 @@ body.recording-mode #cesium-credits {
 
   #intel-hud[data-variant='minimal'] .hud-bottom-left {
     bottom: calc(2vh + 12rem);
-  }
-
-  #intel-hud[data-variant='minimal'] .hud-bottom-bar {
-    bottom: calc(2vh + 16rem);
   }
 }
 
