@@ -2612,7 +2612,7 @@ test('voice Radio resolves Austin and exposes semantic selection, volume, pause,
   assert.deepEqual(calls.at(-1), [
     'cycle',
     1,
-    { focus: false, autoplay: false },
+    { focus: false, autoplay: false, fallback: true },
   ]);
 
   for (const invalidCoordinates of [

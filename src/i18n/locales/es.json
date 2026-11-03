@@ -450,7 +450,7 @@
   "Radio volume": "Volumen de Radio",
   "Radio off": "Radio desactivada",
   "STATION SITE": "SITIO DE LA EMISORA",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "El audio se conecta directamente con la emisora después de pulsar ESCUCHAR. Tu IP es visible para esa emisora.",
+  "Audio connects directly to the broadcaster when you press play, choose a station on the globe or ask voice to play. Your IP is visible to that broadcaster.": "El audio se conecta directamente con la emisora al pulsar ESCUCHAR, elegir una emisora en el globo o pedirlo por voz. Tu IP es visible para esa emisora.",
   "LOADING": "CARGANDO",
   "DEGRADED": "DEGRADADO",
   "STALE": "DESACTUALIZADO",

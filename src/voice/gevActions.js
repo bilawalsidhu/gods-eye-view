@@ -2383,7 +2383,11 @@ export async function controlRadio(
     if (!radioActionIsCurrent(options)) return cancelled(summarize);
     const prepared = state.selected
       ? true
-      : radio.cycleStation?.(1, { focus: false, autoplay: false });
+      : radio.cycleStation?.(1, {
+          focus: false,
+          autoplay: false,
+          fallback: true,
+        });
     return {
       ok: Boolean(prepared),
       action: 'control_radio',
@@ -2407,6 +2411,7 @@ export async function controlRadio(
     const selected = radio.cycleStation?.(action === 'next' ? 1 : -1, {
       focus: false,
       autoplay: false,
+      fallback: true,
     });
     return {
       ok: Boolean(selected),
