@@ -25,11 +25,14 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 32-tool inventory', () => {
+test('Realtime schema exposes the authoritative 35-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 32);
+  assert.equal(tools.length, 35);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 32, 'tool names are unique');
+  assert.equal(new Set(names).size, 35, 'tool names are unique');
+  assert.ok(names.includes('resolve_area'));
+  assert.ok(names.includes('find_imagery'));
+  assert.ok(names.includes('osm_query'));
   assert.ok(names.includes('show_street_level'));
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
@@ -200,6 +203,10 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'track_entity',
     // Point-and-ask: 'pointer' sentinels and referent arguments.
     'annotate_map',
+    // Voice geometry: new tools.
+    'resolve_area',
+    'find_imagery',
+    'osm_query',
     // Street-level photos: a new composite tool, not an edit to a shipped one.
     'show_street_level',
   ]);
