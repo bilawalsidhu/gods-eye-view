@@ -316,6 +316,18 @@ export function createTrails({ state, services, parts, source }) {
       services.render.governorRequestRender('transit-trail-age');
     }, 1000);
   }
+  function detachRenderer() {
+    renderer?.destroy();
+    renderer = null;
+  }
+  function rebind() {
+    if (!selected) return;
+    ensureRenderer();
+    selected.pathRevision = -1;
+    style();
+    prepareEntry(selected);
+    update();
+  }
   function clear() {
     if (historyRequest) {
       historyRequest.abort();
@@ -338,6 +350,8 @@ export function createTrails({ state, services, parts, source }) {
     update,
     style,
     destroy: clear,
+    detachRenderer,
+    rebind,
     requestDiagnostics: () => ({
       requestCount,
       abortCount,

@@ -35,29 +35,6 @@ export function createLifecycle({
       registerSpriteCollection('bikeshare', layerState._pointCollection);
       layerState._pointCollection.show = false;
 
-      layerState._enabled = false;
-      layerState._cameraDebounceTimer = null;
-      layerState._cameraChangedAttached = false;
-      layerState._altitudeGateEnabled = false;
-      layerState._proximityGeneration = 0;
-
-      layerState._activeCityIds = new Set();
-      layerState._cityRuntime = new Map();
-      layerState._stationInfoCache = new Map();
-      layerState._statusCache = new Map();
-      layerState._inFlightInfo = new Map();
-      layerState._inFlightStatus = new Map();
-      layerState._stationRenderMap = new Map();
-      layerState._clickHandler = null;
-      layerState._selectedKey = null;
-      layerState._selectedEntity = null;
-      layerState._count = 0;
-      layerState._lastUpdate = null;
-      layerState._loading = false;
-      layerState._loadingOps = 0;
-      layerState._failedCityIds.clear();
-      layerState._limitWarned = false;
-
       layerState._overlayHost.setVisible(
         BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
         false,
@@ -79,9 +56,12 @@ export function createLifecycle({
      */
     enable(viewer) {
       if (layerState._enabled) return;
-      viewer = layerState._viewer;
       layerState._enabled = true;
       layerState._failedCityIds.clear();
+      this.show(viewer);
+    },
+    show(viewer) {
+      viewer = layerState._viewer;
       layerState._pointCollection.show = true;
       layerState._overlayHost.setVisible(
         BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
@@ -147,6 +127,23 @@ export function createLifecycle({
       layerState._count = 0;
       layerState._loading = false;
       layerState._loadingOps = 0;
+    },
+
+    detach() {
+      const viewer = layerState._viewer;
+      parts.selection._clearSelection();
+      layerState._clickHandler?.destroy();
+      layerState._clickHandler = null;
+      document.removeEventListener('keydown', parts.selection._onKeyDown);
+      unregisterPickOwner('bikeshare');
+      if (layerState._cameraChangedAttached) {
+        viewer.camera.changed.removeEventListener(parts.viewport.onCameraChanged);
+        releaseCameraSensitivity(viewer.camera, 'bikeshare');
+        layerState._cameraChangedAttached = false;
+      }
+      unregisterSpriteCollection?.('bikeshare', layerState._pointCollection);
+      viewer.scene.primitives.remove(layerState._pointCollection);
+      layerState._pointCollection = null;
     },
 
     /** Permanently release primitives, handlers, and the selected host source. */

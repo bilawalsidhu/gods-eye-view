@@ -311,27 +311,6 @@ export function createBikeshareNavaraRenderer(engine, context) {
         if (destroyed) throw new Error('Bikeshare renderer is destroyed');
         state._engine = engine;
         state._viewer = null;
-        state._enabled = false;
-        state._cameraDebounceTimer = null;
-        state._cameraChangedAttached = false;
-        state._altitudeGateEnabled = false;
-        state._proximityGeneration = 0;
-        state._activeCityIds = new Set();
-        state._cityRuntime = new Map();
-        state._stationInfoCache = new Map();
-        state._statusCache = new Map();
-        state._inFlightInfo = new Map();
-        state._inFlightStatus = new Map();
-        state._stationRenderMap = new Map();
-        state._clickHandler = null;
-        state._selectedKey = null;
-        state._selectedEntity = null;
-        state._count = 0;
-        state._lastUpdate = null;
-        state._loading = false;
-        state._loadingOps = 0;
-        state._error = null;
-        state._limitWarned = false;
         normalSet.setCount(0);
         selectedSet.setCount(0);
         normalSet.commit();
@@ -345,6 +324,9 @@ export function createBikeshareNavaraRenderer(engine, context) {
         if (destroyed || state._enabled) return;
         state._enabled = true;
         state._error = null;
+        this.show();
+      },
+      show() {
         state._overlayHost.setVisible(
           BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
           true,
@@ -388,6 +370,15 @@ export function createBikeshareNavaraRenderer(engine, context) {
         state._count = 0;
         state._loading = false;
         state._loadingOps = 0;
+      },
+      detach() {
+        selection._clearSelection();
+        selectionRemove?.();
+        cameraRemove?.();
+        state._cameraChangedAttached = false;
+        normalSet.destroy();
+        selectedSet.destroy();
+        destroyed = true;
       },
       destroy() {
         if (destroyed) return;

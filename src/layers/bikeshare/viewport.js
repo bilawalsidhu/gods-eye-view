@@ -69,7 +69,7 @@ export function createViewport({ state: layerState, services, parts, camera }) {
     governorRequestRender('bikeshare-deactivate');
     parts.ingestion.abortInFlight(layerState._inFlightInfo, cityId);
     parts.ingestion.abortInFlight(layerState._inFlightStatus, cityId);
-    parts.rendering.removeCityPoints(cityId);
+    parts.rendering?.removeCityPoints(cityId);
   }
 
   /** Deactivate all currently active cities and clear the active set. */
@@ -107,12 +107,12 @@ export function createViewport({ state: layerState, services, parts, camera }) {
       )
         return;
 
-      parts.rendering.ensureCityPoints(cityId, stationMap);
+      parts.rendering?.ensureCityPoints(cityId, stationMap);
 
       // Apply any cached status immediately for snappier initial rendering
       const cachedStatus = layerState._statusCache.get(cityId)?.statusMap;
       if (cachedStatus) {
-        parts.rendering.applyStatusToPoints(cityId, cachedStatus);
+        parts.rendering?.applyStatusToPoints(cityId, cachedStatus);
       }
 
       const statusMap = await parts.ingestion.loadCityStationStatus(
@@ -125,7 +125,7 @@ export function createViewport({ state: layerState, services, parts, camera }) {
         generation !== layerState._proximityGeneration
       )
         return;
-      parts.rendering.applyStatusToPoints(cityId, statusMap);
+      parts.rendering?.applyStatusToPoints(cityId, statusMap);
       layerState._lastUpdate = Date.now();
       layerState._failedCityIds.delete(cityId);
     } catch (error) {
@@ -152,7 +152,7 @@ export function createViewport({ state: layerState, services, parts, camera }) {
    */
 
   async function runProximityCheck() {
-    if (!layerState._enabled) return;
+    if (!layerState._enabled || layerState._restoringViewport) return;
 
     const generation = ++layerState._proximityGeneration;
     const altitude = getCameraAltitude(layerState._viewer);
@@ -208,7 +208,7 @@ export function createViewport({ state: layerState, services, parts, camera }) {
   /** Camera change event handler — triggers a debounced proximity check. */
 
   function onCameraChanged() {
-    if (!layerState._enabled) return;
+    if (!layerState._enabled || layerState._restoringViewport) return;
     scheduleProximityCheck();
   }
   return {

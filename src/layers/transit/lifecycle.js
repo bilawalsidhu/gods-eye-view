@@ -114,7 +114,11 @@ export function createLifecycle({
      * Create the point collection. Called once at bootstrap.
      * @param {Cesium.Viewer} viewer
      */
-    init(viewer, options = {}) {
+    init(viewer, options) {
+      this.attachRenderer(viewer, options);
+    },
+    attachRenderer(viewer, options = {}) {
+      state._restoringViewport = Boolean(options.waitForCameraRestore);
       if (parts.renderer)
         throw new Error('Transit layer is already initialized');
       if (typeof rendererFactory !== 'function')
@@ -137,27 +141,16 @@ export function createLifecycle({
         state._viewer = null;
         throw error;
       }
-      state._enabled = false;
-      state._activeFeeds.clear();
-      state._feedStatus.clear();
-      state._inFlight.clear();
-      for (const entry of state._vehicles.values()) {
-        entry.detectContact = null;
-        parts.rendering.cancelWake(entry);
-        destroyTrack(entry.track);
+      state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, state._enabled);
+      if (state._enabled) {
+        for (const [key, entry] of state._vehicles) {
+          parts.rendering.addMarker(key, entry);
+          entry.detectContact = null;
+          entry.pathRevision = -1;
+        }
+        this.bindScene(viewer);
+        if (!state._restoringViewport) this.repaint();
       }
-      state._vehicles.clear();
-      parts.height.clear();
-      state._selectedKey = null;
-      state._lastUpdate = null;
-      state._error = null;
-      state._limitWarned = false;
-      state._altitudeGateOpen = false;
-      state._moving.clear();
-      state._heightDirty.clear();
-      state._rotationPose = null;
-      state._rotationDirty = false;
-      state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
       parts.renderer.restoreOrder();
       bindStyleEvents();
       console.log(
@@ -171,9 +164,13 @@ export function createLifecycle({
      */
     enable(viewer) {
       state._enabled = true;
-      bindVisibility();
       state._generation += 1;
       state._error = null;
+      this.bindScene(viewer);
+    },
+
+    bindScene(viewer) {
+      bindVisibility();
       state._markers.show = true;
       state._animatedMarkers.show = true;
       state._maintenanceTimer = setInterval(
@@ -197,6 +194,51 @@ export function createLifecycle({
       }
       parts.viewport.runProximityCheck();
       parts.renderer.restoreOrder();
+    },
+
+    repaint() {
+      state._visibilityAt = 0;
+      state._rotationDirty = true;
+      parts.viewport.runProximityCheck();
+      parts.rendering.refreshVisibility();
+      parts.trails.rebind();
+      parts.selection.refreshSelectedCard(true);
+      for (const feed of state._activeFeeds.values()) parts.renderer.addCredit(feed);
+    },
+    resumeViewport() {
+      if (!state._restoringViewport) return;
+      state._restoringViewport = false;
+      if (state._enabled && parts.renderer) this.repaint();
+    },
+    detachRenderer() {
+      if (!parts.renderer) return;
+      state._restoringViewport = true;
+      unbindVisibility();
+      clearInterval(state._maintenanceTimer);
+      clearTimeout(state._cameraDebounceTimer);
+      clearTimeout(state._visibilityTimer);
+      state._maintenanceTimer = state._cameraDebounceTimer = state._visibilityTimer = null;
+      parts.selection.removeClickHandler();
+      unregisterPickOwner('transit');
+      state._cameraChangedRemove?.();
+      state._cameraChangedRemove = null;
+      if (state._cameraChangedAttached) returnCameraSensitivity();
+      state._cameraChangedAttached = false;
+      state._preRenderRemove?.();
+      state._preRenderRemove = null;
+      parts.trails.detachRenderer();
+      for (const entry of state._vehicles.values()) {
+        parts.rendering.cancelWake(entry);
+        entry.marker = entry.markerCollection = entry.detectContact = null;
+      }
+      state._detectCache = null;
+      state._detectBuiltAt = -Infinity;
+      state._visible.clear();
+      state._moving.clear();
+      if (state._renderHeld) releaseContinuousRender('transit');
+      state._renderHeld = false;
+      parts.renderer.destroy();
+      parts.renderer = state._markers = state._animatedMarkers = state._viewer = null;
     },
 
     /**
