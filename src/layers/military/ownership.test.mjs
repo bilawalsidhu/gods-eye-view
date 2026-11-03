@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
+import { createTracking } from './tracking.js';
 
 function services() {
   const names = [
@@ -263,4 +264,28 @@ test('a vanished military contact fades while position-less rows keep theirs', a
   await layer.update(viewer);
   assert.equal(layer.findByQuery('ae0002')?.stale, true, 'vanished: fading');
   assert.equal(layer.findByQuery('ae0003')?.stale, false, 'still listed');
+});
+
+test('voice context reads a track that rounds to north as 0°, not 360°', () => {
+  const stubs = services();
+  stubs.aircraftPresentation = { tr3bTypeLabel: (id, type) => type };
+  const tracking = createTracking({
+    flightState: {
+      feed: { _lastSource: 'Fixture aircraft' },
+      records: { data: new Map() },
+    },
+    services: stubs,
+    parts: {
+      queries: {
+        _describeFlight: () => ({ track: 359.6, callsign: 'RCH123' }),
+        _toCleanText: (value) => value || '',
+        _formatAltitude: () => '',
+      },
+    },
+    layer: {},
+  });
+  assert.equal(
+    tracking._contextSubjectMetadata('ae1234').properties.heading,
+    '0°',
+  );
 });

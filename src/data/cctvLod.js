@@ -42,6 +42,9 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   // every 20s showed no change inside 64s but a new frame by ~90-150s later —
   // matches the other highway packs' 3-minute cadence.
   'servei català de trànsit': 3 * 60 * 1000,
+  // Autobrennero (A22) refreshes its stills about once a minute (Last-Modified
+  // tracks the minute); 3 min matches the other highway packs.
+  'autostrada del brennero': 3 * 60 * 1000,
 });
 
 /**

@@ -1,4 +1,4 @@
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import test from 'node:test';
@@ -374,24 +374,26 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
   assert.match(covered, /\} catch \{\s*\n\s*return false;\s*\n\s*\}/);
 });
 
-test('one ESC does one thing — the radio disclosure stops the launcher outright', () => {
+test('one ESC does one thing — a Cockpit utility disclosure stops later document listeners', () => {
   const ui = fs.readFileSync(
     new URL('./ui/radioBindings.js', import.meta.url),
     'utf8',
   );
 
-  // stopPropagation() does NOT stop later listeners on the SAME document, so the
-  // disclosure's earlier capture handler closed the disclosure and the launcher
-  // dismissed itself off the same key. The earlier listener is the only one that
-  // can stop the later one — and only the immediate form does it.
-  const radioEsc = ui.slice(ui.indexOf("event.key !== 'Escape' ||"));
-  const claim = radioEsc.slice(0, radioEsc.indexOf('setRadioDisclosure(false'));
+  // stopPropagation() does NOT stop later listeners on the SAME document. The
+  // Context Radio disclosure that once raced the launcher this way is gone, and
+  // Cockpit's utility disclosures never share the screen with the launcher, but
+  // they own the same contract: their capture handler is the only one that can
+  // keep a later document listener (Cockpit exit, the launcher) off the key, and
+  // only the immediate form does it.
+  const utilityEsc = ui.slice(ui.indexOf('if (!displayOpen && !radioOpen) return;'));
+  const claim = utilityEsc.slice(0, utilityEsc.indexOf('setCockpitDisclosure(kind, false'));
   assert.match(claim, /event\.preventDefault\(\);/);
   assert.match(claim, /event\.stopImmediatePropagation\(\);/);
   assert.doesNotMatch(
     claim,
     /event\.stopPropagation\(\);/,
-    'the plain form leaves the launcher listening and is the defect itself',
+    'the plain form leaves later document listeners acting on the same key',
   );
 
   // Belt on the launcher side: a key another surface already marked is not ours,
@@ -411,11 +413,6 @@ test('one ESC does one thing — the radio disclosure stops the launcher outrigh
 });
 
 test('a refused write takes the tick back instead of promising "never again"', () => {
-  const module = fs.readFileSync(
-    new URL('./firstRunExperience.js', import.meta.url),
-    'utf8',
-  );
-
   // The write stays best-effort; the OUTCOME is now reported, because a box left
   // ticked after a refused write tells the visitor the launcher is gone for good
   // while it is already guaranteed to return next session.
@@ -440,20 +437,7 @@ test('a refused write takes the tick back instead of promising "never again"', (
   assert.equal(working.read(), 'suppressed');
   assert.equal(setFirstRunSuppressed(false, working), true);
   assert.equal(working.read(), null);
-
-  const handler = module.slice(
-    module.indexOf('const onSuppressChange = (event) => {'),
-    module.indexOf('  const keyboard = createSurfaceKeyboard({'),
-  );
-  assert.match(
-    handler,
-    /if \(setFirstRunSuppressed\(wanted, storage\)\) return;/,
-  );
-  assert.match(
-    handler,
-    /box\.checked = !wanted;/,
-    'a refused write must revert the tick',
-  );
+  // The rendered checkbox reverting is firstRunLauncherView.test.mjs.
 });
 
 test('a surface class that never clears is an ACCEPTED no-show, not a timer', () => {
@@ -504,16 +488,8 @@ test('the scroll fade only appears when the list really overflows', () => {
   );
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   // A fade on a card where all five tiles fit promises a sixth mission that does
-  // not exist, which is worse than no affordance at all.
-  assert.match(
-    module,
-    /const overflows = choiceList\.scrollHeight > choiceList\.clientHeight \+ 1;/,
-  );
-  assert.match(
-    module,
-    /choiceList\.dataset\.scrollable = String\(overflows\);/,
-  );
-  // ...and the CSS must be gated on that flag, never on the media query alone.
+  // not exist, which is worse than no affordance at all. The measured flag is
+  // firstRunLauncherView.test.mjs; the CSS must be gated on that flag, never on the media query alone.
   assert.match(
     css,
     /\.first-run-choices\[data-scrollable='true'\] \{[\s\S]*?mask-image/,
@@ -795,8 +771,8 @@ test('the decision table is written down where the next editor will read it', ()
 
 // ── Markup, startup ordering, accessibility ─────────────────────────────────
 
-test('markup, startup ordering and accessibility remain pinned', () => {
-  const html = expandApplicationHtml(
+test('markup, startup ordering and accessibility remain pinned', async () => {
+  const html = await renderApplicationHtml(
     fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
   );
   const startup = fs.readFileSync(
@@ -814,7 +790,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
     html,
     /data-first-run-status[^>]*role="status"[^>]*aria-live="polite"/,
   );
-  assert.match(html, /<input type="checkbox" data-first-run-suppress \/>/);
+  assert.match(html, /<input type="checkbox" data-first-run-suppress\s*\/?>/);
   assert.match(html, /<strong data-first-run-environmental-title>/);
   // Subcopy must name BOTH feeds the tile turns on — a tile that promised only
   // half of what it does is the defect this replaced. Only the VISIBLE <small>
@@ -838,7 +814,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   // passing edit — changing it needs the owner, not a nicer-sounding rewrite.
   assert.ok(
     html.includes(
-      '<p id="first-run-description" data-i18n-runtime>It feels like a forbidden cockpit' +
+      '<p id="first-run-description">It feels like a forbidden cockpit' +
         '—then you realize the sources are public and the data is real.</p>',
     ),
     'the owner-authored first-run line must ship exactly as written',
@@ -913,13 +889,9 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   assert.match(choicesBlock, /overflow-y: auto;/);
 });
 
-test('the card closes without a keyboard: the ESC hint is a button, kept on phones', () => {
-  const html = expandApplicationHtml(
+test('the card closes without a keyboard: the ESC hint is a button, kept on phones', async () => {
+  const html = await renderApplicationHtml(
     fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
-  );
-  const module = fs.readFileSync(
-    new URL('./firstRunExperience.js', import.meta.url),
-    'utf8',
   );
   // The whole stylesheet, so a hide rule added in any other file is caught too.
   const css = readStylesheet(new URL('../style.css', import.meta.url));
@@ -931,14 +903,10 @@ test('the card closes without a keyboard: the ESC hint is a button, kept on phon
     footer,
     /<button type="button" class="first-run-dismiss" data-first-run-dismiss>/,
   );
-  assert.match(footer, /data-i18n>ESC to dismiss</);
-  assert.match(footer, /data-i18n>DISMISS</);
+  assert.match(footer, />ESC to dismiss</);
+  assert.match(footer, />DISMISS</);
   // It closes the way ESC does, through the one dismiss path, so the session
-  // flag and focus handling are the same.
-  assert.match(
-    module,
-    /querySelector\('\[data-first-run-dismiss\]'\)\s*\?\.addEventListener\('click', \(\) => dismiss\(\)\)/,
-  );
+  // flag and focus handling are the same: firstRunLauncherView.test.mjs.
   // Phones used to hide the hint, leaving no way out but picking a mission.
   assert.doesNotMatch(css, /first-run-footer > span:last-child/);
   assert.doesNotMatch(css, /\.first-run-dismiss\s*\{[^}]*display:\s*none/);
@@ -961,12 +929,9 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
     'utf8',
   );
   // aria-disabled, never the `disabled` property: disabling a focused button
-  // drops the keyboard to <body> and strands the visitor outside the launcher.
-  assert.match(
-    module,
-    /button\.setAttribute\('aria-disabled', String\(next\)\)/,
-  );
-  assert.doesNotMatch(module, /button\.disabled = /);
+  // drops the keyboard to <body> and strands the visitor outside the launcher
+  // (firstRunLauncherView.test.mjs renders it).
+  assert.doesNotMatch(module, /\.disabled = /);
   // Tab is confined to the launcher, and ESC always releases it.
   const keyboard = fs.readFileSync(
     new URL('./ui/surfaceKeyboard.js', import.meta.url),
@@ -1022,14 +987,10 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;
-  assert.deepEqual(hudLayout.enum, [
-    'tactical',
-    'operator',
-    'minimal',
-    'cyber',
-  ]);
-  // Cyber deliberately adds one layout; first-run missions still change no tools.
-  hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal', 'cyber']);
+  // Cyber deliberately adds one layout and Operator was retired; first-run
+  // missions still change no tools.
+  hudLayout.enum = ['tactical', 'operator', 'minimal'];
   const cameraMotion = legacyTools.find((tool) => tool.name === 'move_camera')
     .parameters.properties.motion;
   assert.deepEqual(cameraMotion.enum, [
@@ -1040,6 +1001,19 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
     'rotate_globe',
     'stop',
   ]);
+  // Snow is retired from set_visual_style; restore it to keep the legacy pin.
+  const visualStyle = legacyTools.find(
+    (tool) => tool.name === 'set_visual_style',
+  ).parameters.properties.style;
+  assert.deepEqual(visualStyle.enum, [
+    'normal',
+    'retro',
+    'surveillance',
+    'thermal',
+    'anime',
+    'noir',
+  ]);
+  visualStyle.enum = [...visualStyle.enum, 'snow'];
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt
@@ -1055,10 +1029,12 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Panel adds timeout and named voice/provider targets; consolidated guidance
   // preserves the mission mapping and globe-rotation arguments.
   // S2 GhostMaps extends the generated layer enums; both feature contracts remain.
-  assert.equal(block.length, 31206, 'serialized tool schema length drifted');
+  // The layer alias hint leaves out aliases the layer id already spells.
+  // The Utilities panel adds one set_panel_open target.
+  assert.equal(block.length, 30919, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'f772df95404494bf492e02fde1beabffdfe61986940bffd0cf9ad5a38d768746',
+    'dbf9a45649179e626b2e3d938c43903f573c50ffa279b3245b18244dbe9a9284',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

@@ -174,6 +174,7 @@ const schemas = [
             'cctv-panel',
             'radio-panel',
             'scene-panel',
+            'utilities-panel',
             'pp-toggles',
             'global-context-panel',
             'weather-panel',
@@ -248,15 +249,7 @@ const schemas = [
       properties: {
         style: {
           type: 'string',
-          enum: [
-            'normal',
-            'retro',
-            'surveillance',
-            'thermal',
-            'anime',
-            'noir',
-            'snow',
-          ],
+          enum: ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir'],
         },
       },
       required: ['style'],

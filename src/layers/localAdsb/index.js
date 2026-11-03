@@ -56,10 +56,12 @@ const DEFAULT_DISPLAY = Object.freeze({
  * Local ADS-B layer: draws aircraft heard by the user's own receivers.
  *
  * Two inputs feed it. The receiver is any object with `getState()` returning
- * `{ connected, status, message, mode, webUsbSupported, aircraft, messagesPerSecond }`,
+ * `{ connected, status, message, errorText, mode, webUsbSupported, aircraft, messagesPerSecond }`,
  * `subscribe(listener)` and `setMode(mode)`; `aircraft` holds records from
- * `src/sources/adsbRecords.js`. The browser WebUSB session is one such
- * receiver. The optional `feeds` session (`./feeds.js`) supplies records read
+ * `src/sources/adsbRecords.js`, and the optional `errorText` is the English
+ * text of an `error` status (`message`, the UI-language one, stands in for a
+ * receiver without it). The browser WebUSB session is one such receiver.
+ * The optional `feeds` session (`./feeds.js`) supplies records read
  * by the server from local 1090/978 MHz decoders; it polls only while this
  * layer is enabled. Records are merged by ICAO (`mergeLocalAdsbRecords`).
  * Aircraft heard only on 978 MHz UAT carry a thin ring around the marker.
