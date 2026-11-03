@@ -176,7 +176,8 @@ export class ShareRestoration {
         this._initialShareRestoreTimeout = null;
         if (this._disposed) return;
         const generation = this._initialShareNavigationGeneration;
-        const retained = engineSwitch && this._layerStateCoordinator?.retainedTrackingTarget();
+        const retained =
+          engineSwitch && this._layerStateCoordinator?.retainedTrackingTarget();
         const applyCamera =
           Number.isInteger(generation) &&
           this.navigation._reassertNavigationHandoff(generation, {
@@ -246,7 +247,15 @@ export class ShareRestoration {
    */
   async _runShareRestore(
     state,
-    { applyCamera, instant = false, retained, retainScene = false, navigationToken, layersPromise, settle },
+    {
+      applyCamera,
+      instant = false,
+      retained,
+      retainScene = false,
+      navigationToken,
+      layersPromise,
+      settle,
+    },
   ) {
     const generation = this._shareRestoreGeneration;
     const current = () =>
@@ -259,11 +268,13 @@ export class ShareRestoration {
       });
       const layers = await (layersPromise || Promise.resolve([]));
       if (!current()) return;
-      if (retainScene && !retained) retained = this._layerStateCoordinator?.retainedTrackingTarget();
+      if (retainScene && !retained)
+        retained = this._layerStateCoordinator?.retainedTrackingTarget();
       const tracking =
         share.camera === 'applied'
-          ? (retained && this._layerStateCoordinator.resumeRetainedTracking(retained)) ||
-            await this._layerStateCoordinator?.restoreShareTrackingSelection?.()
+          ? (retained &&
+              this._layerStateCoordinator.resumeRetainedTracking(retained)) ||
+            (await this._layerStateCoordinator?.restoreShareTrackingSelection?.())
           : {
               status: 'superseded',
               cleared:

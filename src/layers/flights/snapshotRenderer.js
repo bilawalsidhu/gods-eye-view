@@ -112,8 +112,7 @@ export function createFlightSnapshotRenderer({
     // subpoint + collected floor cells for the viewer-proximate low-contact
     // clamp below — one carto read per poll, one batch warm after the loop.
     const viewerCarto =
-      flightState._renderer?.view.camera?.positionCartographic ||
-      null;
+      flightState._renderer?.view.camera?.positionCartographic || null;
     const viewerLatDeg = viewerCarto
       ? geo.math.toDegrees(viewerCarto.latitude)
       : null;

@@ -232,7 +232,13 @@ export function createAlprCamerasLayer({
       // Stale and saturated are independent facts; a cached response that also
       // hit the cap must still warn about coverage, not just about freshness.
       if (!restoringView) renderer?.renderRecords();
-      setAlprStatus((renderer?.count() ?? records.length) ? (stale ? 'stale' : 'ready') : 'empty');
+      setAlprStatus(
+        (renderer?.count() ?? records.length)
+          ? stale
+            ? 'stale'
+            : 'ready'
+          : 'empty',
+      );
     } catch (error) {
       if (
         error?.name === 'AbortError' ||

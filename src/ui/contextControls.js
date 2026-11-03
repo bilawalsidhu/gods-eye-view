@@ -86,9 +86,13 @@ export class ContextControls {
     }
   }
   canRetainScene() {
-    return ['flights', 'space-missions'].includes(this._contextMode) && !this._contextModeChanging &&
-      !this._contextRestoreState && !this._clearSelectedLayersPromise &&
-      !this._contextLayerReactionPromises.size;
+    return (
+      ['flights', 'space-missions'].includes(this._contextMode) &&
+      !this._contextModeChanging &&
+      !this._contextRestoreState &&
+      !this._clearSelectedLayersPromise &&
+      !this._contextLayerReactionPromises.size
+    );
   }
   captureScene() {
     return { mode: this._contextMode, snapshot: this._contextSessionSnapshot };

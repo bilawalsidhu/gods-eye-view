@@ -406,12 +406,21 @@ export class LayerStateCoordinator {
           );
           // A same-document engine choice retains operational layer intents.
           // The share still owns durable preferences and later history visits.
-          if (live && this.dataManager.layers.get(entry.id) === live.entry &&
-              !live.entry.lifecycleUncertain && live.entry.enabled === targetEnabled) {
+          if (
+            live &&
+            this.dataManager.layers.get(entry.id) === live.entry &&
+            !live.entry.lifecycleUncertain &&
+            live.entry.enabled === targetEnabled
+          ) {
             return {
-              layerId: entry.id, targetEnabled, origin, phase: 'retained',
+              layerId: entry.id,
+              targetEnabled,
+              origin,
+              phase: 'retained',
               ...currentLayerOutcome(this.dataManager, entry.id),
-              appliedOptions: {}, persistenceWrite: false, succeeded: true,
+              appliedOptions: {},
+              persistenceWrite: false,
+              succeeded: true,
             };
           }
           const options = layerOptionsForRestore(this._durableState, entry.id);
@@ -512,24 +521,33 @@ export class LayerStateCoordinator {
     const model = this.dataManager.layers.get(selected.layerId)?.module;
     if (
       model?.attachRenderer &&
-      String(model.getParams?.()[selected.optionKey]) === String(selected.targetId) &&
+      String(model.getParams?.()[selected.optionKey]) ===
+        String(selected.targetId) &&
       model.hasContact?.(selected.targetId) === true
-    ) return selected;
+    )
+      return selected;
     return null;
   }
 
   resumeRetainedTracking(previous) {
     const selected = this.retainedTrackingTarget();
     if (
-      !selected || selected.layerId !== previous.layerId ||
+      !selected ||
+      selected.layerId !== previous.layerId ||
       selected.targetId !== previous.targetId
-    ) return null;
+    )
+      return null;
     const model = this.dataManager.layers.get(selected.layerId).module;
     const followed = model.trackById(selected.targetId, {
       origin: LAYER_RESTORE_ORIGINS.share,
     });
     if (!followed) return null;
-    const result = { ...selected, status: 'found', classification: 'followed', cleared: false };
+    const result = {
+      ...selected,
+      status: 'found',
+      classification: 'followed',
+      cleared: false,
+    };
     this._publishTrackingRestoreStatus(result);
     return result;
   }

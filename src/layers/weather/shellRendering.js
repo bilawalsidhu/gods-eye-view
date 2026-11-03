@@ -407,7 +407,8 @@ export function createWeatherShell({
   cacheBytes = WEATHER_SHELL_CACHE_BYTES,
   createSurface = createShellSurface,
   requestRender = () => viewer.scene.requestRender(),
-  viewRectangle = () => viewer.camera?.computeViewRectangle?.(viewer.scene.globe?.ellipsoid),
+  viewRectangle = () =>
+    viewer.camera?.computeViewRectangle?.(viewer.scene.globe?.ellipsoid),
   moveEnd = viewer?.camera?.moveEnd,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
@@ -572,9 +573,7 @@ export function createWeatherShell({
   }
   /** Recompute the window from the camera's ground footprint; returns whether it changed. */
   function computeView() {
-    const rectangle = detailed
-      ? viewRectangle()
-      : null;
+    const rectangle = detailed ? viewRectangle() : null;
     const degrees = cesium.Math.toDegrees;
     const footprint = rectangle && {
       west: degrees(rectangle.west),

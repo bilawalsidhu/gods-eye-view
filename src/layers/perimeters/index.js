@@ -31,10 +31,20 @@ const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
 
 function samePolygons(left, right) {
   if (left === right) return true;
-  return left?.length === right.length && right.every((rings, i) =>
-    left[i].length === rings.length && rings.every((ring, j) =>
-      left[i][j].length === ring.length && ring.every(([x, y], k) =>
-        left[i][j][k][0] === x && left[i][j][k][1] === y)));
+  return (
+    left?.length === right.length &&
+    right.every(
+      (rings, i) =>
+        left[i].length === rings.length &&
+        rings.every(
+          (ring, j) =>
+            left[i][j].length === ring.length &&
+            ring.every(
+              ([x, y], k) => left[i][j][k][0] === x && left[i][j][k][1] === y,
+            ),
+        ),
+    )
+  );
 }
 
 /** Own one fire-perimeter display, its refresh lifecycle, and click selection. */
@@ -184,7 +194,10 @@ export function createFirePerimetersLayer({
     const pickId = picking.resolvePickId(picked);
     if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX))
       return null;
-    const incidentId = pickId.slice(PICK_PREFIX.length, pickId.lastIndexOf(':'));
+    const incidentId = pickId.slice(
+      PICK_PREFIX.length,
+      pickId.lastIndexOf(':'),
+    );
     return _rowById.has(incidentId) ? incidentId : null;
   }
 
@@ -256,7 +269,8 @@ export function createFirePerimetersLayer({
     updateInterval: 300000,
 
     init(viewer, { engine = null } = {}) {
-      if (initialized) throw new Error('Fire perimeter layer is already initialized');
+      if (initialized)
+        throw new Error('Fire perimeter layer is already initialized');
       initialized = true;
       try {
         if (viewer || engine) this.attachRenderer(viewer, { engine });
@@ -267,8 +281,13 @@ export function createFirePerimetersLayer({
     },
 
     attachRenderer(viewer, { engine = null } = {}) {
-      if (!initialized || renderer) throw new Error('Invalid fire perimeter scene attachment');
-      renderer = createRenderer({ viewer, engine, screenSpaceEventHandlerFactory });
+      if (!initialized || renderer)
+        throw new Error('Invalid fire perimeter scene attachment');
+      renderer = createRenderer({
+        viewer,
+        engine,
+        screenSpaceEventHandlerFactory,
+      });
       renderer.setVisible(_enabled);
       if (geometry.size) renderer.replace([...geometry.values()]);
       if (_enabled) {
@@ -333,7 +352,9 @@ export function createFirePerimetersLayer({
         );
         if (
           signature === _snapshotSignature &&
-          rows.every(row => samePolygons(geometry.get(row.stableId)?.polygons, row.polygons))
+          rows.every((row) =>
+            samePolygons(geometry.get(row.stableId)?.polygons, row.polygons),
+          )
         ) {
           if (_selectedId) publishSelectedCard();
           _lastUpdate = updatedAt;

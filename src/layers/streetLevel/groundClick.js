@@ -32,7 +32,9 @@ export function createGroundClick({ state, openNearest, isAvailable }) {
       )
       .map((entry) => entry.def.id);
     if (!providerIds.length) return false;
-    const position = state.viewer.engine ? state.viewer.engine.picker.pickGlobe(screenPosition) : scenePick.pickGroundPosition(state.viewer, screenPosition);
+    const position = state.viewer.engine
+      ? state.viewer.engine.picker.pickGlobe(screenPosition)
+      : scenePick.pickGroundPosition(state.viewer, screenPosition);
     const carto = position && geo.cartographic.fromCartesian(position);
     if (!carto) return false;
     return openNearest(

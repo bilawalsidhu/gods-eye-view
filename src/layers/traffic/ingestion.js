@@ -275,11 +275,13 @@ export function createIngestion({
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
     if (!Number.isFinite(estimated)) {
       try {
-        estimated = scene?.engine ? scene.sampleHeight(location) : scene?.globe?.show
-          ? scene.globe.getHeight?.(location)
-          : scene?.sampleHeightSupported
-            ? scene.sampleHeight(location, [layerState._pointCollection])
-            : undefined;
+        estimated = scene?.engine
+          ? scene.sampleHeight(location)
+          : scene?.globe?.show
+            ? scene.globe.getHeight?.(location)
+            : scene?.sampleHeightSupported
+              ? scene.sampleHeight(location, [layerState._pointCollection])
+              : undefined;
       } catch {
         /* the local mesh can still be loading */
       }

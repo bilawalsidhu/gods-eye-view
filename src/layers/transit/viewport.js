@@ -79,7 +79,8 @@ export function createViewport({ state, services, parts }) {
       globalThis.document?.visibilityState === 'hidden'
     )
       return;
-    if (!state._enabled || !parts.renderer?.ready || state._restoringViewport) return;
+    if (!state._enabled || !parts.renderer?.ready || state._restoringViewport)
+      return;
     refreshViewBounds();
     const altitude = getCameraAltitude();
     state._altitudeGateOpen = altitudeGateOpen(altitude);

@@ -550,12 +550,13 @@ function anchorOnScreen(viewer, engine, anchor, root) {
     );
     if (Cesium.Cartesian3.dot(delta, camera.directionWC) <= 0) return null;
   }
-  const pixel = engine ? engine.projector.worldToWindow(anchor, {}) : Cesium.SceneTransforms.worldToWindowCoordinates(
-    viewer.scene,
-    anchor,
-  );
+  const pixel = engine
+    ? engine.projector.worldToWindow(anchor, {})
+    : Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, anchor);
   if (!pixel) return null;
-  const canvasBounds = (engine?.host.canvas ?? viewer?.canvas)?.getBoundingClientRect?.();
+  const canvasBounds = (
+    engine?.host.canvas ?? viewer?.canvas
+  )?.getBoundingClientRect?.();
   const rootBounds = root.getBoundingClientRect?.();
   if (!canvasBounds || !rootBounds) return null;
   const x = pixel.x + canvasBounds.left - rootBounds.left;
@@ -638,7 +639,11 @@ function createRoot(documentRef, viewer) {
   const root = documentRef.createElement('div');
   root.id = 'bhote-koshi-embedded-media-root';
   root.setAttribute('aria-live', 'polite');
-  (documentRef.getElementById?.('cesiumContainer') || viewer?.container || documentRef.body)?.append(root);
+  (
+    documentRef.getElementById?.('cesiumContainer') ||
+    viewer?.container ||
+    documentRef.body
+  )?.append(root);
   return root;
 }
 

@@ -585,7 +585,8 @@ export function createLocalGeoJsonLayer(
             // windows (before vs after the add settles) need different cleanup.
             let addedToScene = false;
             try {
-              let features = _cachedFeatures ?? (readFeatures ? await readFeatures() : null);
+              let features =
+                _cachedFeatures ?? (readFeatures ? await readFeatures() : null);
               if (_destroyed) return;
               if (!features) {
                 const response = await fetch(url, {
@@ -1065,7 +1066,9 @@ export function createLocalGeoJsonLayer(
     },
 
     restoreFeatureSelection(viewer, featureId) {
-      const entity = _dataSource?.entities.values.find((item) => String(item.id) === featureId);
+      const entity = _dataSource?.entities.values.find(
+        (item) => String(item.id) === featureId,
+      );
       if (!entity) return false;
       viewer.selectedEntity = entity;
       selectEntityContext(entity);

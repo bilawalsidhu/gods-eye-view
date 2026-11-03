@@ -7,6 +7,11 @@ import * as render from '../../renderGovernor.js';
 export function createApplicationTraffic({ source, surface, nativeRenderer }) {
   return createTrafficLayer({
     source,
-    services: { credits, render, nativeRenderer, ground: surface?.groundFloor || ground },
+    services: {
+      credits,
+      render,
+      nativeRenderer,
+      ground: surface?.groundFloor || ground,
+    },
   });
 }

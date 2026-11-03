@@ -85,7 +85,10 @@ export function createWindLayer({
   const sample = (position) => {
     if (!position && engine && !viewer) {
       const canvas = engine.host.canvas;
-      position = engine.camera.pickEllipsoid({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 });
+      position = engine.camera.pickEllipsoid({
+        x: canvas.clientWidth / 2,
+        y: canvas.clientHeight / 2,
+      });
     }
     reading = inspectWindAtCenter(manifest, viewer, cesium, {
       position,
@@ -122,20 +125,25 @@ export function createWindLayer({
     attachRenderer(nextViewer, { engine: nextEngine = null } = {}) {
       viewer = nextViewer;
       engine = nextEngine;
-      rendering = engine?.kind === 'navara' ? createNativeRendering(engine) : createRendering({
-        cesium,
-        container: container ?? nextViewer.container,
-        getViewer: () => viewer,
-        getHost: () =>
-          imageryHost?.() ?? {
-            collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-            kind: 'globe',
-          },
-        onStatusChange: notify,
-      });
+      rendering =
+        engine?.kind === 'navara'
+          ? createNativeRendering(engine)
+          : createRendering({
+              cesium,
+              container: container ?? nextViewer.container,
+              getViewer: () => viewer,
+              getHost: () =>
+                imageryHost?.() ?? {
+                  collection:
+                    viewer.imageryLayers ?? viewer.scene?.imageryLayers,
+                  kind: 'globe',
+                },
+              onStatusChange: notify,
+            });
       rendering.attach();
       rendering.setOptions?.({ overlay, paused });
-      const target = container ?? nextViewer?.container ?? engine?.host.container;
+      const target =
+        container ?? nextViewer?.container ?? engine?.host.container;
       inspectionMarker = createWindInspectionMarker({
         container: target,
         viewer,

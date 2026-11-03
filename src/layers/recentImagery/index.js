@@ -830,7 +830,7 @@ export function createRecentImageryLayer({
       forgetLease();
       renderer?.destroy();
       renderer = null;
-      _hostInfo = {collection: null, kind: 'none'};
+      _hostInfo = { collection: null, kind: 'none' };
       _viewer = _engine = _tileset = null;
       _keptGeneration = null;
       await Promise.all([lease?.release(), _releasing]);

@@ -246,8 +246,13 @@ export function createLineCoverage({
       const sequence = entry.sequenceList.find(({ id }) => id === sequenceId);
       if (sequence && passes(sequence, current)) parts.push(...sequence.parts);
     }
-    if(state.viewer?.engine){
-      state.coverage.highlight=state.viewer.lines([{id:sequenceId,parts}],colors.selected,tuning.lineWidthPx+1,pickPrefix);
+    if (state.viewer?.engine) {
+      state.coverage.highlight = state.viewer.lines(
+        [{ id: sequenceId, parts }],
+        colors.selected,
+        tuning.lineWidthPx + 1,
+        pickPrefix,
+      );
       requestRender();
       return;
     }
@@ -270,8 +275,13 @@ export function createLineCoverage({
     // Lookup, picking and counts follow what is drawn, not the whole tile.
     const sequences = drawnSequences(entry);
     entry.sequences = new Map(sequences.map((s) => [s.id, s]));
-    if(state.viewer?.engine){
-      const group = state.viewer.lines(sequences,colors.coverage,tuning.lineWidthPx,pickPrefix);
+    if (state.viewer?.engine) {
+      const group = state.viewer.lines(
+        sequences,
+        colors.coverage,
+        tuning.lineWidthPx,
+        pickPrefix,
+      );
       entry.primitives = group ? [group] : [];
       return;
     }
@@ -409,7 +419,9 @@ export function createLineCoverage({
    */
   function wantedTiles(viewer) {
     const ground = groundUnderCamera(viewer);
-    const cameraHeight = viewer.engine?.camera.pose().cartographic.height ?? viewer.camera?.positionCartographic?.height;
+    const cameraHeight =
+      viewer.engine?.camera.pose().cartographic.height ??
+      viewer.camera?.positionCartographic?.height;
     const height = Number.isFinite(cameraHeight)
       ? cameraHeight - (ground ?? 0)
       : null;
@@ -438,7 +450,13 @@ export function createLineCoverage({
   /** Recompute the tile set for the current camera and reconcile primitives. */
   function refresh() {
     const viewer = state.viewer;
-    if (!viewer || state.context.waitingForView?.() || !state.context.isActive() || state.coverage.blocked) return;
+    if (
+      !viewer ||
+      state.context.waitingForView?.() ||
+      !state.context.isActive() ||
+      state.coverage.blocked
+    )
+      return;
     const { zoom, tiles, hint } = wantedTiles(viewer);
     if (hint) {
       state.coverage.hint = hint;
@@ -550,7 +568,7 @@ export function createLineCoverage({
     releaseGraphics() {
       detach();
       highlight(null);
-      for(const entry of state.coverage.tiles.values()) detachPrimitive(entry);
+      for (const entry of state.coverage.tiles.values()) detachPrimitive(entry);
     },
     refresh,
     clear,

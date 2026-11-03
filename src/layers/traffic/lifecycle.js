@@ -21,10 +21,12 @@ export function createLifecycle({
   }
 
   function bindScene() {
-    const viewer = layerState._viewer, engine = layerState._engine;
+    const viewer = layerState._viewer,
+      engine = layerState._engine;
     const camera = engine?.camera ?? viewer.camera;
     const frames = engine?.frames ?? viewer.scene;
-    if (viewer) layerState._surfaceFrameRemover = observeTrafficSurface(viewer.scene);
+    if (viewer)
+      layerState._surfaceFrameRemover = observeTrafficSurface(viewer.scene);
     layerState._pointCollection.show = true;
     layerState._lastAnimTime = 0;
     parts.animation.syncRenderDemand();
@@ -36,11 +38,17 @@ export function createLifecycle({
       parts.timing.clearTrafficTimingEntries();
       layerState._trafficTimingCurrentAnchor = null;
       layerState._trafficTimingPostRenderRemovers = new Set();
-      layerState._trafficTimingMoveEndRemover = camera.moveEnd.addEventListener(parts.timing.markTrafficTimingMoveEnd);
+      layerState._trafficTimingMoveEndRemover = camera.moveEnd.addEventListener(
+        parts.timing.markTrafficTimingMoveEnd,
+      );
     }
-    layerState._cameraRemover = camera.changed.addEventListener(parts.viewport.onCameraChanged);
-    layerState._arrivalRemover = camera.moveEnd.addEventListener(() => parts.viewport.onCameraChanged({immediate:true}));
-    claimCameraSensitivity(engine ?? camera,'traffic',0.05);
+    layerState._cameraRemover = camera.changed.addEventListener(
+      parts.viewport.onCameraChanged,
+    );
+    layerState._arrivalRemover = camera.moveEnd.addEventListener(() =>
+      parts.viewport.onCameraChanged({ immediate: true }),
+    );
+    claimCameraSensitivity(engine ?? camera, 'traffic', 0.05);
   }
 
   function unbindScene() {
@@ -48,15 +56,22 @@ export function createLifecycle({
     layerState._surfaceFrameRemover?.();
     layerState._preRenderRemover?.();
     layerState._trafficTimingMoveEndRemover?.();
-    for (const remove of layerState._trafficTimingPostRenderRemovers || []) remove();
+    for (const remove of layerState._trafficTimingPostRenderRemovers || [])
+      remove();
     layerState._trafficTimingPostRenderRemovers = null;
     layerState._trafficTimingCurrentAnchor = null;
     layerState._cameraRemover?.();
     // Some legacy camera events do not return a remover.
-    if (!layerState._cameraRemover) camera?.changed?.removeEventListener?.(parts.viewport.onCameraChanged);
+    if (!layerState._cameraRemover)
+      camera?.changed?.removeEventListener?.(parts.viewport.onCameraChanged);
     layerState._arrivalRemover?.();
-    layerState._surfaceFrameRemover = layerState._preRenderRemover = layerState._cameraRemover = layerState._arrivalRemover = layerState._trafficTimingMoveEndRemover = null;
-    releaseCameraSensitivity(layerState._engine ?? camera,'traffic');
+    layerState._surfaceFrameRemover =
+      layerState._preRenderRemover =
+      layerState._cameraRemover =
+      layerState._arrivalRemover =
+      layerState._trafficTimingMoveEndRemover =
+        null;
+    releaseCameraSensitivity(layerState._engine ?? camera, 'traffic');
   }
 
   const methods = {
@@ -99,8 +114,12 @@ export function createLifecycle({
         layerState._stylePreset =
           document?.documentElement?.dataset?.gevStyle || 'normal';
         if (!layerState._styleListenerBound) {
-          layerState._styleListener = (e) => parts.style.setStylePreset(e?.detail?.style);
-          window.addEventListener('gev:style-change', layerState._styleListener);
+          layerState._styleListener = (e) =>
+            parts.style.setStylePreset(e?.detail?.style);
+          window.addEventListener(
+            'gev:style-change',
+            layerState._styleListener,
+          );
           layerState._styleListenerBound = true;
         }
       }
@@ -108,25 +127,42 @@ export function createLifecycle({
       console.log('[Data:Traffic] Initialized');
     },
 
-    attachRenderer(viewer, {engine=null,waitForCameraRestore=false}={}) {
+    attachRenderer(
+      viewer,
+      { engine = null, waitForCameraRestore = false } = {},
+    ) {
       layerState._restoringViewport = waitForCameraRestore;
       layerState._viewer = viewer;
       layerState._engine = engine;
-      layerState._native = !viewer && engine ? services.nativeRenderer(engine) : null;
+      layerState._native =
+        !viewer && engine ? services.nativeRenderer(engine) : null;
       layerState._heatSupported = null;
-      const points = layerState._native?.points ?? new Cesium.PointPrimitiveCollection({blendOption: Cesium.BlendOption.TRANSLUCENT});
+      const points =
+        layerState._native?.points ??
+        new Cesium.PointPrimitiveCollection({
+          blendOption: Cesium.BlendOption.TRANSLUCENT,
+        });
       if (viewer) viewer.scene.primitives.add(points);
       layerState._pointCollection = points;
-      for(const dot of layerState._dots) dot.point = points.add(dot.point);
+      for (const dot of layerState._dots) dot.point = points.add(dot.point);
       points.show = layerState._enabled;
       if (!waitForCameraRestore) readyForSurfaceWork();
       if (layerState._enabled) {
         bindScene();
         parts.rendering.rebuildHeatLines(layerState._roads);
-        if (layerState._dots.length && layerState._roads.some(r=>!r.directFlow))
-          services.credits?.showOsmCredit?.(engine ?? viewer,'traffic',{openMapTiles:true});
-        if (layerState._liveMode) services.credits?.registerDynamicCredit?.(engine ?? viewer, services.credits.TOMTOM_CREDIT);
-        parts.viewport.onCameraChanged({immediate:true});
+        if (
+          layerState._dots.length &&
+          layerState._roads.some((r) => !r.directFlow)
+        )
+          services.credits?.showOsmCredit?.(engine ?? viewer, 'traffic', {
+            openMapTiles: true,
+          });
+        if (layerState._liveMode)
+          services.credits?.registerDynamicCredit?.(
+            engine ?? viewer,
+            services.credits.TOMTOM_CREDIT,
+          );
+        parts.viewport.onCameraChanged({ immediate: true });
       }
     },
     resumeViewport() {
@@ -136,40 +172,70 @@ export function createLifecycle({
       if (!layerState._enabled) return;
       if (layerState._populationPending) parts.retention.resume();
       const previous = layerState._surfaceInput;
-      if (previous && !layerState._fetching && layerState._lastBounds === previous.bounds) {
+      if (
+        previous &&
+        !layerState._fetching &&
+        layerState._lastBounds === previous.bounds
+      ) {
         // A completed pass, not a refinement: the incoming globe often still
         // shows coarse tiles, so it samples provisionally and refines once its
         // surface has loaded ('Handoff refined'). A refinement here never
         // refined again and left vehicles on those coarse heights.
-        void parts.flow.applyFlowThenRender(previous.roads, previous.bounds, layerState._loadGeneration,
-          parts.viewport.getCameraAltitude(), 'Handoff').catch(error => {
-            if (error?.name !== 'AbortError') console.warn('[Data:Traffic] Surface refresh failed', error);
+        void parts.flow
+          .applyFlowThenRender(
+            previous.roads,
+            previous.bounds,
+            layerState._loadGeneration,
+            parts.viewport.getCameraAltitude(),
+            'Handoff',
+          )
+          .catch((error) => {
+            if (error?.name !== 'AbortError')
+              console.warn('[Data:Traffic] Surface refresh failed', error);
           });
       }
-      parts.viewport.onCameraChanged({immediate:true});
+      parts.viewport.onCameraChanged({ immediate: true });
     },
     detachRenderer() {
-      if(!layerState._pointCollection)return;
+      if (!layerState._pointCollection) return;
       unbindScene();
       clearTimeout(layerState._fetchTimeout);
       layerState._surfaceRefineRemove?.();
       layerState._surfaceRefineRemove = null;
-      layerState._surfaceRevision = (layerState._surfaceRevision || 0)+1;
+      layerState._surfaceRevision = (layerState._surfaceRevision || 0) + 1;
       layerState._preparedRoads?.clear();
       parts.rendering.removeHeatLines();
-      services.credits?.hideOsmCredit?.(layerState._engine ?? layerState._viewer,'traffic');
-      for(const dot of layerState._dots) {
-        const p=dot.point;
-        dot.point={position:Cesium.Cartesian3.clone(p.position),pixelSize:p.pixelSize,color:p.color,show:p.show,
-          outlineColor:p.outlineColor,outlineWidth:p.outlineWidth,scaleByDistance:p.scaleByDistance,
-          translucencyByDistance:p.translucencyByDistance,disableDepthTestDistance:0};
+      services.credits?.hideOsmCredit?.(
+        layerState._engine ?? layerState._viewer,
+        'traffic',
+      );
+      for (const dot of layerState._dots) {
+        const p = dot.point;
+        dot.point = {
+          position: Cesium.Cartesian3.clone(p.position),
+          pixelSize: p.pixelSize,
+          color: p.color,
+          show: p.show,
+          outlineColor: p.outlineColor,
+          outlineWidth: p.outlineWidth,
+          scaleByDistance: p.scaleByDistance,
+          translucencyByDistance: p.translucencyByDistance,
+          disableDepthTestDistance: 0,
+        };
       }
       layerState._viewer?.scene.primitives.remove(layerState._pointCollection);
       layerState._native?.destroy();
-      if(layerState._renderHeld)services.render.releaseContinuousRender('traffic');
-      layerState._renderHeld=false;
-      layerState._pointCollection=layerState._viewer=layerState._engine=layerState._native=null;
-      layerState._waitForScene ??= new Promise(resolve=>{layerState._sceneReady=resolve;});
+      if (layerState._renderHeld)
+        services.render.releaseContinuousRender('traffic');
+      layerState._renderHeld = false;
+      layerState._pointCollection =
+        layerState._viewer =
+        layerState._engine =
+        layerState._native =
+          null;
+      layerState._waitForScene ??= new Promise((resolve) => {
+        layerState._sceneReady = resolve;
+      });
     },
 
     /**
@@ -220,7 +286,10 @@ export function createLifecycle({
     disable(viewer) {
       layerState._enabled = false;
       layerState._surfaceInput = null;
-      services.credits?.hideOsmCredit?.(layerState._engine ?? layerState._viewer, 'traffic');
+      services.credits?.hideOsmCredit?.(
+        layerState._engine ?? layerState._viewer,
+        'traffic',
+      );
       parts.animation.syncRenderDemand();
       clearTimeout(layerState._fetchTimeout);
       clearInterval(layerState._enableKickTimer);
@@ -255,7 +324,9 @@ export function createLifecycle({
     destroy(viewer) {
       this.disable(viewer);
       if (layerState._pointCollection) {
-        layerState._viewer?.scene.primitives.remove(layerState._pointCollection);
+        layerState._viewer?.scene.primitives.remove(
+          layerState._pointCollection,
+        );
         layerState._native?.destroy();
         layerState._native = null;
         layerState._pointCollection = null;
@@ -263,7 +334,10 @@ export function createLifecycle({
       parts.rendering.removeHeatLines();
       layerState._tileCache.clear();
       if (layerState._styleListenerBound && typeof window !== 'undefined') {
-        window.removeEventListener('gev:style-change', layerState._styleListener);
+        window.removeEventListener(
+          'gev:style-change',
+          layerState._styleListener,
+        );
         layerState._styleListenerBound = false;
       }
       layerState._sceneReady?.();

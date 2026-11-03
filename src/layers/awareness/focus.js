@@ -45,7 +45,11 @@ export function createFocus({ state: layerState, services, parts, source }) {
     )
       return true;
     announceNavigationAuthority('context-vessel-focus');
-    layerState.display.frameContact(vessel.position, VESSEL_FOCUS_RADIUS_M, 1.4);
+    layerState.display.frameContact(
+      vessel.position,
+      VESSEL_FOCUS_RADIUS_M,
+      1.4,
+    );
     return true;
   }
 
@@ -177,7 +181,11 @@ export function createFocus({ state: layerState, services, parts, source }) {
     announceNavigationAuthority('context-vessel-autofocus', {
       cancelPendingSelection: false,
     });
-    layerState.display.frameContact(vessel.position, VESSEL_FOCUS_RADIUS_M, 1.6);
+    layerState.display.frameContact(
+      vessel.position,
+      VESSEL_FOCUS_RADIUS_M,
+      1.6,
+    );
     return true;
   }
   return {

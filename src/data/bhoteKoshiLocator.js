@@ -291,7 +291,10 @@ export function createBhoteKoshiLocatorLayer({
   let _pausedApproach = null;
   const cameraForScene = () => _engine?.camera ?? _viewer?.camera;
   const creditTarget = () => _engine ?? _viewer;
-  const requestRender = reason => _engine?.kind === 'navara' ? _engine.render.request(reason) : requestSceneRender(reason);
+  const requestRender = (reason) =>
+    _engine?.kind === 'navara'
+      ? _engine.render.request(reason)
+      : requestSceneRender(reason);
   let _dataSource = null;
   let _enabled = false;
   let _boundaryReady = false;
@@ -651,10 +654,17 @@ export function createBhoteKoshiLocatorLayer({
         roll: Cesium.Math.toRadians(pose.roll),
       },
       duration,
-      easingFunction: orbit ? Cesium.EasingFunction.SINUSOIDAL_IN_OUT : Cesium.EasingFunction.CUBIC_IN_OUT,
+      easingFunction: orbit
+        ? Cesium.EasingFunction.SINUSOIDAL_IN_OUT
+        : Cesium.EasingFunction.CUBIC_IN_OUT,
       complete: () => {
         if (_triggerApproachAttempt !== attempt) return;
-        if (orbit || !_enabled || _presentation !== BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION) finish();
+        if (
+          orbit ||
+          !_enabled ||
+          _presentation !== BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION
+        )
+          finish();
         else flyTriggerStage(attempt, 'orbiting', TRIGGER_ORBIT_DURATION_SEC);
       },
       cancel: finish,
@@ -1042,14 +1052,14 @@ export function createBhoteKoshiLocatorLayer({
     showOsmCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_LAYER_ID);
   }
 
-  function attachRenderer(viewer, {engine = null} = {}) {
+  function attachRenderer(viewer, { engine = null } = {}) {
     _viewer = viewer;
     _engine = engine;
     if (!_enabled) return true;
     connectDisplay();
-    publishOverlayEntries({moving: _placeRevealMoving});
+    publishOverlayEntries({ moving: _placeRevealMoving });
     if (_pausedApproach) {
-      const {phase, remaining} = _pausedApproach;
+      const { phase, remaining } = _pausedApproach;
       _pausedApproach = null;
       if (phase === 'armed') armTriggerApproach();
       else flyTriggerStage((_triggerApproachAttempt = {}), phase, remaining);
@@ -1060,8 +1070,11 @@ export function createBhoteKoshiLocatorLayer({
   function detachRenderer() {
     const phase = _triggerApproachAttempt?.phase;
     if (phase && phase !== 'finished') {
-      _pausedApproach = {phase, remaining: Math.max(0, (_triggerApproachAttempt.endsAt - now()) / 1000)};
-      clearTriggerApproach({preserveCallout: true});
+      _pausedApproach = {
+        phase,
+        remaining: Math.max(0, (_triggerApproachAttempt.endsAt - now()) / 1000),
+      };
+      clearTriggerApproach({ preserveCallout: true });
     }
     _native?.destroy();
     _native = null;

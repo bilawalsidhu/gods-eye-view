@@ -17,15 +17,33 @@ import {
 // The tools without a viewer (the experimental Navara engine); they load
 // from src/app/navaraMode.js.
 test('without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine', async (t) => {
-  const saved = { window: globalThis.window, document: globalThis.document, localStorage:globalThis.localStorage };
+  const saved = {
+    window: globalThis.window,
+    document: globalThis.document,
+    localStorage: globalThis.localStorage,
+  };
   const listeners = new Map();
   globalThis.window = {};
-  globalThis.localStorage = { getItem:()=>null,setItem(){},removeItem(){} };
+  globalThis.localStorage = {
+    getItem: () => null,
+    setItem() {},
+    removeItem() {},
+  };
   globalThis.document = {
     hidden: false,
     getElementById: () => null,
     querySelector: () => null,
-    body: {classList:{add(){},remove(){},toggle(){},contains(){return false;}},appendChild(){}},
+    body: {
+      classList: {
+        add() {},
+        remove() {},
+        toggle() {},
+        contains() {
+          return false;
+        },
+      },
+      appendChild() {},
+    },
     addEventListener: (type, fn) => listeners.set(type, fn),
     removeEventListener: (type, fn) => {
       if (listeners.get(type) === fn) listeners.delete(type);

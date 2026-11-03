@@ -18,8 +18,8 @@ export function createState({ services }) {
   layerState._viewer = null;
   layerState._engine = null;
   layerState._native = null;
-  layerState._trafficScene = () => layerState._native?.surface ?? layerState._viewer?.scene;
-
+  layerState._trafficScene = () =>
+    layerState._native?.surface ?? layerState._viewer?.scene;
 
   /** @type {Cesium.PointPrimitiveCollection|null} */
 

@@ -483,7 +483,7 @@ test('GERMAN: an existing untracked military billboard repaints each poll withou
   });
   flightState.records = records;
   flightState._renderer = { view: {}, surfaceExclusions: () => [] };
-  const {applySnapshot: apply} = createMilitarySnapshotRenderer({
+  const { applySnapshot: apply } = createMilitarySnapshotRenderer({
     flightState,
     records,
     groundFloor: { warmGroundFloor() {}, cachedGroundFloor: () => null },

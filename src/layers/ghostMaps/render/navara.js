@@ -32,13 +32,11 @@ export function createGhostMapsNavaraRenderer(engine, view) {
       function add(style, geom, id) {
         const key = JSON.stringify(style);
         if (!groups.has(key)) groups.set(key, { style, features: [] });
-        groups
-          .get(key)
-          .features.push({
-            type: 'Feature',
-            geometry: geom,
-            properties: { gevId: id },
-          });
+        groups.get(key).features.push({
+          type: 'Feature',
+          geometry: geom,
+          properties: { gevId: id },
+        });
       }
       for (const [index, feature] of features.entries()) {
         const { style } = feature;
@@ -51,7 +49,14 @@ export function createGhostMapsNavaraRenderer(engine, view) {
         };
         for (const [part, geometry] of feature.geometries.entries()) {
           const id = `ghostmaps:${productId}:${index}:${part}`;
-          shapes.push({ id, geometry, style: { ...style, pointRadius: 10 * clamp((style.iconScale ?? 1) * 0.7, 0.35, 1.5) } });
+          shapes.push({
+            id,
+            geometry,
+            style: {
+              ...style,
+              pointRadius: 10 * clamp((style.iconScale ?? 1) * 0.7, 0.35, 1.5),
+            },
+          });
           if (geometry.type === 'point') {
             const color =
               style.iconColor && style.icon ? style.iconColor : null;

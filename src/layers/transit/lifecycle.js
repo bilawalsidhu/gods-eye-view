@@ -141,7 +141,10 @@ export function createLifecycle({
         state._viewer = null;
         throw error;
       }
-      state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, state._enabled);
+      state._overlayHost.setVisible(
+        TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
+        state._enabled,
+      );
       if (state._enabled) {
         for (const [key, entry] of state._vehicles) {
           parts.rendering.addMarker(key, entry);
@@ -203,7 +206,8 @@ export function createLifecycle({
       parts.rendering.refreshVisibility();
       parts.trails.rebind();
       parts.selection.refreshSelectedCard(true);
-      for (const feed of state._activeFeeds.values()) parts.renderer.addCredit(feed);
+      for (const feed of state._activeFeeds.values())
+        parts.renderer.addCredit(feed);
     },
     resumeViewport() {
       if (!state._restoringViewport) return;
@@ -217,7 +221,10 @@ export function createLifecycle({
       clearInterval(state._maintenanceTimer);
       clearTimeout(state._cameraDebounceTimer);
       clearTimeout(state._visibilityTimer);
-      state._maintenanceTimer = state._cameraDebounceTimer = state._visibilityTimer = null;
+      state._maintenanceTimer =
+        state._cameraDebounceTimer =
+        state._visibilityTimer =
+          null;
       parts.selection.removeClickHandler();
       unregisterPickOwner('transit');
       state._cameraChangedRemove?.();
@@ -238,7 +245,11 @@ export function createLifecycle({
       if (state._renderHeld) releaseContinuousRender('transit');
       state._renderHeld = false;
       parts.renderer.destroy();
-      parts.renderer = state._markers = state._animatedMarkers = state._viewer = null;
+      parts.renderer =
+        state._markers =
+        state._animatedMarkers =
+        state._viewer =
+          null;
     },
 
     /**

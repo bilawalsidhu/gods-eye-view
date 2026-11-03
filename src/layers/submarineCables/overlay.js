@@ -292,8 +292,14 @@ export function updateCableReferenceTip(
   return true;
 }
 
-export function updateCableReferenceStem(record, cameraPositionWC, canvasHeight, fov) {
-  if (!updateCableReferenceTip(record, cameraPositionWC, canvasHeight, fov)) return false;
+export function updateCableReferenceStem(
+  record,
+  cameraPositionWC,
+  canvasHeight,
+  fov,
+) {
+  if (!updateCableReferenceTip(record, cameraPositionWC, canvasHeight, fov))
+    return false;
   record.stemPositionBufferIndex = 1 - record.stemPositionBufferIndex;
   const stemPositions =
     record.stemPositionBuffers[record.stemPositionBufferIndex];

@@ -43,7 +43,11 @@ export function createApplicationDirectionsLayer({
   createNativeRenderer,
   groundFloor = ground,
 } = {}) {
-  return createDirectionsLayer({ services: { ...directionsServices, ground: groundFloor }, source, createNativeRenderer });
+  return createDirectionsLayer({
+    services: { ...directionsServices, ground: groundFloor },
+    source,
+    createNativeRenderer,
+  });
 }
 
 export {

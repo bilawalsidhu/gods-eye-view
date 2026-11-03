@@ -97,7 +97,8 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   earthquakes: createEarthquakesCesiumRenderer,
   'air-quality': (_engine, options) => createAirQualityCesiumRenderer(options),
   'gnss-integrity': (_engine, options) => createGnssCesiumRenderer(options),
-  'fire-perimeters': (_engine, options) => createPerimetersCesiumRenderer(options),
+  'fire-perimeters': (_engine, options) =>
+    createPerimetersCesiumRenderer(options),
   'local-firms': createFirmsCesiumRenderer,
   'rocket-launches': createLaunchesCesiumRenderer,
   satellites: createSatellitesCesiumRenderer,

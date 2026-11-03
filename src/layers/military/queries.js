@@ -383,7 +383,8 @@ export function createQueries({
         const trackedPos = isTracked
           ? parts.motion._trackedDisplayCached()
           : null; // cached, no recompute (anti-jitter)
-        const pos = trackedPos || bb?.position || parts.motion._deadReckon(icao24);
+        const pos =
+          trackedPos || bb?.position || parts.motion._deadReckon(icao24);
         if (!pos) continue;
 
         const distance = geo.cartesian3.distance(center, pos);

@@ -137,7 +137,9 @@ export function createLifecycle({
       document.removeEventListener('keydown', parts.selection._onKeyDown);
       unregisterPickOwner('bikeshare');
       if (layerState._cameraChangedAttached) {
-        viewer.camera.changed.removeEventListener(parts.viewport.onCameraChanged);
+        viewer.camera.changed.removeEventListener(
+          parts.viewport.onCameraChanged,
+        );
         releaseCameraSensitivity(viewer.camera, 'bikeshare');
         layerState._cameraChangedAttached = false;
       }

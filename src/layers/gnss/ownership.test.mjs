@@ -700,8 +700,14 @@ test('view anchor falls back to rectangle, then nadir, then no camera', () => {
 });
 
 test('an in-flight regional response supplies the next renderer without a new request', async () => {
-  let resolve, calls = 0;
-  const h = harness(() => { calls++; return new Promise(done => { resolve = done; }); });
+  let resolve,
+    calls = 0;
+  const h = harness(() => {
+    calls++;
+    return new Promise((done) => {
+      resolve = done;
+    });
+  });
   try {
     h.layer.enable();
     const pending = h.layer.update();

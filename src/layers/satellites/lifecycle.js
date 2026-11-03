@@ -73,22 +73,47 @@ export function createLifecycle({
     detachRenderer() {
       const renderer = layerState._renderer;
       if (!renderer) return;
-      layerState._waitForRenderer ??= new Promise(resolve => { layerState._resumeRenderer = resolve; });
+      layerState._waitForRenderer ??= new Promise((resolve) => {
+        layerState._resumeRenderer = resolve;
+      });
       layerState._clickHandler?.destroy();
       layerState._trackedEntityChangedRemove?.();
       layerState._preRenderListener?.();
-      layerState._clickHandler = layerState._trackedEntityChangedRemove = layerState._preRenderListener = null;
+      layerState._clickHandler =
+        layerState._trackedEntityChangedRemove =
+        layerState._preRenderListener =
+          null;
       document.removeEventListener('keydown', parts.interaction._onKeyDown);
       unregisterPickOwner('satellites');
       if (layerState._trackedEntity) {
-        layerState._handoffOrigin = layerState._trackedEntity.gevSelectionOrigin;
+        layerState._handoffOrigin =
+          layerState._trackedEntity.gevSelectionOrigin;
         renderer.follow.release();
         renderer.removeTracked(layerState._trackedEntity);
         layerState._trackedEntity = null;
       }
       for (const [id, point] of layerState._points) {
-        const {position, show, pixelSize, color, outlineColor, outlineWidth, scaleByDistance, disableDepthTestDistance} = point;
-        layerState._points.set(id, {id, position: {...position}, show, pixelSize, color, outlineColor, outlineWidth, scaleByDistance, disableDepthTestDistance});
+        const {
+          position,
+          show,
+          pixelSize,
+          color,
+          outlineColor,
+          outlineWidth,
+          scaleByDistance,
+          disableDepthTestDistance,
+        } = point;
+        layerState._points.set(id, {
+          id,
+          position: { ...position },
+          show,
+          pixelSize,
+          color,
+          outlineColor,
+          outlineWidth,
+          scaleByDistance,
+          disableDepthTestDistance,
+        });
       }
       for (const path of layerState._orbitPaths.values()) {
         renderer.removeOrbit(path.primitive);
@@ -97,23 +122,36 @@ export function createLifecycle({
       layerState._detectionObjects.clear();
       renderer.removePoints(layerState._pointCollection);
       renderer.destroy();
-      layerState._engine = layerState._viewer = layerState._renderer = layerState._pointCollection = null;
+      layerState._engine =
+        layerState._viewer =
+        layerState._renderer =
+        layerState._pointCollection =
+          null;
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
       if (layerState._enabled) releaseContinuousRender('satellites');
     },
 
-    attachRenderer(viewer, {engine = null, waitForCameraRestore = false} = {}) {
+    attachRenderer(
+      viewer,
+      { engine = null, waitForCameraRestore = false } = {},
+    ) {
       layerState._engine = engine;
-      const renderer = services.renderer.create({viewer,engine});
+      const renderer = services.renderer.create({ viewer, engine });
       layerState._renderer = renderer;
       layerState._viewer = renderer.view;
       layerState._pointCollection = renderer.createPoints();
       for (const [id, spec] of layerState._points)
         layerState._points.set(id, layerState._pointCollection.add(spec));
-      layerState._pointCollection.show = layerState._enabled && layerState._params.showPoints;
+      layerState._pointCollection.show =
+        layerState._enabled && layerState._params.showPoints;
       for (const [id, path] of layerState._orbitPaths) {
-        path.primitive = renderer.createOrbit({ positions: path.basePositions, width: id === ISS_NORAD ? 2.5 : 2, color: path.color });
-        path.primitive.show = layerState._enabled && layerState._params.showOrbits;
+        path.primitive = renderer.createOrbit({
+          positions: path.basePositions,
+          width: id === ISS_NORAD ? 2.5 : 2,
+          color: path.color,
+        });
+        path.primitive.show =
+          layerState._enabled && layerState._params.showOrbits;
       }
       // Source work can publish as soon as GPU collections exist. Restoring
       // share-selected camera state may itself wait for that publication.
@@ -129,7 +167,10 @@ export function createLifecycle({
       layerState._restoringViewport = false;
       if (layerState._enabled) {
         if (layerState._trackedNorad != null && !layerState._trackedEntity)
-          parts.tracking._trackSatellite(layerState._trackedNorad, {origin: layerState._handoffOrigin, resuming: true});
+          parts.tracking._trackSatellite(layerState._trackedNorad, {
+            origin: layerState._handoffOrigin,
+            resuming: true,
+          });
         this.enable(layerState._viewer);
       }
       layerState._resumeRenderer?.();
