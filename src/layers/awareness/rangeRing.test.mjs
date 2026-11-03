@@ -49,20 +49,30 @@ function luminance(color) {
  * test; `motion.set(on)` flips it later and tells its listeners, as the
  * browser does.
  */
-function ringRendering(t, { reducedMotion = false } = {}) {
+function ringRendering(t, { reducedMotion = false, legacyQuery = false } = {}) {
   const previous = globalThis.matchMedia;
   const listeners = new Set();
-  const query = {
-    get matches() {
-      return reducedMotion;
-    },
-    addEventListener(type, listener) {
-      if (type === 'change') listeners.add(listener);
-    },
-    removeEventListener(type, listener) {
-      if (type === 'change') listeners.delete(listener);
-    },
-  };
+  // `legacyQuery` is a MediaQueryList as Safari before 14 shipped it, with
+  // only addListener / removeListener.
+  const query = legacyQuery
+    ? {
+        get matches() {
+          return reducedMotion;
+        },
+        addListener: (listener) => listeners.add(listener),
+        removeListener: (listener) => listeners.delete(listener),
+      }
+    : {
+        get matches() {
+          return reducedMotion;
+        },
+        addEventListener(type, listener) {
+          if (type === 'change') listeners.add(listener);
+        },
+        removeEventListener(type, listener) {
+          if (type === 'change') listeners.delete(listener);
+        },
+      };
   globalThis.matchMedia = (media) =>
     media === '(prefers-reduced-motion: reduce)'
       ? query
@@ -689,6 +699,21 @@ test('turning reduced motion on mid-session stops the pulses, and off restarts t
   assert.ok(getAwarenessEchoField());
   // One media-query listener per visual; none once the ring is gone.
   assert.equal(motion.listeners(), 1);
+  rendering.clearVisual();
+  assert.equal(motion.listeners(), 0);
+});
+
+test('a reduced-motion change reaches older Safari through addListener', (t) => {
+  const { entities, scene, rendering, motion, state } = ringRendering(t, {
+    legacyQuery: true,
+  });
+  state.subject = flight(3);
+  rendering.renderVisual(state.subject);
+  assert.equal(scene.primitives.length, 1);
+  assert.equal(motion.listeners(), 1);
+  motion.set(true);
+  assert.equal(scene.primitives.length, 0);
+  assert.equal(entities.values[0].polyline.material.color.isConstant, true);
   rendering.clearVisual();
   assert.equal(motion.listeners(), 0);
 });

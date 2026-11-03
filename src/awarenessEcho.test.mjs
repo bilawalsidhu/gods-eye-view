@@ -45,7 +45,14 @@ test('an echo lights as a pulse front reaches the contact, then fades', () => {
 test('rim contacts fade out after the front wraps; outside the range never', () => {
   const rim = R * 0.999;
   assert.ok(strength(arrival(rim) + echo.fadeMs / 2, rim) > 0.2);
-  assert.ok(strength(pulse.periodMs * 5, 1000) > 0.99, 'inside the start ring');
+  // Inside the ring pulses are born on, nothing is ever crossed: the
+  // subject and anything within 5 km never echo, at any moment.
+  const inner = R * pulse.startFraction;
+  for (let ms = 0; ms < pulse.periodMs; ms += 10) {
+    assert.equal(strength(ms, 0), 0, 'the subject itself');
+    assert.equal(strength(ms, inner - 1), 0);
+  }
+  assert.ok(strength(pulse.periodMs * 5, inner) > 0.99, 'the birth ring');
   for (let ms = 0; ms < pulse.periodMs; ms += 50)
     assert.equal(strength(ms, R + 1), 0);
   assert.equal(strength(0, Number.NaN), 0);
@@ -74,9 +81,12 @@ test('awarenessEchoAt reads the published field, by layer, at ground level', (t)
         awarenessEchoAt('flights', contact, t0 + 300),
     ) < 0.01,
   );
-  // The field's centre is read in place, so a moved subject moves the echo.
-  Cesium.Cartesian3.clone(contact, center);
-  assert.ok(awarenessEchoAt('flights', contact, pulse.periodMs * 7) > 0.99);
+  // The field's centre is read in place, so a moved subject moves the echo:
+  // about 50 km farther, the contact lights at its new distance's moment.
+  Cesium.Cartesian3.clone(Cesium.Cartesian3.fromDegrees(3.5, 26.1, 0), center);
+  const moved = Cesium.Cartesian3.distance(center, contact);
+  assert.ok(Math.abs(moved - d) > 1000);
+  assert.ok(awarenessEchoAt('flights', contact, arrival(moved)) > 0.99);
   assert.equal(awarenessEchoAt('flights', null, t0), 0);
   clearAwarenessEchoField();
   assert.equal(getAwarenessEchoField(), null);
@@ -106,4 +116,20 @@ test('echoes scale with the field level and rest with the pulses', (t) => {
   );
   level = 0;
   assert.equal(awarenessEchoAt('flights', contact, t0), 0);
+});
+
+test('near the subject an echo is no brighter than the fading-in front', () => {
+  const fading = { ...pulse, fadeInFraction: 0.08 };
+  const at = (distanceM) =>
+    awarenessEchoStrength(arrival(distanceM), distanceM, R, fading, echo);
+  // Born at 5 km, the front reaches full strength 8% of the way out.
+  const full = R * (fading.startFraction + 0.08 * (1 - fading.startFraction));
+  assert.equal(at(R * fading.startFraction), 0);
+  const halfway = (R * fading.startFraction + full) / 2;
+  assert.ok(Math.abs(at(halfway) - 0.5) < 0.01, `${at(halfway)}`);
+  assert.ok(at(full + 1) > 0.99);
+  assert.ok(
+    at(R * 0.999) > 0.99,
+    'the rim, and so the ring flash, is unchanged',
+  );
 });

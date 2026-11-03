@@ -24,6 +24,10 @@ import {
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
 import { DETECTION_THEME_MAP } from '../overlays/worldOverlayTokens.js';
+import {
+  clearAwarenessEchoField,
+  setAwarenessEchoField,
+} from '../awarenessEcho.js';
 import { composeLabel, resolveTier } from './detectionDraw.js';
 
 test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
@@ -623,6 +627,54 @@ test('surveillance military tier reaches the dedicated render target as shipped 
     assert.ok(env.detectionCtx.calls.some(([name, path]) => name === 'stroke'
       && path instanceof MockPath2D));
   } finally {
+    env.cleanup();
+  }
+});
+
+test('Global Context echo brackets reach the canvas in the detection style colour', () => {
+  const env = installEnvironment();
+  // Fronts every millisecond with a long fade, so the contact is lit on
+  // whatever frame paints; a distinctive width picks the echo stroke out.
+  const echo = {
+    layerIds: ['military'],
+    fadeMs: 60_000,
+    color: 'rgb(1, 2, 3)',
+    spreadPx: 8,
+    lineWidth: 3.25,
+  };
+  const echoStrokes = () =>
+    env.detectionCtx.calls
+      .filter(([name, , , width]) => name === 'stroke' && width === echo.lineWidth)
+      .map(([, , style]) => style);
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo,
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [militaryLayer()], () => {});
+    setMode('DENSE');
+    setDetectionStyle('normal');
+    settleFrame(env);
+    assert.ok(echoStrokes().length > 0, 'the echo bracket is painted');
+    assert.ok(echoStrokes().every((style) => style === echo.color));
+
+    // CRT, NVG and FLIR keep their own palettes.
+    for (const style of ['retro', 'surveillance', 'thermal']) {
+      env.detectionCtx.calls.length = 0;
+      setDetectionStyle(style);
+      settleFrame(env);
+      const strokes = echoStrokes();
+      assert.ok(strokes.length > 0, style);
+      assert.ok(
+        strokes.every((stroke) => stroke === DETECTION_THEME_MAP[style].line),
+        `${style} echoes take the style line colour, got ${strokes}`,
+      );
+    }
+  } finally {
+    clearAwarenessEchoField();
     env.cleanup();
   }
 });

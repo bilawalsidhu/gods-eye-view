@@ -758,7 +758,10 @@ export function createRendering({
     const onMotionChange = () => {
       if (layerState.subject) renderVisual(layerState.subject);
     };
-    motionQuery?.addEventListener?.('change', onMotionChange);
+    // Safari before 14 has only the older addListener / removeListener.
+    if (motionQuery?.addEventListener)
+      motionQuery.addEventListener('change', onMotionChange);
+    else motionQuery?.addListener?.(onMotionChange);
 
     layerState.visual = {
       key,
@@ -770,8 +773,11 @@ export function createRendering({
       reducedMotion,
       wake,
       stopPulses,
-      removeMotionListener: () =>
-        motionQuery?.removeEventListener?.('change', onMotionChange),
+      removeMotionListener: () => {
+        if (motionQuery?.removeEventListener)
+          motionQuery.removeEventListener('change', onMotionChange);
+        else motionQuery?.removeListener?.(onMotionChange);
+      },
     };
     governorRequestRender('awareness-visual');
   }

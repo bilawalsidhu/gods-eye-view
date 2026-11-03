@@ -13,7 +13,7 @@ import * as Cesium from 'cesium';
  * @property {Cesium.Cartesian3} center Subject's ground point. The publisher
  *   may move it in place; it is read on every query.
  * @property {number} radiusM Range the pulses grow to.
- * @property {{count: number, periodMs: number, startFraction: number}} pulse
+ * @property {{count: number, periodMs: number, startFraction: number, fadeInFraction?: number}} pulse
  * @property {{fadeMs: number, layerIds: string[]}} echo
  * @property {(nowMs: number) => number} [level] How far the pulses are
  *   switched on, 0 to 1; echoes scale with it, so they rest with the pulses.
@@ -50,22 +50,27 @@ export function getAwarenessEchoField() {
  * its distance, fading as (1 - elapsed / `fadeMs`) squared, 0 otherwise. The
  * strongest pulse wins. A front that has wrapped back to the centre still
  * counts for the contact it last crossed, so rim contacts fade out instead of
- * cutting off.
+ * cutting off. Nothing nearer than the birth ring `startFraction` out echoes,
+ * and within the pulse's `fadeInFraction` the echo is scaled down with it.
  * @param {number} nowMs Monotonic clock in milliseconds.
  * @param {number} distanceM Contact's distance from the subject.
  * @param {number} radiusM Range the pulses grow to.
- * @param {{count: number, periodMs: number, startFraction: number}} pulse
+ * @param {{count: number, periodMs: number, startFraction: number, fadeInFraction?: number}} pulse
  * @param {{fadeMs: number}} echo
  * @returns {number} 0 to 1.
  */
 export function awarenessEchoStrength(nowMs, distanceM, radiusM, pulse, echo) {
-  if (!Number.isFinite(distanceM) || distanceM < 0 || distanceM > radiusM)
+  // Pulses are born `startFraction` out, so nothing nearer (the subject
+  // itself, its wingmen) is ever crossed; without this it lit on every birth.
+  if (
+    !Number.isFinite(distanceM) ||
+    distanceM < radiusM * pulse.startFraction ||
+    distanceM > radiusM
+  )
     return 0;
   // The phase at which a pulse front sits at this distance.
-  const touchPhase = Math.max(
-    0,
-    (distanceM / radiusM - pulse.startFraction) / (1 - pulse.startFraction),
-  );
+  const touchPhase =
+    (distanceM / radiusM - pulse.startFraction) / (1 - pulse.startFraction);
   let strength = 0;
   for (let index = 0; index < pulse.count; index++) {
     const cycle = nowMs / pulse.periodMs + index / pulse.count;
@@ -77,7 +82,10 @@ export function awarenessEchoStrength(nowMs, distanceM, radiusM, pulse, echo) {
     if (elapsedMs < echo.fadeMs)
       strength = Math.max(strength, (1 - elapsedMs / echo.fadeMs) ** 2);
   }
-  return strength;
+  // A front still fading in over `fadeInFraction` of its travel echoes no
+  // brighter than it shows.
+  const fadeIn = pulse.fadeInFraction ?? 0;
+  return fadeIn > 0 ? strength * Math.min(1, touchPhase / fadeIn) : strength;
 }
 
 /**
