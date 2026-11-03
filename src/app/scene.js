@@ -112,8 +112,10 @@ async function createRenderer({
 }) {
   // The Navara mode's own code loads only in that mode, with Navara itself,
   // so the Cesium-mode bundle carries none of it.
-  if (engineKind === 'navara')
-    return (await import('./navaraMode.js')).createNavaraScene({
+  if (engineKind === 'navara') {
+    const scene = await (
+      await import('./navaraMode.js')
+    ).createNavaraScene({
       container,
       cesiumToken,
       credits,
@@ -124,6 +126,17 @@ async function createRenderer({
       signal,
       defer,
     });
+    // As the Cesium scene below: a parked or released engine keeps no camera
+    // verb running on it (a Directions flight is parked before this).
+    const { engine } = scene;
+    defer(() => releaseCameraVerbs(engine));
+    const suspend = scene.suspend;
+    scene.suspend = () => {
+      releaseCameraVerbs(engine);
+      suspend();
+    };
+    return scene;
+  }
   if (engineKind !== 'cesium')
     throw new TypeError(`Unknown globe engine: ${engineKind}`);
   loaderStatus.textContent = t('Configuring viewer...');
@@ -228,6 +241,7 @@ async function createRenderer({
       uninstallRenderGovernor(viewer);
       engine.camera.cancelFlight();
       releaseCameraVerbs(viewer);
+      releaseCameraVerbs(engine);
       viewer.useDefaultRenderLoop = false;
     },
     resume() {
