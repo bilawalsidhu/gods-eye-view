@@ -221,18 +221,18 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       report.firstRoundTrip = await listenerCounts(page, { bySource: true });
     }
-    if (kind === 'cesium')
-      await page.waitForFunction(
-        () => window.__gevGeoImport.diagnostics().drawn === 1,
-        { timeout: 30_000 },
-      );
+    // Both engines draw the session's marks and files (Navara since Stage 6).
+    await page.waitForFunction(
+      () => window.__gevGeoImport.diagnostics().drawn === 1,
+      { timeout: 30_000 },
+    );
     const tools = await readTools(page);
     check(
       tools.marks === toolsBefore.marks &&
         tools.files === toolsBefore.files &&
         tools.drawShape === toolsBefore.drawShape &&
-        tools.marksDrawn === (kind === 'cesium') &&
-        tools.filesDrawn === (kind === 'cesium' ? 1 : 0),
+        tools.marksDrawn === true &&
+        tools.filesDrawn === 1,
       `the session tools changed on the switch to ${kind}`,
       { toolsBefore, tools },
     );
