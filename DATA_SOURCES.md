@@ -461,3 +461,29 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+## Chester County, Pennsylvania incidents
+
+Chester County DES [WebCAD](https://www.chesco.org/3963/WebCad-Active-Incidents)
+supplies public Fire, EMS and Traffic summaries every 60 seconds. © Chester
+County; no open redistribution license identified for incident records.
+[County copyright](https://www.chesco.org/copyright).
+
+Approximate intersections are derived from county [Road Centerlines](https://services.arcgis.com/G4S1dGvn7PIgYd6Y/arcgis/rest/services/Road_Centerlines/FeatureServer/0);
+numbered addresses use [Site Address Points](https://services.arcgis.com/G4S1dGvn7PIgYd6Y/arcgis/rest/services/Site_Address_Points/FeatureServer/0).
+The road [item metadata](https://www.arcgis.com/sharing/rest/content/items/bfdabcd1cdd545e5b7d3a6993dd2b8b5?f=pjson)
+and address [item metadata](https://www.arcgis.com/sharing/rest/content/items/37aa8563d1fb415db286f06198b0140d?f=pjson)
+link CC BY-NC-SA 3.0. Derived locations are approximate; road abbreviation
+normalization and nearby junction-node clustering are the modifications.
+Attribution: © Chester County GIS, CC BY-NC-SA 3.0. These datasets and derivatives
+are not covered by the code's MIT license. Runtime memory cache only; no source
+records or GIS geometry are bundled. Observe the noncommercial/share-alike terms
+and obtain appropriate permission for any incident-data redistribution.
+See `docs/CHESTER-COUNTY-EMS.md`.
+
+County [Common Place](https://services.arcgis.com/G4S1dGvn7PIgYd6Y/arcgis/rest/services/Common_Place/FeatureServer/1)
+provides approximate named-place positions from primary, nonsensitive records.
+© Chester County GIS; [item metadata](https://www.arcgis.com/sharing/rest/content/items/f4fbc771e67a4ce7be14d538c2af8571?f=pjson)
+has no open license identified. It is not covered by the road/address CC license
+or the code MIT license. Runtime only; no source records are bundled. A documented
+Tredyffrin junction name correction is an additional road matching modification.

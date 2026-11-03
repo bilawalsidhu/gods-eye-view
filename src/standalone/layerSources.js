@@ -1,3 +1,4 @@
+import { createChesterCountyEmsSource } from '../layers/chesterCountyEms/source.js';
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createRecentImagerySource } from '../layers/recentImagery/source.js';
 import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
@@ -39,6 +40,7 @@ export function createStandaloneLayerSources(
   });
   const defaults = {
     ...createReferenceSources(),
+    'chester-county-ems': createChesterCountyEmsSource(),
     directions: createDirectionsSource(),
     'recent-imagery': createRecentImagerySource(),
     flights: createFlightSource(),

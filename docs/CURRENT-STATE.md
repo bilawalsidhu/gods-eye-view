@@ -6691,3 +6691,24 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+## Chester County incidents
+
+The Events group includes an off-by-default **Chester County, PA incidents**
+layer. It reads Fire, EMS and Traffic tables from public WebCAD through the
+`/api/chester-county-ems` endpoint every 60 seconds while enabled.
+County road-centerline junctions resolve reported intersections; county address
+points resolve numbered addresses. Map labels preserve the source location and
+say approximate intersection/address. Flame, red-cross and siren billboards
+identify fire, EMS and traffic. Unresolved or ambiguous reports stay listed
+without a marker or municipality-center fallback. Successful empty
+snapshots clear reports and failures retain last-good data marked stale.
+All sources load at runtime into memory, with bounded county GIS lookups and
+no incident archive. The layer id is `chester-county-ems` and share token `8` stores only enabled state. See `docs/CHESTER-COUNTY-EMS.md` for matching limits and source terms.
+
+County incident health separates successful unmatched locations from GIS failures.
+Coverage counts expose mapped, unresolved and lookup-error totals; only actual
+lookup failures degrade a fresh feed. WebCAD retries transient failures once.
+County Common Place provides approximate named-place positions, and a documented
+Tredyffrin-only junction alias resolves Valley Forge/Yellow Springs using the
+GIS Valley Creek road name. Original reports and approximate labels are retained.
