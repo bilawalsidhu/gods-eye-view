@@ -1204,6 +1204,23 @@ test('a follow-up on handed-off places keeps the area they were found in', async
   assert.equal(result.coverage.scope, 'area:area-1');
 });
 
+test('a follow-up on a capped handed-off set is not complete', async () => {
+  const rows = [
+    { id: 'node/1', lat: 27.7, lon: 85.3, name: 'Bir Hospital', kind: 'hospital', emergency: 'yes' },
+  ];
+  const engine = createAnalystEngine({
+    getRecords: (key) => (key === 'osm-places' ? rows : []),
+    resolveRegionRing: async () => null,
+    getViewContext: () => ({ lat: 27.7, lon: 85.3, viewRadiusKm: 20 }),
+  });
+  engine.remember('osm-places', rows, { truncated: true });
+  const result = await engine.query({ layers: ['osm-places'], followUp: true });
+  assert.equal(result.count, 1);
+  assert.equal(result.complete, false);
+  assert.equal(result.coverage.records.truncated, true);
+  assert.equal(result.coverage.records.total, null, 'the true size is unknown');
+});
+
 test('a slow scan yields on a time budget, not only every 20,000 rows', async () => {
   // 4,000 rows that each cost ~0.05 ms to read: ~200 ms of work in one slice
   // under a row-count budget alone.

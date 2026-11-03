@@ -8,6 +8,7 @@ import { boxDeg2, osmQuery } from './osmActions.js';
 import { matchOsmPreset, OSM_PRESET_IDS } from '../data/osmPresets.js';
 import { createAreaStore } from '../data/areaStore.js';
 import { dedupeOsmRecords, mapOsmFeature } from '../layers/osmPlaces/model.js';
+import { createAnalystEngine } from '../data/analystEngine.js';
 
 const square = (w, s, e, n) => [
   [w, s],
@@ -344,6 +345,51 @@ test('a truncated list reports at least N', async () => {
   });
   assert.equal(result.complete, false);
   assert.match(result.say, /^At least 1 hospital in Kathmandu/);
+});
+
+test('a capped list stays incomplete through analyst follow-ups', async () => {
+  // Wired as gevActions wires it: the listed places become the last answer.
+  const run = async (truncated) => {
+    const { value } = deps({
+      answer: { ok: true, features: FEATURES.slice(2, 3), truncated },
+    });
+    const records = [];
+    const engine = createAnalystEngine({
+      getRecords: (key) => (key === 'osm-places' ? records : []),
+      resolveRegionRing: async () => null,
+      getViewContext: () => ({ lat: 27.7, lon: 85.3, viewRadiusKm: 20 }),
+    });
+    value.rememberResults = (rows, presentation, options) => {
+      records.splice(0, records.length, ...rows);
+      engine.remember('osm-places', rows, { presentation, ...options });
+    };
+    const first = await osmQuery(value, {
+      what: 'hospitals',
+      areaId: 'osm:r1',
+      limit: 1,
+    });
+    const followUp = await engine.query({
+      layers: ['osm-places'],
+      followUp: true,
+      filters: [{ field: 'emergency', op: 'eq', value: 'yes' }],
+    });
+    // And a follow-up of the follow-up.
+    const again = await engine.query({ layers: ['osm-places'], followUp: true });
+    return { first, followUp, again };
+  };
+  const capped = await run(true);
+  assert.equal(capped.first.complete, false);
+  assert.equal(capped.followUp.ok, true);
+  assert.equal(capped.followUp.count, 1);
+  assert.equal(capped.followUp.complete, false, 'the count is a floor');
+  assert.equal(capped.followUp.display.caveat, 'listed the first 1; there are more');
+  assert.equal(capped.followUp.scopeLabel, 'inside Kathmandu');
+  assert.equal(capped.again.complete, false);
+  assert.equal(capped.again.display.caveat, 'listed the first 1; there are more');
+
+  const whole = await run(false);
+  assert.equal(whole.first.complete, true);
+  assert.equal(whole.followUp.complete, true);
 });
 
 test('spoken kinds map to curated presets', () => {

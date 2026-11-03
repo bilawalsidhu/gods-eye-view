@@ -1182,12 +1182,21 @@ export function createAnalystEngine(providers) {
      * so a follow-up filters exactly what the user just heard about.
      * @param {string} layerKey Queryable layer the rows belong to.
      * @param {Array<object>} rows Records in that layer's analyst shape.
-     * @param {{scope?: string, presentation?: object|null}} [options]
+     * @param {{scope?: string, presentation?: object|null, truncated?: boolean}} [options]
      *   `presentation` is how the set was scoped ("inside Kathmandu"), so a
-     *   follow-up names the same scope instead of "anywhere".
+     *   follow-up names the same scope instead of "anywhere". `truncated`
+     *   says the set is only the first part of a larger one, so follow-ups
+     *   stay incomplete (a count is a floor) rather than claiming the whole.
      */
-    remember(layerKey, rows, { scope = 'handoff', presentation = null } = {}) {
+    remember(
+      layerKey,
+      rows,
+      { scope = 'handoff', presentation = null, truncated = false } = {},
+    ) {
       if (!ANALYST_LAYERS[layerKey] || !Array.isArray(rows)) return false;
+      const capped = truncated === true;
+      // A capped set's true size is unknown.
+      const total = capped ? null : rows.length;
       lastResult = {
         ...(presentation
           ? { presentation: structuredClone(presentation) }
@@ -1200,14 +1209,14 @@ export function createAnalystEngine(providers) {
               layerKey,
               status: rows.length ? 'ok' : 'empty',
               returned: rows.length,
-              total: rows.length,
-              truncated: false,
+              total,
+              truncated: capped,
             },
           ],
           records: {
             returned: rows.length,
-            total: rows.length,
-            truncated: false,
+            total,
+            truncated: capped,
           },
           scope,
           followUp: false,

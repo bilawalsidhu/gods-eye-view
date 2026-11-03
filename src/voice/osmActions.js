@@ -71,9 +71,9 @@ const EXAMPLES = Object.values(OSM_PRESETS)
  * @param {(enabled: boolean) => Promise<object>} deps.enableLayer
  * @param {Function} deps.search `/api/osm/features` client.
  * @param {() => void} [deps.onCredit] Registers the OpenStreetMap credit.
- * @param {(rows: object[]|null, presentation?: object) => void} [deps.rememberResults]
- *   Hands the listed places, and the scope they were found in, to analyst
- *   follow-ups; null forgets the previous set.
+ * @param {(rows: object[]|null, presentation?: object, options?: {truncated: boolean}) => void} [deps.rememberResults]
+ *   Hands the listed places, the scope they were found in and whether the
+ *   list was capped to analyst follow-ups; null forgets the previous set.
  * @param {(step: string, label?: string) => void} [deps.progress]
  * @param {object} args
  * @param {{isCurrent?: () => boolean, budgetMs?: number, signal?: AbortSignal}} [options]
@@ -266,15 +266,21 @@ export async function osmQuery(
     // These places are now "the last answer": follow-ups filter them and
     // "the second one" is the second row below. A follow-up keeps naming the
     // area they were found in, as an analyst count over that area would.
+    // A capped list stays capped: follow-ups count a floor, with the caveat.
+    const cappedCaveat = `listed the first ${limit}; there are more`;
     rememberResults(
       records,
-      area
-        ? {
-            scopeLabel: `inside ${areaName}`,
-            coverageScope: `area:${args.areaId}`,
-            areaId: args.areaId,
-          }
-        : { scopeLabel: 'in view', coverageScope: 'view' },
+      {
+        ...(area
+          ? {
+              scopeLabel: `inside ${areaName}`,
+              coverageScope: `area:${args.areaId}`,
+              areaId: args.areaId,
+            }
+          : { scopeLabel: 'in view', coverageScope: 'view' }),
+        ...(complete ? {} : { display: { caveat: cappedCaveat } }),
+      },
+      { truncated: !complete },
     );
     const unnamed = `unnamed ${singularLabel(preset.label)}`;
     const referents = [
@@ -309,7 +315,7 @@ export async function osmQuery(
         ...(merged ? { merged: `${merged} duplicate mappings merged` } : {}),
         caveat: complete
           ? 'OpenStreetMap coverage varies by place'
-          : `listed the first ${limit}; there are more`,
+          : cappedCaveat,
       },
     };
   } finally {
