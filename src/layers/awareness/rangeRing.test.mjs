@@ -706,6 +706,89 @@ test('a long drag or touch keeps the pulses awake after it leaves the canvas', (
   assert.equal(ring.state.lastCameraInputMs, noted);
 });
 
+test('lifting one finger of a pinch leaves the other finger counting', (t) => {
+  const ring = ringRendering(t);
+  const { inputWakeMs } = AWARENESS_RANGE_PULSE;
+  const { dispatch, pan, pulsing, loop } = inputLifecycle(t, ring);
+  const onDocument = (type, init = {}) =>
+    document.dispatchEvent(Object.assign(new Event(type), init));
+  // Cesium carries on with a one-finger drag after the other lifts.
+  const dragOn = (move, init) => {
+    for (let ms = 0; ms < inputWakeMs + 1000; ms += 250) {
+      loop.advance(250);
+      onDocument(move, init);
+    }
+    pan();
+    return pulsing();
+  };
+  // Without pointer events: the touch list says who is still down.
+  dispatch('touchstart');
+  onDocument('touchend', { touches: [{}] });
+  assert.equal(dragOn('touchmove', {}), true, 'touch: one finger left');
+  onDocument('touchend', { touches: [] });
+  assert.equal(dragOn('touchmove', {}), false, 'touch: all lifted');
+  // With pointer events: each contact has its own pointer id.
+  dispatch('pointerdown', { pointerId: 1 });
+  dispatch('pointerdown', { pointerId: 2 });
+  onDocument('pointerup', { pointerId: 1 });
+  const drag = { pointerId: 2, buttons: 1 };
+  assert.equal(dragOn('pointermove', drag), true, 'pointer: one left');
+  onDocument('pointercancel', { pointerId: 2 });
+  assert.equal(dragOn('pointermove', drag), false, 'pointer: all lifted');
+});
+
+test('a gesture lost to a window blur or a hidden page stops counting', (t) => {
+  const ring = ringRendering(t);
+  const { inputWakeMs } = AWARENESS_RANGE_PULSE;
+  const { dispatch, pan, pulsing, loop } = inputLifecycle(t, ring);
+  const visibility = Object.getOwnPropertyDescriptor(
+    document,
+    'visibilityState',
+  );
+  t.after(() => {
+    if (visibility)
+      Object.defineProperty(document, 'visibilityState', visibility);
+    else delete document.visibilityState;
+  });
+  const setVisibility = (value) =>
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => value,
+    });
+  for (const [name, lose] of [
+    ['blur', () => window.dispatchEvent(new Event('blur'))],
+    [
+      'hidden',
+      () => {
+        setVisibility('hidden');
+        document.dispatchEvent(new Event('visibilitychange'));
+        setVisibility('visible');
+      },
+    ],
+  ]) {
+    // The release happens outside the window, so no end ever arrives.
+    dispatch('pointerdown', { pointerId: 1 });
+    lose();
+    pan();
+    assert.equal(pulsing(), false, `${name}: pending input dropped`);
+    loop.advance(inputWakeMs + 100);
+    const noted = ring.state.lastCameraInputMs;
+    document.dispatchEvent(
+      Object.assign(new Event('pointermove'), { pointerId: 1, buttons: 1 }),
+    );
+    assert.equal(ring.state.lastCameraInputMs, noted, `${name}: no follow`);
+  }
+  // A page coming back into view is no reason to drop a gesture.
+  dispatch('pointerdown', { pointerId: 1 });
+  document.dispatchEvent(new Event('visibilitychange'));
+  loop.advance(inputWakeMs + 100);
+  document.dispatchEvent(
+    Object.assign(new Event('pointermove'), { pointerId: 1, buttons: 1 }),
+  );
+  pan();
+  assert.equal(pulsing(), true, 'visible: still following');
+});
+
 test('disabling the layer tears the pulses down completely', (t) => {
   const ring = ringRendering(t);
   const { state, scene, rendering, motion, pulseFrames } = ring;

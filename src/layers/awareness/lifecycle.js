@@ -23,6 +23,7 @@ export function createLifecycle({
     if (event?.type === 'pointermove' && !event.buttons) return;
     if (!cameraInputsEnabled()) return;
     layerState.lastCameraInputMs = Date.now();
+    if (event?.type === 'pointerdown') activePointers.add(event.pointerId);
     if (event?.type === 'pointerdown' || event?.type === 'touchstart')
       followGesture(true);
   }
@@ -39,20 +40,40 @@ export function createLifecycle({
     'touchcancel',
   ];
   let followingGesture = false;
+  const activePointers = new Set();
 
   function followGesture(on) {
     if (followingGesture === on) return;
     followingGesture = on;
+    if (!on) activePointers.clear();
     const listen = on ? 'addEventListener' : 'removeEventListener';
     for (const type of GESTURE_MOVE_EVENTS)
       globalThis.document?.[listen]?.(type, noteCameraInput, { passive: true });
     for (const type of GESTURE_END_EVENTS)
       globalThis.document?.[listen]?.(type, endGesture, { passive: true });
+    globalThis[listen]?.('blur', dropGesture);
+    globalThis.document?.[listen]?.('visibilitychange', dropGesture);
   }
 
+  // A gesture ends with its last contact: lifting one finger of a pinch
+  // leaves Cesium a one-finger drag.
   function endGesture(event) {
     noteCameraInput(event);
+    activePointers.delete(event?.pointerId);
+    if (activePointers.size || event?.touches?.length) return;
     followGesture(false);
+  }
+
+  // Losing the window or the page mid-gesture means its end may never
+  // arrive here, so stop following it and drop its pending input.
+  function dropGesture(event) {
+    if (
+      event?.type === 'visibilitychange' &&
+      document.visibilityState !== 'hidden'
+    )
+      return;
+    followGesture(false);
+    layerState.lastCameraInputMs = Number.NEGATIVE_INFINITY;
   }
 
   function cameraInputsEnabled() {
