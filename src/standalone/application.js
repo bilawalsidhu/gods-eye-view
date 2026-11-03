@@ -136,7 +136,12 @@ export function createStandaloneApplication({
         catalog,
       }),
     createData: (context) =>
-      createStandaloneData({ ...context, allowQaRegistration, catalog, layerSession }),
+      createStandaloneData({
+        ...context,
+        allowQaRegistration,
+        catalog,
+        layerSession,
+      }),
     createTools: async (context) => {
       const tools = await createStandaloneTools({
         ...context,

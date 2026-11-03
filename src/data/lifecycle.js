@@ -152,9 +152,13 @@ export class LayerLifecycle {
       const entry = this.layers.get(layer.id);
       if (!entry) this.register(layer);
       else {
-        if (entry.module !== layer) throw new Error(`Layer owner changed: ${layer.id}`);
+        if (entry.module !== layer)
+          throw new Error(`Layer owner changed: ${layer.id}`);
         if (entry.initialized) {
-          const ready = layer.attachRenderer(viewer, { ...this._moduleContext(), ...options });
+          const ready = layer.attachRenderer(viewer, {
+            ...this._moduleContext(),
+            ...options,
+          });
           if (ready?.then) attachments.push(ready);
         }
       }
