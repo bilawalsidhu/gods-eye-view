@@ -31,7 +31,12 @@ const feature = (id = 'fire') => ({
 });
 function install(options = {}, hook = 'configureServer') {
   let handler;
-  const plugin = firePerimetersProxy(options);
+  // AU bushfire feeds are stubbed empty here; auFireWarnings.test.mjs and the
+  // merge test below cover them against their own fixtures.
+  const plugin = firePerimetersProxy({
+    fetchAuFire: async () => [],
+    ...options,
+  });
   assert.equal(typeof plugin.configureServer, 'function');
   assert.equal(typeof plugin.configurePreviewServer, 'function');
   plugin[hook]({
@@ -407,4 +412,41 @@ test('publication HTML streams are capped at 2 MiB', async () => {
   });
   assert.equal((await request('/inciweb/publication/42')).status, 502);
   assert.equal(cancelled, true);
+});
+
+test('AU warning rows merge into the perimeter snapshot after WFIGS rows', async () => {
+  const auRow = {
+    stableId: 'qld:WARN-1',
+    state: 'QLD',
+    polygons: [
+      [
+        [-108, 35],
+        [-107, 35],
+        [-107, 36],
+        [-108, 35],
+      ],
+    ],
+  };
+  const request = install({
+    fetchAuFire: async () => [auRow],
+    fetchImpl: async () => Response.json({ features: [feature()] }),
+  });
+  const res = await request();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.rows.length, 2);
+  assert.equal(res.body.rows[0].stableId, 'fire');
+  assert.equal(res.body.rows[1].stableId, 'qld:WARN-1');
+});
+
+test('a failing AU fetch never blanks or blocks the WFIGS snapshot', async () => {
+  const request = install({
+    fetchAuFire: async () => {
+      throw new Error('au feed down');
+    },
+    fetchImpl: async () => Response.json({ features: [feature()] }),
+  });
+  const res = await request();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.rows.length, 1);
+  assert.equal(res.body.rows[0].stableId, 'fire');
 });

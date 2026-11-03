@@ -45,6 +45,8 @@ test('a truncated response pages until the feed is complete', async () => {
   const requests = [];
   let handler;
   const plugin = firePerimetersProxy({
+    // AU feeds are covered by auFireWarnings.test.mjs; stub them empty here.
+    fetchAuFire: async () => [],
     fetchImpl: async (url) => {
       requests.push(new URL(String(url)).searchParams.get('resultOffset'));
       const page = requests.length;
