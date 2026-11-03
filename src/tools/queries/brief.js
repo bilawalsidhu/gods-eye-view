@@ -4,6 +4,7 @@ import { suggestView } from '../views.js';
 import {
   feedProvenanceEnvelope,
   hudSummaryMatchesProvenance,
+  provenanceLine,
   provenanceTag,
 } from '../../data/layerSnapshot.js';
 import { defineTool, ToolError } from '../catalog.js';
@@ -258,15 +259,12 @@ export const getHudCaption = defineTool({
       throw new ToolError('unavailable', 'The caption service did not answer');
     // As on the HUD: the app's own state leads and its layers trail, and a
     // reply that names another state than the app's keeps only the place.
-    const tag = provenanceTag(feedProvenance);
-    const text = hudSummaryMatchesProvenance(response.data, feedProvenance)
-      ? words
-      : area.label;
-    const caption = tag
-      ? [tag.state.toUpperCase(), text, tag.names.join('/').toUpperCase()]
-          .filter(Boolean)
-          .join(' | ')
-      : text;
+    const caption = provenanceLine(
+      hudSummaryMatchesProvenance(response.data, feedProvenance)
+        ? words
+        : area.label,
+      provenanceTag(feedProvenance),
+    );
     return {
       summary: caption,
       data: {

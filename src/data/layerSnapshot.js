@@ -274,12 +274,34 @@ export function provenanceTag(envelope) {
     )
     .sort(
       (a, b) =>
-        (FEED_STATE_SEVERITY[a.feedState] ?? Infinity) -
-        (FEED_STATE_SEVERITY[b.feedState] ?? Infinity),
+        FEED_STATE_SEVERITY[a.feedState] - FEED_STATE_SEVERITY[b.feedState],
     )
     .map((s) => String(s.name || s.id || 'LAYER'))
     .slice(0, 2);
   return { state: overall, names };
+}
+
+const upperCase = (word) => word.toUpperCase();
+
+/**
+ * `STATE | text | LAYERS`: the state leads so a narrow readout never clips
+ * it; the layer names trail so they never push out the text.
+ * @param {string} text
+ * @param {{ state: string, names: string[] }|null} tag From `provenanceTag`.
+ * @param {(state: string) => string} [stateLabel]
+ * @param {(name: string) => string} [layerLabel]
+ * @returns {string}
+ */
+export function provenanceLine(
+  text,
+  tag,
+  stateLabel = upperCase,
+  layerLabel = upperCase,
+) {
+  if (!tag) return text;
+  return [stateLabel(tag.state), text, tag.names.map(layerLabel).join('/')]
+    .filter(Boolean)
+    .join(' | ');
 }
 
 /**

@@ -35,12 +35,15 @@ import {
   hasWord,
   hudSummaryHasEnglish,
   hudSummaryIsLatin,
-  hudSummaryMatchesProvenance,
   hudSummaryLayerContext,
   hudTelemetryProvenance,
   isHudSummaryUnconfigured,
-  provenanceTag,
 } from './hudSummaryResponse.js';
+import {
+  hudSummaryMatchesProvenance,
+  provenanceLine,
+  provenanceTag,
+} from './data/layerSnapshot.js';
 import {
   applyHudUiTheme,
   DEFAULT_HUD_LAYOUT,
@@ -119,20 +122,17 @@ const FEED_STATE_LABELS = Object.freeze({
   unavailable: msg('UNAVAILABLE'),
 });
 
-/**
- * A summary line with its translated warning:
- * `UNAVAILABLE | <text> | LIVE AIS VESSELS`. The state leads so a narrow
- * readout never clips it; the layer names trail so they never push out the text.
- */
+/** A summary line with its warning in the active language. */
 function withProvenance(text, provenance) {
-  if (!provenance) return text;
-  const state = FEED_STATE_LABELS[provenance.state]
-    ? t(FEED_STATE_LABELS[provenance.state])
-    : provenance.state.toUpperCase();
-  const layers = provenance.names
-    .map((name) => localizeLayerName(name).toUpperCase())
-    .join('/');
-  return [state, text, layers].filter(Boolean).join(' | ');
+  return provenanceLine(
+    text,
+    provenance,
+    (state) =>
+      FEED_STATE_LABELS[state]
+        ? t(FEED_STATE_LABELS[state])
+        : state.toUpperCase(),
+    (name) => localizeLayerName(name).toUpperCase(),
+  );
 }
 
 /**

@@ -1,5 +1,5 @@
+import { SNAPSHOT_FEED_STATES } from '../../../src/data/layerSnapshot.js';
 import {
-  HUD_SUMMARY_FEED_STATES,
   HUD_SUMMARY_MAX_CHARS,
   HUD_SUMMARY_MAX_UNSPACED_CHARS,
   HUD_SUMMARY_RESPONSE_FORMAT,
@@ -33,7 +33,7 @@ function parseHudSummaryReply(text, locale) {
   } catch {
     /* not JSON: no summary */
   }
-  const feedState = HUD_SUMMARY_FEED_STATES.includes(reply?.feedState)
+  const feedState = SNAPSHOT_FEED_STATES.includes(reply?.feedState)
     ? reply.feedState
     : null;
   return {
@@ -64,24 +64,19 @@ function toHudSummary(value, requested) {
  * than that is cut where the cap falls.
  */
 function capAtWord(text, max, locale) {
-  const graphemes = (value) => [
-    ...new Intl.Segmenter(locale, { granularity: 'grapheme' }).segment(value),
+  const graphemes = [
+    ...new Intl.Segmenter(locale, { granularity: 'grapheme' }).segment(text),
   ];
-  if (graphemes(text).length <= max) return text;
-  let kept = '';
-  for (const { segment } of new Intl.Segmenter(locale, {
+  if (graphemes.length <= max) return text;
+  const cut = graphemes[max].index;
+  let end = 0;
+  for (const { index, segment } of new Intl.Segmenter(locale, {
     granularity: 'word',
   }).segment(text)) {
-    if (graphemes(kept + segment).length > max) break;
-    kept += segment;
+    if (index + segment.length > cut) break;
+    end = index + segment.length;
   }
-  return (
-    kept.trim() ||
-    graphemes(text)
-      .slice(0, max)
-      .map(({ segment }) => segment)
-      .join('')
-  );
+  return text.slice(0, end).trim() || text.slice(0, cut);
 }
 
 async function handleHudSummary(req, res) {

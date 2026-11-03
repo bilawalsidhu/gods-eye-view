@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Readable } from 'node:stream';
 import {
-  HUD_SUMMARY_FEED_STATES,
   HUD_SUMMARY_INSTRUCTIONS,
   HUD_SUMMARY_MAX_UNSPACED_CHARS,
   HUD_SUMMARY_RESPONSE_FORMAT,
@@ -11,12 +10,16 @@ import {
   hudSummaryInstructions,
   hudSummaryLayerContext,
   hudSummaryLocale,
-  hudSummaryMatchesProvenance,
   hudTelemetryProvenance,
   isHudSummaryUnconfigured,
   keylessHudSummaryResponse,
-  provenanceTag,
 } from './hudSummaryResponse.js';
+import {
+  SNAPSHOT_FEED_STATES,
+  hudSummaryMatchesProvenance,
+  provenanceTag,
+} from './data/layerSnapshot.js';
+import { parseHudSummaryReply } from '../server/providers/openai/hud-summary.js';
 import { openAiRealtimeProxy } from '../vite.config.js';
 
 const UNCONFIGURED_PAYLOAD = {
@@ -233,10 +236,10 @@ test('HUD summary instructions ask for the canonical feedState as its own field'
   ]);
   assert.deepEqual(
     HUD_SUMMARY_RESPONSE_FORMAT.schema.properties.feedState.anyOf,
-    [{ type: 'string', enum: [...HUD_SUMMARY_FEED_STATES] }, { type: 'null' }],
+    [{ type: 'string', enum: [...SNAPSHOT_FEED_STATES] }, { type: 'null' }],
   );
-  assert.ok(!HUD_SUMMARY_FEED_STATES.includes('none'));
-  assert.ok(HUD_SUMMARY_FEED_STATES.includes('partial'));
+  assert.ok(!SNAPSHOT_FEED_STATES.includes('none'));
+  assert.ok(SNAPSHOT_FEED_STATES.includes('partial'));
 });
 
 test('the instructions name the UI language, with English as the fallback', () => {
@@ -356,34 +359,31 @@ test('a Japanese summary is capped in characters, not words', async () => {
   assert.ok([...shown].length >= 10, shown);
 });
 
+// Within the cap a reply comes back whole, in NFC: marks, in-word
+// apostrophes and dots, multi-word names and Han names included.
 for (const [locale, summary] of [
   ['ar', 'دبي حركة الطيران محدودة حاليًا'],
   ['ar', 'القاهرة تتبّع الرحلات الآن'],
   ['fr', "Vols au-dessus d'Orléans aujourd'hui partiels"],
   ['it', "Voli sull'aeroporto di Roma parziali"],
   ['fr', 'Données de vol à Paris'.normalize('NFD')],
-  ['ja', 'サンフランシスコ・ベイエリア'],
-]) {
-  test(`a ${locale} summary keeps marks, apostrophes and dots: ${summary}`, async () => {
-    const { response } = await postHudSummary(
-      { locale, feedProvenance: { overall: null } },
-      JSON.stringify({ summary, feedState: null }),
-    );
-    assert.equal(response.body.summary, summary.normalize('NFC'));
-  });
-}
-
-for (const [locale, summary] of [
   ['fr', 'Rue de Rivoli Vols en direct'],
   ['es', 'Times Square Nueva York Vuelos en vivo'],
   ['ru', 'Times Square Рейсы онлайн и суда'],
+  ['en', 'Shibuya 渋谷 live flights overhead'],
+  ['es', 'Vuelos sobre 東京駅 datos antiguos'],
+  ['ru', 'Башня Тайбэй 101 台北101 рейсы'],
+  ['ja', 'サンフランシスコ・ベイエリア'],
+  ['ja', '東京 上空 の 航空 情報 は 古い'],
+  ['zh-CN', 'SFO 附近 4 架 航班 数据 过期'],
+  ['zh-Hant', 'SFO 附近 4 架 航班 數據 過期'],
 ]) {
-  test(`a ${locale} summary keeps a multi-word name whole: ${summary}`, async () => {
-    // The parser itself: the file's HUD requests share one rate limiter.
-    const { parseHudSummaryReply } =
-      await import('../server/providers/openai/hud-summary.js');
-    const reply = JSON.stringify({ summary, feedState: 'partial' });
-    assert.equal(parseHudSummaryReply(reply, locale).summary, summary);
+  test(`a ${locale} summary within the cap is kept whole: ${summary}`, () => {
+    const reply = JSON.stringify({ summary, feedState: null });
+    assert.equal(
+      parseHudSummaryReply(reply, locale).summary,
+      summary.normalize('NFC'),
+    );
   });
 }
 
@@ -394,20 +394,6 @@ test('a summary is capped in characters', async () => {
   );
   assert.equal(response.body.summary, 'Berlin');
 });
-
-for (const [locale, summary] of [
-  ['en', 'Shibuya 渋谷 live flights overhead'],
-  ['es', 'Vuelos sobre 東京駅 datos antiguos'],
-  ['ru', 'Башня Тайбэй 101 台北101 рейсы'],
-]) {
-  test(`a ${locale} summary with a Han place name keeps its words`, async () => {
-    const { response } = await postHudSummary(
-      { locale, feedProvenance: { overall: 'stale' } },
-      JSON.stringify({ summary, feedState: 'stale' }),
-    );
-    assert.equal(response.body.summary, summary);
-  });
-}
 
 test('a ja cap steps back to a space instead of cutting a Latin word', async () => {
   const { response } = await postHudSummary(
@@ -430,20 +416,6 @@ test('a ja cap keeps the text before a Latin word it would split', async () => {
   );
   assert.equal(response.body.summary, '東京 羽田空港周辺の');
 });
-
-for (const [locale, summary] of [
-  ['ja', '東京 上空 の 航空 情報 は 古い'],
-  ['zh-CN', 'SFO 附近 4 架 航班 数据 过期'],
-  ['zh-Hant', 'SFO 附近 4 架 航班 數據 過期'],
-]) {
-  test(`a ${locale} phrase within the character cap is kept whole`, async () => {
-    const { response } = await postHudSummary(
-      { locale, feedProvenance: { overall: 'stale' } },
-      JSON.stringify({ summary, feedState: 'stale' }),
-    );
-    assert.equal(response.body.summary, summary);
-  });
-}
 
 test('a reply that skips the format carries no summary and no state', async () => {
   const { response } = await postHudSummary(

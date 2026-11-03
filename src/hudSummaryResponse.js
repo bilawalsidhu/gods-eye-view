@@ -6,11 +6,6 @@ import {
 } from './data/layerSnapshot.js';
 import { DEFAULT_LOCALE, normalizeLocale } from './i18n/locale.js';
 
-export {
-  hudSummaryMatchesProvenance,
-  provenanceTag,
-} from './data/layerSnapshot.js';
-
 export const HUD_SUMMARY_UNCONFIGURED_CODE = 'OPENAI_NOT_CONFIGURED';
 
 /**
@@ -75,9 +70,6 @@ export const HUD_SUMMARY_MAX_UNSPACED_CHARS = 20;
 /** Longest summary, in characters; the cut falls between words. */
 export const HUD_SUMMARY_MAX_CHARS = 80;
 
-/** feedState values the model may return besides null. */
-export const HUD_SUMMARY_FEED_STATES = SNAPSHOT_FEED_STATES;
-
 /** Responses API structured output: the summary plus the canonical state. */
 export const HUD_SUMMARY_RESPONSE_FORMAT = Object.freeze({
   type: 'json_schema',
@@ -91,7 +83,7 @@ export const HUD_SUMMARY_RESPONSE_FORMAT = Object.freeze({
       // summary of a view without layers.
       feedState: {
         anyOf: [
-          { type: 'string', enum: [...HUD_SUMMARY_FEED_STATES] },
+          { type: 'string', enum: [...SNAPSHOT_FEED_STATES] },
           { type: 'null' },
         ],
       },
@@ -131,7 +123,7 @@ const WORD_SCRIPTS = [
   'Hiragana',
   'Katakana',
   'Hangul',
-].map((script) => new RegExp(`\\p{Script=${script}}`, 'u'));
+].map((script) => `\\p{Script=${script}}`);
 
 /** Lower case, with punctuation and brackets as spaces: `Earthquakes 24h`. */
 function flatWords(value) {
@@ -145,8 +137,8 @@ function flatWords(value) {
 const UNSPACED_WORD =
   /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー]+$/u;
 
-function sameScript(a, b) {
-  return WORD_SCRIPTS.some((script) => script.test(a ?? '') && script.test(b));
+function wordScript(char) {
+  return WORD_SCRIPTS.find((script) => new RegExp(script, 'u').test(char));
 }
 
 /**
@@ -162,17 +154,14 @@ export function hasWord(text, word) {
   const needle = flatWords(word);
   if (!needle) return false;
   if (UNSPACED_WORD.test(needle)) return haystack.includes(needle);
-  for (
-    let at = haystack.indexOf(needle);
-    at >= 0;
-    at = haystack.indexOf(needle, at + 1)
-  ) {
-    const before = haystack[at - 1];
-    const after = haystack[at + needle.length];
-    if (!sameScript(before, needle[0]) && !sameScript(after, needle.at(-1)))
-      return true;
-  }
-  return false;
+  const chars = [...needle];
+  const before = wordScript(chars[0]);
+  const after = wordScript(chars.at(-1));
+  // flatWords leaves no regex syntax in the needle.
+  return new RegExp(
+    `${before ? `(?<!${before})` : ''}${needle}${after ? `(?!${after})` : ''}`,
+    'u',
+  ).test(haystack);
 }
 
 /**
