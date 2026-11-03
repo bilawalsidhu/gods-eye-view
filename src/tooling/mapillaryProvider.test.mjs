@@ -141,10 +141,9 @@ test('status reports whether a token exists, never its value', async () => {
     const res = await call('/api/mapillary/status');
     assert.equal(res.statusCode, 200);
     assert.deepEqual(json(res), { configured: false });
-    assert.equal(
-      (await call('/api/mapillary/status', '/', 'POST')).statusCode,
-      405,
-    );
+    const post = await call('/api/mapillary/status', '/', 'POST');
+    assert.equal(post.statusCode, 405);
+    assert.equal(post.headers.allow, 'GET');
   });
   await withToken('MLY|secret', async () => {
     const res = await call('/api/mapillary/status');
@@ -175,6 +174,7 @@ test('the tile route validates the path, then needs a token', async () => {
         'POST',
       );
       assert.equal(post.statusCode, 405);
+      assert.equal(post.headers.allow, 'GET');
     },
   );
   await withToken(undefined, async () => {

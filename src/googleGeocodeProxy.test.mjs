@@ -144,6 +144,7 @@ test('a bad or keyless geocode request never reaches Google', async () => {
       url: '/?address=Austin&lat=30&lon=-97',
     });
     assert.equal(rejected.statusCode, 405);
+    assert.equal(rejected.headers.allow, 'GET');
   }
 
   // Keyless is an empty capability, not an outage: a 200 the browser adapters

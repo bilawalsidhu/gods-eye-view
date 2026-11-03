@@ -14,6 +14,7 @@ import {
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
+import { allowedMethods } from '../common/methods.js';
 import {
   preferCodexOAuth,
   readCodexOAuthAccessToken,
@@ -61,6 +62,7 @@ function createRealtimeOAuthStatusHandler({
     res.setHeader('Content-Type', 'application/json');
     if (req.method !== 'GET') {
       res.statusCode = 405;
+      res.setHeader('Allow', allowedMethods('GET'));
       res.end(JSON.stringify({ error: 'Method not allowed' }));
       return;
     }
@@ -87,6 +89,7 @@ function createRealtimeOAuthLoginHandler({
     res.setHeader('Content-Type', 'application/json');
     if (req.method !== 'POST') {
       res.statusCode = 405;
+      res.setHeader('Allow', allowedMethods('POST'));
       res.end(JSON.stringify({ error: 'Method not allowed' }));
       return;
     }
@@ -141,6 +144,7 @@ function createRealtimeTokenHandler({
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET' && req.method !== 'POST') {
       res.statusCode = 405;
+      res.setHeader('Allow', allowedMethods('GET', 'POST'));
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ error: 'Method not allowed' }));
       return;

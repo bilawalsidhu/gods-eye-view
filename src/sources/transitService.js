@@ -226,11 +226,10 @@ export function createTransitService({ fetchImpl = fetch } = {}) {
         'Cache-Control': 'no-store',
       });
     if (req.method !== 'GET') {
-      return reply(
-        405,
-        JSON.stringify({ error: 'Method Not Allowed' }),
-        transitResponseHeaders('NONE'),
-      );
+      return reply(405, JSON.stringify({ error: 'Method Not Allowed' }), {
+        ...transitResponseHeaders('NONE'),
+        Allow: 'GET',
+      });
     }
     const route = resolveTransitRoute(req.url);
     if (!route) {

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { allowedMethods } from '../common/methods.js';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { admitSameSite } from '../common/same-site.js';
 import { defaultSourceRoot } from '../common/source-root.js';
@@ -401,7 +402,14 @@ export function geocodeProxy({
   function admit(req, res, limiter) {
     if (admitSameSite(req, res)) return null;
     if (req.method !== 'GET') {
-      sendJson(res, 405, { error: 'Method Not Allowed' });
+      sendJson(
+        res,
+        405,
+        { error: 'Method Not Allowed' },
+        {
+          Allow: allowedMethods('GET'),
+        },
+      );
       return null;
     }
     if (!limiter(clientKey(req))) {
