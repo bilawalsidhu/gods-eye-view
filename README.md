@@ -236,12 +236,9 @@ the container.
 
 ### Path 4 — GitHub Codespaces (cloud, no local install)
 
-Codespaces requires a GitHub account. Its forwarded HTTPS URL supports viewing
-the globe, but some features are unavailable through that URL. Overpass-backed
-queries and OpenAI voice token requests return HTTP 403 because the local
-request gate rejects their tunneled request origin. Adding API keys to `.env`
-or setting `GEV_ALLOWED_HOSTS` does not remove that restriction. Use one of the
-local setup paths above for those features.
+Codespaces requires a GitHub account. Overpass queries and OpenAI voice token
+requests return HTTP 403 through its forwarded HTTPS URL, even with API keys
+in `.env` and `GEV_ALLOWED_HOSTS` configured. Use a local setup for these features.
 
 The codespace runs the dev server in a cloud workspace, so Node and the dependencies
 never touch your machine. The globe still renders in your own browser, so it
@@ -272,9 +269,8 @@ ignored on purpose, so pass that exact name.
 
 ⚠️ **A codespace is reachable from the internet.** Treat it as the
 wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
-Settings also does not open on the forwarded URL. If you configure keys in the
-workspace `.env`, the request restrictions above still apply. `.env` is
-gitignored — never commit it. [SECURITY.md](SECURITY.md) has the threat model.
+Settings is unavailable on the forwarded URL. Never commit your workspace
+`.env`. [SECURITY.md](SECURITY.md) has the threat model.
 
 ### Then power it up — in the app, not in a file
 
