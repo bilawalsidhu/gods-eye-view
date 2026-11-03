@@ -37,12 +37,18 @@ const CHECKER_PATH = fileURLToPath(
 const NEXT_PATH = fileURLToPath(
   new URL('../../scripts/next-layer-state-token.mjs', import.meta.url),
 );
-const reservationRows = JSON.parse(
+const currentReservationRows = JSON.parse(
   readFileSync(
     new URL('./layerStateTokenReservations.json', import.meta.url),
     'utf8',
   ),
 );
+
+// Keep the historical competing-PR fixtures anchored just before digits 8/9.
+const reservationRows = currentReservationRows.filter(
+  ([id]) => id !== 'chester-county-ems',
+);
+const fixtureReservations = Object.fromEntries(reservationRows);
 
 test('pre-ledger published ownership is independent of the candidate mapping', () => {
   assert.notStrictEqual(
@@ -104,7 +110,10 @@ function writeCodecFixture(cwd, rows, entries) {
     providerCodec,
     readFileSync(new URL('./idSwitches.js', import.meta.url)),
   );
-  const source = readFileSync(CODEC_SOURCE_PATH, 'utf8');
+  const source = readFileSync(CODEC_SOURCE_PATH, 'utf8').replace(
+    /  Object\.freeze\(\{\s*id: 'chester-county-ems',[\s\S]*?\}\),\n/,
+    '',
+  );
   const registryEnd = ']);\n\nexport const REGISTERED_LAYER_IDS';
   assert.equal(source.split(registryEnd).length, 2);
   const additions = entries
@@ -125,10 +134,10 @@ function writeCodecFixture(cwd, rows, entries) {
 
 test('reservation ledger is complete, pinned, and rejects duplicate or malformed rows', () => {
   assert.deepEqual(
-    { ...parseLayerStateTokenReservations(reservationRows) },
+    { ...parseLayerStateTokenReservations(currentReservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
-  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 34);
+  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 35);
   assert.deepEqual(
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
     {
@@ -139,6 +148,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       's2-ghostmaps': '5',
       'sea-marks': '6',
       'ski-pistes': '7',
+      'chester-county-ems': '8',
     },
   );
   assert.throws(
@@ -363,7 +373,7 @@ test('an isolated valid two-character fixture round-trips an l field beyond the 
     );
     assert.equal(
       validateLayerStateAllocations(
-        LAYER_STATE_TOKEN_RESERVATIONS,
+        fixtureReservations,
         codec.LAYER_STATE_TOKEN_RESERVATIONS,
       ),
       true,

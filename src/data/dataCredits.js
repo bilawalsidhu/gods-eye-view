@@ -99,6 +99,10 @@ export const NYC_DOT_DISCLAIMER =
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
 export const DATA_CREDITS = [
+  {
+    key: 'chester-county-ems',
+    html: '<a href="https://www.chesco.org/3963/WebCad-Active-Incidents" target="_blank" rel="noopener">Chester County DES WebCAD</a> · Approximate street positions derived from © Chester County GIS Road Centerlines and Site Address Points (<a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank" rel="noopener">CC BY-NC-SA 3.0</a>; runtime only) · Named places: <a href="https://services.arcgis.com/G4S1dGvn7PIgYd6Y/arcgis/rest/services/Common_Place/FeatureServer/1" target="_blank" rel="noopener">© Chester County GIS Common Place</a> (county terms)',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',

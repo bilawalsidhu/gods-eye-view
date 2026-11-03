@@ -6720,3 +6720,32 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+## Chester County incidents
+
+The Events group includes an off-by-default **Chester County, PA incidents**
+layer. It reads Fire, EMS and Traffic tables from public WebCAD through the
+`/api/chester-county-ems` endpoint every 60 seconds while enabled.
+County road-centerline junctions resolve reported intersections; county address
+points resolve numbered addresses. Flame, red-cross and siren billboards identify fire, EMS and traffic.
+Only icons show by default; clicking an icon opens a labelled detail card, and
+clicking empty map space dismisses it. Repeated approximate-location tags are
+omitted; the layer-level GIS accuracy notice remains. Unresolved or ambiguous reports stay listed
+without a marker or municipality-center fallback. Successful empty
+snapshots clear reports and failures retain last-good data marked stale.
+All sources load at runtime into memory, with bounded county GIS lookups and
+no incident archive. The layer id is `chester-county-ems` and share token `8` stores only enabled state. See `docs/CHESTER-COUNTY-EMS.md` for matching limits and source terms.
+
+County incident health separates successful unmatched locations from GIS failures.
+Coverage counts expose mapped, unresolved and lookup-error totals; only actual
+lookup failures degrade a fresh feed. WebCAD retries transient failures once.
+County Common Place provides approximate named-place positions, and a documented
+Tredyffrin-only junction alias resolves Valley Forge/Yellow Springs using the
+GIS Valley Creek road name. Original report locations and GIS provenance are retained.
+
+County incident cards acquire public unit IDs, statuses and status-entry times
+from the selected report's official WebCAD detail page. Detail requests are
+on demand through a fixed-origin active-incident lookup, shared/cached for 60
+seconds and limited to four concurrent upstream requests. Detail outages retain
+the report, label old unit fields stale, and leave main-feed health unchanged.
+Cards link to the incident source; no private dispatch notes or history are stored.
