@@ -151,6 +151,28 @@ export class ShareLinkManager {
   }
 
   /**
+   * Follow another globe engine's camera (an engine switch), or none (null)
+   * between two engines. The link's state, listeners and holds stay; a
+   * restore flight still owned on the outgoing camera is settled.
+   */
+  attachEngine(engine) {
+    if (this._destroyed) return;
+    this._removeCameraChanged?.();
+    this._removeCameraChanged = null;
+    if (this._activeCameraFlight) {
+      const flight = this._activeCameraFlight;
+      this._restoreGeneration += 1;
+      this._activeCameraFlight = null;
+      flight.settle?.('superseded');
+    }
+    this.engine = engine ? engineFromViewer(engine) : null;
+    if (!this.engine) return;
+    this._removeCameraChanged = this.engine.camera.changed.addEventListener(
+      () => this._scheduleUpdate(),
+    );
+  }
+
+  /**
    * Parse the share this page opened with: the host's `initialShareCode`, a
    * `/share/<code>` address, or a long-form hash. Returns the parsed state, or
    * null for none. A share code that cannot be opened is recorded in
@@ -364,7 +386,7 @@ export class ShareLinkManager {
     state,
     { applyCamera = true, instant = false, navigationToken = null } = {},
   ) {
-    if (this._destroyed || !state)
+    if (this._destroyed || !state || !this.engine)
       return { succeeded: false, reason: 'unavailable' };
     const view = {
       destination: geo.cartesian3.fromDegrees(state.lon, state.lat, state.alt),
@@ -682,7 +704,12 @@ export class ShareLinkManager {
   }
 
   _updateHash() {
-    if (this._destroyed || this._initialRestorePending || this._navigationHeld)
+    if (
+      this._destroyed ||
+      !this.engine ||
+      this._initialRestorePending ||
+      this._navigationHeld
+    )
       return;
     const params = this._buildHashParams();
     if (!params) return;
@@ -703,7 +730,7 @@ export class ShareLinkManager {
 
   /** Build a deterministic snapshot without mutating history. */
   _buildHashParams() {
-    if (this._destroyed) return null;
+    if (this._destroyed || !this.engine) return null;
     const pose = this.engine.camera.pose();
     const carto = pose.cartographic;
     if (!carto) return null;

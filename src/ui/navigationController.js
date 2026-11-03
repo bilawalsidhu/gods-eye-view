@@ -254,7 +254,10 @@ export class NavigationController {
     });
   }
 
-  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool', keepTracking = false } = {}) {
+  _reassertNavigationHandoff(
+    generation,
+    { trackingOrigin = 'tool', keepTracking = false } = {},
+  ) {
     return reassertNavigationHandoff({
       generation,
       currentGeneration: this._navigationGeneration,
@@ -270,6 +273,24 @@ export class NavigationController {
       },
     });
   }
+  /**
+   * The globe the camera authority applies to (an engine switch), or none.
+   * Leaving a globe retires every deferred navigation started on it: its
+   * flight cannot land on the next one. `retainScene` keeps the selection a
+   * handoff carries across.
+   */
+  setScene({ viewer = null, engine = null } = {}, { retainScene = true } = {}) {
+    if (this._disposed) return;
+    if (this.engine && engine !== this.engine) {
+      cancelCameraArrival(this.engine);
+      this._stampNavigation({
+        cancelPendingSelection: !retainScene,
+        clearSearchedLocation: false,
+      });
+    }
+    this.viewer = viewer;
+    this.engine = engine ?? engineFromViewer(viewer);
+  }
   /** Subscribe to ownership changes without claiming the camera or exposing mutable state. */
   subscribeCameraHandoff(listener) {
     return this._cameraHandoffs.subscribe(listener, { emitCurrent: false });
@@ -282,6 +303,6 @@ export class NavigationController {
   }
   destroy({ retainScene = false } = {}) {
     this.stop();
-    this._stampNavigation({cancelPendingSelection: !retainScene});
+    this._stampNavigation({ cancelPendingSelection: !retainScene });
   }
 }

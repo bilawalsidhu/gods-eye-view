@@ -168,9 +168,9 @@ export class StyleManager extends ShellFacade {
     this._feedback = new ShellFeedback({
       readLayers: () => this._dataManager?.getAll?.() || [],
     });
-    this.viewer = viewer;
-    this.engine = engine;
-    this.mapStackController = mapStackController;
+    // The attached globe: its viewer (null on Navara), engine and map
+    // stack. An engine switch replaces it (attachScene/detachScene).
+    this._scene = { viewer, engine, mapStackController };
     this.placeSearch = placeSearch;
 
     this._navigation = new NavigationController({
@@ -458,7 +458,7 @@ export class StyleManager extends ShellFacade {
       },
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
-      cancelOwnedNavigation: () => this.engine.camera.cancelFlight(),
+      cancelOwnedNavigation: () => this.engine?.camera.cancelFlight(),
       // A host may open a share code without a `/share/<code>` address.
       initialShareCode,
     });
@@ -625,7 +625,10 @@ export class StyleManager extends ShellFacade {
     this._publishActiveStyle();
     this._updateLocationMiniStatus();
 
-    this._shareRestoration.start({ engineSwitch, retainScene: Boolean(this._layerSession?.handoffLayers) });
+    this._shareRestoration.start({
+      engineSwitch,
+      retainScene: Boolean(this._layerSession?.handoffLayers),
+    });
 
     // Keep the parameter panel from overlapping toggle controls.
     this._layoutRightPanels();
@@ -642,6 +645,21 @@ export class StyleManager extends ShellFacade {
     // re-arms its own ticker if the batch is still running.
     this._feedback.observeVisibility();
     this._layerBindings.observeCamera();
+  }
+
+  /** The attached globe's Cesium viewer; null on Navara or between engines. */
+  get viewer() {
+    return this._scene?.viewer ?? null;
+  }
+
+  /** The attached globe engine; null between engines. */
+  get engine() {
+    return this._scene?.engine ?? null;
+  }
+
+  /** The attached globe's map stack; null between engines. */
+  get mapStackController() {
+    return this._scene?.mapStackController ?? null;
   }
 
   // Compatibility reads for existing controls, scene snapshots and Cockpit.
@@ -1475,7 +1493,7 @@ export class StyleManager extends ShellFacade {
    * @returns {void}
    */
   applyCameraState(cameraState, duration = 2.8) {
-    if (!cameraState) return;
+    if (!cameraState || !this.engine) return;
     this.engine.camera.flyTo({
       destination: geo.cartesian3.fromDegrees(
         cameraState.lon,
@@ -1856,12 +1874,17 @@ export class StyleManager extends ShellFacade {
     // re-enable a mode's entry layer and republish `_contextMode` while the
     // rest of teardown is tearing those very layers down.
     this._contextControls.stop();
-    this._navigation.destroy({ retainScene: Boolean(this._layerSession?.handoffLayers) });
+    this._navigation.destroy({
+      retainScene: Boolean(this._layerSession?.handoffLayers),
+    });
     // Close camera-entry seams synchronously. Context restoration may await
     // layer work, so leaving these listeners attached until afterward lets a
     // focus event release tracking or start a flight during teardown.
-    if (this._layerSession && !this._layerSession.lifetime.signal.aborted &&
-        this._contextControls.canRetainScene()) {
+    if (
+      this._layerSession &&
+      !this._layerSession.lifetime.signal.aborted &&
+      this._contextControls.canRetainScene()
+    ) {
       this._layerSession.contextScene = this._contextControls.captureScene();
     } else {
       if (this._layerSession) this._layerSession.contextScene = null;

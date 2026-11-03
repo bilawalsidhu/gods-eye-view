@@ -443,6 +443,30 @@ export class LocationNavigation {
   }
 
   /** Revoke callbacks and settle owned camera work before the viewer is released. */
+  /**
+   * Leave the globe (an engine switch): its reset flight, world-jump
+   * transition and orbit end; the search, its text and the readout stay.
+   */
+  detachScene() {
+    this._cancelGlobeReset?.();
+    this._cancelGlobeReset = null;
+    if (this._worldJumpActive) this._endWorldJumpTransition();
+    clearTimeout(this._trafficTransitionTimer);
+    this._trafficTransitionTimer = null;
+    this._stopOrbit();
+    this.orbitController?.attachEngine(null);
+    this.viewer = null;
+    this.engine = null;
+  }
+
+  /** Navigate on another globe (an engine switch). */
+  attachScene({ viewer = null, engine = engineFromViewer(viewer) } = {}) {
+    if (this._disposed) return;
+    this.viewer = viewer;
+    this.engine = engine;
+    this.orbitController?.attachEngine(engine);
+  }
+
   destroy() {
     if (this._disposed) return;
     this._disposed = true;
