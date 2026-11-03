@@ -1170,6 +1170,10 @@ export class ShellFacade {
   }
 
   /** Show a message in the universal top-center status banner. */
+  _clearPersistentStatusNotice() {
+    return this._feedback.clearPersistentNotice();
+  }
+
   _showGlobalStatusNotice(message, options) {
     return this._feedback._showGlobalStatusNotice(message, options);
   }

@@ -290,6 +290,17 @@ export class ShellFeedback {
     this._publishLoading({ hidden: true, state: null });
   }
 
+  /**
+   * Withdraw a persistent notice (the engine's own, when that engine
+   * detaches); a finite notice showing now stays for its dwell.
+   */
+  clearPersistentNotice() {
+    this._coveredPersistentNotice = null;
+    if (this._globalStatusNotice?.persistent !== true) return;
+    this._globalStatusNotice = null;
+    this._updateGlobalLoadingFeedback(performance.now());
+  }
+
   _showGlobalStatusNotice(message, options = {}) {
     if (this.destroyed) return;
     const now = performance.now();
