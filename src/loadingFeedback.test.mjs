@@ -1,6 +1,6 @@
 import { ShareRestoration } from './ui/shareRestoration.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -202,14 +202,14 @@ test('replacement, repetition, and hidden-tab elapsed time use the newest fixed 
     'elapsed wall time while hidden expires the notice instead of replaying it');
 });
 
-test('universal notice lifecycle clears on dispose and uses the one top-center live region', () => {
+test('universal notice lifecycle clears on dispose and uses the one top-center live region', async () => {
   const ui = readShellSource();
-  const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+  const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
   const disposeStart = ui.indexOf('  async dispose() {');
   const disposeEnd = ui.indexOf('\n  }\n', disposeStart);
   const dispose = ui.slice(disposeStart, disposeEnd);
 
-  assert.match(dispose, /this\._feedback\._globalStatusNotice = null;/);
+  assert.match(dispose, /this\._feedback\.clearLoadingStatus\(\);/);
   assert.match(dispose, /this\._shareRestoration\.destroy\(\)/);
   assert.match(ShareRestoration.prototype.destroy.toString(), /this\._shareTrackingNoticeGeneration \+= 1;/);
   assert.match(html, /<div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>/);
@@ -539,20 +539,10 @@ test('the settled traffic chip shows exactly one percentage — the coverage it 
   assert.doesNotMatch(rendered, /100%/);
 });
 
-test('the chip renderer clears the progress slot instead of stranding the last value', () => {
-  const ui = readFileSync(new URL('./ui/shellFeedback.js', import.meta.url), 'utf8');
+test('an emptied progress slot collapses rather than leaving a min-width stub', () => {
+  // ShellFeedback publishes the empty settled progress
+  // (src/ui/statusChipOwners.test.mjs); the slot must then take no room.
   const css = readStylesheet(new URL('../style.css', import.meta.url));
-  const start = ui.indexOf('  _updateTrafficSyncChip(');
-  assert.ok(start > 0, '_updateTrafficSyncChip is missing');
-  const body = ui.slice(start, ui.indexOf('\n  }', start));
-  // A truthiness guard here would leave the busy "..." sitting beside the
-  // settled label, which is the contradiction wearing a different hat.
-  assert.doesNotMatch(body, /if \(presentation\.progressText\s*\n?\s*&&/);
-  assert.match(
-    body,
-    /if \(this\._trafficSyncProgress\.textContent !== presentation\.progressText\) \{/,
-  );
-  // …and the emptied slot must collapse rather than leave a min-width stub.
   assert.match(css, /#traffic-sync-progress:empty \{\s*display: none;\s*\}/);
 });
 
