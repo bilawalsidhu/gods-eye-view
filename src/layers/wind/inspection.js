@@ -58,17 +58,17 @@ export function inspectWindAtCenter(
         new cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
         ellipsoid,
       ));
-  if (!point || !snapshot?.u || !snapshot?.v)
-    return {
-      coordinates: msg('No surface reading'),
-      wind: msg('Aim the map center at Earth'),
-      model,
-      validTime,
-      status,
-      explanation: msg(
-        'A location reading needs a loaded forecast and the Earth at the center of the view.',
-      ),
-    };
+  const noReading = () => ({
+    coordinates: msg('No surface reading'),
+    wind: msg('Aim the map center at Earth'),
+    model,
+    validTime,
+    status,
+    explanation: msg(
+      'A location reading needs a loaded forecast and the Earth at the center of the view.',
+    ),
+  });
+  if (!point || !snapshot?.u || !snapshot?.v) return noReading();
   const location = cesium.Cartographic.fromCartesian(point, ellipsoid);
   const lon = cesium.Math.toDegrees(location.longitude);
   const lat = cesium.Math.toDegrees(location.latitude);
@@ -77,6 +77,9 @@ export function inspectWindAtCenter(
     lon,
     lat,
   );
+  // A field without cells samples to NaN; that is no reading, never a speed.
+  if (!Number.isFinite(vector.u) || !Number.isFinite(vector.v))
+    return noReading();
   const speed = windSpeed(vector.u, vector.v);
   const from = windFrom(vector.u, vector.v);
   const scalar = ['temperature', 'pressure'].includes(overlay)
