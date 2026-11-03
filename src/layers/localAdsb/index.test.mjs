@@ -12,7 +12,7 @@ import {
   localAdsbReceiverLine,
   localAdsbStatus,
 } from './index.js';
-import { readEntityRecord } from '../../data/entityRecords.js';
+import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 
 function fakeReceiver(initial = {}) {
   const state = {
@@ -56,11 +56,11 @@ function fakeServices() {
       render: { governorRequestRender() {} },
       context: {
         registerEntityContext(entity, metadata) {
-          entity.__gevContextId = metadata.id;
+          entityRecord(entity).contextId = metadata.id;
           calls.registered.push(metadata);
         },
         selectEntityContext(entity) {
-          selected = { id: entity.__gevContextId, entity };
+          selected = { id: readEntityRecord(entity)?.contextId, entity };
           calls.selected.push(selected.id);
           return selected;
         },

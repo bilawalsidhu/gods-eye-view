@@ -1,4 +1,5 @@
 import { getContextStore, isContextRecordActive } from './contextStore.js';
+import { readEntityRecord } from './entityRecords.js';
 import { findPickOwner, resolvePickId } from './pickRegistry.js';
 
 /**
@@ -7,8 +8,8 @@ import { findPickOwner, resolvePickId } from './pickRegistry.js';
  *
  * Two lanes, in order:
  *  1. Context-store carriers. Entity-backed layers (infrastructure GeoJSON,
- *     selected vessels, fires, installations) stamp `__gevContextId` on the
- *     picked object, and the store record already carries the label and
+ *     selected vessels, fires, installations) write a `contextId` into the
+ *     picked object's entity record, and the store record already carries the label and
  *     position voice uses everywhere else.
  *  2. Pick owners. Primitive-backed layers (aircraft, satellites, vessels)
  *     register an ownership predicate in `pickRegistry`; the owning layer's
@@ -52,8 +53,7 @@ function contextCarrierRecord(picked, dataManager) {
     picked?.primitive?.id,
     picked?.primitive,
   ]) {
-    const contextId =
-      carrier && typeof carrier === 'object' ? carrier.__gevContextId : null;
+    const contextId = readEntityRecord(carrier)?.contextId;
     if (!contextId) continue;
     const record = store.entities.get(contextId);
     if (record && isContextRecordActive(record, dataManager)) return record;
