@@ -3079,5 +3079,7 @@
   },
   "listed the first {limit}": "listados os primeiros {limit}",
   "counted over the bounding box of {area}, not its outline": "contado na caixa delimitadora ({area}), não no contorno",
-  "Search cancelled": "Busca cancelada"
+  "Search cancelled": "Busca cancelada",
+  "Sea Marks": "Sinais marítimos",
+  "Ski Pistes": "Pistas de esqui"
 }

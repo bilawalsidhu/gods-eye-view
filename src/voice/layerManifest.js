@@ -72,6 +72,18 @@ const layers = [
     noQuery: 'published third-party intel placemarks; not analyst records',
   },
   {
+    id: 'sea-marks',
+    aliases: ['seamarks', 'nautical charts', 'buoys', 'openseamap'],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
+    id: 'ski-pistes',
+    aliases: ['ski slopes', 'ski runs', 'snow map', 'opensnowmap'],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],

@@ -122,12 +122,14 @@ function sanitizeOverpassBody(rawBody) {
   const boundedSets = new Set();
   for (let stmt of withoutTags.split(';')) {
     stmt = stmt.trim();
-    if (!stmt || stmt.startsWith('[') || /^out\b/.test(stmt)) continue;
+    // The settings block (`[out:json][timeout:25]`) was blanked together with
+    // the tag filters, so it arrives here as an empty statement.
+    if (!stmt || /^out\b/.test(stmt)) continue;
 
-    // Strip output-set assignments (NOT input bounds). Bracket tag filters were
-    // removed above so a tag KEY/value (e.g. `way[is_in]`, `node[around]`) cannot be
-    // misread as a spatial bound. Bounds live in (...) / function calls / set
-    // refs, never inside [...], so the probe loses nothing real.
+    // Strip output-set assignments (NOT input bounds). With the tag filters
+    // already gone, a tag KEY/value (e.g. `way[is_in]`, `node[around]`) cannot
+    // be misread as a spatial bound; bounds live in (...) / function calls /
+    // set refs, never inside [...], so nothing real was lost.
     const outSets = [];
     const probe = stmt.replace(/->\s*\.(\w+)/g, (_, name) => {
       outSets.push(name);
@@ -166,8 +168,10 @@ function sanitizeOverpassBody(rawBody) {
     if (bounded) for (const name of outSets) boundedSets.add(name);
   }
 
+  // Tolerate whitespace around the directive so `[ timeout : N ]` is clamped
+  // rather than passed through as written.
   const clamped = data.replace(
-    /\[timeout:\s*(\d+)\s*\]/gi,
+    /\[\s*timeout\s*:\s*(\d+)\s*\]/gi,
     (_, n) =>
       `[timeout:${Math.min(Number(n) || OVERPASS_MAX_QL_TIMEOUT, OVERPASS_MAX_QL_TIMEOUT)}]`,
   );
