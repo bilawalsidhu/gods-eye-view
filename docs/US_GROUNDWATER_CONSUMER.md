@@ -3,7 +3,7 @@
 The Infrastructure **Water Wells** layer streams historical well source records
 prepared and hosted by Rainfolk. It uses GEV's ordinary standalone source assembly;
 there is no preview launcher injection or query-string endpoint override. The
-contribution is reconciled against GEV main `4c94f202d70c385559ea3ecc8f11948ba35bbec6`.
+verified PR reconciliation baseline is GEV main `0e27d69fccb5dae47aea924ada49dfccf40a6161`.
 
 ## Data and interpretation
 
@@ -45,7 +45,7 @@ data. That timer is not the observation date, publication date or live well stat
 
 `VITE_RAINFOLK_WELLS_RELEASE` may select another explicitly verified published
 release by its lowercase 64-character SHA-256. The provider origin remains fixed
-at `https://data.rainfolk.org`; credentials, arbitrary origins, redirects, query
+at `https://data.rainfolk.org`; credentials, arbitrary provider origins, redirects, query
 parameters and path escapes remain rejected. Unset selects the release above.
 Restart development or rebuild the frontend after changing this public setting.
 Merely uploading another prefix does not update existing clients. There is no
@@ -66,15 +66,14 @@ last-good retention, and bounded caches apply. Detail is limited to 2,000 record
 and 16 MiB per view; unresolved detail is reported rather than invented.
 A checksum establishes byte integrity, not factual location or current conditions.
 
-The feed must allow the actual document Origin through CORS. Normal documented
-local origins are `http://localhost:4173` and `http://127.0.0.1:4173`; a built
-Vite preview defaults to port 4173 as well. A custom HOST/PORT, LAN hostname or
-external deployment needs its own exact origin approval. The earlier review
-origin `http://127.0.0.1:5191` is separate. GET/HEAD and any preflight for the
-consumer's Cache-Control request header must succeed without credentials.
+The public feed permits credential-free cross-origin GET/HEAD with
+`Access-Control-Allow-Origin: *`. Normal local origins are `http://localhost:4173`
+and `http://127.0.0.1:4173`; custom ports, LAN hosts and external deployments do
+not need individual origin entries for this feed. The consumer omits credentials;
+any preflight for its Cache-Control request header must also succeed. These
+read-only CORS permissions grant no upload, editing or deletion access.
 The host CSP must permit `https://data.rainfolk.org` in connect-src. GEV's current
 native CSP already permits HTTPS; this patch does not widen it or change CORS.
-A working 5191 preview is not proof that every other origin is allowed.
 
 ## Contribution checks
 
