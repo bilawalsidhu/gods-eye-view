@@ -182,12 +182,13 @@ def feature_line(key, sequence, fresh):
 
 
 def merge(lines, fresh, rings, tagged):
-    out, seen, sequence = [], set(), 0
-    report = {'kept': 0, 'updated': [], 'removed': [], 'added': [], 'unexported': []}
+    out, seen, known, sequence = [], set(), set(), 0
+    report = {'kept': 0, 'updated': [], 'removed': [], 'added': [], 'unexported': [], 'skipped': []}
     for line in lines:
         feature = json.loads(line)
         sequence = max(sequence, feature['properties']['id'])
         key = osm_key(feature)
+        known.add(key)
         if key in fresh:
             seen.add(key)
             old_tags = feature['properties']['tags']
@@ -211,6 +212,8 @@ def merge(lines, fresh, rings, tagged):
         sequence += 1
         out.append(feature_line(key, sequence, fresh[key]))
         report['added'].append(key)
+    # newly tagged, but osmium built no usable geometry: nothing to add yet
+    report['skipped'] = sorted(set(tagged) - set(fresh) - known, key=lambda k: (k[0], int(k[1:])))
     if len({osm_key(json.loads(line)) for line in out}) != len(out):
         raise ValueError('Duplicate OSM identity')
     return out, report
@@ -239,6 +242,9 @@ def main():
     if report['unexported']:
         print('warning: kept the old line of tagged features osmium did not export: %s'
               % ', '.join(report['unexported']), file=sys.stderr)
+    if report['skipped']:
+        print('warning: did not add newly tagged features osmium did not export: %s'
+              % ', '.join(report['skipped']), file=sys.stderr)
     payload = '\n'.join(merged) + '\n'
     if args.verify:
         if payload != DATASET.read_text(encoding='utf-8'):

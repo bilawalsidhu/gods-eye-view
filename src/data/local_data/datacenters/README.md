@@ -29,7 +29,8 @@ reflects OSM as of the extract below, everything else the original snapshot.
 - Contact tags are dropped as above; unchanged features keep their original
   line, so geometry is only rewritten when tags or rings actually changed.
   A feature is removed only once it is no longer tagged; one still tagged but
-  without an exportable geometry keeps its line and is reported as unexported.
+  without an exportable geometry keeps its line and is reported as unexported,
+  and a newly tagged one osmium cannot export is reported as skipped.
 - Refresh: `python3 scripts/build-datacenters-norway.py --cache <dir>` uses
   Geofabrik's current Norway extract and prints the dated name it used; record
   that name, its OSM timestamp and MD5 here. Requires `osmium-tool`.
