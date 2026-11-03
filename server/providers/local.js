@@ -30,6 +30,7 @@ import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { ghostMapsProxy } from './ghostMaps.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { abyssProxy } from './abyss.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -78,6 +79,7 @@ function localProviderPlugins({
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    abyssProxy(),
     ghostMapsProxy(),
     keySetupEndpoint(),
   ];

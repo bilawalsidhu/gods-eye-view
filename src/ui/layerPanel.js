@@ -63,6 +63,7 @@ const PANEL_GROUPS = [
       'military-installations',
       'local-datacenters',
       'telegeography-submarine-cables',
+      'abyss',
       'local-dams',
     ],
   },
