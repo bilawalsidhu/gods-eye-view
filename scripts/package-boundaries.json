@@ -4738,6 +4738,7 @@
       "src/tools/queries/surveillance.js",
       "src/tools/queries/infrastructure.js",
       "src/tools/queries/events.js",
+      "src/tools/queries/chesterCounty.js",
       "src/data/bhoteKoshiFloodPath.js",
       "src/tools/functions.js",
       "src/tools/surfaces.js",
@@ -4783,6 +4784,7 @@
     "modules": [
       "src/sources/adsbFields.js",
       "src/tools/services.js",
+      "src/layers/chesterCountyEms/source.js",
       "src/layers/bikeshare/registry.js",
       "src/layers/bikeshare/source.js",
       "src/layers/cctv/source.js",

@@ -25,6 +25,10 @@ import {
   getTerrainHeight,
   getWeather,
 } from './queries/environment.js';
+import {
+  getChesterCountyIncidents,
+  getChesterCountyIncidentDetails,
+} from './queries/chesterCounty.js';
 import { getBhoteKoshiFlood } from './queries/events.js';
 import { getActiveFires, getEarthquakes } from './queries/hazards.js';
 import { getRecentImagery } from './queries/imagery.js';
@@ -113,6 +117,8 @@ export const coreTools = Object.freeze([
   findSubmarineCables,
   findInfrastructure,
   getBhoteKoshiFlood,
+  getChesterCountyIncidents,
+  getChesterCountyIncidentDetails,
   getRegionalBrief,
   getCyclones,
   getFirePerimeters,

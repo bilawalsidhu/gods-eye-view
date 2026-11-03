@@ -130,3 +130,18 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       claimed.set(alias, entry.id);
     }
 });
+
+test('Chesco is toggleable through scoped aliases and directs record questions to county tools', () => {
+  assert.equal(VOICE_OFF_LAYERS['chester-county-ems'], undefined);
+  assert.ok(VOICE_TOGGLE_LAYER_IDS.includes('chester-county-ems'));
+  assert.equal(voiceLayerAliasMap().get('chesco ems'), 'chester-county-ems');
+  assert.equal(
+    voiceLayerAliasMap().get('chester county incidents'),
+    'chester-county-ems',
+  );
+  assert.match(
+    VOICE_LAYER_MANIFEST.find((layer) => layer.id === 'chester-county-ems')
+      .noQuery,
+    /get_chester_county_incidents/,
+  );
+});

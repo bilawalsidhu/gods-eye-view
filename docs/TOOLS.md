@@ -84,6 +84,18 @@ the GBFS source. `createGeocodePlaceService` resolves place names through `/api/
 `createPlaceSearchService` searches `/api/google/*` and reports when no search key
 is configured; `createRouteService` plans routes through `/api/route`.
 
+### Chester County public incidents
+
+`get_chester_county_incidents` and `get_chester_county_incident_details` are
+available on both MCP and voice through the `chesterCounty` service, backed by
+`createChesterCountyEmsSource`. They read `/api/chester-county-ems` and its
+active-incident `/details` endpoint. Listing supports category, municipality,
+text and row limits; details take a category-qualified incident ID. Responses
+include source timestamps, stale flags, null positions for unresolved reports,
+approximate GIS provenance, bounded public unit updates and a suggested county
+layer view. They do not require the map layer to be enabled and do not read
+private dispatch notes or patient records. See [county setup](CHESTER-COUNTY-EMS.md).
+
 ## Views
 
 `gods-eye-view/view` (`src/view/index.js`) describes what the app shows,

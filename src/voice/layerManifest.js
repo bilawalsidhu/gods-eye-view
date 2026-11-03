@@ -44,6 +44,18 @@ const AIRCRAFT_FIELDS = {
 
 const layers = [
   {
+    id: 'chester-county-ems',
+    aliases: [
+      'chesco ems',
+      'chester county incidents',
+      'chester county ems',
+      'chesco incidents',
+    ],
+    context: false,
+    noQuery:
+      'use get_chester_county_incidents and get_chester_county_incident_details; unresolved public reports have no coordinates',
+  },
+  {
     id: 'gnss-integrity',
     aliases: [
       'gnss integrity',
@@ -434,8 +446,6 @@ const layers = [
  * pair belong to a scripted scene and are driven by `control_scene`.
  */
 export const VOICE_OFF_LAYERS = Object.freeze({
-  'chester-county-ems':
-    'local county report list; approximate street matching is not enabled for spatial voice queries',
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
 });

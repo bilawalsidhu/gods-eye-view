@@ -67,7 +67,8 @@ are not sent in location queries. No commercial geocoder is used.
 No API key is required. Use `npm run dev` or build and preview. Static file
 hosting alone cannot provide the proxy. The route is `/api/chester-county-ems`, the layer id is
 `chester-county-ems`, and share token `8` stores only enabled state. Selection is transient. The layer is off by default and
-is intentionally outside the voice-query manifest.
+supports voice visibility controls through “Chesco EMS” or “Chester County incidents”.
+MCP and voice share the dedicated queries described below.
 
 While enabled, browser refresh is every 60 seconds (paused by the manager in
 hidden tabs). The server shares in-flight work and permits at most one snapshot
@@ -145,3 +146,23 @@ its screenshot to `qa-shots/chester-county-ems/selected.png`. Set
 
 PR evidence uses only synthetic records: [screenshot](media/chester-county-incidents-synthetic.png)
 and [demo recording](media/chester-county-incidents-demo.mp4) (2× playback).
+
+## AI and MCP queries
+
+- `get_chester_county_incidents`: lists the county DES public feed, including
+  unmapped reports. Optional `category` (`fire`, `ems`, `traffic`), municipality,
+  text search and `limit` filters keep answers bounded. Results carry dispatch
+  times, source freshness, mapping coverage, approximate GIS positions or null,
+  and a suggested view that enables this layer.
+- `get_chester_county_incident_details`: takes a returned category-qualified
+  `id` (for example `ems:F26000001`) and reads that active report's public unit
+  IDs, statuses and entry timestamps. Unavailable unit data preserves the report
+  with `details_available: false`; stale unit status is distinct from feed age.
+
+Listing tools makes no source requests. Calling a query uses the same local
+proxy, minute caches and source limits as the map, even if the browser layer is
+currently off. No point is invented for unresolved reports, and no patient
+records or private dispatch notes are exposed. The spatial analyst engine does
+not count these reports as geolocated entities; voice uses the dedicated tools
+so unresolved reports remain included. Reconnect an existing MCP/voice session
+to load the updated tool list.

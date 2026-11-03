@@ -6720,3 +6720,12 @@ on demand through a fixed-origin active-incident lookup, shared/cached for 60
 seconds and limited to four concurrent upstream requests. Detail outages retain
 the report, label old unit fields stale, and leave main-feed health unchanged.
 Cards link to the incident source; no private dispatch notes or history are stored.
+
+Chester County incidents are exposed to MCP and voice through
+`get_chester_county_incidents` and `get_chester_county_incident_details`, using
+the existing public snapshot/detail proxy and shared caches. Listing preserves
+unresolved reports with null coordinates and includes source freshness and
+coverage; selected report queries return bounded public unit status or an
+explicit unavailable result without discarding the report. Voice can toggle
+the layer through scoped Chesco/Chester County aliases. Its spatial analyst
+exclusion now directs the model to these tools rather than hiding the layer.
