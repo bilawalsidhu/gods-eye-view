@@ -55,7 +55,6 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
-    // Sea Marks and Ski Pistes extend the generated layer enums and alias hint.
     'd0c5ad733670972713a54cb10676c42b7c6e78834bfff52b473c0e8a45e742c3',
   );
 });

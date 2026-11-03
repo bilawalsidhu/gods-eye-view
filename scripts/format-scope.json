@@ -742,8 +742,6 @@
   "src/sources/protocols.test.mjs",
   "src/voice/actionSchemas.js",
   "src/voice/actionSchemas.test.mjs",
-  "src/voice/areaCandidateContract.js",
-  "src/voice/layerActionOwnership.js",
   "server/providers/openai/toolDescriptions.js",
   "src/voice/session.js",
   "src/voice/sessionCommands.js",
@@ -1210,6 +1208,9 @@
   "src/tooling/nominatimGuardLifecycle.test.mjs",
   "src/tooling/nominatimLockOwnership.test.mjs",
   "src/tooling/nominatimOutlineRoute.test.mjs",
+  "server/providers/common/rateLimitKeys.test.mjs",
+  "src/voice/areaCandidateContract.js",
+  "src/voice/layerActionOwnership.js",
   "src/data/areaGeometry.test.mjs",
   "src/data/areaResolver.test.mjs",
   "src/sources/osmFeatures.test.mjs",
@@ -1219,6 +1220,5 @@
   "src/voice/areaActions.test.mjs",
   "src/voice/imageryActions.test.mjs",
   "src/voice/osmActions.test.mjs",
-  "src/voice/realtimeProtocol.test.mjs",
-  "server/providers/common/rateLimitKeys.test.mjs"
+  "src/voice/realtimeProtocol.test.mjs"
 ]

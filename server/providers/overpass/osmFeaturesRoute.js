@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
-import { admitSameSite } from '../common/same-site.js';
+import { admitSameSiteKeyless } from '../common/same-site.js';
 import { createBoundedCache } from '../common/boundedCache.js';
 import {
   compileOsmFeatureQuery,
@@ -201,8 +201,9 @@ export function installOsmFeaturesRoute(
   middlewares.use('/api/osm/features', async (req, res) => {
     const send = sender(res);
     if (req.method !== 'GET') return send(jsonError(405, 'Method Not Allowed'));
-    // Quota-bearing: a page elsewhere must not spend the operator's Overpass.
-    if (admitSameSite(req, res)) return undefined;
+    // A page elsewhere must not spend the operator's Overpass. The keyless
+    // gate, as on /api/overpass: voice works behind a reverse proxy too.
+    if (admitSameSiteKeyless(req, res)) return undefined;
     if (!configured())
       return send(
         jsonError(503, 'Place search needs a configured Overpass server.', {

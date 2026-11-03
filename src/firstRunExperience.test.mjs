@@ -1037,8 +1037,8 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // S2 GhostMaps extends the generated layer enums; both feature contracts remain.
   // The layer alias hint leaves out aliases the layer id already spells.
   // The Utilities panel adds one set_panel_open target; Sea Marks and Ski
-  // Pistes extend the generated layer enums and alias hint.
-  // Voice geometry adds the analyst area scopes and the osm-places layer.
+  // Pistes extend the generated layer enums and alias hint; voice geometry
+  // adds the analyst area scopes and the osm-places layer.
   assert.equal(block.length, 31318, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
