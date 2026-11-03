@@ -256,6 +256,28 @@ function mount(
   return { request, start, writes };
 }
 
+test('a search without a limit lists up to 500 features', async () => {
+  const sent = [];
+  const { request } = mount(async (body) => {
+    sent.push(decodeURIComponent(body));
+    return { status: 200, body: JSON.stringify({ elements: [] }) };
+  });
+  for (const search of [
+    'preset=hospital&bbox=0,0,1,1',
+    'preset=school&bbox=0,0,1,1&limit=',
+  ]) {
+    const answer = await request(search);
+    assert.equal(answer.status, 200, search);
+  }
+  assert.equal(sent.length, 2);
+  for (const ql of sent) assert.match(ql, /out center tags 500;$/);
+  assert.equal(
+    compileOsmFeatureQuery({ preset: 'hospital', bbox: '0,0,1,1', limit: '7' })
+      .limit,
+    7,
+  );
+});
+
 test('the route answers, caches, and shares upstream slots fairly', async () => {
   const release = [];
   let upstream = 0;

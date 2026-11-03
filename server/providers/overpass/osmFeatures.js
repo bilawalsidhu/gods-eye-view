@@ -109,7 +109,13 @@ export function compileOsmFeatureQuery(request = {}) {
         ? 'That area is too large to search; narrow it down.'
         : 'That area is too large to list; count first or narrow it down.',
     );
-  const requested = Number(request.limit);
+  // An absent or empty limit is the default, not Number(null) = 0.
+  const requested =
+    request.limit === null ||
+    request.limit === undefined ||
+    String(request.limit).trim() === ''
+      ? NaN
+      : Number(request.limit);
   const limit = Math.max(
     1,
     Math.min(
