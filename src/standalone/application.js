@@ -31,6 +31,11 @@ export function pageEngineKind() {
   return resolveEngineKind({ search: globalThis.location?.search, storage });
 }
 
+/** The page-session state shared by every application on that session. */
+function sessionChrome(layerSession) {
+  return (layerSession.chrome ??= {});
+}
+
 /** Compose one engine session. Destroy it before starting another. */
 export function createStandaloneApplication({
   googleApiKey,
@@ -64,22 +69,38 @@ export function createStandaloneApplication({
   let catalog;
   const application = createApplication({
     createScene: async (context) => {
+      // The page's language listener and place search belong to the page
+      // session when there is one (an engine switch keeps them), else to
+      // this application.
+      const session = layerSession ? sessionChrome(layerSession) : null;
       // A language switch applies in place; the page's own markup follows.
-      context.defer(
-        onLocaleChange(() => {
+      if (!session?.locale) {
+        const offLocale = onLocaleChange(() => {
           applyDocumentLanguage(document, getLocale());
           applyDocumentTranslations(document);
-        }),
-      );
-      placeSearch = createStandalonePlaceSearch({
-        // The bundled city and landmark data the offline name provider reads.
-        // The search package takes it as plain data rather than importing it,
-        // so it stays free of application state.
-        presets: CITY_POIS,
-        ...geospatial,
-        resolveApiKey: () => googleApiKey,
-        signal: context.signal,
-      });
+        });
+        if (session) {
+          session.locale = offLocale;
+          layerSession.lifetime.signal.addEventListener('abort', offLocale, {
+            once: true,
+          });
+        } else context.defer(offLocale);
+      }
+      const createPlaceSearch = (signal) =>
+        createStandalonePlaceSearch({
+          // The bundled city and landmark data the offline name provider
+          // reads. The search package takes it as plain data rather than
+          // importing it, so it stays free of application state.
+          presets: CITY_POIS,
+          ...geospatial,
+          resolveApiKey: () => googleApiKey,
+          signal,
+        });
+      placeSearch = session
+        ? (session.placeSearch ??= createPlaceSearch(
+            layerSession.lifetime.signal,
+          ))
+        : createPlaceSearch(context.signal);
       const scene = await createStandaloneScene({
         ...context,
         googleApiKey,
