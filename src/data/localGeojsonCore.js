@@ -1159,9 +1159,10 @@ function groundSamplePoint(record, height, result) {
  * retry, each one a full offscreen render; 110 unseen data centres there held
  * rest frames at 58-589 ms. Unsampled bases sit on the ellipsoid, so the test
  * uses loaded globe terrain when there is some. Otherwise (a hidden globe) it
- * tests the vertical from 0 to GROUND_SAMPLE_MAX_ABS_HEIGHT_M, every height a
- * sample can accept, so high ground in view is never mistaken for an unseen
- * base. Unseen ground is sampled on the first walk that sees it.
+ * tests the vertical across +/-GROUND_SAMPLE_MAX_ABS_HEIGHT_M, every height a
+ * sample can accept, so high or below-ellipsoid ground in view is never
+ * mistaken for an unseen base. Unseen ground is sampled on the first walk that
+ * sees it.
  */
 function groundSampleInView(viewer, record) {
   const camera = viewer.camera;
@@ -1170,7 +1171,11 @@ function groundSampleInView(viewer, record) {
   const known =
     Number.isFinite(terrain) &&
     Math.abs(terrain) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
-  const low = groundSamplePoint(record, known ? terrain : 0, groundSampleLow);
+  const low = groundSamplePoint(
+    record,
+    known ? terrain : -GROUND_SAMPLE_MAX_ABS_HEIGHT_M,
+    groundSampleLow,
+  );
   const high = known
     ? low
     : groundSamplePoint(

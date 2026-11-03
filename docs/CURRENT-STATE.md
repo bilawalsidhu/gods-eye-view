@@ -2048,8 +2048,8 @@ Unchanged overlay entries do not request another frame; moved positions,
 changed membership and re-enabling still publish. Ground sampling waits for
 visible globe tiles to settle, and skips markers whose ground the camera
 cannot see (unseen ground reads through the Earth and would retry every 2 s).
-Ground is tested at loaded globe terrain, or across 0-9,000 m when the globe
-is hidden, so photoreal views skip only ground well out of view. Until it is
+Ground is tested at loaded globe terrain, or across -9,000 to 9,000 m when the
+globe is hidden, so photoreal views skip only ground well out of view. Until it is
 seen, a stem keeps its unsampled height, which can show for a stem whose base
 is just off screen. Sampling uses valid loaded terrain as a floor while
 retaining rooftop and below-sea-level elevations. A hidden globe does not

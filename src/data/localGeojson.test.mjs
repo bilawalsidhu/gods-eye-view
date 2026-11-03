@@ -797,7 +797,7 @@ test('an unseen base is not sampled and arms no retry until it is in view', asyn
  * `cameraM` metres above the ellipsoid, looking at the base's ground at
  * `groundM` (or directly away from it).
  */
-function aimRealCamera(env, { groundM, cameraM, southM, away = false }) {
+function aimRealCamera(env, { groundM, cameraM, southM, away = false, fov = Math.PI / 3 }) {
   const entity = env.dataSources[0].entities.values[0];
   const base = Cesium.Cartographic.fromCartesian(entity.__localBaseCartesian);
   const ground = Cesium.Cartesian3.fromRadians(base.longitude, base.latitude, groundM);
@@ -822,7 +822,7 @@ function aimRealCamera(env, { groundM, cameraM, southM, away = false }) {
   );
   const up = Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3());
   const frustum = new Cesium.PerspectiveFrustum({
-    fov: Math.PI / 3,
+    fov,
     aspectRatio: 800 / 600,
     near: 1,
     far: 1e8,
@@ -841,7 +841,10 @@ function aimRealCamera(env, { groundM, cameraM, southM, away = false }) {
 const loadedTerrain = (height) => ({ show: true, tilesLoaded: true, getHeight: () => height });
 const hiddenGlobe = { show: false, tilesLoaded: true, getHeight: () => undefined };
 
-for (const { label, globe, groundM, cameraM, southM, baseOffScreen } of [
+for (const { label, globe, groundM, cameraM, southM, fov, baseOffScreen } of [
+  // The Dead Sea (about -430 m) under a hidden globe, seen steeply down
+  // through a narrow view: both 0 m and 9,000 m above it are off screen.
+  { label: 'hidden-globe depression', globe: hiddenGlobe, groundM: -430, cameraM: 20, southM: 180, fov: Math.PI / 12, baseOffScreen: true },
   // 2,500 m terrain from 3 km away at a shallow angle: the ellipsoid-height
   // base is far below the bottom of the screen.
   { label: 'high ground with loaded terrain', globe: loadedTerrain(2_500), groundM: 2_500, cameraM: 3_500, southM: 3_000, baseOffScreen: true },
@@ -857,7 +860,7 @@ for (const { label, globe, groundM, cameraM, southM, baseOffScreen } of [
     const clock = installFakeClock(t);
     t.after(() => { env.layer.destroy(env.viewer); env.cleanup(); });
     env.viewer.scene.globe = globe;
-    const baseVisibility = aimRealCamera(env, { groundM, cameraM, southM });
+    const baseVisibility = aimRealCamera(env, { groundM, cameraM, southM, fov });
     if (baseOffScreen)
       assert.equal(baseVisibility, Cesium.Intersect.OUTSIDE, 'precondition: the ellipsoid-height base is off screen');
 
