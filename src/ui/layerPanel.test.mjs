@@ -56,6 +56,8 @@ test('panel presentation exposes groundwater wells under Infrastructure', () => 
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'sea-marks',
+      'ski-pistes',
       'us-groundwater',
     ],
   );

@@ -2873,6 +2873,8 @@
   "UTILITIES": "ユーティリティ",
   "Exit cockpit to fly to a drawing": "描画の位置へ移動するにはコックピットを終了してください",
   "Directions, drawing and your own files": "ルート案内、描画、自分のファイル",
+  "Sea Marks": "航路標識",
+  "Ski Pistes": "スキーゲレンデ",
   "USGS (bounded six-site snapshot)": "USGS（6地点の限定スナップショット）",
   "Visible source records": "表示中の出典レコード",
   "Use Arrow keys to move between source records, Home or End to jump, and Enter to inspect.": "矢印キーで出典レコードを移動し、Home または End で先頭や末尾へ、Enter で詳細を表示します。",

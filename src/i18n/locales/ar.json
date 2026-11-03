@@ -3223,6 +3223,8 @@
   "UTILITIES": "الأدوات",
   "Exit cockpit to fly to a drawing": "اخرج من القمرة للانتقال إلى رسم",
   "Directions, drawing and your own files": "الاتجاهات والرسم وملفاتك الخاصة",
+  "Sea Marks": "علامات بحرية",
+  "Ski Pistes": "مسارات التزلج",
   "Visible source records": "سجلات المصدر الظاهرة",
   "Use Arrow keys to move between source records, Home or End to jump, and Enter to inspect.": "استخدم مفاتيح الأسهم للتنقل بين سجلات المصدر، وHome أو End للانتقال إلى البداية أو النهاية، وEnter لعرض التفاصيل.",
   "{record} · Enter: inspect record · Arrow keys: move": "{record} · Enter: عرض السجل · مفاتيح الأسهم: تنقل",

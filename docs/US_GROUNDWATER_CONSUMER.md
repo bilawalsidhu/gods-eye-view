@@ -3,7 +3,7 @@
 The Infrastructure **Water Wells** layer streams historical well source records
 prepared and hosted by Rainfolk. It uses GEV's ordinary standalone source assembly;
 there is no preview launcher injection or query-string endpoint override. The
-verified PR reconciliation baseline is GEV main `0e27d69fccb5dae47aea924ada49dfccf40a6161`.
+verified PR reconciliation baseline is GEV main `e5d15f24d5472b75f1d378d8e52fb5cc962bd908`.
 
 ## Data and interpretation
 
@@ -77,8 +77,9 @@ native CSP already permits HTTPS; this patch does not widen it or change CORS.
 
 ## Contribution checks
 
-The provisional unpublished layer token is **6**; upstream token **5** remains
-owned by S2 GhostMaps. Re-run the allocator/checker against merge-time main.
+The provisional unpublished well-layer token is **8**. Published tokens **5**,
+**6** and **7** remain owned by S2 GhostMaps, Sea Marks and Ski Pistes. Re-run
+the allocator/checker against merge-time main.
 Focused source/selection tests are beside the layer and application assembly.
 The offline component browser gate is `scripts/qa-us-groundwater-offline.mjs`;
 upstream also requires build, full unit suite, test:track, i18n, formatting and
