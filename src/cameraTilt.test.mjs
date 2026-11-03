@@ -8,6 +8,7 @@ import {
   interruptCameraMotion,
   moveCamera,
 } from './cameraVerbs.js';
+import { createGevActionRunner } from './voice/gevActions.js';
 
 const radians = Cesium.Math.toRadians;
 const degrees = Cesium.Math.toDegrees;
@@ -238,7 +239,11 @@ test('a zoom during a pivoting tilt changes the range it holds', (t) => {
   );
   h.tick();
   const before = pivotRange(h);
-  assert.equal(adjustOrbitRange(0.5), true, 'the tilt must take the zoom');
+  assert.deepEqual(
+    adjustOrbitRange(0.5),
+    { kind: 'tilt', changed: true },
+    'the tilt must take the zoom',
+  );
   for (let i = 0; i < 5; i += 1) h.tick();
   // The next frame's lookAt must not put the old range back.
   assert.ok(
@@ -250,7 +255,7 @@ test('a zoom during a pivoting tilt changes the range it holds', (t) => {
 test('a zoom with no pivot to hold is left to the camera', (t) => {
   harness(t, { pivot: false });
   moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
-  assert.equal(adjustOrbitRange(0.5), false);
+  assert.equal(adjustOrbitRange(0.5), null);
 });
 
 test('a pivot tilt toward the horizon keeps its clearance above the ground', (t) => {
@@ -364,9 +369,47 @@ test('a zoom out during a far orbit never pulls the camera in', (t) => {
   h.tick();
   const before = pivotRange(h);
   assert.ok(before > 5_000_000, `range ${before} m`);
-  assert.equal(adjustOrbitRange(2.4), true);
+  assert.deepEqual(adjustOrbitRange(2.4), { kind: 'orbit', changed: false });
   h.tick();
   assert.ok(pivotRange(h) >= before - 1, `range fell to ${pivotRange(h)} m`);
+});
+
+test('a zoom in during a pivot tilt stops at the clearance', (t) => {
+  // 400 m of range at -40°, then "zoom in a lot" twice: unfloored, that left
+  // the camera about 107 m up, then at the 80 m zoom floor.
+  const h = harness(t, { height: 400 });
+  moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
+  while (pitchDeg(h.camera) < -40) h.tick();
+  assert.deepEqual(adjustOrbitRange(1 / 2.4), { kind: 'tilt', changed: true });
+  // At -40° the floor is 150 / sin 40° ≈ 233 m, which the first zoom reached.
+  assert.deepEqual(adjustOrbitRange(1 / 2.4), { kind: 'tilt', changed: false });
+  for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) {
+    h.tick();
+    assert.ok(heightM(h.camera) > 149, `camera at ${heightM(h.camera)} m`);
+  }
+  assert.ok(Math.abs(pitchDeg(h.camera) - -5) < 0.5);
+});
+
+test('a voice zoom during a pivot tilt says what it changed', async (t) => {
+  const h = harness(t, { height: 400 });
+  const runner = createGevActionRunner({
+    viewer: h.viewer,
+    styleManager: {},
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
+  h.tick();
+  const zoom = { direction: 'in', amount: 'lot' };
+  const first = await runner('adjust_camera_zoom', zoom);
+  assert.equal(first.ok, true);
+  assert.equal(first.tiltRangeAdjusted, true);
+  assert.equal('orbitRadiusAdjusted' in first, false);
+  // 400 m → 167 m → the 150 m clearance; a third zoom in moves nothing, and
+  // says so.
+  assert.equal((await runner('adjust_camera_zoom', zoom)).ok, true);
+  const third = await runner('adjust_camera_zoom', zoom);
+  assert.equal(third.ok, false);
+  assert.match(third.error, /tilt is already at its closest range/);
 });
 
 test('from globe range a tilt happens in place', (t) => {

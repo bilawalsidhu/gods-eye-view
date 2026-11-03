@@ -411,13 +411,25 @@ export function createGevActionRunner({
       const zoomOut = String(args.direction || '').toLowerCase() === 'out';
       const amt = String(args.amount || 'medium').toLowerCase();
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
-      if (adjustOrbitRange(zoomOut ? factor : 1 / factor)) {
+      const held = adjustOrbitRange(zoomOut ? factor : 1 / factor);
+      if (held) {
+        const direction = zoomOut ? 'out' : 'in';
+        if (!held.changed) {
+          return {
+            ok: false,
+            action: 'adjust_camera_zoom',
+            direction,
+            amount: amt,
+            error: `Not zoomed: the ${held.kind} is already at its ${zoomOut ? 'farthest' : 'closest'} range.`,
+          };
+        }
         return {
           ok: true,
           action: 'adjust_camera_zoom',
-          direction: zoomOut ? 'out' : 'in',
+          direction,
           amount: amt,
-          orbitRadiusAdjusted: true,
+          [held.kind === 'tilt' ? 'tiltRangeAdjusted' : 'orbitRadiusAdjusted']:
+            true,
         };
       }
     }

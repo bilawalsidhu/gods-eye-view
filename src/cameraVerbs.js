@@ -1932,19 +1932,27 @@ export function moveCamera(args = {}, runNavigation = null) {
  * fight the per-frame lookAt (field test: "zoom out did literally nothing").
  * A tilt swinging about its pivot holds a range the same way.
  * @param {number} factor  >1 zooms out (radius grows), <1 zooms in.
- * @returns {boolean} true when an orbit or pivoting tilt consumed the zoom.
+ * @returns {{kind: string, changed: boolean}|null} the motion that consumed
+ *   the zoom, and whether its range moved; null when none did.
  */
 export function adjustOrbitRange(factor) {
   if (!_active || !['orbit', 'tilt'].includes(_active.kind) || !_active.hpr)
-    return false;
-  // The limits never move a view the wrong way: a zoom in leaves a closer
-  // view in place, and a zoom out leaves a farther one.
-  const range = _active.hpr.range;
-  _active.hpr.range = Math.max(
-    Math.min(80, range),
+    return null;
+  // A tilt's zoom in stops at the range that keeps its clearance. The limits
+  // never move a view the wrong way: a zoom in leaves a closer view in place,
+  // and a zoom out leaves a farther one.
+  const { kind, hpr } = _active;
+  const floor =
+    kind === 'tilt'
+      ? Math.max(80, TILT_MIN_CLEARANCE_M / Math.abs(Math.sin(hpr.pitch)))
+      : 80;
+  const range = hpr.range;
+  hpr.range = Math.max(
+    Math.min(floor, range),
     Math.min(Math.max(5_000_000, range), range * factor),
   );
-  return true;
+  // Under half a metre counts as not moved, as for a plain zoom.
+  return { kind, changed: Math.abs(hpr.range - range) >= 0.5 };
 }
 
 /**
