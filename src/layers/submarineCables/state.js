@@ -69,8 +69,6 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._markerBlendInvariantWarned = false;
 
-  state._pickByEntity = new WeakMap();
-
   state._referenceLabelCount = 0;
 
   state._referenceSweepGate = createCableReferenceSweepGate({

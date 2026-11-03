@@ -133,7 +133,6 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._referenceDataSource = null;
       state._referenceRecords = [];
       state._surfaceRecords = [];
-      state._pickByEntity = new WeakMap();
       state._referenceLabelCount = 0;
       state._publishScratch.length = 0;
       state._markerBlendDone = false;

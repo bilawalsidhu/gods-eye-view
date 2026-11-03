@@ -142,7 +142,6 @@ export function createIngestion({ state, parts, source }) {
 
       const cableEntities = state._cableDataSource.entities.values;
       const landingEntities = state._landingDataSource.entities.values;
-      state._pickByEntity = new WeakMap();
       state._referenceRecords = [];
       state._surfaceRecords = [];
 

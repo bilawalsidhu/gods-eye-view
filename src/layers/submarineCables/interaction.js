@@ -1,10 +1,10 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { cablePicks } from './pickState.js';
 
 export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
   function registerPickEntity(entity, info) {
-    entity.__gevTeleGeography = info;
-    state._pickByEntity.set(entity, info);
+    cablePicks.write(entity).info = info;
   }
 
   function beginInteraction(viewer) {
@@ -25,9 +25,8 @@ export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
     if (!picked) return null;
     const primitive = picked.primitive;
     if (primitive) {
-      const primitiveInfo = state._pickByEntity.get(primitive);
+      const primitiveInfo = cablePicks.read(primitive)?.info;
       if (primitiveInfo) return primitiveInfo;
-      if (primitive.__gevTeleGeography) return primitive.__gevTeleGeography;
       if (
         primitive.id &&
         typeof primitive.id === 'object' &&
@@ -39,9 +38,8 @@ export function createInteraction({ state, screenSpaceEventHandlerFactory }) {
 
     const entity = picked.id;
     if (entity) {
-      const entityInfo = state._pickByEntity.get(entity);
+      const entityInfo = cablePicks.read(entity)?.info;
       if (entityInfo) return entityInfo;
-      if (entity.__gevTeleGeography) return entity.__gevTeleGeography;
       if (entity.id && typeof entity.id === 'object' && entity.id.reference) {
         return entity.id;
       }
