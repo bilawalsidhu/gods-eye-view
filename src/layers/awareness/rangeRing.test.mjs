@@ -667,6 +667,45 @@ test('input the camera controller ignores, as in the cockpit, does not wake the 
   assert.equal(pulsing(), true, 'a drag after the cockpit');
 });
 
+test('a long drag or touch keeps the pulses awake after it leaves the canvas', (t) => {
+  const ring = ringRendering(t);
+  const { inputWakeMs } = AWARENESS_RANGE_PULSE;
+  const { dispatch, pan, pulsing, loop, lifecycle } = inputLifecycle(t, ring);
+  const onDocument = (type, init = {}) =>
+    document.dispatchEvent(Object.assign(new Event(type), init));
+  // The gesture starts on the canvas and carries on past `inputWakeMs`
+  // outside it, where Cesium still follows it at document level.
+  const longGesture = (start, move, init) => {
+    dispatch(start, init);
+    for (let ms = 0; ms < inputWakeMs + 1000; ms += 250) {
+      loop.advance(250);
+      onDocument(move, init);
+    }
+  };
+  for (const [start, move, end, init] of [
+    ['pointerdown', 'pointermove', 'pointerup', { buttons: 1 }],
+    ['touchstart', 'touchmove', 'touchend', {}],
+    ['touchstart', 'touchmove', 'touchcancel', {}],
+  ]) {
+    longGesture(start, move, init);
+    pan();
+    assert.equal(pulsing(), true, `${move} outside the canvas`);
+    // Once it ends, moves elsewhere are not handling the map.
+    onDocument(end);
+    loop.advance(inputWakeMs + 100);
+    onDocument(move, init);
+    pan();
+    assert.equal(pulsing(), false, `${move} after ${end}`);
+  }
+  // Detaching mid-gesture drops the document listeners too.
+  dispatch('pointerdown');
+  lifecycle.detachRuntimeListeners();
+  loop.advance(inputWakeMs + 100);
+  const noted = ring.state.lastCameraInputMs;
+  onDocument('pointermove', { buttons: 1 });
+  assert.equal(ring.state.lastCameraInputMs, noted);
+});
+
 test('disabling the layer tears the pulses down completely', (t) => {
   const ring = ringRendering(t);
   const { state, scene, rendering, motion, pulseFrames } = ring;

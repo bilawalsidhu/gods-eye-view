@@ -23,6 +23,36 @@ export function createLifecycle({
     if (event?.type === 'pointermove' && !event.buttons) return;
     if (!cameraInputsEnabled()) return;
     layerState.lastCameraInputMs = Date.now();
+    if (event?.type === 'pointerdown' || event?.type === 'touchstart')
+      followGesture(true);
+  }
+
+  // A drag can leave the canvas, and Cesium follows it at document level
+  // (in Firefox, and wherever there are no pointer events). So does this,
+  // from a gesture's start on the canvas to its end, so a long gesture keeps
+  // the input window open the whole way.
+  const GESTURE_MOVE_EVENTS = ['pointermove', 'touchmove'];
+  const GESTURE_END_EVENTS = [
+    'pointerup',
+    'pointercancel',
+    'touchend',
+    'touchcancel',
+  ];
+  let followingGesture = false;
+
+  function followGesture(on) {
+    if (followingGesture === on) return;
+    followingGesture = on;
+    const listen = on ? 'addEventListener' : 'removeEventListener';
+    for (const type of GESTURE_MOVE_EVENTS)
+      globalThis.document?.[listen]?.(type, noteCameraInput, { passive: true });
+    for (const type of GESTURE_END_EVENTS)
+      globalThis.document?.[listen]?.(type, endGesture, { passive: true });
+  }
+
+  function endGesture(event) {
+    noteCameraInput(event);
+    followGesture(false);
   }
 
   function cameraInputsEnabled() {
@@ -160,6 +190,7 @@ export function createLifecycle({
           noteCameraInput,
         );
       layerState.cameraInputTarget = null;
+      followGesture(false);
     }
     layerState.preRenderRemover?.();
     layerState.preRenderRemover = null;
