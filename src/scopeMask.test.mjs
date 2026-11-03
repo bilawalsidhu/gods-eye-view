@@ -801,3 +801,11 @@ test('on a globe engine (Navara) the mask goes into its host container and follo
     dom.restore();
   }
 });
+
+test('an engine without a DOM container gets no mask and no listeners', async () => {
+  const { createFakeEngine } = await import('./globe/testing/fakeEngine.js');
+  const engine = createFakeEngine({ kind: 'navara' });
+  installScopeMask(engine);
+  assert.equal(engine.frames.preRender.numberOfListeners, 0);
+  destroyScopeMask();
+});
