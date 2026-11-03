@@ -56,6 +56,7 @@ test('the Navara mode registers migrated renderers once', async () => {
       'alpr-cameras',
       'satellites',
       'rocket-launches',
+      'traffic',
       'cctv',
       'radio',
       'transit',

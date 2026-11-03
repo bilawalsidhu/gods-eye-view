@@ -17,6 +17,10 @@ export function createState({ services }) {
   /** @type {Cesium.Viewer|null} */
 
   layerState._viewer = null;
+  layerState._engine = null;
+  layerState._native = null;
+  layerState._trafficScene = () => layerState._native?.surface ?? layerState._viewer?.scene;
+
 
   /** @type {Cesium.PointPrimitiveCollection|null} */
 

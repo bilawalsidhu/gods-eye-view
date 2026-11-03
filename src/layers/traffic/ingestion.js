@@ -270,12 +270,12 @@ export function createIngestion({
     layerState._viewHeightEstimate = 0;
     const centerLat = (clamped.south + clamped.north) / 2;
     const centerLon = (clamped.west + clamped.east) / 2;
-    const scene = layerState._viewer?.scene;
+    const scene = layerState._trafficScene?.() ?? layerState._viewer?.scene;
     const location = geo.cartographic.fromDegrees(centerLon, centerLat);
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
     if (!Number.isFinite(estimated)) {
       try {
-        estimated = scene?.globe?.show
+        estimated = scene?.engine ? scene.sampleHeight(location) : scene?.globe?.show
           ? scene.globe.getHeight?.(location)
           : scene?.sampleHeightSupported
             ? scene.sampleHeight(location, [layerState._pointCollection])

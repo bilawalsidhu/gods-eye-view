@@ -142,7 +142,7 @@ export class LayerLifecycle {
   }
 
   /** Bind the next catalog only after the preceding scene released its entries. */
-  bindCatalog(viewer, engine, catalog) {
+  bindCatalog(viewer, engine, catalog, options = {}) {
     if (this._registrationsFinalized) throw new Error('Scene already attached');
     this.viewer = viewer;
     this.engine = engine ?? engineFromViewer(viewer) ?? null;
@@ -154,7 +154,7 @@ export class LayerLifecycle {
       else {
         if (entry.module !== layer) throw new Error(`Layer owner changed: ${layer.id}`);
         if (entry.initialized) {
-          const ready = layer.attachRenderer(viewer, this._moduleContext());
+          const ready = layer.attachRenderer(viewer, { ...this._moduleContext(), ...options });
           if (ready?.then) attachments.push(ready);
         }
       }

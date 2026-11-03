@@ -50,6 +50,7 @@ export function observeTrafficSurface(scene) {
 }
 
 function currentRenderedFrame(scene) {
+  if (scene.engine) return {ready:scene.ready};
   if (!scene.postRender?.addEventListener || !scene.camera?.viewMatrix)
     return { ready: surfaceTilesReady(scene) };
   const frame = renderedFrames.get(scene);
@@ -204,6 +205,7 @@ const surfaceId = (object) => {
  */
 const surfaceKeys = new WeakMap();
 export function trafficSurfaceKey(scene) {
+  if (scene.engine) return scene.surfaceKey;
   let state = surfaceKeys.get(scene);
   if (!state) {
     state = { globe: null, terrain: null, tiles: [], key: '' };
@@ -278,7 +280,7 @@ export async function prepareRoadSurfaces(
     cache = { surface, heights: new Map() };
     sceneCaches.set(scene, cache);
   }
-  const cameraCarto = scene.camera?.positionCartographic;
+  const cameraCarto = scene.engine?.camera.pose().cartographic ?? scene.camera?.positionCartographic;
   const cameraLon = cameraCarto
     ? Cesium.Math.toDegrees(cameraCarto.longitude)
     : 0;
@@ -333,7 +335,8 @@ export async function prepareRoadSurfaces(
         let sampled;
         // sampleHeight reads the locally rendered mesh, not unresolved/offscreen
         // tiles. Global tilesLoaded can stay false while this street is usable.
-        if (scene.globe?.show) sampled = scene.globe.getHeight?.(carto);
+        if (scene.engine) sampled = scene.sampleHeight(carto);
+        else if (scene.globe?.show) sampled = scene.globe.getHeight?.(carto);
         else {
           const estimate = Cesium.Cartographic.fromCartesian(
             road.waypoints[i],
@@ -342,7 +345,7 @@ export async function prepareRoadSurfaces(
           if (validHeight(sampled)) metrics.depthHits++;
         }
         if (
-          !scene.globe?.show &&
+          !scene.engine && !scene.globe?.show &&
           !validHeight(sampled) &&
           scene.sampleHeightSupported
         ) {
