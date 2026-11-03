@@ -88,6 +88,22 @@ export const MISSION_ORBIT_DASHES_PER_GROUP = 100;
 
 export const LAUNCH_PAD_ZONE_RADIUS_M = 500;
 
+/**
+ * The pad zone's look on both engines, as a fraction of the radius: a faint
+ * fill, a bright rim between rimStart and rimEnd whose colour gains the
+ * emission, and a soft edge from rimEnd to the radius. The zone is classified
+ * onto the surface under the pad (terrain and 3D tiles), never drawn at a
+ * height.
+ */
+export const LAUNCH_PAD_ZONE_STYLE = Object.freeze({
+  color: '#22e6e6',
+  fillAlpha: 0.105,
+  rimAlpha: 0.72,
+  rimStart: 0.952,
+  rimEnd: 0.985,
+  emission: 0.35,
+});
+
 export const LAUNCH_PAD_ZONE_MAX_CAMERA_HEIGHT_M = 120000;
 
 export const LAUNCH_PAD_ZONE_MAX_CAMERA_DISTANCE_M = 180000;

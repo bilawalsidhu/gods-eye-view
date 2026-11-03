@@ -3689,6 +3689,7 @@
       "src/layers/localAdsb/render/navara.js",
       "src/layers/vessels/render/navara.js",
       "src/layers/launches/render/navara.js",
+      "src/layers/launches/render/navaraPadGround.js",
       "src/layers/satellites/render/navara.js",
       "src/layers/shared/render/engineView.js",
       "src/celestialRing/render/cesium.js",

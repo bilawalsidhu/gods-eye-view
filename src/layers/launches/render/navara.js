@@ -1,21 +1,11 @@
-// Mission points, paths and the documented flat pad disc on Navara.
+// Mission points, paths and the pad zone on Navara.
 import * as geo from '../../../geo/index.js';
-import {
-  Group,
-  Mesh,
-  CircleGeometry,
-  RingGeometry,
-  MeshBasicMaterial,
-  DoubleSide,
-} from 'three';
 import { createMoverBank } from '../../aircraft/render/navara.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
 import { registerViewerEngine } from '../../../globe/cesium/engineFromViewer.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
-import { LAUNCH_PAD_ZONE_RADIUS_M } from '../policy.js';
+import { createPadGround } from './navaraPadGround.js';
 
-const PAD_KIND = 'gevLaunchPad';
-const registered = new WeakSet();
 const read = (v, time) =>
   typeof v?.getValue === 'function' ? v.getValue(time) : v;
 const property = (v) =>
@@ -23,7 +13,7 @@ const property = (v) =>
 const rgba = (c) => (c ? [c.red, c.green, c.blue, c.alpha] : [1, 1, 1, 1]);
 export function createLaunchesNavaraRenderer(
   engine,
-  { view: nativeView, MeshDesc } = {},
+  { view: nativeView, EffectDesc, NavaraEffect } = {},
 ) {
   let destroyed = false,
     sequence = 0,
@@ -355,113 +345,31 @@ export function createLaunchesNavaraRenderer(
     return source;
   };
   const createPad = (launch) => {
-    const group = new Group();
-    group.matrixAutoUpdate = false;
-    group.frustumCulled = false;
-    const fill = new Mesh(
-      new CircleGeometry(LAUNCH_PAD_ZONE_RADIUS_M, 96),
-      new MeshBasicMaterial({
-        color: 0x22e6e6,
-        transparent: true,
-        opacity: 0.105,
-        side: DoubleSide,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -4,
-      }),
-    );
-    const rim = new Mesh(
-      new RingGeometry(
-        LAUNCH_PAD_ZONE_RADIUS_M * 0.952,
-        LAUNCH_PAD_ZONE_RADIUS_M * 0.985,
-        96,
-      ),
-      new MeshBasicMaterial({
-        color: 0x22e6e6,
-        transparent: true,
-        opacity: 0.687,
-        side: DoubleSide,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -4,
-      }),
-    );
-    fill.frustumCulled = false;
-    rim.frustumCulled = false;
-    rim.renderOrder = 1;
-    group.add(fill, rim);
-    let padHeightM = 0;
+    // Classified onto the surface under the pad as Cesium's GroundPrimitive
+    // (render/navaraPadGround.js); nothing is drawn at a height.
+    const ground =
+      nativeView?.registerEffect && EffectDesc && NavaraEffect
+        ? createPadGround(nativeView, { EffectDesc, NavaraEffect }, launch)
+        : null;
     let dead = false,
-      freed = false;
-    const dispose = () => {
-      if (freed) return;
-      freed = true;
-      for (const mesh of [fill, rim]) {
-        mesh.geometry.dispose();
-        mesh.material.dispose();
-      }
-    };
-    const place = (height) => {
-      if (dead) return;
-      padHeightM = Number.isFinite(height) ? height : 0;
-      group.matrix.fromArray(
-        geo.transforms.eastNorthUpToFixedFrame(
-          geo.cartesian3.fromDegrees(
-            launch.lon,
-            launch.lat,
-            Number.isFinite(height) ? height : 0,
-          ),
-          geo.ellipsoid.WGS84,
-        ),
-      );
-      group.matrixWorldNeedsUpdate = true;
-      engine.render.request('launch-pad');
-    };
-    // W1 parity decision: a flat ellipsoid disc, not terrain classification.
-    // A coarse tile height sampled during the focus flight can be kilometres off.
-    place(0);
-    let handle;
-    if (nativeView) {
-      if (!registered.has(nativeView)) {
-        registered.add(nativeView);
-        nativeView.registerMesh(
-          PAD_KIND,
-          class extends MeshDesc {
-            constructor(view, ctx, config) {
-              super(view, ctx, config);
-              this.pad = config[PAD_KIND];
-            }
-            createMesh() {
-              return this.pad.group;
-            }
-            onDestroy() {
-              this.pad.dispose();
-              super.onDestroy();
-            }
-          },
-        );
-      }
-      handle = nativeView.addMesh({ [PAD_KIND]: { group, dispose } });
-    }
+      shown = true;
+    engine.render.request('launch-pad');
     const pad = {
-      get heightM() {
-        return padHeightM;
-      },
+      /** Classified, as on Cesium: the zone has no height of its own. */
+      heightM: null,
       get show() {
-        return group.visible;
+        return shown;
       },
       set show(value) {
-        if (group.visible === Boolean(value)) return;
-        group.visible = Boolean(value);
+        if (shown === Boolean(value)) return;
+        shown = Boolean(value);
+        if (ground) ground.visible = shown;
         engine.render.request('launch-pad');
       },
       destroy() {
         if (dead) return;
         dead = true;
-        handle?.delete();
-        dispose();
+        ground?.destroy();
         primitives.delete(pad);
         engine.render.request('launch-pad');
       },
