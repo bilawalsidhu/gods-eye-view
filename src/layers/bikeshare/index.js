@@ -23,7 +23,10 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
   let renderer = null;
   let initialized = false;
   const lifecycle = {
-    init(viewer, options = {}) {
+    init(viewer, options) {
+      return this.attachRenderer(viewer, options);
+    },
+    attachRenderer(viewer, options = {}) {
       if (initialized)
         throw new Error('Bikeshare layer is already initialized');
       renderer ??= rendererFactory({
@@ -36,11 +39,43 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
       Object.assign(parts, renderer);
       initialized = true;
       try {
-        return renderer.lifecycle.methods.init(viewer, options);
+        state._restoringViewport = Boolean(options.waitForCameraRestore);
+        renderer.lifecycle.methods.init(viewer, options);
+        if (state._enabled) {
+          const selected = state._selectedKey;
+          for (const city of state._activeCityIds) {
+            const stations = state._stationInfoCache.get(city);
+            if (!stations) continue;
+            parts.rendering.ensureCityPoints(city, stations);
+            const status = state._statusCache.get(city)?.statusMap;
+            if (status) parts.rendering.applyStatusToPoints(city, status);
+          }
+          if (selected) parts.selection._selectStation(selected);
+          renderer.lifecycle.methods.show(viewer);
+        }
       } catch (error) {
         initialized = false;
         throw error;
       }
+    },
+    resumeViewport() {
+      if (!state._restoringViewport) return;
+      state._restoringViewport = false;
+      if (state._enabled) parts.viewport?.onCameraChanged();
+    },
+    detachRenderer() {
+      if (!renderer) return;
+      state._restoringViewport = true;
+      clearTimeout(state._cameraDebounceTimer);
+      const selected = state._selectedKey;
+      renderer.lifecycle.methods.detach();
+      state._selectedKey = selected;
+      state._cityRuntime.clear();
+      state._stationRenderMap.clear();
+      state._viewer = state._engine = null;
+      renderer = null;
+      initialized = false;
+      for (const key of ['rendering', 'selection', 'viewport', 'lifecycle']) delete parts[key];
     },
     enable(...args) {
       return renderer?.lifecycle.methods.enable(...args);

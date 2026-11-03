@@ -91,6 +91,7 @@ export function createRendering({ state, services, parts }) {
     );
     entry.surfaceReady = !!known;
     entry.heightPending = !known;
+    if (!entry.marker) return;
     entry.marker.show = !!known && vehicleInView(entry);
     if (known) {
       entry.marker.position = state._scratchCartesian;
@@ -239,6 +240,7 @@ export function createRendering({ state, services, parts }) {
   }
 
   function addMarker(key, entry) {
+    if (!state._markers) return null;
     const marker = state._markers.add({
       id: key,
       position: entry.toCart,

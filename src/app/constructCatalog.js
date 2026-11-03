@@ -253,11 +253,11 @@ export function createApplicationCatalog({
       ],
       [
         'transit',
-        () => createApplicationTransit({ surface, source: sources.transit }),
+        () => sessionModel('transit', () => createApplicationTransit({ surface, source: sources.transit })),
       ],
       [
         'bikeshare',
-        () => createApplicationBikeshare({ source: sources.bikeshare }),
+        () => sessionModel('bikeshare', () => createApplicationBikeshare({ source: sources.bikeshare })),
       ],
       [
         'directions',
