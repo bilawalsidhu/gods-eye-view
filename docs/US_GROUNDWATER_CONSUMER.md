@@ -3,7 +3,7 @@
 The Infrastructure **Water Wells** layer streams historical well source records
 prepared and hosted by Rainfolk. It uses GEV's ordinary standalone source assembly;
 there is no preview launcher injection or query-string endpoint override. The
-verified PR reconciliation baseline is GEV main `e5d15f24d5472b75f1d378d8e52fb5cc962bd908`.
+verified PR reconciliation baseline is GEV main `3ad3cc2ab773bb2d694a1e1605cf7ffe5d0dca46`.
 
 ## Data and interpretation
 
