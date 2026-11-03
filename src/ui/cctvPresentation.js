@@ -1,8 +1,9 @@
-import { updateStatusBadge } from './statusBadge.js';
-import { t, tn } from '../i18n/index.js';
+import { getLocale, keepCodesWithValues, msg, t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
+import { presentCctvCalibration } from './cctvCalibration.js';
+import { roundHeadingDegrees } from '../data/headingDegrees.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -16,6 +17,11 @@ export function _calBadgeLabel(badge) {
   }
 }
 
+/** A picker option for a camera. */
+function pickerOption(camera, id = camera.id) {
+  return { value: id, label: `${camera.city} · ${camera.name}` };
+}
+
 /** The picker's closing line for the cameras the view leaves out. */
 function outsideNoteText(count) {
   return tn(
@@ -23,6 +29,109 @@ function outsideNoteText(count) {
     '{count} more camera outside this view · pan or zoom out',
     '{count} more cameras outside this view · pan or zoom out',
   );
+}
+
+/**
+ * The panel's buttons, CAL chip and meta line for a camera state, as the CCTV
+ * panel view renders them. Pure: the picker, frame, source badge, calibration
+ * readout and summary stay with the controls.
+ * @param {object|null} state Camera layer UI state.
+ * @param {boolean} enabled Whether the layer is on.
+ */
+export function presentCctvPanel(state, enabled) {
+  const cameras = state?.cameraIndex || state?.cameras || [];
+  const catalogCount = Number.isFinite(state?.count)
+    ? state.count
+    : cameras.length;
+  const activeId = state?.activeCameraId || '';
+  const activeCamera = state?.activeCamera || null;
+  // Tri-state (viewshed design §3b): off → on (wireframes) → viewshed
+  // (color-coded volumes). The click handler cycles; this renders.
+  const coverage = state?.coverageMode || (state?.showCoverage ? 'on' : 'off');
+  const autoHop = !!state?.autoHop;
+  const showProjection = state?.showProjection !== false;
+  // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only, no
+  // in-world tint): three states from cctv.js's deriveCalBadge. Unsaved live
+  // edits show EDITED over the persisted state (viewshed design §3e): SAVE
+  // CAL promotes to CALIBRATED, RESET CAL clears.
+  const badge = activeCamera?.calBadge || null;
+  const dirty = !!activeCamera?.calDirty;
+  return {
+    enabled,
+    navDisabled: !enabled || catalogCount === 0,
+    focusDisabled: !enabled || catalogCount === 0 || !activeId,
+    toggleDisabled: !enabled,
+    coverage: {
+      active: coverage !== 'off',
+      text:
+        coverage === 'viewshed'
+          ? t('VIEWSHED ON')
+          : coverage === 'on'
+            ? t('COVERAGE ON')
+            : t('COVERAGE OFF'),
+    },
+    autoHop: {
+      active: autoHop,
+      text: autoHop ? t('AUTO HOP ON') : t('AUTO HOP OFF'),
+    },
+    projection: {
+      active: showProjection,
+      text: showProjection ? t('PROJECTION ON') : t('PROJECTION OFF'),
+    },
+    quality: {
+      label: dirty
+        ? t('CAL · EDITED (UNSAVED)')
+        : t('CAL · {badge}', { badge: _calBadgeLabel(badge) }),
+      calBadge: dirty ? 'edited' : badge || '',
+    },
+    meta: metaText(state, enabled, activeCamera, catalogCount),
+    calibration: presentCctvCalibration(state, enabled),
+  };
+}
+
+function metaText(state, enabled, activeCamera, catalogCount) {
+  if (activeCamera) {
+    const provider = cctvSourceLabelText(
+      activeCamera.sourceLabel || activeCamera.provider || 'Configured Source',
+    );
+    const statusMsg = activeCamera.sourceMessage
+      ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
+      : '';
+    // A partner-supplied feed inside a pack names its owner here.
+    const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
+    const calBadge = activeCamera.calBadge
+      ? _calBadgeLabel(activeCamera.calBadge)
+      : '';
+    const projLabel = state?.showProjection !== false ? t('MONITOR') : t('OFF');
+    return keepCodesWithValues(
+      t(
+        '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
+        {
+          city: activeCamera.city,
+          heading: `${roundHeadingDegrees(Number(activeCamera.headingDeg)) ?? 0}°`,
+          fov: `${Math.round(activeCamera.fovDeg)}°`,
+          range: Math.round(activeCamera.rangeM),
+          projection: projLabel,
+          calBadge: calBadge ? ` · ${calBadge}` : '',
+          provider,
+          status: `${credit}${statusMsg}`,
+        },
+      ),
+    );
+  }
+  if (catalogCount > 0)
+    return enabled
+      ? tn(
+          catalogCount,
+          '{count} camera loaded · click a camera to activate',
+          '{count} cameras loaded · click a camera to activate',
+        )
+      : tn(
+          catalogCount,
+          '{count} camera loaded · enable CCTV to activate',
+          '{count} cameras loaded · enable CCTV to activate',
+        );
+  return t('Enable CCTV to load camera intersections');
 }
 
 export function _renderCctvState(state) {
@@ -68,207 +177,73 @@ export function _renderCctvState(state) {
 
   this._updateCctvSyncChip(state?.loading, enabled);
 
-  if (this._cctvEnableBtn) {
-    this._cctvEnableBtn.classList.toggle('active', enabled);
-    this._cctvEnableBtn.textContent = enabled ? t('CCTV ON') : t('CCTV OFF');
-  }
-
   if (this._cctvSelect) {
-    // The index keeps its identity until the view or the active camera
-    // changes, so an unchanged list skips the per-option comparison. A
-    // focused picker is not rebuilt under the user; blur re-renders it.
-    const picking = document.activeElement === this._cctvSelect;
+    // A focused picker keeps the options it shows; blur re-renders it. One
+    // about to be disabled cannot hold focus, so it does not count.
+    const disabled = !enabled || cameras.length === 0;
+    const picking = document.activeElement === this._cctvSelect && !disabled;
     // Cameras the view leaves out get one closing line, so a short list
     // does not read as the whole catalog. A disabled layer has no view.
     const outside = enabled ? Math.max(0, catalogCount - cameras.length) : 0;
-    const shouldRebuild =
-      !picking &&
-      (this._cctvSelectSource !== cameras ||
-        this._cctvSelectOutside !== outside) &&
-      (this._cctvSelectOutside !== outside ||
-        this._cctvSelect.options.length !==
-          cameras.length + (outside ? 1 : 0) ||
-        cameras.some(
-          (cam, idx) => this._cctvSelect.options[idx]?.value !== cam.id,
-        ));
-    if (!picking) {
-      this._cctvSelectSource = cameras;
-      this._cctvSelectOutside = outside;
-    }
-    if (shouldRebuild) {
-      const options = document.createDocumentFragment();
-      for (const camera of cameras) {
-        const option = document.createElement('option');
-        option.value = camera.id;
-        option.textContent = `${camera.city} · ${camera.name}`;
-        options.appendChild(option);
-      }
-      if (outside) {
-        const note = document.createElement('option');
-        note.value = '';
-        note.disabled = true;
-        note.dataset.cctvOutside = '';
-        note.textContent = outsideNoteText(outside);
-        options.appendChild(note);
-      }
-      this._cctvSelect.replaceChildren(options);
-    }
-    this._cctvSelect.disabled = !enabled || cameras.length === 0;
-    // A deferred rebuild can miss a camera activated meanwhile (auto-hop,
-    // voice); add it so the picker does not go blank.
+    let picker = this._picker;
+    // The index keeps its identity until the view or the active camera
+    // changes, so an unchanged list keeps its options; a new locale words
+    // the closing line again.
     if (
+      !picking &&
+      (picker?.source !== cameras ||
+        picker.outside !== outside ||
+        picker.locale !== getLocale())
+    )
+      picker = {
+        source: cameras,
+        outside,
+        locale: getLocale(),
+        options: cameras.map((camera) => pickerOption(camera)),
+        note: outside ? outsideNoteText(outside) : '',
+      };
+    else if (
       picking &&
       activeId &&
       activeCamera &&
-      ![...this._cctvSelect.options].some((option) => option.value === activeId)
+      !picker?.options.some((option) => option.value === activeId)
     ) {
-      const option = document.createElement('option');
-      option.value = activeId;
-      option.textContent = `${activeCamera.city} · ${activeCamera.name}`;
-      this._cctvSelect.prepend(option);
-      // The added camera is one fewer outside the view.
-      const note = [...this._cctvSelect.options].find(
-        (entry) => entry.dataset?.cctvOutside !== undefined,
-      );
-      if (note) {
-        const left = Math.max(
-          0,
-          catalogCount - (this._cctvSelect.options.length - 1),
-        );
-        if (left) note.textContent = outsideNoteText(left);
-        else note.remove();
-      }
+      // A deferred rebuild can miss a camera activated meanwhile (auto-hop,
+      // voice); add it so the picker does not go blank. It is one fewer
+      // outside the view.
+      const options = [
+        pickerOption(activeCamera, activeId),
+        ...(picker?.options || []),
+      ];
+      const left = Math.max(0, catalogCount - options.length);
+      picker = {
+        ...picker,
+        options,
+        note: picker?.note && left ? outsideNoteText(left) : '',
+      };
     }
-    // The active camera is always one of the listed records.
-    if (activeId && activeCamera) {
-      this._cctvSelect.value = activeId;
-    } else if (!activeId) {
-      // With nothing in view, the closed picker says where the cameras are.
-      // A focused picker keeps its old options, so it only clears.
-      this._cctvSelect.selectedIndex =
-        !picking && cameras.length === 0 && outside ? 0 : -1;
-    }
-  }
-
-  for (const btn of [
-    this._cctvNearestBtn,
-    this._cctvPrevBtn,
-    this._cctvNextBtn,
-  ]) {
-    if (!btn) continue;
-    btn.disabled = !enabled || catalogCount === 0;
-  }
-  if (this._cctvFocusBtn) {
-    this._cctvFocusBtn.disabled = !enabled || catalogCount === 0 || !activeId;
-  }
-
-  if (this._cctvCoverageBtn) {
-    // Tri-state (viewshed design §3b): off → on (wireframes) → viewshed
-    // (color-coded volumes). The click handler cycles; this renders.
-    const mode = state?.coverageMode || (state?.showCoverage ? 'on' : 'off');
-    this._cctvCoverageBtn.classList.toggle('active', mode !== 'off');
-    this._cctvCoverageBtn.textContent =
-      mode === 'viewshed'
-        ? t('VIEWSHED ON')
-        : mode === 'on'
-          ? t('COVERAGE ON')
-          : t('COVERAGE OFF');
-    this._cctvCoverageBtn.disabled = !enabled;
-  }
-
-  if (this._cctvAutoHopBtn) {
-    const autoHop = !!state?.autoHop;
-    this._cctvAutoHopBtn.classList.toggle('active', autoHop);
-    this._cctvAutoHopBtn.textContent = autoHop
-      ? t('AUTO HOP ON')
-      : t('AUTO HOP OFF');
-    this._cctvAutoHopBtn.disabled = !enabled;
-  }
-
-  if (this._cctvProjectionBtn) {
-    const showProjection = state?.showProjection !== false;
-    this._cctvProjectionBtn.classList.toggle('active', showProjection);
-    this._cctvProjectionBtn.textContent = showProjection
-      ? t('PROJECTION ON')
-      : t('PROJECTION OFF');
-    this._cctvProjectionBtn.disabled = !enabled;
-  }
-
-  if (this._cctvQualityChip) {
-    // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only,
-    // no in-world tint): three states driven by cctv.js's deriveCalBadge,
-    // no client-side scoring math. Casing is unified via _calBadgeLabel so
-    // the chip and the meta line never drift onto different conventions.
-    // Save-gated persistence (viewshed design §3e): unsaved live edits show
-    // EDITED on top of whatever the persisted badge state is — SAVE CAL
-    // promotes to CALIBRATED, RESET CAL clears.
-    const badge = activeCamera?.calBadge || null;
-    const dirty = !!activeCamera?.calDirty;
-    updateStatusBadge(this._cctvQualityChip, {
-      label: dirty
-        ? t('CAL · EDITED (UNSAVED)')
-        : t('CAL · {badge}', {
-            badge: this._calBadgeLabel(badge),
-          }),
+    this._picker = picker;
+    this.store.setPicker({
+      options: picker?.options || [],
+      note: picker?.note || '',
+      disabled,
+      // The active camera is always one of the listed records. With nothing
+      // active the closed picker shows the note when nothing is in view; a
+      // focused picker keeps its old options, so it only clears.
+      selection:
+        activeId && activeCamera
+          ? { value: activeId }
+          : !activeId
+            ? { index: !picking && cameras.length === 0 && outside ? 0 : -1 }
+            : null,
     });
-    this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : badge || '';
   }
 
-  this._syncCctvCalReadout(enabled, activeCamera);
-
-  if (this._cctvMeta) {
-    if (activeCamera) {
-      const provider = cctvSourceLabelText(
-        activeCamera.sourceLabel ||
-          activeCamera.provider ||
-          'Configured Source',
-      );
-      const statusMsg = activeCamera.sourceMessage
-        ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
-        : '';
-      // A partner-supplied feed inside a pack names its owner here.
-      const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
-      const calBadge = activeCamera.calBadge
-        ? this._calBadgeLabel(activeCamera.calBadge)
-        : '';
-      const projLabel =
-        state?.showProjection !== false ? t('MONITOR') : t('OFF');
-      this._cctvMeta.textContent = t(
-        '{city} · HDG {heading} · FOV {fov} · RANGE {range}m · {projection}{calBadge} · {provider}{status}',
-        {
-          city: activeCamera.city,
-          heading: `${Math.round(activeCamera.headingDeg)}°`,
-          fov: `${Math.round(activeCamera.fovDeg)}°`,
-          range: Math.round(activeCamera.rangeM),
-          projection: projLabel,
-          calBadge: calBadge ? ` · ${calBadge}` : '',
-          provider,
-          status: `${credit}${statusMsg}`,
-        },
-      );
-    } else if (catalogCount > 0) {
-      this._cctvMeta.textContent = enabled
-        ? tn(
-            catalogCount,
-            '{count} camera loaded · click a camera to activate',
-            '{count} cameras loaded · click a camera to activate',
-          )
-        : tn(
-            catalogCount,
-            '{count} camera loaded · enable CCTV to activate',
-            '{count} cameras loaded · enable CCTV to activate',
-          );
-    } else {
-      this._cctvMeta.textContent = t(
-        'Enable CCTV to load camera intersections',
-      );
-    }
-  }
+  this.store.publish(presentCctvPanel(state, enabled));
 
   const liveIntent = enabled && !!activeCamera?.isVideo;
+  this.store.setLive(liveIntent);
   if (this._cctvVideo) {
-    this._cctvVideo.hidden = !liveIntent;
-    if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
     const visible =
       liveIntent &&
       !document.hidden &&
@@ -288,16 +263,15 @@ export function _renderCctvState(state) {
   if (this._cctvFrame && !liveIntent) {
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
-    const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
-    const frameLoading = this._cctvFrame.dataset.loading === 'true';
+    const cameraChanged = this._frame.cameraId !== nextCameraId;
+    const frameLoading = this._frame.loading;
     // A same-camera refresh waits for the current image to settle. Replacing
     // src every 10 seconds can cancel a slow but healthy decode forever and
     // leave SNAPSHOT · OK beside a blank/loading preview. Camera changes are
     // immediate so navigation never waits on the prior camera's request.
     if (
       nextSrc &&
-      (cameraChanged ||
-        (!frameLoading && this._cctvFrame.dataset.currentSrc !== nextSrc))
+      (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
       this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
     }
@@ -322,25 +296,46 @@ export function _typeCctvSummary(text) {
   this._lastCctvSummaryText = nextText;
 
   clearInterval(this._cctvSummaryTypingTimer);
-  this._cctvSummary.textContent = '';
+  this.store.setSummary('');
   let idx = 0;
   this._cctvSummaryTypingTimer = setInterval(() => {
     if (this.destroyed) return;
     idx += 3;
     if (idx >= nextText.length) {
-      this._cctvSummary.textContent = nextText;
+      this.store.setSummary(nextText);
       clearInterval(this._cctvSummaryTypingTimer);
       this._cctvSummaryTypingTimer = null;
       return;
     }
-    this._cctvSummary.textContent = nextText.slice(0, idx);
+    this.store.setSummary(nextText.slice(0, idx));
   }, 20);
+}
+
+/** Publish a change to the camera grid chip; its label stays while hidden. */
+export function _publishCctvChip(patch) {
+  const current = this._cctvChip ?? {
+    visible: false,
+    labelKey: msg('loading frames'),
+    immediate: false,
+    progress: '0/0',
+    stopped: false,
+  };
+  // The chip keeps its English key, so a new locale shows it again; the
+  // view gets the label alone.
+  const next = { ...current, ...patch };
+  next.label = t(next.labelKey);
+  if (
+    this._cctvChip &&
+    Object.keys(next).every((key) => next[key] === current[key])
+  )
+    return;
+  this._cctvChip = next;
+  const { labelKey, ...chip } = next;
+  this.statusStore.publishCctv(chip);
 }
 
 export function _updateCctvSyncChip(loading, enabled) {
   if (this.destroyed) return;
-  if (!this._cctvSyncChip || !this._cctvSyncLabel || !this._cctvSyncProgress)
-    return;
   const total = Number(loading?.total) || 0;
   const loaded = Math.max(0, Math.min(Number(loading?.loaded) || 0, total));
   const busy = !!enabled && !!loading?.active && total > 0;
@@ -349,31 +344,35 @@ export function _updateCctvSyncChip(loading, enabled) {
     clearTimeout(this._cctvChipHideTimer);
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = true;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, t('loading frames'));
     // The counter is left plain on purpose: it ticks every few frames
     // during a grid load, and flapping it would read as a slot machine.
-    this._cctvSyncProgress.textContent = `${loaded}/${total}`;
-    this._cctvSyncChip.classList.add('visible');
+    this._publishCctvChip({
+      visible: true,
+      labelKey: msg('loading frames'),
+      progress: `${loaded}/${total}`,
+    });
     return;
   }
 
   if (this._cctvChipWasBusy && enabled && total > 0) {
     // Load just completed — flash the final count, then auto-hide.
     this._cctvChipWasBusy = false;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, t('camera grid ready'));
-    this._cctvSyncProgress.textContent = `${total}/${total}`;
-    this._cctvSyncChip.classList.add('visible');
+    this._publishCctvChip({
+      visible: true,
+      labelKey: msg('camera grid ready'),
+      progress: `${total}/${total}`,
+    });
     clearTimeout(this._cctvChipHideTimer);
     this._cctvChipHideTimer = window.setTimeout(() => {
       if (this.destroyed) return;
       this._cctvChipHideTimer = null;
-      this._cctvSyncChip.classList.remove('visible');
+      this._publishCctvChip({ visible: false });
     }, 1500);
     return;
   }
 
   if (!this._cctvChipHideTimer) {
     this._cctvChipWasBusy = false;
-    this._cctvSyncChip.classList.remove('visible');
+    this._publishCctvChip({ visible: false });
   }
 }

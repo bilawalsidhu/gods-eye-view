@@ -6,11 +6,8 @@ import {
   windReadingResult,
   windUnitChips,
 } from './presentation.js';
-import {
-  inspectWindAtCenter,
-  createWindInspectionMarker,
-  WIND_UNITS,
-} from './inspection.js';
+import { inspectWindAtCenter, WIND_UNITS } from './inspection.js';
+import { createWindInspectionMarker } from './inspectionMarker.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 

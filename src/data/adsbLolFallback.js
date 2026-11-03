@@ -1,3 +1,5 @@
+import { readAdsbVerticalRateFpm } from '../sources/adsbFields.js';
+
 const KNOT_TO_MPS = 0.514444;
 const FOOT_TO_M = 0.3048;
 const FPM_TO_MPS = 0.00508;
@@ -61,8 +63,7 @@ export function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
   const barometricFeet = onGround ? null : finiteNumber(aircraft?.alt_baro);
   const geometricFeet = finiteNumber(aircraft?.alt_geom);
   const groundSpeedKnots = finiteNumber(aircraft?.gs);
-  const verticalRateFpm =
-    finiteNumber(aircraft?.baro_rate) ?? finiteNumber(aircraft?.geom_rate);
+  const verticalRateFpm = readAdsbVerticalRateFpm(aircraft);
   const track = finiteNumber(aircraft?.track);
 
   return [

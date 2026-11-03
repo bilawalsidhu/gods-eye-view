@@ -1,6 +1,6 @@
 import { encodeParams, decodeParams } from '../layers/streetLevel/params.js';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
-import { expandApplicationHtml } from '../../build/application-html.js';
+import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -734,18 +734,27 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     /this\.(?:flightState\.)?_models3dMode = 'proximity';/,
     'ui.js: and believes the mode is proximity',
   );
-  const html = expandApplicationHtml(
+  const html = await renderApplicationHtml(
     await readFile(new URL('../../index.html', import.meta.url), 'utf8'),
   );
   assert.match(
     html,
-    /class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true"/,
+    /<button(?=[^>]*\sid="models3d-toggle")(?=[^>]*\sclass="(?=[^"]*\bpp-toggle-btn\b)(?=[^"]*\bactive\b))(?=[^>]*\saria-pressed="true")/,
     'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so',
   );
   assert.match(
     ui,
-    /this\._models3dBtn\?\.setAttribute\(\s*'aria-pressed',\s*String\(this\.(?:flightState\.)?_models3dEnabled\),?\s*\)/,
-    'ui.js: and keeps aria-pressed synchronized, so the lit state is not colour-only',
+    /this\._models3dPressedShown = this\._models3dEnabled;/,
+    'ui.js: and keeps the pressed state synchronized, so the lit state is not colour-only',
+  );
+  const panel = await readFile(
+    new URL('../ui/views/panels/DisplayPanel.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    panel,
+    /:pressed="models3dOn" pressed-class="active" id="models3d-toggle"/,
+    'DisplayPanel.vue: the view renders aria-pressed with the lit state',
   );
   assert.match(
     html,
