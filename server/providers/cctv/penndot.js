@@ -1,5 +1,5 @@
 import { fetchHlsBytes } from './stream.js';
-import { prioritizeSources } from './normalize.js';
+import { cameraDisplayCode, prioritizeSources } from './normalize.js';
 import { DEFAULT_PENNDOT_MAX_SOURCES } from './constants.js';
 
 const ORIGIN = 'https://511pa.com';
@@ -56,12 +56,16 @@ export function pennDotCameraToSources(site) {
   // State envelope, including cameras just over the border shown by 511PA.
   if (!(lat >= 39.6 && lat <= 42.6 && lon >= -80.6 && lon <= -74.5)) return [];
   const county = typeof site.county === 'string' ? site.county.trim() : '';
-  const location = String(
-    site.location ||
-      site.cameraName ||
-      site.roadway ||
-      'Pennsylvania traffic camera',
-  );
+  // Some newer/portable cameras repeat the asset key as their location.
+  const publishedLocation =
+    typeof site.location === 'string' &&
+    !/^CAM\d+[A-Z0-9_-]*$/i.test(site.location.trim())
+      ? site.location
+      : '';
+  const location =
+    [publishedLocation, site.roadway, site.cameraName]
+      .find((value) => typeof value === 'string' && value.trim())
+      ?.trim() || 'Pennsylvania traffic camera';
   return site.images.flatMap((image) => {
     if (
       !image ||
@@ -84,7 +88,8 @@ export function pennDotCameraToSources(site) {
           : 'pennsylvania',
         provider: 'PennDOT / 511PA',
         sourceKind: '511pa-public-camera',
-        code: String(site.cameraName || site.roadway || image.id),
+        // Map labels use 511PA's road/intersection, not its internal asset key.
+        code: cameraDisplayCode(location.toUpperCase()),
         lat,
         lon,
         headingConfidence: 'unknown',

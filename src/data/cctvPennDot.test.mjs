@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 import {
+  CAMERA_CODE_MAX_CHARS,
+  normalizeSourceItem,
+} from '../../server/providers/cctv/normalize.js';
+import {
   pennDotCameraToSources,
   loadPennDotSources,
   createPennDotStreamResolver,
@@ -81,6 +85,47 @@ test('511PA uses published WGS84 coordinates and separate image ids; traffic dir
   assert.equal(camera.headingDeg, undefined);
   assert.equal(camera.headingConfidence, 'unknown');
   assert.match(camera.credit, /Northbound/);
+});
+
+test('511PA map labels use published roads and intersections instead of asset keys', () => {
+  const [camera] = pennDotCameraToSources(
+    site({ location: 'US-202 @ PAOLI PIKE' }),
+  );
+  assert.equal(camera.name, 'US-202 @ PAOLI PIKE');
+  assert.equal(camera.code, 'US-202 @ PAOLI PIKE');
+  assert.equal(normalizeSourceItem(camera).code, 'US-202 @ PAOLI PIKE');
+  assert.equal(camera.id, '511pa-5852');
+
+  const [long] = pennDotCameraToSources(site());
+  assert.equal(long.name, 'US-202 @ PA-3/ WEST CHESTER PIKE');
+  assert.equal(long.code, 'US-202 @ PA-3/ WEST CHESTER…');
+  assert.ok(long.code.length <= CAMERA_CODE_MAX_CHARS);
+  assert.equal(normalizeSourceItem(long).name, long.name);
+});
+
+test('511PA labels use roadway when location is blank or repeats an asset key', () => {
+  for (const location of [
+    undefined,
+    null,
+    '',
+    '   ',
+    'CAM06061CM223',
+    ' CAM12029PORTABLE ',
+  ]) {
+    const [camera] = pennDotCameraToSources(
+      site({ location, roadway: ' US 202 ' }),
+    );
+    assert.equal(camera.name, 'US 202');
+    assert.equal(camera.code, 'US 202');
+  }
+  const [fallback] = pennDotCameraToSources(
+    site({ location: '', roadway: '', cameraName: 'CAM06061CM223' }),
+  );
+  assert.equal(fallback.name, 'CAM06061CM223');
+  const [unnamed] = pennDotCameraToSources(
+    site({ location: null, roadway: null, cameraName: null }),
+  );
+  assert.equal(unnamed.name, 'Pennsylvania traffic camera');
 });
 
 test('offline video falls back to snapshots; blocked views, malformed ids and bad geometry are omitted', () => {
