@@ -1,8 +1,9 @@
 /**
  * Snap Map–style heat raster for the Active Fires far-zoom bands: detections
- * are binned on an equirectangular grid (row 0 = north, column 0 = 180°W),
- * blurred, normalized on a log scale and mapped through HEAT_PALETTE. Pure:
- * no Cesium, no DOM, so the whole pipeline is unit-tested in node.
+ * are linearly binned on an equirectangular grid (row 0 = north, column
+ * 0 = 180°W), blurred, normalized on a log scale and mapped through
+ * HEAT_PALETTE. Pure: no Cesium, no DOM, so the whole pipeline is unit-tested
+ * in node.
  */
 
 /** Below this normalized heat nothing is painted: empty land stays empty. */
@@ -54,19 +55,35 @@ export const HEAT_MIN_WEIGHT_MW = 0.5;
 const defaultWeight = (fire) =>
   Math.max(HEAT_MIN_WEIGHT_MW, Number(fire.frp) || 0);
 
+/**
+ * Linear binning (Wand 1994): each detection's weight is shared between the
+ * four pixel centres around it in proportion to closeness, instead of
+ * dropping whole into one pixel. Spots then sit at the true position rather
+ * than snapping by up to half a pixel (~10 km), and a lone weak fire blurs
+ * into a round spot instead of a square or a plus sign. Longitude wraps;
+ * rows beyond the poles fold back onto the edge row.
+ */
 export function binFires(fires, { width, height, weight = defaultWeight }) {
   const grid = new Float32Array(width * height);
+  const row = (y) => Math.min(height - 1, Math.max(0, y)) * width;
+  const col = (x) => ((x % width) + width) % width;
   for (const fire of fires) {
     if (!Number.isFinite(fire.lat) || !Number.isFinite(fire.lon)) continue;
-    const x = Math.min(
-      width - 1,
-      Math.max(0, Math.floor(((fire.lon + 180) / 360) * width)),
-    );
-    const y = Math.min(
-      height - 1,
-      Math.max(0, Math.floor(((90 - fire.lat) / 180) * height)),
-    );
-    grid[y * width + x] += weight(fire);
+    const fx = ((fire.lon + 180) / 360) * width - 0.5;
+    const fy = ((90 - fire.lat) / 180) * height - 0.5;
+    const x0 = Math.floor(fx);
+    const y0 = Math.floor(fy);
+    const tx = fx - x0;
+    const ty = fy - y0;
+    const w = weight(fire);
+    const top = row(y0);
+    const bottom = row(y0 + 1);
+    const left = col(x0);
+    const right = col(x0 + 1);
+    grid[top + left] += w * (1 - tx) * (1 - ty);
+    grid[top + right] += w * tx * (1 - ty);
+    grid[bottom + left] += w * (1 - tx) * ty;
+    grid[bottom + right] += w * tx * ty;
   }
   return grid;
 }

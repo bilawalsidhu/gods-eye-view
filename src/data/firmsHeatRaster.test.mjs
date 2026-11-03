@@ -28,22 +28,37 @@ test('palette runs ember to white-hot and starts fully transparent', () => {
   }
 });
 
-test('binFires drops each detection into its equirectangular pixel', () => {
-  const grid = binFires([fire(89.9, -179.9, 1), fire(-89.9, 179.9, 1)], {
+test('binFires puts a detection at a pixel centre wholly in that pixel', () => {
+  // 4×2 grid: pixel centres at lon −135/−45/45/135, lat ±45.
+  const grid = binFires([fire(45, -135, 1), fire(-45, 135, 1)], {
     width: 4,
     height: 2,
   });
-  assert.equal(grid[0], 1, 'north-west corner');
-  assert.equal(grid[7], 1, 'south-east corner');
+  assert.equal(grid[0], 1, 'north-west pixel');
+  assert.equal(grid[7], 1, 'south-east pixel');
   assert.equal(
     grid.reduce((a, b) => a + b, 0),
     2,
   );
 });
 
+test('binFires shares a detection between the pixels around it', () => {
+  const between = binFires([fire(45, 0, 1)], { width: 4, height: 2 });
+  assert.equal(between[1], 0.5, 'half to the pixel west of it');
+  assert.equal(between[2], 0.5, 'half to the pixel east of it');
+  const quarter = binFires([fire(45, -112.5, 1)], { width: 4, height: 2 });
+  assert.equal(quarter[0], 0.75, 'closer centre takes more');
+  assert.equal(quarter[1], 0.25);
+  const wrapped = binFires([fire(45, 180, 1)], { width: 4, height: 2 });
+  assert.equal(wrapped[3], 0.5, 'the antimeridian wraps');
+  assert.equal(wrapped[0], 0.5);
+  const polar = binFires([fire(90, -135, 1)], { width: 4, height: 2 });
+  assert.equal(polar[0], 1, 'beyond the last row folds back onto it');
+});
+
 test('binFires weights each detection by its radiative power', () => {
   const grid = binFires(
-    [fire(0.1, 0.1, 250), fire(0.2, 0.2, 0), fire(0.3, 0.3, Number.NaN)],
+    [fire(45, 45, 250), fire(45, 45, 0), fire(45, 45, Number.NaN)],
     { width: 4, height: 2 },
   );
   assert.equal(grid[2], 250 + 2 * HEAT_MIN_WEIGHT_MW);
