@@ -9,7 +9,12 @@ import {
   mapAnalystRecord,
 } from './model.js';
 export * from './model.js';
-export { createUsgsEarthquakeSource } from './source.js';
+export {
+  createUsgsEarthquakeSource,
+  createEmscEarthquakeSource,
+  createEarthquakeSource,
+  emscQueryUrl,
+} from './source.js';
 
 // A portable package (no i18n): the error stays English data and the layer
 // panel shows it translated.
@@ -27,12 +32,13 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
+  let _missingSources = [];
 
   const layer = {
     id: 'earthquakes',
     name: 'Earthquakes (24h)',
     icon: '🌋',
-    source: 'USGS',
+    source: 'USGS · EMSC',
     updateInterval: 60000,
 
     init(viewer) {
@@ -44,6 +50,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _missingSources = [];
       _enabled = false;
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
       console.log('[Data:Earthquakes] Initialized');
@@ -72,7 +79,13 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       const request = new AbortController();
       _request = request;
       try {
-        const rows = await source.getSnapshot({ signal: request.signal });
+        const snapshot = source.getSnapshotWithStatus
+          ? await source.getSnapshotWithStatus({ signal: request.signal })
+          : {
+              rows: await source.getSnapshot({ signal: request.signal }),
+              missingSources: [],
+            };
+        const { rows } = snapshot;
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
 
@@ -83,6 +96,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         for (const {
           stableId,
           usgsId,
+          emscId = null,
           lon,
           lat,
           depthKm,
@@ -118,6 +132,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
               properties: {
                 // Analyst seam (additive): the USGS event id (e.g. "us7000abcd").
                 usgsId,
+                // EMSC event id for events only EMSC reports.
+                emscId,
                 mag,
                 place,
                 time,
@@ -151,7 +167,12 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
 
         _count = count;
         _lastUpdate = Date.now();
-        _lastError = null;
+        _missingSources = snapshot.missingSources || [];
+        _lastError = _missingSources.includes('USGS')
+          ? msg('Partial earthquake coverage: USGS unavailable')
+          : _missingSources.includes('EMSC')
+            ? msg('Partial earthquake coverage: EMSC unavailable')
+            : null;
         console.log(`[Data:Earthquakes] Updated: ${_count} events (M2.5+)`);
         return true;
       } catch (e) {
@@ -179,6 +200,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _missingSources = [];
     },
 
     /**
@@ -210,7 +232,11 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         result.push(
           mapAnalystRecord(
             {
-              id: p?.usgsId?.getValue(now) ?? null,
+              id:
+                p?.usgsId?.getValue(now) ??
+                (p?.emscId?.getValue(now)
+                  ? `emsc:${p.emscId.getValue(now)}`
+                  : null),
               mag: p?.mag?.getValue(now),
               place: p?.place?.getValue(now),
               time: p?.time?.getValue(now),
@@ -230,6 +256,9 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         count: _count,
         lastUpdate: _lastUpdate,
         error: _lastError,
+        complete: _lastUpdate !== null && !_lastError,
+        partial: _missingSources.length > 0,
+        missingSources: [..._missingSources],
       };
     },
   };

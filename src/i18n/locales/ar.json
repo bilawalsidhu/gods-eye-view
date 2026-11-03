@@ -3224,5 +3224,7 @@
   "Exit cockpit to fly to a drawing": "اخرج من القمرة للانتقال إلى رسم",
   "Directions, drawing and your own files": "الاتجاهات والرسم وملفاتك الخاصة",
   "Sea Marks": "علامات بحرية",
-  "Ski Pistes": "مسارات التزلج"
+  "Ski Pistes": "مسارات التزلج",
+  "Partial earthquake coverage: USGS unavailable": "تغطية جزئية للزلازل: USGS غير متاح",
+  "Partial earthquake coverage: EMSC unavailable": "تغطية جزئية للزلازل: EMSC غير متاح"
 }

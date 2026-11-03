@@ -2874,5 +2874,7 @@
   "Exit cockpit to fly to a drawing": "请先退出座舱，再飞往绘制位置",
   "Directions, drawing and your own files": "路线导航、绘制和你自己的文件",
   "Sea Marks": "航标",
-  "Ski Pistes": "滑雪道"
+  "Ski Pistes": "滑雪道",
+  "Partial earthquake coverage: USGS unavailable": "地震数据覆盖不完整：USGS 不可用",
+  "Partial earthquake coverage: EMSC unavailable": "地震数据覆盖不完整：EMSC 不可用"
 }

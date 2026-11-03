@@ -3084,5 +3084,7 @@
   "Exit cockpit to fly to a drawing": "Выйдите из кабины, чтобы перелететь к рисунку",
   "Directions, drawing and your own files": "Маршруты, рисование и ваши файлы",
   "Sea Marks": "Морские знаки",
-  "Ski Pistes": "Горнолыжные трассы"
+  "Ski Pistes": "Горнолыжные трассы",
+  "Partial earthquake coverage: USGS unavailable": "Неполные данные о землетрясениях: USGS недоступен",
+  "Partial earthquake coverage: EMSC unavailable": "Неполные данные о землетрясениях: EMSC недоступен"
 }
