@@ -467,3 +467,66 @@ test('far zoom drapes one heatmap and draws no rectangles; markers and disable h
     restoreDocument();
   }
 });
+
+test('the spot-size slider rebuilds only the heatmap, on a proportionally coarser grid', async () => {
+  const priorDocument = globalThis.document;
+  const grids = [];
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({
+        createImageData: (w, hh) => {
+          grids.push([w, hh]);
+          return { data: new Uint8ClampedArray(w * hh * 4) };
+        },
+        putImageData() {},
+        createRadialGradient: () => ({ addColorStop() {} }),
+        fillRect() {},
+      }),
+      toDataURL: () => 'data:image/png;base64,AAAA',
+    }),
+  };
+  const h = harness({
+    fires: [makeFire(), makeFire({ index: 8, lat: 30.6, lon: -98.3, frp: 12 })],
+    withDataSource: true,
+    cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 12_000_000),
+  });
+  h.viewer.scene.primitives = { add() {}, remove() {}, raiseToTop() {}, contains: () => true };
+  h.viewer.scene.frameState = { mode: Cesium.SceneMode.SCENE3D };
+  const collection = {
+    addImageryProvider: (provider) => ({ provider, show: true }),
+    remove() {},
+    raiseToTop() {},
+  };
+  try {
+    h.layer.attachShellServices({ imageryHost: () => ({ kind: 'globe', collection }) });
+    h.layer._renderLodForTest('global');
+    assert.deepEqual(grids.at(-1), [2048, 1024]);
+    assert.deepEqual(
+      h.layer.getRowControls().sliders.map((slider) => slider.id),
+      ['min-frp', 'heat-spot-size'],
+    );
+    const spot = h.layer.getRowControls().sliders[1];
+    assert.equal(spot.valueText, '1×');
+    assert.deepEqual(spot.params(1000), { spotSize: 400 });
+
+    let repaints = 0;
+    h.layer.setRowControlsListener(() => repaints++);
+    h.layer.setParams({ spotSize: 200 });
+    assert.equal(h.layer.getParams().spotSize, 200);
+    assert.equal(h.layer.getParams().minFrp, 0, 'the filter is untouched');
+    assert.equal(h.layer.getStats().count, 2, 'every fire still shown');
+    assert.equal(repaints, 1, 'the row repaints its value');
+    assert.equal(h.layer.getRowControls().sliders[1].valueText, '2×');
+    // The rebuild trails a drag (HEAT_REBUILD_MS) and keeps the old drape meanwhile.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.deepEqual(grids.at(-1), [1024, 512]);
+
+    h.layer.setParams({ spotSize: 'nope' });
+    assert.equal(h.layer.getParams().spotSize, 200, 'invalid input is ignored');
+  } finally {
+    h.layer.destroy(h.viewer);
+    h.cleanup();
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
+});

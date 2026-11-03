@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { DEFAULT_FIRE_FILTER } from '../../data/firmsIntensity.js';
+import { HEAT_SPOT_SIZE_DEFAULT } from '../../data/firmsHeatRaster.js';
 
 export function createFirmsState({ services, config }) {
   const layerState = {};
@@ -68,6 +69,10 @@ export function createFirmsState({ services, config }) {
   /** Minimum FRP (MW) and confidence mode; see firmsIntensity.js. */
 
   layerState._filter = { ...DEFAULT_FIRE_FILTER };
+
+  /** Heatmap spot size, percent of the shipped size (firmsHeatRaster.js). */
+
+  layerState._spotSize = HEAT_SPOT_SIZE_DEFAULT;
 
   /** Panel callback: repaint the row controls (counter) after a load. */
 

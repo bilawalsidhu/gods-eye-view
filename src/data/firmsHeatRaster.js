@@ -43,6 +43,70 @@ export function heatColorAt(t) {
   ];
 }
 
+/**
+ * Spot size, in percent of the shipped size: the panel slider and share
+ * option `w.s`. Whole percents, half to four times.
+ */
+export const HEAT_SPOT_SIZE_MIN = 50;
+export const HEAT_SPOT_SIZE_MAX = 400;
+export const HEAT_SPOT_SIZE_DEFAULT = 100;
+
+/**
+ * Spot size → whole percent inside the bounds, or null.
+ * @param {*} value
+ * @returns {?number}
+ */
+export function normalizeHeatSpotSize(value) {
+  const number =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : NaN;
+  if (!Number.isFinite(number)) return null;
+  const rounded = Math.round(number);
+  return rounded >= HEAT_SPOT_SIZE_MIN && rounded <= HEAT_SPOT_SIZE_MAX
+    ? rounded
+    : null;
+}
+
+/**
+ * The grid for a spot size. The same one-pixel blur on a grid that many
+ * times coarser (or finer) scales every spot exactly; widening the blur
+ * instead lowers each spot's peak, so weak lone fires faded as they grew.
+ * @param {{width: number, height: number, sigmaPx: number}} base Shipped grid.
+ * @param {number} spotSize Percent of the shipped size.
+ * @returns {{width: number, height: number, sigmaPx: number}}
+ */
+export function heatGridForSpotSize(base, spotSize) {
+  const percent = normalizeHeatSpotSize(spotSize) ?? HEAT_SPOT_SIZE_DEFAULT;
+  const height = Math.round((base.height * HEAT_SPOT_SIZE_DEFAULT) / percent);
+  return { width: height * 2, height, sigmaPx: base.sigmaPx };
+}
+
+/**
+ * Slider axis for the spot size: log2, so ½× and 2× sit equally far from 1×.
+ * Values snap to 5 % steps, which is also their share-link form.
+ */
+const SPOT_LOG_MIN = Math.log2(HEAT_SPOT_SIZE_MIN / 100);
+const SPOT_LOG_SPAN = Math.log2(HEAT_SPOT_SIZE_MAX / 100) - SPOT_LOG_MIN;
+
+/** Track position in 0..1 for a spot size in percent. */
+export function sliderPositionForSpotSize(spotSize) {
+  const percent = normalizeHeatSpotSize(spotSize) ?? HEAT_SPOT_SIZE_DEFAULT;
+  return (Math.log2(percent / 100) - SPOT_LOG_MIN) / SPOT_LOG_SPAN;
+}
+
+/** Spot size in percent for a track position in 0..1. */
+export function spotSizeForSliderPosition(position) {
+  const p = Number.isFinite(position) ? Math.max(0, Math.min(1, position)) : 0;
+  const percent = 100 * Math.pow(2, SPOT_LOG_MIN + p * SPOT_LOG_SPAN);
+  return Math.min(
+    HEAT_SPOT_SIZE_MAX,
+    Math.max(HEAT_SPOT_SIZE_MIN, Math.round(percent / 5) * 5),
+  );
+}
+
 /** Weight of a detection with no or zero FRP, in megawatts. */
 export const HEAT_MIN_WEIGHT_MW = 0.5;
 

@@ -2949,6 +2949,9 @@
   "≥ {value} MW": "≥ {value} MW",
   "Confidence": "Konfidenz",
   "Minimum fire radiative power, megawatts": "Minimale Strahlungsleistung des Brandes in Megawatt",
+  "Heatmap spot size": "Fleckengröße der Heatmap",
+  "Far-zoom heatmap spot size": "Fleckengröße der Heatmap in der Fernansicht",
+  "{value}×": "{value}×",
   "fire intensity filter|All": "Alle",
   "Detection confidence": "Konfidenz der Erkennung",
   "{shown} of {total} shown": "{shown} von {total} angezeigt"

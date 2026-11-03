@@ -1,7 +1,10 @@
 import * as Cesium from 'cesium';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
-import { buildHeatRaster } from '../../data/firmsHeatRaster.js';
+import {
+  buildHeatRaster,
+  heatGridForSpotSize,
+} from '../../data/firmsHeatRaster.js';
 import {
   LOD_LEVELS,
   CONTEXT_TOP_N,
@@ -144,13 +147,16 @@ export function createRendering({
     return layerState._heatImagery;
   }
 
-  /** Build the heat raster from the shown set and drape it. */
+  /** Build the heat raster from the shown set at the chosen spot size and drape it. */
 
   function rebuildHeatRaster() {
     clearTimeout(layerState._heatRebuildTimer);
     layerState._heatRebuildTimer = null;
     if (layerState._destroyed) return;
-    layerState._heatRaster = buildHeatRaster(layerState._fires, HEAT_RASTER);
+    layerState._heatRaster = buildHeatRaster(
+      layerState._fires,
+      heatGridForSpotSize(HEAT_RASTER, layerState._spotSize),
+    );
     heatImagery().setRaster(layerState._heatRaster);
   }
 

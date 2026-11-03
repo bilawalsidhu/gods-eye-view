@@ -2205,14 +2205,19 @@ areas; their accent is the strongest fire's FRP color.
 The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale
 whose track is painted with the ramp and ticked at the same six values (its
 value reads "All" or "≥ N MW"), a "Confidence" switch with All / Nominal+ /
-High, and an "N of M shown" counter. The default is 0 MW and
+High, a "Heatmap spot size" slider (½× to 4× on a log2 axis, 5 % steps,
+default 1×) and an "N of M shown" counter. The spot size scales the heat
+grid rather than the blur (2× is a 1024 × 512 grid with the same one-pixel
+blur), so every spot grows exactly and weak lone fires do not fade as they
+widen; changing it rebuilds only the heatmap, not the shown set. The default is 0 MW and
 All, because many of the strongest detections are rated low confidence. The
 filter runs once in `ingestion.applyFilter()` before rendering, so markers,
 cards, the heatmap, the shared context store, the top-fires query and the
 analyst records all see one filtered set; a selected fire that no longer passes
-is deselected. The layer state keeps both options under the `w` (`local-firms`)
-share token as `f` (whole megawatts, 0–10,000) and `c` (`a`, `n`, `h`),
-including the short share codec; a link without them restores the defaults.
+is deselected. The layer state keeps the options under the `w` (`local-firms`)
+share token as `f` (whole megawatts, 0–10,000), `c` (`a`, `n`, `h`) and `s`
+(spot size in percent, 50–400), including the short share codec; a link
+without them restores the defaults.
 
 The `get_active_fires` tool accepts its own `min_frp_mw` and `confidence`
 (`all`, `nominal`, `high`) arguments, independent of the panel's setting, and

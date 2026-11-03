@@ -2879,6 +2879,9 @@
   "≥ {value} MW": "≥ {value} MW",
   "Confidence": "信頼度",
   "Minimum fire radiative power, megawatts": "火災放射強度の最小値（メガワット）",
+  "Heatmap spot size": "ヒートマップの点の大きさ",
+  "Far-zoom heatmap spot size": "遠景ヒートマップの点の大きさ",
+  "{value}×": "{value}×",
   "fire intensity filter|All": "すべて",
   "Detection confidence": "検知の信頼度",
   "{shown} of {total} shown": "{total}件中{shown}件を表示"

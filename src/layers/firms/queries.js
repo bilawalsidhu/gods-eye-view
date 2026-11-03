@@ -8,6 +8,11 @@ import {
   rampTrackGradient,
   sliderPositionForFrp,
 } from '../../data/firmsIntensity.js';
+import {
+  normalizeHeatSpotSize,
+  sliderPositionForSpotSize,
+  spotSizeForSliderPosition,
+} from '../../data/firmsHeatRaster.js';
 import { formatNumber, t } from '../../i18n/index.js';
 import { LOD_LEVELS, REFRESH_INTERVAL_MS } from './policy.js';
 
@@ -22,6 +27,16 @@ export function createQueries({
   feed,
 }) {
   const { id, name, icon, source } = config;
+
+  /** Spot sizes marked under the spot-size slider, in percent. */
+  const SPOT_SIZE_TICKS = [50, 100, 200, 400];
+
+  /** Spot-size label for a percent ("0.5×", "1×", "1.5×"). */
+  function spotSizeLabel(percent) {
+    return t('{value}×', {
+      value: formatNumber(percent / 100, { maximumFractionDigits: 2 }),
+    });
+  }
 
   /** Whole-megawatt label for a slider value or tick ("0", "20", "1 000"). */
   function frpLabel(frp) {
@@ -83,12 +98,12 @@ export function createQueries({
     updateInterval: REFRESH_INTERVAL_MS,
 
     /**
-     * The intensity filter as layer options (share token `w`, owner
-     * `local-firms` in layerState.js).
-     * @returns {{minFrp: number, confidence: string}}
+     * The intensity filter and the heatmap spot size as layer options (share
+     * token `w`, owner `local-firms` in layerState.js).
+     * @returns {{minFrp: number, confidence: string, spotSize: number}}
      */
     getParams() {
-      return { ...layerState._filter };
+      return { ...layerState._filter, spotSize: layerState._spotSize };
     },
 
     /**
@@ -96,24 +111,36 @@ export function createQueries({
      * value. The filter runs in one place (ingestion.applyFilter) and the LOD
      * rebuild re-derives markers, cells, cards and context registrations from
      * the shown set; a selected fire that no longer passes is deselected.
-     * @param {{minFrp?: number, confidence?: string}} params
+     * A spot-size change only marks the heat raster stale: the shown set,
+     * markers and cards stay as they are.
+     * @param {{minFrp?: number, confidence?: string, spotSize?: number}} params
      * @returns {boolean} True — the request is always accepted.
      */
     setParams(params = {}) {
       const next = normalizeFireFilter(params, layerState._filter);
-      if (
-        next.minFrp === layerState._filter.minFrp &&
-        next.confidence === layerState._filter.confidence
-      )
-        return true;
+      const spotSize =
+        normalizeHeatSpotSize(params?.spotSize) ?? layerState._spotSize;
+      const filterChanged =
+        next.minFrp !== layerState._filter.minFrp ||
+        next.confidence !== layerState._filter.confidence;
+      const spotChanged = spotSize !== layerState._spotSize;
+      if (!filterChanged && !spotChanged) return true;
       layerState._filter = next;
-      if (!layerState._allFires.length) return true;
-      components.ingestion.applyFilter();
-      if (
-        layerState._selectedFire &&
-        !firePassesFilter(layerState._selectedFire, next)
-      ) {
-        components.selection.clearFireSelection();
+      layerState._spotSize = spotSize;
+      if (!layerState._allFires.length) {
+        layerState._rowControlsListener?.();
+        return true;
+      }
+      if (filterChanged) {
+        components.ingestion.applyFilter();
+        if (
+          layerState._selectedFire &&
+          !firePassesFilter(layerState._selectedFire, next)
+        ) {
+          components.selection.clearFireSelection();
+        }
+      } else {
+        layerState._heatRaster = null;
       }
       if (layerState._enabled) components.rendering.renderCurrentLod(true);
       layerState._rowControlsListener?.();
@@ -123,8 +150,8 @@ export function createQueries({
     /**
      * Row controls under the Active Fires row: the log-scale minimum-FRP
      * slider whose track is painted with the intensity ramp (so it doubles as
-     * the legend), the All / Nominal+ / High confidence switch, and the
-     * "N of M shown" counter.
+     * the legend), the All / Nominal+ / High confidence switch, the far-zoom
+     * heatmap spot-size slider and the "N of M shown" counter.
      */
     getRowControls() {
       const { minFrp, confidence } = layerState._filter;
@@ -133,27 +160,48 @@ export function createQueries({
       const shown = layerState._count;
       const total = layerState._totalCount;
       return {
-        slider: {
-          id: 'min-frp',
-          label: t('Fire intensity (FRP)'),
-          ariaLabel: t('Minimum fire radiative power, megawatts'),
-          valueText:
-            minFrp > 0
-              ? t('≥ {value} MW', { value: frpLabel(minFrp) })
-              : t('All', { context: 'fire intensity filter' }),
-          min: 0,
-          max: SLIDER_STEPS,
-          step: 1,
-          value: Math.round(sliderPositionForFrp(minFrp) * SLIDER_STEPS),
-          track: rampTrackGradient(),
-          ticks: FRP_SLIDER_TICKS.map((frp) => ({
-            at: sliderPositionForFrp(frp),
-            label: frpLabel(frp),
-          })),
-          params: (value) => ({
-            minFrp: frpForSliderPosition(Number(value) / SLIDER_STEPS),
-          }),
-        },
+        sliders: [
+          {
+            id: 'min-frp',
+            label: t('Fire intensity (FRP)'),
+            ariaLabel: t('Minimum fire radiative power, megawatts'),
+            valueText:
+              minFrp > 0
+                ? t('≥ {value} MW', { value: frpLabel(minFrp) })
+                : t('All', { context: 'fire intensity filter' }),
+            min: 0,
+            max: SLIDER_STEPS,
+            step: 1,
+            value: Math.round(sliderPositionForFrp(minFrp) * SLIDER_STEPS),
+            track: rampTrackGradient(),
+            ticks: FRP_SLIDER_TICKS.map((frp) => ({
+              at: sliderPositionForFrp(frp),
+              label: frpLabel(frp),
+            })),
+            params: (value) => ({
+              minFrp: frpForSliderPosition(Number(value) / SLIDER_STEPS),
+            }),
+          },
+          {
+            id: 'heat-spot-size',
+            label: t('Heatmap spot size'),
+            ariaLabel: t('Far-zoom heatmap spot size'),
+            valueText: spotSizeLabel(layerState._spotSize),
+            min: 0,
+            max: SLIDER_STEPS,
+            step: 1,
+            value: Math.round(
+              sliderPositionForSpotSize(layerState._spotSize) * SLIDER_STEPS,
+            ),
+            ticks: SPOT_SIZE_TICKS.map((percent) => ({
+              at: sliderPositionForSpotSize(percent),
+              label: spotSizeLabel(percent),
+            })),
+            params: (value) => ({
+              spotSize: spotSizeForSliderPosition(Number(value) / SLIDER_STEPS),
+            }),
+          },
+        ],
         segmented: {
           id: 'confidence',
           label: t('Confidence'),

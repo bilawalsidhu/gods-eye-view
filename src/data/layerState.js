@@ -298,7 +298,7 @@ function satelliteFilterOption() {
 }
 
 const OPTION_GROUPS = Object.freeze({
-  // Active Fires intensity filter (HAL-676). `minFrp` is whole megawatts on
+  // Active Fires intensity filter and heatmap spot size (HAL-676). `minFrp` is whole megawatts on
   // the codec side; the panel's log slider rounds to it. Both default to
   // "show everything": many of the strongest fires are rated low confidence.
   // The bounds and modes mirror MIN_FRP_MW_MAX / FIRMS_CONFIDENCE_MODES in
@@ -311,6 +311,9 @@ const OPTION_GROUPS = Object.freeze({
       nominal: 'n',
       high: 'h',
     }),
+    // Heatmap spot size in percent; mirrors HEAT_SPOT_SIZE_* in
+    // firmsHeatRaster.js.
+    boundedIntegerOption('spotSize', 's', 100, { min: 50, max: 400 }),
   ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {

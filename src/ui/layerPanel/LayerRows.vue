@@ -63,11 +63,10 @@ defineProps({
             :segmented="item.controls.segmented"
             :on-select="(optionId) => onChip(item.id, optionId)"
           /><RowSlider
-            v-if="item.controls.slider"
-            :slider="item.controls.slider"
-            :on-input="
-              (value) => onSlider(item.id, item.controls.slider.id, value)
-            "
+            v-for="slider in item.controls.sliders || []"
+            :key="slider.id"
+            :slider="slider"
+            :on-input="(value) => onSlider(item.id, slider.id, value)"
           /><span
             v-for="(entry, index) in item.controls.legend"
             :key="index"

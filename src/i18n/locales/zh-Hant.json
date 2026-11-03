@@ -2879,6 +2879,9 @@
   "≥ {value} MW": "≥ {value} MW",
   "Confidence": "置信度",
   "Minimum fire radiative power, megawatts": "最小火輻射功率（兆瓦）",
+  "Heatmap spot size": "熱力圖光斑大小",
+  "Far-zoom heatmap spot size": "遠景熱力圖光斑大小",
+  "{value}×": "{value}×",
   "fire intensity filter|All": "全部",
   "Detection confidence": "檢測置信度",
   "{shown} of {total} shown": "顯示 {shown} / {total}"
