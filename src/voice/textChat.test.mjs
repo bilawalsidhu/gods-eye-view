@@ -403,6 +403,31 @@ for (const provider of ['openai', 'gemini']) {
     assert.equal(h.completions().length, 1);
     h.chat.stop();
   });
+
+  test(`${provider}: each map action in a round gets its own deadline`, async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    let pending = 0;
+    const h = harness(provider, (n) => (n < 2 ? w.calls(3) : w.final('Done')), {
+      chat: { timeoutMs: 50 },
+      runAction: () =>
+        new Promise((resolve) => {
+          pending++;
+          setTimeout(() => resolve({ ok: true }), 40);
+        }),
+    });
+    h.chat.start();
+    h.chat.sendText('Three slow steps');
+    // One request, then three 40 ms actions: 120 ms against a 50 ms deadline.
+    for (const expected of [1, 2, 3]) {
+      await settle();
+      assert.equal(pending, expected);
+      context.mock.timers.tick(40);
+    }
+    await settle();
+    assert.equal(h.errors().length, 0);
+    assert.equal(h.completions().length, 1);
+    h.chat.stop();
+  });
 }
 
 test('long history shortens old tool results and keeps every call paired', async () => {
