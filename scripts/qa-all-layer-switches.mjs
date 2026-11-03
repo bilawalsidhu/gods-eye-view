@@ -82,6 +82,17 @@ try {
 
 // Every name the checkout's .env files define, plus key-like names in this
 // environment: all blank for the build and the preview.
+const KEY_LIKE = /(_KEY|_TOKEN|_SECRET|_CLIENT_ID|PASSWORD)$/;
+const dotenvNames = () => {
+  const names = new Set();
+  for (const file of ['.env', '.env.local'])
+    if (existsSync(join(root, file)))
+      for (const line of readFileSync(join(root, file), 'utf8').split('\n')) {
+        const name = line.match(/^\s*([A-Z0-9_]+)\s*=/)?.[1];
+        if (name) names.add(name);
+      }
+  return [...names].sort();
+};
 const envNames = () => {
   const names = new Set();
   for (const file of ['.env', '.env.local'])
@@ -91,8 +102,7 @@ const envNames = () => {
         if (name) names.add(name);
       }
   for (const name of Object.keys(process.env))
-    if (/(_KEY|_TOKEN|_SECRET|_CLIENT_ID|PASSWORD)$/.test(name))
-      names.add(name);
+    if (KEY_LIKE.test(name)) names.add(name);
   return [...names].sort();
 };
 const envValues = () => {
@@ -100,12 +110,12 @@ const envValues = () => {
   for (const file of ['.env', '.env.local'])
     if (existsSync(join(root, file)))
       for (const line of readFileSync(join(root, file), 'utf8').split('\n')) {
-        const value = line
-          .match(/^\s*[A-Z0-9_]+\s*=\s*(.*)$/)?.[1]
-          ?.trim()
-          .replace(/^["']|["']$/g, '');
-        // Long enough to be a credential rather than a setting.
-        if (value && value.length >= 16) values.push(value);
+        const [, name, raw] = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/) ?? [];
+        const value = raw?.trim().replace(/^["']|["']$/g, '');
+        // Credentials only (model names and URLs are settings the code may
+        // also carry as defaults).
+        if (KEY_LIKE.test(name ?? '') && value && value.length >= 8)
+          values.push(value);
       }
   return values;
 };
@@ -121,8 +131,9 @@ const cleanup = () => {
   if (served?.worktree)
     try {
       git('worktree', 'remove', '--force', served.worktree);
-    } catch {
-      // Already gone.
+      served.worktree = null;
+    } catch (error) {
+      console.error('Could not remove', served.worktree, error.message);
     }
 };
 process.on('exit', cleanup);
@@ -147,7 +158,12 @@ if (flag('serve')) {
     commit,
     worktree,
     dist,
-    blankedEnv: envNames(),
+    // Names from .env files only; other key-like variables of this shell
+    // are blanked too but only counted.
+    blankedEnv: dotenvNames(),
+    otherKeyLikeVariablesBlanked: envNames().filter(
+      (name) => !dotenvNames().includes(name),
+    ).length,
     envFilesInCheckout: ['.env', '.env.local'].filter((f) =>
       existsSync(join(worktree, f)),
     ),
@@ -403,6 +419,7 @@ const report = {
         appCheckoutClean: true,
         envFilesInCheckout: served.envFilesInCheckout,
         blankedEnv: served.blankedEnv,
+        otherKeyLikeVariablesBlanked: served.otherKeyLikeVariablesBlanked,
         distCredentialValuesFound: served.distCredentialValuesFound,
       }
     : { servedByRunner: false },
@@ -565,3 +582,6 @@ if (
   !report.catalogMatches
 )
   process.exitCode = 1;
+// The preview child would keep this process alive: stop it and drop the
+// checkout now.
+cleanup();
