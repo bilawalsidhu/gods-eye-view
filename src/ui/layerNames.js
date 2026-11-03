@@ -30,6 +30,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'telegeography-submarine-cables': msg('Submarine Cables'),
   'local-firms': msg('FIRMS Active Fires'),
   'local-adsb': msg('Local ADS-B'),
+  'osm-places': msg('OSM Places'),
   transit: msg('Transit'),
   'us-groundwater': msg('U.S. Groundwater Wells'),
   'recent-imagery': msg('Recent Imagery'),
