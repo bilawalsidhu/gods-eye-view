@@ -12,7 +12,10 @@ export function createLifecycle({
   const { id, overlayHost } = config;
 
   const methods = {
-    init(viewer, { engine = null } = {}) {
+    init(viewer, options) {
+      this.attachRenderer(viewer, options);
+    },
+    attachRenderer(viewer, { engine = null, waitForCameraRestore = false } = {}) {
       if (layerState._destroyed) return;
       if (layerState._renderer) return;
       layerState._renderer = config.renderer.create({
@@ -25,14 +28,36 @@ export function createLifecycle({
       layerState._viewer = layerState._renderer.view;
       layerState._dataSource = layerState._renderer.dataSource;
       layerState._renderer.setVisible(false);
+      layerState._restoringViewport = waitForCameraRestore;
+      if (layerState._enabled && !waitForCameraRestore) {
+        this.showRenderer();
+        layerState._renderer.onEnable();
+      }
     },
 
-    async enable(viewer) {
-      if (layerState._destroyed) return;
-      layerState._enabled = true;
-      if (!layerState._dataSource) this.init(viewer);
-      const renderer = layerState._renderer;
-      layerState._viewer = layerState._renderer.view;
+    resumeViewport() {
+      if (!layerState._restoringViewport) return;
+      layerState._restoringViewport = false;
+      if (layerState._enabled && layerState._renderer) {
+        this.showRenderer();
+        layerState._renderer.onEnable();
+      }
+    },
+
+    detachRenderer() {
+      components.selection.removeClickHandler();
+      components.viewport.removeMoveEndWatcher();
+      components.viewport.removeLodWatcher();
+      unregisterPickOwner(id);
+      components.rendering.removeDetectionCollections(layerState._viewer);
+      layerState._renderer?.destroy();
+      layerState._renderer = layerState._viewer = layerState._dataSource = null;
+      layerState._pickIndexById.clear();
+      layerState._labelCandidates = [];
+      layerState._camSnapValid = false;
+    },
+
+    showRenderer() {
       if (layerState._billboards) {
         // The camera can have moved anywhere while the layer was off: moveEnd
         // was not being listened to, and the preRender watcher is inert while
@@ -51,14 +76,18 @@ export function createLifecycle({
       registerPickOwner(id, (pickedId) =>
         layerState._pickIndexById.has(pickedId),
       );
+      components.rendering.renderCurrentLod(true);
+    },
+
+    async enable(viewer) {
+      if (layerState._destroyed) return;
+      if (!layerState._dataSource) this.init(viewer);
+      layerState._enabled = true;
+      const renderer = layerState._renderer;
+      this.showRenderer();
       if (!layerState._fires.length && !layerState._loading)
         await components.ingestion.loadHeatmap();
-      if (
-        layerState._enabled &&
-        !layerState._destroyed &&
-        layerState._renderer === renderer
-      )
-        renderer.onEnable();
+      if (layerState._enabled && layerState._renderer === renderer) renderer.onEnable();
     },
 
     disable() {

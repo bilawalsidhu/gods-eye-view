@@ -68,6 +68,7 @@ export function createAlprCamerasLayer({
     renderSaturated: false,
   };
   let renderer = null;
+  let restoringView = false;
 
   function setAlprStatus(status, error = null) {
     if (state.status === status && state.error === error) return;
@@ -112,7 +113,7 @@ export function createAlprCamerasLayer({
   }
 
   function scheduleLoad() {
-    if (!state.enabled) return;
+    if (!state.enabled || !renderer || restoringView) return;
     clearUnavailableRetry({ resetBackoff: false });
     clearTimeout(state.debounceTimer);
     // A view the accepted tiles already cover is a local filter: show it now.
@@ -130,7 +131,7 @@ export function createAlprCamerasLayer({
   }
 
   async function loadCameras() {
-    if (!state.enabled || !renderer?.ready) return;
+    if (!state.enabled || !renderer?.ready || restoringView) return;
     clearTimeout(state.debounceTimer);
     state.debounceTimer = null;
     clearUnavailableRetry({ resetBackoff: false });
@@ -197,14 +198,14 @@ export function createAlprCamerasLayer({
         state.lastQueryBox = null;
         state.lastQueryZoom = null;
         clearUnavailableRetry();
-        renderer.renderRecords();
+        if (!restoringView) renderer?.renderRecords();
         setAlprStatus('zoom-in');
         return;
       }
       const { records, stale, saturated } = validateAlprSnapshot(snapshot);
       // Resolve marker floors (bounded wait, warm cells answer at once) so new
       // markers are placed on the floor instead of clamped then moved.
-      await renderer.prepareFloors(records);
+      await renderer?.prepareFloors(records);
       if (
         requestAbort.signal.aborted ||
         state.abort !== requestAbort ||
@@ -230,8 +231,8 @@ export function createAlprCamerasLayer({
       clearUnavailableRetry();
       // Stale and saturated are independent facts; a cached response that also
       // hit the cap must still warn about coverage, not just about freshness.
-      renderer.renderRecords();
-      setAlprStatus(renderer.count() ? (stale ? 'stale' : 'ready') : 'empty');
+      if (!restoringView) renderer?.renderRecords();
+      setAlprStatus((renderer?.count() ?? records.length) ? (stale ? 'stale' : 'ready') : 'empty');
     } catch (error) {
       if (
         error?.name === 'AbortError' ||
@@ -265,7 +266,11 @@ export function createAlprCamerasLayer({
     source: source.label || msg('Mapped camera locations'),
     updateInterval: 0,
     statsRefreshInterval: 1000,
-    init(viewer, options = {}) {
+    init(viewer, options) {
+      this.attachRenderer(viewer, options);
+    },
+    attachRenderer(viewer, options = {}) {
+      restoringView = Boolean(options.waitForCameraRestore);
       if (renderer?.ready) throw new Error('ALPR layer is already initialized');
       if (typeof rendererFactory !== 'function')
         throw new TypeError('An ALPR renderer factory is required');
@@ -276,6 +281,24 @@ export function createAlprCamerasLayer({
         engine: options.engine,
       });
       renderer.init(viewer, { onMove: scheduleLoad });
+      if (state.enabled) {
+        renderer.setVisible(true);
+        if (!restoringView) renderer.renderRecords();
+      }
+    },
+    detachRenderer() {
+      restoringView = true;
+      clearTimeout(state.debounceTimer);
+      renderer?.destroy({ retainContext: true });
+      renderer = null;
+    },
+    resumeViewport() {
+      if (!restoringView) return;
+      restoringView = false;
+      if (state.enabled && renderer) {
+        renderer.renderRecords();
+        if (!state.loading) scheduleLoad();
+      }
     },
     enable() {
       if (state.enabled) return;

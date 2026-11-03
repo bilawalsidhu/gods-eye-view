@@ -71,3 +71,7 @@ Coverage, sequence, attribution, photo hosts and filters now share the same owne
 ### Radio and Recent Imagery
 
 Radio kept one playing audio element, the selected broadcaster, volume and the original 750-station directory through Navara → Cesium → Navara. The fixture observed one play and one directory fetch. Recent Imagery retained both pinned dates and the original STAC search. Release screenshots sampled the expected red and green rasters on opposite sides on each engine. Box selection, divider dragging, a failed image replacement and cleanup also passed.
+
+### FIRMS and ALPR camera reports
+
+A pointer-selected FIRMS detection from a 371-fire snapshot and a pointer-selected camera in a 325-camera query stayed selected after both switches. Both layers reused the original records and acquisition timestamps and retained the application context selection. ALPR defers its viewport query until the new camera is in place; FIRMS recreates its horizon-culling and sprite-order bindings without reloading the feed.

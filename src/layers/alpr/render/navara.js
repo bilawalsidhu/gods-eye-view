@@ -449,7 +449,7 @@ export function createAlprNavaraRenderer(engine, { state, services, source }) {
     else hideOnMapCredit();
     request();
   }
-  function clearRendered() {
+  function clearRendered({ retainContext = false } = {}) {
     hideOnMapCredit();
     generation++;
     floors.cancel();
@@ -464,7 +464,7 @@ export function createAlprNavaraRenderer(engine, { state, services, source }) {
       selected.commit();
       spritesDirty = false;
     }
-    services.context.removeEntityContextsForLayer(LAYER_ID);
+    if (!retainContext) services.context.removeEntityContextsForLayer(LAYER_ID);
   }
   function frame() {
     const camera = engine.camera.livePosition;
@@ -582,9 +582,9 @@ export function createAlprNavaraRenderer(engine, { state, services, source }) {
       request();
       return true;
     },
-    destroy() {
+    destroy(options) {
       if (!initialized) return;
-      clearRendered();
+      clearRendered(options);
       overlay.destroy();
       removeClick?.();
       removeClick = null;

@@ -44,7 +44,7 @@ export function createAlprCesiumRenderer({ state, services, source }) {
       if (visible) native.creditPresented = false;
       if (native.dataSource) native.dataSource.show = visible;
     },
-    destroy() {
+    destroy(options) {
       presentation.destroyOverlay();
       removeMove?.();
       removeMove = null;
@@ -52,7 +52,7 @@ export function createAlprCesiumRenderer({ state, services, source }) {
       removeFrame = null;
       native.clickHandler?.destroy();
       native.clickHandler = null;
-      presentation.clearRendered();
+      presentation.clearRendered(options);
       if (native.dataSource && native.viewer)
         native.viewer.dataSources.remove(native.dataSource, true);
       native.dataSource = null;

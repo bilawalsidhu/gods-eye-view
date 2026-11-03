@@ -219,7 +219,7 @@ export function createApplicationCatalog({
       ],
       [
         'alpr-cameras',
-        () => createApplicationAlpr({ surface, source: sources.alpr }),
+        () => sessionModel('alpr-cameras', () => createApplicationAlpr({ surface, source: sources.alpr })),
       ],
       [
         'street-level',
@@ -326,14 +326,14 @@ export function createApplicationCatalog({
       [
         'local-firms',
         () =>
-          createApplicationFirms({
+          sessionModel('local-firms', () => createApplicationFirms({
             surface,
             id: 'local-firms',
             name: 'FIRMS Active Fires',
             icon: '▲',
             source: 'NASA FIRMS · LIVE',
             feed: sources.firms,
-          }),
+          })),
       ],
     ];
     const available = (id) => availability.isAvailable(id);
