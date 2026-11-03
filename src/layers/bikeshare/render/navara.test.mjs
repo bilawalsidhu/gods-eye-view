@@ -194,3 +194,42 @@ test('station positions sample the visible surface with own point sets excluded'
     f.layer.destroy();
   }
 });
+
+test('a Navara station without a published capacity re-derives it from every status poll', async () => {
+  const f = fixture();
+  try {
+    f.layer.enable();
+    await settle();
+    const { rendering } = f.renderer;
+    const { model } = f.context.parts;
+    const info = model.parseStationInformation({
+      data: {
+        stations: [
+          { station_id: 'open', name: 'Open', lat: 30.26, lon: -97.74 },
+        ],
+      },
+    });
+    rendering.ensureCityPoints(city, info);
+    const poll = (stations) =>
+      rendering.applyStatusToPoints(
+        city,
+        model.parseStationStatus({ data: { stations } }),
+      );
+    const open = f.context.state._stationRenderMap.get(`${city}:open`);
+    poll([
+      { station_id: 'open', num_bikes_available: 10, num_docks_available: 20 },
+    ]);
+    assert.equal(open.capacity, 30);
+    poll([
+      { station_id: 'open', num_bikes_available: 4, num_docks_available: 2 },
+    ]);
+    assert.equal(open.capacity, 6, 'the second poll is not pinned to 30');
+    assert.equal(
+      f.context.state._stationRenderMap.get(key).capacity,
+      10,
+      'a published capacity is kept',
+    );
+  } finally {
+    f.layer.destroy();
+  }
+});
