@@ -47,7 +47,7 @@ export function createApplicationData({
     throw new TypeError('An application layer catalog is required');
   for (const layer of catalog.layers)
     layer.attachMapStackController?.(mapStackController);
-  const attached = dataManager.bindCatalog(viewer, engine, catalog);
+  const attached = dataManager.bindCatalog(viewer, engine, catalog, { waitForCameraRestore: layerSession?.restoringView === true });
   for (const layer of catalog.layers) layer.attachDataManager?.(dataManager);
 
   if (allowQaRegistration) {

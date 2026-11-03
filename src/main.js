@@ -24,6 +24,7 @@ window.addEventListener('pagehide', (event) => {
 
 async function start(next, engineSwitch = false, cockpit = null) {
   kind = next;
+  layerSession.restoringView = engineSwitch;
   application = createStandaloneApplication({
     googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
@@ -37,6 +38,8 @@ async function start(next, engineSwitch = false, cockpit = null) {
   if (engineSwitch) {
     const style = controls.styleManager;
     await style.initialRestorePromise;
+    layerSession.restoringView = false;
+    for (const {module} of layerSession.manager.layers.values()) module.resumeViewport?.();
     if (layerSession.handoffLayers) layerSession.manager.layers.get('directions')?.module.resumeCamera?.();
     // Only resume the aircraft that actually survived the handoff. A history
     // entry may select a different subject, and a stale track may disappear.

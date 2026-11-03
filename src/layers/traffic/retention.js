@@ -17,6 +17,7 @@ export function createRetention({ state, parts }) {
   const screenTo = new Cesium.Cartesian2();
   const eye = new Cesium.Cartesian3();
   function projectSafely(scene, point, screen) {
+    if (scene.project) return Boolean(scene.project(point, screen));
     if (scene.camera.viewMatrix) {
       Cesium.Matrix4.multiplyByPoint(scene.camera.viewMatrix, point, eye);
       if (eye.z >= -(scene.camera.frustum?.near || 0)) return false;
@@ -50,7 +51,7 @@ export function createRetention({ state, parts }) {
   };
   function pump() {
     timer = null;
-    if (!state._enabled) return;
+    if (!state._enabled || !state._pointCollection) return;
     let budget = DOT_CHANGE_BUDGET;
     let pending = false;
     const now = Date.now();
@@ -191,9 +192,9 @@ export function createRetention({ state, parts }) {
   }
   function easeHeights(dt) {
     const blend = Math.min(1, dt * 12);
-    const scene = state._viewer?.scene;
+    const scene = state._trafficScene?.() ?? state._viewer?.scene;
     const canProject =
-      scene?.canvas?.clientHeight && scene.camera && scene.frameState;
+      scene?.canvas?.clientHeight && (scene.project || (scene.camera && scene.frameState));
     state._heightPending = false;
     for (let r = 0; r < state._roads.length; r++) {
       const road = state._roads[r];
@@ -276,5 +277,5 @@ export function createRetention({ state, parts }) {
     state._populationPending = false;
     state._heightPending = false;
   }
-  return { reconcile, easeHeights, finishHeights, clear, refreshCounts };
+  return { reconcile, easeHeights, finishHeights, clear, refreshCounts, resume: schedule };
 }

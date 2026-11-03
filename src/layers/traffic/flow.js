@@ -70,7 +70,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
           layerState._flowStatusKnown = true;
           if (layerState._liveMode) {
             console.log('[Data:Traffic] TomTom key present — live flow mode');
-            registerDynamicCredit(layerState._viewer, TOMTOM_CREDIT);
+            registerDynamicCredit(layerState._engine ?? layerState._viewer, TOMTOM_CREDIT);
           }
         })
         .catch((e) => {
@@ -217,6 +217,10 @@ export function createFlow({ state: layerState, services, parts, source }) {
   ) {
     if (generation !== layerState._loadGeneration || signal?.aborted)
       return false;
+    if (layerState._waitForScene) {
+      await layerState._waitForScene;
+      if (generation !== layerState._loadGeneration || signal?.aborted) return false;
+    }
     const revision = (layerState._surfaceRevision || 0) + 1;
     layerState._surfaceRevision = revision;
     const current = () =>
@@ -237,6 +241,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
       layerState._retainedPreview = true;
       return true;
     }
+    if (roads.length && !majorPreview && !label.includes('refined'))
+      layerState._surfaceInput = { roads, bounds: clamped };
     const preparedRoads =
       layerState._preparedRoads || (layerState._preparedRoads = new Map());
     const refining = label.includes('refined');
@@ -253,7 +259,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
       parts.rendering.renderRoadsForAltitude([], altitude, label, trace);
       return true;
     }
-    const scene = layerState._viewer.scene;
+    const scene = layerState._trafficScene?.() ?? layerState._viewer?.scene;
+    if (!scene) return false;
     // The enable-time estimate can predate the first local mesh (especially
     // after an intercontinental jump). Once previews have measured roads, use
     // that local evidence to select the detail view at its real elevation.
@@ -325,7 +332,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
     const selected = parts.rendering
       .visibleRoadsForAltitude(roads, altitude)
       .filter((road) => {
-        const camera = layerState._viewer.camera?.positionWC;
+        const camera = (layerState._engine?.camera.livePosition ?? layerState._viewer?.camera?.positionWC);
         const localHeight = Math.max(
           0,
           altitude - (layerState._viewHeightEstimate || 0),
@@ -349,10 +356,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
           maxX = -Infinity,
           maxY = -Infinity;
         for (const point of road.waypoints) {
-          const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-            scene,
-            point,
-          );
+          const screen = scene.project ? scene.project(point, {}) : Cesium.SceneTransforms.worldToWindowCoordinates(scene, point);
           if (!screen) continue;
           minX = Math.min(minX, screen.x);
           maxX = Math.max(maxX, screen.x);
@@ -382,7 +386,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       roadDotBudget(altitude),
     );
     const admitted = selected.filter((r, i) => budgets[i] > 0);
-    const camera = layerState._viewer.camera?.positionWC;
+    const camera = (layerState._engine?.camera.livePosition ?? layerState._viewer?.camera?.positionWC);
     if (camera)
       admitted.sort(
         (a, b) =>
@@ -478,7 +482,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
     };
     let prepared = await prepareRoadSurfaces(
       unresolved,
-      layerState._viewer.scene,
+      scene,
       services.ground,
       [layerState._pointCollection],
       signal,
@@ -500,7 +504,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       if (!current()) return false;
       prepared = await prepareRoadSurfaces(
         prepared.pending,
-        layerState._viewer.scene,
+        scene,
         services.ground,
         [layerState._pointCollection],
         signal,

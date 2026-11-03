@@ -59,3 +59,7 @@ The locator owns its Nepal boundary, presentation clock and source graphics, and
 ### Bhote Koshi reconstruction
 
 The event pack, historical image pair, paused/playing timeline, player host and divider persist. Navara applies the geographic rasters to terrain depth and samples the same authored flood geometry. The release round trip proved different real before/after image pixels, one read of each event/image asset, identical 52 percent paused progress and continued playback on the next engine. Scene Director is now installed on Navara and its voice scene list works. Continuity of the Director’s own multi-shot queue and third-party scene data packs is separate from the event timeline round trip.
+
+### Traffic
+
+The city road source, flow requests, vehicle identities and simulation phase survive a switch. The incoming scene waits for the restored camera before querying its viewport or refreshing local surface heights. A release round trip in Austin retained 1,093 moving vehicles and 35 congestion corridors with fixture-backed live flow. The independent simulation case retained 620 vehicles. Both captures compared visible traffic against disabled traffic over the same streets.
