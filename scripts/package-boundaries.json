@@ -416,7 +416,11 @@
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/sources/overpass.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/common/boundedCache.js",
+      "src/data/osmPresets.js",
+      "server/providers/overpass/osmFeatures.js",
+      "server/providers/overpass/osmFeaturesRoute.js"
     ],
     "external": []
   },
@@ -507,9 +511,11 @@
       "server/providers/common/same-site.js",
       "src/localRequestGate.mjs",
       "src/voice/actionSchemas.js",
+      "src/voice/areaCandidateContract.js",
       "src/voice/layerManifest.js",
       "server/providers/openai/toolDescriptions.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/overpass/constants.js"
     ],
     "external": []
   },
@@ -3182,7 +3188,20 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/sources/osmFeatures.js",
+      "src/voice/imageryActions.js",
+      "src/voice/layerActionOwnership.js",
+      "src/data/areaGeometry.js",
+      "src/layers/osmPlaces/model.js",
+      "src/data/areaStore.js",
+      "src/data/areaResolver.js",
+      "src/voice/areaCandidateContract.js",
+      "src/data/osmPresets.js",
+      "src/voice/osmActions.js",
+      "src/layers/osmPlaces/index.js",
+      "src/app/layers/osmPlaces.js",
+      "src/voice/areaActions.js"
     ],
     "external": [
       "hls.js",
@@ -3789,7 +3808,10 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/layers/osmPlaces/model.js",
+      "src/layers/osmPlaces/index.js",
+      "src/app/layers/osmPlaces.js"
     ],
     "external": [
       "hls.js",
@@ -4154,6 +4176,7 @@
     "exports": ["./voice/action-schemas"],
     "modules": [
       "src/voice/actionSchemas.js",
+      "src/voice/areaCandidateContract.js",
       "src/voice/layerManifest.js",
       "src/hudLayoutPolicy.js"
     ],

@@ -27,6 +27,7 @@ import {
   createGateStateStore,
   createNominatimGate,
 } from '../../server/providers/regional/nominatimGate.js';
+import { createVoiceAreas } from '../voice/areaActions.js';
 
 const TILES = [6745, 6746].map((y) =>
   decodeOpenFreeMapOutlineTile(
@@ -876,6 +877,19 @@ const NOMINATIM_ROWS = {
       geojson: { type: 'Polygon', coordinates: [square(40.78, -73.965, 0.01)] },
     },
   ],
+  'Bagmati Province': [
+    {
+      category: 'boundary',
+      type: 'administrative',
+      addresstype: 'province',
+      name: 'Bagmati Province',
+      lat: '27.7',
+      lon: '85.3',
+      osm_type: 'relation',
+      osm_id: 12345,
+      geojson: { type: 'Polygon', coordinates: [square(27.7, 85.3, 0.4)] },
+    },
+  ],
 };
 
 const PLACES = {
@@ -899,6 +913,13 @@ const PLACES = {
     name: 'Congress Avenue',
     label: 'Congress Ave, Austin',
     types: ['route'],
+  },
+  'Bagmati Province': {
+    lat: 27.7,
+    lng: 85.3,
+    name: 'Bagmati Province',
+    label: 'Bagmati Province, Nepal',
+    types: ['administrative_area_level_1', 'political'],
   },
 };
 
@@ -977,6 +998,19 @@ test('default settings: outline, street and building asks send nothing to Overpa
     target: 'Central Park',
   });
 
+  const areas = createVoiceAreas({
+    viewer: viewerAt(27.7, 85.3, 40_000),
+    annotationResolver: resolver,
+    placeSearch,
+  });
+  const verified = await areas.resolveAreaAction({
+    query: 'Bagmati Province',
+    level: 'admin1',
+  });
+  assert.equal(verified.ok, true);
+  assert.equal(verified.sourceIdentity, 'Bagmati Province');
+  assert.equal(areas.store.get(verified.areaId).meta.adminLevel, 'admin1');
+
   const street = await resolve(viewerAt(30.27, -97.742), {
     target: 'Congress Avenue',
   });
@@ -1000,7 +1034,7 @@ test('default settings: outline, street and building asks send nothing to Overpa
   );
   assert.equal(
     upstream.length,
-    2,
+    3,
     'one upstream request per explicit ask that needed one',
   );
   assert.ok(!upstream.some((url) => /overpass/i.test(url)));

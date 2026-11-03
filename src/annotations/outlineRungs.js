@@ -266,6 +266,8 @@ export function createOutlineRungs({
       heightM: null,
       synthesized: false,
       outlineName: outline.name,
+      adminArea: outline.adminArea || null,
+      adminLevel: outline.adminLevel || null,
     };
   }
 
