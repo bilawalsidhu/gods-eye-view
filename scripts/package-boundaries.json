@@ -485,6 +485,7 @@
     "exports": ["./server/providers/openai"],
     "modules": [
       "src/i18n/marker.js",
+      "src/i18n/locale.js",
       "src/hudLayoutPolicy.js",
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",
@@ -2352,6 +2353,7 @@
       "src/data/groundSnap.js",
       "src/data/iconOrientation.js",
       "src/data/infrastructure.js",
+      "src/data/osmOverlays.js",
       "src/data/installationFeedback.js",
       "src/data/labelArbiter.js",
       "src/data/idSwitches.js",
@@ -3282,6 +3284,7 @@
       "src/data/geoid.js",
       "src/data/iconOrientation.js",
       "src/data/infrastructure.js",
+      "src/data/osmOverlays.js",
       "src/data/installationFeedback.js",
       "src/data/satellitePass.js",
       "src/data/labelArbiter.js",

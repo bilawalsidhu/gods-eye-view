@@ -1103,6 +1103,7 @@
   "scripts/qa-anime-sky.mjs",
   "scripts/qa-sky-model-lighting.mjs",
   "server/providers/overpass/requestAdmission.test.mjs",
+  "src/tooling/trackArrivalObservation.mjs",
   "src/tooling/trackArrivalObservation.test.mjs",
   "src/ui/styles/status-badge.css",
   "src/ui/cctvBadges.test.mjs",
@@ -1112,6 +1113,9 @@
   "src/voice/globeResetConfirmation.test.mjs",
   "src/hudDms.test.mjs",
   "src/hudSummaryGate.test.mjs",
+  "src/hudSummaryLine.test.mjs",
+  "src/testSupport/stubMgrs.mjs",
+  "src/tools/queries/hud-caption-feed-state.test.mjs",
   "src/voice/hudPlaceLabels.test.mjs",
   "src/voice/panel/preferences.test.mjs",
   "src/voice/panel/preferencesView.test.mjs",
@@ -1204,5 +1208,6 @@
   "src/standalone/layerSources.test.mjs",
   "src/tooling/nominatimGuardLifecycle.test.mjs",
   "src/tooling/nominatimLockOwnership.test.mjs",
-  "src/tooling/nominatimOutlineRoute.test.mjs"
+  "src/tooling/nominatimOutlineRoute.test.mjs",
+  "server/providers/common/rateLimitKeys.test.mjs"
 ]

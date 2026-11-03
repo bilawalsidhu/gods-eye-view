@@ -334,7 +334,6 @@
   "STALE": "ЗАСТАРІЛО",
   "PARTIAL": "ЧАСТКОВО",
   "FALLBACK": "РЕЗЕРВ",
-  "{state} {layers}": "{state}: {layers}",
   "view band|STREET": "ВУЛИЦЯ",
   "view band|CITY": "МІСТО",
   "view band|METRO": "АГЛОМЕРАЦІЯ",
@@ -2889,7 +2888,7 @@
   "Radio volume": "Гучність радіо",
   "STATION SITE": "САЙТ СТАНЦІЇ",
   "DIRECTORY: RADIO BROWSER": "КАТАЛОГ: RADIO BROWSER",
-  "Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.": "Після натискання «Відтворити» звук надходить безпосередньо від мовника. Мовник бачить вашу IP-адресу.",
+  "Audio connects directly to the broadcaster when you press play, choose a station on the globe or ask voice to play. Your IP is visible to that broadcaster.": "Звук надходить безпосередньо від мовника після натискання «Відтворити», вибору станції на глобусі або голосової команди. Мовник бачить вашу IP-адресу.",
   "Local RTL-SDR receiver": "Локальний приймач RTL-SDR",
   "LOCAL RTL-SDR": "ЛОКАЛЬНИЙ RTL-SDR",
   "Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.": "Chrome/Edge · WebUSB · один локальний тюнер для FM і шару «Локальний ADS-B».",
@@ -3083,5 +3082,7 @@
   "Audio": "Аудіо",
   "UTILITIES": "ІНСТРУМЕНТИ",
   "Exit cockpit to fly to a drawing": "Вийдіть із кабіни, щоб перелетіти до малюнка",
-  "Directions, drawing and your own files": "Маршрути, малювання та ваші файли"
+  "Directions, drawing and your own files": "Маршрути, малювання та ваші файли",
+  "Sea Marks": "Морські знаки",
+  "Ski Pistes": "Гірськолижні траси"
 }
