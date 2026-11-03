@@ -1,6 +1,7 @@
 import { normalizeDroneAirspaceSnapshot } from '../../src/layers/droneAirspace/records.js';
 import { readResponseJsonCapped, coalesceProxyRequest } from './common/http.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
+import { admitSameSiteKeyless } from './common/same-site.js';
 
 // FAA Special Use Airspace (public, keyless). TYPE_CODE P (prohibited) and
 // R (restricted) only — the small, always-in-force slice of the national
@@ -121,6 +122,10 @@ export function droneAirspaceProxy({
       });
       res.end(JSON.stringify(value));
     };
+    // Keyless and needed to render the layer: refuse cross-site browsers
+    // before they spend a client's quota or start a refresh, but keep the
+    // documented reverse-proxy deployment working.
+    if (admitSameSiteKeyless(req, res)) return;
     if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' });
     const path = (req.url || '/').split('?')[0];
     if (path !== '/' && path !== '')

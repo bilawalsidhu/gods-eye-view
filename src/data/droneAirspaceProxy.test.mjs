@@ -35,17 +35,25 @@ function install(options = {}, hook = 'configureServer') {
       },
     },
   });
-  return async (url = '/', method = 'GET', peer = 'local') => {
+  return async (url = '/', method = 'GET', peer = 'local', headers = {}) => {
     const res = {
+      headers: {},
       writeHead(status, headers) {
         this.status = status;
         this.headers = headers;
       },
+      setHeader(name, value) {
+        this.headers[name] = value;
+      },
       end(body) {
+        this.status ??= this.statusCode;
         this.body = JSON.parse(body);
       },
     };
-    await handler({ url, method, socket: { remoteAddress: peer } }, res);
+    await handler(
+      { url, method, headers, socket: { remoteAddress: peer } },
+      res,
+    );
     return res;
   };
 }
@@ -234,4 +242,51 @@ test('a stale snapshot is served for at most a day, then refused', async () => {
   assert.equal(stale.body.fetchedAt, fresh.body.fetchedAt);
   now += 2 * 60 * 60 * 1000;
   assert.equal((await request()).status, 502, 'a day-old snapshot is refused');
+});
+
+test('a cross-site page is refused before it spends quota or reaches FAA', async () => {
+  let fetches = 0;
+  const request = install({
+    fetchImpl: async () => {
+      fetches += 1;
+      return Response.json({ features: [feature()] });
+    },
+  });
+  const host = 'localhost:5173';
+  const refused = [
+    { host, 'sec-fetch-site': 'cross-site' },
+    { host, origin: 'https://evil.example' },
+    { host, origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
+    { host, 'x-forwarded-for': '203.0.113.9', 'sec-fetch-site': 'cross-site' },
+  ];
+  // More refusals than the 60/min per-client quota, all from one peer.
+  for (let i = 0; i < 64; i++) {
+    const headers = refused[i % refused.length];
+    const res = await request('/', 'GET', '10.0.0.5', headers);
+    assert.equal(res.status, 403, JSON.stringify(headers));
+  }
+  assert.equal(fetches, 0, 'refusals cost no upstream call');
+  const app = await request('/', 'GET', '10.0.0.5', {
+    host,
+    origin: `http://${host}`,
+    'sec-fetch-site': 'same-origin',
+  });
+  assert.equal(app.status, 200, 'the app keeps its full quota');
+  assert.equal(fetches, 1);
+});
+
+test('the app served behind a reverse proxy still gets the zones', async () => {
+  const request = install({
+    fetchImpl: async () => Response.json({ features: [feature()] }),
+  });
+  const host = 'gev.example.com';
+  const res = await request('/', 'GET', '127.0.0.1', {
+    host,
+    origin: `https://${host}`,
+    'sec-fetch-site': 'same-origin',
+    'x-forwarded-for': '203.0.113.9',
+    'x-forwarded-proto': 'https',
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.rows.length, 1);
 });

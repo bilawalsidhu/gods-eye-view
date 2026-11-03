@@ -4103,7 +4103,10 @@ FeatureServer, caps the body, and reuses a one-hour snapshot, serving the last
 good payload as stale for at most 24 hours when a refresh fails; the layer row
 then reads STALE, dated by that snapshot's fetch. An answer with no valid zone, or
 paging that ends while the service still flags more records, counts as a
-failed refresh. Client-supplied URLs are rejected.
+failed refresh. Client-supplied URLs are ignored. The route uses the keyless
+same-site checks: a cross-site browser request gets `403` before it spends the
+per-client quota or starts a refresh, and the app still works behind a reverse
+proxy.
 Polygons keep holes; pick ownership is deliberately unregistered so sibling
 cards still work over a zone. The row legend and selected card state that the
 layer is informational only and not a substitute for B4UFLY / LAANC.
