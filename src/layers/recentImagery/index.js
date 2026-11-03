@@ -808,13 +808,32 @@ export function createRecentImageryLayer({
     source: 'NASA GIBS · HLS + VIIRS',
     updateInterval: 0,
 
-    init(viewer, { engine } = {}) {
+    init(viewer, options) {
+      return this.attachRenderer(viewer, options);
+    },
+
+    attachRenderer(viewer, { engine } = {}) {
       _viewer = viewer || null;
       _engine = engine || null;
       if (rendererFactory && !renderer)
         renderer = rendererFactory({ viewer, engine });
       if (!renderer) throw new TypeError('Recent imagery requires a renderer');
+      if (_enabled) syncRender();
       return true;
+    },
+
+    async detachRenderer() {
+      _unsubscribeMap?.();
+      _unsubscribeMap = null;
+      _mapStackController = null;
+      const lease = _lease;
+      forgetLease();
+      renderer?.destroy();
+      renderer = null;
+      _hostInfo = {collection: null, kind: 'none'};
+      _viewer = _engine = _tileset = null;
+      _keptGeneration = null;
+      await Promise.all([lease?.release(), _releasing]);
     },
 
     enable(viewer) {
@@ -836,7 +855,7 @@ export function createRecentImageryLayer({
           applyPreview(_followKey);
         // A pinned or previewed day that was still being probed drapes now.
         const shown = plan();
-        const owned = renderer.getOwned?.() || {};
+        const owned = renderer?.getOwned?.() || {};
         const drapesChanged = SLOT_IDS.some(
           (slotId) => (owned[slotId]?.key || null) !== shown[slotId],
         );
@@ -1225,7 +1244,7 @@ export function createRecentImageryLayer({
       const next = clampUnit(value, _alpha);
       if (next === _alpha) return;
       _alpha = next;
-      for (const slotId of SLOT_IDS) renderer.setAlpha(slotId, next);
+      for (const slotId of SLOT_IDS) renderer?.setAlpha(slotId, next);
       notify('alpha');
     },
 
@@ -1253,7 +1272,7 @@ export function createRecentImageryLayer({
       _swapped = false;
       if (_alpha !== 1) {
         _alpha = 1;
-        for (const slotId of SLOT_IDS) renderer.setAlpha(slotId, 1);
+        for (const slotId of SLOT_IDS) renderer?.setAlpha(slotId, 1);
       }
       _notice = msg('Box and images cleared');
       syncRender();

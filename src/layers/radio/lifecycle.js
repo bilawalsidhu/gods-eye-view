@@ -17,6 +17,15 @@ export function createLifecycle({
   const methods = {
     /** Initialize scene resources and the single audio element. */
     init(viewer, options = {}) {
+      this.attachRenderer(viewer, options);
+      layerState._sessionGeneration += 1;
+      parts.clustering.resetRadioClusterOverlayIdentities();
+      parts.playback.installAudio();
+      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
+      setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
+    },
+
+    attachRenderer(viewer, options = {}) {
       if (parts.renderer?.ready)
         throw new Error('Radio layer is already initialized');
       if (typeof rendererFactory !== 'function')
@@ -29,11 +38,22 @@ export function createLifecycle({
         engine: options.engine,
       });
       parts.renderer.init(viewer, options);
-      layerState._sessionGeneration += 1;
-      parts.clustering.resetRadioClusterOverlayIdentities();
-      parts.playback.installAudio();
+      if (layerState._enabled) {
+        parts.rendering.drawStations(layerState._stations);
+        parts.interaction.syncRadioLifecyclePresentation();
+      }
+    },
+
+    detachRenderer() {
+      parts.interaction.removeInteraction();
+      clearTimeout(layerState._overlayPublishTimer);
+      layerState._overlayPublishTimer = null;
+      parts.renderer?.destroy();
+      parts.renderer = null;
+      layerState._renderById.clear();
+      layerState._selectedPosition = null;
+      layerState._lastHorizonCameraPosition = null;
       clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
-      setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
     },
 
     /** Show stations. Enabling or preset restoration never starts audio. */

@@ -228,9 +228,7 @@ const FRAME_TARGETS = new Map([
 
 /**
  * The tools that still need the Cesium viewer or a subsystem built on it:
- * the scene director, annotations and routes over them, the camera verbs
- * (orbit, pan, tilt), Contacts (the context mode), Radio and
- * CCTV. Without a viewer (the Navara engine) each answers a structured
+ * annotations and routes over them, camera verbs, the context mode and CCTV. Without a viewer (the Navara engine) each answers a structured
  * refusal (UNAVAILABLE_ON_ENGINE) instead of running.
  */
 export const VIEWER_ONLY_ACTIONS = Object.freeze([
@@ -239,7 +237,6 @@ export const VIEWER_ONLY_ACTIONS = Object.freeze([
   'fly_route',
   'move_camera',
   'set_context_mode',
-  'control_radio',
   'control_cctv',
 ]);
 /** The refusal code of a viewer-only tool on an engine without a viewer. */
