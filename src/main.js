@@ -44,7 +44,7 @@ const session = createSessionDiagnostics(() => {
     navigation: style?._navigation,
     placeSearch: style?.placeSearch,
     dataManager: components.data?.dataManager,
-    voice: components.tools?.voiceCommands,
+    voice: layerSession.voice?.commands ?? components.tools?.voiceCommands,
     annotations: components.tools?.annotations,
     geoImport: window.__gevGeoImport,
     drawTool: window.__gevDrawTool,
@@ -171,8 +171,13 @@ async function settle() {
   components.controls.styleManager.shareLinkManager?.resumeNavigation?.();
 }
 
+// Voice calls made while the engines switch wait for the next engine
+// (src/voice/sceneRunner.js); a settled switch lets them look again.
+layerSession.switching = () => engineSwitch?.state().busy === true;
+
 function present() {
   const { kind, busy } = engineSwitch.state();
+  if (!busy) layerSession.voice?.runner.wake();
   display.presentGlobeEngine({ kind, busy, select });
   for (const button of loading.querySelectorAll('.engine-switch-retry button'))
     button.disabled = busy;

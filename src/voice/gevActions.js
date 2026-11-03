@@ -349,6 +349,8 @@ export function createGevActionRunner({
   speechBuilders = null,
   deixis = null,
   readVoicePanelOperation = null,
+  analystMemory = null,
+  layerEnabledAt = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -357,7 +359,10 @@ export function createGevActionRunner({
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
   const engine = givenEngine ?? engineFromViewer(viewer);
-  const _layerEnabledAt = new Map();
+  // A host that replaces this runner when the globe engine changes passes
+  // the analyst's follow-up memory and the layer enable times, so the next
+  // runner keeps them.
+  const _layerEnabledAt = layerEnabledAt ?? new Map();
   let analystEngine;
   const resolveRegionRing = (name, signal) =>
     annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
@@ -368,6 +373,7 @@ export function createGevActionRunner({
         resolveRegionRing,
         isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
       }),
+      { memory: analystMemory },
     ));
   installViewTargetPrewarm(engine);
   // The camera verbs (move_camera, fly_route) still run on the viewer.
@@ -471,7 +477,9 @@ export function createGevActionRunner({
     };
     if (
       !viewer &&
-      ((name === 'control_scene' && !sceneDirector) || VIEWER_ONLY_ACTIONS.includes(name) || CESIUM_LOOK_ACTIONS.includes(name))
+      ((name === 'control_scene' && !sceneDirector) ||
+        VIEWER_ONLY_ACTIONS.includes(name) ||
+        CESIUM_LOOK_ACTIONS.includes(name))
     )
       return unavailableOnEngine(name, engine);
 
@@ -1077,7 +1085,9 @@ export function createGevActionRunner({
           contextState?.mode === 'flights' &&
           contextState?.active !== false &&
           contextState?.changing !== true;
-        const directEntry = !targetLayer && !aircraftClass &&
+        const directEntry =
+          !targetLayer &&
+          !aircraftClass &&
           styleManager.getCockpitState?.()?.entryAllowed === true;
         if (!contactsReady && !directEntry) {
           const contextResult = await styleManager.setContextMode('flights', {
