@@ -1303,7 +1303,7 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: { moveEnd: { addEventListener() {} } },
   };
-  const recordCarrier = { __gevContextId: 'selected-flight-for-cockpit-enter' };
+  const recordCarrier = {};
   const record = registerEntityContext(recordCarrier, {
     id: 'abc123',
     layerId: 'flights',
@@ -1444,10 +1444,10 @@ test('control_cockpit rolls Contacts back when the turn becomes stale at commit'
 test('control_cockpit adopts the newest selection after Contacts settles', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const contextStore = getContextStore();
-  const first = registerEntityContext({ __gevContextId: 'cockpit-selection-first' }, {
+  const first = registerEntityContext({}, {
     id: 'first', layerId: 'flights', label: 'FIRST',
   });
-  const second = registerEntityContext({ __gevContextId: 'cockpit-selection-second' }, {
+  const second = registerEntityContext({}, {
     id: 'second', layerId: 'flights', label: 'SECOND',
   });
   contextStore.selectedEntityId = first.id;
@@ -1713,7 +1713,7 @@ test('control_cockpit enter skips selected non-flight context', async () => {
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: { moveEnd: { addEventListener() {} } },
   };
-  const recordCarrier = { __gevContextId: 'selected-non-flight-cockpit-enter' };
+  const recordCarrier = {};
   const record = registerEntityContext(recordCarrier, {
     id: 'poi-001',
     layerId: 'local-datacenters',

@@ -1,3 +1,5 @@
+import { entityRecord, readEntityRecord } from './entityRecords.js';
+
 const STORE_KEY = '__gevContextStore';
 
 function createStore() {
@@ -36,14 +38,14 @@ export function registerEntityContext(entity, metadata) {
     entity,
     updatedAt: Date.now(),
   };
-  entity.__gevContextId = metadata.id;
+  entityRecord(entity).contextId = metadata.id;
   store.entities.set(metadata.id, record);
   return record;
 }
 
 export function selectEntityContext(entity) {
   const store = getContextStore();
-  const contextId = entity?.__gevContextId;
+  const contextId = readEntityRecord(entity)?.contextId;
   if (!contextId || !store.entities.has(contextId)) return null;
   store.selectedEntityId = contextId;
   store.selectedAt = Date.now();
@@ -84,7 +86,7 @@ export function selectTrackedSubjectContext(metadata) {
       store.entities.delete(key);
   }
   // Reuse the existing carrier so a per-poll refresh does not churn identity.
-  const carrier = store.entities.get(id)?.entity || { __gevContextId: id };
+  const carrier = store.entities.get(id)?.entity || {};
   const record = registerEntityContext(carrier, { ...metadata, id });
   if (!record) return null;
   store.selectedEntityId = id;
