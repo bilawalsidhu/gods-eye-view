@@ -137,8 +137,12 @@ export function createLifecycle({
       if (layerState._populationPending) parts.retention.resume();
       const previous = layerState._surfaceInput;
       if (previous && !layerState._fetching && layerState._lastBounds === previous.bounds) {
+        // A completed pass, not a refinement: the incoming globe often still
+        // shows coarse tiles, so it samples provisionally and refines once its
+        // surface has loaded ('Handoff refined'). A refinement here never
+        // refined again and left vehicles on those coarse heights.
         void parts.flow.applyFlowThenRender(previous.roads, previous.bounds, layerState._loadGeneration,
-          parts.viewport.getCameraAltitude(), 'Handoff refined').catch(error => {
+          parts.viewport.getCameraAltitude(), 'Handoff').catch(error => {
             if (error?.name !== 'AbortError') console.warn('[Data:Traffic] Surface refresh failed', error);
           });
       }

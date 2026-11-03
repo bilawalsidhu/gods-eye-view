@@ -14,6 +14,22 @@ import {
 import { msg } from '../../i18n/index.js';
 import { nextTask } from '../../sources/vectorTiles.js';
 
+/**
+ * Camera distance, in metres, to a [lon, lat] road coordinate standing on the
+ * local ground estimate (a local tangent-plane approximation, metres apart at
+ * the traffic layer's kilometre range). Null without a camera.
+ */
+export function groundDistanceFrom(camera, groundHeight = 0) {
+  const view = camera && Cesium.Cartographic.fromCartesian(camera);
+  if (!view) return null;
+  const clearance = view.height - (groundHeight || 0) - DOT_HEIGHT_OFFSET;
+  const lat = Cesium.Math.toDegrees(view.latitude);
+  const lon = Cesium.Math.toDegrees(view.longitude);
+  const east = 111320 * Math.cos(view.latitude);
+  return ([roadLon, roadLat]) =>
+    Math.hypot((roadLon - lon) * east, (roadLat - lat) * 111320, clearance);
+}
+
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
   const { fetchFlowForBounds } = source;
@@ -333,10 +349,22 @@ export function createFlow({ state: layerState, services, parts, source }) {
         }
       }
     }
+    // Camera distances are measured to the road's coordinates standing on the
+    // local ground estimate, never to its waypoints. Until this pass samples
+    // them again, waypoints keep the heights of whichever surface sampled them
+    // last: after a globe switch the outgoing globe's, often taken from its
+    // coarse first tiles (about -2 200 m at Austin on keyless Cesium). Weighted
+    // by those, a returning globe's population fell from 620 to 260.
+    const viewCamera =
+      layerState._engine?.camera.livePosition ??
+      layerState._viewer?.camera?.positionWC;
+    const groundDistance = groundDistanceFrom(
+      viewCamera,
+      layerState._viewHeightEstimate,
+    );
     const selected = parts.rendering
       .visibleRoadsForAltitude(roads, altitude)
       .filter((road) => {
-        const camera = (layerState._engine?.camera.livePosition ?? layerState._viewer?.camera?.positionWC);
         const localHeight = Math.max(
           0,
           altitude - (layerState._viewHeightEstimate || 0),
@@ -345,12 +373,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
           ? clamped.coverage.rangeKm * 1000 + 1500
           : Math.max(1200, localHeight * 2);
         if (
-          camera &&
-          road.waypoints.every(
-            (point) =>
-              Cesium.Cartesian3.distanceSquared(camera, point) >
-              radius * radius,
-          )
+          groundDistance &&
+          road.coords.every((coordinate) => groundDistance(coordinate) > radius)
         )
           return false;
         // Spend surface work on roads crossing the canvas, with a small pan margin.
@@ -368,14 +392,11 @@ export function createFlow({ state: layerState, services, parts, source }) {
           maxY = Math.max(maxY, screen.y);
         }
         road.coverageBand = maxY < scene.canvas.clientHeight / 2 ? 1 : 0;
-        if (clamped.coverage && camera) {
+        if (clamped.coverage && groundDistance) {
           road.baseDensityWeight ??= road.densityWeight || 1;
           road.densityWeight =
             road.baseDensityWeight /
-            Math.max(
-              1,
-              Cesium.Cartesian3.distance(camera, road.waypoints[0]) / 1500,
-            );
+            Math.max(1, groundDistance(road.coords[0]) / 1500);
         }
         return (
           maxX >= -100 &&
@@ -469,7 +490,11 @@ export function createFlow({ state: layerState, services, parts, source }) {
     const flowJob = applyFlowToRoads(admitted, clamped, generation, signal);
     flowJob
       .then(() => {
-        if (current()) parts.model.recolorDotsInPlace(label);
+        if (!current()) return;
+        parts.model.recolorDotsInPlace(label);
+        // Flow cleared for this refresh may land after the roads were
+        // published; their budgets then follow it too, not only the colours.
+        if (layerState._liveMode) parts.retention?.retarget?.();
       })
       .catch(() => {});
     const options = {
