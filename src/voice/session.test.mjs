@@ -6,9 +6,10 @@ import {
   voiceCardView,
 } from './voiceCardPresentation.js';
 import { createVoiceSession } from './session.js';
+import { createRealtimeSession } from './realtimeSession.js';
 import { realtimeSessionEvent } from './realtimeEvents.js';
 import { createVoiceCommands } from './sessionCommands.js';
-import { describeUnsavedWork } from '../i18n/index.js';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 
 function deferred() {
   let resolve;
@@ -241,26 +242,17 @@ test('common button and annotation bindings work with an alternate adapter and c
   const previous = globalThis.window;
   globalThis.window = {};
   try {
-    const button = new EventTarget();
-    button.setAttribute = () => {};
     let removed = 0;
     let subscribed = null;
     let calls = 0;
     const events = [];
-    const ui = {
-      button,
-      root: {
-        dataset: {},
-        remove() {
-          removed++;
-        },
-      },
-      status: {},
-      detail: {},
-      tierButton: {},
-      costValue: {},
-      helpDetail: {},
+    const ui = createTestVoiceUi();
+    // Count removals but keep the control, so a click after cleanup still
+    // reaches any listener the binder failed to release.
+    ui.remove = () => {
+      removed++;
     };
+    const click = () => ui.emit('button');
     const lifetime = new AbortController();
     const controls = createVoiceCommands({
       runner: async () => {
@@ -293,31 +285,26 @@ test('common button and annotation bindings work with an alternate adapter and c
         };
       },
     });
-    button.dispatchEvent(new Event('click'));
+    click();
     await new Promise((done) => setTimeout(done, 0));
     assert.equal(calls, 1);
-    assert.equal(ui.tierButton.hidden, true);
-    assert.equal(ui.costValue.hidden, true);
-    assert.equal(ui.helpDetail.textContent, 'Activate to toggle voice');
-    assert.equal(ui.status.textContent, 'LISTENING');
-    assert.equal(ui.detail.textContent, 'Ready');
-    // Switching language (a reload) asks first during a session.
-    assert.deepEqual(describeUnsavedWork(), ['the active voice session']);
+    assert.equal(ui.state.tier.hidden, true);
+    assert.equal(ui.state.cost.hidden, true);
+    assert.equal(ui.state.help.text, 'Activate to toggle voice');
+    assert.equal(ui.state.status.text, 'LISTENING');
+    assert.equal(ui.state.detail.text, 'Ready');
     subscribed({ status: 'resolved' });
     assert.deepEqual(events, [
       { type: 'map_annotation_outline', status: 'resolved' },
     ]);
-    button.dispatchEvent(new Event('click'));
+    click();
     assert.equal(controls.state, 'idle');
-    assert.deepEqual(describeUnsavedWork(), []);
-    button.dispatchEvent(new Event('click'));
+    click();
     await new Promise((done) => setTimeout(done, 0));
-    assert.deepEqual(describeUnsavedWork(), ['the active voice session']);
     lifetime.abort();
-    assert.deepEqual(describeUnsavedWork(), [], 'disposal unregisters');
     assert.equal(subscribed, null);
     assert.equal(removed, 1);
-    button.dispatchEvent(new Event('click'));
+    click();
     assert.equal(calls, 2);
   } finally {
     globalThis.window = previous;
@@ -440,4 +427,181 @@ test('a late rejection cannot settle a newer turn card', async () => {
     false,
   );
   f.session.destroy();
+});
+
+function startReentrancyFixture() {
+  let starts = 0;
+  let stops = 0;
+  const settings = [];
+  const session = createVoiceSession({
+    runner: async () => ({ ok: true }),
+    createAdapter: ({ emit }) => ({
+      async start(options) {
+        starts++;
+        settings.push(options);
+        emit({ type: 'state', state: 'listening' });
+      },
+      stop() {
+        stops++;
+      },
+      sendText() {},
+      sendMapEvent() {},
+    }),
+  });
+  return { session, settings, starts: () => starts, stops: () => stops };
+}
+
+for (const action of ['stop', 'destroy']) {
+  test(`initial connecting observer ${action} prevents adapter acquisition`, async () => {
+    const f = startReentrancyFixture();
+    const unsubscribe = f.session.subscribe((event) => {
+      if (event.type === 'state' && event.state === 'connecting') {
+        unsubscribe();
+        f.session[action]();
+      }
+    });
+    await f.session.start();
+    assert.equal(
+      f.starts(),
+      0,
+      'cancelled attempt must not call adapter.start',
+    );
+    assert.equal(f.stops(), 1);
+    assert.equal(f.session.state, 'idle');
+    if (action === 'stop') {
+      await f.session.start();
+      assert.equal(f.starts(), 1, 'later explicit Start remains usable');
+      assert.equal(f.session.state, 'listening');
+    }
+    f.session.destroy();
+  });
+}
+
+test('preserveStatus Stop still prevents adapter acquisition', async () => {
+  const f = startReentrancyFixture();
+  const unsubscribe = f.session.subscribe((event) => {
+    if (event.type === 'state' && event.state === 'connecting') {
+      unsubscribe();
+      f.session.stop({ preserveStatus: true });
+    }
+  });
+  await f.session.start();
+  assert.equal(f.starts(), 0);
+  assert.equal(
+    f.session.state,
+    'connecting',
+    'preserved state is not ownership',
+  );
+  f.session.stop();
+  await f.session.start();
+  assert.equal(f.starts(), 1);
+  f.session.destroy();
+});
+
+test('Stop and explicit reentrant successor start acquire only for the successor', async () => {
+  const f = startReentrancyFixture();
+  let successor;
+  const unsubscribe = f.session.subscribe((event) => {
+    if (event.type === 'state' && event.state === 'connecting') {
+      unsubscribe();
+      f.session.stop();
+      successor = f.session.start();
+    }
+  });
+  await f.session.start();
+  await successor;
+  assert.equal(f.starts(), 1);
+  assert.equal(f.session.state, 'listening');
+  f.session.destroy();
+});
+
+test('ordinary start forwards caller settings once and remains stoppable', async () => {
+  const f = startReentrancyFixture();
+  const settings = { pushToTalk: true };
+  await f.session.start(settings);
+  assert.equal(f.settings.length, 1);
+  assert.equal(f.settings[0], settings);
+  assert.equal(f.starts(), 1);
+  assert.equal(f.session.state, 'listening');
+  f.session.stop();
+  assert.equal(f.session.state, 'idle');
+  f.session.destroy();
+});
+
+for (const emitsIdle of [false, true]) {
+  for (const outcome of ['normal', 'preserveStatus', 'throw']) {
+    test(`stop preserves custom adapter contract: emitsIdle=${emitsIdle}, ${outcome}`, async (t) => {
+      let adapter;
+      const calls = [];
+      const events = [];
+      const failure = new Error('Controlled stop failure');
+      const session = createVoiceSession({
+        runner: async () => ({}),
+        createAdapter: ({ emit }) =>
+          (adapter = {
+            async start() {
+              emit({ type: 'state', state: 'listening' });
+            },
+            stop(settings = {}) {
+              calls.push({ receiver: this, settings });
+              if (settings.removeUi) return;
+              if (emitsIdle && !settings.preserveStatus)
+                emit({ type: 'state', state: 'idle' });
+              if (outcome === 'throw') throw failure;
+              return 'adapter-only return';
+            },
+            sendText() {},
+            sendMapEvent() {},
+          }),
+      });
+      t.after(() => session.destroy());
+      session.subscribe((event) => events.push(event));
+      await session.start();
+      events.length = 0;
+      const settings =
+        outcome === 'preserveStatus' ? { preserveStatus: true } : {};
+      if (outcome === 'throw')
+        assert.throws(
+          () => session.stop(settings),
+          (error) => error === failure,
+        );
+      else assert.equal(session.stop(settings), undefined);
+      assert.equal(calls[0].receiver, adapter);
+      assert.equal(calls[0].settings, settings);
+      assert.equal(
+        session.state,
+        outcome === 'preserveStatus' ? 'listening' : 'idle',
+      );
+      assert.equal(
+        events.filter(
+          (event) => event.type === 'state' && event.state === 'idle',
+        ).length,
+        outcome === 'preserveStatus' ? 0 : 1,
+      );
+    });
+  }
+}
+
+test('actual default OpenAI adapter stop publishes one common idle', (t) => {
+  const events = [];
+  const ui = createTestVoiceUi();
+  const runner = async () => ({});
+  const session = createVoiceSession({
+    runner,
+    createAdapter: (hooks) =>
+      createRealtimeSession({ ...hooks, runner, ui, debugSink() {} }),
+  });
+  t.after(() => session.destroy());
+  session.subscribe((event) => events.push(event));
+  // Exercise the real stop path without acquiring microphone/WebRTC resources.
+  session.adapter.controller.setStatus('listening', 'Controlled active state');
+  events.length = 0;
+  session.stop();
+  assert.equal(
+    events.filter((event) => event.type === 'state' && event.state === 'idle')
+      .length,
+    1,
+  );
+  assert.equal(session.state, 'idle');
+  assert.equal(session.adapter.controller.status, 'idle');
 });

@@ -208,6 +208,8 @@ export function feedProvenanceNote(layers = [], overall = null) {
     return `${s.name || s.id} is ${String(s.feedState).toUpperCase()}${extras ? ` (${extras})` : ''}`;
   });
   const body = bits.join('; ') || `${String(overall).toUpperCase()} feed`;
+  if (overall === 'partial')
+    return `${body}. Narrate that coverage is incomplete with any count; do not claim full coverage.`;
   return `${body}. Narrate that provenance with any count; do not describe this as live.`;
 }
 
@@ -253,4 +255,64 @@ export function viewStateLayerRow(layer, options) {
     source: snap.source,
     lastUpdate: snap.lastUpdate,
   };
+}
+
+/**
+ * The feed state and up to two layer names of a provenance envelope that is
+ * not nominal, or null; the worst layers come first, so the names match the
+ * state. Values stay English (`state` is a feed-state id, `names` are
+ * `layer.name`); the HUD translates them for display.
+ * @param {{ overall?: string|null, layers?: Array<object> }|null} envelope
+ * @returns {{ state: string, names: string[] }|null}
+ */
+export function provenanceTag(envelope) {
+  const overall = envelope?.overall;
+  if (!overall || overall === 'nominal' || overall === 'off') return null;
+  const names = (envelope.layers || [])
+    .filter(
+      (s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off',
+    )
+    .sort(
+      (a, b) =>
+        FEED_STATE_SEVERITY[a.feedState] - FEED_STATE_SEVERITY[b.feedState],
+    )
+    .map((s) => String(s.name || s.id || 'LAYER'))
+    .slice(0, 2);
+  return { state: overall, names };
+}
+
+const upperCase = (word) => word.toUpperCase();
+
+/**
+ * `STATE | text | LAYERS`: the state leads so a narrow readout never clips
+ * it; the layer names trail so they never push out the text.
+ * @param {string} text
+ * @param {{ state: string, names: string[] }|null} tag From `provenanceTag`.
+ * @param {(state: string) => string} [stateLabel]
+ * @param {(name: string) => string} [layerLabel]
+ * @returns {string}
+ */
+export function provenanceLine(
+  text,
+  tag,
+  stateLabel = upperCase,
+  layerLabel = upperCase,
+) {
+  if (!tag) return text;
+  return [stateLabel(tag.state), text, tag.names.map(layerLabel).join('/')]
+    .filter(Boolean)
+    .join(' | ');
+}
+
+/**
+ * Require a matching feedState for warning states: a view that is not
+ * nominal falls back on a missing or different state.
+ * @param {{ feedState?: string|null }|null} response The proxy's reply.
+ * @param {{ overall?: string|null }|null} provenance The context's envelope.
+ * @returns {boolean}
+ */
+export function hudSummaryMatchesProvenance(response, provenance) {
+  const state = provenance?.overall;
+  if (!state || state === 'nominal' || state === 'off') return true;
+  return response?.feedState === state;
 }

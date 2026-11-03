@@ -20,10 +20,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [24.14.0, 26.x]
+        node: [24.22.2, 26.x]
     env:
       PUPPETEER_SKIP_DOWNLOAD: '1'
-      GEV_REQUIRE_ALLOCATION_GATE: ${{ matrix.node == '24.14.0' && '1' || '0' }}
+      GEV_REQUIRE_ALLOCATION_GATE: ${{ matrix.node == '24.22.2' && '1' || '0' }}
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -67,8 +67,6 @@ jobs:
     timeout-minutes: 30
     env:
       GEV_REQUIRE_ALLOCATION_GATE: '0'
-      # Fail on a missed header press unless the panel itself moved.
-      QA_FAIL_ON_RETRY: '1'
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -78,7 +76,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24.14.0
+          node-version: 24.22.2
           cache: npm
 
       - name: Install locked dependencies and headless Chrome
@@ -103,10 +101,6 @@ jobs:
 
       - name: Street Level gate with Mapillary fixtures
         run: npm run qa:street-level:fixtures -- --strict --url http://localhost:4173
-
-      - name: Portable panel gate
-        if: success() || failure()
-        run: npm run qa:panel-resize -- --url http://localhost:4173
 
       - name: Preview server log
         if: failure()
@@ -137,7 +131,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24.14.0
+          node-version: 24.22.2
           cache: npm
 
       - name: Run the Pinokio install path

@@ -1,7 +1,6 @@
 import * as Cesium from 'cesium';
 import { positionMarkerGlyph, viewConeMarkerGlyph } from './glyphs.js';
 import { COLORS, POSITION_PICK_ID } from './policy.js';
-import { refineHeights } from './groundCast.js';
 import { createHorizonCull } from './view.js';
 
 const SPRITE_ID = 'street-level:marker';
@@ -22,10 +21,9 @@ function markerLook(style) {
   };
 }
 
-/** On-globe marker for the open image; in terrain mode it stands on bare earth. */
-export function createMarker({ state, parts }) {
+/** On-globe marker for the open image, clamped to the ground. */
+export function createMarker({ state }) {
   const { render, sprites } = state.services;
-  let last = null;
 
   function requestRender() {
     render?.governorRequestRender?.('street-level-marker');
@@ -47,38 +45,10 @@ export function createMarker({ state, parts }) {
     sprites?.registerSpriteCollection?.(SPRITE_ID, state.marker.collection);
   }
 
-  /**
-   * Terrain-mode height (bare earth refined by mesh samples), or null to
-   * clamp. Requests a missing terrain cell or mesh sample as a side effect.
-   */
-  function castHeight(position) {
-    const ground = parts?.groundCaster;
-    if (state.surface !== 'terrain' || !ground) return null;
-    const { lon, lat } = position;
-    const dem = ground.groundAt(lon, lat);
-    if (dem === null) {
-      ground.prepare([[lon, lat]]).then((ready) => {
-        if (ready && last?.position === position)
-          set(position, last.bearing, last.style);
-      });
-      return null;
-    }
-    const mesh = parts.meshSampler?.meshAt(lon, lat);
-    if (mesh === undefined) parts.meshSampler?.request([[lon, lat]]);
-    return refineHeights([{ dem, mesh }])[0];
-  }
-
-  // A new mesh sample may move the marker onto (or off) the road surface.
-  parts?.meshSampler?.onSampled(() => {
-    if (last && state.surface === 'terrain')
-      set(last.position, last.bearing, last.style);
-  });
-
   /** Move (or create) the marker; null removes it. `style`: the provider's `marker`. */
   function set(position, bearing, style = null) {
     const collection = state.marker.collection;
     if (!collection) return;
-    last = position ? { position, bearing, style } : null;
     if (!position) {
       collection.removeAll();
       state.marker.billboard = null;
@@ -86,16 +56,7 @@ export function createMarker({ state, parts }) {
       requestRender();
       return;
     }
-    const height = castHeight(position);
-    const cartesian = Cesium.Cartesian3.fromDegrees(
-      position.lon,
-      position.lat,
-      height ?? 0,
-    );
-    const heightReference =
-      height === null
-        ? Cesium.HeightReference.CLAMP_TO_GROUND
-        : Cesium.HeightReference.NONE;
+    const cartesian = Cesium.Cartesian3.fromDegrees(position.lon, position.lat);
     const look = markerLook(style);
     if (state.marker.billboard && state.marker.look !== look.key) {
       collection.remove?.(state.marker.billboard);
@@ -111,12 +72,11 @@ export function createMarker({ state, parts }) {
         width: look.size,
         height: look.size,
         alignedAxis: Cesium.Cartesian3.UNIT_Z,
-        heightReference,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
       });
     } else {
-      state.marker.billboard.heightReference = heightReference;
       state.marker.billboard.position = cartesian;
     }
     state.marker.billboard.rotation = -Cesium.Math.toRadians(bearing || 0);
@@ -139,17 +99,11 @@ export function createMarker({ state, parts }) {
     state.marker.billboard = null;
   }
 
-  /** Re-place the marker after the surface mode changes. */
-  function setSurface() {
-    if (last) set(last.position, last.bearing, last.style);
-  }
-
   return {
     ensure,
     set,
     clear: () => set(null),
     setVisible,
-    setSurface,
     destroy,
   };
 }

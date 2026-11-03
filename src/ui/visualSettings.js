@@ -1,5 +1,9 @@
+import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
-import { t } from '../i18n/index.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
+import { useDisplayStore } from './stores/display.js';
+import { applicationPinia } from './vueRuntime.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
   VisualEffects,
@@ -8,8 +12,7 @@ import {
   STYLE_PRESET_DEFAULTS,
   MILITARY_DETECTION_PRESET,
 } from './effects.js';
-import { createStyleParameters } from './visualInput.js';
-import * as Cesium from 'cesium';
+import { styleParameterRows, withParameterValue } from './styleParameters.js';
 import {
   BLOOM_SCALE_VERSION,
   clampBloomIntensity,
@@ -45,12 +48,7 @@ const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
 /** Own visual preferences, detection overrides and display-control state. */
 export class VisualSettings {
   async restoreShareState(state) {
-    const {
-      setScopeMaskEnabled,
-      setScopeMaskFeather,
-      setScopeTerminusOverride,
-      clampScopeTerminusPct,
-    } = this.services;
+    const { setScopeTerminusOverride, clampScopeTerminusPct } = this.services;
     const {
       style,
       bloom,
@@ -73,13 +71,24 @@ export class VisualSettings {
       panelState,
       styleParams,
     } = state || {};
-    // Ignore the retired 'ai-edit' style from older share links.
-    if (style && style !== 'normal' && style !== 'ai-edit') {
+    // Ignore the retired 'ai-edit' style from older share links. Normal is
+    // the start-up style, but a share opened later in the tab must still leave
+    // a filtered style for it.
+    if (
+      style &&
+      style !== 'ai-edit' &&
+      (style !== 'normal' || this.activeStyle !== 'normal')
+    ) {
+      const alreadyActive = style === this.activeStyle;
       this.setStyle(style, {
         applyPreset: true,
         revealParameters: false,
         restore: true,
       });
+      // setStyle leaves an already-active style untouched; the incoming share
+      // still starts from that preset before its own parameters apply.
+      if (alreadyActive && style !== 'normal')
+        this._applyStylePresetDefaults(style);
     }
     if (styleParams && style && this.stages[style] && STYLES[style]?.uniforms) {
       for (const [uniformName, uniformValue] of Object.entries(styleParams)) {
@@ -88,16 +97,12 @@ export class VisualSettings {
       }
       this._updateSliderPanel(style, { reveal: false });
     }
-    if (typeof bloomIntensity === 'number' && this._bloomSlider) {
+    if (typeof bloomIntensity === 'number') {
       const intensity = decodeBloomIntensity(bloomIntensity, bloomVersion);
       this._setBloomIntensity(intensity, { syncShare: false });
     }
-    if (typeof sharpenIntensity === 'number' && this._sharpenSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(sharpenIntensity)));
-      this._sharpenSlider.value = String(pct);
-      this._sharpenSliderValue.textContent = `${pct}%`;
-      this._applySharpenIntensity(pct / 100);
-    }
+    if (typeof sharpenIntensity === 'number')
+      this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
     if (typeof bloom === 'boolean') this._setBloomEnabled(bloom);
     if (typeof sharpen === 'boolean') this._setSharpenEnabled(sharpen);
     if (hudVariant) this._setHudVariant(hudVariant);
@@ -105,28 +110,22 @@ export class VisualSettings {
       this.hud.setMode(hudVisible ? 'on' : 'off');
       this._updateHudButtonState();
     }
-    if (typeof detectionDensity === 'number' && this._detectionDensitySlider) {
-      const pct = canonicalizeDensity(detectionDensity);
-      this._detectionDensitySlider.value = String(pct);
-      this._detectionDensityValue.textContent = `${pct}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof detectionDensity === 'number')
+      this._setDetectionDensity(detectionDensity);
     if (detectionAllocation) {
       this._setDetectionAllocation(detectionAllocation, {
         syncShare: false,
         persist: false,
       });
     }
-    if (typeof detectionFadePct === 'number' && this._detectionFadeSlider) {
-      this._detectionFadeSlider.value = String(detectionFadePct);
-    }
-    if (
-      typeof detectionOutsideOpacityPct === 'number' &&
-      this._detectionOpacitySlider
-    ) {
-      this._detectionOpacitySlider.value = String(detectionOutsideOpacityPct);
-    }
-    this._applyDetectionFadeFromUi();
+    this._setDetectionFade({
+      fadePct:
+        typeof detectionFadePct === 'number' ? detectionFadePct : undefined,
+      outsideOpacityPct:
+        typeof detectionOutsideOpacityPct === 'number'
+          ? detectionOutsideOpacityPct
+          : undefined,
+    });
     if (detectionMode) this._setDetectionMode(detectionMode);
     if (typeof celestialRing === 'boolean') {
       this.setCelestialRingEnabled(celestialRing, {
@@ -134,18 +133,7 @@ export class VisualSettings {
         focus: false,
       });
     }
-    if (typeof scopeEnabled === 'boolean') {
-      setScopeMaskEnabled(scopeEnabled);
-      this._scopeBtn?.classList.toggle('active', scopeEnabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeEnabled));
-    }
-    if (typeof scopeFeatherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(scopeFeatherPct)));
-      this._scopeFeatherSlider.value = String(pct);
-      if (this._scopeFeatherValue)
-        this._scopeFeatherValue.textContent = `${pct}%`;
-      setScopeMaskFeather(pct / 100);
-    }
+    this._setScope({ enabled: scopeEnabled, featherPct: scopeFeatherPct });
     // null restores the altitude-adaptive ramp; a number pins the terminus
     // (clamped to the supported 94..100 band, same as the `sce` hash key).
     if (scopeTerminusPct === null) setScopeTerminusOverride(null);
@@ -175,7 +163,9 @@ export class VisualSettings {
     readContextMode,
     readContextChanging,
     readDisplayPortalActive,
+    store = useDisplayStore(applicationPinia()),
   }) {
+    this.store = store;
     Object.assign(this, elements, operations, {
       viewer,
       services,
@@ -190,12 +180,46 @@ export class VisualSettings {
       readDisplayPortalActive,
     });
     this._lifetime = new UiLifetime();
+    // The display, the active style and the style sliders carry translated
+    // text; publish them again in a new locale.
+    this._lifetime.own(
+      onLocaleChange(() => {
+        this._publishActiveStyle();
+        this._publishDisplay();
+        this._refreshParameters();
+      }),
+    );
+    // The active style's published parameter rows; null while it has none.
+    this._parameters = null;
+    this._parametersToken = store.connect({
+      setStyleParameter: (name, value) => this.setStyleParameter(name, value),
+    });
     this._visualEffects = new VisualEffects({
       viewer,
       requestRender: services.governorRequestRender,
       holdRender: services.holdContinuousRender,
       releaseRender: services.releaseContinuousRender,
     });
+    // The sharpen amount as a whole percentage. VisualEffects keeps the
+    // fraction it applies, and drops writes once it is stopped.
+    this._sharpenPct = 49;
+    // Detection's density stop, keyhole fade and outside opacity, in whole
+    // percentages; the mode label the button shows (null until first
+    // synced) and the allocation its segments show (null until set).
+    this._detectionDensityPct = 50;
+    this._detectionFadePct = 7;
+    this._detectionOutsidePct = 1;
+    this._detectionModeLabel = null;
+    this._detectionAllocationShown = null;
+    // What the HUD and Sonar controls show; null until first synced, so the
+    // initial markup stands.
+    this._hudVisibleShown = null;
+    this._hudVariantShown = null;
+    this._sonarShown = null;
+    // What the Scope and Celestial controls show; null until first set.
+    this._scopeEnabledShown = null;
+    this._scopeFeatherShown = null;
+    this._celestialShown = null;
     this.activeStyle = 'normal';
     this._preCyberStyle = null;
     this._cyberStyleUserSelected = false;
@@ -204,10 +228,6 @@ export class VisualSettings {
     this._cockpitVisionMode = 'optical';
     this._cockpitVisionRestore = null;
     this._contactsDetectionRestore = null;
-    this._detectionAllocationBtns = [
-      document.getElementById('detection-allocation-elastic'),
-      document.getElementById('detection-allocation-weighted'),
-    ].filter(Boolean);
     let storedDetectionAllocation = 'ELASTIC';
     try {
       storedDetectionAllocation =
@@ -257,6 +277,16 @@ export class VisualSettings {
 
   get sharpenEnabled() {
     return this._visualEffects.sharpenEnabled;
+  }
+
+  /** Bloom intensity as the Display slider shows it, 0-200. */
+  get bloomIntensityPct() {
+    return clampBloomIntensity(this._getBloomIntensity());
+  }
+
+  /** Sharpen amount as the Display slider shows it, 0-100. */
+  get sharpenIntensityPct() {
+    return this._sharpenPct;
   }
 
   _initStages() {
@@ -419,22 +449,13 @@ export class VisualSettings {
   }
 
   _revealCockpitStyleParameters({ openDisplay = false } = {}) {
-    if (
-      !this.cockpitView?.active ||
-      !this._sliderPanel?.classList.contains('active')
-    )
-      return;
-    if (
-      openDisplay &&
-      this._cockpitDisplayToggleBtn?.getAttribute('aria-expanded') !== 'true'
-    ) {
+    if (!this.cockpitView?.active || !this._parameters) return;
+    if (openDisplay && !this._cockpitDisclosureOpen?.('display')) {
       this._setCockpitDisclosure?.('display', true);
       return;
     }
-    if (this._cockpitDisplayToggleBtn?.getAttribute('aria-expanded') !== 'true')
-      return;
-    this._sliderPanel.classList.remove('collapsed');
-    this._syncPanelCollapseButton(this._sliderPanel);
+    if (!this._cockpitDisclosureOpen?.('display')) return;
+    this._presentPanel(this._sliderPanel, { collapsed: false });
     this._lifetime.frame(() =>
       this._lifetime.frame(() => {
         this._sliderPanel?.scrollIntoView?.({ block: 'nearest' });
@@ -443,9 +464,78 @@ export class VisualSettings {
   }
 
   _initBloomSharpen() {
-    this._visualEffects.initPostProcess(
-      this._sharpenSlider ? parseInt(this._sharpenSlider.value, 10) / 100 : 0.6,
-    );
+    this._visualEffects.initPostProcess(this._sharpenPct / 100);
+    this._publishDisplay();
+  }
+
+  /** Present the Display panel's post-processing groups. */
+  _presentDisplay() {
+    return {
+      bloom: { active: this.bloomEnabled, intensity: this.bloomIntensityPct },
+      sharpen: { active: this.sharpenEnabled, intensity: this._sharpenPct },
+      detection: this._presentDetection(),
+      hud: { visible: this._hudVisibleShown, variant: this._hudVariantShown },
+      sonar: this._sonarShown,
+      scope: {
+        enabled: this._scopeEnabledShown,
+        featherPct: this._scopeFeatherShown,
+      },
+      celestial: this._celestialShown,
+    };
+  }
+
+  /**
+   * Apply the Scope mask and show it on its controls; a field that is not
+   * given stays as it is. `apply: false` only shows the mask's state.
+   */
+  _setScope({ enabled, featherPct } = {}, { apply = true } = {}) {
+    if (typeof enabled === 'boolean') {
+      if (apply) this.services.setScopeMaskEnabled(enabled);
+      this._scopeEnabledShown = enabled;
+    }
+    if (typeof featherPct === 'number') {
+      const pct = clampScopeFeatherPct(featherPct);
+      if (apply) this.services.setScopeMaskFeather(pct / 100);
+      this._scopeFeatherShown = pct;
+    }
+    this._publishDisplay();
+  }
+
+  /** Detection's button, rows, sliders and allocation segments. */
+  _presentDetection() {
+    const mode = this._detectionModeLabel;
+    const enabled = mode != null && mode !== 'OFF';
+    const labels = {
+      SPARSE: t('SPARSE'),
+      BALANCED: t('BALANCED'),
+      DENSE: t('DENSE'),
+    };
+    return {
+      // Null until the first sync, so the initial markup stands.
+      button:
+        mode == null
+          ? null
+          : {
+              pressed: enabled,
+              ariaLabel: enabled
+                ? t('Detection overlay: {mode}', {
+                    mode: String(mode).toLowerCase(),
+                  })
+                : t('Detection overlay: off'),
+              label: labels[mode] ?? t('DETECT'),
+              active: Object.hasOwn(labels, mode),
+              panoptic: mode === 'DENSE',
+            },
+      rowsVisible: enabled,
+      densityPct: this._detectionDensityPct,
+      fadePct: this._detectionFadePct,
+      outsideOpacityPct: this._detectionOutsidePct,
+      allocation: this._detectionAllocationShown,
+    };
+  }
+
+  _publishDisplay() {
+    this.store.publish(this._presentDisplay());
   }
 
   _getBloomIntensity() {
@@ -459,11 +549,8 @@ export class VisualSettings {
   _setBloomIntensity(intensity, { syncShare = true } = {}) {
     const { governorRequestRender } = this.services;
     governorRequestRender('bloom');
-    const clamped = clampBloomIntensity(intensity);
-    if (this._bloomSlider) this._bloomSlider.value = String(clamped);
-    if (this._bloomSliderValue)
-      this._bloomSliderValue.textContent = `${clamped}%`;
-    this._applyBloomIntensity(clamped);
+    this._applyBloomIntensity(clampBloomIntensity(intensity));
+    this._publishDisplay();
     if (syncShare) this._syncShareState();
   }
 
@@ -476,8 +563,7 @@ export class VisualSettings {
     governorRequestRender('bloom');
     this._visualEffects.setBloomEnabled(enabled);
     this._syncBloomStageEnabled();
-    this._bloomBtn.classList.toggle('active', this.bloomEnabled);
-    this._bloomSliderRow.classList.toggle('visible', this.bloomEnabled);
+    this._publishDisplay();
     if (this.bloomEnabled) {
       this._applyBloomIntensity(this._getBloomIntensity());
     }
@@ -489,61 +575,51 @@ export class VisualSettings {
     this._visualEffects.applySharpenIntensity(val);
   }
 
+  /** Set the sharpen amount, a percentage clamped to 0-100, and apply it. */
+  _setSharpenIntensity(pct, { syncShare = true } = {}) {
+    if (!Number.isFinite(pct)) return;
+    this._sharpenPct = Math.max(0, Math.min(100, Math.round(pct)));
+    this._applySharpenIntensity(this._sharpenPct / 100);
+    this._publishDisplay();
+    if (syncShare) this._syncShareState();
+  }
+
   _setSharpenEnabled(enabled) {
     const { governorRequestRender } = this.services;
     governorRequestRender('sharpen');
     this._visualEffects.setSharpenEnabled(enabled);
-    this._sharpenBtn.classList.toggle('active', this.sharpenEnabled);
-    if (this._sharpenSliderRow) {
-      this._sharpenSliderRow.classList.toggle('visible', this.sharpenEnabled);
-    }
-    if (this.sharpenEnabled && this._sharpenSlider) {
-      this._applySharpenIntensity(
-        parseInt(this._sharpenSlider.value, 10) / 100,
-      );
-    }
+    this._publishDisplay();
+    if (this.sharpenEnabled)
+      this._applySharpenIntensity(this._sharpenPct / 100);
     this._syncShareState();
     this._layoutRightPanels();
   }
 
-  _applyDetectionDensityFromUi() {
+  /** Set detection's density to its nearest stop and apply it. */
+  _setDetectionDensity(pct = this._detectionDensityPct) {
     const { getDetectionMode, setDetectionTuning } = this.services;
-    if (!this._detectionDensitySlider) return;
-    const pct = canonicalizeDensity(this._detectionDensitySlider.value);
-    this._detectionDensitySlider.value = String(pct);
-    if (this._detectionDensityValue)
-      this._detectionDensityValue.textContent = `${pct}%`;
-    setDetectionTuning({ densityPct: pct });
+    this._detectionDensityPct = canonicalizeDensity(pct);
+    setDetectionTuning({ densityPct: this._detectionDensityPct });
     this._updateDetectionButton(getDetectionMode());
   }
 
-  _applyDetectionFadeFromUi() {
+  /**
+   * Set the keyhole fade distance (0-40%) and the opacity outside it
+   * (0-100%), keeping either one that is not given, and apply them.
+   */
+  _setDetectionFade({
+    fadePct = this._detectionFadePct,
+    outsideOpacityPct = this._detectionOutsidePct,
+  } = {}) {
     const { setKeyholeFadeTuning } = this.services;
-    const fadePct = Math.max(
-      0,
-      Math.min(40, Math.round(Number(this._detectionFadeSlider?.value) || 0)),
-    );
-    const outsideOpacityValue = this._detectionOpacitySlider?.value;
-    const outsideOpacityPct = Math.max(
-      0,
-      Math.min(
-        100,
-        Math.round(
-          outsideOpacityValue == null ? 3 : Number(outsideOpacityValue) || 0,
-        ),
-      ),
-    );
-    if (this._detectionFadeSlider)
-      this._detectionFadeSlider.value = String(fadePct);
-    if (this._detectionFadeValue)
-      this._detectionFadeValue.textContent = `${fadePct}%`;
-    if (this._detectionOpacitySlider)
-      this._detectionOpacitySlider.value = String(outsideOpacityPct);
-    if (this._detectionOpacityValue)
-      this._detectionOpacityValue.textContent = `${outsideOpacityPct}%`;
+    const whole = (value, max) =>
+      Math.max(0, Math.min(max, Math.round(Number(value) || 0)));
+    this._detectionFadePct = whole(fadePct, 40);
+    this._detectionOutsidePct = whole(outsideOpacityPct, 100);
+    this._publishDisplay();
     setKeyholeFadeTuning({
-      fadeRatio: fadePct / 100,
-      outsideOpacity: outsideOpacityPct / 100,
+      fadeRatio: this._detectionFadePct / 100,
+      outsideOpacity: this._detectionOutsidePct / 100,
     });
     this.viewer.scene.requestRender?.();
   }
@@ -557,11 +633,8 @@ export class VisualSettings {
     const normalized = normalizeAllocationStrategy(raw);
     this._detectionAllocationPreference = normalized;
     setDetectionTuning({ allocationStrategy: normalized });
-    for (const button of this._detectionAllocationBtns) {
-      const active = button.dataset.allocation === normalized;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-checked', String(active));
-    }
+    this._detectionAllocationShown = normalized;
+    this._publishDisplay();
     if (persist) {
       try {
         localStorage.setItem(DETECTION_ALLOCATION_STORAGE_KEY, normalized);
@@ -577,25 +650,16 @@ export class VisualSettings {
     const { getKeyholeFadeTuning, getDetectionTuning, getDetectionMode } =
       this.services;
     const tuning = getDetectionTuning();
-    if (this._detectionDensitySlider)
-      this._detectionDensitySlider.value = String(tuning.densityPct);
-    if (this._detectionDensityValue)
-      this._detectionDensityValue.textContent = `${tuning.densityPct}%`;
+    this._detectionDensityPct = canonicalizeDensity(tuning.densityPct);
     this._setDetectionAllocation(tuning.allocationStrategy, {
       syncShare: false,
       persist: false,
     });
     const fadeTuning = getKeyholeFadeTuning();
-    if (this._detectionFadeSlider)
-      this._detectionFadeSlider.value = String(
-        Math.round(fadeTuning.fadeRatio * 100),
-      );
-    if (this._detectionOpacitySlider) {
-      this._detectionOpacitySlider.value = String(
-        Math.round(fadeTuning.outsideOpacity * 100),
-      );
-    }
-    this._applyDetectionFadeFromUi();
+    this._setDetectionFade({
+      fadePct: fadeTuning.fadeRatio * 100,
+      outsideOpacityPct: fadeTuning.outsideOpacity * 100,
+    });
     this._updateDetectionButton(getDetectionMode());
   }
 
@@ -624,9 +688,8 @@ export class VisualSettings {
       this._preCyberStyle = this.activeStyle;
       this._cyberStyleUserSelected = false;
     }
-    if (this._hudLayoutSelect && this._hudLayoutSelect.value !== nextVariant) {
-      this._hudLayoutSelect.value = nextVariant;
-    }
+    this._hudVariantShown = nextVariant;
+    this._publishDisplay();
     const visualDefaults = cyberVisualDefaultsForHudTransition(
       previousVariant,
       nextVariant,
@@ -667,37 +730,16 @@ export class VisualSettings {
   }
 
   _syncCyberSonarControl() {
-    if (!this._cyberSonarBtn) return;
-    const enabled = isCyberSonarEnabled();
     const settings = applyCyberSonarSettings(readCyberSonarSettings());
-    this._cyberSonarBtn.classList.toggle('active', enabled);
-    this._cyberSonarBtn.setAttribute('aria-pressed', String(enabled));
-    this._cyberSonarBtn.textContent = enabled ? t('ON') : t('OFF');
-    for (const [input, output, value, suffix] of [
-      [this._cyberSonarRings, this._cyberSonarRingsValue, settings.rings, ''],
-      [this._cyberSonarRange, this._cyberSonarRangeValue, settings.range, '%'],
-      [
-        this._cyberSonarIntensity,
-        this._cyberSonarIntensityValue,
-        settings.intensity,
-        '%',
-      ],
-      [
-        this._cyberSonarOpacity,
-        this._cyberSonarOpacityValue,
-        settings.opacity,
-        '%',
-      ],
-      [
-        this._cyberSonarSector,
-        this._cyberSonarSectorValue,
-        settings.sector,
-        '°',
-      ],
-    ]) {
-      if (input) input.value = String(value);
-      if (output) output.textContent = `${value}${suffix}`;
-    }
+    this._sonarShown = {
+      enabled: isCyberSonarEnabled(),
+      rings: settings.rings,
+      range: settings.range,
+      intensity: settings.intensity,
+      opacity: settings.opacity,
+      sector: settings.sector,
+    };
+    this._publishDisplay();
   }
 
   _setCyberSonarEnabled(enabled = !isCyberSonarEnabled()) {
@@ -731,10 +773,11 @@ export class VisualSettings {
           governorRequestRender('style-param');
         }
       }
+      this._refreshParameters();
     }
 
     const bloomInput = preset.bloom || {};
-    if (typeof bloomInput.intensity === 'number' && this._bloomSlider) {
+    if (typeof bloomInput.intensity === 'number') {
       this._setBloomIntensity(clampBloomIntensity(bloomInput.intensity), {
         syncShare: false,
       });
@@ -744,15 +787,8 @@ export class VisualSettings {
     }
 
     const sharpenInput = preset.sharpen || {};
-    if (typeof sharpenInput.intensity === 'number' && this._sharpenSlider) {
-      const sharpenPct = Math.max(
-        0,
-        Math.min(100, Math.round(sharpenInput.intensity)),
-      );
-      this._sharpenSlider.value = String(sharpenPct);
-      this._sharpenSliderValue.textContent = `${sharpenPct}%`;
-      this._applySharpenIntensity(sharpenPct / 100);
-    }
+    if (typeof sharpenInput.intensity === 'number')
+      this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
     if (typeof sharpenInput.enabled === 'boolean') {
       this._setSharpenEnabled(sharpenInput.enabled);
     }
@@ -778,19 +814,14 @@ export class VisualSettings {
 
   _applyDetectionPreset(det) {
     if (!det) return;
-    if (typeof det.densityPct === 'number' && this._detectionDensitySlider) {
-      const pct = canonicalizeDensity(det.densityPct);
-      this._detectionDensitySlider.value = String(pct);
-      if (this._detectionDensityValue)
-        this._detectionDensityValue.textContent = `${pct}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof det.densityPct === 'number')
+      this._setDetectionDensity(det.densityPct);
     if (det.mode) this._setDetectionMode(String(det.mode).toUpperCase());
   }
 
   _applyGlobalPostDefaults() {
     const defaults = GLOBAL_POST_DEFAULTS;
-    if (typeof defaults.bloom?.intensity === 'number' && this._bloomSlider) {
+    if (typeof defaults.bloom?.intensity === 'number') {
       this._setBloomIntensity(clampBloomIntensity(defaults.bloom.intensity), {
         syncShare: false,
       });
@@ -799,18 +830,10 @@ export class VisualSettings {
       this._setBloomEnabled(defaults.bloom.enabled);
     }
 
-    if (
-      typeof defaults.sharpen?.intensity === 'number' &&
-      this._sharpenSlider
-    ) {
-      const sharpenPct = Math.max(
-        0,
-        Math.min(100, Math.round(defaults.sharpen.intensity)),
-      );
-      this._sharpenSlider.value = String(sharpenPct);
-      this._sharpenSliderValue.textContent = `${sharpenPct}%`;
-      this._applySharpenIntensity(sharpenPct / 100);
-    }
+    if (typeof defaults.sharpen?.intensity === 'number')
+      this._setSharpenIntensity(defaults.sharpen.intensity, {
+        syncShare: false,
+      });
     if (typeof defaults.sharpen?.enabled === 'boolean') {
       this._setSharpenEnabled(defaults.sharpen.enabled);
     }
@@ -826,30 +849,18 @@ export class VisualSettings {
     if (defaults.detectionMode) {
       this._setDetectionMode(defaults.detectionMode);
     }
-    if (
-      typeof defaults.detectionDensity === 'number' &&
-      this._detectionDensitySlider
-    ) {
-      const density = canonicalizeDensity(defaults.detectionDensity);
-      this._detectionDensitySlider.value = String(density);
-      this._detectionDensityValue.textContent = `${density}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof defaults.detectionDensity === 'number')
+      this._setDetectionDensity(defaults.detectionDensity);
     this._setDetectionAllocation(
       this._detectionAllocationPreference ||
         defaults.detectionAllocation ||
         'ELASTIC',
       { syncShare: false, persist: false },
     );
-    if (this._detectionFadeSlider) {
-      this._detectionFadeSlider.value = String(defaults.detectionFadePct ?? 7);
-    }
-    if (this._detectionOpacitySlider) {
-      this._detectionOpacitySlider.value = String(
-        defaults.detectionOutsideOpacityPct ?? 1,
-      );
-    }
-    this._applyDetectionFadeFromUi();
+    this._setDetectionFade({
+      fadePct: defaults.detectionFadePct ?? 7,
+      outsideOpacityPct: defaults.detectionOutsideOpacityPct ?? 1,
+    });
     if (typeof defaults.celestialRing === 'boolean') {
       this.setCelestialRingEnabled(defaults.celestialRing, {
         syncShare: false,
@@ -863,7 +874,7 @@ export class VisualSettings {
     return shareableDetectionState({
       owned: this._contactsDetectionRestore,
       liveMode: getDetectionMode(),
-      liveDensityPct: parseInt(this._detectionDensitySlider?.value || '50', 10),
+      liveDensityPct: this._detectionDensityPct,
     });
   }
 
@@ -881,17 +892,14 @@ export class VisualSettings {
       options: {
         bloomIntensity: this._getBloomIntensity(),
         bloomVersion: BLOOM_SCALE_VERSION,
-        sharpenIntensity: parseInt(this._sharpenSlider?.value || '49', 10),
+        sharpenIntensity: this._sharpenPct,
         hudVariant: this.hud.getVariant(),
         hudVisible: this.hud.visible,
         detectionMode: detection.mode,
         detectionDensity: detection.densityPct,
         detectionAllocation: getDetectionTuning().allocationStrategy,
-        detectionFadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-        detectionOutsideOpacityPct: parseInt(
-          this._detectionOpacitySlider?.value || '1',
-          10,
-        ),
+        detectionFadePct: this._detectionFadePct,
+        detectionOutsideOpacityPct: this._detectionOutsidePct,
         celestialRingEnabled: this.celestialRingEnabled,
         scopeEnabled: isScopeMaskEnabled(),
         scopeFeatherPct: Math.round(getScopeMaskFeather() * 100),
@@ -907,18 +915,12 @@ export class VisualSettings {
 
   getDetectionState() {
     const { getDetectionTuning, getDetectionMode } = this.services;
-    const pct = this._detectionDensitySlider
-      ? parseInt(this._detectionDensitySlider.value, 10)
-      : null;
     return {
       detectionMode: getDetectionMode(),
-      densityPct: pct,
+      densityPct: this._detectionDensityPct,
       allocationStrategy: getDetectionTuning().allocationStrategy,
-      fadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-      outsideOpacityPct: parseInt(
-        this._detectionOpacitySlider?.value || '0',
-        10,
-      ),
+      fadePct: this._detectionFadePct,
+      outsideOpacityPct: this._detectionOutsidePct,
     };
   }
 
@@ -1023,18 +1025,11 @@ export class VisualSettings {
     if (requestedAllocation) {
       this._setDetectionAllocation(requestedAllocation, { syncShare: false });
     }
-    if (fadePct != null && this._detectionFadeSlider) {
-      this._detectionFadeSlider.value = String(
-        Math.max(0, Math.min(40, Math.round(Number(fadePct)))),
-      );
-    }
-    if (outsideOpacityPct != null && this._detectionOpacitySlider) {
-      this._detectionOpacitySlider.value = String(
-        Math.max(0, Math.min(100, Math.round(Number(outsideOpacityPct)))),
-      );
-    }
     if (fadePct != null || outsideOpacityPct != null)
-      this._applyDetectionFadeFromUi();
+      this._setDetectionFade({
+        fadePct: fadePct ?? undefined,
+        outsideOpacityPct: outsideOpacityPct ?? undefined,
+      });
 
     if (
       requestedProfile &&
@@ -1043,10 +1038,7 @@ export class VisualSettings {
     ) {
       requestedDensity = defaultDensityForProfile(requestedProfile);
     }
-    if (requestedDensity != null && this._detectionDensitySlider) {
-      this._detectionDensitySlider.value = String(requestedDensity);
-      this._applyDetectionDensityFromUi();
-    }
+    if (requestedDensity != null) this._setDetectionDensity(requestedDensity);
 
     if (enabled === false || requestedProfile === 'OFF') {
       setDetectionModeByLabel('OFF');
@@ -1054,9 +1046,7 @@ export class VisualSettings {
       setDetectionModeByLabel(requestedProfile);
     } else if (enabled === true && getDetectionMode() === 'OFF') {
       setDetectionModeByLabel(
-        profileForDensity(
-          requestedDensity ?? this._detectionDensitySlider?.value ?? 50,
-        ),
+        profileForDensity(requestedDensity ?? this._detectionDensityPct),
       );
     }
     this._syncDetectionUiFromEngine();
@@ -1067,9 +1057,7 @@ export class VisualSettings {
   setBloom({ enabled, intensityPct } = {}) {
     const current = () => ({
       enabled: !!this.bloomEnabled,
-      intensityPct: this._bloomSlider
-        ? parseInt(this._bloomSlider.value, 10)
-        : null,
+      intensityPct: this.bloomIntensityPct,
     });
     if (enabled !== undefined && typeof enabled !== 'boolean') {
       return {
@@ -1107,9 +1095,7 @@ export class VisualSettings {
   setSharpen({ enabled, intensityPct } = {}) {
     const current = () => ({
       enabled: !!this.sharpenEnabled,
-      intensityPct: this._sharpenSlider
-        ? parseInt(this._sharpenSlider.value, 10)
-        : null,
+      intensityPct: this.sharpenIntensityPct,
     });
     if (enabled !== undefined && typeof enabled !== 'boolean') {
       return {
@@ -1133,12 +1119,7 @@ export class VisualSettings {
     if (hasExplicitVisualChange)
       this.shareLinkManager?.claimRestoreLane?.('visual');
     if (intensityPct !== undefined) {
-      const pct = Math.round(Math.max(0, Math.min(100, intensityPct)));
-      if (this._sharpenSlider) this._sharpenSlider.value = String(pct);
-      if (this._sharpenSliderValue)
-        this._sharpenSliderValue.textContent = `${pct}%`;
-      this._applySharpenIntensity(pct / 100);
-      this._syncShareState();
+      this._setSharpenIntensity(intensityPct);
     }
     if (enabled !== undefined) this._setSharpenEnabled(enabled);
     return {
@@ -1185,15 +1166,8 @@ export class VisualSettings {
     if (syncShare) this.shareLinkManager?.claimRestoreLane?.('visual');
     const nextEnabled = styleSupported && enabled;
     this.celestialRing?.setEnabled(nextEnabled);
-    this._celestialBtn?.classList.toggle('active', nextEnabled);
-    this._celestialBtn?.setAttribute('aria-pressed', String(nextEnabled));
-    if (this._celestialBtn) {
-      this._celestialBtn.disabled = !styleSupported;
-      this._celestialBtn.setAttribute('aria-disabled', String(!styleSupported));
-      this._celestialBtn.title = styleSupported
-        ? t('Celestial ring — reveal the full globe')
-        : t('Celestial ring — available in Normal style');
-    }
+    this._celestialShown = { active: nextEnabled, supported: styleSupported };
+    this._publishDisplay();
     let cameraFocused = false;
     if (nextEnabled && focus) {
       cameraFocused = !!this.celestialRing?.focusFullGlobe();
@@ -1232,7 +1206,7 @@ export class VisualSettings {
       },
       sharpen: {
         enabled: this.sharpenEnabled,
-        intensity: parseInt(this._sharpenSlider?.value || '49', 10),
+        intensity: this._sharpenPct,
       },
       hud: {
         visible: this.hud.visible,
@@ -1240,13 +1214,10 @@ export class VisualSettings {
       },
       detection: {
         mode: getDetectionMode(),
-        density: parseInt(this._detectionDensitySlider?.value || '50', 10),
+        density: this._detectionDensityPct,
         allocation: getDetectionTuning().allocationStrategy,
-        fadePct: parseInt(this._detectionFadeSlider?.value || '7', 10),
-        outsideOpacityPct: parseInt(
-          this._detectionOpacitySlider?.value || '0',
-          10,
-        ),
+        fadePct: this._detectionFadePct,
+        outsideOpacityPct: this._detectionOutsidePct,
       },
       scope: {
         enabled: isScopeMaskEnabled(),
@@ -1258,16 +1229,16 @@ export class VisualSettings {
   }
 
   async applyVisualState(state = {}, { isCurrent = null } = {}) {
-    const { setScopeMaskEnabled, setScopeMaskFeather } = this.services;
     const superseded = () => typeof isCurrent === 'function' && !isCurrent();
     if (superseded()) return false;
 
-    if (state.style && state.style !== this.activeStyle) {
-      this.setStyle(state.style, { applyPreset: false });
+    const style = RETIRED_STYLES.includes(state.style) ? 'normal' : state.style;
+    if (style && style !== this.activeStyle) {
+      this.setStyle(style, { applyPreset: false });
     }
 
     const bloomState = state.bloom || {};
-    if (typeof bloomState.intensity === 'number' && this._bloomSlider) {
+    if (typeof bloomState.intensity === 'number') {
       const intensity = decodeBloomIntensity(
         bloomState.intensity,
         bloomState.version ?? state.bloomVersion ?? BLOOM_SCALE_VERSION,
@@ -1279,15 +1250,8 @@ export class VisualSettings {
     }
 
     const sharpenState = state.sharpen || {};
-    if (typeof sharpenState.intensity === 'number' && this._sharpenSlider) {
-      const pct = Math.max(
-        0,
-        Math.min(100, Math.round(sharpenState.intensity)),
-      );
-      this._sharpenSlider.value = String(pct);
-      this._sharpenSliderValue.textContent = `${pct}%`;
-      this._applySharpenIntensity(pct / 100);
-    }
+    if (typeof sharpenState.intensity === 'number')
+      this._setSharpenIntensity(sharpenState.intensity, { syncShare: false });
     if (typeof sharpenState.enabled === 'boolean') {
       this._setSharpenEnabled(sharpenState.enabled);
     }
@@ -1302,50 +1266,29 @@ export class VisualSettings {
     }
 
     const scopeState = state.scope || {};
-    if (typeof scopeState.enabled === 'boolean') {
-      setScopeMaskEnabled(scopeState.enabled);
-      this._scopeBtn?.classList.toggle('active', scopeState.enabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeState.enabled));
-    }
-    if (typeof scopeState.featherPct === 'number' && this._scopeFeatherSlider) {
-      const pct = Math.max(0, Math.min(100, Math.round(scopeState.featherPct)));
-      this._scopeFeatherSlider.value = String(pct);
-      if (this._scopeFeatherValue)
-        this._scopeFeatherValue.textContent = `${pct}%`;
-      setScopeMaskFeather(pct / 100);
-    }
+    this._setScope({
+      enabled: scopeState.enabled,
+      featherPct: scopeState.featherPct,
+    });
 
     const detectionState = state.detection || {};
-    if (
-      typeof detectionState.density === 'number' &&
-      this._detectionDensitySlider
-    ) {
-      const pct = canonicalizeDensity(detectionState.density);
-      this._detectionDensitySlider.value = String(pct);
-      if (this._detectionDensityValue)
-        this._detectionDensityValue.textContent = `${pct}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof detectionState.density === 'number')
+      this._setDetectionDensity(detectionState.density);
     if (detectionState.allocation) {
       this._setDetectionAllocation(detectionState.allocation, {
         syncShare: false,
       });
     }
-    if (
-      typeof detectionState.fadePct === 'number' &&
-      this._detectionFadeSlider
-    ) {
-      this._detectionFadeSlider.value = String(detectionState.fadePct);
-    }
-    if (
-      typeof detectionState.outsideOpacityPct === 'number' &&
-      this._detectionOpacitySlider
-    ) {
-      this._detectionOpacitySlider.value = String(
-        detectionState.outsideOpacityPct,
-      );
-    }
-    this._applyDetectionFadeFromUi();
+    this._setDetectionFade({
+      fadePct:
+        typeof detectionState.fadePct === 'number'
+          ? detectionState.fadePct
+          : undefined,
+      outsideOpacityPct:
+        typeof detectionState.outsideOpacityPct === 'number'
+          ? detectionState.outsideOpacityPct
+          : undefined,
+    });
     if (detectionState.mode) {
       this._setDetectionMode(detectionState.mode);
     }
@@ -1425,15 +1368,8 @@ export class VisualSettings {
       typeof preset.sharpen === 'object'
         ? preset.sharpen
         : { enabled: preset.sharpen };
-    if (typeof sharpenInput.intensity === 'number' && this._sharpenSlider) {
-      const sharpenPct = Math.max(
-        0,
-        Math.min(100, Math.round(sharpenInput.intensity)),
-      );
-      this._sharpenSlider.value = String(sharpenPct);
-      this._sharpenSliderValue.textContent = `${sharpenPct}%`;
-      this._applySharpenIntensity(sharpenPct / 100);
-    }
+    if (typeof sharpenInput.intensity === 'number')
+      this._setSharpenIntensity(sharpenInput.intensity, { syncShare: false });
     if (typeof sharpenInput.enabled === 'boolean') {
       this._setSharpenEnabled(sharpenInput.enabled);
     } else if (typeof sharpenInput.intensity === 'number') {
@@ -1447,15 +1383,8 @@ export class VisualSettings {
     if (preset.detectionMode) {
       this._setDetectionMode(preset.detectionMode);
     }
-    if (
-      typeof preset.detectionDensity === 'number' &&
-      this._detectionDensitySlider
-    ) {
-      const density = canonicalizeDensity(preset.detectionDensity);
-      this._detectionDensitySlider.value = String(density);
-      this._detectionDensityValue.textContent = `${density}%`;
-      this._applyDetectionDensityFromUi();
-    }
+    if (typeof preset.detectionDensity === 'number')
+      this._setDetectionDensity(preset.detectionDensity);
     if (preset.detectionAllocation) {
       this._setDetectionAllocation(preset.detectionAllocation, {
         syncShare: false,
@@ -1479,44 +1408,56 @@ export class VisualSettings {
     this._syncShareState();
   }
 
+  /** Publish the style's parameter rows, or none for a style without any. */
   _updateSliderPanel(styleName, { reveal = false } = {}) {
-    const { governorRequestRender } = this.services;
-    this._styleParameters ||= createStyleParameters({
-      container: this._sliderContainer,
-    });
-    this._styleParameters.clear();
     const shader = STYLES[styleName];
-
     if (!shader || !shader.uniforms || styleName === 'normal') {
-      this._sliderPanel.classList.remove('active');
+      this._publishParameters(null);
       this._scheduleRightPanelLayout();
       return;
     }
-
-    this._styleParameters.render({
-      uniforms: shader.uniforms,
-      readValue: (uName) => this.stages[styleName].uniforms[uName],
-      writeValue: (uName, val) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this.stages[styleName].uniforms[uName] = val;
-      },
-      onChange: () => {
-        // Uniform writes need an explicit render under the idle governor.
-        governorRequestRender('style-param-slider');
-        this._syncShareState();
-      },
+    this._publishParameters({
+      style: styleName,
+      rows: styleParameterRows(
+        shader.uniforms,
+        (name) => this.stages[styleName].uniforms[name],
+      ),
     });
-
-    this._sliderPanel.classList.add('active');
     this._scheduleRightPanelLayout();
     if (reveal) this._revealStyleParameters();
   }
 
+  /** Publish the shown style's rows again from its uniforms as they stand. */
+  _refreshParameters() {
+    const style = this._parameters?.style;
+    if (style) this._updateSliderPanel(style);
+  }
+
+  _publishParameters(next) {
+    this._parameters = next;
+    this.store.publishParameters(next);
+  }
+
+  /** A parameter slider moved: write the active style's uniform. */
+  setStyleParameter(name, value) {
+    const parameters = this._parameters;
+    // Only the shown style's own parameters.
+    if (!parameters?.rows.some((row) => row.name === name)) return;
+    this.shareLinkManager?.claimRestoreLane?.('visual');
+    this.stages[parameters.style].uniforms[name] = value;
+    this._publishParameters({
+      ...parameters,
+      rows: withParameterValue(parameters.rows, name, value),
+    });
+    // Uniform writes need an explicit render under the idle governor.
+    this.services.governorRequestRender('style-param-slider');
+    this._syncShareState();
+  }
+
   _revealStyleParameters() {
-    if (!this._sliderPanel?.classList.contains('active')) return;
+    if (!this._parameters) return;
     if (this._cockpitDisplayPortalActive) return;
-    this._sliderPanel.classList.remove('collapsed');
-    this._syncPanelCollapseButton(this._sliderPanel);
+    this._presentPanel(this._sliderPanel, { collapsed: false });
     this.setPanelCollapsed('pp-toggles', false, { explicit: true });
     this._lifetime.frame(() =>
       this._lifetime.frame(() => {
@@ -1539,6 +1480,11 @@ export class VisualSettings {
       preserveCyberRestore = false,
     } = {},
   ) {
+    if (
+      typeof styleName !== 'string' ||
+      (styleName !== 'normal' && !Object.hasOwn(STYLES, styleName))
+    )
+      return;
     const { setDetectionStyle } = this.services;
     if (!restore) this.shareLinkManager?.claimRestoreLane?.('visual');
     if (this.hud.getVariant() === 'cyber') {
@@ -1589,16 +1535,8 @@ export class VisualSettings {
       this._applyStylePresetDefaults(styleName);
     }
 
-    // Update button UI
-    document.querySelectorAll('.style-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.style === styleName);
-    });
-
-    // Update style indicator
-    this._styleIndicator.textContent = STYLE_STATUS_LABELS[styleName]
-      ? t(STYLE_STATUS_LABELS[styleName])
-      : styleName.toUpperCase();
-    this._updateStyleMiniStatus(styleName);
+    // The style buttons, the dock's mini status and the ACTIVE STYLE corner.
+    this._publishActiveStyle(styleName);
 
     // Update parameter sliders
     this._updateSliderPanel(styleName, { reveal: revealParameters });
@@ -1627,70 +1565,45 @@ export class VisualSettings {
     this._visualEffects.startTransition(styleName, fromValue, toValue);
   }
 
-  _updateStyleMiniStatus(styleName = this.activeStyle) {
-    if (!this._styleMiniValue) return;
-    this._styleMiniValue.textContent = STYLE_STATUS_LABELS[styleName]
-      ? t(STYLE_STATUS_LABELS[styleName])
-      : String(styleName || 'normal').toUpperCase();
+  /** Publish the active style and its label in the UI language. */
+  _publishActiveStyle(styleName = this.activeStyle) {
+    const name = String(styleName || 'normal');
+    this.store.publishStyle({
+      name,
+      label: STYLE_STATUS_LABELS[name]
+        ? t(STYLE_STATUS_LABELS[name])
+        : name.toUpperCase(),
+    });
   }
 
   _updateHudButtonState() {
-    this._hudBtn.classList.toggle('active', this.hud.visible);
-    if (this._hudLayoutRow) {
-      this._hudLayoutRow.classList.toggle('visible', this.hud.visible);
-    }
+    this._syncHudControls();
+  }
+
+  /**
+   * Show the HUD's current visibility and layout on its controls; the layout
+   * row's visibility changes the panel's height, so the rails settle again.
+   */
+  _syncHudControls() {
+    this._hudVisibleShown = Boolean(this.hud.visible);
+    this._hudVariantShown = this.hud.getVariant();
+    this._publishDisplay();
     this._scheduleAdaptivePanelLayout({ settle: true });
   }
 
   _updateDetectionButton(modeLabel) {
-    const btn = this._detectionBtn;
-    const enabled = modeLabel !== 'OFF';
-    btn.setAttribute('aria-pressed', String(enabled));
-    btn.setAttribute(
-      'aria-label',
-      enabled
-        ? t('Detection overlay: {mode}', {
-            mode: String(modeLabel).toLowerCase(),
-          })
-        : t('Detection overlay: off'),
-    );
-    btn.classList.remove('active', 'god', 'panoptic');
-    if (modeLabel === 'SPARSE') {
-      btn.querySelector('.pp-label').textContent = t('SPARSE');
-      btn.classList.add('active');
-    } else if (modeLabel === 'BALANCED') {
-      btn.querySelector('.pp-label').textContent = t('BALANCED');
-      btn.classList.add('active');
-    } else if (modeLabel === 'DENSE') {
-      btn.querySelector('.pp-label').textContent = t('DENSE');
-      btn.classList.add('active', 'panoptic');
-    } else {
-      btn.querySelector('.pp-label').textContent = t('DETECT');
-    }
-
-    if (this._detectionSliderRow) {
-      this._detectionSliderRow.classList.toggle('visible', modeLabel !== 'OFF');
-    }
-    if (this._detectionAllocationRow) {
-      this._detectionAllocationRow.classList.toggle(
-        'visible',
-        modeLabel !== 'OFF',
-      );
-    }
-    if (this._detectionFadeRow) {
-      this._detectionFadeRow.classList.toggle('visible', modeLabel !== 'OFF');
-    }
-    if (this._detectionOpacityRow) {
-      this._detectionOpacityRow.classList.toggle(
-        'visible',
-        modeLabel !== 'OFF',
-      );
-    }
+    this._detectionModeLabel = modeLabel;
+    this._publishDisplay();
     this._layoutRightPanels();
   }
   stop() {
     this._lifetime.destroy();
-    this._styleParameters?.destroy();
+    if (this._parametersToken) this.store.detach(this._parametersToken);
+    this._parametersToken = null;
+    // The sliders go with their owner, unless a newer owner has published
+    // its own since.
+    if (this._parameters && this.store.parameters === this._parameters)
+      this._publishParameters(null);
     this._visualEffects.stop();
   }
   releaseIrBoost() {

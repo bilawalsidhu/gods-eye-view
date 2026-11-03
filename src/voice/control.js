@@ -1,7 +1,13 @@
-import { t } from '../i18n/index.js';
+import { nextTick } from 'vue';
+import { onLocaleChange, t } from '../i18n/index.js';
+import { useVoiceStore } from '../ui/stores/voice.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 
 // The assistant's name on its card. i18n-ignore: product name
-const ASSISTANT_NAME = 'GEV';
+export const ASSISTANT_NAME = 'GEV';
+
+/** Bars in the dock waveform. */
+export const VOICE_VISUALIZER_BARS = 15;
 
 /**
  * Short state label for the narrow voice heading. The `voice` context lets
@@ -26,98 +32,294 @@ export function voiceStatusLabel(status) {
   }
 }
 
-/** Build the voice control independently of its connection backend. */
-export function createVoiceControl({ reset = false } = {}) {
-  let root = document.getElementById('gev-voice-control');
-  if (root && reset) {
-    root.remove();
-    root = null;
-  }
-  if (!root) {
-    root = document.createElement('div');
-    root.id = 'gev-voice-control';
-    root.dataset.status = 'idle';
-    root.dataset.speaker = 'idle';
-    root.innerHTML = `
-      <div class="gev-voice-heading">
-        <div class="gev-voice-kicker">${t('AI AGENT')}</div>
-        <div id="gev-voice-status">${voiceStatusLabel('idle')}</div>
-        <div class="gev-voice-cost">
-          <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="${t('Voice model tier — applies next session')}">${t('STD')}</button>
-          <span id="gev-voice-cost-value" class="gev-voice-cost-value" data-level="ok" title="${t('Estimated session cost')}">~$0.00</span>
-        </div>
-      </div>
-      <button id="gev-voice-button" type="button" aria-label="${t('Voice control — activate to toggle voice; hold Space to speak')}" aria-describedby="gev-voice-help">
-        <span class="gev-mic-orbit"><img src="/mic.svg" alt="" /></span>
-        <span class="gev-mic-label">${t('ON/OFF')}</span>
-      </button>
-      <div class="gev-voice-visualizer" aria-hidden="true">
-        ${Array.from({ length: 15 }, (_, index) => `<span style="--bar:${index}"></span>`).join('')}
-      </div>
-      <div class="gev-voice-readout">
-        <div id="gev-voice-detail">${t('VOICE STANDBY')}</div>
-      </div>
-      <div id="gev-voice-help" class="gev-voice-help-tray" role="tooltip">
-        <span class="gev-voice-help-kicker">${t('VOICE CONTROL')}</span>
-        <span class="gev-voice-help-detail">${t('Hold Space to speak · tap Space to activate focused controls')}</span>
-      </div>
-      <section id="gev-voice-card" class="gev-voice-card" hidden aria-label="${t('Voice assistant')}">
-        <div class="gev-voice-card-header">
-          <span class="gev-voice-card-kicker">${t('VOICE')}</span>
-          <span id="gev-voice-card-phase" class="gev-voice-card-phase"></span>
-          <button id="gev-voice-card-dismiss" class="gev-voice-card-dismiss" type="button" aria-label="${t('Dismiss voice card')}">×</button>
-        </div>
-        <p id="gev-voice-card-user" class="gev-voice-card-caption" data-role="user" hidden><span class="gev-voice-card-who">${t('YOU')}</span><span id="gev-voice-card-user-text" class="gev-voice-card-text"></span></p>
-        <p id="gev-voice-card-pointer" class="gev-voice-card-pointer" hidden><span id="gev-voice-card-pointer-kind" class="gev-voice-card-who">${t('THIS')}</span><span class="gev-voice-card-sr">: </span><span id="gev-voice-card-pointer-text" class="gev-voice-card-pointer-label"></span></p>
-        <p id="gev-voice-card-assistant" class="gev-voice-card-caption" data-role="assistant" hidden><span class="gev-voice-card-who">${ASSISTANT_NAME}</span><span id="gev-voice-card-assistant-text" class="gev-voice-card-text"></span></p>
-        <ol id="gev-voice-card-plan" class="gev-voice-card-plan" aria-label="${t('Plan')}" hidden></ol>
-        <div id="gev-voice-card-result" class="gev-voice-card-result" hidden>
-          <div id="gev-voice-card-result-title" class="gev-voice-card-result-title"></div>
-          <div id="gev-voice-card-chips" class="gev-voice-card-chips" hidden></div>
-          <ul id="gev-voice-card-lines" class="gev-voice-card-lines"></ul>
-          <ol id="gev-voice-card-referents" class="gev-voice-card-referents" aria-label="${t('Referenced items')}" hidden></ol>
-          <details id="gev-voice-card-notes" class="gev-voice-card-notes" hidden>
-            <summary>${t('NOTES & SOURCES')}</summary>
-            <ul id="gev-voice-card-note-list" class="gev-voice-card-lines"></ul>
-          </details>
-        </div>
-        <div id="gev-voice-card-live" class="gev-voice-card-sr" aria-live="polite" aria-atomic="true"></div>
-      </section>
-      <div class="gev-voice-error-tray" role="alert" aria-live="assertive">
-        <div class="gev-voice-error-header">
-          <span>${t('VOICE SYSTEM ERROR')}</span>
-          <button class="gev-voice-error-dismiss" type="button">${t('DISMISS')}</button>
-        </div>
-        <div id="gev-voice-error-detail"></div>
-        <div class="gev-voice-error-hint">${t('Check microphone permission and network access, then try again.')}</div>
-      </div>
-    `;
-    const commandDock = document.getElementById('command-dock');
-    if (commandDock) {
-      const locationBar = document.getElementById('location-bar');
-      const controlPanel = document.getElementById('control-panel');
-      commandDock.appendChild(root);
-      if (locationBar) commandDock.insertBefore(locationBar, root);
-      if (controlPanel) commandDock.appendChild(controlPanel);
-    } else {
-      document.body.appendChild(root);
-    }
-    root
-      .querySelector('.gev-voice-error-dismiss')
-      ?.addEventListener('click', () => {
-        root.classList.add('error-dismissed');
-      });
-  }
+/** The card before its first render: hidden, with its default labels. */
+function initialCard() {
   return {
-    root,
-    button: root.querySelector('#gev-voice-button'),
-    buttonLabel: root.querySelector('.gev-mic-label'),
-    status: root.querySelector('#gev-voice-status'),
-    detail: root.querySelector('#gev-voice-detail'),
-    helpDetail: root.querySelector('.gev-voice-help-detail'),
-    errorDetail: root.querySelector('#gev-voice-error-detail'),
-    tierButton: root.querySelector('#gev-voice-tier'),
-    costValue: root.querySelector('#gev-voice-cost-value'),
-    card: root.querySelector('#gev-voice-card'),
+    visible: false,
+    busy: null,
+    phase: '',
+    user: { visible: false, text: '', label: t('YOU') },
+    pointer: { visible: false, kind: t('THIS'), text: '' },
+    assistant: { visible: false, text: '' },
+    steps: [],
+    result: {
+      visible: false,
+      title: '',
+      chips: [],
+      lines: [],
+      referents: [],
+      notes: [],
+    },
+    announce: '',
   };
+}
+
+/** The control as it first renders, before any owner writes to it. */
+function initialState(panel) {
+  return {
+    panel,
+    root: {
+      status: 'idle',
+      speaker: 'idle',
+      provider: null,
+      providerChoice: null,
+      pushToTalk: null,
+      microphone: null,
+      rowGrace: false,
+      errorDismissed: false,
+    },
+    // The provider field and its select.
+    provider: {
+      hidden: true,
+      options: [],
+      value: '',
+      title: () => t('Changing provider reconnects voice if it is on.'),
+    },
+    tier: {
+      hidden: false,
+      text: () => t('STD'),
+      pressed: false,
+      title: () => t('Voice model tier — applies next session'),
+    },
+    cost: {
+      hidden: false,
+      text: '~$0.00',
+      level: 'ok',
+      title: () => t('Estimated session cost'),
+    },
+    costWarning: { hidden: true, text: '', level: null, title: null },
+    button: {
+      label: () =>
+        t('Voice control — activate to toggle voice; hold Space to speak'),
+      pressed: null,
+    },
+    mic: { text: () => t('ON/OFF') },
+    status: { text: () => voiceStatusLabel('idle') },
+    detail: { text: () => t('VOICE STANDBY'), title: null },
+    help: {
+      text: () =>
+        t('Hold Space to speak · tap Space to activate focused controls'),
+    },
+    error: { text: '' },
+    voicePanel: {
+      hidden: true,
+      view: null,
+      previewHidden: false,
+      settingsHidden: true,
+      settingsExpanded: false,
+      selected: 'preview',
+    },
+    previewEmpty: {
+      hidden: false,
+      text: () => t('Voice replies appear here.'),
+    },
+    preferences: {
+      previewChecked: true,
+      previewNote: '',
+      timeoutChoice: '5',
+      timeoutMinutes: '5',
+      timeoutInputHidden: false,
+      timeoutNote: () => t('These preferences stay in this browser.'),
+      timeoutStatus: '',
+      // Bumped by every owner write of the fields, so the view restores a
+      // refused edit but leaves a draft alone across other renders.
+      revision: 0,
+    },
+    card: initialCard(),
+  };
+}
+
+// The rendered elements the presenter focuses or measures, by name.
+const ELEMENT_IDS = Object.freeze({
+  root: 'gev-voice-control',
+  button: 'gev-voice-button',
+  provider: 'gev-voice-provider',
+  voicePanel: 'gev-voice-panel',
+  previewPanel: 'gev-voice-preview-panel',
+  settingsPanel: 'gev-voice-settings-panel',
+  previewTab: 'gev-voice-preview-tab',
+  settingsTab: 'gev-voice-settings-tab',
+  settingsButton: 'gev-voice-settings-button',
+  card: 'gev-voice-card',
+});
+
+let controlCount = 0;
+
+const sameBars = (a, b) =>
+  a === b ||
+  (Array.isArray(a) &&
+    Array.isArray(b) &&
+    a.length === b.length &&
+    a.every(
+      (bar, index) =>
+        bar.level === b[index].level && bar.opacity === b[index].opacity,
+    ));
+
+/**
+ * The voice control, independent of its connection backend. Session owners
+ * write its state by part (`update('detail', {text})`) and listen for what
+ * the person does (`on('button', fn)`); the command dock's VoiceControl view
+ * renders it from the voice store. A newer control replaces this one there.
+ * @param {object} [options]
+ * @param {boolean} [options.panel] Show the Voice Settings panel and preview.
+ */
+export function createVoiceControl({
+  panel = false,
+  store = useVoiceStore(applicationPinia()),
+} = {}) {
+  const id = ++controlCount;
+  const listeners = new Map();
+  // The fields given as functions, by part: they are called again when the
+  // locale changes, so the control's words follow the language.
+  const wording = new Map();
+  const word = (part, patch) => {
+    let fields = wording.get(part);
+    let worded = patch;
+    for (const [field, value] of Object.entries(patch)) {
+      if (typeof value !== 'function') {
+        fields?.delete(field);
+        continue;
+      }
+      if (!fields) wording.set(part, (fields = new Map()));
+      fields.set(field, value);
+      if (worded === patch) worded = { ...patch };
+      worded[field] = value();
+    }
+    return worded;
+  };
+  let state = initialState(Boolean(panel));
+  for (const [part, value] of Object.entries(state))
+    if (part !== 'card' && value && typeof value === 'object')
+      state[part] = word(part, value);
+  // The default card's labels follow the locale until a card replaces it.
+  let defaultCard = true;
+  // Each bar's `--audio-level` and `--audio-opacity`, or null at rest.
+  let bars = null;
+  let removed = false;
+  const owns = () => !removed && store.controls === ui;
+  const publish = () => {
+    if (owns()) store.publish({ ...state, id });
+  };
+  const element = (name) =>
+    owns()
+      ? (globalThis.document?.getElementById(ELEMENT_IDS[name]) ?? null)
+      : null;
+  const shown = (node) =>
+    Boolean(
+      node?.checkVisibility?.({
+        opacityProperty: true,
+        visibilityProperty: true,
+      }) ?? node,
+    );
+  const ui = {
+    get panel() {
+      return state.panel;
+    },
+    /** The current state; read-only, replaced on every update. */
+    get state() {
+      return state;
+    },
+    /**
+     * Merge `patch` into one part of the control. A field given as a
+     * function is shown as what it returns, and called again when the
+     * locale changes; give translated words that way.
+     */
+    update(part, patch) {
+      if (removed) return;
+      state = { ...state, [part]: { ...state[part], ...word(part, patch) } };
+      publish();
+    },
+    /** Replace one part of the control. */
+    replace(part, value) {
+      if (removed) return;
+      wording.delete(part);
+      if (part === 'card') defaultCard = false;
+      state = { ...state, [part]: value };
+      publish();
+    },
+    /**
+     * Listen for an interaction the view reports: `button`, `tier`,
+     * `provider-change`, `settings-button`, `settings-close`, `tab`,
+     * `tab-keydown`, `panel-keydown`, `pointerenter`, `pointerleave`,
+     * `preview-change`, `timeout-select`, `timeout-input`, `card-dismiss`;
+     * and `locale` after a locale change, for an owner's own words.
+     * @returns {() => void} Removes the listener.
+     */
+    on(name, listener) {
+      if (!listeners.has(name)) listeners.set(name, new Set());
+      listeners.get(name).add(listener);
+      return () => listeners.get(name)?.delete(listener);
+    },
+    /** The view reports an interaction; listeners run in the order added. */
+    emit(name, ...args) {
+      if (removed) return;
+      for (const listener of [...(listeners.get(name) ?? [])])
+        listener(...args);
+    },
+    /** The waveform's bars, or null at rest. */
+    get bars() {
+      return bars;
+    },
+    /**
+     * Show the waveform's bars (null rests it). Published apart from the
+     * rest of the control, and only when they change.
+     * @param {?Array<{level: string, opacity: string}>} next
+     */
+    setBars(next) {
+      if (removed || sameBars(bars, next)) return;
+      bars = next;
+      if (owns()) store.publishBars(bars);
+    },
+    /** The error tray's DISMISS. */
+    dismissError() {
+      ui.update('root', { errorDismissed: true });
+    },
+    /** The rendered element by name, or null before it renders. */
+    element,
+    /** Whether the named element is rendered and visible on the page. */
+    visible: (name) => shown(element(name)),
+    /**
+     * Once the view has rendered the latest state, focus the first of the
+     * named elements that is visible, or with `anyVisibility`, that is
+     * rendered (focus may be what reveals it).
+     * @param {string[]} names
+     * @param {{anyVisibility?: boolean}} [options]
+     */
+    focus(names, { anyVisibility = false } = {}) {
+      return nextTick(() => {
+        const target = names
+          .map(element)
+          .find((node) => node && (anyVisibility || shown(node)));
+        target?.focus?.();
+        return target ?? null;
+      });
+    },
+    /** Remove the control from the dock, unless a newer one replaced it. */
+    remove() {
+      if (removed) return;
+      if (store.controls === ui) {
+        store.connect(null);
+        store.publish(null);
+        store.publishBars(null);
+      }
+      removed = true;
+      offLocale();
+      listeners.clear();
+    },
+  };
+  const offLocale = onLocaleChange(() => {
+    if (removed) return;
+    for (const [part, fields] of wording) {
+      const patch = {};
+      for (const [field, value] of fields) patch[field] = value();
+      state = { ...state, [part]: { ...state[part], ...patch } };
+    }
+    if (defaultCard) state = { ...state, card: initialCard() };
+    publish();
+    ui.emit('locale');
+  });
+  store.connect(ui);
+  store.publishBars(null);
+  publish();
+  return ui;
 }

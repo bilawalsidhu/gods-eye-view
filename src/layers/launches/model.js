@@ -10,6 +10,9 @@ export const UNKNOWN_LAUNCH_STATUS = msg('Unknown');
 
 export function createModel({ state: layerState, services, parts, source }) {
   function finiteCoordinate(value) {
+    // Number(null), Number('') and Number(false) are 0: absent is not zero.
+    if (value == null || typeof value === 'boolean') return null;
+    if (typeof value === 'string' && value.trim() === '') return null;
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
   }
@@ -184,15 +187,11 @@ export function createModel({ state: layerState, services, parts, source }) {
         const pad = launch.pad || {};
         const location = pad.location || {};
         const coordinates = location.coordinates || '';
-        const [coordinateLon, coordinateLat] = String(coordinates)
-          .split(',')
-          .map(Number);
-        const lat = Number.isFinite(Number(pad.latitude))
-          ? Number(pad.latitude)
-          : coordinateLat;
-        const lon = Number.isFinite(Number(pad.longitude))
-          ? Number(pad.longitude)
-          : coordinateLon;
+        const [coordinateLon, coordinateLat] = String(coordinates).split(',');
+        const lat =
+          finiteCoordinate(pad.latitude) ?? finiteCoordinate(coordinateLat);
+        const lon =
+          finiteCoordinate(pad.longitude) ?? finiteCoordinate(coordinateLon);
         const payloads = normalizePayloadFlights(launch);
         return {
           id: String(

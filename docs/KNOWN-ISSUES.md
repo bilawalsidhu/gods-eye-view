@@ -57,9 +57,8 @@ Related keys (current versions):
 - Panel collapsed state: `godsEyeView.v6.panelCollapsed.<panel-id>` — `'0'` open,
   `'1'` closed, absent means the panel's own default. A view opened from a share
   link ignores the stored value entirely.
-- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` — written only for a
-  floating portable panel (CCTV, Street Level). Deleting it, or double-clicking
-  the panel header, docks the panel again.
+- Panel positions: `godsEyeView.v8.panelPos.<panel-id>` — the current layout
+  writes none.
 - CCTV calibration: `godsEyeView.cctv.calibration.v2`
 
 ---
@@ -72,9 +71,9 @@ Status: Open (owner-accepted 2026-07-08, documented)
   a few stragglers take one more poll.
 - **Born-grounded first poll:** a contact first seen on the ground with no altitude
   data renders at the geoid for ≤1 poll until its floor cell warms.
-- Full context, improvement ideas, and the verification oracle
-  (`scripts/qa-floor-verify.mjs`):
-  `docs/superpowers/reports/2026-07-08-height-datum-handover.md`.
+- Verify floor-placement behavior with `scripts/qa-floor-verify.mjs` against a
+  running local app; set `QA_BASE_URL` when it is not on the default port
+  (`http://localhost:4173`).
 
 ---
 

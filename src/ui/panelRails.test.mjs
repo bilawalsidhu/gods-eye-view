@@ -7,6 +7,7 @@ import {
   layoutRightPanelRail,
   measurePanelNaturalHeight,
 } from './panelRails.js';
+import { applyPanelState, readPanelState } from './rail/panelState.js';
 
 test('Display uses an inner scroll body only in Cyber', () => {
   const body = { scrollTop: 95 };
@@ -20,45 +21,57 @@ test('Display uses an inner scroll body only in Cyber', () => {
   assert.equal(displayPanelScroller(null), null);
 });
 
-test('Cyber restores one expanded owner, keeps launchers, and restores other theme preferences', () => {
-  for (const mobile of [false, true]) {
-    const f = fixture('right', {
-      mobile,
-      hud: { visible: true, variant: 'cyber' },
-    });
+for (const side of ['left', 'right']) {
+  test(`${side} desktop rail keeps one expanded owner in every HUD layout`, () => {
+    for (const variant of ['tactical', 'minimal', 'cyber']) {
+      const f = fixture(side, { hud: { visible: true, variant } });
+      f.expand(f.first, 250);
+      f.expand(f.second, 250);
+      f.options.preferredPanelId = f.second.id;
+      f.run();
+      assert.equal(f.first.classList.contains('accordion-collapsed'), true);
+      assert.equal(f.second.classList.contains('collapsed'), false);
+      assert.equal(f.stack.classList.contains('layout-exclusive'), true);
+      assert.equal(f.first.getAttribute('aria-hidden'), 'true');
+      assert.equal(f.retries(), 0, 'the accordion needs no auto-collapse pass');
+      f.run();
+      assert.equal(
+        f.first.classList.contains('collapsed'),
+        true,
+        'layout does not reopen a peer',
+      );
+      // Phone sheets restore the presentation-only collapse.
+      f.options.windowRef.matchMedia = () => ({ matches: true });
+      f.run();
+      assert.equal(f.first.classList.contains('collapsed'), false);
+      assert.equal(f.first.classList.contains('accordion-collapsed'), false);
+      assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+    }
+  });
+
+  test(`${side} rail keeps no accordion on phones, where it is presented as tab sheets`, () => {
+    // A sheet (for example Cameras: CCTV with Street Level) shows several of the
+    // rail's panels at once; the accordion would collapse all but one.
+    const f = fixture(side, { mobile: true });
     f.expand(f.first, 250);
     f.expand(f.second, 250);
     f.options.preferredPanelId = f.second.id;
     f.run();
-    assert.equal(f.first.classList.contains('cyber-accordion-collapsed'), true);
-    assert.equal(f.second.classList.contains('collapsed'), false);
-    assert.equal(f.first.getAttribute('aria-hidden'), undefined);
-    f.run();
-    assert.equal(
-      f.first.classList.contains('collapsed'),
-      true,
-      'layout does not reopen a peer',
-    );
-    f.options.hud.variant = 'operator';
-    f.run();
     assert.equal(f.first.classList.contains('collapsed'), false);
-    assert.equal(
-      f.first.classList.contains('cyber-accordion-collapsed'),
-      false,
-    );
+    assert.equal(f.first.classList.contains('accordion-collapsed'), false);
     assert.equal(f.second.classList.contains('collapsed'), false);
-  }
-});
+  });
 
-test('Cyber restored accordion prefers keyboard focus when no explicit owner exists', () => {
-  const f = fixture('right', { hud: { visible: true, variant: 'cyber' } });
-  f.expand(f.first, 250);
-  f.expand(f.second, 250);
-  f.options.documentRef.activeElement = f.second;
-  f.run();
-  assert.equal(f.first.classList.contains('collapsed'), true);
-  assert.equal(f.second.classList.contains('collapsed'), false);
-});
+  test(`${side} restored accordion prefers keyboard focus when no explicit owner exists`, () => {
+    const f = fixture(side);
+    f.expand(f.first, 250);
+    f.expand(f.second, 250);
+    f.options.documentRef.activeElement = f.second;
+    f.run();
+    assert.equal(f.first.classList.contains('collapsed'), true);
+    assert.equal(f.second.classList.contains('collapsed'), false);
+  });
+}
 
 function element(
   id,
@@ -113,10 +126,7 @@ function element(
     getBoundingClientRect() {
       return this.rect;
     },
-    matches: (selector) =>
-      selector === '[data-panel-id]' ||
-      (selector === '[data-panel-id]:not(.panel-floating)' &&
-        !classes.has('panel-floating')),
+    matches: (selector) => selector === '[data-panel-id]',
     contains(target) {
       return (
         target === this || this.children.some((child) => child.contains(target))
@@ -160,7 +170,11 @@ function fixture(
       matchMedia: () => ({ matches: mobile }),
       getComputedStyle: (node) => node.computed,
     },
-    onCollapse: (panel) => collapsed.push(panel.id),
+    // The owner presents the patch; the panel's root draws it at once.
+    onCollapse: (panel, patch) => {
+      collapsed.push(panel.id);
+      applyPanelState(panel, { ...readPanelState(panel), ...patch });
+    },
     onRetry: () => {
       retries += 1;
     },
@@ -237,16 +251,16 @@ for (const side of ['left', 'right']) {
     );
     assert.equal(f.first.getAttribute('aria-hidden'), undefined);
   });
-  test(`${side} constrained layout preserves the preferred panel and requests another pass`, () => {
+  test(`${side} constrained layout keeps the preferred panel without another pass`, () => {
     const f = fixture(side);
     f.expand(f.first, 900);
     f.expand(f.second, 900);
     f.options.preferredPanelId = 'second';
     f.run();
     assert.equal(f.second.classList.contains('collapsed'), false);
-    assert.equal(f.first.classList.contains('layout-auto-collapsed'), true);
+    assert.equal(f.first.classList.contains('accordion-collapsed'), true);
     assert.deepEqual(f.collapsed, ['first']);
-    assert.equal(f.retries(), 1);
+    assert.equal(f.retries(), 0);
   });
   test(`${side} hidden HUD restores automatic collapse without altering manual collapse`, () => {
     const f = fixture(side, { hud: { visible: false, variant: 'tactical' } });
@@ -264,7 +278,7 @@ test('right layout uses keyboard focus when there is no preferred panel', () => 
   f.expand(f.second, 900);
   f.options.documentRef.activeElement = f.second;
   f.run();
-  assert.equal(f.first.classList.contains('layout-auto-collapsed'), true);
+  assert.equal(f.first.classList.contains('accordion-collapsed'), true);
   assert.equal(f.second.classList.contains('collapsed'), false);
 });
 
@@ -325,28 +339,6 @@ test('right layout retains Display allocation during measurement and caps restor
   );
 });
 
-test('right rail neither measures nor allocates a panel floating out of it', () => {
-  const f = fixture('right');
-  f.expand(f.first, 900);
-  f.expand(f.second, 300);
-  f.first.classList.add('panel-floating');
-  f.first.style.setProperty('--right-panel-allocated-height', '500px');
-  f.first.writes.length = 0;
-  f.run();
-  assert.equal(f.stack.dataset.expandedCount, '1');
-  assert.deepEqual(
-    f.first.writes,
-    [],
-    'a floating panel keeps whatever inline style it left the rail with',
-  );
-  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
-  assert.equal(f.first.classList.contains('layout-auto-collapsed'), false);
-  assert.ok(
-    f.second.style.getPropertyValue('--right-panel-allocated-height'),
-    'the docked panel still receives its allocation',
-  );
-});
-
 test('right rail aligns to the current left rail and excludes hidden obstacles', () => {
   const f = fixture('right');
   f.options.leftStack.rect.top = 200;
@@ -355,6 +347,32 @@ test('right rail aligns to the current left rail and excludes hidden obstacles',
   f.options.obstacles = [hidden];
   f.run();
   assert.equal(f.stack.dataset.safeTop, '200.0');
+});
+
+// An opened panel moves the left stack up, but its rail buttons hold still:
+// the right rail lines up with those buttons, not with the moved stack.
+test('right rail aligns to the left rail buttons while the left stack is offset', () => {
+  const f = fixture('right');
+  f.options.leftStack.rect.top = 100;
+  f.options.leftStack.style.setProperty('--panel-rail-offset', '186.7px');
+  f.run();
+  assert.equal(f.stack.dataset.safeTop, '286.7');
+});
+
+test('left rail buttons hold still while a tall panel moves the stack', () => {
+  const f = fixture('left');
+  f.expand(f.first, 900);
+  f.run();
+  assert.equal(f.stack.dataset.layoutMode, 'focus');
+  assert.ok(
+    parseFloat(f.stack.style.getPropertyValue('--panel-rail-offset')) > 0,
+  );
+
+  // A theme that pins the stack's top (Cyber) leaves nothing to offset.
+  f.stack.computed.getPropertyValue = (name) =>
+    name === '--panel-stack-top-pinned' ? ' 1' : '';
+  f.run();
+  assert.equal(f.stack.style.getPropertyValue('--panel-rail-offset'), '0.0px');
 });
 
 // The left rail's `top` animates after the right pass runs, and nothing
@@ -541,26 +559,27 @@ test('right rail enters focus only above available height and leaves below the f
   assert.equal(f.stack.classList.contains('layout-focus'), false);
 });
 
-test('right rail auto-collapse requests only one retry and settles within two passes', () => {
+test('right rail settles a second tall panel through the accordion in one pass', () => {
   const f = thrashingRightRail({ weatherOpen: true });
   const modes = [];
   for (let pass = 0; pass < 10; pass++) {
     f.run();
-    modes.push(f.stack.classList.contains('layout-focus'));
+    modes.push(f.stack.dataset.layoutMode);
   }
   assert.deepEqual(f.collapsed, ['weather-panel']);
-  assert.equal(f.retries(), 1);
-  assert.deepEqual(modes.slice(1), Array(9).fill(true));
+  assert.equal(f.weather.classList.contains('accordion-collapsed'), true);
+  assert.equal(f.retries(), 0);
+  assert.deepEqual(modes.slice(1), Array(9).fill(modes[0]));
 });
 
-test('right rail retry cannot enqueue another retry even if disclosure changes before it runs', () => {
+test('right rail reopening a peer outside the rail keeps one owner without retrying', () => {
   const f = thrashingRightRail({ weatherOpen: true });
   f.run();
-  assert.equal(f.retries(), 1);
-  f.weather.classList.remove('collapsed', 'layout-auto-collapsed');
+  f.weather.classList.remove('collapsed', 'accordion-collapsed');
   f.run();
-  assert.equal(f.retries(), 1);
-  assert.equal(f.stack.dataset.layoutMode, 'focus');
+  assert.equal(f.retries(), 0);
+  assert.equal(f.weather.classList.contains('collapsed'), true);
+  assert.equal(f.cctv.classList.contains('collapsed'), false);
 });
 
 test('right rail restores presentation even when intrinsic measurement throws', () => {
@@ -604,14 +623,14 @@ test('right rail measuring pass keeps an opted-in scroller position', () => {
 });
 
 for (const variant of ['minimal', 'full']) {
-  test(`right rail does not retry collapse that the ${variant} HUD immediately restores`, () => {
+  test(`right rail settles two tall panels without retrying in the ${variant} HUD`, () => {
     const f = fixture('right', { hud: { visible: true, variant } });
     f.expand(f.first, 900);
     f.expand(f.second, 900);
     for (let pass = 0; pass < 10; pass++) f.run();
     assert.equal(f.retries(), 0);
     assert.equal(f.first.classList.contains('collapsed'), false);
-    assert.equal(f.second.classList.contains('collapsed'), false);
+    assert.equal(f.second.classList.contains('accordion-collapsed'), true);
   });
 }
 // ── Narrow-screen rail overflow pin ──────────────────────────────────────────
@@ -665,13 +684,16 @@ test('narrow-screen rails pin every hosted panel glow inside its panel box', () 
   const css = readStylesheet(new URL('../../style.css', import.meta.url));
   for (const panel of [
     'data-panel',
+    'utilities-panel',
     'scene-panel',
     'cctv-panel',
-    'global-context-panel',
   ]) {
+    // The glow rule may be shared: `#data-panel .panel-glow, #utilities-panel .panel-glow {`.
     assert.match(
       css,
-      new RegExp(`#${panel} \\.panel-glow \\{[^}]*\\binset: -\\d+px;`),
+      new RegExp(
+        `#${panel} \\.panel-glow(?:,[^{]*)? \\{[^}]*\\binset: -\\d+px;`,
+      ),
       `${panel} glow no longer overhangs its panel; revisit this pin`,
     );
   }
@@ -713,10 +735,11 @@ test('right layout ignores a CSS-hidden expanded panel when deciding exclusivity
 
   f.run();
 
-  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  // The rail lists the collapsed panels; the CSS-hidden one claims nothing.
+  assert.equal(f.stack.classList.contains('layout-exclusive'), true);
   assert.equal(f.stack.dataset.expandedCount, '0');
-  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
-  assert.equal(f.second.getAttribute('aria-hidden'), undefined);
+  assert.equal(weather.classList.contains('collapsed'), false);
+  assert.equal(weather.getAttribute('aria-hidden'), undefined);
   assert.equal(
     weather.style.getPropertyValue('--right-panel-allocated-height'),
     '',
@@ -744,9 +767,10 @@ test('right layout still restores panels that exclusive presentation hides', () 
 
   f.options.hud.visible = false;
   f.run();
-  assert.equal(f.second.classList.contains('collapsed'), false);
+  // Restored from the space-based collapse, it yields to the accordion owner.
   assert.equal(f.second.classList.contains('layout-auto-collapsed'), false);
-  assert.deepEqual(f.collapsed, ['second']);
+  assert.equal(f.second.classList.contains('accordion-collapsed'), true);
+  assert.equal(f.first.classList.contains('collapsed'), false);
 });
 
 test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', () => {
@@ -780,10 +804,10 @@ test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', (
   const retriesBefore = f.retries();
   f.run();
   assert.ok(
-    f.collapsed.includes('recent-imagery-panel'),
-    'focus mode collapses the later panel and asks for another pass',
+    imagery.classList.contains('accordion-collapsed'),
+    'the accordion keeps the first panel and collapses the later one',
   );
-  assert.equal(f.retries(), retriesBefore + 1);
+  assert.equal(f.retries(), retriesBefore);
   f.run();
   assert.equal(f.stack.dataset.expandedCount, '1');
   assert.ok(
@@ -791,4 +815,18 @@ test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', (
       f.first.style.getPropertyValue('--right-panel-allocated-height'),
     ) <= alone,
   );
+});
+
+test('left rail keeps collapsed panels shown beside Cockpit, still one open', () => {
+  const f = fixture('left');
+  f.options.documentRef.body = {
+    classList: { contains: (name) => name === 'cockpit-mode' },
+  };
+  f.expand(f.first, 250);
+  f.expand(f.second, 250);
+  f.options.preferredPanelId = f.second.id;
+  f.run();
+  assert.equal(f.first.classList.contains('accordion-collapsed'), true);
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
 });

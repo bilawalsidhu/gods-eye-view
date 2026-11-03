@@ -730,7 +730,8 @@ html:not([lang='en']) .cockpit-roll-token.is-separator {
 }
 .cockpit-vision-controls {
   display: grid;
-  grid-template-columns: 48px 58px 48px;
+  /* The current style grows for a long translated name (ЗВИЧАЙНИЙ). */
+  grid-template-columns: 48px minmax(58px, max-content) 48px;
   align-items: stretch;
   gap: 2px;
   margin-top: 2px;
@@ -968,23 +969,50 @@ body.cockpit-mode #view-switcher button {
 .cockpit-context-window[data-state='lost'] {
   border-top-color: rgba(213, 168, 99, 0.72);
 }
-.cockpit-context-header {
+/* The Cockpit cards' headers (Contact, the briefing) share their frame: a
+   title column over a hairline, a kicker in the accent, and a row of square
+   actions. Each card sets only its spacing and sizes. */
+.cockpit-card-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 5px 10px;
-  padding: 0 5px 7px;
   border-bottom: 1px solid
     color-mix(in srgb, var(--cockpit-accent) 22%, transparent);
 }
-.cockpit-context-header > div {
+.cockpit-card-header > div {
   display: grid;
   gap: 2px;
 }
-.cockpit-context-kicker {
+.cockpit-card-kicker {
   color: var(--cockpit-accent);
-  font-size: 8px;
   font-weight: 700;
+}
+.cockpit-card-actions {
+  display: flex;
+}
+.cockpit-card-actions button {
+  display: grid;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 30%, transparent);
+  border-radius: 5px;
+  background: rgba(0, 7, 12, 0.72);
+  color: color-mix(in srgb, var(--cockpit-accent) 82%, white);
+  cursor: pointer;
+}
+.cockpit-card-actions button:hover,
+.cockpit-card-actions button:focus-visible {
+  border-color: var(--cockpit-accent);
+  color: #fff;
+  outline: none;
+}
+.cockpit-context-header {
+  gap: 5px 10px;
+  padding: 0 5px 7px;
+}
+.cockpit-context-kicker {
+  font-size: 8px;
   letter-spacing: 0.2em;
 }
 #cockpit-context-subject {
@@ -1040,26 +1068,10 @@ body.cockpit-mode #view-switcher button {
   outline: none;
 }
 .cockpit-context-actions {
-  display: flex;
   gap: 4px;
 }
 .cockpit-context-actions button {
-  display: grid;
   width: 28px;
-  height: 24px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 30%, transparent);
-  border-radius: 5px;
-  background: rgba(0, 7, 12, 0.72);
-  color: color-mix(in srgb, var(--cockpit-accent) 82%, white);
-  cursor: pointer;
-}
-.cockpit-context-actions button:hover,
-.cockpit-context-actions button:focus-visible {
-  border-color: var(--cockpit-accent);
-  color: #fff;
-  outline: none;
 }
 .cockpit-context-actions button:disabled {
   border-color: rgba(244, 251, 255, 0.1);
@@ -1081,7 +1093,7 @@ body.cockpit-mode #view-switcher button {
   gap: 3px 8px;
   min-width: 0;
   padding: 6px 9px;
-  border-left: 1px solid
+  border-inline-start: 1px solid
     color-mix(in srgb, var(--cockpit-accent) 40%, transparent);
   background: rgba(0, 7, 12, 0.34);
 }
@@ -1107,7 +1119,7 @@ body.cockpit-mode #view-switcher button {
   white-space: nowrap;
 }
 .cockpit-context-cohorts > div.unknown {
-  border-left-color: rgba(213, 168, 99, 0.58);
+  border-inline-start-color: rgba(213, 168, 99, 0.58);
 }
 .cockpit-context-cohorts > div.unknown strong {
   color: #d5a863;
@@ -1499,17 +1511,8 @@ body.cockpit-mode #view-switcher button {
   width: 100%;
 }
 .cockpit-signal-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
   gap: 10px;
   padding: 0 4px 7px 8px;
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--cockpit-accent) 22%, transparent);
-}
-.cockpit-signal-header > div {
-  display: grid;
-  gap: 2px;
 }
 html:not([lang='en']) .cockpit-signal-header > div {
   min-width: 0;
@@ -1525,9 +1528,7 @@ html:not([lang='en']) .cockpit-signal-kicker {
   letter-spacing: 0.1em;
 }
 .cockpit-signal-kicker {
-  color: var(--cockpit-accent);
   font-size: 8px;
-  font-weight: 700;
   letter-spacing: 0.18em;
 }
 .cockpit-signal-kicker i {
@@ -1541,7 +1542,6 @@ html:not([lang='en']) .cockpit-signal-kicker {
   animation: cockpit-live 1.6s ease-in-out infinite;
 }
 .cockpit-brief-actions {
-  display: flex;
   align-items: center;
   gap: 3px;
 }
@@ -1551,22 +1551,7 @@ html:not([lang='en']) .cockpit-brief-actions > * {
   flex-shrink: 0;
 }
 .cockpit-brief-actions button {
-  display: grid;
   width: 23px;
-  height: 24px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 30%, transparent);
-  border-radius: 5px;
-  background: rgba(0, 7, 12, 0.72);
-  color: color-mix(in srgb, var(--cockpit-accent) 82%, white);
-  cursor: pointer;
-}
-.cockpit-brief-actions button:hover,
-.cockpit-brief-actions button:focus-visible {
-  border-color: var(--cockpit-accent);
-  color: #fff;
-  outline: none;
 }
 .cockpit-brief-actions .material-symbols-outlined {
   font-size: 14px;
@@ -1626,8 +1611,9 @@ html:not([lang='en']) #cockpit-brief-auto {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
   gap: 8px;
-  padding: 7px 7px 7px 9px;
-  border-left: 1px solid rgba(244, 251, 255, 0.2);
+  padding-block: 7px;
+  padding-inline: 9px 7px;
+  border-inline-start: 1px solid rgba(244, 251, 255, 0.2);
   background: rgba(0, 7, 12, 0.3);
 }
 .cockpit-signal-list li.actionable {
@@ -1637,7 +1623,7 @@ html:not([lang='en']) #cockpit-brief-auto {
 }
 .cockpit-signal-list li.actionable:hover,
 .cockpit-signal-list li.actionable:focus-within {
-  border-left-color: var(--cockpit-accent);
+  border-inline-start-color: var(--cockpit-accent);
   background: color-mix(
     in srgb,
     var(--cockpit-accent) 10%,
@@ -1646,16 +1632,16 @@ html:not([lang='en']) #cockpit-brief-auto {
 }
 .cockpit-signal-list li.track,
 .cockpit-signal-list li.current {
-  border-left-color: var(--cockpit-accent);
+  border-inline-start-color: var(--cockpit-accent);
 }
 .cockpit-signal-list li.nearby {
-  border-left-color: #fff;
+  border-inline-start-color: #fff;
 }
 .cockpit-signal-list li.military {
-  border-left-color: #d5a863;
+  border-inline-start-color: #d5a863;
 }
 .cockpit-signal-list li.warning {
-  border-left-color: #d5a863;
+  border-inline-start-color: #d5a863;
 }
 .cockpit-signal-list time {
   color: rgba(244, 251, 255, 0.38);
@@ -1984,8 +1970,7 @@ body.cockpit-mode
     #command-dock,
     #military-awareness-panel,
     #military-awareness-direction-overlay,
-    #cockpit-entry,
-    .sl-viewer-wrap-expanded
+    #cockpit-entry
   ) {
   display: none !important;
 }
@@ -2009,6 +1994,11 @@ body.cockpit-mode #left-panel-stack {
   transition: none;
 }
 body.cockpit-mode #left-panel-stack > #scene-panel {
+  display: none !important;
+}
+/* Directions stays reachable in Cockpit, as in Data Layers; Draw and Import
+   were never there (DISPLAY sits in the hidden right rail). */
+body.cockpit-mode #utilities-panel .utilities-tools {
   display: none !important;
 }
 body.cockpit-mode #right-context-rail {

@@ -9,7 +9,7 @@ import {
   displacementPlausible,
 } from './movement.js';
 import { buildTransitSelectionCopy } from './policy.js';
-import { seek, sampleAt } from '../../data/contactPlayback.js';
+import { sampleAt } from '../../data/contactPlayback.js';
 const entry = () => {
   const e = { mode: 'bus', modeInferred: false, courseDeg: null };
   initializePlayback(e);

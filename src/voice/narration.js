@@ -4,7 +4,7 @@ import { progressLine } from './speech.js';
  * Timing policy for filling silence while tools run. Tuned against the turn
  * spans' `max_silence_ms`.
  */
-export const NARRATION_TIMING = Object.freeze({
+const NARRATION_TIMING = Object.freeze({
   /** Start the earcon when nothing is audible this long after end of speech. */
   earconAfterMs: 700,
   /** First spoken progress line when a tool is still running after this. */

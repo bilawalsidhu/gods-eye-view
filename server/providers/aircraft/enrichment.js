@@ -7,8 +7,9 @@ const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
 /**
  * adsbdb.com enrichment proxy: callsign → route (airline + origin/destination
  * airports) and hex → aircraft type/registration. Free community API — cached
- * aggressively: ONE upstream request per new key ever (404s negative-cached),
- * persisted to disk so restarts don't re-hammer it. Adapted from skylight
+ * aggressively: successes and 404s are kept per key for 24 hours (TTL_MS) and
+ * persisted to disk so restarts don't re-hammer it; other failures are not
+ * cached. Adapted from skylight
  * (MIT) server/src/enrich/routes.ts.
  */
 export function adsbdbProxy() {

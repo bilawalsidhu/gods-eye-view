@@ -1,4 +1,6 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import { useProviderSettingsStore } from './ui/stores/providerSettings.js';
+import { applicationPinia } from './ui/vueRuntime.js';
 import {
   readStoredCloudVoiceAuthMode,
   writeStoredCloudVoiceAuthMode,
@@ -18,9 +20,13 @@ import {
  * The surface self-destructs where it cannot work: a prod build (no endpoint)
  * or a LAN visitor (loopback-only endpoint) fails the status fetch, and both
  * the chip and the dialog are removed outright.
+ *
+ * ProviderSettingsView renders it: initKeySetup() keeps the requests, the
+ * field values and the dialog's keyboard, and publishes what is shown to the
+ * gev-provider-settings store.
  */
 
-import { t, msg, tn, registerUnsavedWork } from './i18n/index.js';
+import { t, msg, tn, onLocaleChange } from './i18n/index.js';
 
 /**
  * Chip label — pure, exported for tests (keySetup.test.mjs pins the English).
@@ -215,156 +221,28 @@ export function stripKeylessBasemapFromHash(hash) {
   }
 }
 
-const TIER_DOTS = Object.freeze({ metered: '🔴', free: '🟡' });
+const TIER_DOTS = Object.freeze({ metered: '🔴', paid: '🔴', free: '🟡' });
 
-function updateCloudVoiceAuthControl(auth, busy = false) {
-  const mode = readStoredCloudVoiceAuthMode();
-  const state = auth.querySelector('.key-setup-cloud-auth-state');
-  const toggle = auth.querySelector('[data-cloud-voice-auth-toggle]');
-  state.textContent =
-    mode === 'oauth'
-      ? t('VOICE AUTH · CHATGPT OAUTH')
-      : t('VOICE AUTH · API KEY');
-  toggle.textContent =
-    mode === 'oauth' ? t('USE API KEY') : t('USE CHATGPT OAUTH');
-  toggle.title =
-    mode === 'oauth'
-      ? t('Use OPENAI_API_KEY for the next cloud voice session')
-      : t(
-          'Use the signed-in local ChatGPT/Codex OAuth session for the next cloud voice session',
-        );
-  // Keep the control focusable while the delegated handler blocks repeats.
-  toggle.setAttribute('aria-disabled', String(busy));
-}
-
-/** Build one key row. All content is our own registry text, set via textContent. */
-function buildRow(documentRef, key) {
-  const row = documentRef.createElement('section');
-  row.className = 'key-setup-row';
-  row.dataset.keyId = key.id;
-  row.dataset.set = String(Boolean(key.set));
-  if (key.managed) row.dataset.managed = key.managed;
-  const external = key.managed === 'external';
-
-  const head = documentRef.createElement('div');
-  head.className = 'key-setup-row-head';
-  const led = documentRef.createElement('span');
-  led.className = 'key-setup-led';
-  led.setAttribute('aria-hidden', 'true');
-  const title = documentRef.createElement('strong');
-  title.textContent = key.title; // i18n-ignore: provider product name
-  const tier = documentRef.createElement('span');
-  tier.className = 'key-setup-tier';
-  tier.textContent = TIER_DOTS[key.tier] || '';
-  tier.title =
-    key.tier === 'metered'
-      ? t('Metered — a billing-enabled account')
-      : t('Free key — register, paste, done');
-  head.append(led, title, tier);
-  if (key.clientExposed) {
-    const exposed = documentRef.createElement('span');
-    exposed.className = 'key-setup-exposed';
-    exposed.textContent = t('browser-side');
-    exposed.title = t(
-      'This key runs in the browser by design — restrict it at the provider (see SECURITY.md)',
-    );
-    head.append(exposed);
-  }
-  if (external) {
-    // Externally supplied credentials (shell env, Keychain, a launcher) are
-    // facts this panel reports, never values it rewrites or deletes.
-    const badge = documentRef.createElement('span');
-    badge.className = 'key-setup-external';
-    badge.textContent = t('configured externally');
-    badge.title = t(
-      'Supplied by your environment, Keychain, or launcher — change it where it was set',
-    );
-    head.append(badge);
-  }
-  const get = documentRef.createElement('a');
-  get.className = 'key-setup-get';
-  get.href = key.getUrl;
-  get.target = '_blank';
-  get.rel = 'noopener noreferrer';
-  get.textContent = key.set ? t('MANAGE ↗') : t('GET KEY ↗');
-  head.append(get);
-
-  const unlocks = documentRef.createElement('p');
-  unlocks.className = 'key-setup-unlocks';
-  unlocks.textContent = t(key.unlocks);
-
-  row.append(head, unlocks);
-  if (!external) {
-    const fields = documentRef.createElement('div');
-    fields.className = 'key-setup-fields';
-    for (const envVar of key.envVars) {
-      const input = documentRef.createElement('input');
-      // Passwords-style so a pasted key never shows on a shared or recorded
-      // screen — this app gets screen-recorded a lot.
-      input.type = 'password';
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.dataset.envVar = envVar;
-      input.setAttribute('aria-label', envVar);
-      input.placeholder = key.set
-        ? t('{envVar} saved — paste to replace', { envVar })
-        : t('paste {envVar}', { envVar });
-      fields.append(input);
-    }
-    if (key.managed === 'file') {
-      const remove = documentRef.createElement('button');
-      remove.type = 'button';
-      remove.className = 'key-setup-remove';
-      remove.dataset.keySetupRemove = JSON.stringify(key.envVars);
-      remove.textContent = t('REMOVE');
-      remove.title = t("Remove {title} from this app's saved keys", {
-        title: key.title,
-      });
-      fields.append(remove);
-    }
-    row.append(fields);
-  }
-  if (key.id === 'openai') {
-    const auth = documentRef.createElement('div');
-    auth.className = 'key-setup-cloud-auth';
-    const state = documentRef.createElement('span');
-    state.className = 'key-setup-cloud-auth-state';
-    const toggle = documentRef.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'key-setup-cloud-auth-toggle';
-    toggle.dataset.cloudVoiceAuthToggle = 'true';
-    auth.append(state, toggle);
-    updateCloudVoiceAuthControl(auth);
-    row.append(auth);
-  }
-  return row;
-}
-
-/**
- * Move the existing setup action with the theme, retaining its listeners:
- * Cyber puts it in the top toolbar, every other theme keeps it first in its
- * markup home (the bottom-right corner row, beside the language picker).
- */
-export function bindKeySetupPlacement(documentRef, chip) {
-  const theme = documentRef?.documentElement;
-  const toolbar = documentRef?.getElementById?.('top-center-actions');
-  const Observer = documentRef?.defaultView?.MutationObserver;
-  const home = chip?.parentNode;
-  if (!theme || !toolbar || !Observer || !home) return () => {};
-  const sync = () => {
-    if (theme.dataset.uiTheme === 'cyber') {
-      if (chip.parentNode !== toolbar) toolbar.append(chip);
-    } else if (chip.parentNode !== home) {
-      home.prepend(chip);
-    }
+/** One key row as the view renders it, from the status payload's own text. */
+function presentRow(key) {
+  return {
+    id: key.id,
+    title: key.title,
+    set: Boolean(key.set),
+    managed: key.managed || null,
+    external: key.managed === 'external',
+    tierDot: TIER_DOTS[key.tier] || '',
+    tierTitle:
+      key.tier === 'metered'
+        ? t('Metered — a billing-enabled account')
+        : key.tier === 'paid'
+          ? t('Optional paid token — public access works without one')
+          : t('Free key — register, paste, done'),
+    clientExposed: Boolean(key.clientExposed),
+    getUrl: key.getUrl,
+    unlocks: t(key.unlocks),
+    envVars: [...(key.envVars || [])],
   };
-  const observer = new Observer(sync);
-  observer.observe(theme, {
-    attributes: true,
-    attributeFilter: ['data-ui-theme'],
-  });
-  sync();
-  return () => observer.disconnect();
 }
 
 /** Wire the dev-only setup surface; unavailable endpoints remove it entirely. */
@@ -372,91 +250,78 @@ export async function initKeySetup({
   documentRef = globalThis.document,
   fetchImpl,
   signal,
+  store = useProviderSettingsStore(applicationPinia()),
 } = {}) {
-  const chip = documentRef?.getElementById?.('key-setup-chip');
   const root = documentRef?.getElementById?.('key-setup');
-  if (!chip || !root || root.dataset.initialized === 'true') return null;
-  root.dataset.initialized = 'true';
+  if (!root || store.controls) return null;
   const lifetime = new AbortController();
+  const doFetch = fetchImpl || globalThis.fetch?.bind(globalThis);
   let disposed = false;
-  let disposeControls = () => {};
-  let disposePlacement = () => {};
-  // A pasted key lives only in its field until Save: switching language (a
-  // reload) asks first while any field holds one.
-  const unregisterUnsavedWork = registerUnsavedWork(() =>
-    [...(root.querySelectorAll?.('input[data-env-var]') || [])].some((input) =>
-      String(input.value ?? '').trim(),
-    )
-      ? msg('unsaved provider keys')
-      : null,
-  );
+  // Pasted keys live only here until Save.
+  const fields = {};
+  const state = {
+    available: null,
+    ready: false,
+    chip: null,
+    dialog: { hidden: true, visible: false },
+    rows: [],
+    // Bumped by a save: the rows render afresh, so no field keeps a key.
+    generation: 0,
+    fields,
+    status: null,
+    // Counts messages, so the live region announces a repeated one again.
+    statusSeq: 0,
+    saving: null,
+    auth: { mode: readStoredCloudVoiceAuthMode(), busy: false },
+  };
+  const publish = () => {
+    if (store.controls !== controls) return;
+    store.publish({
+      ...state,
+      chip: state.chip && { ...state.chip },
+      dialog: { ...state.dialog },
+      fields: { ...fields },
+      auth: { ...state.auth },
+    });
+  };
   const destroy = () => {
     if (disposed) return;
     disposed = true;
-    unregisterUnsavedWork();
+    offLocale();
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
-    disposeControls();
-    disposePlacement();
-    chip.remove();
-    root.remove();
+    open = false;
+    keyboard.destroy();
+    state.available = false;
+    state.ready = false;
+    publish();
+    if (store.controls === controls) store.connect(null);
   };
-  if (signal?.aborted) {
-    destroy();
-    return null;
-  }
-  signal?.addEventListener('abort', destroy, { once: true });
-  const doFetch = fetchImpl || globalThis.fetch?.bind(globalThis);
 
   let status = null;
-  try {
-    const response = await doFetch('/api/setup/status', {
-      cache: 'no-store',
-      signal: lifetime.signal,
-    });
-    if (!response.ok) throw new Error(String(response.status));
-    status = await response.json();
-    if (disposed) return null;
-  } catch {
-    // Prod build or non-loopback visitor: the surface cannot function, so it
-    // does not exist. (The README covers .env for headless/self-host setups.)
-    destroy();
-    return null;
-  }
-
-  const rowsHost = root.querySelector('[data-key-setup-rows]');
-  disposePlacement = bindKeySetupPlacement(documentRef, chip);
-  const applyButton = root.querySelector('[data-key-setup-apply]');
-  const closeButton = root.querySelector('[data-key-setup-close]');
-  const chipLabel = chip.querySelector('[data-key-setup-chip-label]') || chip;
-  const statusLine = root.querySelector('[data-key-setup-status]');
-  const defaultStatusText = statusLine?.textContent || '';
   let busy = false;
-  let oauthBusy = false;
   let open = false;
-
-  const syncCloudVoiceAuth = () => {
-    for (const auth of rowsHost.querySelectorAll('.key-setup-cloud-auth'))
-      updateCloudVoiceAuthControl(auth, oauthBusy);
-  };
 
   const render = (nextStatus) => {
     if (disposed) return;
     status = nextStatus;
-    chipLabel.textContent = keySetupChipLabel(status);
-    chip.title = t('Project keys: {status}', {
-      status: keySetupChipLabel(status),
-    });
-    chip.setAttribute('aria-label', chip.title);
+    const label = keySetupChipLabel(status);
     // Fully powered is the owner's clean screen: the chip retires. The dialog
     // stays reachable this session (and via ?setup=1) to swap or verify keys.
-    chip.hidden = status.setCount >= status.total;
-    if (!rowsHost) return;
-    rowsHost.textContent = '';
-    for (const key of status.keys || [])
-      rowsHost.append(buildRow(documentRef, key));
-    syncCloudVoiceAuth();
+    state.chip = {
+      label,
+      title: t('Project keys: {status}', { status: label }),
+      hidden: status.setCount >= status.total,
+    };
+    state.rows = (status.keys || []).map(presentRow);
+    state.auth = { ...state.auth, mode: readStoredCloudVoiceAuthMode() };
+    publish();
   };
+
+  // The chip and rows are translated here; show them again in a new locale.
+  const offLocale = onLocaleChange(() => {
+    if (status) render(status);
+  });
 
   const visible = () =>
     root.isConnected &&
@@ -471,32 +336,48 @@ export async function initKeySetup({
   });
 
   const openDialog = () => {
-    if (disposed || open) return;
+    if (disposed || open || !state.ready) return;
     open = true;
     keyboard.activate();
-    root.hidden = false;
+    state.dialog = { hidden: false, visible: false };
+    publish();
+    // The frame runs after Vue shows the dialog, so the fade starts from it.
     globalThis.requestAnimationFrame?.(() => {
       if (!open) return;
-      root.classList.add('visible');
-      root.querySelector('input')?.focus?.({ preventScroll: true });
+      state.dialog = { hidden: false, visible: true };
+      publish();
+      // The fields are already rendered; focus after Vue applies the class.
+      Promise.resolve().then(() => {
+        if (open) root.querySelector('input')?.focus?.({ preventScroll: true });
+      });
     });
+  };
+
+  const hideIfClosed = () => {
+    if (open || disposed || state.dialog.hidden) return;
+    state.dialog = { hidden: true, visible: false };
+    publish();
   };
 
   const close = () => {
     if (!open) return;
     open = false;
-    root.classList.remove('visible');
-    const hide = () => {
-      if (!open) root.hidden = true;
-    };
-    root.addEventListener('transitionend', hide, { once: true });
-    globalThis.setTimeout?.(hide, 400);
-    if (statusLine) statusLine.textContent = defaultStatusText;
+    state.dialog = { hidden: false, visible: false };
+    state.status = null;
+    publish();
+    globalThis.setTimeout?.(hideIfClosed, 400);
     keyboard.deactivate({ restoreFocus: true });
   };
 
   const say = (text) => {
-    if (statusLine) statusLine.textContent = text;
+    state.status = text;
+    state.statusSeq += 1;
+    publish();
+  };
+
+  const syncAuth = (busyNow = state.auth.busy) => {
+    state.auth = { mode: readStoredCloudVoiceAuthMode(), busy: busyNow };
+    publish();
   };
 
   const storeLabel = () =>
@@ -512,7 +393,7 @@ export async function initKeySetup({
       (key) => key.id === 'google-maps',
     )?.set;
     busy = true;
-    applyButton?.setAttribute('aria-disabled', 'true');
+    state.saving = true;
     say(t('Saving…'));
     try {
       const response = await doFetch('/api/setup/keys', {
@@ -527,8 +408,8 @@ export async function initKeySetup({
         say(saveRefusalText(payload, response.status));
         return;
       }
-      for (const input of root.querySelectorAll('input[data-env-var]'))
-        input.value = '';
+      for (const envVar of Object.keys(fields)) delete fields[envVar];
+      state.generation += 1;
       render(payload.status);
       if (googleWasUnset && payload.saved?.includes('GOOGLE_MAPS_API_KEY')) {
         const strip = () => {
@@ -563,18 +444,15 @@ export async function initKeySetup({
       );
     } finally {
       busy = false;
-      applyButton?.setAttribute('aria-disabled', 'false');
+      state.saving = false;
+      publish();
     }
   };
 
-  const onApply = async () => {
+  const apply = async () => {
     if (disposed || busy) return;
-    const inputs = [...root.querySelectorAll('input[data-env-var]')];
     const updates = collectKeyUpdates(
-      inputs.map((input) => ({
-        envVar: input.dataset.envVar,
-        value: input.value,
-      })),
+      Object.entries(fields).map(([envVar, value]) => ({ envVar, value })),
     );
     if (!Object.keys(updates).length) {
       say(t('Paste at least one key first.'));
@@ -586,124 +464,8 @@ export async function initKeySetup({
     );
   };
 
-  chip.addEventListener('click', openDialog);
-  closeButton?.addEventListener('click', close);
-  applyButton?.addEventListener('click', onApply);
-  // Remove buttons are rendered per row; delegate so re-renders stay wired.
-  rowsHost?.addEventListener('click', (event) => {
-    const authButton = event.target?.closest?.(
-      '[data-cloud-voice-auth-toggle]',
-    );
-    if (authButton && !disposed) {
-      if (oauthBusy) return;
-      void (async () => {
-        const current = readStoredCloudVoiceAuthMode();
-        if (current === 'oauth') {
-          writeStoredCloudVoiceAuthMode('api-key');
-          syncCloudVoiceAuth();
-          say(t('Cloud voice will use OPENAI_API_KEY on the next session.'));
-          return;
-        }
-        oauthBusy = true;
-        syncCloudVoiceAuth();
-        say(t('Checking local ChatGPT OAuth sign-in…'));
-        try {
-          const response = await doFetch('/api/realtime/oauth-status', {
-            cache: 'no-store',
-            signal: lifetime.signal,
-          });
-          const payload = await response.json().catch(() => ({}));
-          if (lifetime.signal.aborted) return;
-          if (!response.ok)
-            throw oauthCheckError(
-              payload.error,
-              t('Could not check ChatGPT sign-in.'),
-            );
-          if (payload.available) {
-            writeStoredCloudVoiceAuthMode('oauth');
-            syncCloudVoiceAuth();
-            say(
-              t(
-                'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
-              ),
-            );
-            return;
-          }
-
-          say(
-            payload.code === 'CODEX_OAUTH_REAUTH_REQUIRED'
-              ? t('ChatGPT sign-in expired. Opening sign-in again…')
-              : t('Opening ChatGPT sign-in in your browser…'),
-          );
-          const loginResponse = await doFetch('/api/realtime/oauth-login', {
-            method: 'POST',
-            cache: 'no-store',
-            signal: lifetime.signal,
-          });
-          const loginPayload = await loginResponse.json().catch(() => ({}));
-          if (lifetime.signal.aborted) return;
-          if (!loginResponse.ok) {
-            say(
-              loginPayload.error ||
-                payload.error ||
-                t('Could not start ChatGPT sign-in on this machine.'),
-            );
-            return;
-          }
-          if (loginPayload.available) {
-            writeStoredCloudVoiceAuthMode('oauth');
-            syncCloudVoiceAuth();
-            say(
-              t(
-                'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
-              ),
-            );
-            return;
-          }
-
-          say(
-            t(
-              'Finish ChatGPT sign-in in the browser. Waiting for it to complete…',
-            ),
-          );
-          const available = await waitForChatGptOAuth({
-            fetchImpl: doFetch,
-            signal: lifetime.signal,
-          });
-          if (lifetime.signal.aborted) return;
-          if (!available) {
-            say(
-              t('ChatGPT sign-in timed out. Click {button} to try again.', {
-                button: t('USE CHATGPT OAUTH'),
-              }),
-            );
-            return;
-          }
-          writeStoredCloudVoiceAuthMode('oauth');
-          syncCloudVoiceAuth();
-          say(
-            t(
-              'ChatGPT sign-in complete. OAuth will be used for the next cloud voice session.',
-            ),
-          );
-        } catch (error) {
-          if (lifetime.signal.aborted) return;
-          say(oauthCheckFailureText(error));
-        } finally {
-          oauthBusy = false;
-          if (!disposed) syncCloudVoiceAuth();
-        }
-      })();
-      return;
-    }
-    const button = event.target?.closest?.('[data-key-setup-remove]');
-    if (disposed || !button || busy) return;
-    let envVars = [];
-    try {
-      envVars = JSON.parse(button.dataset.keySetupRemove || '[]');
-    } catch {
-      return;
-    }
+  const remove = (envVars) => {
+    if (disposed || busy) return;
     if (!Array.isArray(envVars) || !envVars.length) return;
     // Removal is destructive and — behind a framing defense that should already
     // stop it — a clickjack target. A confirm turns a single aligned click into
@@ -716,8 +478,142 @@ export async function initKeySetup({
       Object.fromEntries(envVars.map((name) => [name, null])),
       msg('Removed from {store}. Restarting — this page reloads itself.'),
     );
-  });
+  };
 
+  const toggleAuth = async () => {
+    if (disposed || state.auth.busy) return;
+    const current = readStoredCloudVoiceAuthMode();
+    if (current === 'oauth') {
+      writeStoredCloudVoiceAuthMode('api-key');
+      syncAuth();
+      say(t('Cloud voice will use OPENAI_API_KEY on the next session.'));
+      return;
+    }
+    syncAuth(true);
+    say(t('Checking local ChatGPT OAuth sign-in…'));
+    try {
+      const response = await doFetch('/api/realtime/oauth-status', {
+        cache: 'no-store',
+        signal: lifetime.signal,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (lifetime.signal.aborted) return;
+      if (!response.ok)
+        throw oauthCheckError(
+          payload.error,
+          t('Could not check ChatGPT sign-in.'),
+        );
+      if (payload.available) {
+        writeStoredCloudVoiceAuthMode('oauth');
+        syncAuth();
+        say(
+          t(
+            'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
+          ),
+        );
+        return;
+      }
+
+      say(
+        payload.code === 'CODEX_OAUTH_REAUTH_REQUIRED'
+          ? t('ChatGPT sign-in expired. Opening sign-in again…')
+          : t('Opening ChatGPT sign-in in your browser…'),
+      );
+      const loginResponse = await doFetch('/api/realtime/oauth-login', {
+        method: 'POST',
+        cache: 'no-store',
+        signal: lifetime.signal,
+      });
+      const loginPayload = await loginResponse.json().catch(() => ({}));
+      if (lifetime.signal.aborted) return;
+      if (!loginResponse.ok) {
+        say(
+          loginPayload.error ||
+            payload.error ||
+            t('Could not start ChatGPT sign-in on this machine.'),
+        );
+        return;
+      }
+      if (loginPayload.available) {
+        writeStoredCloudVoiceAuthMode('oauth');
+        syncAuth();
+        say(
+          t(
+            'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
+          ),
+        );
+        return;
+      }
+
+      say(
+        t('Finish ChatGPT sign-in in the browser. Waiting for it to complete…'),
+      );
+      const available = await waitForChatGptOAuth({
+        fetchImpl: doFetch,
+        signal: lifetime.signal,
+      });
+      if (lifetime.signal.aborted) return;
+      if (!available) {
+        say(
+          t('ChatGPT sign-in timed out. Click {button} to try again.', {
+            button: t('USE CHATGPT OAUTH'),
+          }),
+        );
+        return;
+      }
+      writeStoredCloudVoiceAuthMode('oauth');
+      syncAuth();
+      say(
+        t(
+          'ChatGPT sign-in complete. OAuth will be used for the next cloud voice session.',
+        ),
+      );
+    } catch (error) {
+      if (lifetime.signal.aborted) return;
+      say(oauthCheckFailureText(error));
+    } finally {
+      if (!disposed) syncAuth(false);
+    }
+  };
+
+  const controls = {
+    open: openDialog,
+    close,
+    apply,
+    remove,
+    toggleAuth: () => void toggleAuth(),
+    setField(envVar, value) {
+      fields[envVar] = String(value ?? '');
+      publish();
+    },
+    transitionEnd: hideIfClosed,
+  };
+  store.connect(controls);
+  publish();
+
+  if (signal?.aborted) {
+    destroy();
+    return null;
+  }
+  signal?.addEventListener('abort', destroy, { once: true });
+
+  try {
+    const response = await doFetch('/api/setup/status', {
+      cache: 'no-store',
+      signal: lifetime.signal,
+    });
+    if (!response.ok) throw new Error(String(response.status));
+    status = await response.json();
+    if (disposed) return null;
+  } catch {
+    // Prod build or non-loopback visitor: the surface cannot function, so it
+    // does not exist. (The README covers .env for headless/self-host setups.)
+    destroy();
+    return null;
+  }
+
+  state.available = true;
+  state.ready = true;
   render(status);
 
   // Re-entry for a fully-keyed setup, demos, and support: ?setup=1 opens the
@@ -732,12 +628,5 @@ export async function initKeySetup({
     // An unparsable location never blocks init.
   }
 
-  disposeControls = () => {
-    open = false;
-    keyboard.destroy();
-    chip.removeEventListener('click', openDialog);
-    closeButton?.removeEventListener('click', close);
-    applyButton?.removeEventListener('click', onApply);
-  };
   return { open: openDialog, close, render, destroy };
 }

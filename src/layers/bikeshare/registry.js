@@ -604,6 +604,114 @@ const RAW_GBFS_CITY_REGISTRY = [
       'https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_bs/en/station_status.json',
     provider: 'AMBici',
   },
+  {
+    id: 'madrid-bicimad',
+    city: 'Madrid, Spain',
+    centerLat: 40.4241,
+    centerLon: -3.6825,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://madrid.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://madrid.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'BiciMAD',
+  },
+  {
+    id: 'valencia-valenbisi',
+    city: 'Valencia, Spain',
+    centerLat: 39.4706,
+    centerLon: -0.3749,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://api.cyclocity.fr/contracts/valence/gbfs/station_information.json',
+    stationStatusUrl:
+      'https://api.cyclocity.fr/contracts/valence/gbfs/station_status.json',
+    provider: 'Valenbisi',
+  },
+  {
+    id: 'zaragoza-bizi',
+    city: 'Zaragoza, Spain',
+    centerLat: 41.6481,
+    centerLon: -0.8927,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://zaragoza.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://zaragoza.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bizi Zaragoza',
+  },
+  {
+    id: 'sevilla-sevici',
+    city: 'Seville, Spain',
+    centerLat: 37.3726,
+    centerLon: -5.9607,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://api.cyclocity.fr/contracts/seville/gbfs/station_information.json',
+    stationStatusUrl:
+      'https://api.cyclocity.fr/contracts/seville/gbfs/station_status.json',
+    provider: 'Sevici',
+  },
+  {
+    id: 'valladolid-biki',
+    city: 'Valladolid, Spain',
+    centerLat: 41.6233,
+    centerLon: -4.7382,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://valladolid.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://valladolid.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'BIKI',
+  },
+  {
+    id: 'a-coruna-bicicoruna',
+    city: 'A Coruña, Spain',
+    centerLat: 43.3534,
+    centerLon: -8.4156,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://acoruna.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://acoruna.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'BiciCoruña',
+  },
+  {
+    id: 'donostia-dbizi',
+    city: 'Donostia-San Sebastián, Spain',
+    centerLat: 43.3075,
+    centerLon: -1.9696,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://sansebastian.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://sansebastian.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Dbizi',
+  },
+  {
+    id: 'bilbao-bilbaobizi',
+    city: 'Bilbao, Spain',
+    centerLat: 43.2624,
+    centerLon: -2.9367,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://bilbao.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://bilbao.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'Bilbao Bizi',
+  },
+  {
+    id: 'rivas-bicinrivas',
+    city: 'Rivas-Vaciamadrid, Spain',
+    centerLat: 40.3535,
+    centerLon: -3.5319,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://rivas.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://rivas.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'BicinRivas',
+  },
 ];
 function normalizeRegistryEntry(entry) {
   const id = String(entry?.id || '')
