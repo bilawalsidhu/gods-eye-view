@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { msg } from '../../i18n/marker.js';
 import { OSM_PLACES_LAYER_ID } from './model.js';
+import { createNominatimStatus } from '../../sources/nominatimStatus.js';
 export * from './model.js';
 
 const OVERLAY_SOURCE_ID = OSM_PLACES_LAYER_ID;
@@ -15,9 +16,13 @@ const COLOR = '#7fe3ff';
  * The search runs only on an operator-configured Overpass, so without one
  * the layer stays empty. Session-only: never in share links or stored layer
  * state.
- * @param {{overlayHost: object}} options
+ * @param {{overlayHost: object, overpassConfigured?: () => Promise<boolean|null>}} options
  */
-export function createOsmPlacesLayer({ overlayHost } = {}) {
+export function createOsmPlacesLayer({
+  overlayHost,
+  // The same once-per-page capability probe as Nominatim's, on Overpass.
+  overpassConfigured = createNominatimStatus({ url: '/api/overpass/status' }),
+} = {}) {
   if (!overlayHost) throw new TypeError('OSM Places requires an overlay host');
   let viewer = null;
   let dataSource = null;
@@ -25,6 +30,8 @@ export function createOsmPlacesLayer({ overlayHost } = {}) {
   let records = [];
   let meta = null;
   let lastUpdate = null;
+  /** true / false from the server's probe, null while unknown. */
+  let configured = null;
 
   function render() {
     if (!dataSource) return;
@@ -42,7 +49,9 @@ export function createOsmPlacesLayer({ overlayHost } = {}) {
           outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
           outlineWidth: 2,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // On top only up close (as bikeshare stations): beyond that the
+          // depth test keeps far-side points from showing through the globe.
+          disableDepthTestDistance: 2500,
         },
       });
       if (record.name && overlay.length < LABEL_LIMIT)
@@ -79,8 +88,24 @@ export function createOsmPlacesLayer({ overlayHost } = {}) {
     source: 'OpenStreetMap',
     updateInterval: 0,
 
+    /** Unavailable only once the server says no Overpass is configured. */
+    getSourceAvailability() {
+      return configured === false
+        ? {
+            available: false,
+            source: OSM_PLACES_LAYER_ID,
+            reason: 'Needs an operator-configured Overpass server',
+          }
+        : { available: true, source: OSM_PLACES_LAYER_ID, reason: null };
+    },
+
     init(nextViewer) {
       viewer = nextViewer;
+      Promise.resolve(overpassConfigured?.())
+        .then((answer) => {
+          if (typeof answer === 'boolean') configured = answer;
+        })
+        .catch(() => {});
       dataSource = new Cesium.CustomDataSource(OSM_PLACES_LAYER_ID);
       dataSource.show = false;
       viewer.dataSources.add(dataSource);

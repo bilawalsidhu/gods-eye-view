@@ -1211,6 +1211,8 @@ export function createRecentImageryLayer({
 
     /** Stop catalog/preview work owned by a cancelled voice action. */
     cancelPendingSearch() {
+      // Without a note the emptied strip would read as "no imagery".
+      if (_searching) _notice = msg('Search cancelled');
       cancelSearch();
       clearPending();
       syncRender();

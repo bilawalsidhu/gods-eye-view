@@ -293,6 +293,14 @@ const FIXED_NOTES = new Map(
     msg(
       'the count is a lower bound because at least one layer reached its retained limit.',
     ),
+    // Area, imagery and OSM card lines (areaActions, imageryActions,
+    // osmActions); the model gets the English.
+    msg('buffer sized to the place'),
+    msg('enclosing mapped area'),
+    msg('the map was cleared while looking it up'),
+    msg('OpenStreetMap coverage varies by place'),
+    msg('the catalog covers the last 30 days'),
+    msg('there are more'),
   ].map((text) => [text, text]),
 );
 
@@ -302,7 +310,58 @@ const LAYER_STATUS_NOTES = Object.freeze({
   error: (label) => t('{label} error', { label }),
 });
 
+const countOf = (text) => Number(String(text).replace(/,/g, ''));
+
 const NOTE_PATTERNS = [
+  [
+    /^([\d,]+) m around the landmark$/,
+    ([, radius]) =>
+      t('{radius} m around the landmark', {
+        radius: formatNumber(countOf(radius)),
+      }),
+  ],
+  [
+    /^([\d,]+) parts$/,
+    ([, n]) =>
+      tn(countOf(n), '{count} part', '{count} parts', {
+        count: formatNumber(countOf(n)),
+      }),
+  ],
+  [
+    /^([\d,]+) of ([\d,]+) parts drawn$/,
+    ([, drawn, total]) =>
+      tn(
+        countOf(total),
+        '{drawn} of {total} part drawn',
+        '{drawn} of {total} parts drawn',
+        {
+          drawn: formatNumber(countOf(drawn)),
+          total: formatNumber(countOf(total)),
+        },
+      ),
+  ],
+  [
+    /^([\d,]+) duplicate mappings merged$/,
+    ([, n]) =>
+      tn(
+        countOf(n),
+        '{count} duplicate mapping merged',
+        '{count} duplicate mappings merged',
+        { count: formatNumber(countOf(n)) },
+      ),
+  ],
+  [
+    /^listed the first ([\d,]+)$/,
+    ([, limit]) =>
+      t('listed the first {limit}', { limit: formatNumber(countOf(limit)) }),
+  ],
+  [
+    /^counted over the bounding box of (.+), not its outline$/,
+    ([, area]) =>
+      t('counted over the bounding box of {area}, not its outline', {
+        area: spokenLabel(area, 48),
+      }),
+  ],
   [
     /^counted the first ([\d,]+) loaded records$/,
     ([, returned]) =>
@@ -372,6 +431,11 @@ const NOTE_PATTERNS = [
       layerNameForId(key) ? `${shownLayerKey(key)}: ${shownNote(note)}` : null,
   ],
 ];
+
+/** A card line from a producer's English text, or null when absent. */
+function shownLine(text) {
+  return text ? shownNote(String(text)) : null;
+}
 
 function shownNote(text) {
   if (FIXED_NOTES.has(text)) return t(FIXED_NOTES.get(text));
@@ -465,18 +529,18 @@ function areaCard(result, args = {}) {
       title: `${result.name ? spokenLabel(result.name, 48) : t('Area', { context: 'voice area' })}${result.country ? `, ${spokenLabel(result.country, 24)}` : ''}`,
       lines: [
         Number.isFinite(km2) && km2 > 0 ? `${formatNumber(km2)} km²` : null,
-        display.basis,
-        display.parts,
-        display.drawnParts,
+        shownLine(display.basis),
+        shownLine(display.parts),
+        shownLine(display.drawnParts),
         result.notDrawn
-          ? t('Not drawn: {parts}', { parts: result.notDrawn })
+          ? t('Not drawn: {parts}', { parts: shownNote(result.notDrawn) })
           : null,
       ].filter(Boolean),
       chips: [
         ...(result.approximate ? [{ label: t('approximate') }] : []),
         ...(result.partial ? [{ label: shownFeedState('partial') }] : []),
       ],
-      notes: notesOf(display.caveat),
+      notes: notesOf(display.caveat).map(shownNote),
       sources: display.source ? [{ label: display.source }] : [],
     },
     referents: [],
@@ -509,7 +573,7 @@ function imageryCard(result) {
             total: formatNumber(Number(result.total) || 0),
           },
         ),
-        capitalized(display.window),
+        capitalized(shownLine(display.window)),
       ]
     : [
         tn(
@@ -518,7 +582,7 @@ function imageryCard(result) {
           '{n} acquisitions searched',
           { n: formatNumber(Number(result.total) || 0) },
         ),
-        capitalized(display.window),
+        capitalized(shownLine(display.window)),
       ];
   return {
     display: {
@@ -528,7 +592,7 @@ function imageryCard(result) {
       lines: lines.filter(Boolean),
       chips:
         shown && !shown.onMap ? [{ label: shownFeedState('loading') }] : [],
-      notes: notesOf(display.caveat),
+      notes: notesOf(display.caveat).map(shownNote),
     },
     referents: [],
   };
@@ -538,8 +602,12 @@ function osmCard(result) {
   if (!result?.ok) return null;
   const display = result.display || {};
   const count = Number(result.count);
-  // The kind is the preset's English noun, the model's data.
-  const kind = spokenLabel(result.kind || 'places', 32);
+  // The kind is the preset's English noun, the model's data; one place takes
+  // its singular ("1 hospital").
+  const kind = spokenLabel(
+    (count === 1 && result.kindSingular) || result.kind || 'places',
+    32,
+  );
   const values = { count: formatNumber(count), kind };
   const title = !Number.isFinite(count)
     ? t('Unknown number of {kind}', { kind })
@@ -555,9 +623,9 @@ function osmCard(result) {
         result.area
           ? t('In {area}', { area: spokenLabel(result.area, 48) })
           : null,
-        display.merged,
+        shownLine(display.merged),
       ].filter(Boolean),
-      notes: notesOf(display.caveat),
+      notes: notesOf(display.caveat).map(shownNote),
       sources: display.source ? [{ label: display.source }] : [],
     },
     referents: Array.isArray(result.referents) ? result.referents : [],

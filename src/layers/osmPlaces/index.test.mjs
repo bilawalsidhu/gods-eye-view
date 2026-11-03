@@ -100,3 +100,53 @@ test('destroy and re-init expose a fresh empty session', () => {
     statusMessage: 'Voice place search (needs an Overpass server)',
   });
 });
+
+test('without an operator Overpass the layer shows as unavailable', async () => {
+  const added = [];
+  const viewer = { dataSources: { add: (ds) => added.push(ds), remove() {} } };
+  const off = createOsmPlacesLayer({
+    overlayHost: fakeOverlayHost(),
+    overpassConfigured: async () => false,
+  });
+  assert.equal(
+    off.getSourceAvailability().available,
+    true,
+    'unknown until asked',
+  );
+  off.init(viewer);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(off.getSourceAvailability().available, false);
+  const unknown = createOsmPlacesLayer({
+    overlayHost: fakeOverlayHost(),
+    overpassConfigured: async () => null,
+  });
+  unknown.init(viewer);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(
+    unknown.getSourceAvailability().available,
+    true,
+    'an unknown answer keeps it listed',
+  );
+});
+
+test('places are depth-tested past close range, so they never show through the globe', () => {
+  const added = [];
+  const viewer = { dataSources: { add: (ds) => added.push(ds), remove() {} } };
+  const layer = createOsmPlacesLayer({
+    overlayHost: fakeOverlayHost(),
+    overpassConfigured: async () => true,
+  });
+  layer.init(viewer);
+  layer.enable();
+  layer.setResults(RECORDS, {
+    kind: 'hospital',
+    label: 'hospitals',
+    area: 'Kathmandu',
+  });
+  const point = added[0].entities.values[0].point;
+  const distance = point.disableDepthTestDistance.getValue();
+  assert.ok(
+    Number.isFinite(distance) && distance <= 5000,
+    `depth test off only within ${distance} m`,
+  );
+});

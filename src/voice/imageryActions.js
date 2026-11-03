@@ -268,6 +268,8 @@ export async function findImagery(
           : args.source === 'any'
             ? { hls: true, viirs: true }
             : { hls: true };
+    // The operator's own settings, put back if the box is refused.
+    const before = layer.getSnapshot();
     layer.setSources(sources);
     layer.setMode?.('image');
 
@@ -279,6 +281,8 @@ export async function findImagery(
     if (!accepted) {
       const reason =
         layer.getSnapshot().boxError || 'That area cannot be searched.';
+      if (before?.sources) layer.setSources(before.sources);
+      if (before?.mode) layer.setMode?.(before.mode);
       return fail('BOX_REFUSED', `${reason}. Zoom in or pick a smaller area.`, {
         ...(areaName ? { area: areaName } : {}),
       });

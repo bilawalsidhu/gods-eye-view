@@ -47,6 +47,8 @@ function fakeLayer({
     pins: { a: { key: null } },
     shown: { a: null },
     notes: [],
+    sources: { hls: false, viirs: true },
+    mode: 'basemap',
   };
   const listeners = new Set();
   const calls = [];
@@ -92,9 +94,11 @@ function fakeLayer({
     },
     setSources(sources) {
       calls.push(['setSources', sources]);
+      set({ sources: { ...sources } });
     },
     setMode(mode) {
       calls.push(['setMode', mode]);
+      set({ mode });
     },
     setAssignment(slot, key) {
       calls.push(['setAssignment', slot, key]);
@@ -269,6 +273,15 @@ test('a box the layer refuses is refused with its reason, and the layer is turne
   assert.equal(result.code, 'BOX_REFUSED');
   assert.match(result.error, /limit 1,000 km/);
   assert.deepEqual(toggles, [true]);
+});
+
+test('a refused box leaves the operator panel sources and mode as they were', async () => {
+  const layer = fakeLayer({ refuse: 'Box is 1,200 km wide · limit 1,000 km' });
+  const result = await findImagery(deps(layer).value, {});
+  assert.equal(result.code, 'BOX_REFUSED');
+  const snap = layer.getSnapshot();
+  assert.deepEqual(snap.sources, { hls: false, viirs: true });
+  assert.equal(snap.mode, 'basemap');
 });
 
 test('a superseded search is cancelled before anything is pinned', async () => {
