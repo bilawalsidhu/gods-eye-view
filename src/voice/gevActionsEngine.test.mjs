@@ -94,7 +94,6 @@ test('the viewer-only actions are one exported list of real tools', () => {
     'fly_route',
     'move_camera',
     'set_context_mode',
-    'control_cctv',
   ]);
   assert.ok(Object.isFrozen(VIEWER_ONLY_ACTIONS));
   const tools = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));

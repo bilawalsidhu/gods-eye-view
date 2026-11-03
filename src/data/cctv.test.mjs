@@ -14,6 +14,7 @@
 // computeFrustumGeometry is PURE (no viewer, no scene queries) so it runs under
 // plain node:test.
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 // Preserve structural pins across component qualification and formatter wrapping.
 function componentFunctionSource(fn) {
   return fn
@@ -233,7 +234,7 @@ test('lazy coverage inserts nothing at catalog init, then materializes only elig
     'building a 100-camera catalog must insert zero coverage entities',
   );
   assert.doesNotMatch(
-    componentFunctionSource(cctvLayer.init),
+    sceneBindings,
     /buildCoverageEntities|ensure(?:Active|Visible)CoverageEntities/,
   );
 
@@ -968,6 +969,11 @@ test('CCTV focus refuses camera flights while cockpit owns the view', () => {
   assert.equal(flyCalls, 0);
 });
 
+// Both initial mount and live engine switches install the same click handler.
+const sceneBindings = componentFunctionSource(
+  readFileSync(new URL('../layers/cctv/lifecycle.js', import.meta.url), 'utf8')
+    .split('function bindScene(viewer, options) {')[1].split('function createRenderer(')[0],
+);
 test('CCTV repeated in-world clicks dispatch focus only for the one real activation', () => {
   const target = new EventTarget();
   const activated = [];
@@ -997,23 +1003,23 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
   assert.deepEqual(activated, ['atx-cam-3', 'atx-cam-3', 'atx-cam-3']);
   assert.deepEqual(requests, [{ cameraId: 'atx-cam-3' }]);
   assert.match(
-    componentFunctionSource(cctvLayer.init),
+    sceneBindings,
     /_removeClick = bindClick\(/,
   );
   assert.match(
-    componentFunctionSource(cctvLayer.init),
+    sceneBindings,
     /_cctvOverlayHost\.hitTest/,
   );
   assert.match(
-    componentFunctionSource(cctvLayer.init),
+    sceneBindings,
     /sourceId: CCTV_OVERLAY_SOURCE_ID/,
   );
   assert.match(
-    componentFunctionSource(cctvLayer.init),
+    sceneBindings,
     /activateCctvCameraFromWorldClick\(cameraId, setActiveCamera\)/,
   );
   assert.match(
-    componentFunctionSource(cctvLayer.init),
+    sceneBindings,
     /activateCctvCameraFromWorldClick\(cardId, setActiveCamera\)/,
   );
 });
@@ -1126,7 +1132,7 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
     'an ID-less surface pick remains true empty space',
   );
 
-  const initSource = componentFunctionSource(cctvLayer.init);
+  const initSource = sceneBindings;
   assert.ok(
     initSource.indexOf('if (pickedId !== null) return') <
       initSource.indexOf('_cctvOverlayHost.hitTest'),

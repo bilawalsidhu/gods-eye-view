@@ -748,10 +748,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * Removes all coverage entities and projection runtimes from the scene.
    */
 
-  function destroyCoverageEntities() {
-    if (!parts.renderer?.ready) return;
+  function destroyCoverageEntities({ retainMedia = false } = {}) {
     for (const entity of layerState._coverageEntities) {
-      parts.renderer.removeCoverageEntity(entity);
+      parts.renderer?.removeCoverageEntity(entity);
     }
     layerState._coverageEntities = [];
 
@@ -760,9 +759,14 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     }
 
     for (const runtime of layerState._projectionEntities) {
-      parts.projection.destroyProjectionRuntime(runtime);
+      if (retainMedia) {
+        if (runtime.planeEntity) parts.renderer.removePlane(runtime);
+        runtime.planeEntity = runtime.planeMaterial = null;
+        runtime.planeVisible = false;
+        runtime.needsPlane = true;
+      } else parts.projection.destroyProjectionRuntime(runtime);
     }
-    layerState._projectionEntities = [];
+    if (!retainMedia) layerState._projectionEntities = [];
   }
   return {
     computeFrustumGeometry,

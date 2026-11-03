@@ -79,3 +79,7 @@ A pointer-selected FIRMS detection from a 371-fire snapshot and a pointer-select
 ### Bikeshare and Transit
 
 The Boston GBFS test retained its selected dock, availability and 200 stations with one station-information request. Transit previously skipped proximity checks on a scene without a Cesium viewer. Its viewport now uses the active renderer. The MBTA fixture activated from the map, kept its 12 vehicles, selected bus and single trail-history request through both handoffs. The selection was made with a physical map click in both tests.
+
+### CCTV projection and video
+
+Camera records, calibration and the active decoder stay in the session. The renderer owns monitor planes, textures, markers, geometry and picking. The release check decoded a local 320 × 180 MP4, kept the same playing HTMLVideoElement through both switches, observed advancing decoded frames on each scene, retained the viewshed mode and created a native plane each time without another catalog request. The still-image scheduler and map-click regression tests also passed.
