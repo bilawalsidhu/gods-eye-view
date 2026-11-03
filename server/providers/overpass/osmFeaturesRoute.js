@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
+import { makeRateLimiter, clientNetworkKey } from '../common/rate-limit.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 import { createBoundedCache } from '../common/boundedCache.js';
 import {
@@ -220,7 +220,10 @@ export function installOsmFeaturesRoute(
     });
     if (!compiled.ok)
       return send(jsonError(400, compiled.error, { code: compiled.code }));
-    if (!limiter(clientKey(req)))
+    // IPv6 peers by /64, as /api/overpass does: rotating addresses inside
+    // one prefix earns neither a second rate bucket nor a second slot.
+    const client = clientNetworkKey(req);
+    if (!limiter(client))
       return send({
         ...jsonError(429, 'Rate limit exceeded'),
         retryAfter: '10',
@@ -235,7 +238,7 @@ export function installOsmFeaturesRoute(
         compiled.ql,
         (parsed) => summarizeOsmFeatures(parsed, compiled),
         controller.signal,
-        clientKey(req),
+        client,
       );
       if (!controller.signal.aborted) send(answer);
     } catch {

@@ -278,6 +278,57 @@ test('a search without a limit lists up to 500 features', async () => {
   );
 });
 
+test('one IPv6 /64 is one client for slots and the rate limit', async () => {
+  const release = [];
+  const { request } = mount(async () => {
+    await new Promise((r) => release.push(r));
+    return { status: 200, body: JSON.stringify({ elements: [] }) };
+  });
+  const first = request(
+    'preset=hospital&bbox=0,0,1,1',
+    undefined,
+    {},
+    '2001:db8:1:2::a',
+  );
+  await new Promise((r) => setTimeout(r, 5));
+  // A rotated address that wrongly got its own slot would wait upstream
+  // too: answer every held search before asserting, so a failure never hangs.
+  const rotated = request(
+    'preset=school&bbox=0,0,1,1',
+    undefined,
+    {},
+    '2001:db8:1:2:ffff::b',
+  );
+  await new Promise((r) => setTimeout(r, 5));
+  release.splice(0).forEach((r) => r());
+  assert.equal(
+    (await rotated).status,
+    503,
+    'a rotated address waits for its first search',
+  );
+  assert.equal((await first).status, 200);
+
+  // Twelve a minute per /64, wherever in it the requests come from.
+  const { request: limited } = mount(async () => ({
+    status: 200,
+    body: JSON.stringify({ elements: [] }),
+  }));
+  const statuses = [];
+  for (let i = 0; i < 13; i += 1)
+    statuses.push(
+      (
+        await limited(
+          `preset=hospital&bbox=0,0,1,${(i + 1) / 20}`,
+          undefined,
+          {},
+          `2001:db8:5:6::${(i + 1).toString(16)}`,
+        )
+      ).status,
+    );
+  assert.deepEqual(statuses.slice(0, 12), Array(12).fill(200));
+  assert.equal(statuses[12], 429);
+});
+
 test('the route answers, caches, and shares upstream slots fairly', async () => {
   const release = [];
   let upstream = 0;
