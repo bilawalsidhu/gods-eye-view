@@ -1,0 +1,4 @@
+navara { enabled: true, playing: false, progress: 0.52, split: 0.27 } imagery difference 55.13706666666667
+cesium { enabled: true, playing: false, progress: 0.52, split: 0.27 } imagery difference 83.53706666666666
+navara { enabled: true, playing: false, progress: 0.52, split: 0.27 } imagery difference 55.06933333333333
+PASS event timeline, paused and playing handoff, image pair, divider, player host and single asset acquisition

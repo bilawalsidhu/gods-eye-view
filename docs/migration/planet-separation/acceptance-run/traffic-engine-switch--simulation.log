@@ -1,0 +1,7 @@
+navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 9, rebuilds: 0, added: 625, removed: 7, recycled: 34 }
+cesium sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 12, rebuilds: 0, added: 625, removed: 7, recycled: 35 }
+navara sim 618 { free: 0, slow: 0, jam: 0, sim: 618 } 0 { publishes: 15, rebuilds: 0, added: 625, removed: 7, recycled: 37 }
+vehicles in view {"aboveGround":150,"drawn":150,"belowTerrain":1,"withinOneMetre":1,"strayChangedPixels":2,"area":250000}
+vehicles below the drawn terrain, hidden by the depth test: 1
+population before the switches 618 settled after the round trip 618 after the comparison 618 below the drawn terrain before the switches 2
+PASS kept the traffic module, parameters, flow and vehicle identities across both globes; vehicles in view are drawn where the layer places them

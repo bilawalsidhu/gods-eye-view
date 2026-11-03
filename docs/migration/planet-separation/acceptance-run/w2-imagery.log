@@ -1,0 +1,26 @@
+PASS image pixels inside selected box
+PASS geographic clip outside box
+PASS A/B dates on opposite sides
+PASS cesium holds both original pins
+PASS cesium renders both pinned dates
+PASS cesium reuses the STAC search
+PASS navara holds both original pins
+PASS navara renders both pinned dates
+PASS navara reuses the STAC search
+PASS swap reverses dates
+PASS physical divider drag changes rendered split
+PASS divider Home exposes B
+PASS divider End exposes A
+PASS half opacity blends source with basemap
+PASS basemap comparison clips only A
+PASS ten toggles restore visible image
+PASS Navara tile admission stays bounded
+PASS failed replacement does not leave stale image pixels
+PASS rapid replacement leaves final date only
+PASS clear removes both slots
+PASS physical box drag selects geography without moving camera
+PASS USE VIEW works on real engine camera
+PASS oversized view refuses and offers bounded zoom
+PASS ZOOM IN lands at requested height
+PASS disable leaves no imagery owners or queued requests
+PASS no browser exceptions

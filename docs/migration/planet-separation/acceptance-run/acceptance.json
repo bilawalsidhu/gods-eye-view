@@ -1,41 +1,15 @@
 {
-  "commit": "c80864e5a67f25c5f37e3ef763002200fd3f3b29",
+  "commit": "f7a82aef0450e943130c414746b4cacfaf367c11",
   "dirty": false,
   "dirtyFiles": [],
-  "dirtyFilesAtEnd": [
-    "docs/migration/planet-separation/README.md",
-    "docs/migration/planet-separation/acceptance.md",
-    "docs/migration/planet-separation/layers.md",
-    "docs/migration/planet-separation/progress.md",
-    "scripts/qa-engine-switch.mjs",
-    "scripts/qa-layer-handoff.mjs",
-    "src/app/catalog.test.mjs",
-    "src/app/data.js",
-    "src/data/bhoteKoshiEvent.js",
-    "src/data/bhoteKoshiEvent.test.mjs",
-    "src/data/layerStateCoordinator.js",
-    "src/data/lifecycle.js",
-    "src/data/lifecycleScene.test.mjs",
-    "src/layers/ghostMaps/index.js",
-    "src/layers/infrastructure/index.js",
-    "src/layers/infrastructure/session.test.mjs",
-    "src/layers/submarineCables/session.js",
-    "src/layers/submarineCables/session.test.mjs",
-    "src/main.js",
-    "src/sharelink.js",
-    "src/sharelink.navigation.test.mjs",
-    "src/standalone/engineSwitch.js",
-    "src/standalone/engineSwitch.test.mjs",
-    "src/ui/styles/controls.css",
-    "src/data/layerStateHandoff.test.mjs"
-  ],
+  "dirtyFilesAtEnd": [],
   "chrome": "Chrome/156.0.8078.79",
   "puppeteerExecutable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "node": "v26.12.0",
   "platform": "darwin arm64",
   "baseUrl": "http://127.0.0.1:4208",
-  "startedAt": "2026-11-03T11:09:24.162Z",
-  "finishedAt": "2026-11-03T11:21:25.125Z",
+  "startedAt": "2026-11-03T12:40:54.583Z",
+  "finishedAt": "2026-11-03T12:51:10.215Z",
   "layers": [
     "air-quality",
     "ais-live-vessels",
@@ -85,9 +59,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 47.5,
+      "seconds": 46.6,
       "log": "engine-switch.log",
-      "logSha256": "398020f191492f2fa9623fceae9f4ac2c312b5f7eb28fc74f62cd491e4d79816"
+      "logSha256": "6738ce91f0b751e6ac2fcf7053cbe636aa70e2e901886040e88e5c07410b162d"
     },
     {
       "label": "director-engine-switch",
@@ -98,7 +72,7 @@
       "layers": [],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 46.9,
+      "seconds": 46,
       "log": "director-engine-switch.log",
       "logSha256": "f1ad9279c2da96d9dfea3eee13137f37043b9dcf9ff8de42d2280094061fd68c"
     },
@@ -113,9 +87,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 10,
+      "seconds": 11.9,
       "log": "layer-handoff.log",
-      "logSha256": "5e596f58b415bf6195360af37d7e54e090f0c2380c374b1bec913f472540306a"
+      "logSha256": "7e5b6a9fd244e2e57e20a8bba39148957581297b37f2c29dda35c7ed835e2d51"
     },
     {
       "label": "layer-handoff--military",
@@ -129,9 +103,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 10,
+      "seconds": 11.9,
       "log": "layer-handoff--military.log",
-      "logSha256": "5e596f58b415bf6195360af37d7e54e090f0c2380c374b1bec913f472540306a"
+      "logSha256": "7e5b6a9fd244e2e57e20a8bba39148957581297b37f2c29dda35c7ed835e2d51"
     },
     {
       "label": "ground-layer-switch",
@@ -147,7 +121,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 72.1,
+      "seconds": 72.7,
       "log": "ground-layer-switch.log",
       "logSha256": "e28197471ce3c6247314f8b0ef217f4e608e2846cf421f8a813506ae0ed0fab7"
     },
@@ -163,7 +137,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 9,
+      "seconds": 10.3,
       "log": "contact-switch.log",
       "logSha256": "7fab7d06f72d44728a9b9eb84dada479dfd3e89b3d1cdb715741c659c37e48ed"
     },
@@ -178,7 +152,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 8.7,
+      "seconds": 8.3,
       "log": "local-adsb-engine-switch.log",
       "logSha256": "fbf922362bb05996c6577ae76dce815cd656cf8e5800d6149dbbb41ab5959469"
     },
@@ -211,9 +185,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 15.8,
+      "seconds": 15,
       "log": "weather-engine-switch.log",
-      "logSha256": "89ebb54cdb64678e4260c80ece4ccaf4430b4195eb664bd7629742f81d973630"
+      "logSha256": "a4500fbe84f77dc0da27c4fc510a22a9012037eb3ed5ee3c11c0a2ba99884690"
     },
     {
       "label": "wind-engine-switch",
@@ -226,7 +200,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 13.4,
+      "seconds": 12.8,
       "log": "wind-engine-switch.log",
       "logSha256": "2d052aa4c8414606c4ee0b98f4c8281cfde1951c856cac941a97413c5bb301d1"
     },
@@ -242,9 +216,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 14.6,
+      "seconds": 14.3,
       "log": "infrastructure-engine-switch.log",
-      "logSha256": "abcb48a21fe0145090c71fa3bcb74bda01fb10012818d038ab9755c051a2cab7"
+      "logSha256": "6e79ead38e0f10f805cba8edc0fd6178f9a15096dca64bfe8b9e26df45eee85a"
     },
     {
       "label": "submarine-cables-engine-switch",
@@ -257,9 +231,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 11.9,
+      "seconds": 11.3,
       "log": "submarine-cables-engine-switch.log",
-      "logSha256": "227caa7bdb17d6a6799c47791c7acd08912a3d1f25e75036476cbf1e29f4df3a"
+      "logSha256": "093b9e3b6f0e15911e683b98504b1deb9dc0476e71ef02148711b8fdcfea0d46"
     },
     {
       "label": "directions-engine-switch",
@@ -272,9 +246,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 14.9,
+      "seconds": 15.1,
       "log": "directions-engine-switch.log",
-      "logSha256": "e79e9d3a6b4b08765a66d2da6f881f4c4edac0ad5d74eec37a414e012a9b3513"
+      "logSha256": "6edd50c85e4bcf9e59030d7830e123629d13f125d5bc143fa9e66c700929d002"
     },
     {
       "label": "nepal-locator-switch",
@@ -287,9 +261,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 16.6,
+      "seconds": 66.3,
       "log": "nepal-locator-switch.log",
-      "logSha256": "6475104879d5885dbe27fbad9dfc67405d323dc2471311f6a4d99da5803a335b"
+      "logSha256": "edc6ee79f215f8ffbba63353c6eb1abbf54e5c1d3d12dbbef68bea8e6b39d6e9"
     },
     {
       "label": "nepal-event-switch",
@@ -302,9 +276,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 14.6,
+      "seconds": 14.3,
       "log": "nepal-event-switch.log",
-      "logSha256": "b44d799d0476dbd8bb5945d1f507edcd0f981e3f993fa2066a1553e230fc4136"
+      "logSha256": "50fab7da33d31151d4b2bd1fff45130a4df6a82789da95e75a88f78d6248523a"
     },
     {
       "label": "traffic-engine-switch",
@@ -317,9 +291,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 14.3,
+      "seconds": 13.9,
       "log": "traffic-engine-switch.log",
-      "logSha256": "043a3598dc1863b1842e3a5615c5520af5429f745ecf7b2b072d49182989aaa8"
+      "logSha256": "da28ccdc648a9fa7044d45af01dd9e1137769c34466ef9eb462f8eaa11571610"
     },
     {
       "label": "traffic-engine-switch--simulation",
@@ -333,9 +307,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 13.8,
+      "seconds": 13.4,
       "log": "traffic-engine-switch--simulation.log",
-      "logSha256": "a718f60072815e1db6219161d48c4fb234abde75a608e37a22bd32bcd43c8d33"
+      "logSha256": "3711ad46c44999866beb9658ed4f2143e0d2e7394d86db3533cd2bcfbc1f2ba9"
     },
     {
       "label": "street-level-engine-switch",
@@ -348,7 +322,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 9.6,
+      "seconds": 9.5,
       "log": "street-level-engine-switch.log",
       "logSha256": "368789e88605c106784e06d76ec662860d4ad84dfb02d5c4290bd1d61626101b"
     },
@@ -364,7 +338,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 8.9,
+      "seconds": 8.5,
       "log": "street-level-engine-switch--panoramax.log",
       "logSha256": "0a825b9635ea17b0f55b8d1eb4dfbfb300378e2fc8635cde2b4a29f381fe6705"
     },
@@ -379,7 +353,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 8.6,
+      "seconds": 8.1,
       "log": "radio-engine-switch.log",
       "logSha256": "a46db0fa4b92100e4f0076a859500ca3da38ce36deadaf504e2b218f979cd128"
     },
@@ -399,7 +373,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 167.3,
+      "seconds": 45.2,
       "log": "w2-imagery.log",
       "logSha256": "1bda1f84bcfb380290fa617ecba4a780d5900420963e7f149ddb13c8b6ea9fa7"
     },
@@ -414,7 +388,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 11.4,
+      "seconds": 11.2,
       "log": "fire-camera-switch.log",
       "logSha256": "fa5df05da6634f8d3e680f0fd77663e7213a1c7378669d3bcb7a9a6f8d7fb311"
     },
@@ -430,7 +404,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 12.7,
+      "seconds": 11,
       "log": "fire-camera-switch--fires.log",
       "logSha256": "ab4938f4d0e5f0f82682cfda1353c676fd012ad9c4ff2e0b2934ba49d818c691"
     },
@@ -445,7 +419,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 13.5,
+      "seconds": 9.1,
       "log": "urban-engine-switch.log",
       "logSha256": "f22042ae9d55eedab437035bea896c27f7ae4b576b4619570b70bd8ddf897361"
     },
@@ -461,7 +435,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 71.1,
+      "seconds": 46.6,
       "log": "urban-engine-switch--transit.log",
       "logSha256": "0ea656d153b601e6de9f351499f6ad45d553c0d6ce0d8f401f71ceb1bf49806d"
     },
@@ -476,9 +450,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 10.5,
+      "seconds": 9.1,
       "log": "cctv-engine-switch.log",
-      "logSha256": "8d2c1a778c299400e9a9b34b2782d54c1875cc4dc1ff716b3aab281df45c1baf"
+      "logSha256": "cd97611e1715ebdba8f40f916aee595dcf65294b5281d8d31f62ce2fd6355c6f"
     },
     {
       "label": "space-engine-switch",
@@ -491,7 +465,7 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 9.3,
+      "seconds": 8.4,
       "log": "space-engine-switch.log",
       "logSha256": "e8f5b7829f3d1d72a084f2453238757c5a27d5428aef77a5a7a70d3ba709a42f"
     },
@@ -507,9 +481,9 @@
       ],
       "status": "pass",
       "exitCode": 0,
-      "seconds": 45.7,
+      "seconds": 46.6,
       "log": "space-engine-switch--missions.log",
-      "logSha256": "944bf86556f3dc03b19f92bac0ddb1af10bf1c7cd374ae163f8916ef4d537c4d"
+      "logSha256": "7dd529fec7122740b6a9ca6ca8f55a8f38dbdee821b95d1c130b0ac82cba42e3"
     }
   ]
 }

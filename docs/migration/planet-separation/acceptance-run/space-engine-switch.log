@@ -1,0 +1,14 @@
+core catalog ready
+dense catalog ready
+before switch {
+  '/api/celestrak/stations': 1,
+  '/api/celestrak/visual': 1,
+  '/api/celestrak/gps-ops': 1,
+  '/api/celestrak/glo-ops': 1,
+  '/api/celestrak/galileo': 1,
+  '/api/celestrak/geo': 1,
+  '/api/celestrak/starlink': 1
+} undefined undefined
+cesium [ true, true ] 6839 25544 true null undefined undefined
+navara [ true, true ] 6839 25544 true null undefined undefined
+PASS retained space data and active camera across both planets

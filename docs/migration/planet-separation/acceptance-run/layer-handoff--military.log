@@ -1,0 +1,6 @@
+PASS cold Cesium failure rolled back to Navara with the same flight, cockpit and history
+PASS cesium cockpit, aircraft, HUD, manager and timer (0 polls since entry)
+PASS navara cockpit, aircraft, HUD, manager and timer (0 polls since entry)
+PASS warm Navara failure rolled back to Cesium with the same flight and cockpit
+PASS retry after the warm failure started Navara cold
+PASS failed recovery offered the picker; the retry restored the session on Cesium

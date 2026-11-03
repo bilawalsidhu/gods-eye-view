@@ -1,0 +1,4 @@
+baseline {"context":true,"sites":true,"mode":"flights","subject":"223456789","history":["ais-live-vessels:123456789","ais-live-vessels:223456789"],"enabled":["ais-live-vessels","flights","military","military-awareness","military-installations"],"ring":1}
+handoff cesium {"context":true,"sites":true,"mode":"flights","subject":"223456789","history":["ais-live-vessels:123456789","ais-live-vessels:223456789"],"enabled":["ais-live-vessels","flights","military","military-awareness","military-installations"],"ring":null}
+handoff navara {"context":true,"sites":true,"mode":"flights","subject":"223456789","history":["ais-live-vessels:123456789","ais-live-vessels:223456789"],"enabled":["ais-live-vessels","flights","military","military-awareness","military-installations"],"ring":1}
+PASS Contacts history, dependency ownership and exit restore across both globes

@@ -1,0 +1,26 @@
+navara {
+  same: true,
+  referenceLabelCount: 112,
+  count: 2629,
+  loading: false,
+  lastUpdate: 1793709930206,
+  error: null
+}
+cesium {
+  same: true,
+  count: 2629,
+  lastUpdate: 1793709930206,
+  loading: false,
+  loadingLabel: '',
+  error: null,
+  referenceLabelCount: 68
+}
+navara {
+  same: true,
+  referenceLabelCount: 68,
+  count: 2629,
+  loading: false,
+  lastUpdate: 1793709930206,
+  error: null
+}
+PASS full bundled cable dataset, bounded labels, landing-point fly-to and one read per file

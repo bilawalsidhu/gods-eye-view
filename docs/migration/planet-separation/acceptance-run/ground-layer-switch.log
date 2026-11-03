@@ -1,0 +1,12 @@
+PASS navara eccc:QA1 AQHI 9
+PASS navara GNSS high cell, view anchor 44 -79
+PASS cesium eccc:QA1 AQHI 9
+PASS cesium GNSS high cell, view anchor 44 -79
+PASS navara eccc:QA1 AQHI 9
+PASS navara GNSS high cell, view anchor 44 -79
+PASS navara select fire under GNSS, exclude hole, retain incident card
+PASS cesium select fire under GNSS, exclude hole, retain incident card
+PASS navara select fire under GNSS, exclude hole, retain incident card
+PASS navara retained selected AIS vessel, chevron, card and single track request
+PASS cesium retained selected AIS vessel, chevron, card and single track request
+PASS navara retained selected AIS vessel, chevron, card and single track request

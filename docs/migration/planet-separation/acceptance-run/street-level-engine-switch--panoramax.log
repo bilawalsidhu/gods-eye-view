@@ -1,0 +1,4 @@
+pick { x: 600, y: 450, id: 'pnx:seq:a1a1a1a1-0000-4000-8000-000000000001' }
+cesium true true a1a1a1a1-0034 73 2
+navara true true a1a1a1a1-0034 73 2
+PASS native line pick, same mounted photo and sequence across two switches

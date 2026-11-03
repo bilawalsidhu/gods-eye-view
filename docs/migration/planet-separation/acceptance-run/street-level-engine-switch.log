@@ -1,0 +1,4 @@
+pick { x: 639, y: 420, id: 'kv:line:14/2662/6285/0' }
+cesium true true 77000016 36 4
+navara true true 77000016 36 4
+PASS native line pick, same mounted photo and sequence across two switches

@@ -1,0 +1,7 @@
+navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 9, rebuilds: 0, added: 1317, removed: 224, recycled: 61 }
+cesium live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 9, rebuilds: 0, added: 1317, removed: 224, recycled: 65 }
+navara live 1093 { free: 0, slow: 630, jam: 0, sim: 463 } 35 { publishes: 12, rebuilds: 0, added: 1317, removed: 224, recycled: 70 }
+vehicles in view {"aboveGround":236,"drawn":236,"belowTerrain":1,"withinOneMetre":9,"strayChangedPixels":776,"area":250000}
+vehicles below the drawn terrain, hidden by the depth test: 1
+population before the switches 1093 settled after the round trip 1093 after the comparison 1093 below the drawn terrain before the switches 1
+PASS kept the traffic module, parameters, flow and vehicle identities across both globes; vehicles in view are drawn where the layer places them

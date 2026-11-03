@@ -1,0 +1,4 @@
+navara [{"same":true,"lod":{"total":4362,"active":186,"budgetLimit":420,"computed":true},"count":4362,"error":null,"name":"AWS"},{"same":true,"lod":{"total":704,"active":12,"budgetLimit":420,"computed":true},"count":716,"error":null,"name":"HE Podlubnik - Centrala"}]
+cesium [{"same":true,"lod":{"total":4362,"active":214,"budgetLimit":420,"computed":true},"count":4362,"error":null,"name":"AWS"},{"same":true,"lod":{"total":704,"active":83,"budgetLimit":420,"computed":true},"count":716,"error":null,"name":"HE Podlubnik - Centrala"}]
+navara [{"same":true,"lod":{"total":4362,"active":134,"budgetLimit":420,"computed":true},"count":4362,"error":null,"name":"AWS"},{"same":true,"lod":{"total":704,"active":12,"budgetLimit":420,"computed":true},"count":716,"error":null,"name":"HE Podlubnik - Centrala"}]
+PASS complete bundled datasets, bounded stems, retained selection and one read per file

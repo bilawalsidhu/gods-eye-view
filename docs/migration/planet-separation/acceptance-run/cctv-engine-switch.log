@@ -1,0 +1,3 @@
+cesium true true 12 true w2-cctv-video viewshed
+navara true true 15 true w2-cctv-video viewshed
+PASS retained CCTV catalog, decoder and textured projection
