@@ -2874,7 +2874,7 @@
   "UTILITIES": "工具",
   "Exit cockpit to fly to a drawing": "請先退出座艙，再飛往繪製位置",
   "Directions, drawing and your own files": "路線導航、繪製和你自己的文件",
-  "Voice place search (needs an Overpass server)": "語音地點搜索（需要 Overpass 伺服器）",
+  "Voice place search (needs an Overpass server)": "語音地點搜索（需要 Overpass 服務器）",
   "OSM Places": "OSM 地點",
   "state or province": "州或省",
   "county or district": "縣或區",

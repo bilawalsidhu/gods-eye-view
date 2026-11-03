@@ -3025,7 +3025,7 @@
   "Not drawn: {parts}": "Non disegnati: {parts}",
   "approximate": "approssimativo",
   "{pct}% cloud": "{pct}% di nuvole",
-  "Over {area}": "Sopra {area}",
+  "Over {area}": "Zona: {area}",
   "{count} of {total} acquisitions match": {
     "many": "Acquisizioni corrispondenti: {count} su {total}",
     "one": "Acquisizioni corrispondenti: {count} su {total}",

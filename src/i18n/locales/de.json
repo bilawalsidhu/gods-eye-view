@@ -2955,7 +2955,7 @@
   "Not drawn: {parts}": "Nicht gezeichnet: {parts}",
   "approximate": "ungefähr",
   "{pct}% cloud": "{pct} % Bewölkung",
-  "Over {area}": "Über {area}",
+  "Over {area}": "Gebiet: {area}",
   "{count} of {total} acquisitions match": {
     "one": "Passende Aufnahmen: {count} von {total}",
     "other": "Passende Aufnahmen: {count} von {total}"
