@@ -37,11 +37,17 @@ const CHECKER_PATH = fileURLToPath(
 const NEXT_PATH = fileURLToPath(
   new URL('../../scripts/next-layer-state-token.mjs', import.meta.url),
 );
-const reservationRows = JSON.parse(
+const allReservationRows = JSON.parse(
   readFileSync(
     new URL('./layerStateTokenReservations.json', import.meta.url),
     'utf8',
   ),
+);
+// The allocation scenarios below start from the ledger as published before
+// the USGS water layers (digits 9, 00 and 01 are theirs), so each scenario still
+// exercises "the next free token is 9".
+const reservationRows = allReservationRows.filter(
+  ([id]) => !id.startsWith('local-usgs-'),
 );
 
 test('pre-ledger published ownership is independent of the candidate mapping', () => {
@@ -154,7 +160,7 @@ function writeCodecFixture(cwd, rows, entries) {
 
 test('reservation ledger is complete, pinned, and rejects duplicate or malformed rows', () => {
   assert.deepEqual(
-    { ...parseLayerStateTokenReservations(reservationRows) },
+    { ...parseLayerStateTokenReservations(allReservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
   assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 39);
