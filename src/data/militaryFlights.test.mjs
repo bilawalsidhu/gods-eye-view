@@ -17,6 +17,7 @@ import {
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
+import { readEntityRecord, withEntityRecord } from './entityRecords.js';
 
 test('share-Follow absence requires an accepted adsb.lol snapshot', async () => {
   _setMilitaryTrackingRefreshOutcomeForTest({ status: 'source-unavailable' });
@@ -147,7 +148,7 @@ test('military first update forwards caller cancellation into the feed request',
 test('nonempty adsb.lol payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedMilitaryRefreshStateForTest({
     icao24: 'ae1234',
-    entity: { gevLabelModel: { title: 'WARM', details: [] } },
+    entity: withEntityRecord({}, { labelModel: { title: 'WARM', details: [] } }),
     billboard: { show: false },
     billboardCollection: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
@@ -183,7 +184,7 @@ test('nonempty adsb.lol payload with zero usable rows cannot prove share target 
 
 test('military poll refreshes tracked callsign/altitude/kts and marks a missed poll STALE', async () => {
   const icao24 = 'ae01ce';
-  const entity = { gevLabelModel: { title: 'OLD', details: [] } };
+  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: [] } });
   const billboard = {
     position: Cesium.Cartesian3.fromDegrees(-97.0, 31.0, 8_000),
     color: Cesium.Color.WHITE,
@@ -246,12 +247,12 @@ test('military poll refreshes tracked callsign/altitude/kts and marks a missed p
 
   try {
     await militaryFlightsLayer.update(viewer);
-    assert.equal(entity.gevLabelModel.title, 'RCH451');
-    assert.match(entity.gevLabelModel.details.join(' · '), /28000 ft/);
-    assert.match(entity.gevLabelModel.details.join(' · '), /400 kt/);
+    assert.equal(readEntityRecord(entity)?.labelModel.title, 'RCH451');
+    assert.match(readEntityRecord(entity)?.labelModel.details.join(' · '), /28000 ft/);
+    assert.match(readEntityRecord(entity)?.labelModel.details.join(' · '), /400 kt/);
 
     await militaryFlightsLayer.update(viewer);
-    assert.match(entity.gevLabelModel.title, /STALE/);
+    assert.match(readEntityRecord(entity)?.labelModel.title, /STALE/);
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -264,7 +265,7 @@ test('cached military snapshots retain their observation time and expose stale f
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedMilitaryRefreshStateForTest({
     icao24: 'ae01ce',
-    entity: { gevLabelModel: { title: 'RCH451', details: [] } },
+    entity: withEntityRecord({}, { labelModel: { title: 'RCH451', details: [] } }),
     billboard: {
       position: Cesium.Cartesian3.fromDegrees(-97, 31, 8000),
       show: false,
@@ -442,7 +443,7 @@ test('real military track path creates no native label and publishes every cache
     assert.ok(
       entities.values.every((candidate) => candidate.label === undefined),
     );
-    assert.deepEqual(entity.gevLabelModel, {
+    assert.deepEqual(readEntityRecord(entity)?.labelModel, {
       title: 'RCH451',
       details: ['C17 · 05-8152', 'United States Air Force · 28000 ft · 450 kt'],
       accent: '#ffd166',
@@ -464,7 +465,7 @@ test('real military track path creates no native label and publishes every cache
       'user',
       'same-target selection upgrades durable authority',
     );
-    assert.equal(entity.gevSelectionOrigin, 'user');
+    assert.equal(readEntityRecord(entity)?.selectionOrigin, 'user');
     assert.equal(
       militaryFlightsLayer.refocusTrackedById('different-flight'),
       false,
@@ -500,8 +501,8 @@ test('real military track path creates no native label and publishes every cache
     const entry = publication.entries[0];
     assert.equal(entry.protected, true);
     assert.equal(entry.paintLane, 'tracked');
-    assert.equal(entry.title, entity.gevLabelModel.title);
-    assert.deepEqual(entry.details, entity.gevLabelModel.details);
+    assert.equal(entry.title, readEntityRecord(entity)?.labelModel.title);
+    assert.deepEqual(entry.details, readEntityRecord(entity)?.labelModel.details);
 
     const display = entity.position.getValue(now);
     assert.ok(display, 'tracked position callback must seed its frame cache');
@@ -845,7 +846,7 @@ test('the military tracked descriptor publishes the reported vertical rate', () 
   const seedRate = (verticalRateMps) =>
     _setTrackedMilitaryRefreshStateForTest({
       icao24: 'ae7f01',
-      entity: { gevLabelModel: { title: 'TEST', details: [] } },
+      entity: withEntityRecord({}, { labelModel: { title: 'TEST', details: [] } }),
       billboard: {
         position: Cesium.Cartesian3.fromDegrees(-97.0, 31.0, 8_000),
         color: Cesium.Color.WHITE,

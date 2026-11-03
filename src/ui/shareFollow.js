@@ -5,6 +5,7 @@ import {
   followOffsetFromEnu,
   followOffsetToEnu,
 } from '../share/follow.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 /**
  * The bridge between the camera following an entity and a share link's thing
@@ -39,7 +40,7 @@ export function readShareFollowSubject({ viewer, nowMs = Date.now() }) {
   const cameraPosition = viewer?.camera?.positionWC;
   if (!cameraPosition) return null;
   const tracked = viewer.trackedEntity;
-  const trackedId = String(tracked?.gevTrackedId || '');
+  const trackedId = String(readEntityRecord(tracked)?.trackedId || '');
   const separator = trackedId.indexOf(':');
   if (separator <= 0) return null;
   const kind = KIND_BY_LAYER.get(trackedId.slice(0, separator));

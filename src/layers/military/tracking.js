@@ -26,6 +26,7 @@ import {
   TRACKED_ICON_COLOR,
 } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 
 export function createTracking({
   flightState,
@@ -65,7 +66,7 @@ export function createTracking({
     const info = flightState.records.data.get(icao24);
     if (!bb?.position || !info) return false;
     if (flightState._trackedEntity)
-      flightState._trackedEntity.gevSelectionOrigin = origin;
+      entityRecord(flightState._trackedEntity).selectionOrigin = origin;
     _emitAwarenessEvent('gev:awareness-subject-selected', {
       layerId: 'military',
       id: icao24,
@@ -252,10 +253,11 @@ export function createTracking({
   function _updateTrackedLabelModel(icao24) {
     if (!flightState._trackedEntity || icao24 !== flightState._trackedIcao)
       return;
-    flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
-      _buildTrackedLabel(flightState.records.data.get(icao24), icao24),
-      '#ffd166',
-    );
+    entityRecord(flightState._trackedEntity).labelModel =
+      trackedLabelModelFromText(
+        _buildTrackedLabel(flightState.records.data.get(icao24), icao24),
+        '#ffd166',
+      );
     refreshTrackedReadout(flightState._trackedEntity);
     // The readout and the context slot describe the same contact — refresh them
     // together so voice never narrates a fix the card has already replaced.
@@ -966,12 +968,10 @@ export function createTracking({
         }, false),
       },
     });
-    flightState._trackedEntity.gevSelectionOrigin = origin;
-    flightState._trackedEntity.gevTrackedId = `military:${icao24}`;
-    flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
-      _buildTrackedLabel(info, icao24),
-      '#ffd166',
-    );
+    entityRecord(flightState._trackedEntity).selectionOrigin = origin;
+    entityRecord(flightState._trackedEntity).trackedId = `military:${icao24}`;
+    entityRecord(flightState._trackedEntity).labelModel =
+      trackedLabelModelFromText(_buildTrackedLabel(info, icao24), '#ffd166');
 
     // A billboard has a ~zero bounding sphere, so Cesium's default follow distance is
     // far too tight (the user had to scroll out to read the plane). Give the entity a
@@ -990,12 +990,12 @@ export function createTracking({
     // mid-fly_to_location) would follow the plane WITHOUT centering it like a click does.
     // Cross-module HUD consumers (tracked-target readout) read the camera's settled position, not a
     // postRender recompute, so the label doesn't jitter against the now-stable plane (mirror of flights).
-    flightState._trackedEntity.gevDisplayPosition =
+    entityRecord(flightState._trackedEntity).displayPosition =
       parts.motion._trackedDisplayCached;
-    // Separate accessor on purpose (mirror of flights.js): `gevDisplayPosition` keeps the
+    // Separate accessor on purpose (mirror of flights.js): the entity record's `displayPosition` keeps the
     // follow-camera anti-jitter contract; presentation that must weld to the aircraft you
-    // can see reads `gevVisualPosition`.
-    flightState._trackedEntity.gevVisualPosition =
+    // can see reads the entity record's `visualPosition`.
+    entityRecord(flightState._trackedEntity).visualPosition =
       parts.motion._trackedVisualCached;
     refreshTrackedReadout(flightState._trackedEntity);
     flightState._viewer.camera.cancelFlight();
@@ -1060,8 +1060,8 @@ export function createTracking({
           ) {
             _clearTracking(true, {
               origin:
-                flightState._viewer.trackedEntity?.gevSelectionOrigin ||
-                'programmatic',
+                readEntityRecord(flightState._viewer.trackedEntity)
+                  ?.selectionOrigin || 'programmatic',
             });
           }
         });

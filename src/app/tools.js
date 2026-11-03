@@ -17,6 +17,7 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
+import { entityRecord, readEntityRecord } from '../data/entityRecords.js';
 
 /** Attach scene tools, rendering listeners and the application debug handle. */
 export function createApplicationTools({
@@ -194,6 +195,7 @@ export function createApplicationTools({
     getRenderGovernorDiagnostics,
     surfaceServices: operations.surface,
     requestRender: governorRequestRender,
+    entityRecords: { read: readEntityRecord, write: entityRecord },
   };
   const debug = window.__godsEyeView;
   defer(() => {

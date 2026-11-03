@@ -227,7 +227,7 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
   assert.doesNotMatch(exit, /applyTrackedCameraFrame/);
   assert.match(
     ui,
-    /restoreTrackingFrame: \(entity\) => \{[\s\S]*?gevTrackedId[\s\S]*?flightsLayer\.refocusTrackedById[\s\S]*?militaryFlightsLayer\.refocusTrackedById/,
+    /restoreTrackingFrame: \(entity\) => \{[\s\S]*?readEntityRecord\(entity\)\?\.trackedId[\s\S]*?flightsLayer\.refocusTrackedById[\s\S]*?militaryFlightsLayer\.refocusTrackedById/,
     'Cockpit exit must return camera-frame ownership through the source layer so Contact Focus cannot accumulate a second owner',
   );
 });
@@ -299,7 +299,7 @@ test('the cockpit reads its aircraft from the layer that owns Cesium tracking', 
   const read = readAircraftInfo.toString();
   assert.ok(read, 'readAircraftInfo is missing');
   assert.match(read, /resolveTrackedAircraftInfo\(\{/);
-  assert.match(read, /gevTrackedId/);
+  assert.match(read, /readEntityRecord\([^)]*\)\?\.trackedId/);
   // In cockpit mode the controller moves the entity off viewer.trackedEntity,
   // so its own handle is the tracked identity there.
   assert.match(read, /this\.viewer\?\.trackedEntity \|\| this\.trackedEntity/);

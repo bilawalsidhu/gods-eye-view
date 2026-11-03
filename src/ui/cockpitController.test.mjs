@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CockpitViewController } from './cockpitController.js';
+import { withEntityRecord } from '../data/entityRecords.js';
 
 function environment() {
   const original = { document: globalThis.document, window: globalThis.window };
@@ -95,9 +96,15 @@ test('aircraft identity is read from the supplied layer instances', () => {
         militaryFlightsLayer: { getTrackedInfo: () => military },
       },
     });
-    env.viewer.trackedEntity = { gevTrackedId: 'military:def456' };
+    env.viewer.trackedEntity = withEntityRecord(
+      {},
+      { trackedId: 'military:def456' },
+    );
     assert.deepEqual(owner.readAircraftInfo(), military);
-    env.viewer.trackedEntity = { gevTrackedId: 'flights:abc123' };
+    env.viewer.trackedEntity = withEntityRecord(
+      {},
+      { trackedId: 'flights:abc123' },
+    );
     assert.deepEqual(owner.readAircraftInfo(), civilian);
     owner.dispose();
   } finally {

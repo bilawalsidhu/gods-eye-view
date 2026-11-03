@@ -2,6 +2,7 @@ import { installationClassLabel, installationTitle } from './classLabel.js';
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from './policy.js';
+import { entityRecord } from '../../data/entityRecords.js';
 
 export function createRendering({
   state: layerState,
@@ -221,7 +222,7 @@ export function createRendering({
         if (retained.gevInstallationHeightM !== surfaceHeightM) {
           retained.gevInstallationHeightM = surfaceHeightM;
           retained.position = displayPosition;
-          retained.gevDisplayPosition = () => displayPosition;
+          entityRecord(retained).displayPosition = () => displayPosition;
         }
         if (retained.gevInstallationSelected !== selectedRecord) {
           retained.gevInstallationSelected = selectedRecord;
@@ -269,9 +270,9 @@ export function createRendering({
       }
       entity.gevInstallationHeightM = surfaceHeightM;
       entity.gevInstallationSelected = selectedRecord;
-      entity.gevTrackedId = `installations:${record.id}`;
-      entity.gevDisplayPosition = () => displayPosition;
-      entity.gevLabelModel = {
+      entityRecord(entity).trackedId = `installations:${record.id}`;
+      entityRecord(entity).displayPosition = () => displayPosition;
+      entityRecord(entity).labelModel = {
         title: installationTitle(record.name) || t('MAPPED INSTALLATION'),
         details: [
           installationClassLabel(record.class),

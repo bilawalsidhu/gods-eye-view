@@ -31,6 +31,7 @@ import {
   isAlprSurveillanceType,
   normalizeAlprNode,
 } from './alprCameras.js';
+import { readEntityRecord } from './entityRecords.js';
 
 test('normalizeAlprNode: maps a full OSM node to a plain record', () => {
   const record = normalizeAlprNode({
@@ -443,25 +444,25 @@ test('all manufacturers share one ALPR title and color; only supplied metadata a
     const entities = h.source.entities.values;
     assert.equal(alprCamerasLayer.name, 'ALPR Cameras');
     assert.deepEqual(
-      entities.map((entity) => entity.gevLabelModel.title),
+      entities.map((entity) => readEntityRecord(entity)?.labelModel.title),
       ['ALPR-0042', 'ALPR-0043', 'ALPR-0044'],
     );
     assert.equal(
       new Set(entities.map((entity) => entity.billboard.image.getValue())).size,
       1,
     );
-    assert.deepEqual(entities[0].gevLabelModel.details, [
+    assert.deepEqual(readEntityRecord(entities[0])?.labelModel.details, [
       'OSM MAPPED',
       'FLOCK SAFETY · CITY POLICE · FIXED',
       'PUBLIC MAP DATA',
     ]);
-    assert.deepEqual(entities[1].gevLabelModel.details, [
+    assert.deepEqual(readEntityRecord(entities[1])?.labelModel.details, [
       'OSM MAPPED',
       'MOTOROLA SOLUTIONS',
       'PUBLIC MAP DATA',
     ]);
     assert.deepEqual(
-      entities[2].gevLabelModel.details,
+      readEntityRecord(entities[2])?.labelModel.details,
       ['OSM MAPPED', 'PUBLIC MAP DATA'],
       'unknown metadata is not guessed, but the source is always named',
     );
@@ -813,7 +814,7 @@ test('selected readout samples the rendered ground, not zero elevation or the di
     h.click('alpr:42');
     const entity = h.source.entities.getById('alpr:42');
     const anchor = Cesium.Cartographic.fromCartesian(
-      entity.gevDisplayPosition(),
+      readEntityRecord(entity)?.displayPosition(),
     );
     assert.ok(Math.abs(anchor.height - 187) < 0.001);
     assert.ok(
@@ -821,7 +822,7 @@ test('selected readout samples the rendered ground, not zero elevation or the di
     );
     for (let i = 0; i < 60; i++) {
       h.viewer.scene.postRender.raiseEvent();
-      entity.gevDisplayPosition();
+      readEntityRecord(entity)?.displayPosition();
     }
     assert.equal(samples, 1, 'no per-frame raycasts');
     h.advance(1000);
@@ -921,9 +922,9 @@ test('two factories keep their requests, records and destruction independent', a
     assert.equal(b.source.entities.values[0].id, 'directory:99');
     assert.equal(second.source, 'Test camera directory');
     assert.ok(
-      b.source.entities.values[0].gevLabelModel.details.includes(
-        'Source: Test directory',
-      ),
+      readEntityRecord(
+        b.source.entities.values[0],
+      )?.labelModel.details.includes('Source: Test directory'),
     );
     assert.equal(a.viewer.camera.moveEnd.numberOfListeners, 0);
     assert.equal(a.viewer.scene.postRender.numberOfListeners, 0);

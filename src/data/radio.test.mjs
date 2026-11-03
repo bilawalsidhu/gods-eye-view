@@ -52,6 +52,7 @@ import {
   stationMatchesRadioCategory,
 } from './radio.js';
 import { radioStationRow, withRadioLayer } from '../testSupport/radioLayerHarness.mjs';
+import { withEntityRecord } from './entityRecords.js';
 
 const stations = [
   { id: 'news', tags: ['News', 'Weather Radio', 'air traffic'] },
@@ -1652,10 +1653,10 @@ test('Radio recovery preserves closer altitude and caps extreme full-globe zoom'
 test('Radio camera navigation yields to every live tracked-entity owner', () => {
   const viewer = { camera: {} };
   assert.equal(radioCameraNavigationAllowed(viewer), true);
-  for (const gevTrackedId of ['flights:abc123', 'military:def456']) {
-    const trackedEntity = { gevTrackedId };
+  for (const trackedId of ['flights:abc123', 'military:def456']) {
+    const trackedEntity = withEntityRecord({}, { trackedId });
     viewer.trackedEntity = trackedEntity;
-    assert.equal(radioCameraNavigationAllowed(viewer), false, gevTrackedId);
+    assert.equal(radioCameraNavigationAllowed(viewer), false, trackedId);
     assert.equal(viewer.trackedEntity, trackedEntity);
   }
   viewer.trackedEntity = undefined;

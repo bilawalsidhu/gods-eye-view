@@ -227,6 +227,7 @@
     "./standalone/catalog": "./src/standalone/catalog.js",
     "./application/layers": "./src/app/constructCatalog.js",
     "./application/operations": "./src/app/operations.js",
+    "./data/entity-records": "./src/data/entityRecords.js",
     "./data/lifecycle": "./src/data/lifecycle.js",
     "./ui/navigation": "./src/ui/navigationController.js",
     "./ui/share-restoration": "./src/ui/shareRestoration.js",

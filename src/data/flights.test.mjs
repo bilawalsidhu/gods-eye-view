@@ -28,6 +28,7 @@ import {
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
+import { readEntityRecord, withEntityRecord } from './entityRecords.js';
 
 test('share-Follow absence requires an accepted OpenSky snapshot', async () => {
   _setFlightTrackingRefreshOutcomeForTest({ status: 'source-unavailable' });
@@ -184,7 +185,7 @@ test('flights first update forwards caller cancellation into the feed request', 
 test('nonempty OpenSky payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedFlightRefreshStateForTest({
     icao24: 'abc123',
-    entity: { gevLabelModel: { title: 'WARM', details: [] } },
+    entity: withEntityRecord({}, { labelModel: { title: 'WARM', details: [] } }),
     billboard: { show: false },
     billboardCollection: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
@@ -317,7 +318,7 @@ test('a newly seen aircraft appears at its delayed position, not ahead of it', a
 
 test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STALE', async () => {
   const icao24 = 'a1b2c3';
-  const entity = { gevLabelModel: { title: 'OLD', details: [] } };
+  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: [] } });
   const billboard = {
     position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 9_000),
     color: Cesium.Color.WHITE,
@@ -388,13 +389,13 @@ test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STA
 
   try {
     await flightsLayer.update(viewer);
-    assert.equal(entity.gevLabelModel.title, 'DAL123');
-    assert.match(entity.gevLabelModel.details.join(' · '), /FL350/);
-    assert.match(entity.gevLabelModel.details.join(' · '), /486 kts/);
+    assert.equal(readEntityRecord(entity)?.labelModel.title, 'DAL123');
+    assert.match(readEntityRecord(entity)?.labelModel.details.join(' · '), /FL350/);
+    assert.match(readEntityRecord(entity)?.labelModel.details.join(' · '), /486 kts/);
 
     await flightsLayer.update(viewer);
     assert.match(
-      [entity.gevLabelModel.title, ...entity.gevLabelModel.details].join(' · '),
+      [readEntityRecord(entity)?.labelModel.title, ...readEntityRecord(entity)?.labelModel.details].join(' · '),
       /STALE/,
     );
   } finally {
@@ -527,7 +528,7 @@ test('real civil track path creates no native label and publishes every cached h
     assert.ok(
       entities.values.every((candidate) => candidate.label === undefined),
     );
-    assert.deepEqual(entity.gevLabelModel, {
+    assert.deepEqual(readEntityRecord(entity)?.labelModel, {
       title: 'N12345 · FL350 · 486 kts',
       details: ['TEST AIR · A320', 'AUS → LAX'],
       accent: '#39d0ff',
@@ -546,7 +547,7 @@ test('real civil track path creates no native label and publishes every cached h
       'user',
       'same-target selection upgrades durable authority',
     );
-    assert.equal(entity.gevSelectionOrigin, 'user');
+    assert.equal(readEntityRecord(entity)?.selectionOrigin, 'user');
     assert.equal(flightsLayer.refocusTrackedById('different-flight'), false);
     assert.equal(
       flightsLayer.refocusTrackedById(icao24, { origin: 'voice' }),
@@ -579,8 +580,8 @@ test('real civil track path creates no native label and publishes every cached h
     const entry = publication.entries[0];
     assert.equal(entry.protected, true);
     assert.equal(entry.paintLane, 'tracked');
-    assert.equal(entry.title, entity.gevLabelModel.title);
-    assert.deepEqual(entry.details, entity.gevLabelModel.details);
+    assert.equal(entry.title, readEntityRecord(entity)?.labelModel.title);
+    assert.deepEqual(entry.details, readEntityRecord(entity)?.labelModel.details);
 
     const display = entity.position.getValue(now);
     assert.ok(display, 'tracked position callback must seed its frame cache');
@@ -941,7 +942,7 @@ test('civil label chain: the awareness selection EVENT uses the canonical chain'
 });
 
 test('civil tracked readout: a callsign-less enriched contact reads as its registration', async () => {
-  const entity = { gevLabelModel: { title: 'OLD', details: [] } };
+  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: [] } });
   seedLabelContact({ callsign: '  ', registration: ' N123AB ', tracked: true });
   _setTrackedFlightRefreshStateForTest({
     icao24: LABEL_ICAO,
@@ -981,9 +982,9 @@ test('civil tracked readout: a callsign-less enriched contact reads as its regis
       camera: { positionCartographic: null },
       scene: {},
     });
-    assert.match(entity.gevLabelModel.title, /^N123AB\b/);
+    assert.match(readEntityRecord(entity)?.labelModel.title, /^N123AB\b/);
     assert.doesNotMatch(
-      [entity.gevLabelModel.title, ...entity.gevLabelModel.details].join(' · '),
+      [readEntityRecord(entity)?.labelModel.title, ...readEntityRecord(entity)?.labelModel.details].join(' · '),
       /ae1fa4/,
     );
   } finally {

@@ -18,6 +18,7 @@ import {
   followCameraFor,
   followOffsetToEnu,
 } from '../share/viewCodec.js';
+import { entityRecord, withEntityRecord } from '../data/entityRecords.js';
 
 const NOW_MS = Date.now();
 const FIX = { lat: 37.6213, lon: -122.379, alt: 3200 };
@@ -278,10 +279,7 @@ test('a thing view turns its layer on, follows by id and frames the shared offse
       this.position = Cesium.Cartesian3.clone(offset);
     },
   });
-  entity = {
-    gevTrackedId: 'flights:a1b2c3',
-    gevDisplayPosition: () => target,
-  };
+  entity = withEntityRecord({}, { trackedId: 'flights:a1b2c3', displayPosition: () => target });
 
   const parsed = page.manager._parseShareCode(aircraftCode());
   assert.deepEqual(parsed.layerState.enabledLayerIds, ['flights']);
@@ -452,10 +450,7 @@ test('the followed entity is read in the share format, and its offset round-trip
   const viewer = {
     camera: { positionWC: cameraPosition },
     clock: { currentTime: Cesium.JulianDate.now() },
-    trackedEntity: {
-      gevTrackedId: 'military:ae1234',
-      gevDisplayPosition: () => target,
-    },
+    trackedEntity: withEntityRecord({}, { trackedId: 'military:ae1234', displayPosition: () => target }),
   };
   const subject = readShareFollowSubject({ viewer, nowMs: NOW_MS });
   assert.equal(subject.kind, 'military_aircraft');
@@ -464,7 +459,7 @@ test('the followed entity is read in the share format, and its offset round-trip
   assert.ok(Math.abs(subject.lastKnown.lat - FIX.lat) < 1e-9);
   assert.ok(Math.abs(subject.lastKnown.alt - FIX.alt) < 1e-3);
   // A followed entity the share format has no kind for is not a thing view.
-  viewer.trackedEntity.gevTrackedId = 'local-adsb:abc';
+  entityRecord(viewer.trackedEntity).trackedId = 'local-adsb:abc';
   assert.equal(readShareFollowSubject({ viewer }), null);
   // Nor is a camera that follows nothing (a selected vessel is not followed).
   viewer.trackedEntity = undefined;
@@ -475,7 +470,7 @@ test('a shared offset on the far side swings round, never jumping through the en
   const target = Cesium.Cartesian3.fromDegrees(FIX.lon, FIX.lat, FIX.alt);
   const listeners = [];
   const looks = [];
-  const entity = { gevDisplayPosition: () => target };
+  const entity = withEntityRecord({}, { displayPosition: () => target });
   const viewer = {
     clock: { currentTime: Cesium.JulianDate.now() },
     scene: {

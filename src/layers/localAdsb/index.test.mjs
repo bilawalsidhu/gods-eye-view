@@ -12,6 +12,7 @@ import {
   localAdsbReceiverLine,
   localAdsbStatus,
 } from './index.js';
+import { readEntityRecord } from '../../data/entityRecords.js';
 
 function fakeReceiver(initial = {}) {
   const state = {
@@ -252,8 +253,8 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
     ),
   );
   assert.equal(entity.billboard.rotation.getValue(), 0);
-  assert.equal(entity.gevLabelModel.title, 'LOCAL1');
-  assert.equal(typeof entity.gevDisplayPosition, 'function');
+  assert.equal(readEntityRecord(entity)?.labelModel.title, 'LOCAL1');
+  assert.equal(typeof readEntityRecord(entity)?.displayPosition, 'function');
 
   const heli = sources[0].entities.getById('local-adsb:a0b702');
   assert.equal(heli.billboard.image.getValue(), aircraftIcon('helicopter'));
@@ -265,7 +266,10 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
     ),
     'the helicopter keeps the local magenta',
   );
-  assert.equal(heli.gevLabelModel.details[1], 'Helicopter · A7');
+  assert.equal(
+    readEntityRecord(heli)?.labelModel.details[1],
+    'Helicopter · A7',
+  );
 
   // On the ground the silhouette shrinks like a grounded public flight.
   receiver.set({
@@ -479,14 +483,14 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
   await new Promise((resolve) => setTimeout(resolve, 400));
   assert.deepEqual([...queries].sort(), ['route:EVC145', 'type:a0b702']);
   const entity = sources[0].entities.getById('local-adsb:a0b702');
-  assert.deepEqual(entity.gevLabelModel.details.slice(0, 4), [
+  assert.deepEqual(readEntityRecord(entity)?.labelModel.details.slice(0, 4), [
     'ICAO A0B702 · EVC145',
     'Helicopter · A7',
     'Air Evac · Bell 407',
     'AUS → SAT',
   ]);
   assert.equal(
-    entity.gevLabelModel.details.at(-1),
+    readEntityRecord(entity)?.labelModel.details.at(-1),
     'Heard by your receiver · 1090 MHz · browser SDR',
   );
   layer.selectAircraft('a0b702');
@@ -760,7 +764,7 @@ test('feed records merge with browser SDR records by ICAO and UAT-only aircraft 
   );
   assert.equal(shared.point, undefined, 'heard on 1090 too: no UAT ring');
   assert.equal(
-    shared.gevLabelModel.details.at(-1),
+    readEntityRecord(shared)?.labelModel.details.at(-1),
     'Heard by your receiver · 1090 MHz + 978 MHz UAT · browser SDR + decoder feed',
   );
   assert.ok(uat.point, 'a UAT-only aircraft carries the ring');
@@ -776,7 +780,7 @@ test('feed records merge with browser SDR records by ICAO and UAT-only aircraft 
     'same magenta marker family',
   );
   assert.equal(
-    uat.gevLabelModel.details.at(-1),
+    readEntityRecord(uat)?.labelModel.details.at(-1),
     'Heard by your receiver · 978 MHz UAT · decoder feed',
   );
   const stats = layer.getStats();

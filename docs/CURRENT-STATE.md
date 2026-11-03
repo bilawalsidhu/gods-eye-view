@@ -3513,7 +3513,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   ambient-label host source. Its getter reads the already-propagated point
 >   cache, preserving the 1 Hz fleet epoch and eliminating the former second ISS
 >   propagation. Satellite tracking continues to publish exactly one protected
->   tracked-lane card through `gevLabelModel` and `_trackedDisplayCached`; the
+>   tracked-lane card through its entity record's `labelModel` and `_trackedDisplayCached`; the
 >   tracked entity is point-only. Tracking ISS suppresses the ambient entry and
 >   untracking restores it, preventing duplicate ISS text. Disable, orbit-text
 >   preference changes, catalog rebuild, and destroy clear/hide the source.
@@ -3528,7 +3528,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 > - **Phase 5 tracked civil aircraft label:** A tracked flight's Cesium entity
 >   is a billboard-only camera target with no native label. The flight source
 >   retains callsign/registration fallback, flight-level/altitude, speed, stale
->   state, airline/type, and plausible-route formatting in `gevLabelModel`; the
+>   state, airline/type, and plausible-route formatting in the entity record's `labelModel`; the
 >   one protected tracked-lane host card renders that complete model. Its
 >   position getter reads only `_trackedDisplayCached`, the same authoritative
 >   Cartesian already consumed by the tracked visual and camera, and never
@@ -3635,8 +3635,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 > - **Tracked-readout ownership:** `trackedReadout.js` is now a presentation-model
 >   bridge only; it owns no canvas, projection, post-render listener, layout,
 >   keyhole fade, or paint path. Civilian flights, military flights, satellites,
->   and mapped installations write explicit `gevLabelModel` objects and expose
->   `gevDisplayPosition` getters backed by their layer-owned frame/display cache.
+>   and mapped installations write explicit `labelModel` objects and
+>   `displayPosition` getters, backed by their layer-owned frame/display cache,
+>   into Core's entity records (`src/data/entityRecords.js`), never onto the
+>   Cesium entity.
 >   Selected AIS vessels continue using the vessel source's protected selected
 >   card, so they do not create a duplicate tracked readout. The host registers
 >   the active readout in the protected tracked lane with a zero ambient quota;

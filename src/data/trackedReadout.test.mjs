@@ -13,6 +13,7 @@ import {
   refreshTrackedReadout,
   trackedLabelModelFromText,
 } from './trackedReadout.js';
+import { entityRecord, readEntityRecord, withEntityRecord } from './entityRecords.js';
 
 function makeCesiumEvent() {
   const listeners = new Set();
@@ -53,15 +54,12 @@ test('tracked label text becomes an explicit title/details/accent model', () => 
   );
 });
 
-test('tracked position source reads only gevDisplayPosition and never entity.position', () => {
+test('tracked position source reads only the record\'s displayPosition and never entity.position', () => {
   const cached = { x: 1, y: 2, z: 3 };
   let propertyReads = 0;
-  const entity = {
-    gevDisplayPosition: () => cached,
-    position: {
+  const entity = withEntityRecord({ position: {
       getValue() { propertyReads += 1; throw new Error('fresh position read is forbidden'); },
-    },
-  };
+    } }, { displayPosition: () => cached });
   assert.equal(cachedTrackedDisplayPosition(entity), cached);
   assert.equal(propertyReads, 0);
   assert.equal(cachedTrackedDisplayPosition({ position: entity.position }), null);
@@ -71,17 +69,12 @@ test('tracked position source reads only gevDisplayPosition and never entity.pos
 test('the tracked card anchors to the visual position without repurposing the display accessor', () => {
   // A grounded aircraft's 3D model rides a ground snap while its billboard stays
   // at the reported (buried) altitude — ~100 m apart. The card must follow the
-  // model you can see, while `gevDisplayPosition` keeps returning the cached
+  // model you can see, while the record's `displayPosition` keeps returning the cached
   // dead-reckoned value the follow camera settled on (anti-jitter contract).
   const display = { x: 1, y: 2, z: 3 };
   const visual = { x: 1, y: 2, z: 103 };
   let displayReads = 0;
-  const entity = {
-    gevTrackedId: 'flights:aaa077',
-    gevDisplayPosition: () => { displayReads += 1; return display; },
-    gevVisualPosition: () => visual,
-    gevLabelModel: { title: 'SWA143', details: ['ON GROUND'], accent: '#6be8ff' },
-  };
+  const entity = withEntityRecord({}, { trackedId: 'flights:aaa077', displayPosition: () => { displayReads += 1; return display; }, visualPosition: () => visual, labelModel: { title: 'SWA143', details: ['ON GROUND'], accent: '#6be8ff' } });
   assert.equal(cachedTrackedVisualPosition(entity), visual);
   assert.equal(displayReads, 0, 'the visual accessor short-circuits the display read');
   assert.equal(cachedTrackedDisplayPosition(entity), display,
@@ -91,15 +84,12 @@ test('the tracked card anchors to the visual position without repurposing the di
 
   // Layers with no 3D visual, and any layer before its model is ready, are
   // unchanged: the accessor falls back to the display position.
-  const spriteOnly = { gevDisplayPosition: () => display };
+  const spriteOnly = withEntityRecord({}, { displayPosition: () => display });
   assert.equal(cachedTrackedVisualPosition(spriteOnly), display);
-  assert.equal(cachedTrackedVisualPosition({ ...spriteOnly, gevVisualPosition: () => null }), display,
+  assert.equal(cachedTrackedVisualPosition(withEntityRecord({}, { displayPosition: () => display, visualPosition: () => null })), display,
     'a null visual position falls back rather than blanking the card');
   assert.equal(
-    cachedTrackedVisualPosition({
-      gevDisplayPosition: () => display,
-      gevVisualPosition: () => { throw new Error('model gone'); },
-    }),
+    cachedTrackedVisualPosition(withEntityRecord({}, { displayPosition: () => display, visualPosition: () => { throw new Error('model gone'); } })),
     display,
     'a throwing visual accessor falls back instead of dropping the card',
   );
@@ -108,11 +98,7 @@ test('the tracked card anchors to the visual position without repurposing the di
 
 test('tracked entry factory pins the production protected-lane policy', () => {
   const display = { x: 4, y: 5, z: 6 };
-  const entry = createTrackedOverlayEntry({
-    gevTrackedId: 'satellites:25544',
-    gevDisplayPosition: () => display,
-    gevLabelModel: { title: 'ISS', details: ['420 km · NORAD 25544'], accent: '#ffd84d' },
-  });
+  const entry = createTrackedOverlayEntry(withEntityRecord({}, { trackedId: 'satellites:25544', displayPosition: () => display, labelModel: { title: 'ISS', details: ['420 km · NORAD 25544'], accent: '#ffd84d' } }));
   assert.equal(entry.id, 'satellites:25544');
   assert.equal(entry.position(), display);
   assert.equal(entry.protected, true);
@@ -122,15 +108,12 @@ test('tracked entry factory pins the production protected-lane policy', () => {
 });
 
 test('selected camera readout carries tactical animation and fixed badge clearance', () => {
-  const entry = createTrackedOverlayEntry({
-    id: 'alpr:42', gevDisplayPosition: () => ({ x: 1, y: 2, z: 3 }),
-    gevLabelModel: {
+  const entry = createTrackedOverlayEntry(withEntityRecord({ id: 'alpr:42' }, { displayPosition: () => ({ x: 1, y: 2, z: 3 }), labelModel: {
       title: 'ALPR-0042', details: ['OSM MAPPED'], accent: '#ff6474',
       cardStyle: 'tactical', selected: true, leaderStyle: 'elbow',
       leaderAnimationMs: 440, leaderAnimationStartedAt: 100, leaderDrawRatio: 0.68,
       anchorRadiusPx: 30, anchorRadiusScale: null,
-    },
-  });
+    } }));
   assert.equal(entry.cardStyle, 'tactical');
   assert.equal(entry.selected, true);
   assert.equal(entry.leaderStyle, 'elbow');
@@ -146,12 +129,7 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
   const fakeWindow = new EventTarget();
   const changed = makeCesiumEvent();
   const display = { x: 10, y: 20, z: 30 };
-  const entity = {
-    id: 'generated',
-    gevTrackedId: 'flights:abc123',
-    gevDisplayPosition: () => display,
-    gevLabelModel: { title: 'UAL123', details: ['FL350 · 451 kts'], accent: '#39d0ff' },
-  };
+  const entity = withEntityRecord({ id: 'generated' }, { trackedId: 'flights:abc123', displayPosition: () => display, labelModel: { title: 'UAL123', details: ['FL350 · 451 kts'], accent: '#39d0ff' } });
   const viewer = { trackedEntity: entity, trackedEntityChanged: changed };
   const recorder = makeHostRecorder();
   globalThis.window = fakeWindow;
@@ -174,7 +152,7 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
     assert.equal(publication.options.hideInCockpit, true);
     assert.equal(getActiveTrackedReadoutId(), 'flights:abc123');
 
-    entity.gevLabelModel = { ...entity.gevLabelModel, details: ['FL360 · 455 kts'] };
+    entityRecord(entity).labelModel = { ...readEntityRecord(entity)?.labelModel, details: ['FL360 · 455 kts'] };
     refreshTrackedReadout(entity);
     assert.deepEqual(recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].details, [
       'FL360 · 455 kts',
@@ -197,11 +175,7 @@ test('selection lifecycle leaves installations to their own entry and retains AL
   const changed = makeCesiumEvent();
   const viewer = { trackedEntity: null, trackedEntityChanged: changed };
   const recorder = makeHostRecorder();
-  const installation = {
-    gevTrackedId: 'installations:fort-test',
-    gevDisplayPosition: () => ({ x: 1, y: 2, z: 3 }),
-    gevLabelModel: { title: 'FORT TEST', details: ['AIRFIELD'], accent: '#5aa9ff' },
-  };
+  const installation = withEntityRecord({}, { trackedId: 'installations:fort-test', displayPosition: () => ({ x: 1, y: 2, z: 3 }), labelModel: { title: 'FORT TEST', details: ['AIRFIELD'], accent: '#5aa9ff' } });
   globalThis.window = fakeWindow;
   _setTrackedOverlayHostForTest(recorder.host);
   try {
@@ -219,11 +193,7 @@ test('selection lifecycle leaves installations to their own entry and retains AL
     assert.equal(recorder.calls.filter(({ op }) => op === 'set').length, setsBefore, 'installation selection cannot create a second overlay');
 
     // ALPR cameras are static context too: a click publishes the same card.
-    const camera = {
-      gevTrackedId: 'alpr:42',
-      gevDisplayPosition: () => ({ x: 4, y: 5, z: 6 }),
-      gevLabelModel: { title: 'FLOCK SAFETY ALPR', details: ['CITY PD'], accent: '#ff66c4' },
-    };
+    const camera = withEntityRecord({}, { trackedId: 'alpr:42', displayPosition: () => ({ x: 4, y: 5, z: 6 }), labelModel: { title: 'FLOCK SAFETY ALPR', details: ['CITY PD'], accent: '#ff66c4' } });
     fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
       detail: { layerId: 'alpr-cameras', entity: camera },
     }));
@@ -271,7 +241,7 @@ test('trackedReadout cannot resurrect a dedicated canvas or render listener', as
   }
 });
 
-test('tracking layers write gevLabelModel and expose only their cached display positions', async () => {
+test('tracking layers write the record\'s labelModel and expose only their cached display positions', async () => {
   const files = await Promise.all([
     'flights.js',
     'militaryFlights.js',
@@ -280,12 +250,16 @@ test('tracking layers write gevLabelModel and expose only their cached display p
   ].map(async (name) => [name, readLayerSource(new URL(`./${name}`, import.meta.url))]));
   const sources = Object.fromEntries(files);
   for (const [name, source] of files) {
-    assert.ok(source.includes('.gevLabelModel ='), `${name} writes the explicit model directly`);
-    assert.ok(source.includes('.gevDisplayPosition ='), `${name} exposes a display-position cache`);
+    assert.match(source, /entityRecord\([^)]*\)\.labelModel\s*=/, `${name} writes the explicit model into the entity record`);
+    assert.match(source, /entityRecord\([^)]*\)\.displayPosition\s*=/, `${name} exposes a display-position cache in the entity record`);
+    assert.doesNotMatch(source, /\.gev(LabelModel|DisplayPosition|VisualPosition|TrackedId|SelectionOrigin)\b/, `${name} hangs no tracked state on the entity`);
   }
-  assert.match(sources['flights.js'], /gevDisplayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
-  assert.match(sources['militaryFlights.js'], /gevDisplayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
-  assert.ok(sources['satellites.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
+  assert.match(sources['flights.js'], /entityRecord\([^)]*\)\.displayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
+  assert.match(sources['militaryFlights.js'], /entityRecord\([^)]*\)\.displayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
+  assert.match(
+    sources['satellites.js'],
+    /entityRecord\([^)]*\)\.displayPosition\s*=\s*_trackedDisplayCached/,
+  );
   assert.equal(sources['flights.js'].includes('_trackedEntity.label.text'), false);
   assert.equal(sources['militaryFlights.js'].includes('_trackedEntity.label.text'), false);
   assert.equal(sources['satellites.js'].includes('_trackedEntity.label.text'), false);

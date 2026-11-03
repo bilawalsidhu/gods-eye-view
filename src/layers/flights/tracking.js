@@ -25,6 +25,7 @@ import {
   CYAN_TRANSPARENT,
 } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 
 export function createTracking({
   flightState,
@@ -66,7 +67,7 @@ export function createTracking({
     const info = flightState.records.data.get(icao24);
     if (!bb?.position || !info) return false;
     if (flightState._trackedEntity)
-      flightState._trackedEntity.gevSelectionOrigin = origin;
+      entityRecord(flightState._trackedEntity).selectionOrigin = origin;
     _emitAwarenessEvent('gev:awareness-subject-selected', {
       layerId: 'flights',
       id: icao24,
@@ -788,10 +789,8 @@ export function createTracking({
   function _updateTrackedLabelModel(icao24) {
     if (!flightState._trackedEntity || icao24 !== flightState._trackedIcao)
       return;
-    flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
-      _trackedLabelText(icao24),
-      '#39d0ff',
-    );
+    entityRecord(flightState._trackedEntity).labelModel =
+      trackedLabelModelFromText(_trackedLabelText(icao24), '#39d0ff');
     refreshTrackedReadout(flightState._trackedEntity);
     // The readout and the context slot describe the same contact — refresh them
     // together so voice never narrates a fix the card has already replaced.
@@ -1007,12 +1006,10 @@ export function createTracking({
         }, false),
       },
     });
-    flightState._trackedEntity.gevSelectionOrigin = origin;
-    flightState._trackedEntity.gevTrackedId = `flights:${icao24}`;
-    flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
-      _trackedLabelText(icao24),
-      '#39d0ff',
-    );
+    entityRecord(flightState._trackedEntity).selectionOrigin = origin;
+    entityRecord(flightState._trackedEntity).trackedId = `flights:${icao24}`;
+    entityRecord(flightState._trackedEntity).labelModel =
+      trackedLabelModelFromText(_trackedLabelText(icao24), '#39d0ff');
 
     // A billboard has a ~zero bounding sphere, so Cesium's default follow distance is
     // far too tight (the user had to scroll out to read the plane). Give the entity a
@@ -1035,12 +1032,12 @@ export function createTracking({
     // Expose the camera's already-settled position to cross-module HUD consumers (the tracked-target
     // readout) so they draw at the SAME spot the camera framed, without recomputing the dead-reckon in
     // postRender (which would jitter the label against the now-stable plane).
-    flightState._trackedEntity.gevDisplayPosition =
+    entityRecord(flightState._trackedEntity).displayPosition =
       parts.motion._trackedDisplayCached;
-    // Separate accessor on purpose: `gevDisplayPosition` carries the follow-camera
+    // Separate accessor on purpose: the entity record's `displayPosition` carries the follow-camera
     // anti-jitter contract and must keep returning the cached DR position. Presentation
-    // that should weld to the AIRCRAFT YOU SEE reads `gevVisualPosition` instead.
-    flightState._trackedEntity.gevVisualPosition =
+    // that should weld to the AIRCRAFT YOU SEE reads the entity record's `visualPosition` instead.
+    entityRecord(flightState._trackedEntity).visualPosition =
       parts.motion._trackedVisualCached;
     refreshTrackedReadout(flightState._trackedEntity);
     flightState._viewer.camera.cancelFlight();
@@ -1155,8 +1152,8 @@ export function createTracking({
           ) {
             _clearTracking(true, {
               origin:
-                flightState._viewer.trackedEntity?.gevSelectionOrigin ||
-                'programmatic',
+                readEntityRecord(flightState._viewer.trackedEntity)
+                  ?.selectionOrigin || 'programmatic',
             });
           }
         });

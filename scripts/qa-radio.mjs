@@ -3817,7 +3817,7 @@ async function main() {
           id: `qa:${ownerPrefix}:radio-camera-owner`,
           position: viewer.camera.positionWC.clone(),
         });
-        owner.gevTrackedId = `${ownerPrefix}:qa-radio-camera-owner`;
+        window.__godsEyeView.entityRecords.write(owner).trackedId = `${ownerPrefix}:qa-radio-camera-owner`;
         viewer.trackedEntity = owner;
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const beforeStationId = radio.getUIState().selected?.id || null;
@@ -3831,7 +3831,7 @@ async function main() {
           afterStationId: radio.getUIState().selected?.id || null,
           flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
           trackedIdentityPreserved: viewer.trackedEntity === owner,
-          trackedId: viewer.trackedEntity?.gevTrackedId || null,
+          trackedId: window.__godsEyeView.entityRecords.read(viewer.trackedEntity)?.trackedId || null,
         };
         viewer.trackedEntity = undefined;
         viewer.entities.remove(owner);
@@ -3867,11 +3867,11 @@ async function main() {
         id: 'qa:flights:delayed-radio-fallback-owner',
         position: viewer.camera.positionWC.clone(),
       });
-      owner.gevTrackedId = 'flights:qa-delayed-radio-fallback-owner';
+      window.__godsEyeView.entityRecords.write(owner).trackedId = 'flights:qa-delayed-radio-fallback-owner';
       viewer.trackedEntity = owner;
       window.__qaDelayedRadioTrackingOwner = owner;
       window.__qaRejectRadioPlay();
-      return owner.gevTrackedId;
+      return window.__godsEyeView.entityRecords.read(owner)?.trackedId;
     });
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
     const delayedFallbackOwnership = await page.evaluate((beforeFlyToCalls) => {
@@ -3880,7 +3880,7 @@ async function main() {
       const result = {
         flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
         trackedIdentityPreserved: viewer.trackedEntity === owner,
-        trackedId: viewer.trackedEntity?.gevTrackedId || null,
+        trackedId: window.__godsEyeView.entityRecords.read(viewer.trackedEntity)?.trackedId || null,
         selectedId: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id || null,
       };
       viewer.trackedEntity = undefined;
@@ -4222,7 +4222,7 @@ async function main() {
         id: 'qa:flights:radio-recenter-stage-owner',
         position: viewer.camera.positionWC.clone(),
       });
-      owner.gevTrackedId = 'flights:qa-radio-recenter-stage-owner';
+      window.__godsEyeView.entityRecords.write(owner).trackedId = 'flights:qa-radio-recenter-stage-owner';
       viewer.trackedEntity = owner;
       completeFlight(0);
       const trackingBetweenStagesCalls = calls.length;

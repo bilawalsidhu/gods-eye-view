@@ -23,6 +23,7 @@ import {
   alprLabelDetails,
   validAlprGroundHeight,
 } from './visuals.js';
+import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;
@@ -236,11 +237,10 @@ export function createAlprPresentation({ state, services, source }) {
     entity.billboard.width = entity.billboard.height = selected
       ? SELECTED_MARKER_ICON_SIZE
       : MARKER_ICON_SIZE;
-    if (entity.gevLabelModel) {
-      entity.gevLabelModel.accent = color.toCssColorString();
-      entity.gevLabelModel.leaderAnimationStartedAt = selected
-        ? selectionStartedAt
-        : 0;
+    const labelModel = readEntityRecord(entity)?.labelModel;
+    if (labelModel) {
+      labelModel.accent = color.toCssColorString();
+      labelModel.leaderAnimationStartedAt = selected ? selectionStartedAt : 0;
     }
   }
 
@@ -425,13 +425,14 @@ export function createAlprPresentation({ state, services, source }) {
         }
       }
       entity.gevAlprRecord = record;
-      entity.gevTrackedId = record.id;
+      entityRecord(entity).trackedId = record.id;
       // The mapped camera datum has no elevation; it is not the clamped marker's
       // visual anchor. Only the selected marker samples the rendered surface,
       // at most once per second, through Cesium's public height APIs.
       entity.gevAlprDisplayPosition ??= null;
-      entity.gevDisplayPosition = () => entity.gevAlprDisplayPosition;
-      entity.gevLabelModel = {
+      entityRecord(entity).displayPosition = () =>
+        entity.gevAlprDisplayPosition;
+      entityRecord(entity).labelModel = {
         title: alprDisplayId(record),
         details: alprLabelDetails(record, source),
         accent: color.toCssColorString(),

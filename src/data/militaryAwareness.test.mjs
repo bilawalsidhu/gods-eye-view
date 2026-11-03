@@ -46,6 +46,7 @@ import {
   presentAwarenessDistance,
 } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
+import { withEntityRecord } from './entityRecords.js';
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
@@ -823,9 +824,7 @@ for (const fixture of [
     let retrackCalls = 0;
 
     try {
-      const trackedEntity = {
-        gevTrackedId: `${subject.layerId}:${subject.id}`,
-      };
+      const trackedEntity = withEntityRecord({}, { trackedId: `${subject.layerId}:${subject.id}` });
       runtime.viewer.trackedEntity = trackedEntity;
       replaceMethod(
         fixture.layer,
@@ -927,7 +926,7 @@ test('Contacts activation adopts the production military tracked-subject descrip
       ),
       'mutating one accessor result must not alter the tracked source position',
     );
-    runtime.viewer.trackedEntity = { gevTrackedId: `military:${id}` };
+    runtime.viewer.trackedEntity = withEntityRecord({}, { trackedId: `military:${id}` });
     replaceMethod(flightsLayer, 'getTrackedSubject', () => null, restores);
     replaceMethod(
       flightsLayer,
@@ -1032,7 +1031,7 @@ test('production military tracked-subject label falls back to registration befor
       'getAllPositions id stays the identity hex',
     );
 
-    runtime.viewer.trackedEntity = { gevTrackedId: `military:${id}` };
+    runtime.viewer.trackedEntity = withEntityRecord({}, { trackedId: `military:${id}` });
     replaceMethod(flightsLayer, 'getTrackedSubject', () => null, restores);
     replaceMethod(flightsLayer, 'trackById', () => true, restores);
     replaceMethod(militaryFlightsLayer, 'trackById', () => true, restores);
@@ -1104,7 +1103,7 @@ test('a cached Context subject re-reads its label when enrichment lands after se
       meta,
     });
 
-    runtime.viewer.trackedEntity = { gevTrackedId: `flights:${id}` };
+    runtime.viewer.trackedEntity = withEntityRecord({}, { trackedId: `flights:${id}` });
     replaceMethod(
       militaryFlightsLayer,
       'getTrackedSubject',
@@ -1247,7 +1246,7 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
       ),
       'mutating one accessor result must not alter the tracked source position',
     );
-    runtime.viewer.trackedEntity = { gevTrackedId: `flights:${id}` };
+    runtime.viewer.trackedEntity = withEntityRecord({}, { trackedId: `flights:${id}` });
     replaceMethod(
       militaryFlightsLayer,
       'getTrackedSubject',
@@ -1334,7 +1333,7 @@ test('Contacts activation reconciles to a newer cross-layer tracked flight after
   const restores = [];
 
   try {
-    runtime.viewer.trackedEntity = { gevTrackedId: 'flights:first' };
+    runtime.viewer.trackedEntity = withEntityRecord({}, { trackedId: 'flights:first' });
     replaceMethod(
       flightsLayer,
       'getTrackedSubject',
@@ -1357,7 +1356,7 @@ test('Contacts activation reconciles to a newer cross-layer tracked flight after
 
     civilianTracked = null;
     militaryTracked = awarenessSubject('military', 'latest', positions.latest);
-    runtime.viewer.trackedEntity = { gevTrackedId: 'military:latest' };
+    runtime.viewer.trackedEntity = withEntityRecord({}, { trackedId: 'military:latest' });
     releaseDependencies();
     await nextTurn();
     await nextTurn();
@@ -1401,7 +1400,7 @@ test('tracked flight cleared during Contacts activation suppresses fallback auto
   const focused = [];
 
   try {
-    runtime.viewer.trackedEntity = { gevTrackedId: 'flights:selected' };
+    runtime.viewer.trackedEntity = withEntityRecord({}, { trackedId: 'flights:selected' });
     replaceMethod(flightsLayer, 'getTrackedSubject', () => tracked, restores);
     replaceMethod(
       militaryFlightsLayer,

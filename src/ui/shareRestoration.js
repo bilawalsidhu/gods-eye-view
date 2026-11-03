@@ -4,6 +4,7 @@ import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { t, msg, formatDate } from '../i18n/index.js';
 import { SHARE_VIEW_ENTITY_KINDS } from '../share/follow.js';
 import { UiLifetime } from './uiLifetime.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 /** How long a shared vessel may take to appear in the vessel feed. */
 export const SHARED_VESSEL_WAIT_MS = 120_000;
@@ -424,7 +425,7 @@ export class ShareRestoration {
     // a long link's follow keeps the app's own framing.
     if (
       !view?.lastKnown ||
-      String(entity?.gevTrackedId || '') !==
+      String(readEntityRecord(entity)?.trackedId || '') !==
         `${result.layerId}:${result.targetId}`
     )
       return;
