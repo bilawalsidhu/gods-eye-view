@@ -4,6 +4,7 @@
 
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
 import { navaraDrawSurface } from '../annotations/drawInputNavara.js';
+import { destroyScopeMask, installScopeMask } from '../scopeMask.js';
 import {
   sessionAnnotations,
   sessionDrawTool,
@@ -91,4 +92,14 @@ export function attachNavaraGeoImport(
   });
   defer(() => geoFileImport?.detachScene());
   return geoFileImport;
+}
+
+/**
+ * The DISPLAY scope mask over this Navara scene: the same canvas as on
+ * Cesium, in the engine's container, its terminus following the engine
+ * camera's height. It goes with the engine.
+ */
+export function attachNavaraScopeMask({ engine }, _context, { defer }) {
+  installScopeMask(engine);
+  defer(() => destroyScopeMask());
 }
