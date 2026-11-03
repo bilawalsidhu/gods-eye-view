@@ -412,8 +412,8 @@ export function createTracking({
     refreshTrackedReadout(layerState._trackedEntity);
   }
 
-  function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
-    _clearTracking(false, { origin });
+  function _trackSatellite(noradId, { origin = 'programmatic', resuming = false } = {}) {
+    if (!resuming) _clearTracking(false, { origin });
 
     const point = layerState._points.get(noradId);
     const sat = layerState._catalog.get(noradId);
@@ -470,15 +470,17 @@ export function createTracking({
     layerState._trackedEntity.gevDisplayPosition = _trackedDisplayCached;
     _updateTrackedSatelliteLabelModel(initialPos?.altitude ?? null);
 
-    _emitAwarenessEvent('gev:awareness-subject-selected', {
-      layerId: 'satellites',
-      id: noradId,
-      label: name,
-      position: geo.cartesian3.clone(point.position),
-      origin,
-    });
-    selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
-    layerState._contextRefreshedAtMs = Date.now();
+    if (!resuming) {
+      _emitAwarenessEvent('gev:awareness-subject-selected', {
+        layerId: 'satellites',
+        id: noradId,
+        label: name,
+        position: geo.cartesian3.clone(point.position),
+        origin,
+      });
+      selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
+      layerState._contextRefreshedAtMs = Date.now();
+    }
 
     getRenderer().follow.start(layerState._trackedEntity);
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);

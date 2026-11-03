@@ -85,8 +85,8 @@ export class ContextControls {
       this[field] = null;
     }
   }
-  canRetainContacts() {
-    return this._contextMode === 'flights' && !this._contextModeChanging &&
+  canRetainScene() {
+    return ['flights', 'space-missions'].includes(this._contextMode) && !this._contextModeChanging &&
       !this._contextRestoreState && !this._clearSelectedLayersPromise &&
       !this._contextLayerReactionPromises.size;
   }

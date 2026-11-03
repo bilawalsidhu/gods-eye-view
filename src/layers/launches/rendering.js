@@ -76,18 +76,12 @@ export function createRendering({
     }
   }
 
-  function addLaunchEntity(launch, activeTleText = layerState._activeTleText) {
-    const position = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
-    const overlayRecord = {
-      launch,
-      anchorPosition: position,
-      elementEntryFactories: [],
-      liveEventTime: null,
-    };
-    layerState._missionOverlayRecords.set(launch.id, overlayRecord);
-    const orbitAllowed = parts.policyHelpers.launchStatusAllowsOrbit(
-      launch.status,
-    );
+  // The source snapshot owns its ephemeris epoch. A renderer attached later
+  // must reconstruct the same ascent and orbit, including a paused replay.
+  const orbitSolutions = new WeakMap();
+  function orbitForLaunch(launch, activeTleText, orbitAllowed) {
+    const known = orbitSolutions.get(launch);
+    if (known && known.activeTleText === activeTleText) return known;
     const coreTrack =
       orbitAllowed && launch.satelliteQuery
         ? getSatelliteOrbitTrack(launch.satelliteQuery, {
@@ -106,6 +100,24 @@ export function createRendering({
       : satelliteTrack?.orbitPath?.length > 1
         ? satelliteTrack.orbitPath
         : parts.paths.approximateOrbitPath(launch);
+    const solution = {activeTleText, satelliteTrack, orbitPath};
+    orbitSolutions.set(launch, solution);
+    return solution;
+  }
+
+  function addLaunchEntity(launch, activeTleText = layerState._activeTleText) {
+    const position = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
+    const overlayRecord = {
+      launch,
+      anchorPosition: position,
+      elementEntryFactories: [],
+      liveEventTime: null,
+    };
+    layerState._missionOverlayRecords.set(launch.id, overlayRecord);
+    const orbitAllowed = parts.policyHelpers.launchStatusAllowsOrbit(
+      launch.status,
+    );
+    const { satelliteTrack, orbitPath } = orbitForLaunch(launch, activeTleText, orbitAllowed);
     launch.recoveryStages.forEach((stage) => {
       stage.endpoint = parts.paths.landingEndpoint(
         stage,

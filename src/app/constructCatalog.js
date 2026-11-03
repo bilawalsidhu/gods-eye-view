@@ -153,9 +153,9 @@ export function createApplicationCatalog({
       ),
     );
     const satellites = once(() =>
-      createApplicationSatellites({
+      sessionModel('satellites', () => createApplicationSatellites({
         source: sources.satellites,
-      }),
+      })),
     );
     // Catalog order: [layer id(s), construction]. Only the layers the
     // engine can show are constructed (renderers.js).
@@ -235,10 +235,10 @@ export function createApplicationCatalog({
       [
         'rocket-launches',
         () =>
-          createApplicationLaunches({
+          sessionModel('rocket-launches', () => createApplicationLaunches({
             source: sources.launches,
             satellites: satellites(),
-          }),
+          })),
       ],
       [
         'traffic',

@@ -179,6 +179,7 @@ export function createIngestion({
             stale: false,
           };
       const launches = parts.model.normalizeRocketLaunches(payload);
+      if (layerState._waitForRenderer) await layerState._waitForRenderer;
       if (
         !layerState._enabled ||
         token !== layerState._lifecycleToken ||

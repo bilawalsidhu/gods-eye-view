@@ -280,8 +280,8 @@ export class NavigationController {
     this._cameraHandoffs?.publish();
     this._cameraHandoffs?.destroy();
   }
-  destroy() {
+  destroy({ retainScene = false } = {}) {
     this.stop();
-    this._stampNavigation();
+    this._stampNavigation({cancelPendingSelection: !retainScene});
   }
 }

@@ -1,4 +1,4 @@
-import { ISS_OVERLAY_SOURCE_ID } from './policy.js';
+import { ISS_NORAD, ISS_OVERLAY_SOURCE_ID } from './policy.js';
 
 export function createLifecycle({
   state: layerState,
@@ -64,6 +64,78 @@ export function createLifecycle({
       console.log('[Data:Satellites] Initialized');
     },
 
+    suspendCamera() {
+      // Outgoing tools release their cameras during teardown. That release
+      // must not classify a retained follow as a user deselection.
+      layerState._trackedEntityChangedRemove?.();
+      layerState._trackedEntityChangedRemove = null;
+    },
+    detachRenderer() {
+      const renderer = layerState._renderer;
+      if (!renderer) return;
+      layerState._waitForRenderer ??= new Promise(resolve => { layerState._resumeRenderer = resolve; });
+      layerState._clickHandler?.destroy();
+      layerState._trackedEntityChangedRemove?.();
+      layerState._preRenderListener?.();
+      layerState._clickHandler = layerState._trackedEntityChangedRemove = layerState._preRenderListener = null;
+      document.removeEventListener('keydown', parts.interaction._onKeyDown);
+      unregisterPickOwner('satellites');
+      if (layerState._trackedEntity) {
+        layerState._handoffOrigin = layerState._trackedEntity.gevSelectionOrigin;
+        renderer.follow.release();
+        renderer.removeTracked(layerState._trackedEntity);
+        layerState._trackedEntity = null;
+      }
+      for (const [id, point] of layerState._points) {
+        const {position, show, pixelSize, color, outlineColor, outlineWidth, scaleByDistance, disableDepthTestDistance} = point;
+        layerState._points.set(id, {id, position: {...position}, show, pixelSize, color, outlineColor, outlineWidth, scaleByDistance, disableDepthTestDistance});
+      }
+      for (const path of layerState._orbitPaths.values()) {
+        renderer.removeOrbit(path.primitive);
+        path.primitive = null;
+      }
+      layerState._detectionObjects.clear();
+      renderer.removePoints(layerState._pointCollection);
+      renderer.destroy();
+      layerState._engine = layerState._viewer = layerState._renderer = layerState._pointCollection = null;
+      layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
+      if (layerState._enabled) releaseContinuousRender('satellites');
+    },
+
+    attachRenderer(viewer, {engine = null, waitForCameraRestore = false} = {}) {
+      layerState._engine = engine;
+      const renderer = services.renderer.create({viewer,engine});
+      layerState._renderer = renderer;
+      layerState._viewer = renderer.view;
+      layerState._pointCollection = renderer.createPoints();
+      for (const [id, spec] of layerState._points)
+        layerState._points.set(id, layerState._pointCollection.add(spec));
+      layerState._pointCollection.show = layerState._enabled && layerState._params.showPoints;
+      for (const [id, path] of layerState._orbitPaths) {
+        path.primitive = renderer.createOrbit({ positions: path.basePositions, width: id === ISS_NORAD ? 2.5 : 2, color: path.color });
+        path.primitive.show = layerState._enabled && layerState._params.showOrbits;
+      }
+      // Source work can publish as soon as GPU collections exist. Restoring
+      // share-selected camera state may itself wait for that publication.
+      layerState._resumeRenderer?.();
+      layerState._waitForRenderer = layerState._resumeRenderer = null;
+      // The restored camera runs before a retained follow gets its new native target.
+      layerState._restoringViewport = true;
+      if (!waitForCameraRestore) this.resumeViewport();
+    },
+
+    resumeViewport() {
+      if (!layerState._restoringViewport || !layerState._renderer) return;
+      layerState._restoringViewport = false;
+      if (layerState._enabled) {
+        if (layerState._trackedNorad != null && !layerState._trackedEntity)
+          parts.tracking._trackSatellite(layerState._trackedNorad, {origin: layerState._handoffOrigin, resuming: true});
+        this.enable(layerState._viewer);
+      }
+      layerState._resumeRenderer?.();
+      layerState._waitForRenderer = layerState._resumeRenderer = null;
+    },
+
     enable(viewer) {
       layerState._enabled = true;
       holdContinuousRender('satellites'); // per-frame animator (perf wave 2)
@@ -124,6 +196,8 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
+      layerState._resumeRenderer?.();
+      layerState._waitForRenderer = layerState._resumeRenderer = null;
       parts.catalog._abortActiveUpdates();
       releaseContinuousRender('satellites'); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
@@ -151,7 +225,7 @@ export function createLifecycle({
       }
       // Orbit ring primitives are removed (and destroyed) here
       for (const path of layerState._orbitPaths.values()) {
-        getRenderer().removeOrbit(path.primitive);
+        if (path.primitive) getRenderer().removeOrbit(path.primitive);
       }
       layerState._points.clear();
       layerState._detectionObjects.clear();

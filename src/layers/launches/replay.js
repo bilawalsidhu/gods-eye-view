@@ -280,6 +280,7 @@ export function createReplay({
       return false;
     layerState._replayPausedAtMs = appClock.now();
     layerState._replayPaused = true;
+    layerState._replayTracks.get(layerState._replayCameraLaunchId)?.beginReplayFrame?.();
     syncReplayButton();
     return true;
   }
@@ -329,20 +330,22 @@ export function createReplay({
     parts.overlays.syncMissionOverlayEntries();
   }
 
-  function startMissionReplay(launchId) {
+  function startMissionReplay(launchId, {resuming = false} = {}) {
     const launch = layerState._launches.find((item) => item.id === launchId);
     const track = layerState._replayTracks.get(launchId);
     if (!layerState._viewer || !launch || !track) return false;
-    if (layerState._replayCameraLaunchId === launchId) {
+    if (!resuming && layerState._replayCameraLaunchId === launchId) {
       stopMissionReplay();
       return false;
     }
 
-    parts.selection.stopMissionZoomAnchor();
-    stopMissionReplay();
-    layerState._replayCameraLaunchId = launchId;
-    layerState._replayPaused = false;
-    layerState._replayPausedAtMs = null;
+    if (!resuming) {
+      parts.selection.stopMissionZoomAnchor();
+      stopMissionReplay();
+      layerState._replayCameraLaunchId = launchId;
+      layerState._replayPaused = false;
+      layerState._replayPausedAtMs = null;
+    }
     const token = ++layerState._replayCameraToken;
     const ascentDurationSec = track.ascentDurationSec;
     // Start broadside to the ascent/orbit direction so the launch profile is
@@ -354,15 +357,17 @@ export function createReplay({
     track.lastCameraHeading = initialHeading;
     syncReplayButton();
     parts.overlays.syncMissionOverlayEntries();
-    parts.policyHelpers.releaseAircraftTracking(layerState._dataManager);
-    layerState._viewer.trackedEntity = undefined;
-    layerState._viewer.camera.cancelFlight();
-    layerState._animationStarts.set(
-      launchId,
-      appClock.now() +
-        (REPLAY_TILE_SETTLE_DELAY_SEC + REPLAY_COUNTDOWN_DURATION_SEC) * 1000,
-    );
-    let cameraReady = false;
+    if (!resuming) {
+      parts.policyHelpers.releaseAircraftTracking(layerState._dataManager);
+      layerState._viewer.trackedEntity = undefined;
+      layerState._viewer.camera.cancelFlight();
+      layerState._animationStarts.set(
+        launchId,
+        appClock.now() +
+          (REPLAY_TILE_SETTLE_DELAY_SEC + REPLAY_COUNTDOWN_DURATION_SEC) * 1000,
+      );
+    }
+    let cameraReady = resuming;
     let lastCameraUpdateMs = null;
 
     // Move the chase camera before scene traversal. Mutating it in preRender
@@ -486,6 +491,7 @@ export function createReplay({
         }
       });
 
+    if (resuming) return true;
     layerState._viewer.camera.flyToBoundingSphere(
       geo.boundingSphere.create(track.ascentPath[0], 0),
       {

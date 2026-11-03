@@ -86,6 +86,10 @@ export function createIngestion({
           ? `${failed.length} CelesTrak group${failed.length === 1 ? '' : 's'} unavailable`
           : null;
 
+        if (layerState._waitForRenderer) {
+          await layerState._waitForRenderer;
+          updateSignal.throwIfAborted();
+        }
         // Clear existing
         layerState._pointCollection.removeAll();
         layerState._points.clear();

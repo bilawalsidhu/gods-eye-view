@@ -83,3 +83,7 @@ The Boston GBFS test retained its selected dock, availability and 200 stations w
 ### CCTV projection and video
 
 Camera records, calibration and the active decoder stay in the session. The renderer owns monitor planes, textures, markers, geometry and picking. The release check decoded a local 320 × 180 MP4, kept the same playing HTMLVideoElement through both switches, observed advancing decoded frames on each scene, retained the viewshed mode and created a native plane each time without another catalog request. The still-image scheduler and map-click regression tests also passed.
+
+### Satellites and Space Missions
+
+A tracked ISS and its ring remained active through Navara → Cesium → Navara with all 6,839 core and dense satellite positions. Each of the seven fixture TLE groups was read once. The launch library, TLE dependency, selected mission, replay rate, pause and Space Missions mode retain their session. The recorded globe camera is restored before replay or follow takes it back. Space Missions exit restores the original layer visibility.
