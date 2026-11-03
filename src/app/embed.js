@@ -267,10 +267,50 @@ export function installViews({
     const center=hit ? Cesium.Cartographic.fromCartesian(hit) : pos;
     return {lat:Cesium.Math.toDegrees(center.latitude),lon:Cesium.Math.toDegrees(center.longitude),alt:pos.height,heading:Cesium.Math.toDegrees(c.heading),pitch:Cesium.Math.toDegrees(c.pitch)};
   };
+  // Mapa cartográfico raster OSM opcional: nomes de ruas já desenhados nos tiles.
+  // Uso experimental sob demanda, sujeito à política de tiles OSM.
+  let osmOverlay=null;
+  const setOsmOverlay=async(enabled)=>{
+    if(!enabled){if(osmOverlay){viewer.imageryLayers.remove(osmOverlay,true);osmOverlay=null}return}
+    if(osmOverlay)return;
+    try{
+      const provider=new Cesium.OpenStreetMapImageryProvider({url:'https://tile.openstreetmap.org/',maximumLevel:19,credit:'© OpenStreetMap contributors'});
+      osmOverlay=viewer.imageryLayers.addImageryProvider(provider);
+      osmOverlay.alpha=0.78;
+      post({type:'gev:osm-overlay-status',ok:true});
+    }catch(error){post({type:'gev:osm-overlay-status',ok:false,error:String(error?.message||error)})}
+  };
+  // Seleção explícita de ponto geográfico; não registra cliques fora do modo marcador.
+  let geoPickHandler=null,geoPickMarker=null;
+  const stopGeoPick=()=>{
+    geoPickHandler?.destroy();geoPickHandler=null;
+    viewer.scene.canvas.style.cursor='';
+  };
+  const setGeoPick=(enabled)=>{
+    stopGeoPick();
+    if(!enabled)return;
+    viewer.scene.canvas.style.cursor='crosshair';
+    geoPickHandler=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    geoPickHandler.setInputAction(movement=>{
+      const point=viewer.scene.pickPositionSupported ? viewer.scene.pickPosition(movement.position) : undefined;
+      const ray=viewer.camera.getPickRay(movement.position);
+      const cartesian=point|| (ray&&viewer.scene.globe?.pick(ray,viewer.scene)) || viewer.camera.pickEllipsoid(movement.position);
+      if(!cartesian){post({type:'gev:geo-picked',ok:false,error:'Não foi possível identificar o terreno'});return}
+      const geo=Cesium.Cartographic.fromCartesian(cartesian);
+      const lat=Cesium.Math.toDegrees(geo.latitude),lon=Cesium.Math.toDegrees(geo.longitude);
+      if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
+      if(geoPickMarker)viewer.entities.remove(geoPickMarker);
+      geoPickMarker=viewer.entities.add({position:Cesium.Cartesian3.fromDegrees(lon,lat,Math.max(geo.height,0)+4),point:{pixelSize:12,color:Cesium.Color.ORANGE,outlineColor:Cesium.Color.WHITE,outlineWidth:3,disableDepthTestDistance:Number.POSITIVE_INFINITY},label:{text:'📍 Ponto selecionado',font:'14px sans-serif',fillColor:Cesium.Color.WHITE,showBackground:true,backgroundColor:Cesium.Color.BLACK.withAlpha(0.75),pixelOffset:new Cesium.Cartesian2(0,-25),disableDepthTestDistance:Number.POSITIVE_INFINITY}});
+      post({type:'gev:geo-picked',ok:true,lat,lon,height:geo.height,cameraAltitude:viewer.camera.positionCartographic?.height||3500});
+      stopGeoPick();
+    },Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  };
   // Views apply one at a time, in the order they arrive.
   let queue = ready;
   const onMessage = (event) => {
     if (event.source !== peer) return;
+    if (event.data?.type === 'gev:osm-overlay') {void setOsmOverlay(event.data.enabled===true);return;}
+    if (event.data?.type === 'gev:geo-pick-mode') {setGeoPick(event.data.enabled===true);return;}
     if (event.data?.type === 'gev:geo-labels') {
       clearGeoLabels();
       const items=Array.isArray(event.data.items)?event.data.items.slice(0,45):[];
@@ -349,6 +389,8 @@ export function installViews({
     if (!signal?.aborted) post({ type: EMBED_READY_MESSAGE });
   });
   return () => {
+    stopGeoPick();
+    if(geoPickMarker)viewer.entities.remove(geoPickMarker);
     stopRendering();
     windowRef.removeEventListener('message', onMessage);
   };
