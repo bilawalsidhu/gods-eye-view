@@ -417,6 +417,7 @@ const report = {
         servedByRunner: true,
         appCommit: served.commit,
         appCheckoutClean: true,
+        scenariosFrom: 'the same clean checkout',
         envFilesInCheckout: served.envFilesInCheckout,
         blankedEnv: served.blankedEnv,
         otherKeyLikeVariablesBlanked: served.otherKeyLikeVariablesBlanked,
@@ -476,7 +477,10 @@ for (const [label, name, layers, extra = [], seconds = 300, external] of runs) {
   if (external) args.splice(0, 1, base.origin + '/');
   else args.push(`--layers=${layers.join(',')}`, `--evidence=${evidence}`);
   const start = Date.now();
-  const run = spawnSync(process.execPath, [join(root, script), ...args], {
+  // With --serve the scenarios run from the same clean checkout the app was
+  // built from, so other work in this tree cannot change them.
+  const scripts = served?.worktree ?? root;
+  const run = spawnSync(process.execPath, [join(scripts, script), ...args], {
     encoding: 'utf8',
     timeout: seconds * 1000,
     maxBuffer: 1 << 26,
