@@ -326,13 +326,16 @@ export function createReplay({
     layerState._replayCameraLaunchId = null;
     layerState._replayPaused = false;
     layerState._replayPausedAtMs = null;
-    if (stoppedLaunchId)
+    if (stoppedLaunchId) {
       layerState._animationStarts.set(stoppedLaunchId, appClock.now());
+      // The flyover moved the camera; the orbit view asked for before it is gone.
+      layerState._missionFocusIntentId = null;
+    }
     syncReplayButton();
     parts.overlays.syncMissionOverlayEntries();
   }
 
-  function startMissionReplay(launchId, {resuming = false} = {}) {
+  function startMissionReplay(launchId, { resuming = false } = {}) {
     const launch = layerState._launches.find((item) => item.id === launchId);
     const track = layerState._replayTracks.get(launchId);
     if (!layerState._viewer || !launch || !track) return false;
@@ -345,6 +348,7 @@ export function createReplay({
       parts.selection.stopMissionZoomAnchor();
       stopMissionReplay();
       layerState._replayCameraLaunchId = launchId;
+      layerState._missionFocusIntentId = null;
       layerState._replayPaused = false;
       layerState._replayPausedAtMs = null;
     }

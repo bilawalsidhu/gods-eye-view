@@ -68,6 +68,8 @@ export function createSelection({
       layerState._missionZoomAnchorId !== launchId
     )
       stopMissionZoomAnchor();
+    if (layerState._missionFocusIntentId !== launchId)
+      layerState._missionFocusIntentId = null;
     layerState._selectedLaunchId = launchId;
     layerState._explicitSelection = Boolean(launchId && isolate);
     if (launchId) layerState._animationStarts.set(launchId, appClock.now());
@@ -122,6 +124,7 @@ export function createSelection({
   function focusMission(launch) {
     if (!layerState._viewer || !launch) return;
     stopMissionZoomAnchor();
+    layerState._missionFocusIntentId = launch.id;
     layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
       `rocket-launch:${launch.id}`,
     );
@@ -198,6 +201,7 @@ export function createSelection({
   function focusLaunchSite(launch) {
     if (!layerState._viewer || !launch) return;
     parts.replay.stopMissionReplay();
+    layerState._missionFocusIntentId = null;
     stopMissionZoomAnchor();
     const launchPosition = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(

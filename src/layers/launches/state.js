@@ -100,6 +100,11 @@ export function createState({ services }) {
 
   state._focusAfterActiveLookup = false;
 
+  // The mission whose orbit view the user asked for last; any later camera
+  // command of this layer (a flyover, a launch-site view) clears it, so a late
+  // active-satellite answer can reframe only a view nobody has left.
+  state._missionFocusIntentId = null;
+
   state._satelliteStateBeforeMission = null;
 
   state._satelliteActivationPromise = null;
