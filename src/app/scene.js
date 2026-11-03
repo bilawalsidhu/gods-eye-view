@@ -39,15 +39,27 @@ export async function createApplicationScene({
       signal: layerSession?.lifetime.signal ?? signal,
     });
   if (layerSession) layerSession.operations = operations;
-  defer(initLogoGaze());
-  const previousKey = window.__GOOGLE_MAPS_API_KEY__;
-  if (googleApiKey) {
-    window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
-    defer(() => {
-      if (window.__GOOGLE_MAPS_API_KEY__ !== googleApiKey) return;
-      if (previousKey === undefined) delete window.__GOOGLE_MAPS_API_KEY__;
-      else window.__GOOGLE_MAPS_API_KEY__ = previousKey;
-    });
+  // The logo's gaze and the page's Google key belong to the page session
+  // when there is one: an engine switch keeps them.
+  const pageChrome = layerSession ? (layerSession.chrome ??= {}) : null;
+  const own = pageChrome
+    ? (release) =>
+        layerSession.lifetime.signal.addEventListener('abort', release, {
+          once: true,
+        })
+    : defer;
+  if (!pageChrome?.sceneChrome) {
+    if (pageChrome) pageChrome.sceneChrome = true;
+    own(initLogoGaze());
+    const previousKey = window.__GOOGLE_MAPS_API_KEY__;
+    if (googleApiKey) {
+      window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
+      own(() => {
+        if (window.__GOOGLE_MAPS_API_KEY__ !== googleApiKey) return;
+        if (previousKey === undefined) delete window.__GOOGLE_MAPS_API_KEY__;
+        else window.__GOOGLE_MAPS_API_KEY__ = previousKey;
+      });
+    }
   }
   // A cached renderer is built once, by the first application that asks for
   // its engine, and later applications reuse it warm. Everything this closure
