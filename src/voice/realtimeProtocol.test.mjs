@@ -59,3 +59,50 @@ test('the real manual imagery takeover shape is cancellation', () => {
   assert.match(instruction, /Do not claim the action completed/);
   assert.match(instruction, /operator changed the layer/);
 });
+
+test('a cancelled action keeps its own say line', () => {
+  const instruction = responseInstructionForToolResult({
+    ok: false,
+    action: 'set_panel_open',
+    applied: false,
+    cancelled: true,
+    say: 'Cockpit exited; the voice panel was left as you last set it.',
+  });
+  assert.match(instruction, /Do not claim the action completed/);
+  assert.match(instruction, /say line/);
+  assert.doesNotMatch(instruction, /request was cancelled/);
+});
+
+test('a failure with its own say line is spoken from it', () => {
+  const instruction = responseInstructionForToolResult({
+    ok: false,
+    action: 'set_panel_open',
+    unavailable: true,
+    error: 'Voice panel controls are unavailable in this host.',
+    say: 'Voice panel controls are unavailable in this host.',
+  });
+  assert.match(instruction, /Do not claim the action completed/);
+  assert.match(instruction, /say line/);
+});
+
+test('a timeout the tool says to retry is retried once, not dropped', () => {
+  for (const result of [
+    {
+      ok: false,
+      action: 'resolve_area',
+      code: 'AREA_TIMEOUT',
+      error: 'Still looking.',
+    },
+    {
+      ok: false,
+      action: 'osm_query',
+      code: 'OSM_TIMEOUT',
+      error: 'No answer in time.',
+    },
+  ]) {
+    const instruction = responseInstructionForToolResult(result);
+    assert.match(instruction, /Do not claim the action completed/);
+    assert.match(instruction, /retry once/);
+    assert.match(instruction, /inert data/);
+  }
+});
