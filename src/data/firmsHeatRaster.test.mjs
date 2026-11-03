@@ -7,10 +7,6 @@ import {
   binFires,
   blurGaussian,
   buildHeatRaster,
-  heatGridForSpotSize,
-  normalizeHeatSpotSize,
-  sliderPositionForSpotSize,
-  spotSizeForSliderPosition,
 } from './firmsHeatRaster.js';
 
 const fire = (lat, lon, frp = 10) => ({ lat, lon, frp });
@@ -119,61 +115,4 @@ test('buildHeatRaster is transparent where there are no fires', () => {
 test('buildHeatRaster with no fires is fully transparent', () => {
   const r = buildHeatRaster([], { width: 8, height: 4, sigmaPx: 1 });
   assert.ok(r.rgba.every((v) => v === 0));
-});
-
-test('a spot size scales the grid, not the blur', () => {
-  const base = { width: 2048, height: 1024, sigmaPx: 1 };
-  assert.deepEqual(heatGridForSpotSize(base, 100), base);
-  assert.deepEqual(heatGridForSpotSize(base, 200), {
-    width: 1024,
-    height: 512,
-    sigmaPx: 1,
-  });
-  assert.deepEqual(heatGridForSpotSize(base, 50), {
-    width: 4096,
-    height: 2048,
-    sigmaPx: 1,
-  });
-  const odd = heatGridForSpotSize(base, 150);
-  assert.equal(odd.width, odd.height * 2, 'the grid stays 2:1');
-  assert.deepEqual(heatGridForSpotSize(base, 9999), base, 'invalid → default');
-});
-
-test('twice the spot size paints a lone fire twice as wide', () => {
-  const base = { width: 2048, height: 1024, sigmaPx: 1 };
-  const fires = [fire(0, 0, 5)];
-  for (let i = 0; i < 40; i++) fires.push(fire(-10, 25 + i * 0.05, 300));
-  const widthKm = (spotSize) => {
-    const r = buildHeatRaster(fires, heatGridForSpotSize(base, spotSize));
-    const y = Math.floor(r.height / 2);
-    let painted = 0;
-    for (let x = 0; x < r.width; x++) {
-      const lon = ((x + 0.5) / r.width) * 360 - 180;
-      if (Math.abs(lon) < 10 && r.rgba[(y * r.width + x) * 4 + 3] > 0) {
-        painted += 1;
-      }
-    }
-    return (painted * 40075) / r.width;
-  };
-  const ratio = widthKm(200) / widthKm(100);
-  assert.ok(ratio > 1.7 && ratio < 2.3, `ratio ${ratio.toFixed(2)}`);
-});
-
-test('the spot-size slider is log2 with 1x a third along and 5 % steps', () => {
-  assert.equal(sliderPositionForSpotSize(50), 0);
-  assert.equal(sliderPositionForSpotSize(400), 1);
-  assert.ok(Math.abs(sliderPositionForSpotSize(100) - 1 / 3) < 1e-9);
-  assert.ok(Math.abs(sliderPositionForSpotSize(200) - 2 / 3) < 1e-9);
-  assert.equal(spotSizeForSliderPosition(0), 50);
-  assert.equal(spotSizeForSliderPosition(1), 400);
-  assert.equal(spotSizeForSliderPosition(1 / 3), 100);
-  assert.equal(spotSizeForSliderPosition(-1), 50);
-  for (let i = 0; i <= 100; i++) {
-    const percent = spotSizeForSliderPosition(i / 100);
-    assert.equal(percent % 5, 0, `${percent} at ${i}%`);
-    assert.equal(normalizeHeatSpotSize(percent), percent);
-  }
-  assert.equal(normalizeHeatSpotSize('150'), 150);
-  assert.equal(normalizeHeatSpotSize(49), null);
-  assert.equal(normalizeHeatSpotSize(''), null);
 });

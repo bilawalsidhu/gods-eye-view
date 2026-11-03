@@ -3,6 +3,12 @@
  * imagery tile on the active imagery host (globe or 3D-tiles), like the wind
  * layer's scalar field. Owns the canvas and the imagery layer; nothing else
  * in the fires layer touches imagery.
+ *
+ * `show` is only for the layer being on or off. The zoom hand-off fades
+ * `alpha` instead: Cesium unmaps a hidden imagery layer from the globe
+ * tiles and re-maps it when shown, so a show toggle at the band edge left
+ * a beat with neither markers nor heat. At alpha 0 the layer stays mapped
+ * and costs no draw.
  */
 
 const defaultCanvas = (width, height) => {
@@ -21,6 +27,7 @@ export function createHeatImagery({
   let layer = null;
   let collection = null;
   let show = true;
+  let opacity = 1;
 
   function detach() {
     if (layer && collection) collection.remove(layer, true);
@@ -47,6 +54,7 @@ export function createHeatImagery({
     collection = host.collection;
     layer = collection.addImageryProvider(provider);
     layer.show = show;
+    layer.alpha = opacity;
     collection.raiseToTop?.(layer);
   }
 
@@ -62,6 +70,11 @@ export function createHeatImagery({
     setShow(value) {
       show = Boolean(value);
       if (layer) layer.show = show;
+    },
+    /** Hand-off fade, 0..1; the layer stays mapped at 0. */
+    setOpacity(value) {
+      opacity = Math.min(1, Math.max(0, Number(value) || 0));
+      if (layer) layer.alpha = opacity;
     },
     rehome() {
       const host = getHost?.();

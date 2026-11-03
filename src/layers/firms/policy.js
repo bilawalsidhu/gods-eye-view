@@ -49,19 +49,28 @@ export const LOD_LEVELS = [
 ];
 
 /**
- * Global heat raster for the `heat` bands: ≈0.18° (≈20 km) per pixel and a
- * one-pixel Gaussian σ, so a lone fire is a distinct spot about twice as wide
- * as its marker at the 3,000 km hand-off and still reads from the
- * whole-globe view; neighbours merge only when they nearly touch (σ 3 here
- * smeared each fire over ~200 km). Built once per data refresh or filter
- * change, never per camera move.
+ * Global heat raster for the `heat` bands: ≈0.09° (≈10 km) per pixel and a
+ * one-pixel Gaussian σ, so a lone fire is a spot about the size of its
+ * marker at the 3,000 km hand-off and the two cross-fade without a jump;
+ * neighbours merge only when they nearly touch (σ 3 on a 2048 grid smeared
+ * each fire over ~200 km). Built once per data refresh or filter change,
+ * never per camera move.
  */
 
 export const HEAT_RASTER = Object.freeze({
-  width: 2048,
-  height: 1024,
+  width: 4096,
+  height: 2048,
   sigmaPx: 1,
 });
+
+/**
+ * Camera heights, in metres, over which the heatmap and the markers
+ * cross-fade around the 3,000 km band edge: markers alone below `from`,
+ * heatmap alone above `to`. Wider than the ±10 % band hysteresis, so
+ * whichever band is active inside it, both layers are already built.
+ */
+
+export const HANDOFF_FADE = Object.freeze({ from: 2_400_000, to: 3_600_000 });
 
 /**
  * Trailing delay before a stale heatmap is rebuilt while one is already on

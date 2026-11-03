@@ -66,40 +66,28 @@ const fireRow = (value, active = 'all') => ({
         active: mode === active,
       })),
     },
-    sliders: [
-      {
-        id: 'min-frp',
-        label: 'Fire intensity (FRP)',
-        ariaLabel: 'Minimum fire radiative power, megawatts',
-        valueText: value ? `≥ ${value} MW` : 'All',
-        min: 0,
-        max: 1000,
-        step: 1,
-        value,
-        track: 'linear-gradient(90deg, #9e2a1b, #fff3b0)',
-        ticks: [
-          { at: 0, label: '0' },
-          { at: 0.5, label: '30' },
-        ],
-      },
-      {
-        id: 'heat-spot-size',
-        label: 'Heatmap spot size',
-        ariaLabel: 'Far-zoom heatmap spot size',
-        valueText: '1×',
-        min: 0,
-        max: 1000,
-        value: 333,
-        ticks: [{ at: 1 / 3, label: '1×' }],
-      },
-    ],
+    slider: {
+      id: 'min-frp',
+      label: 'Fire intensity (FRP)',
+      ariaLabel: 'Minimum fire radiative power, megawatts',
+      valueText: value ? `≥ ${value} MW` : 'All',
+      min: 0,
+      max: 1000,
+      step: 1,
+      value,
+      track: 'linear-gradient(90deg, #9e2a1b, #fff3b0)',
+      ticks: [
+        { at: 0, label: '0' },
+        { at: 0.5, label: '30' },
+      ],
+    },
     legend: [],
     info: null,
     list: null,
   },
 });
 
-test('a row switch and sliders render their markup and report choices', () => {
+test('a row switch and slider render their markup and report choices', () => {
   document.body.replaceChildren();
   const container = document.body.appendChild(document.createElement('div'));
   const chips = [];
@@ -127,13 +115,8 @@ test('a row switch and sliders render their markup and report choices', () => {
   segments[1].click();
   assert.deepEqual(chips, [['fires', 'confidence-high']]);
 
-  const blocks = [...container.querySelectorAll('.data-toggle-slider')];
-  assert.deepEqual(
-    blocks.map((entry) => entry.dataset.sliderId),
-    ['min-frp', 'heat-spot-size'],
-    'sliders render in order, after the switch',
-  );
-  const [block, spotBlock] = blocks;
+  const block = container.querySelector('.data-toggle-slider');
+  assert.equal(block.dataset.sliderId, 'min-frp');
   assert.equal(
     block.querySelector('.data-toggle-slider-label').textContent,
     'Fire intensity (FRP)',
@@ -164,18 +147,7 @@ test('a row switch and sliders render their markup and report choices', () => {
 
   input.value = '120';
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  const spotInput = spotBlock.querySelector('input.data-toggle-slider-input');
-  assert.equal(
-    spotInput.getAttribute('aria-label'),
-    'Far-zoom heatmap spot size',
-  );
-  assert.equal(spotInput.style.getPropertyValue('--slider-track'), '');
-  spotInput.value = '700';
-  spotInput.dispatchEvent(new Event('input', { bubbles: true }));
-  assert.deepEqual(moves, [
-    ['fires', 'min-frp', 120],
-    ['fires', 'heat-spot-size', 700],
-  ]);
+  assert.deepEqual(moves, [['fires', 'min-frp', 120]]);
 
   // The refresh that tick triggers keeps the same nodes and updates the text.
   render(h(LayerRows, { items: [fireRow(120, 'high')], ...props }), container);

@@ -470,7 +470,7 @@ export class LayerPanel {
   }
 
   /**
-   * A layer's row chips, one-of-many switch, sliders, color legend, info line
+   * A layer's row chips, one-of-many switch, slider, color legend, info line
    * and ordered list. The block
    * is hidden while the layer is off (or while a dependency owner has
    * surrendered it), so a quiet row stays quiet. Chips and list items are
@@ -496,7 +496,7 @@ export class LayerPanel {
     }));
     const infoText = controls?.info ? String(controls.info) : '';
     const segmented = controls?.segmented || null;
-    const sliders = Array.isArray(controls?.sliders) ? controls.sliders : [];
+    const slider = controls?.slider || null;
     // The info line, once shown, stays in place and hides when empty.
     if (infoText) row.info = true;
     return {
@@ -505,10 +505,10 @@ export class LayerPanel {
         legend.length === 0 &&
         !infoText &&
         !segmented &&
-        sliders.length === 0,
+        !slider,
       chips,
       segmented,
-      sliders,
+      slider,
       legend,
       info: row.info
         ? { text: infoText, title: controls?.infoTitle || '' }
@@ -562,10 +562,13 @@ export class LayerPanel {
   // to params through the live descriptor on every tick.
   _moveSlider(id, sliderId, value, generation = this._generation) {
     if (this._destroyed || this._generation !== generation) return;
-    const slider = this._rowControlsFor(id)?.sliders?.find(
-      (entry) => entry.id === sliderId,
-    );
-    if (!slider || typeof slider.params !== 'function' || !this.isEnabled(id))
+    const slider = this._rowControlsFor(id)?.slider;
+    if (
+      !slider ||
+      slider.id !== sliderId ||
+      typeof slider.params !== 'function' ||
+      !this.isEnabled(id)
+    )
       return;
     this.setLayerParams(id, slider.params(value), { origin: 'user' });
   }

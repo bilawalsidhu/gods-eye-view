@@ -71,6 +71,22 @@ test('setShow toggles without rebuilding', () => {
   assert.equal(layer.show, true);
 });
 
+test('setOpacity fades the same layer and survives a rebuild', () => {
+  const h = harness();
+  h.imagery.setRaster(raster);
+  const layer = h.layers[0];
+  h.imagery.setOpacity(0);
+  assert.equal(layer.alpha, 0);
+  assert.equal(layer.show, true, 'a faded layer stays mapped');
+  h.imagery.setOpacity(0.25);
+  assert.equal(h.layers[0], layer);
+  assert.equal(layer.alpha, 0.25);
+  h.imagery.setRaster(raster);
+  assert.equal(h.layers[0].alpha, 0.25, 'a rebuilt layer keeps the fade');
+  h.imagery.setOpacity(7);
+  assert.equal(h.layers[0].alpha, 1);
+});
+
 test('no imagery host keeps nothing draped; rehome brings it back', () => {
   const h = harness();
   h.setHost({ collection: null, kind: 'none' });

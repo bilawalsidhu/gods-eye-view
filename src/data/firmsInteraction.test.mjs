@@ -15,6 +15,7 @@ import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { HEAT_REBUILD_MS } from '../layers/firms/policy.js';
 
 const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
@@ -393,7 +394,58 @@ test('disable cancels a pending source and a late response cannot repopulate the
   } finally { h.layer.destroy(h.viewer); h.cleanup(); }
 });
 
-test('far zoom drapes one heatmap and draws no rectangles; markers and disable hide it', () => {
+test('the heatmap is preloaded under the markers before the first zoom-out', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const priorDocument = globalThis.document;
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({
+        createImageData: (w, hh) => ({ data: new Uint8ClampedArray(w * hh * 4) }),
+        putImageData() {},
+        createRadialGradient: () => ({ addColorStop() {} }),
+        fillRect() {},
+      }),
+      toDataURL: () => 'data:image/png;base64,AAAA',
+    }),
+  };
+  const h = harness({
+    withDataSource: true,
+    cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 1_000_000),
+  });
+  h.viewer.camera = { positionCartographic: { height: 1_000_000 } };
+  h.viewer.scene.primitives = { add() {}, remove() {}, raiseToTop() {}, contains: () => true };
+  h.viewer.scene.frameState = { mode: Cesium.SceneMode.SCENE3D };
+  const added = [];
+  try {
+    h.layer.attachShellServices({
+      imageryHost: () => ({
+        kind: 'globe',
+        collection: {
+          addImageryProvider: (provider) => {
+            const layer = { provider, show: true, alpha: 1 };
+            added.push(layer);
+            return layer;
+          },
+          remove() {},
+          raiseToTop() {},
+        },
+      }),
+    });
+    h.layer._renderLodForTest('close');
+    assert.equal(added.length, 0, 'the markers paint first; the build trails');
+    t.mock.timers.tick(HEAT_REBUILD_MS);
+    assert.equal(added.length, 1, 'then the heatmap is draped');
+    assert.equal(added[0].alpha, 0, 'invisible until the hand-off');
+    assert.equal(added[0].show, true, 'but mapped onto the globe tiles');
+  } finally {
+    h.layer.destroy(h.viewer);
+    h.cleanup();
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
+});
+
+test('far zoom drapes one heatmap and the hand-off cross-fades it with the markers', () => {
   // A canvas stub for the heat drape and the detection glow sprites.
   const priorDocument = globalThis.document;
   const restoreDocument = () => {
@@ -420,8 +472,16 @@ test('far zoom drapes one heatmap and draws no rectangles; markers and disable h
   });
   const added = [];
   const removed = [];
+  let markers = null;
+  // The fade reads the camera height; the cull reads scene.camera.
+  const setHeight = (height) => {
+    h.viewer.camera = { positionCartographic: { height } };
+  };
+  setHeight(12_000_000);
   h.viewer.scene.primitives = {
-    add() {},
+    add(primitive) {
+      markers = primitive;
+    },
     remove() {},
     raiseToTop() {},
     contains: () => true,
@@ -430,7 +490,7 @@ test('far zoom drapes one heatmap and draws no rectangles; markers and disable h
   try {
     const collection = {
       addImageryProvider: (provider) => {
-        const layer = { provider, show: true };
+        const layer = { provider, show: true, alpha: 1 };
         added.push(layer);
         return layer;
       },
@@ -443,17 +503,33 @@ test('far zoom drapes one heatmap and draws no rectangles; markers and disable h
     h.layer._renderLodForTest('global');
     assert.equal(added.length, 1, 'one heat imagery layer');
     assert.equal(added[0].show, true);
+    assert.equal(added[0].alpha, 1);
     assert.equal(h.layer._entityCountForTest(), 0, 'no rectangle entities');
     assert.ok(h.published.length > 0, 'the far band still paints cards');
+    assert.equal(markers.length, 2, 'the markers are built under the heatmap');
+    assert.equal(markers.show, false, 'and hidden while the heatmap is whole');
 
     h.layer._renderLodForTest('regional');
     assert.equal(added.length, 1, 'switching far bands reuses the raster');
 
+    setHeight(1_000_000);
     h.layer._renderLodForTest('close');
-    assert.equal(added[0].show, false, 'the markers band hides the heatmap');
+    assert.equal(added.length, 1, 'the markers band keeps the same heat layer');
+    assert.equal(added[0].show, true, 'still mapped onto the globe tiles');
+    assert.equal(added[0].alpha, 0, 'faded out under the markers');
+    assert.equal(markers.show, true);
+    assert.equal(markers.get(0).color.alpha, 1);
 
-    h.layer._renderLodForTest('global');
-    assert.equal(added[0].show, true);
+    // Mid hand-off both are drawn, half each, in either band.
+    setHeight(3_000_000);
+    h.layer._applyHandoffFadeForTest();
+    assert.equal(added[0].alpha, 0.5);
+    assert.equal(markers.show, true);
+    assert.equal(markers.get(0).color.alpha, 0.5);
+    h.layer._renderLodForTest('regional');
+    assert.equal(added[0].alpha, 0.5);
+    assert.equal(markers.get(1).color.alpha, 0.5, 'rebuilt markers get the fade');
+
     h.layer.disable();
     assert.equal(added[0].show, false, 'disable hides the heatmap');
 
@@ -465,68 +541,5 @@ test('far zoom drapes one heatmap and draws no rectangles; markers and disable h
   } finally {
     h.cleanup();
     restoreDocument();
-  }
-});
-
-test('the spot-size slider rebuilds only the heatmap, on a proportionally coarser grid', async () => {
-  const priorDocument = globalThis.document;
-  const grids = [];
-  globalThis.document = {
-    createElement: () => ({
-      getContext: () => ({
-        createImageData: (w, hh) => {
-          grids.push([w, hh]);
-          return { data: new Uint8ClampedArray(w * hh * 4) };
-        },
-        putImageData() {},
-        createRadialGradient: () => ({ addColorStop() {} }),
-        fillRect() {},
-      }),
-      toDataURL: () => 'data:image/png;base64,AAAA',
-    }),
-  };
-  const h = harness({
-    fires: [makeFire(), makeFire({ index: 8, lat: 30.6, lon: -98.3, frp: 12 })],
-    withDataSource: true,
-    cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 12_000_000),
-  });
-  h.viewer.scene.primitives = { add() {}, remove() {}, raiseToTop() {}, contains: () => true };
-  h.viewer.scene.frameState = { mode: Cesium.SceneMode.SCENE3D };
-  const collection = {
-    addImageryProvider: (provider) => ({ provider, show: true }),
-    remove() {},
-    raiseToTop() {},
-  };
-  try {
-    h.layer.attachShellServices({ imageryHost: () => ({ kind: 'globe', collection }) });
-    h.layer._renderLodForTest('global');
-    assert.deepEqual(grids.at(-1), [2048, 1024]);
-    assert.deepEqual(
-      h.layer.getRowControls().sliders.map((slider) => slider.id),
-      ['min-frp', 'heat-spot-size'],
-    );
-    const spot = h.layer.getRowControls().sliders[1];
-    assert.equal(spot.valueText, '1×');
-    assert.deepEqual(spot.params(1000), { spotSize: 400 });
-
-    let repaints = 0;
-    h.layer.setRowControlsListener(() => repaints++);
-    h.layer.setParams({ spotSize: 200 });
-    assert.equal(h.layer.getParams().spotSize, 200);
-    assert.equal(h.layer.getParams().minFrp, 0, 'the filter is untouched');
-    assert.equal(h.layer.getStats().count, 2, 'every fire still shown');
-    assert.equal(repaints, 1, 'the row repaints its value');
-    assert.equal(h.layer.getRowControls().sliders[1].valueText, '2×');
-    // The rebuild trails a drag (HEAT_REBUILD_MS) and keeps the old drape meanwhile.
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    assert.deepEqual(grids.at(-1), [1024, 512]);
-
-    h.layer.setParams({ spotSize: 'nope' });
-    assert.equal(h.layer.getParams().spotSize, 200, 'invalid input is ignored');
-  } finally {
-    h.layer.destroy(h.viewer);
-    h.cleanup();
-    if (priorDocument === undefined) delete globalThis.document;
-    else globalThis.document = priorDocument;
   }
 });

@@ -2209,37 +2209,36 @@ At far zoom (camera above ~3,000 km) the layer drapes a Snap Map–style
 heatmap instead of individual markers: the shown detections are linearly binned
 (each detection's weight shared between the four nearest pixel centres, so spots
 sit at the true position and stay round) on a
-global 2048 × 1024 grid (≈20 km per pixel), each weighted by its FRP in megawatts (so heat is
+global 4096 × 2048 grid (≈10 km per pixel), each weighted by its FRP in megawatts (so heat is
 radiated power, and raising the FRP slider does not dim areas where strong fires
-burn), Gaussian-blurred by one pixel so each fire stays a distinct spot about
-twice the size of its marker,
+burn, and a cluster of detections reads brighter than one), Gaussian-blurred by one
+pixel so each fire stays a distinct spot about the size of its marker,
 normalized on a log scale against the 99.5th percentile and mapped through the
 same hues, from a bright red edge through orange and gold to a pale
 white-hot core. The edge starts more than half opaque, so regions far below
 the hottest ones still read over forest and savanna imagery. Nothing is painted where
 nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
 tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
-on each data refresh or filter change (the first paint at once, later ones
-150 ms after the last change) and hidden once markers take over below
-~750 km. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
+on each data refresh or filter change (the first far-band paint at once,
+later ones 150 ms after the last change). Heatmap and markers are both kept
+built at every zoom and cross-fade by camera height between 2,400 and
+3,600 km, every frame, so a fast zoom never shows a gap: the heatmap fades by
+imagery `alpha` (a hidden Cesium imagery layer is unmapped from the globe
+tiles and re-mapped late when shown), the markers by sprite alpha, and the
+marker collection is hidden once the heatmap is whole. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
 areas; their accent is the strongest fire's FRP color.
 
 The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale
 whose track is painted with the ramp and ticked at the same six values (its
 value reads "All" or "≥ N MW"), a "Confidence" switch with All / Nominal+ /
-High, a "Heatmap spot size" slider (½× to 4× on a log2 axis, 5 % steps,
-default 1×) and an "N of M shown" counter. The spot size scales the heat
-grid rather than the blur (2× is a 1024 × 512 grid with the same one-pixel
-blur), so every spot grows exactly and weak lone fires do not fade as they
-widen; changing it rebuilds only the heatmap, not the shown set. The default is 0 MW and
+High, and an "N of M shown" counter. The default is 0 MW and
 All, because many of the strongest detections are rated low confidence. The
 filter runs once in `ingestion.applyFilter()` before rendering, so markers,
 cards, the heatmap, the shared context store, the top-fires query and the
 analyst records all see one filtered set; a selected fire that no longer passes
-is deselected. The layer state keeps the options under the `w` (`local-firms`)
-share token as `f` (whole megawatts, 0–10,000), `c` (`a`, `n`, `h`) and `s`
-(spot size in percent, 50–400), including the short share codec; a link
-without them restores the defaults.
+is deselected. The layer state keeps both options under the `w` (`local-firms`)
+share token as `f` (whole megawatts, 0–10,000) and `c` (`a`, `n`, `h`),
+including the short share codec; a link without them restores the defaults.
 
 The `get_active_fires` tool accepts its own `min_frp_mw` and `confidence`
 (`all`, `nominal`, `high`) arguments, independent of the panel's setting, and

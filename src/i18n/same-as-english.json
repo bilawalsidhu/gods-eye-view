@@ -31,7 +31,6 @@
     "dB",
     "hPa",
     "{source} HTTP {status}",
-    "{value}×",
     "▲ {frp} MW"
   ],
   "de": [
@@ -198,7 +197,6 @@
     "{value} KM DOWNRANGE",
     "{value} KM/H",
     "{value} KM/S",
-    "{value}×",
     "ΔN",
     "Ⅱ PAUSE",
     "≥ {value} MW",
@@ -329,7 +327,6 @@
     "{value} KM",
     "{value} KM/H",
     "{value} KM/S",
-    "{value}×",
     "≥ {value} MW",
     "ΔE",
     "ΔN",
@@ -511,7 +508,6 @@
     "{value} KM",
     "{value} KM/H",
     "{value} KM/S",
-    "{value}×",
     "ΔE",
     "ΔN",
     "Ⅱ PAUSE",
@@ -685,7 +681,6 @@
     "{value} KM/H",
     "{value} KM/S",
     "{value} conf",
-    "{value}×",
     "≥ {value} MW",
     "ΔE",
     "ΔN",
@@ -736,7 +731,6 @@
     "{source} HTTP {status}",
     "{speed} kn",
     "{type}  SPD: {speed}  HDG: {heading}",
-    "{value}×",
     "ΔE",
     "ΔN",
     "≥ {value} MW",
@@ -871,7 +865,6 @@
     "{value} KM/S",
     "ΔN",
     "▲ {frp} MW",
-    "{value}×",
     "≥ {value} MW"
   ],
   "ru": [
@@ -890,8 +883,7 @@
     "S2 GhostMaps",
     "S2 · {name}",
     "VS",
-    "WHOT/BHOT",
-    "{value}×"
+    "WHOT/BHOT"
   ],
   "uk": [
     "AIS: --",
@@ -904,8 +896,7 @@
     "NVG",
     "REC",
     "S2 GhostMaps",
-    "WHOT/BHOT",
-    "{value}×"
+    "WHOT/BHOT"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -960,7 +951,6 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
     "{value} KM/S",
-    "{value}×",
     "≥ {value} MW",
     "ΔE",
     "ΔN",
@@ -1019,7 +1009,6 @@
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
     "{value} KM/S",
-    "{value}×",
     "≥ {value} MW",
     "ΔE",
     "ΔN",

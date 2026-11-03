@@ -1,6 +1,5 @@
 import * as Cesium from 'cesium';
 import { DEFAULT_FIRE_FILTER } from '../../data/firmsIntensity.js';
-import { HEAT_SPOT_SIZE_DEFAULT } from '../../data/firmsHeatRaster.js';
 
 export function createFirmsState({ services, config }) {
   const layerState = {};
@@ -69,10 +68,6 @@ export function createFirmsState({ services, config }) {
   /** Minimum FRP (MW) and confidence mode; see firmsIntensity.js. */
 
   layerState._filter = { ...DEFAULT_FIRE_FILTER };
-
-  /** Heatmap spot size, percent of the shipped size (firmsHeatRaster.js). */
-
-  layerState._spotSize = HEAT_SPOT_SIZE_DEFAULT;
 
   /** Panel callback: repaint the row controls (counter) after a load. */
 
@@ -146,6 +141,10 @@ export function createFirmsState({ services, config }) {
   /** Pending debounced heat rebuild (see HEAT_REBUILD_MS). */
 
   layerState._heatRebuildTimer = null;
+
+  /** Last applied hand-off fade (0 markers … 1 heatmap); -1 forces a reapply. */
+
+  layerState._handoffHeat = -1;
 
   /** Imagery adapter (heatImagery.js), created on the first far render. */
 

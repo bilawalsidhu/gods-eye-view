@@ -30,11 +30,6 @@ import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { MAX_SINCE_DAYS } from '../layers/streetLevel/policy.js';
 import { SINCE_STOPS } from '../ui/streetLevelPresentation.js';
 import { FIRMS_CONFIDENCE_MODES, MIN_FRP_MW_MAX } from './firmsIntensity.js';
-import {
-  HEAT_SPOT_SIZE_DEFAULT,
-  HEAT_SPOT_SIZE_MAX,
-  HEAT_SPOT_SIZE_MIN,
-} from './firmsHeatRaster.js';
 
 function deferred() {
   let resolve;
@@ -3024,14 +3019,9 @@ test('Active Fires: the intensity filter rides share token w and round-trips', (
   assert.deepEqual(state.options['local-firms'], {
     minFrp: 0,
     confidence: 'all',
-    spotSize: 100,
   });
   state.enabledLayerIds = ['local-firms'];
-  state.options['local-firms'] = {
-    minFrp: 20,
-    confidence: 'high',
-    spotSize: 250,
-  };
+  state.options['local-firms'] = { minFrp: 20, confidence: 'high' };
   const encoded = encode(state);
   assert.equal(new URLSearchParams(encoded).get('l'), 'w');
   // Other owners write their own explicit defaults into `lo` too (flights 3D,
@@ -3039,12 +3029,10 @@ test('Active Fires: the intensity filter rides share token w and round-trips', (
   const assignments = new URLSearchParams(encoded).get('lo').split('_');
   assert.ok(assignments.includes('w.f.20'), assignments.join(' '));
   assert.ok(assignments.includes('w.c.h'), assignments.join(' '));
-  assert.ok(assignments.includes('w.s.250'), assignments.join(' '));
   const decoded = decodeLayerStateParams(new URLSearchParams(encoded));
   assert.deepEqual(decoded.options['local-firms'], {
     minFrp: 20,
     confidence: 'high',
-    spotSize: 250,
   });
   assert.deepEqual(
     parseStoredLayerState(serializeStoredLayerState(state)).options[
@@ -3062,11 +3050,7 @@ test('Active Fires: the intensity filter rides share token w and round-trips', (
       .filter((assignment) => assignment.startsWith('w.')).length,
     0,
   );
-  assert.deepEqual(firmsOptions(''), {
-    minFrp: 0,
-    confidence: 'all',
-    spotSize: 100,
-  });
+  assert.deepEqual(firmsOptions(''), { minFrp: 0, confidence: 'all' });
 });
 
 test('Active Fires: the codec accepts whole megawatts in bounds and the three confidence codes', () => {
@@ -3094,17 +3078,5 @@ test('Active Fires: the codec accepts whole megawatts in bounds and the three co
   assert.deepEqual(firmsOptions('w.c.n_w.f.5'), {
     minFrp: 5,
     confidence: 'nominal',
-    spotSize: 100,
   });
-});
-
-test('Active Fires: the codec accepts whole-percent spot sizes from half to four times', () => {
-  assert.equal(HEAT_SPOT_SIZE_MIN, 50);
-  assert.equal(HEAT_SPOT_SIZE_MAX, 400);
-  assert.equal(HEAT_SPOT_SIZE_DEFAULT, 100);
-  assert.equal(firmsOptions('w.s.50').spotSize, 50);
-  assert.equal(firmsOptions('w.s.400').spotSize, 400);
-  assert.equal(firmsOptions('w.s.45').spotSize, 100, 'out of bounds → default');
-  assert.equal(firmsOptions('w.s.401').spotSize, 100);
-  assert.equal(firmsOptions('w.s.x').spotSize, 100);
 });
