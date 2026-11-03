@@ -10,8 +10,59 @@ import {
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
-import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
+import {
+  AWARENESS_PAGE_SIZE,
+  AWARENESS_RANGE_RING_STYLE,
+  CONTEXT_RIM_HEIGHT_M,
+} from './policy.js';
 import { formatAwarenessDirection } from './presentation.js';
+
+/**
+ * A closed ring of positions `radiusM` along the surface from `groundCenter`,
+ * raised to `heightM`. Each bearing steps over a sphere with the ellipsoid's
+ * radius of curvature in that direction (Euler's formula), which keeps the
+ * ring within a few metres of the true geodesic radius at 250 km.
+ * @param {Cesium.Cartesian3} groundCenter Ring centre on the ellipsoid.
+ * @param {number} radiusM Surface radius in metres.
+ * @param {number} heightM Height of the ring above the ellipsoid.
+ * @param {number} [segments] Chords around the ring.
+ * @returns {Cesium.Cartesian3[]} `segments + 1` positions; the last repeats the first.
+ */
+export function awarenessRangeRingPositions(
+  groundCenter,
+  radiusM,
+  heightM,
+  segments = AWARENESS_RANGE_RING_STYLE.segments,
+) {
+  const { latitude, longitude } =
+    Cesium.Cartographic.fromCartesian(groundCenter);
+  const { x: a, z: b } = Cesium.Ellipsoid.WGS84.radii;
+  const e2 = 1 - (b * b) / (a * a);
+  const sinLat = Math.sin(latitude);
+  const cosLat = Math.cos(latitude);
+  const w = 1 - e2 * sinLat * sinLat;
+  const meridional = (a * (1 - e2)) / (w * Math.sqrt(w));
+  const primeVertical = a / Math.sqrt(w);
+  const positions = [];
+  for (let i = 0; i <= segments; i++) {
+    const bearing = ((i % segments) / segments) * Cesium.Math.TWO_PI;
+    const cosB = Math.cos(bearing);
+    const sinB = Math.sin(bearing);
+    const angular =
+      radiusM * ((cosB * cosB) / meridional + (sinB * sinB) / primeVertical);
+    const lat = Math.asin(
+      sinLat * Math.cos(angular) + cosLat * Math.sin(angular) * cosB,
+    );
+    const lon =
+      longitude +
+      Math.atan2(
+        sinB * Math.sin(angular) * cosLat,
+        Math.cos(angular) - sinLat * Math.sin(lat),
+      );
+    positions.push(Cesium.Cartesian3.fromRadians(lon, lat, heightM));
+  }
+  return positions;
+}
 
 export function createRendering({
   state: layerState,
@@ -292,15 +343,19 @@ export function createRendering({
     );
     const key = `${subject.layerId}:${subject.id}`;
     if (layerState.visual?.key === key) {
-      // Large ellipse geometry is more reliable as a ConstantPositionProperty.
-      // Move it only after a meaningful displacement so live tracking does not
-      // churn ten large geometries for sub-pixel motion every 750 ms.
+      // Move the ring only after a meaningful displacement so live tracking
+      // does not rebuild its geometry for sub-pixel motion every 750 ms.
       if (
         Cesium.Cartesian3.distance(layerState.visual.center, groundCenter) >=
         250
       ) {
+        const positions = awarenessRangeRingPositions(
+          groundCenter,
+          AWARENESS_RADIUS_M,
+          CONTEXT_RIM_HEIGHT_M,
+        );
         for (const entity of layerState.visual.entities)
-          entity.position.setValue(groundCenter);
+          entity.polyline.positions.setValue(positions);
         Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
@@ -311,17 +366,26 @@ export function createRendering({
 
     const entities = [];
 
+    // A polyline, not an ellipse outline: WebGL draws ellipse outlines at
+    // 1 px whatever `outlineWidth` says, and the ring needs a halo.
+    const ring = AWARENESS_RANGE_RING_STYLE;
     entities.push(
       layerState.viewer.entities.add({
-        position: groundCenter,
-        ellipse: {
-          semiMajorAxis: AWARENESS_RADIUS_M,
-          semiMinorAxis: AWARENESS_RADIUS_M,
-          fill: false,
-          outline: true,
-          outlineColor:
-            Cesium.Color.fromCssColorString('#62b5ff').withAlpha(0.72),
-          height: CONTEXT_RIM_HEIGHT_M,
+        polyline: {
+          positions: new Cesium.ConstantProperty(
+            awarenessRangeRingPositions(
+              groundCenter,
+              AWARENESS_RADIUS_M,
+              CONTEXT_RIM_HEIGHT_M,
+            ),
+          ),
+          width: ring.width,
+          arcType: Cesium.ArcType.NONE,
+          material: new Cesium.PolylineOutlineMaterialProperty({
+            color: Cesium.Color.fromCssColorString(ring.color),
+            outlineColor: Cesium.Color.fromCssColorString(ring.outlineColor),
+            outlineWidth: ring.outlineWidth,
+          }),
         },
       }),
     );

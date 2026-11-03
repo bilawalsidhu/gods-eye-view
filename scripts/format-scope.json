@@ -1177,6 +1177,7 @@
   "src/overlays/worldOverlayActionsView.test.mjs",
   "src/ui/stores/awarenessDirection.js",
   "src/layers/awareness/directionOverlay.test.mjs",
+  "src/layers/awareness/rangeRing.test.mjs",
   "src/hudReadouts.js",
   "src/ui/stores/hud.js",
   "src/ui/views/intelHudView.test.mjs",
