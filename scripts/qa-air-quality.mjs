@@ -45,6 +45,12 @@ async function main() {
 
   try {
     const page = await browser.newPage();
+    page.on('response', (response) => {
+      if (response.status() >= 400) {
+        const url = new URL(response.url());
+        console.log(`HTTP ${response.status()}: ${url.origin}${url.pathname}`);
+      }
+    });
     page.on('pageerror', (e) => consoleErrors.push(String(e).slice(0, 160)));
     page.on('console', (m) => {
       if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 160));
@@ -135,15 +141,16 @@ async function main() {
     );
     const readoutOk =
       controls?.readout === true &&
-      Array.isArray(controls?.legend?.colors) &&
-      controls.legend.colors.length === controls.legend.labels.length &&
+      Array.isArray(controls?.legend) &&
+      controls.legend.length === 4 &&
+      controls.legend.every((entry) => entry.color && entry.label) &&
       Array.isArray(controls?.list?.items) &&
       controls.list.items.length > 0 &&
-      controls.list.items.every((item) => item.id && item.label && item.value) &&
+      controls.list.items.every((item) => item.id && item.lead && item.text) &&
       /Canada only/.test(controls?.summary?.coverage || '');
     record('the Weather readout lists the worst readings in view, with a legend', readoutOk,
       controls
-        ? `bands=${controls.legend?.labels?.join('/')} inView=${controls.list?.items?.length} coverage="${controls.summary?.coverage}"`
+        ? `bands=${controls.legend?.map((entry) => entry.label).join('/')} inView=${controls.list?.items?.length} coverage="${controls.summary?.coverage}"`
         : 'no descriptor');
     if (!readoutOk) exitCode = 1;
 

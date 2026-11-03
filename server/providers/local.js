@@ -30,6 +30,7 @@ import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { ghostMapsProxy } from './ghostMaps.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { cpcbProxy } from './cpcb.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -78,6 +79,8 @@ function localProviderPlugins({
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    cpcbProxy(),
+
     ghostMapsProxy(),
     keySetupEndpoint(),
   ];

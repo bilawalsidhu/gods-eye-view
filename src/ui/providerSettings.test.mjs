@@ -419,3 +419,40 @@ test('the chip does nothing until the setup endpoint has answered', async (t) =>
   await nextTick();
   assert.equal(document.getElementById('key-setup').hidden, true);
 });
+
+test('India connection uses its contextual Vue dialog and stays outside POWER UP', async (t) => {
+  const india = {
+    id: 'data-gov-in', title: 'DATA.GOV.IN', contextual: true,
+    tier: 'free', set: false, managed: null, getUrl: 'https://www.data.gov.in/',
+    unlocks: 'Indian air-quality station observations', envVars: ['DATA_GOV_IN_API_KEY'],
+  };
+  const status = { ...STATUS, keys: [...STATUS.keys, india] };
+  const { $, text, store, setup, requests } = await fixture(t, {
+    status,
+    respond: async () => ({ ok: true, json: async () => ({ ok: true, saved: ['DATA_GOV_IN_API_KEY'], status }) }),
+  });
+  assert.equal($('[data-key-id="data-gov-in"]'), null);
+  assert.equal(text('[data-key-setup-chip-label]'), 'POWER UP · 2 KEYS WAITING');
+  setup.open('unknown');
+  await nextTick();
+  assert.equal($('#key-setup').hidden, true);
+  setup.open('data-gov-in');
+  await nextTick();
+  assert.equal(text('#key-setup-title'), 'Manage connection');
+  assert.match(text('#key-setup-description'), /India air quality/);
+  assert.equal(text('[data-key-setup-status]'), '');
+  assert.deepEqual(store.view.rows.map((row) => row.id), ['data-gov-in']);
+  store.controls.setField('DATA_GOV_IN_API_KEY', 'fixture-key');
+  await store.controls.apply();
+  assert.deepEqual(requests.at(-1).body, { DATA_GOV_IN_API_KEY: 'fixture-key' });
+  store.controls.setField('DATA_GOV_IN_API_KEY', 'unsaved-fixture-key');
+  setup.close();
+  setup.open();
+  await nextTick();
+  assert.equal(text('#key-setup-title'), 'Power up the globe');
+  assert.equal($('[data-key-id="data-gov-in"]'), null);
+  assert.ok($('[data-key-id="google-maps"]'));
+  assert.deepEqual(store.view.fields, {});
+  setup.destroy();
+  assert.equal(store.controls, null);
+});

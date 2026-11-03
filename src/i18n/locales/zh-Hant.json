@@ -2931,5 +2931,17 @@
   "counted over the bounding box of {area}, not its outline": "按外接矩形（{area}）計數，而非其輪廓",
   "Search cancelled": "搜索已取消",
   "Sea Marks": "航標",
-  "Ski Pistes": "滑雪道"
+  "Ski Pistes": "滑雪道",
+  "Indian air-quality station observations": "印度空氣品質監測站觀測資料",
+  "India · CPCB via OGD": "印度 · 透過 OGD 取得 CPCB 資料",
+  "Reported pollutant average · not an overall AQI": "回報的污染物平均值 · 非綜合空氣品質指數",
+  "Canada": "加拿大",
+  "India": "印度",
+  "Manage connection": "管理連線",
+  "Source updated: {time}": "資料來源更新時間：{time}",
+  "Showing cached observations": "正在顯示快取的觀測資料",
+  "India air quality requires a data.gov.in API key": "印度空氣品質需要 data.gov.in API 金鑰",
+  "India air quality is unavailable": "印度空氣品質暫時無法取得",
+  "Malformed India air-quality response": "印度空氣品質回應格式錯誤",
+  "Connect India air quality with your data.gov.in key. It stays on this machine. Saving restarts the server.": "使用您的 data.gov.in 金鑰連接印度空氣品質資料。金鑰會保留在本機。儲存將重新啟動伺服器。"
 }

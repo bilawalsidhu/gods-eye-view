@@ -1,12 +1,14 @@
 import * as Cesium from 'cesium';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
+import { CPCB_POLLUTANTS } from './cpcb.js';
 import {
   AIR_QUALITY_BANDS,
   AIR_QUALITY_OVERLAY_SOURCE_ID,
   AIR_QUALITY_OVERLAY_COHORT_LIMIT,
   AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
   AIR_QUALITY_PROVIDERS,
+  OBSERVATION_MAX_AGE_MS,
   createAirQualityOverlayEntry,
   mapAnalystRecord,
   newestObservation,
@@ -15,7 +17,10 @@ import {
   selectAirQualityOverlayCohort,
 } from './model.js';
 export * from './model.js';
-export { createEcccAirQualitySource } from './source.js';
+export {
+  createEcccAirQualitySource,
+  createAirQualitySource,
+} from './source.js';
 
 /** Station markers are a point reading, not an extent. */
 const STATION_MARKER_RADIUS_M = 6_000;
@@ -23,7 +28,12 @@ const STATION_MARKER_RADIUS_M = 6_000;
 const READOUT_LIMIT = 5;
 
 /** Own one air-quality display, its refresh lifecycle, and its readout card. */
-export function createAirQualityLayer({ source, overlayHost } = {}) {
+export function createAirQualityLayer({
+  source,
+  overlayHost,
+  onManageConnection,
+  canManageConnection = () => true,
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
@@ -36,6 +46,9 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   let _lastError = null;
   let _enabled = false;
   let rowControlsListener = null;
+  let providerId = 'eccc';
+  let pollutant = 'PM2.5';
+  let sourceStale = false;
 
   const notify = () => rowControlsListener?.();
 
@@ -97,12 +110,17 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       const request = new AbortController();
       _request = request;
       try {
-        const readings = await source.getSnapshot({ signal: request.signal });
+        const readings = await source.getSnapshot({
+          signal: request.signal,
+          provider: providerId,
+          pollutant,
+        });
         // A superseded or aborted request must not touch the scene, and neither
         // must one that lands after the layer was switched off.
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         _readings = readings;
+        sourceStale = source.getStatus?.().stale === true;
         this._render();
         _count = _readings.length;
         _lastUpdate = Date.now();
@@ -111,10 +129,21 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         return true;
       } catch (error) {
         if (request.signal.aborted || _request !== request) return false;
+        if (providerId === 'cpcb') {
+          _readings = _readings.filter(
+            (reading) =>
+              Date.now() - reading.observedMs <= OBSERVATION_MAX_AGE_MS,
+          );
+          _count = _readings.length;
+          sourceStale = true;
+          this._render();
+        }
         _lastError = error?.message || msg('Air quality request failed');
         console.warn('[Data:AirQuality] Refresh failed:', _lastError);
         notify();
-        return false;
+        // Keep India's controls available when its optional key/feed is missing.
+        // Stats still report the failure; users can select Canada or retry.
+        return providerId === 'cpcb';
       } finally {
         if (_request === request) _request = null;
       }
@@ -165,7 +194,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           createAirQualityOverlayEntry({
             id: reading.id,
             position,
-            title: `${reading.name} ${reading.label}`,
+            title: `${reading.name} ${reading.scale} ${reading.label}`,
             accent: reading.color,
             value: reading.value,
           }),
@@ -211,6 +240,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
      */
     getRowControls() {
       const provider = AIR_QUALITY_PROVIDERS.eccc;
+      const india = providerId === 'cpcb';
       const inView = readingsInView(_readings, viewRectangle(), READOUT_LIMIT);
       const newest = _readings.reduce(
         (max, reading) => Math.max(max, reading.observedMs || 0),
@@ -223,9 +253,60 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         readout: true,
         summary: {
           label: t(provider.label),
-          coverage: t(provider.coverage),
+          coverage: india ? t('India · CPCB via OGD') : t(provider.coverage),
           validTime: newest ? new Date(newest).toISOString() : undefined,
-          detail: `${provider.network} · ${provider.scale}`,
+          detail: india
+            ? t('Reported pollutant average · not an overall AQI')
+            : `${provider.network} · ${provider.scale}`,
+          actions: source.providers?.includes('cpcb')
+            ? [
+                {
+                  id: 'eccc',
+                  label: t('Canada'),
+                  params: { provider: 'eccc' },
+                  disabled: !india,
+                },
+                {
+                  id: 'cpcb',
+                  label: t('India'),
+                  params: { provider: 'cpcb' },
+                  disabled: india,
+                },
+                ...(india
+                  ? CPCB_POLLUTANTS.map((value) => ({
+                      id: value,
+                      label: value,
+                      params: { pollutant: value },
+                      disabled: pollutant === value,
+                    }))
+                  : []),
+                ...(india && onManageConnection && canManageConnection()
+                  ? [
+                      {
+                        id: 'connection',
+                        label: t('Manage connection'),
+                        onClick: onManageConnection,
+                      },
+                    ]
+                  : []),
+              ]
+            : [],
+          lines: india
+            ? [
+                { id: 'pollutant', text: pollutant },
+                {
+                  id: 'updated',
+                  text: newest
+                    ? t('Source updated: {time}', {
+                        time: new Date(newest).toISOString(),
+                      })
+                    : t('No current readings'),
+                },
+                ...((_lastError || sourceStale) && _count > 0
+                  ? [{ id: 'stale', text: t('Showing cached observations') }]
+                  : []),
+              ]
+            : [],
           status: _lastError
             ? translateFeedError(_lastError)
             : _count === 0
@@ -237,12 +318,14 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
                   '{count} station reporting',
                   '{count} stations reporting',
                 ),
-          units: provider.scale,
+          units: india ? pollutant : provider.scale,
         },
-        legend: AIR_QUALITY_BANDS.map((band) => ({
-          color: band.color,
-          label: t(band.label),
-        })),
+        legend: india
+          ? []
+          : AIR_QUALITY_BANDS.map((band) => ({
+              color: band.color,
+              label: t(band.label),
+            })),
         legendCategorical: true,
         list: {
           ariaLabel: t('Highest air-quality readings in view'),
@@ -250,7 +333,9 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             id: reading.id,
             ordinal: index + 1,
             lead: `${reading.scale} ${reading.label}`,
-            text: `${reading.name} · ${t(reading.risk)}`,
+            text: india
+              ? `${reading.name} · ${reading.zone} · ${t('Source updated: {time}', { time: new Date(reading.observedMs).toISOString() })}`
+              : `${reading.name} · ${t(reading.risk)}`,
             accent: reading.color,
           })),
         },
@@ -259,6 +344,34 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
 
     setRowControlsListener(listener) {
       rowControlsListener = typeof listener === 'function' ? listener : null;
+    },
+
+    getParams() {
+      return { provider: providerId, pollutant };
+    },
+
+    setParams(params = {}) {
+      const nextProvider = source.providers?.includes(params.provider)
+        ? params.provider
+        : providerId;
+      const nextPollutant = CPCB_POLLUTANTS.includes(params.pollutant)
+        ? params.pollutant
+        : pollutant;
+      if (nextProvider === providerId && nextPollutant === pollutant) return;
+      _request?.abort();
+      _request = null;
+      providerId = nextProvider;
+      pollutant = nextPollutant;
+      layer.source =
+        providerId === 'cpcb' ? 'CPCB · data.gov.in' : 'ECCC MSC GeoMet';
+      _readings = [];
+      _count = 0;
+      _lastUpdate = null;
+      _lastError = null;
+      sourceStale = false;
+      layer._render();
+      notify();
+      if (_enabled) void layer.update();
     },
 
     /**
@@ -287,7 +400,8 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         error: _lastError,
         observedAt: newestObservation(_readings),
         // Only a completed refresh can be stale; before one there is no feed.
-        stale: _lastUpdate !== null && readingsAreStale(_readings),
+        stale:
+          _lastUpdate !== null && (sourceStale || readingsAreStale(_readings)),
       };
     },
   };

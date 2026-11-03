@@ -3112,6 +3112,7 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
+      "src/layers/airQuality/cpcb.js",
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/voice/providerCommands.js",
       "src/voice/providerCapabilities.js",
@@ -3229,6 +3230,7 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/ui/stores/providerSettings.js",
       "src/sources/adsbFields.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
@@ -3794,6 +3796,7 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
+      "src/layers/airQuality/cpcb.js",
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/data/geoImportImages.js",
       "src/data/geoImportPins.js",
@@ -4339,7 +4342,8 @@
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
-      "src/layers/airQuality/source.js"
+      "src/layers/airQuality/source.js",
+      "src/layers/airQuality/cpcb.js"
     ],
     "external": []
   },
@@ -4901,7 +4905,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/statusText.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/layers/airQuality/cpcb.js"
     ],
     "external": ["cesium"]
   },
@@ -4911,7 +4916,8 @@
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/sources/httpBody.js",
-      "src/i18n/marker.js"
+      "src/i18n/marker.js",
+      "src/layers/airQuality/cpcb.js"
     ],
     "external": []
   },
