@@ -236,7 +236,11 @@ test('the catalog fetch refuses redirects and oversized bodies', async (t) => {
   t.mock.restoreAll();
   t.mock.method(console, 'warn', () => {});
   t.mock.method(globalThis, 'fetch', async () => {
-    const oversized = 'x'.repeat(HOUSTON_MAX_CATALOG_BYTES + 1024);
+    // Valid JSON with a usable camera, so only the byte cap can refuse it.
+    const oversized = JSON.stringify({
+      cameras: [row()],
+      padding: 'x'.repeat(HOUSTON_MAX_CATALOG_BYTES + 1024),
+    });
     return new Response(
       new ReadableStream({
         start(controller) {
