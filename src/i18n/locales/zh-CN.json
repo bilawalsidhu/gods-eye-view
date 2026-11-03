@@ -2943,5 +2943,7 @@
   "counted over the bounding box of {area}, not its outline": "按外接矩形（{area}）计数，而非其轮廓",
   "Search cancelled": "搜索已取消",
   "Sea Marks": "航标",
-  "Ski Pistes": "滑雪道"
+  "Ski Pistes": "滑雪道",
+  "DeFlock + OpenStreetMap · community mapped": "DeFlock + OpenStreetMap · 社区地图数据",
+  "Some camera sources are unavailable; showing available locations": "部分摄像头数据源不可用；正在显示可用位置"
 }

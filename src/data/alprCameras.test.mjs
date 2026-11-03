@@ -304,6 +304,7 @@ function cameraHarness(layer = alprCamerasLayer) {
           saturated: body.elements.length >= QUERY_LIMIT,
           noCoverage: body.noCoverage,
           zoomIn: body.zoomIn,
+          partialSources: body.partialSources,
         };
       },
     });
@@ -1268,6 +1269,36 @@ test('a non-retryable capability error does not arm the ALPR retry timer', async
     t.mock.timers.tick(300_000);
     await Promise.resolve();
     assert.equal(h.requests.length, requests);
+  } finally {
+    h.restore();
+  }
+});
+
+test('a partially available feed keeps cameras, retries while stationary, and clears the notice after recovery', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = cameraHarness();
+  let partial = true;
+  try {
+    h.setFetch(async () =>
+      Response.json({ elements: [cameraNode(42)], partialSources: partial }),
+    );
+    await alprCamerasLayer.update();
+    assert.equal(alprCamerasLayer.getStats().count, 1);
+    assert.equal(alprCamerasLayer.getStats().partialSources, true);
+    assert.equal(alprCamerasLayer.getStats().saturated, true);
+    assert.ok(alprCamerasLayer.getStats().retryAt);
+    assert.match(alprCamerasLayer.getRowControls().info, /Some camera sources/);
+    const count = h.requests.length;
+    partial = false;
+    h.advance(30_000);
+    t.mock.timers.tick(30_000);
+    for (let i = 0; i < 12; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.requests.length, count + 1);
+    assert.equal(alprCamerasLayer.getStats().partialSources, false);
+    assert.equal(alprCamerasLayer.getStats().retryAt, 0);
+    assert.equal(alprCamerasLayer.getRowControls().info, null);
+    assert.equal(alprCamerasLayer.getStats().count, 1);
   } finally {
     h.restore();
   }

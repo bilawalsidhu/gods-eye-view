@@ -3168,5 +3168,7 @@
   "counted over the bounding box of {area}, not its outline": "підраховано за обмежувальним прямокутником ({area}), а не за контуром",
   "Search cancelled": "Пошук скасовано",
   "Sea Marks": "Морські знаки",
-  "Ski Pistes": "Гірськолижні траси"
+  "Ski Pistes": "Гірськолижні траси",
+  "DeFlock + OpenStreetMap · community mapped": "DeFlock + OpenStreetMap · дані спільноти",
+  "Some camera sources are unavailable; showing available locations": "Деякі джерела камер недоступні; показано доступні місця"
 }
