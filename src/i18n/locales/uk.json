@@ -3074,6 +3074,15 @@
   "Right panels": "Праві панелі",
   "CONFIRMED": "ПІДТВЕРДЖЕНО",
   "PAD / RTLS": "МІСЦЕ ЗАПУСКУ / RTLS",
+  "Name of {name}": "Назва: {name}",
+  "Change the colour of {name}": "Змінити колір: {name}",
+  "Colour of {name}": "Колір: {name}",
+  "Colour of the next shape": "Колір наступної фігури",
+  "Drawn shapes": "Намальовані фігури",
+  "Audio": "Аудіо",
+  "UTILITIES": "ІНСТРУМЕНТИ",
+  "Exit cockpit to fly to a drawing": "Вийдіть із кабіни, щоб перелетіти до малюнка",
+  "Directions, drawing and your own files": "Маршрути, малювання та ваші файли",
   "Sea Marks": "Морські знаки",
   "Ski Pistes": "Гірськолижні траси"
 }

@@ -2870,6 +2870,9 @@
   "Download this scene as JSON or an asset bundle": "將此場景下載為 JSON 或資源包",
   "Left panels": "左側面板",
   "Right panels": "右側面板",
+  "UTILITIES": "工具",
+  "Exit cockpit to fly to a drawing": "請先退出座艙，再飛往繪製位置",
+  "Directions, drawing and your own files": "路線導航、繪製和你自己的文件",
   "Sea Marks": "航標",
   "Ski Pistes": "滑雪道"
 }

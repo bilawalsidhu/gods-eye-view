@@ -3004,6 +3004,15 @@
   "Right panels": "Pannelli a destra",
   "CONFIRMED": "CONFERMATA",
   "PAD / RTLS": "SITO DI LANCIO / RTLS",
+  "Name of {name}": "Nome di {name}",
+  "Change the colour of {name}": "Cambia il colore di {name}",
+  "Colour of {name}": "Colore di {name}",
+  "Colour of the next shape": "Colore della prossima forma",
+  "Drawn shapes": "Forme disegnate",
+  "Audio": "Audio",
+  "UTILITIES": "STRUMENTI",
+  "Exit cockpit to fly to a drawing": "Esci dal cockpit per volare a un disegno",
+  "Directions, drawing and your own files": "Indicazioni, disegno e i tuoi file",
   "Sea Marks": "Segnalamenti marittimi",
   "Ski Pistes": "Piste da sci"
 }

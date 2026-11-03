@@ -2864,6 +2864,15 @@
   "Right panels": "右パネル",
   "CONFIRMED": "確認済み",
   "PAD / RTLS": "射場 / RTLS",
+  "Name of {name}": "{name}の名前",
+  "Change the colour of {name}": "{name}の色を変更",
+  "Colour of {name}": "{name}の色",
+  "Colour of the next shape": "次の図形の色",
+  "Drawn shapes": "描いた図形",
+  "Audio": "オーディオ",
+  "UTILITIES": "ユーティリティ",
+  "Exit cockpit to fly to a drawing": "描画の位置へ移動するにはコックピットを終了してください",
+  "Directions, drawing and your own files": "ルート案内、描画、自分のファイル",
   "Sea Marks": "航路標識",
   "Ski Pistes": "スキーゲレンデ"
 }

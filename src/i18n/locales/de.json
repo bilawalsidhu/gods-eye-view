@@ -2934,6 +2934,15 @@
   "Right panels": "Rechte Panels",
   "CONFIRMED": "BESTÄTIGT",
   "PAD / RTLS": "STARTPLATZ / RTLS",
+  "Name of {name}": "Name von {name}",
+  "Change the colour of {name}": "Farbe von {name} ändern",
+  "Colour of {name}": "Farbe von {name}",
+  "Colour of the next shape": "Farbe der nächsten Form",
+  "Drawn shapes": "Gezeichnete Formen",
+  "Audio": "Audio",
+  "UTILITIES": "WERKZEUGE",
+  "Exit cockpit to fly to a drawing": "Cockpit verlassen, um zu einer Zeichnung zu fliegen",
+  "Directions, drawing and your own files": "Route, Zeichnen und eigene Dateien",
   "Sea Marks": "Seezeichen",
   "Ski Pistes": "Skipisten"
 }

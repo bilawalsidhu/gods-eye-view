@@ -1030,11 +1030,12 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // preserves the mission mapping and globe-rotation arguments.
   // S2 GhostMaps extends the generated layer enums; both feature contracts remain.
   // The layer alias hint leaves out aliases the layer id already spells.
-  // Sea Marks and Ski Pistes extend the generated layer enums and alias hint.
-  assert.equal(block.length, 31008, 'serialized tool schema length drifted');
+  // The Utilities panel adds one set_panel_open target; Sea Marks and Ski
+  // Pistes extend the generated layer enums and alias hint.
+  assert.equal(block.length, 31026, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'da1674545ab9380fb86d387f6e8513aa271e0afe539b69b6a6d09add6c710b0c',
+    '5f5275cd6e320afef4fd224b235f3e0f191ec06599b257ffe1f60b703a255199',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
