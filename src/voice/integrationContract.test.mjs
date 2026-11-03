@@ -5,6 +5,7 @@
 // Run with: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import {
   initialVoiceCardState,
   reduceVoiceCard,
@@ -206,14 +207,7 @@ test('the voice controls reset the runner on stop and dispose it on removal', as
   globalThis.window = {};
   try {
     const h = harness();
-    const button = new EventTarget();
-    button.setAttribute = () => {};
-    const ui = {
-      button,
-      root: { dataset: {}, remove() {} },
-      status: {},
-      detail: {},
-    };
+    const ui = createTestVoiceUi();
     const lifetime = new AbortController();
     let emitState;
     const controls = createVoiceCommands({

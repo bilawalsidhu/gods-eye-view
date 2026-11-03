@@ -1,112 +1,55 @@
-/** Reconcile actionable signal rows without disturbing native keyboard focus. */
+/** The Cockpit signal rows: which contacts and statuses they show, and their selection. */
 import { t, tn } from '../i18n/index.js';
 import { formatCockpitDistance } from './cockpitPresentation.js';
 
-export function renderCockpitSignals() {
-  if (!this.signalList) return;
-  const existing = [...this.signalList.children];
-  const focusedEntry = existing.find((entry) =>
-    entry.contains(document.activeElement),
+/**
+ * Publish the signal rows. A row's key includes its action target, so a
+ * reused status key never turns a focused flight button into a different
+ * selection; repeats of a key are numbered so each keeps its own row.
+ */
+export function publishCockpitSignals() {
+  const seen = new Map();
+  this.publishSignals(
+    this.signalItems.map((item) => {
+      const identity = JSON.stringify([
+        item.key,
+        Boolean(item.target),
+        item.target?.layerId || '',
+        String(item.target?.id ?? ''),
+      ]);
+      const repeat = seen.get(identity) ?? 0;
+      seen.set(identity, repeat + 1);
+      return {
+        key: repeat ? `${identity}#${repeat}` : identity,
+        className: item.target ? `${item.tone} actionable` : item.tone,
+        time: new Date(item.timestamp).toISOString().slice(11, 19) + 'Z',
+        title: item.title,
+        detail: item.detail,
+        target: item.target && {
+          layerId: item.target.layerId,
+          id: item.target.id,
+          label: t('Select flight {title}', { title: item.title }),
+        },
+      };
+    }),
   );
-  const entriesByKey = new Map();
-  for (const entry of existing) {
-    const key = entry.dataset.signalKey;
-    if (!entriesByKey.has(key)) entriesByKey.set(key, []);
-    entriesByKey.get(key).push(entry);
-  }
-  const setText = (element, value) => {
-    if (element.textContent !== value) element.textContent = value;
-  };
-  const entries = this.signalItems.map((item) => {
-    // Identity includes the action target: a reused status key must never
-    // silently turn a focused flight button into a different selection.
-    const key = JSON.stringify([
-      item.key,
-      Boolean(item.target),
-      item.target?.layerId || '',
-      String(item.target?.id ?? ''),
-    ]);
-    let entry = entriesByKey.get(key)?.shift();
-    if (!entry) {
-      entry = document.createElement('li');
-      entry.dataset.signalKey = key;
-      const time = document.createElement('time');
-      const body = document.createElement('div');
-      const heading = document.createElement(item.target ? 'button' : 'strong');
-      if (item.target) {
-        heading.type = 'button';
-        heading.className = 'cockpit-signal-target';
-        const label = document.createElement('span');
-        label.className = 'cockpit-signal-target-label';
-        const rule = document.createElement('span');
-        rule.className = 'cockpit-signal-target-rule';
-        rule.setAttribute('aria-hidden', 'true');
-        const chevron = document.createElement('span');
-        chevron.className =
-          'material-symbols-outlined cockpit-signal-target-chevron';
-        chevron.setAttribute('aria-hidden', 'true');
-        chevron.textContent = 'chevron_right';
-        heading.append(label, rule, chevron);
-      }
-      body.append(heading, document.createElement('span'));
-      entry.append(time, body);
-    }
-    const [time, body] = entry.children;
-    const [heading, copy] = body.children;
-    const className = item.target ? `${item.tone} actionable` : item.tone;
-    if (entry.className !== className) entry.className = className;
-    setText(time, new Date(item.timestamp).toISOString().slice(11, 19) + 'Z');
-    if (item.target) {
-      heading.dataset.signalLayer = item.target.layerId;
-      heading.dataset.signalId = item.target.id;
-      const label = t('Select flight {title}', { title: item.title });
-      if (heading.getAttribute('aria-label') !== label)
-        heading.setAttribute('aria-label', label);
-      setText(heading.children[0], item.title);
-    } else {
-      setText(heading, item.title);
-    }
-    setText(copy, item.detail);
-    return entry;
-  });
-  const retainedFocus = entries.includes(focusedEntry) ? focusedEntry : null;
-  if (focusedEntry && !retainedFocus) {
-    // A departed contact cannot remain selectable. Continue from the stable
-    // briefing footer instead of dropping keyboard traversal to the page top.
-    (this.briefTabs?.[this.briefPageIndex] || this.signalToggle)?.focus({
-      preventScroll: true,
-    });
-  }
-  for (const entry of existing) if (!entries.includes(entry)) entry.remove();
-
-  // Ordinary insertBefore moves disconnect an element and lose its focus.
-  // Reorder the other rows around the focused row, which stays connected.
-  const focusIndex = retainedFocus ? entries.indexOf(retainedFocus) : -1;
-  if (retainedFocus) {
-    let anchor = retainedFocus;
-    for (let index = focusIndex - 1; index >= 0; index -= 1) {
-      const entry = entries[index];
-      if (entry.nextElementSibling !== anchor)
-        this.signalList.insertBefore(entry, anchor);
-      anchor = entry;
-    }
-  }
-  let anchor = retainedFocus
-    ? retainedFocus.nextElementSibling
-    : this.signalList.firstElementChild;
-  for (let index = focusIndex + 1; index < entries.length; index += 1) {
-    const entry = entries[index];
-    if (entry === anchor) anchor = anchor.nextElementSibling;
-    else this.signalList.insertBefore(entry, anchor);
-  }
   this.scheduleContextLayout();
 }
 
 export function pushCockpitSignal(key, tone, title, detail, target = null) {
-  if (!this.signalList || !title || !detail) return;
+  if (!title || !detail) return;
   const signature = `${title}|${detail}|${target?.layerId || ''}|${target?.id || ''}`;
   if (this.signalSignatures.get(key) === signature) return;
   this.signalSignatures.set(key, signature);
+  // A locale change words the signal again where it stands.
+  const shown = this.rewordingSignals
+    ? this.signalItems.find((item) => item.key === key)
+    : null;
+  if (shown) {
+    Object.assign(shown, { title, detail });
+    this.publishCockpitSignals();
+    return;
+  }
   this.signalItems.unshift({
     key,
     tone,
@@ -116,7 +59,7 @@ export function pushCockpitSignal(key, tone, title, detail, target = null) {
     timestamp: Date.now(),
   });
   this.signalItems = this.signalItems.slice(0, 5);
-  this.renderCockpitSignals();
+  this.publishCockpitSignals();
 }
 
 export function updateCockpitSignals(snapshot, unknownCount) {
@@ -195,7 +138,7 @@ export function updateCockpitSignals(snapshot, unknownCount) {
   }
   this.signalItems = nextItems;
   this.signalSignatures.clear();
-  this.renderCockpitSignals();
+  this.publishCockpitSignals();
 }
 
 export function handleSignalClick(event) {
