@@ -511,6 +511,8 @@ export class IntelHUD {
    * collection timestamp. Stores results in {@link _latestMetrics}.
    */
   _updateCameraData() {
+    // Between two globe engines there is no camera to read.
+    if (!this.engine) return;
     const pose = this.engine.camera.pose();
     const cartographic = pose.cartographic;
     if (!cartographic) return;
@@ -563,7 +565,7 @@ export class IntelHUD {
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
     // i18n-ignore: sensor codes
     readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
-    if (this.engine.host.container?.hasAttribute?.('data-terrain-daylight'))
+    if (this.engine?.host.container?.hasAttribute?.('data-terrain-daylight'))
       readouts.alt += ' · DAYLIGHT VIEW';
 
     // Collection timestamp
@@ -740,7 +742,7 @@ export class IntelHUD {
    *   dimensions, or null if the view rectangle cannot be computed.
    */
   _viewWindowKm(latDeg) {
-    const rect = this.engine.camera.viewRectangle();
+    const rect = this.engine?.camera.viewRectangle();
     if (!rect) return null;
     const north = geo.math.toDegrees(rect.north);
     const south = geo.math.toDegrees(rect.south);
@@ -1040,6 +1042,8 @@ export class IntelHUD {
 
   async _summaryContext() {
     const revision = this._summaryRevision;
+    // Between two globe engines the summary keeps its fallback line.
+    if (!this.engine) throw new Error('No globe camera to describe');
     const labels = await getBasemapLabelContext(this.engine, this.placeSearch, {
       ...this.basemapContext,
       previous: this._placeLabels,
@@ -1222,6 +1226,29 @@ export class IntelHUD {
       });
     }
     this._markSummaryDirty();
+  }
+
+  /**
+   * Read another globe engine's camera (an engine switch), or none (null)
+   * between two engines. Telemetry, summaries and the camera listeners
+   * follow it; the view, timers and data manager stay.
+   */
+  attachEngine(engine, { viewer = null } = {}) {
+    this._removeCameraMoveEnd?.();
+    this._removeCameraMoveEnd = null;
+    this._removeCameraMoveStart?.();
+    this._removeCameraMoveStart = null;
+    this._summaryRequest?.abort();
+    this.engine = engine ? engineFromViewer(engine) : null;
+    this.viewer = viewer;
+    if (!this.engine) return;
+    this._removeCameraMoveStart =
+      this.engine.camera.moveStart?.addEventListener(this._onCameraMoveStart);
+    this._removeCameraMoveEnd = this.engine.camera.moveEnd.addEventListener(
+      this._onCameraMoveEnd,
+    );
+    this._markSummaryDirty();
+    if (this._visible) this._updateCameraData();
   }
 
   /** Tear down all running intervals. Call when discarding the HUD instance. */

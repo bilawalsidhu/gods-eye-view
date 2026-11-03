@@ -306,7 +306,7 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
     'this._navigation.destroy(',
     'await this._contextControls.restoreForDisposal();',
   ], 'dispose invalidation');
-  assert.match(shellMethod('destroy').toString(), /this\._stampNavigation\(\{cancelPendingSelection: !retainScene\}\)/);
+  assert.match(shellMethod('destroy').toString(), /this\._stampNavigation\(\{\s*cancelPendingSelection: !retainScene\s*\}\)/);
 });
 
 test('teardown synchronously closes immediate camera entry points', () => {

@@ -83,6 +83,20 @@ export class OrbitController {
   }
 
   /**
+   * Orbit on another globe engine's camera (an engine switch), or none
+   * (null). A running orbit stops: its frames belonged to the outgoing one.
+   */
+  attachEngine(engine) {
+    if (this.active || this._removeListener) {
+      this.active = false;
+      releaseContinuousRender('camera-orbit');
+      this._removeListener?.();
+      this._removeListener = null;
+    }
+    this.engine = engine ? engineFromViewer(engine) : null;
+  }
+
+  /**
    * Toggle orbit on/off.
    * @param {{x: number, y: number, z: number}} targetCartesian - Required when starting
    * @param {object} options - Passed to start()
