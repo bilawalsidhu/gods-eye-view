@@ -1820,6 +1820,7 @@
     "other": "Не вдалося додати {count} файлу ({name}: {error})"
   },
   "Some KML content was left out.": "Частину вмісту KML пропущено.",
+  "Map objects this engine leaves out of {name}: {count}.": "Обʼєктів із {name}, які цей рушій не показує: {count}.",
   "Press on the ground, not the sky": "Натисніть на землю, а не на небо",
   "Drag to size the box": "Потягніть, щоб задати розмір області",
   "light {source} to use your {name} key": "увімкніть {source}, щоб використати свій ключ {name}",

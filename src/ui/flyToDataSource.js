@@ -3,6 +3,7 @@ import * as Cesium from 'cesium';
 import { guardCameraAboveGround } from '../cameraGroundGuard.js';
 import { rangeForBoundingSphere } from '../data/cameraFraming.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
+import { isGlobeEngine } from '../globe/contract.js';
 
 /** All visible positions, path vertices, polygon rings, walls and overlay bounds. */
 export function dataSourcePoints(dataSource, time = Cesium.JulianDate.now()) {
@@ -69,7 +70,11 @@ export function dataSourcePoints(dataSource, time = Cesium.JulianDate.now()) {
   return points;
 }
 
-/** Fly synchronously to the footprint; later navigation always owns its camera. */
+/**
+ * Fly synchronously to the footprint; later navigation always owns its
+ * camera. `viewer` is a Cesium viewer or a globe engine (Navara), which flies
+ * the same sphere through the contract's flyToSphere.
+ */
 export function flyToDataSource(
   viewer,
   dataSource,
@@ -87,7 +92,12 @@ export function flyToDataSource(
     Cesium.Cartographic.fromDegrees(points[0][0], points[0][1]);
   const lat = Cesium.Math.toDegrees(center.latitude),
     lon = Cesium.Math.toDegrees(center.longitude);
-  const terrain = viewer.scene?.globe?.getHeight?.(center);
+  const engine = isGlobeEngine(viewer) ? viewer : null;
+  const terrain = engine
+    ? engine.surface.terrainHeightSupported
+      ? engine.surface.terrainHeight(center)
+      : undefined
+    : viewer.scene?.globe?.getHeight?.(center);
   const cached = ground?.cachedGroundFloor?.(lat, lon);
   const height =
     Number.isFinite(terrain) && terrain > 0
@@ -109,6 +119,30 @@ export function flyToDataSource(
       sphere.radius,
       Cesium.Cartesian3.distance(sphere.center, position),
     );
+  if (engine) {
+    const pose = engine.camera.pose();
+    const aspect = pose.aspectRatio ?? 1;
+    // Cesium's frustum fov: the wider side's angle.
+    const fov =
+      aspect > 1 ? 2 * Math.atan(Math.tan(pose.fovy / 2) * aspect) : pose.fovy;
+    engine.camera.flyToSphere(
+      { center: sphere.center, radius: sphere.radius },
+      {
+        heading: pose.heading || 0,
+        pitch: -Math.PI / 2,
+        range: Math.max(
+          800,
+          rangeForBoundingSphere(
+            { camera: { frustum: { fov, aspectRatio: aspect } } },
+            sphere.radius,
+          ),
+        ),
+        duration,
+        complete: () => guardCameraAboveGround(engine, { lat, lon }),
+      },
+    );
+    return true;
+  }
   viewer.camera?.flyToBoundingSphere?.(sphere, {
     offset: new Cesium.HeadingPitchRange(
       viewer.camera.heading || 0,

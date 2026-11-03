@@ -3,7 +3,7 @@
 // with src/app/navaraMode.js, so the Cesium-mode bundle carries none of it.
 
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
-import { sessionAnnotations } from './sessionTools.js';
+import { sessionAnnotations, sessionGeoImport } from './sessionTools.js';
 
 /**
  * The annotation board drawn on this Navara scene: draped areas and routes
@@ -38,7 +38,31 @@ export function attachNavaraDraw() {
   return null;
 }
 
-/** UTILITIES ▸ Import on this Navara scene; null while it has none. */
-export function attachNavaraGeoImport() {
-  return null;
+/**
+ * UTILITIES ▸ Import on this Navara scene: the session's files drawn by
+ * `drawImported(engine, dataSource)` (src/layers/shared/render/navaraStory.js,
+ * loaded by src/app/navaraMode.js), what Navara leaves out of them reported
+ * in the control's hint; drops and camera gestures on this engine's canvas.
+ * Returns the control (null on a page without it or without the view).
+ */
+export function attachNavaraGeoImport(
+  { engine, views, mapStackController },
+  { layerSession, styleManager, operations, drawImported },
+  { defer },
+) {
+  if (!views?.view || typeof drawImported !== 'function') return null;
+  const geoFileImport = sessionGeoImport({
+    layerSession,
+    styleManager,
+    operations,
+    defer,
+  });
+  geoFileImport?.attachScene({
+    engine,
+    draw: (dataSource) => drawImported(engine, dataSource),
+    navigation: styleManager,
+    subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
+  });
+  defer(() => geoFileImport?.detachScene());
+  return geoFileImport;
 }

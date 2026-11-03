@@ -161,3 +161,20 @@ test('non-finite positions and hidden features never enter the camera footprint'
   assert.equal(points.length, 1);
   assert.ok(Math.abs(points[0][0] - 20) < 1e-6);
 });
+
+test('on a globe engine the footprint is flown to through flyToSphere, straight down at the surface', async () => {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine({ kind: 'navara' });
+  engine.fake.script('terrainHeight', 120);
+  assert.equal(flyToDataSource(engine, source(), { duration: 0.5 }), true);
+  const [call] = engine.fake.callsOf('camera.flyToSphere');
+  assert.ok(call, 'one sphere flight');
+  const [sphere, options] = call.args;
+  const center = Cesium.Cartographic.fromCartesian(sphere.center);
+  assert.ok(Math.abs(center.height - 120) < 1, 'centre on the terrain');
+  assert.ok(sphere.radius > 100);
+  assert.equal(options.pitch, -Math.PI / 2);
+  assert.equal(options.duration, 0.5);
+  assert.ok(options.range >= 800);
+  assert.equal(typeof options.complete, 'function');
+});

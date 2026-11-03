@@ -1728,6 +1728,7 @@
     "other": "{count}個のファイルを追加できませんでした（{name}：{error}）"
   },
   "Some KML content was left out.": "KMLの一部の内容は読み込まれませんでした。",
+  "Map objects this engine leaves out of {name}: {count}.": "このエンジンで表示されない {name} の地図オブジェクト: {count}。",
   "Press on the ground, not the sky": "空ではなく地表を押してください",
   "Drag to size the box": "ドラッグして範囲の大きさを決めてください",
   "light {source} to use your {name} key": "{source}をオンにして{name}キーを使う",

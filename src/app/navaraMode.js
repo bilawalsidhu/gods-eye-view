@@ -28,6 +28,19 @@ import { createRecentImageryPanel } from '../ui/recentImagery.js';
 // Native mesh capability stays at the composition boundary.
 const navaraViews = new WeakMap();
 
+/**
+ * An imported file's data source drawn on `engine` (UTILITIES ▸ Import); the
+ * drawing loads on first use, like the layers' Navara renderers.
+ */
+async function drawImported(engine, dataSource) {
+  const { drawImportedSource, measureImportImages } =
+    await import('../layers/shared/render/navaraStory.js');
+  const sizes = await measureImportImages(dataSource);
+  return drawImportedSource(engine, navaraViews.get(engine), dataSource, {
+    sizes,
+  });
+}
+
 /** The Navara globe module, loaded on demand. */
 const loadNavaraGlobeModule = async () =>
   (await import('../globe/navara/index.js')).createNavaraGlobe;
@@ -400,7 +413,7 @@ export async function createNavaraScene({
  * voice.
  */
 export function attachViewerlessTools(
-  { engine },
+  { engine, mapStackController = null },
   {
     data,
     operations,
@@ -468,8 +481,14 @@ export function attachViewerlessTools(
   defer(() => styleManager._clearPersistentStatusNotice?.());
   // The page session's annotation board, Draw and Import on this engine
   // (src/app/navaraTools.js).
-  const tools = { engine, views: navaraViews.get(engine) };
-  const context = { operations, placeSearch, layerSession, styleManager };
+  const tools = { engine, views: navaraViews.get(engine), mapStackController };
+  const context = {
+    operations,
+    placeSearch,
+    layerSession,
+    styleManager,
+    drawImported,
+  };
   const annotations = attachNavaraAnnotations(tools, context, {
     signal,
     defer,

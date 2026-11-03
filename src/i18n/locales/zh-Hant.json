@@ -1695,6 +1695,7 @@
     "other": "{count} 個文件無法添加（{name}：{error}）"
   },
   "Some KML content was left out.": "部分 KML 內容未被導入。",
+  "Map objects this engine leaves out of {name}: {count}.": "此引擎未顯示的 {name} 地圖對象：{count}。",
   "Press on the ground, not the sky": "請按在地面，而不是天空",
   "Drag to size the box": "拖動以調整框選大小",
   "light {source} to use your {name} key": "開啟 {source} 以使用你的 {name} 密鑰",
