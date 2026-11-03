@@ -545,9 +545,37 @@ test('priority-country configuration is bounded, normalized and validated before
   const { parseRadioPriorityCountries } = await import('../../server/providers/radio/catalog.js');
   assert.deepEqual(parseRadioPriorityCountries(' in, PL,in, '), ['IN', 'PL']);
   assert.deepEqual(parseRadioPriorityCountries(''), []);
+  assert.deepEqual(parseRadioPriorityCountries('uk,GB,UK'), ['GB']);
+  assert.deepEqual(parseRadioPriorityCountries('US,CA,IN,PL,DE,FR,UK,GB,JP'), ['US', 'CA', 'IN', 'PL', 'DE', 'FR', 'GB', 'JP']);
   for (const value of ['ZZ', 'India', 'IN&limit=9999', 'US,CA,IN,PL,DE,FR,GB,JP,AU']) {
     assert.throws(() => createProxy({ priorityCountries: value }), /RADIO_PRIORITY_COUNTRIES/);
   }
+});
+
+test('UK aliases query and report GB once and retain British stations', async () => {
+  const countryQueries = [];
+  const middleware = createProxy({
+    priorityCountries: 'UK,GB',
+    fetchImpl: async (url) => {
+      const parsed = new URL(url);
+      if (parsed.pathname === '/json/servers')
+        return responseJson([{ name: 'de1.api.radio-browser.info' }]);
+      const country = parsed.searchParams.get('countrycode');
+      if (country) {
+        countryQueries.push(country);
+        return responseJson([station({ country: 'United Kingdom', countrycode: 'GB' })]);
+      }
+      return responseJson(healthyRowsForQuery(url));
+    },
+  });
+  const response = await invoke(middleware, '/stations');
+  assert.equal(response.status, 200);
+  const body = JSON.parse(response.body);
+  assert.deepEqual(countryQueries, ['GB']);
+  assert.deepEqual(body.coverage.priorityCountries, [
+    { countryCode: 'GB', succeeded: true, stationCount: 1 },
+  ]);
+  assert.equal(body.stations.find((row) => row.id === UUID)?.countryCode, 'GB');
 });
 
 test('low-click country stations survive a full global catalog, with bounded cached queries and deduplication', async () => {

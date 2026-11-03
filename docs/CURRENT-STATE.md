@@ -6315,6 +6315,7 @@ play action; the source does not relay or record streams.
 
 Optional `RADIO_PRIORITY_COUNTRIES` is a server-owned comma-separated list of
 up to eight ISO alpha-2 codes (for example `IN,PL`). Restart after changing it.
+The `UK` alias is canonicalized to `GB` before deduplication and querying.
 It needs no API key and adds no POWER UP entry. An empty list preserves the
 existing global/tag-based directory. Invalid configuration fails at startup.
 

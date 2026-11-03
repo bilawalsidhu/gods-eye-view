@@ -39,12 +39,14 @@ export function parseRadioPriorityCountries(value = '') {
   const entries = Array.isArray(value) ? value : String(value).split(',');
   const countries = [];
   for (const entry of entries) {
-    const code = String(entry).trim().toUpperCase();
-    if (!code) continue;
-    if (!/^[A-Z]{2}$/.test(code) || !normalizeRadioCountryInput(code).valid)
+    const input = String(entry).trim().toUpperCase();
+    if (!input) continue;
+    const normalized = normalizeRadioCountryInput(input);
+    if (!/^[A-Z]{2}$/.test(input) || !normalized.valid)
       throw new TypeError(
         'RADIO_PRIORITY_COUNTRIES requires ISO alpha-2 country codes',
       );
+    const code = normalized.code;
     if (!countries.includes(code)) countries.push(code);
   }
   if (countries.length > PRIORITY_COUNTRY_LIMIT)
