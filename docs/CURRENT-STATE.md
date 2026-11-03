@@ -207,7 +207,7 @@ shared `area` argument (place name, bounding box, or point and radius) and cap
 lists at 25 rows by default. Vessel `course_deg` and `heading_deg`, aircraft
 `course_deg`, transit `bearing_deg`, camera `heading_deg` and satellite
 `rise_azimuth_deg` and `azimuth_deg` are whole degrees from 0 to 359; a
-direction of 359.5° or more reads 0 rather than 360. `aircraft_in_area` and `vessels_in_area` can also
+direction that rounds to 360 reads 0, and larger or negative values wrap. `aircraft_in_area` and `vessels_in_area` can also
 count every match by a field (`group_by`: airline, read from the ICAO
 designator in the callsign, or operator, country or type for aircraft; type or
 destination for ships; the ten largest groups, then other and unknown counts;
