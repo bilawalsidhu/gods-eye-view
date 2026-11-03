@@ -107,6 +107,12 @@ export class LayerLifecycle {
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
     this._qaLayerIds = new Set();
+    // The bound scene: its signal reaches every attachRenderer() call and is
+    // aborted when the scene detaches. Asynchronous attachments still running
+    // are kept here so the detach releases them only after they stopped.
+    this._sceneController = null;
+    this._sceneDetached = false;
+    this._pendingAttachments = new Set();
   }
 
   /** The second argument of every layer module call: `{ signal, engine }`. */
@@ -125,20 +131,71 @@ export class LayerLifecycle {
    * Release the scene only. Models with an explicit renderer lifetime keep
    * their entry, polling interval, visibility intents and in-flight source.
    * Legacy modules use their ordinary teardown until they gain that contract.
+   *
+   * Every layer is released even when another one fails, and the manager is
+   * always left unbound, so the next bindCatalog() can attach a scene. The
+   * failures are reported together. A layer whose release failed keeps it
+   * pending: a repeated detachScene(), or the next bindCatalog(), retries it.
+   * Periodic refreshes due while no scene is bound wait for the next one.
    */
   async detachScene() {
-    for (const [id, entry] of [...this.layers]) {
-      await entry.toggleChain.catch(() => {});
-      if (entry.module.attachRenderer && entry.module.detachRenderer) {
-        if (entry.initialized) await entry.module.detachRenderer(this.viewer);
-      } else if (!(await this.destroyLayer(id))) {
-        throw new Error(`Cannot detach layer ${id}`);
+    // Attachments still in flight stop at their next checkpoint; their
+    // partial work is released below like a finished attachment.
+    this._sceneController?.abort();
+    this._sceneController = null;
+    this._sceneDetached = true;
+    const viewer = this.viewer;
+    const errors = [];
+    const droppedQaLayers = [];
+    try {
+      await Promise.allSettled([...this._pendingAttachments]);
+      for (const [id, entry] of [...this.layers]) {
+        try {
+          await entry.toggleChain.catch(() => {});
+          if (entry.module.attachRenderer && entry.module.detachRenderer) {
+            await this._detachEntryRenderer(entry, viewer);
+          } else {
+            const qaLayer = this._qaLayerIds.has(id);
+            if (!(await this.destroyLayer(id))) {
+              // The next catalog brings a fresh module for this id. A stale
+              // entry would refuse it, so the failed one is dropped here.
+              this._stopUpdateLoop(entry);
+              this.layers.delete(id);
+              this._qaLayerIds.delete(id);
+              throw new Error(`Cannot detach layer ${id}`);
+            }
+            if (qaLayer) droppedQaLayers.push(id);
+          }
+        } catch (error) {
+          errors.push(error);
+        }
       }
+    } finally {
+      this.viewer = null;
+      this.engine = null;
+      this._registrationsFinalized = false;
+      this._registrationDispositions = null;
     }
-    this.viewer = null;
-    this.engine = null;
-    this._registrationsFinalized = false;
-    this._registrationDispositions = null;
+    if (droppedQaLayers.length)
+      console.warn(
+        `[Data] QA layers do not survive a scene switch; register them again: ${droppedQaLayers.join(', ')}`,
+      );
+    if (errors.length) {
+      for (const error of errors)
+        console.warn('[Data] scene detach error:', error);
+      throw new AggregateError(errors, 'Data layers could not detach');
+    }
+  }
+
+  /** Release one retained layer's renderer, keeping a failure for a retry. */
+  async _detachEntryRenderer(entry, viewer) {
+    const pending = entry.pendingSceneDetach;
+    if (!pending && (!entry.initialized || entry.sceneDetached)) return;
+    const target = pending ? pending.viewer : viewer;
+    entry.pendingSceneDetach = { viewer: target };
+    await entry.module.detachRenderer(target);
+    entry.pendingSceneDetach = null;
+    entry.sceneDetached = true;
   }
 
   /** Bind the next catalog only after the preceding scene released its entries. */
@@ -147,6 +204,12 @@ export class LayerLifecycle {
     this.viewer = viewer;
     this.engine = engine ?? engineFromViewer(viewer) ?? null;
     this._catalogSourceAvailability = catalog.getSourceAvailability;
+    const scene = new AbortController();
+    this._sceneController = scene;
+    this._sceneDetached = false;
+    // An attachment that is still running when the scene detaches sees this
+    // signal aborted and must stop touching the scene.
+    const context = { ...this._moduleContext(scene.signal), ...options };
     const attachments = [];
     for (const layer of catalog.layers) {
       const entry = this.layers.get(layer.id);
@@ -155,11 +218,7 @@ export class LayerLifecycle {
         if (entry.module !== layer)
           throw new Error(`Layer owner changed: ${layer.id}`);
         if (entry.initialized) {
-          const ready = layer.attachRenderer(viewer, {
-            ...this._moduleContext(),
-            ...options,
-          });
-          if (ready?.then) attachments.push(ready);
+          attachments.push(this._attachEntryRenderer(entry, viewer, context));
         }
       }
     }
@@ -171,7 +230,50 @@ export class LayerLifecycle {
       this.layers.set(id, entry);
     }
     this.finalizeRegistrations(catalog.metadata);
-    if (attachments.length) return Promise.all(attachments);
+    const pending = attachments.filter((ready) => ready?.then);
+    const settled = Promise.allSettled(pending).then(() => {
+      if (this._sceneController === scene) this._runDeferredRefreshes();
+    });
+    if (pending.length) return settled.then(() => Promise.all(pending));
+  }
+
+  /**
+   * Attach one retained layer to the bound scene. A release that failed on
+   * the previous scene is retried first. Asynchronous attachments are tracked
+   * so detachScene() releases them only after they stopped.
+   */
+  _attachEntryRenderer(entry, viewer, context) {
+    let ready;
+    try {
+      const pending = entry.pendingSceneDetach;
+      entry.sceneDetached = false;
+      if (pending) {
+        ready = Promise.resolve()
+          .then(() => entry.module.detachRenderer(pending.viewer))
+          .then(() => {
+            entry.pendingSceneDetach = null;
+            if (context.signal.aborted) return undefined;
+            return entry.module.attachRenderer(viewer, context);
+          });
+      } else ready = entry.module.attachRenderer(viewer, context);
+    } catch (error) {
+      ready = Promise.reject(error);
+    }
+    if (!ready?.then) return ready;
+    const tracked = Promise.resolve(ready);
+    this._pendingAttachments.add(tracked);
+    const untrack = () => this._pendingAttachments.delete(tracked);
+    tracked.then(untrack, untrack);
+    return tracked;
+  }
+
+  /** Run the periodic refreshes that came due while no scene was bound. */
+  _runDeferredRefreshes() {
+    for (const [layerId, entry] of this.layers) {
+      if (!entry.refreshDeferred) continue;
+      entry.refreshDeferred = false;
+      void this._runPeriodicUpdate(layerId, entry);
+    }
   }
 
   /** Register a synthetic layer after sealing in an explicitly dev-enabled manager. */
@@ -251,6 +353,12 @@ export class LayerLifecycle {
       // interval is armed after the user already turned the layer off, and a
       // subsequent enable arms a SECOND interval → 2× poll → OpenSky 429 (M1).
       toggleChain: Promise.resolve(),
+      // Scene handoff (detachScene/bindCatalog): whether this entry's
+      // renderer is released, a release that failed and is retried, and a
+      // periodic refresh that came due while no scene was bound.
+      sceneDetached: false,
+      pendingSceneDetach: null,
+      refreshDeferred: false,
     });
   }
 
@@ -346,6 +454,11 @@ export class LayerLifecycle {
   }
 
   async _runPeriodicUpdate(layerId, entry, { signal = null } = {}) {
+    if (this._sceneDetached) {
+      // No renderer to draw into: refresh as soon as the next scene binds.
+      if (entry.enabled && !entry.destroying) entry.refreshDeferred = true;
+      return false;
+    }
     if (
       !entry.enabled ||
       entry.lifecycleState !== 'enabled' ||
