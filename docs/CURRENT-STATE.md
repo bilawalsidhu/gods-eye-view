@@ -1,10 +1,5 @@
 # God's Eye View Current State
 
-The Dams OSM dataset contains 706 features including Acaray and Yacyretá,
-producing 705 analyst records; an existing MultiLineString has no query point.
-The source label preserves both OpenStreetMap and OpenInfraMap credit. NVE and
-IGN remain independent regional contributions.
-
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.

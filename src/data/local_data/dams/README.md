@@ -41,5 +41,3 @@ reconcile the shared source label and docs without replacing the regional list.
 Together the snapshots contain 706 OSM + 4,141 NVE + 121 IGN = 4,968 source
 features and 4,967 analyst records. Those are combined expectations, not the
 contents of this standalone OSM-only branch.
-
-depend on those fields.
