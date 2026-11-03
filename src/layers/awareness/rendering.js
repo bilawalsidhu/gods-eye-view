@@ -176,6 +176,9 @@ export function awarenessRingFlash(nowMs) {
 /** Most pulses the pulse shader draws; its uniforms are vec4s. */
 export const AWARENESS_PULSE_GRADIENT_MAX = 4;
 
+/** The pulse disc's Cesium material type, one cached template per page. */
+const AWARENESS_PULSE_MATERIAL_TYPE = 'GevAwarenessPulseGradient';
+
 // Ellipse texture coordinates put the centre at (0.5, 0.5) and the rim at
 // distance 0.5, so `r` is the fraction of the range. Each pulse is a line
 // `lineWidth` CSS pixels wide whose outer `haloWidth` is a dark halo, half
@@ -804,10 +807,19 @@ export function createRendering({
         haloWidth: pulse.outlineWidth,
       };
       uniforms.color.alpha = pulse.gradientOpacity;
+      // A named type: Cesium caches every material type for the page's
+      // lifetime, so an unnamed fabric (a fresh GUID each time) would leave
+      // one entry per new visual. Built from the cached template, the
+      // uniforms come back as plain copies; restore this visual's own.
       const material = new Cesium.Material({
-        fabric: { uniforms, source: PULSE_GRADIENT_SOURCE },
+        fabric: {
+          type: AWARENESS_PULSE_MATERIAL_TYPE,
+          uniforms,
+          source: PULSE_GRADIENT_SOURCE,
+        },
         translucent: true,
       });
+      Object.assign(material.uniforms, uniforms);
       gradient = scene.primitives.add(
         createPulseGradient(groundCenter, material),
       );

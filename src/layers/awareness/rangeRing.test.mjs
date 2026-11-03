@@ -774,6 +774,36 @@ test('a gradient disc behind the pulses fades inward and follows the subject', (
   assert.equal(scene.preRender.numberOfListeners, 0);
 });
 
+test("switching subjects keeps one pulse material in Cesium's global cache", (t) => {
+  const ring = ringRendering(t);
+  const { scene, rendering } = ring;
+  frameLoop(t, ring);
+  // Cesium keeps every new material type for the page's lifetime, so an
+  // unnamed fabric (a fresh GUID type each time) would grow it per subject.
+  const cached = () =>
+    Object.keys(Cesium.Material._materialCache._materials).length;
+  rendering.renderVisual({ ...flight(3), id: 'subject-0' });
+  const first = pulsePrimitives(scene).disc.appearance.material;
+  const size = cached();
+  let last = first;
+  for (let index = 1; index <= 6; index++) {
+    rendering.renderVisual({ ...flight(3 + index), id: `subject-${index}` });
+    last = pulsePrimitives(scene).disc.appearance.material;
+  }
+  assert.equal(cached(), size, 'subject switches add no cache entries');
+  rendering.clearVisual();
+  rendering.renderVisual(flight(3));
+  assert.equal(cached(), size, 'nor does a reselect');
+  // A material built from the cached template still owns its uniform values.
+  const again = pulsePrimitives(scene).disc.appearance.material;
+  assert.notEqual(again, last);
+  assert.notEqual(again.uniforms.radii, last.uniforms.radii);
+  assert.notEqual(again.uniforms.alphas, first.uniforms.alphas);
+  assert.ok(again.uniforms.radii instanceof Cesium.Cartesian4);
+  assert.ok(again.uniforms.lineColor instanceof Cesium.Color);
+  assert.equal(again.uniforms.lineWidth, AWARENESS_RANGE_PULSE.width);
+});
+
 test('a resting pulse disc is not rebuilt as the subject moves, and catches up on wake', (t) => {
   const ring = ringRendering(t);
   const { scene, rendering } = ring;
