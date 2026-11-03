@@ -13,9 +13,14 @@ test('the controls pass the scene engine to the shell', () => {
   const controls = read('./controls.js');
   assert.match(
     controls,
-    /scene: \{ viewer, engine, mapStackController, operations \}/,
+    /const \{ viewer, engine, mapStackController, operations \} = scene;/,
   );
   assert.match(controls, /new Controls\(viewer, \{[\s\S]*?\n\s+engine,\n/);
+  // A later globe reaches the shell with its own engine.
+  assert.match(
+    controls,
+    /styleManager\.attachScene\(\{\s+viewer: next\.viewer,\s+engine: next\.engine,/,
+  );
 });
 
 test('the shell initializes the world overlay on its engine', () => {
