@@ -68,6 +68,27 @@ test('pickWorldFromScreen tries the depth pick, then the ellipsoid, then the glo
   assert.equal(resolver.pickWorldFromScreen(engine, 0.5, 0.5), null);
 });
 
+test('a depth pick at the camera itself (an overlay at the near plane) is a miss', () => {
+  const engine = lookingDownAt(-97.7431, 30.2672);
+  // Navara reads a screen-space preview line at the near plane: a point a
+  // metre from the camera, 20 km above the ground.
+  engine.fake.script(
+    'pickPosition',
+    geo.cartesian3.fromDegrees(-97.7431, 30.2672, 19999),
+  );
+  const picked = resolver.pickWorldFromScreen(engine, 0.5, 0.5);
+  assert.ok(Math.abs(picked.height) < 1e-3, 'the ellipsoid answers instead');
+  // A roof well below the camera is kept.
+  engine.fake.script(
+    'pickPosition',
+    geo.cartesian3.fromDegrees(-97.7431, 30.2672, 400),
+  );
+  assert.ok(
+    Math.abs(resolver.pickWorldFromScreen(engine, 0.5, 0.5).height - 400) <
+      1e-6,
+  );
+});
+
 test('near-view recovery centres on the engine camera when nothing is picked', async () => {
   const engine = lookingDownAt(2.35, 48.85, 10000);
   for (const name of ['pickPosition', 'pickEllipsoid', 'pickGlobe'])
