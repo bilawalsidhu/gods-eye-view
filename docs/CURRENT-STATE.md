@@ -3092,9 +3092,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   take over under the Cockpit cap of 60. Loading/capped contacts remain 2D,
 >   out-of-range contacts use rotation-free dots, and exit restores map treatment.
 >   Its Radio popover exposes compact power,
->   transport, station, and volume controls. Cockpit Previous/Next preserves
->   selection, autoplay, and broadcaster fallback audio without starting the
->   map-view station flights that compete with the first-person camera. These
+>   transport, station, and volume controls. Cockpit Previous/Next changes the
+>   selection without starting the map-view station flights that compete with
+>   the first-person camera; like the Context Previous/Next buttons, it plays
+>   (with broadcaster fallback) only while a stream is already active. These
 >   are a Cockpit-only accordion:
 >   each static header uses the left accordion's label and divider with a dedicated
 >   directional-chevron disclosure button and no full-row hover treatment. Only one
@@ -4736,10 +4737,12 @@ accepted snapshot, and feed telemetry before re-initialization; monotonic
 ownership tokens plus the session boundary keep late callbacks from a retired
 session inert.
 A tuner drag resolves previews against the single accepted snapshot captured at
-pointer-down, even while a newer catalog is admitted. Release starts playback
-only when the current same-ID record still exactly matches the frozen
-presentation and stream metadata; removal or replacement reports the channel as
-unavailable and never silently retargets the drag. A cold degraded fallback may
+pointer-down, even while a newer catalog is admitted. Like Previous/Next,
+release starts playback only if a stream was active when the drag began;
+otherwise it just selects the station. It commits only when the current same-ID
+record still exactly matches the frozen presentation and stream metadata.
+Removal or replacement reports the channel as unavailable and never silently
+retargets the drag. A cold degraded fallback may
 still populate the directory and globe, but its null accepted generation cannot
 populate or begin the tuner.
 
@@ -4916,7 +4919,9 @@ before the later control succeeds, only its playback handoff is suppressed; its
 result reads enabled state from the manager and audio state from the Radio
 module. Voice Pause is a playback-only no-op while the layer is disabled; it
 never enables Radio and reports a fulfilled-false pause as failure. A
-newer-response or user-origin Stop still cancels stale handoff work.
+newer-response or user-origin Stop still cancels stale handoff work, as do a
+user Pause, a user Previous/Next that only selects another station, and a tuner
+release onto a station the directory removed or changed mid-drag.
 Only a newer user turn or session teardown aborts the complete active-tool set.
 A cancelled turn cannot publish a late Radio playback request. Dedicated Radio
 controls and generic layer-visibility commands both forward cancellation.
