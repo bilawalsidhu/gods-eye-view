@@ -79,6 +79,14 @@ function fixture() {
     return id;
   };
   globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+  const published = [];
+  // The Display panel's Teleport: the group moves to the published slot and
+  // back to its home ahead of its sibling.
+  const publish = (slots) => {
+    published.push(slots);
+    if (slots) slots.hud.append(group);
+    else if (group.parentNode !== standard) standard.children[0].before(group);
+  };
   const create = () =>
     new CockpitDisplayPortal({
       standardPanel: standard,
@@ -87,6 +95,7 @@ function fixture() {
       layout: () => {
         layouts += 1;
       },
+      publish,
     });
   return {
     standard,
@@ -96,6 +105,7 @@ function fixture() {
     slot,
     frames,
     create,
+    published,
     get focusCalls() {
       return focusCalls;
     },
@@ -120,6 +130,7 @@ test('Display groups return to their exact home with independent scroll position
   try {
     const owner = f.create();
     owner.setActive(true);
+    assert.deepEqual(f.published, [{ hud: f.slot }]);
     assert.equal(f.group.parentNode, f.slot);
     f.cockpit.scrollTop = 0;
     f.flush();
@@ -130,8 +141,54 @@ test('Display groups return to their exact home with independent scroll position
     f.flush();
     assert.equal(f.standard.scrollTop, 71);
     owner.destroy();
+    assert.deepEqual(f.published, [{ hud: f.slot }, null, null]);
     assert.deepEqual(f.standard.children, [f.group, f.sibling]);
     assert.equal(f.frames.size, 0);
+  } finally {
+    f.restore();
+  }
+});
+
+test('the surfaces are laid out and scrolled once the groups have rendered', () => {
+  const f = fixture();
+  try {
+    const rendered = [];
+    const owner = new CockpitDisplayPortal({
+      standardPanel: f.standard,
+      cockpitPanel: f.cockpit,
+      groups: [['hud', f.group]],
+      layout: () => rendered.push('layout'),
+      publish: (slots) => rendered.push(slots ? 'cockpit' : 'standard'),
+      afterRender: (callback) => rendered.push(callback),
+    });
+    owner.setActive(true, { settle: false });
+    // Published first; the scroll waits for the render.
+    assert.deepEqual(rendered.slice(0, 1), ['cockpit']);
+    f.cockpit.scrollTop = 0;
+    rendered.splice(1).forEach((callback) => callback());
+    assert.equal(f.cockpit.scrollTop, 19);
+    owner.setActive(false);
+    const pending = rendered.filter((item) => typeof item === 'function');
+    assert.equal(rendered.includes('layout'), false);
+    pending.forEach((callback) => callback());
+    assert.equal(rendered.at(-1), 'layout');
+    owner.destroy();
+  } finally {
+    f.restore();
+  }
+});
+
+test('focus moved elsewhere before the frame is not taken back', () => {
+  const f = fixture();
+  try {
+    const owner = f.create();
+    owner.setActive(true);
+    // Cockpit entry focuses its exit button before the portal's frame runs.
+    document.activeElement = f.sibling;
+    f.flush();
+    assert.equal(f.focusCalls, 0);
+    assert.equal(document.activeElement === f.sibling, true);
+    owner.destroy();
   } finally {
     f.restore();
   }

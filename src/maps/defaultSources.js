@@ -34,17 +34,20 @@ export function createDefaultMapSources({
       const common = {
         descriptor,
         available: !descriptor.requiresIon || hasIon,
+        // Read when shown, so it follows the locale.
         unavailableReason: descriptor.requiresIon
-          ? t('Needs {envVars} — add it in Provider Settings', {
-              envVars: keySetupRequirementEnvVars('cesium-ion'),
-            })
+          ? () =>
+              t('Needs {envVars} — add it in Provider Settings', {
+                envVars: keySetupRequirementEnvVars('cesium-ion'),
+              })
           : null,
       };
       if (descriptor.kind === 'photoreal')
         return {
           ...common,
           available: Boolean(googleTileset),
-          unavailableReason: photorealUnavailableReason(hasIon || hasGoogle),
+          unavailableReason: () =>
+            photorealUnavailableReason(hasIon || hasGoogle),
           tileset: googleTileset,
         };
       const imagery =
