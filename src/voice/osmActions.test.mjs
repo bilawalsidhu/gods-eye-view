@@ -64,6 +64,7 @@ function deps({ area = kathmanduArea(), answer, enabled = false } = {}) {
     results: null,
     credits: 0,
     memory: [],
+    presentation: [],
   };
   const layer = {
     setResults(records, meta) {
@@ -111,7 +112,10 @@ function deps({ area = kathmanduArea(), answer, enabled = false } = {}) {
       onCredit: () => {
         calls.credits += 1;
       },
-      rememberResults: (records) => calls.memory.push(records),
+      rememberResults: (records, presentation) => {
+        calls.memory.push(records);
+        calls.presentation.push(presentation);
+      },
     },
     requestOff({ settle = true } = {}) {
       const change = {
@@ -165,6 +169,15 @@ test('hospitals inside an area: exact inside the outline, duplicates merged, sho
     limit: 500,
   });
   assert.match(result.display.merged, /1 duplicate/);
+  assert.deepEqual(
+    calls.presentation.at(-1),
+    {
+      scopeLabel: 'inside Kathmandu',
+      coverageScope: 'area:osm:r1',
+      areaId: 'osm:r1',
+    },
+    'a follow-up keeps naming the area the places were found in',
+  );
 });
 
 test('an area too large to list is counted over its box and says so', async () => {
@@ -241,6 +254,10 @@ test('the view is searched when no area is named; countOnly leaves the layer alo
   assert.equal(calls.results, null);
   assert.match(result.say, /in view, per OpenStreetMap$/);
   assert.deepEqual(calls.search[0].bbox, [85.2, 27.6, 85.4, 27.8]);
+  assert.deepEqual(calls.presentation.at(-1), {
+    scopeLabel: 'in view',
+    coverageScope: 'view',
+  });
 });
 
 test('unknown kinds, unknown areas, failures and supersession are refused plainly', async () => {

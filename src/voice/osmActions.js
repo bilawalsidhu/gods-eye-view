@@ -67,8 +67,9 @@ const EXAMPLES = Object.values(OSM_PRESETS)
  * @param {(enabled: boolean) => Promise<object>} deps.enableLayer
  * @param {Function} deps.search `/api/osm/features` client.
  * @param {() => void} [deps.onCredit] Registers the OpenStreetMap credit.
- * @param {(rows: object[]|null) => void} [deps.rememberResults] Hands the
- *   listed places to analyst follow-ups; null forgets the previous set.
+ * @param {(rows: object[]|null, presentation?: object) => void} [deps.rememberResults]
+ *   Hands the listed places, and the scope they were found in, to analyst
+ *   follow-ups; null forgets the previous set.
  * @param {(step: string, label?: string) => void} [deps.progress]
  * @param {object} args
  * @param {{isCurrent?: () => boolean, budgetMs?: number, signal?: AbortSignal}} [options]
@@ -258,8 +259,18 @@ export async function osmQuery(
     }
     if (wasDisplaced()) return displaced();
     // These places are now "the last answer": follow-ups filter them and
-    // "the second one" is the second row below.
-    rememberResults(records);
+    // "the second one" is the second row below. A follow-up keeps naming the
+    // area they were found in, as an analyst count over that area would.
+    rememberResults(
+      records,
+      area
+        ? {
+            scopeLabel: `inside ${areaName}`,
+            coverageScope: `area:${args.areaId}`,
+            areaId: args.areaId,
+          }
+        : { scopeLabel: 'in view', coverageScope: 'view' },
+    );
     const unnamed = `unnamed ${singularLabel(preset.label)}`;
     const referents = [
       ...records.filter((r) => r.name),

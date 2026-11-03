@@ -1226,9 +1226,12 @@ export function createGevActionRunner({
           onCredit: () => registerDynamicCredit(viewer, OSM_PLACES_CREDIT),
           // The listed places become the analyst's "last answer", so
           // "which of those…" filters them and never an older set.
-          rememberResults: (rows) => {
+          rememberResults: (rows, presentation) => {
             if (!current()) return;
-            if (rows) ensureAnalystEngine().remember('osm-places', rows);
+            if (rows)
+              ensureAnalystEngine().remember('osm-places', rows, {
+                presentation,
+              });
             else analystEngine?.reset();
           },
           progress: reportProgress,

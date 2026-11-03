@@ -1164,11 +1164,16 @@ export function createAnalystEngine(providers) {
      * so a follow-up filters exactly what the user just heard about.
      * @param {string} layerKey Queryable layer the rows belong to.
      * @param {Array<object>} rows Records in that layer's analyst shape.
-     * @param {{scope?: string}} [options]
+     * @param {{scope?: string, presentation?: object|null}} [options]
+     *   `presentation` is how the set was scoped ("inside Kathmandu"), so a
+     *   follow-up names the same scope instead of "anywhere".
      */
-    remember(layerKey, rows, { scope = 'handoff' } = {}) {
+    remember(layerKey, rows, { scope = 'handoff', presentation = null } = {}) {
       if (!ANALYST_LAYERS[layerKey] || !Array.isArray(rows)) return false;
       lastResult = {
+        ...(presentation
+          ? { presentation: structuredClone(presentation) }
+          : {}),
         matched: [{ key: layerKey, rows: rows.slice() }],
         layerKeys: [layerKey],
         coverage: {

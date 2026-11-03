@@ -1176,3 +1176,29 @@ test('analyst: without an area provider the area scopes refuse plainly', async (
   assert.equal(r.ok, false);
   assert.equal(r.code, 'AREA_UNAVAILABLE');
 });
+
+test('a follow-up on handed-off places keeps the area they were found in', async () => {
+  const rows = [
+    { id: 'node/1', lat: 27.7, lon: 85.3, name: 'Bir Hospital', kind: 'hospital', emergency: 'yes' },
+    { id: 'node/2', lat: 27.71, lon: 85.31, name: 'Teaching Hospital', kind: 'hospital', emergency: 'no' },
+  ];
+  const engine = createAnalystEngine({
+    getRecords: (key) => (key === 'osm-places' ? rows : []),
+    resolveRegionRing: async () => null,
+    getViewContext: () => ({ lat: 27.7, lon: 85.3, viewRadiusKm: 20 }),
+  });
+  assert.equal(
+    engine.remember('osm-places', rows, {
+      presentation: { scopeLabel: 'inside Kathmandu', coverageScope: 'area:area-1', areaId: 'area-1' },
+    }),
+    true,
+  );
+  const result = await engine.query({
+    layers: ['osm-places'],
+    followUp: true,
+    filters: [{ field: 'emergency', op: 'eq', value: 'yes' }],
+  });
+  assert.equal(result.count, 1);
+  assert.equal(result.scopeLabel, 'inside Kathmandu');
+  assert.equal(result.coverage.scope, 'area:area-1');
+});
