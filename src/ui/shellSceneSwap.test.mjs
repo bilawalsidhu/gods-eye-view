@@ -142,7 +142,7 @@ test('the next globe gets new globe-bound parts and the restore runs on it', asy
   await shell.detachScene({ handoff: true });
   log.length = 0;
   const engine = { kind: 'navara' };
-  shell.attachScene({
+  await shell.attachScene({
     viewer: null,
     engine,
     mapStackController: {},
@@ -172,14 +172,18 @@ test('the next globe gets new globe-bound parts and the restore runs on it', asy
     '_syncCctvPanelViewport',
   ]);
   assert.equal(shell._navigation, session.navigation);
-  assert.throws(() => shell.attachScene({ engine }), /attached to a globe/);
+  await shell.attachScene({ engine });
+  await assert.rejects(
+    shell.attachScene({ engine: { kind: 'cesium' } }),
+    /attached to a globe/,
+  );
 });
 
 test('a panel whose layer is another instance in the new catalog is rebuilt', async () => {
   const { shell, log } = fakeShell();
   await shell.detachScene({ handoff: true });
   log.length = 0;
-  shell.attachScene({
+  await shell.attachScene({
     engine: { kind: 'cesium' },
     services: { cctvLayer: 'other' },
   });
@@ -202,8 +206,8 @@ test('an attachment that throws part-way leaves the shell detached and attachabl
   shell._initSceneOverlays = () => {
     throw new Error('overlay host failed');
   };
-  assert.throws(
-    () => shell.attachScene({ engine: { kind: 'navara' } }),
+  await assert.rejects(
+    shell.attachScene({ engine: { kind: 'navara' } }),
     /overlay host failed/,
   );
   // The shell releases what it built and is detached when that settles.
@@ -212,7 +216,7 @@ test('an attachment that throws part-way leaves the shell detached and attachabl
   log.length = 0;
   shell._initSceneOverlays = () => log.push('_initSceneOverlays');
   const engine = { kind: 'cesium' };
-  shell.attachScene({ engine });
+  await shell.attachScene({ engine });
   assert.equal(shell.engine, engine);
   assert.ok(log.includes('shareRestoration.start'));
 });
@@ -238,8 +242,55 @@ test('between engines a style key waits for the next engine instead of the relea
     shell._layerBindings = { observeCamera() {}, stop() {}, disconnect() {} };
     shell._visualSettings = { setStyle: (name) => applied.push(name) };
   };
-  shell.attachScene({ engine: { kind: 'cesium' } });
+  await shell.attachScene({ engine: { kind: 'cesium' } });
   await Promise.resolve();
   await Promise.resolve();
   assert.deepEqual(applied, ['crt']);
+});
+
+test('shell recovery waits for failed attachment cleanup and serializes repeated detach', async () => {
+  const { shell, session } = fakeShell();
+  await shell.detachScene({ handoff: true });
+  let release;
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
+  session.context.canRetainScene = () => false;
+  session.context.restoreForDisposal = () => pending;
+  shell._initSceneOverlays = () => {
+    throw new Error('overlay failed');
+  };
+  const failed = shell.attachScene({ engine: { kind: 'navara' } });
+  const rejected = assert.rejects(failed, /overlay failed/);
+  await Promise.resolve();
+  const detach = shell.detachScene();
+  const again = shell.detachScene();
+  shell._initSceneOverlays = () => {};
+  const engine = { kind: 'cesium' };
+  const recovered = shell.attachScene({ engine });
+  await Promise.resolve();
+  assert.notEqual(shell.engine, engine, 'recovery waits for cleanup');
+  release();
+  await Promise.all([rejected, detach, again, recovered]);
+  assert.equal(shell.engine, engine);
+  await shell.attachScene({ engine });
+  assert.equal(shell.engine, engine, 'same attachment is idempotent');
+});
+
+test('shell attach waits for a deferred outgoing detach', async () => {
+  const { shell, session } = fakeShell();
+  let release;
+  session.context.canRetainScene = () => false;
+  session.context.restoreForDisposal = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  const leaving = shell.detachScene({ handoff: true });
+  const engine = { kind: 'navara' };
+  const entering = shell.attachScene({ engine });
+  await Promise.resolve();
+  assert.notEqual(shell.engine, engine);
+  release();
+  await Promise.all([leaving, entering]);
+  assert.equal(shell.engine, engine);
 });
