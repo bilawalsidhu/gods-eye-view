@@ -38,6 +38,7 @@ export function createApplication({
   let state = Object.freeze({ status: 'created', phase: null });
   let startPromise;
   let destroyPromise;
+  let destroyRequested = false;
   let cleanupPromise;
 
   function publish(status, phase = null) {
@@ -51,21 +52,29 @@ export function createApplication({
     }
   }
 
+  // A release that fails stays registered and the failed attempt is not
+  // remembered, so a later destroy() retries exactly the failed releases.
   function cleanup() {
     cleanupPromise ||= Promise.resolve().then(async () => {
       const errors = [];
       for (const phase of STOP_ORDER) {
+        const failed = [];
         while (cleanups[phase].length) {
+          const dispose = cleanups[phase].pop();
           try {
-            await cleanups[phase].pop()();
+            await dispose();
           } catch (error) {
             errors.push(error);
+            failed.unshift(dispose);
           }
         }
+        cleanups[phase].push(...failed);
         delete components[phase];
       }
-      if (errors.length)
+      if (errors.length) {
+        cleanupPromise = null;
         throw new AggregateError(errors, 'Application cleanup failed');
+      }
     });
     return cleanupPromise;
   }
@@ -116,7 +125,7 @@ export function createApplication({
 
   return Object.freeze({
     start() {
-      if (destroyPromise)
+      if (destroyRequested)
         return Promise.reject(new Error('Application has been destroyed'));
       // Assign before notifying subscribers, including reentrant start/destroy.
       startPromise ||= Promise.resolve().then(initialize);
@@ -124,21 +133,25 @@ export function createApplication({
     },
     destroy() {
       if (destroyPromise) return destroyPromise;
-      destroyPromise = Promise.resolve().then(async () => {
+      destroyRequested = true;
+      const attempt = Promise.resolve().then(async () => {
         try {
           await startPromise?.catch(() => {});
           await cleanup();
           publish('destroyed');
         } catch (error) {
+          // A failed teardown can be retried by calling destroy() again.
+          if (destroyPromise === attempt) destroyPromise = null;
           publish('failed');
           throw error;
         } finally {
           listeners.clear();
         }
       });
+      destroyPromise = attempt;
       controller.abort();
       publish('destroying');
-      return destroyPromise;
+      return attempt;
     },
     getState: () => state,
     getComponents: () => Object.freeze({ ...components }),

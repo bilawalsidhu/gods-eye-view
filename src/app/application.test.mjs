@@ -197,6 +197,34 @@ test('cleanup errors are reported after all remaining resources are attempted', 
   assert.equal(app.getState().status, 'failed');
 });
 
+test('a failed teardown can be retried and repeats only the failed release', async () => {
+  let failures = 1;
+  const { app, events } = fixture({
+    createData({ defer }) {
+      defer(() => events.push('data:released'));
+      defer(() => {
+        events.push('data:detach');
+        if (failures-- > 0) throw new Error('detach failed');
+      });
+      return {};
+    },
+  });
+  await app.start();
+  await assert.rejects(app.destroy(), AggregateError);
+  assert.equal(app.getState().status, 'failed');
+  const firstAttempt = events.splice(0);
+  assert.deepEqual(firstAttempt.slice(-4), [
+    'stop:Controls',
+    'data:detach',
+    'data:released',
+    'stop:Scene',
+  ]);
+  await app.destroy();
+  assert.deepEqual(events, ['data:detach']);
+  assert.equal(app.getState().status, 'destroyed');
+  await assert.rejects(app.start(), /destroyed/);
+});
+
 test('subscribers can destroy during startup without allowing the next constructor', async () => {
   const { app, events } = fixture();
   app.subscribe((state) => {
