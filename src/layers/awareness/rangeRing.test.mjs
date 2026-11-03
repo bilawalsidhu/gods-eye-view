@@ -574,6 +574,99 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
   assert.equal(state.lastCameraInputMs < Date.now() - inputWakeMs, true);
 });
 
+/**
+ * The lifecycle's camera-input listeners over `ring`, with a camera the test
+ * moves by longitude (`pan`) and a camera controller whose inputs it can
+ * switch off, as the cockpit view does. Pulses start resting.
+ */
+function inputLifecycle(t, ring) {
+  const { state, rendering } = ring;
+  const loop = frameLoop(t, ring, { date: true });
+  state.enabled = true;
+  state.viewer.canvas = new EventTarget();
+  state.viewer.scene.screenSpaceCameraController = { enableInputs: true };
+  state.viewer.camera = {
+    positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
+    heading: 0,
+    pitch: -1,
+    roll: 0,
+  };
+  const lifecycle = createLifecycle({
+    state,
+    services: {
+      render: { holdContinuousRender() {}, releaseContinuousRender() {} },
+    },
+    parts: {
+      rendering,
+      model: {
+        awarenessRefreshDecision: () => ({ moving: false, refresh: false }),
+        awarenessNeedsContinuousRender: () => false,
+      },
+    },
+  });
+  lifecycle.attachRuntimeListeners();
+  t.after(() => lifecycle.detachRuntimeListeners());
+  rendering.renderVisual(flight(3));
+  loop.advance(AWARENESS_RANGE_PULSE.activeMs + 500);
+  let lon = 3;
+  return {
+    loop,
+    lifecycle,
+    controller: state.viewer.scene.screenSpaceCameraController,
+    dispatch: (type, init = {}) =>
+      state.viewer.canvas.dispatchEvent(Object.assign(new Event(type), init)),
+    pan(stepDeg = 0.1) {
+      lon += stepDeg;
+      state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+        lon,
+        20,
+        800_000,
+      );
+      loop.draw();
+    },
+    /** Whether the pulses drew frames during the next `ms`. */
+    pulsing(ms = AWARENESS_RANGE_PULSE.activeMs) {
+      const before = ring.pulseFrames();
+      loop.advance(ms);
+      return ring.pulseFrames() > before;
+    },
+  };
+}
+
+test('input the camera controller ignores, as in the cockpit, does not wake the pulses', (t) => {
+  const ring = ringRendering(t);
+  const { activeMs } = AWARENESS_RANGE_PULSE;
+  const { controller, dispatch, pan, pulsing, loop } = inputLifecycle(t, ring);
+  // The cockpit takes the camera: clicks, drags and wheels on the canvas
+  // move nothing, while the cockpit itself moves the camera every frame.
+  controller.enableInputs = false;
+  for (const [type, init] of [
+    ['pointerdown', {}],
+    ['pointermove', { buttons: 1 }],
+    ['wheel', {}],
+    ['touchstart', {}],
+  ]) {
+    dispatch(type, init);
+    pan();
+    assert.equal(pulsing(), false, `${type} in the cockpit`);
+  }
+  // A gesture that began just before the cockpit took the camera is
+  // dropped too, rather than waking the pulses on the cockpit's first move.
+  controller.enableInputs = true;
+  loop.advance(activeMs);
+  dispatch('pointerdown');
+  controller.enableInputs = false;
+  pan();
+  assert.equal(pulsing(), false, 'a gesture cut off by the cockpit');
+  controller.enableInputs = true;
+  pan();
+  assert.equal(pulsing(), false, 'and stays dropped once it hands back');
+  // Back in the user's hands, a drag wakes them again.
+  dispatch('pointerdown');
+  pan();
+  assert.equal(pulsing(), true, 'a drag after the cockpit');
+});
+
 test('disabling the layer tears the pulses down completely', (t) => {
   const ring = ringRendering(t);
   const { state, scene, rendering, motion, pulseFrames } = ring;

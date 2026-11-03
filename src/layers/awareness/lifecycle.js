@@ -14,11 +14,20 @@ export function createLifecycle({
    * Cesium canvas, where its camera controller listens), so a camera move the
    * user made can wake the range pulses and one the app made (tracking,
    * cockpit, orbit, a fly-to) does not. Keys are left out: Cesium's camera
-   * controller reads none, and typing elsewhere must not count.
+   * controller reads none, and typing elsewhere must not count. Nor does
+   * input while the camera controller's inputs are off: the cockpit (or a
+   * gizmo drag, or a drawing tool) owns the camera then, and the user's
+   * gesture moves nothing.
    */
   function noteCameraInput(event) {
     if (event?.type === 'pointermove' && !event.buttons) return;
+    if (!cameraInputsEnabled()) return;
     layerState.lastCameraInputMs = Date.now();
+  }
+
+  function cameraInputsEnabled() {
+    const controller = layerState.viewer?.scene?.screenSpaceCameraController;
+    return controller?.enableInputs !== false;
   }
 
   const CAMERA_INPUT_EVENTS = [
@@ -79,6 +88,10 @@ export function createLifecycle({
       layerState.viewer.scene.preRender.addEventListener(() => {
         if (!layerState.enabled) return;
         const now = Date.now();
+        // Another owner took the camera: a gesture begun before it did must
+        // not wake the pulses on that owner's first move.
+        if (!cameraInputsEnabled())
+          layerState.lastCameraInputMs = Number.NEGATIVE_INFINITY;
         // "Did the camera move" uses the SAME quantized pose signature the fleet
         // rotation pass gates on (iconOrientation.cameraPoseSignature) rather than
         // camera.changed, whose granularity is globally degraded by other layers

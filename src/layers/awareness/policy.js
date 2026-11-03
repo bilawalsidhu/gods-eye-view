@@ -92,7 +92,7 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
  *  stays on screen, static, and nothing asks for frames, so a parked view
  *  goes quiet again. Only a camera move within `inputWakeMs` of the user
  *  handling the map (pointer, wheel or touch on the canvas, which covers a
- *  drag's inertia) wakes them; a moving subject and the app's own camera moves
+ *  drag's inertia, while the camera controls take input) wakes them; a moving subject and the app's own camera moves
  *  (tracking, cockpit, orbit, a fly-to) do not. Below the disc's height they
  *  rest too. While they run they never hold
  *  continuous rendering; each drawn frame arms one more request after the
