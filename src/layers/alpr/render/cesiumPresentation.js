@@ -304,7 +304,7 @@ export function createAlprPresentation({ state, native, services, source }) {
     return { south, west, north, east };
   }
 
-  function clearRendered() {
+  function clearRendered({ retainContext = false } = {}) {
     hideOnMapCredit();
     floors.cancel();
     floorResolve = null;
@@ -312,7 +312,7 @@ export function createAlprPresentation({ state, native, services, source }) {
     visibleRecords = [];
     clampedMarkers.clear();
     if (native.dataSource?.entities) native.dataSource.entities.removeAll();
-    removeEntityContextsForLayer(LAYER_ID);
+    if (!retainContext) removeEntityContextsForLayer(LAYER_ID);
   }
 
   function hideOnMapCredit() {
