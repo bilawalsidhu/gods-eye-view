@@ -26,6 +26,7 @@ import {
 } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
+import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 
 export function createTracking({
   flightState,
@@ -65,7 +66,7 @@ export function createTracking({
   function _publishTrackedSelection(icao24, origin = 'programmatic') {
     const bb = flightState._billboards.get(icao24);
     const info = flightState.records.data.get(icao24);
-    if (!bb?.position || !info) return false;
+    if (!billboardState(bb)?.position || !info) return false;
     if (flightState._trackedEntity)
       entityRecord(flightState._trackedEntity).selectionOrigin = origin;
     _emitAwarenessEvent('gev:awareness-subject-selected', {
@@ -76,7 +77,7 @@ export function createTracking({
       // a callsign-less contact reached Context as its raw hex even once adsbdb
       // had supplied a registration. Identity below stays `icao24`.
       label: parts.queries._contactLabel(icao24, info),
-      position: Cesium.Cartesian3.clone(bb.position),
+      position: Cesium.Cartesian3.clone(billboardState(bb).position),
       origin,
     });
     selectTrackedSubjectContext(_contextSubjectMetadata(icao24));
@@ -162,12 +163,13 @@ export function createTracking({
     const previous = flightState._cockpitNearContacts;
     const distancesSquared = [];
     for (const [icao24, bb] of flightState._billboards) {
-      if (icao24 === flightState._trackedIcao || !bb?.position) continue;
+      const position = billboardState(bb)?.position;
+      if (icao24 === flightState._trackedIcao || !position) continue;
       distancesSquared.push([
         icao24,
         Cesium.Cartesian3.distanceSquared(
           flightState._viewer.camera.positionWC,
-          bb.position,
+          position,
         ),
       ]);
     }
@@ -316,7 +318,8 @@ export function createTracking({
     if (!flightState._trackedIcao || !flightState._viewer) return;
     const pos =
       parts.motion._trackedDisplayCached() ||
-      flightState._billboards.get(flightState._trackedIcao)?.position;
+      billboardState(flightState._billboards.get(flightState._trackedIcao))
+        ?.position;
     if (!pos) return;
     const projected = screenProjectedRotation(
       flightState._viewer.scene,
@@ -642,17 +645,21 @@ export function createTracking({
     // ROTATION_REFRESH_MS of a wrong (possibly reversed) nose on release.
     if (flightState._billboards.has(flightState._trackedIcao)) {
       const bb = flightState._billboards.get(flightState._trackedIcao);
-      bb.show = true;
-      bb.width = 20;
-      bb.height = 20;
+      setBillboard(bb, 'show', true);
+      setBillboard(bb, 'width', 20);
+      setBillboard(bb, 'height', 20);
       // Ground/military-aware restore (a plane untracked while taxiing must come
       // back muted-gray at ground scale, not white at full scale).
       bb.color = parts.rendering._fleetBillboardColor(flightState._trackedIcao);
-      bb.scale = parts.rendering._fleetBillboardScale(
-        flightState._trackedIcao,
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+      setBillboard(
+        bb,
+        'scale',
+        parts.rendering._fleetBillboardScale(
+          flightState._trackedIcao,
+          flightState.records.data.get(flightState._trackedIcao)?.klass,
+        ),
       );
-      bb.rotation = flightState._lastTrackedRotation;
+      setBillboard(bb, 'rotation', flightState._lastTrackedRotation);
     }
     flightState._lastCamPoseSig = ''; // force a fleet rotation pass on the next tick
 
@@ -830,7 +837,7 @@ export function createTracking({
       if (flightState._models.has(id) || flightState._modelPending.has(id))
         parts.rendering._releaseModel(id);
       const bb = flightState._billboards.get(id);
-      if (bb && id !== flightState._trackedIcao) bb.show = true; // horizon cull re-asserts next tick
+      if (bb && id !== flightState._trackedIcao) setBillboard(bb, 'show', true); // horizon cull re-asserts next tick
       if (id === flightState._trackedIcao) {
         parts.rendering._releaseTrackedModel();
         _syncTracked2dRotation();
@@ -862,9 +869,9 @@ export function createTracking({
   function _routeIsPlausible(icao24, route) {
     const info = flightState.records.data.get(icao24);
     const bb = flightState._billboards.get(icao24);
-    if (!info || !bb || !bb.position) return true;
+    if (!info || !bb || !billboardState(bb).position) return true;
     const carto = Cesium.Cartographic.fromCartesian(
-      bb.position,
+      billboardState(bb).position,
       Cesium.Ellipsoid.WGS84,
       flightState._scratchCarto,
     );
@@ -906,21 +913,22 @@ export function createTracking({
     flightState._trackedIcao = icao24;
     _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling, full load-retry budget
     flightState._cachedDRFrame = -1;
-    flightState._lastTrackedRotation = bb.rotation || 0;
+    flightState._lastTrackedRotation = billboardState(bb).rotation || 0;
     // Drop any fleet 3D model for this aircraft — the tracked entity now owns its visual (its
     // own billboard + model graphic), and the fleet tick skips the tracked icao, so a leftover
     // fleet model would be orphaned + double-rendered.
     parts.rendering._releaseModel(icao24);
 
     // Hide the billboard — the tracked entity replaces it visually
-    bb.show = false;
+    setBillboard(bb, 'show', false);
 
     // Helper: smoothed, per-frame-cached tracked position (see _trackedDisplayPosition —
     // one computation shared by the position/alignedAxis/rotation/trail-head callbacks,
     // with discontinuity reconciliation). Falls back to the last billboard position when
     // the aircraft has no fix.
     const getTrackedPosition = () =>
-      parts.motion._trackedDisplayPosition(icao24) || bb.position;
+      parts.motion._trackedDisplayPosition(icao24) ||
+      billboardState(bb).position;
 
     // Dead-reckoning position property — smooth continuous motion between API updates.
     const positionProperty = new Cesium.CallbackProperty(() => {

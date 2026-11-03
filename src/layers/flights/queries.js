@@ -16,6 +16,7 @@ import {
   FLEET_DR_INTERVAL_MS,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
+import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 
 export function createQueries({
   flightState,
@@ -134,7 +135,8 @@ export function createQueries({
     const info = flightState.records.data.get(icao24);
     const bb = flightState._billboards.get(icao24);
     const basePos =
-      parts.motion._deadReckon(icao24) || (bb ? bb.position : null);
+      parts.motion._deadReckon(icao24) ||
+      (bb ? billboardState(bb).position : null);
     if (!basePos) return null;
     const displayed = displayedKinematics({
       derivedSpeedMps: flightState._drSpeedMps,
@@ -336,7 +338,8 @@ export function createQueries({
           // here would double-image the tracked plane when 3D is turned off mid-track.
           if (flightState._billboardCollection)
             for (const [icao, bb] of flightState._billboards) {
-              if (icao !== flightState._trackedIcao) bb.show = true;
+              if (icao !== flightState._trackedIcao)
+                setBillboard(bb, 'show', true);
             }
         }
       }
@@ -454,7 +457,8 @@ export function createQueries({
         // doesn't vanish on the 2D→3D handoff; bb.position stays current while hidden.
         const model = flightState._models.get(icao24) ?? null;
         const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24, model);
-        if (!isTracked && !bb.show && !modelOwnsVisual) continue;
+        if (!isTracked && !billboardState(bb).show && !modelOwnsVisual)
+          continue;
         const info = flightState.records.data.get(icao24);
         let object = flightState._detectionObjects.get(icao24);
         if (!object) {
@@ -476,7 +480,7 @@ export function createQueries({
           ? parts.rendering._modelSpec(info?.klass)
           : null;
         const pos = isTracked
-          ? parts.motion._trackedVisualCached() || bb.position
+          ? parts.motion._trackedVisualCached() || billboardState(bb).position
           : modelOwnsVisual
             ? modelVisualAnchor(
                 model.modelMatrix,
@@ -486,7 +490,7 @@ export function createQueries({
                   : spec.scale,
                 object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
               )
-            : bb.position;
+            : billboardState(bb).position;
         if (!pos) continue;
         object.position = pos;
         object.skipLabel = isTracked;
@@ -600,7 +604,7 @@ export function createQueries({
         if (
           !aircraftIncludedInNearby({
             isTracked,
-            billboardShown: bb.show,
+            billboardShown: billboardState(bb).show,
             modelRendering: parts.rendering._modelOwnsVisual(icao24),
             includeHidden,
           })
@@ -610,7 +614,7 @@ export function createQueries({
         const trackedPos = isTracked
           ? parts.motion._trackedDisplayCached()
           : null; // cached, no recompute (anti-jitter)
-        const pos = trackedPos || bb.position;
+        const pos = trackedPos || billboardState(bb).position;
         if (!pos) continue;
 
         const distance = Cesium.Cartesian3.distance(center, pos);
@@ -692,7 +696,7 @@ export function createQueries({
 
       const result = [];
       for (const [icao24, bb] of flightState._billboards) {
-        const pos = bb.position;
+        const pos = billboardState(bb).position;
         if (!pos) continue;
         const carto = Cesium.Cartographic.fromCartesian(
           pos,

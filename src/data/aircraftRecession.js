@@ -5,6 +5,7 @@
  * with the locked NearFarScalar. It never edits that scalar, culls a contact,
  * or allows alpha to reach zero.
  */
+import { billboardState, setBillboard } from './billboardMirror.js';
 
 export const DEFAULT_AIRCRAFT_RECESSION_PARAMS = Object.freeze({
   startLimbRatio: 0.5,
@@ -220,11 +221,12 @@ export function applyAircraftBillboardTreatment({
   const alpha = baseAlpha * composedTreatment;
   let scaleWrites = 0;
   let alphaWrites = 0;
+  const pushedScale = billboardState(billboard)?.scale;
   if (
-    !Number.isFinite(billboard.scale) ||
-    Math.abs(billboard.scale - scale) > tuning.writeEpsilon
+    !Number.isFinite(pushedScale) ||
+    Math.abs(pushedScale - scale) > tuning.writeEpsilon
   ) {
-    billboard.scale = scale;
+    setBillboard(billboard, 'scale', scale);
     scaleWrites = 1;
   }
   if (

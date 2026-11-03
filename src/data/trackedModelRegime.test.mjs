@@ -45,6 +45,7 @@ import militaryFlightsLayer, {
 } from './militaryFlights.js';
 import { clearTr3bRegistry, setTr3b } from './tr3bRegistry.js';
 import { reportMeshFloorCell, _clearMeshFloorCellsForTest } from './groundFloor.js';
+import { setBillboard } from './billboardMirror.js';
 
 // Sample altitudes are expressed RELATIVE to the band rather than as absolute
 // offsets. The thresholds have already been retuned once (1_000_000 → 150_000
@@ -351,7 +352,7 @@ for (const fixture of LAYERS) {
         onGround: true,
         models: [[icao24, model]],
       });
-      billboard.show = false;
+      setBillboard(billboard, 'show', false);
 
       let ownsVisual = fixture.driveFleetModel({ icao24, position, course: 92 });
       assert.equal(ownsVisual, false, 'cold terrain cannot transfer ownership to 3D');
@@ -487,7 +488,7 @@ for (const fixture of LAYERS) {
         onGround: true,
         models: [[icao24, model]],
       });
-      billboard.show = false;
+      setBillboard(billboard, 'show', false);
 
       const atA = Cesium.Cartesian3.fromDegrees(A_LON, LAT, 0);
       const atB = Cesium.Cartesian3.fromDegrees(B_LON, LAT, 0);
@@ -622,7 +623,7 @@ for (const fixture of LAYERS) {
         0,
         1e-6,
       ), 'a hidden tracked model cannot steal the detection anchor');
-      billboard.show = false; // tracking hides the fleet sprite; the tracked entity remains the 2D owner
+      setBillboard(billboard, 'show', false); // tracking hides the fleet sprite; the tracked entity remains the 2D owner
       const loadingNearby = fixture.layer.getNearby(billboard.position, 1_000, 50)
         .find((object) => object.icao24 === (fixture.name === 'flights' ? 'a0f001' : 'b0f001'));
       assert.ok(loadingNearby, 'the tracked contact remains in proximity while its model loads');
@@ -661,7 +662,7 @@ for (const fixture of LAYERS) {
 
       viewer.tileset.tilesLoaded = false;
       sampledHeight = undefined;
-      billboard.position = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, -500);
+      setBillboard(billboard, 'position', Cesium.Cartesian3.fromDegrees(-97.71, 30.21, -500));
       fixture.driveTrackedModel();
       assert.equal(model.show, true,
         'a successful cached snap survives a poll-time vertical datum change');
@@ -671,7 +672,7 @@ for (const fixture of LAYERS) {
       // Taxi past the resample threshold with the tiles gone: the tracked model
       // holds its last measured floor rather than handing the operator's own
       // selection back to a 2D glyph for a retry backoff.
-      billboard.position = Cesium.Cartesian3.fromDegrees(-97.709, 30.21, -500);
+      setBillboard(billboard, 'position', Cesium.Cartesian3.fromDegrees(-97.709, 30.21, -500));
       fixture.driveTrackedModel();
       assert.equal(model.show, true,
         'a taxi-invalidated tracked snap is HELD through the resample outage');
@@ -680,7 +681,7 @@ for (const fixture of LAYERS) {
       assert.equal(sampleCalls, 1, 'the hold costs no extra synchronous sample');
 
       // Past the drift bound the memory is released and the gate takes over.
-      billboard.position = Cesium.Cartesian3.fromDegrees(-97.707, 30.21, -500);
+      setBillboard(billboard, 'position', Cesium.Cartesian3.fromDegrees(-97.707, 30.21, -500));
       fixture.driveTrackedModel();
       assert.equal(model.show, false,
         'past HELD_SNAP_MAX_DRIFT_M the hold is released and the model is withheld');

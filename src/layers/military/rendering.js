@@ -55,6 +55,7 @@ import {
 } from './policy.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 import { aircraftVisuals } from '../aircraft/visualState.js';
+import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 
 export function createRendering({
   flightState,
@@ -159,12 +160,12 @@ export function createRendering({
     if (isCockpitContact && !isCockpitNear) {
       const freshnessAlpha = cyberSonarBaseAlpha(bb);
       bb.image = cockpitContactDotImage();
-      bb.width = COCKPIT_CONTACT_SIZE_PX;
-      bb.height = COCKPIT_CONTACT_SIZE_PX;
-      bb.scale = limbScale;
-      bb.scaleByDistance = _cockpitBillboardScaleByDistance();
+      setBillboard(bb, 'width', COCKPIT_CONTACT_SIZE_PX);
+      setBillboard(bb, 'height', COCKPIT_CONTACT_SIZE_PX);
+      setBillboard(bb, 'scale', limbScale);
+      setBillboard(bb, 'scaleByDistance', _cockpitBillboardScaleByDistance());
       bb.color = _fleetBillboardColor(icao24).withAlpha(freshnessAlpha);
-      bb.rotation = 0;
+      setBillboard(bb, 'rotation', 0);
       return;
     }
 
@@ -173,10 +174,10 @@ export function createRendering({
       _iconKind(icao24, meta?.klass),
       aircraftVisuals.read(bb)?.iconLarge ? TRACKED_ICON_PX : undefined,
     );
-    bb.width = icao24 === flightState._trackedIcao ? 24 : 20;
-    bb.height = icao24 === flightState._trackedIcao ? 24 : 20;
-    bb.scale = _militaryBillboardScale(icao24) * limbScale;
-    bb.scaleByDistance = _normalBillboardScaleByDistance();
+    setBillboard(bb, 'width', icao24 === flightState._trackedIcao ? 24 : 20);
+    setBillboard(bb, 'height', icao24 === flightState._trackedIcao ? 24 : 20);
+    setBillboard(bb, 'scale', _militaryBillboardScale(icao24) * limbScale);
+    setBillboard(bb, 'scaleByDistance', _normalBillboardScaleByDistance());
     bb.color = _fleetBillboardColor(icao24, meta).withAlpha(
       cyberSonarBaseAlpha(bb),
     );
@@ -330,7 +331,7 @@ export function createRendering({
 
   function _driveFleetModelHandoff(icao24, model, bb, pos, course, beforeShow) {
     if (!model) {
-      bb.show = true;
+      setBillboard(bb, 'show', true);
       return false;
     }
     const displayPos = _modelDisplayPosition(
@@ -340,7 +341,7 @@ export function createRendering({
     );
     if (!displayPos) {
       model.show = false; // no ground evidence → nothing safe to place a depth-tested model at
-      bb.show = true;
+      setBillboard(bb, 'show', true);
       return false;
     }
     // The matrix is written BEFORE the readiness test on purpose: a model can flip
@@ -354,12 +355,12 @@ export function createRendering({
     );
     if (!model.ready) {
       model.show = false; // not loaded yet → keep the 2D icon, no half-model flash
-      bb.show = true;
+      setBillboard(bb, 'show', true);
       return false;
     }
     beforeShow?.();
     if (!model.show) model.show = true;
-    if (bb.show) bb.show = false; // hand off ONLY once the model renders
+    if (billboardState(bb).show) setBillboard(bb, 'show', false); // hand off ONLY once the model renders
     return true;
   }
 
@@ -405,7 +406,8 @@ export function createRendering({
       (!current && flightState._modelPending.has(icao24))
     ) {
       const bb = flightState._billboards.get(icao24);
-      if (bb && icao24 !== flightState._trackedIcao) bb.show = true;
+      if (bb && icao24 !== flightState._trackedIcao)
+        setBillboard(bb, 'show', true);
       _releaseModel(icao24);
     }
     if (
@@ -440,7 +442,8 @@ export function createRendering({
       )
         continue; // already right state
       const bb = flightState._billboards.get(icao);
-      if (bb && icao !== flightState._trackedIcao) bb.show = true;
+      if (bb && icao !== flightState._trackedIcao)
+        setBillboard(bb, 'show', true);
       _releaseModel(icao);
     }
     if (flightState._irReloadQueue.length === 0)
@@ -662,7 +665,8 @@ export function createRendering({
     // readout consumers then reuse that exact cached position.
     const pos =
       parts.motion._trackedDisplayPosition(flightState._trackedIcao) ||
-      flightState._billboards.get(flightState._trackedIcao)?.position;
+      billboardState(flightState._billboards.get(flightState._trackedIcao))
+        ?.position;
     if (!pos) {
       if (flightState._trackedModel) flightState._trackedModel.show = false;
       return;
@@ -738,7 +742,9 @@ export function createRendering({
           // default here produces a one-frame jump to the Earth's center.
           const currentPos =
             parts.motion._trackedDisplayCached() ||
-            flightState._billboards.get(flightState._trackedIcao)?.position;
+            billboardState(
+              flightState._billboards.get(flightState._trackedIcao),
+            )?.position;
           if (currentPos) {
             const displayPos = _modelDisplayPosition(
               flightState._trackedIcao,
@@ -897,12 +903,10 @@ export function createRendering({
         // Ground planes compete for model slots like everyone else (owner decision
         // 2026-07-03, mirror of flights.js — no air/ground distinction; grounded
         // placement is handled by the one-shot ground snap in _modelDisplayPosition).
-        const d2 = Cesium.Cartesian3.distanceSquared(camPos, bb.position);
+        const { position } = billboardState(bb);
+        const d2 = Cesium.Cartesian3.distanceSquared(camPos, position);
         if (d2 > keepDistSq) continue; // beyond keep radius → never eligible
-        Cesium.Cartesian3.clone(
-          bb.position,
-          flightState._scratchModelBS.center,
-        );
+        Cesium.Cartesian3.clone(position, flightState._scratchModelBS.center);
         cand.push([
           icao,
           d2,
@@ -932,27 +936,28 @@ export function createRendering({
 
     for (const [icao24, bb] of flightState._billboards) {
       if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
+      const icon = billboardState(bb);
 
       const dr = parts.motion._deadReckon(icao24, flightState._scratchFleetPos);
       // Gate the write — assigning Billboard.position dirties the whole
       // collection's vertex buffer, so skip sub-meter moves.
-      if (dr && Cesium.Cartesian3.distanceSquared(dr, bb.position) > 1.0) {
-        bb.position = dr;
+      if (dr && Cesium.Cartesian3.distanceSquared(dr, icon.position) > 1.0) {
+        setBillboard(bb, 'position', dr);
       }
 
       // Round 6: occlusion-test a LIFTED point for contacts at/below the
       // ellipsoid (mirror of flights.js — sub-ellipsoid points near the limb
       // read "beyond the horizon" and would hide low contacts awaiting floors).
       const beyondHorizon = !occluder.isPointVisible(
-        flightState.records.data.get(icao24)?.cullPosition || bb.position,
+        flightState.records.data.get(icao24)?.cullPosition || icon.position,
       );
       // A billboard flipping INTO view (horizon reveal while the camera idles)
       // gets its rotation refreshed THIS tick even without a pose change —
       // otherwise it reappears wearing its stale (often creation-north) nose for
       // up to ROTATION_REFRESH_MS. (Model-handed-off planes also read show=false
       // here; harmless — the model branch below `continue`s past the rotation.)
-      const revealed = !beyondHorizon && !bb.show;
-      if (bb.show === beyondHorizon) bb.show = !beyondHorizon;
+      const revealed = !beyondHorizon && !icon.show;
+      if (icon.show === beyondHorizon) setBillboard(bb, 'show', !beyondHorizon);
       if (beyondHorizon) {
         // Also hide any 3D model — otherwise a model that crossed the limb would keep
         // rendering through the hidden globe at its last matrix.
@@ -968,22 +973,22 @@ export function createRendering({
       // untouched and multiplicative; there is no cull or zero-alpha path.
       const cameraDistanceM = Cesium.Cartesian3.distance(
         camera.positionWC,
-        bb.position,
+        icon.position,
       );
       const distanceScale = nearFarScalarValueAtDistance(
-        bb.scaleByDistance,
+        icon.scaleByDistance,
         cameraDistanceM,
       );
       const focus = advanceProjectedSpriteFocus(
         bb,
-        bb.position,
+        icon.position,
         scene,
         camera,
         nowMs,
         focusTarget,
         undefined,
-        (bb.width || 20) * (bb.scale || 1) * distanceScale * 0.5,
-        (bb.height || 20) * (bb.scale || 1) * distanceScale * 0.5,
+        (icon.width || 20) * (icon.scale || 1) * distanceScale * 0.5,
+        (icon.height || 20) * (icon.scale || 1) * distanceScale * 0.5,
       );
       const isCockpitNear =
         flightState._cockpitContactMode &&
@@ -1007,8 +1012,8 @@ export function createRendering({
       // focus/limb recession counts) with hysteresis (atlas has no mips).
       if (!flightState._cockpitContactMode || isCockpitNear) {
         const glyphDevPx =
-          (bb.width || 20) *
-          (bb.scale || 1) *
+          (icon.width || 20) *
+          (icon.scale || 1) *
           distanceScale *
           (globalThis.devicePixelRatio || 1);
         const visual = aircraftVisuals.write(bb);
@@ -1087,12 +1092,12 @@ export function createRendering({
       ) {
         const rot = screenProjectedRotation(
           scene,
-          bb.position,
+          icon.position,
           course,
-          bb.rotation,
+          icon.rotation,
         );
-        if (rot !== null && Math.abs(rot - bb.rotation) > 0.002) {
-          bb.rotation = rot;
+        if (rot !== null && Math.abs(rot - icon.rotation) > 0.002) {
+          setBillboard(bb, 'rotation', rot);
         }
       }
     }

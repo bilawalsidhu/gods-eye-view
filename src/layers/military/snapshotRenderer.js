@@ -9,6 +9,7 @@ import {
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
 import { BILLBOARD_SCALE, GROUND_SCALE, TRACKED_ICON_COLOR } from './policy.js';
+import { addBillboard, setBillboard } from '../../data/billboardMirror.js';
 
 /** Apply military record changes to Cesium resources and existing follow operations. */
 export function createMilitarySnapshotRenderer({
@@ -150,7 +151,7 @@ export function createMilitarySnapshotRenderer({
         // it ahead until the next fleet tick snapped it back.
         const displayed =
           motion._deadReckon(icao24, new Cesium.Cartesian3()) || position;
-        const bb = flightState._billboardCollection.add({
+        const bb = addBillboard(flightState._billboardCollection, {
           position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
           width: isTracked ? 24 : 20,
@@ -226,7 +227,7 @@ export function createMilitarySnapshotRenderer({
       if (newest)
         newest.position = Cesium.Cartesian3.clone(liftedPos, newest.position);
       const bbStale = flightState._billboards.get(icao24);
-      if (bbStale) bbStale.position = liftedPos;
+      if (bbStale) setBillboard(bbStale, 'position', liftedPos);
     }
     // Round 4: sample the RENDERED mesh for those cells (one-shot per cell,
     // budget-capped, viewer-proximate, google-3d regime only), excluding

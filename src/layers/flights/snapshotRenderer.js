@@ -7,6 +7,7 @@ import {
 } from '../../data/motionModel.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
+import { addBillboard } from '../../data/billboardMirror.js';
 
 /** Apply reconciled aircraft records to Cesium resources and follow state. */
 export function createFlightSnapshotRenderer({
@@ -195,7 +196,7 @@ export function createFlightSnapshotRenderer({
               rendering._modelOwnsVisual(icao24),
             )) ||
           position;
-        const bb = flightState._billboardCollection.add({
+        const bb = addBillboard(flightState._billboardCollection, {
           position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
           width: isTracked ? 24 : 20,
