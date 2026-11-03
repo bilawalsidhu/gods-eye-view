@@ -2774,7 +2774,74 @@ export function createContractSuite(
   if (capabilities.bloom) checks.push(...bloomChecks(engine.render, settle));
   if (capabilities.cloudCover)
     checks.push(...cloudCoverChecks(engine.render, settle));
+  if (capabilities.contactSonar)
+    checks.push(...contactSonarChecks(engine.render, settle));
   return checks.map(([name, run]) => ({ name, run }));
+}
+
+// The optional contactSonar capability (render.setContactSonar).
+function contactSonarChecks(render, settle) {
+  return [
+    [
+      'render.setContactSonar (contactSonar): merges, copies, rejects bad values, draws',
+      async () => {
+        const previous = render.contactSonar();
+        ensure(
+          previous.enabled === false,
+          `the sonar starts ${JSON.stringify(previous)}`,
+        );
+        try {
+          render.setContactSonar({
+            enabled: true,
+            active: true,
+            angleDeg: 90,
+            range: 100,
+            opacity: 40,
+            sector: 30,
+          });
+          await settle(2);
+          render.setContactSonar({ angleDeg: 180 });
+          const state = render.contactSonar();
+          ensure(
+            state.enabled && state.active && state.angleDeg === 180,
+            `after an angle alone: ${JSON.stringify(state)}`,
+          );
+          state.angleDeg = 0;
+          ensure(
+            render.contactSonar().angleDeg === 180,
+            'contactSonar() is a copy',
+          );
+          for (const bad of [
+            { enabled: 'yes' },
+            { active: 1 },
+            { angleDeg: Number.NaN },
+            { range: 0 },
+            { opacity: 101 },
+            { sector: 0 },
+            { sector: 400 },
+          ]) {
+            let error = null;
+            try {
+              render.setContactSonar(bad);
+            } catch (caught) {
+              error = caught;
+            }
+            ensure(
+              error instanceof TypeError,
+              `setContactSonar(${JSON.stringify(bad)}) did not throw a TypeError`,
+            );
+          }
+          ensure(
+            render.contactSonar().opacity === 40,
+            'a rejected call changed the sonar',
+          );
+        } finally {
+          render.setContactSonar(previous);
+          await settle(1);
+        }
+      },
+    ],
+  ];
 }
 
 // The optional cloudCover capability (render.setCloudCover).

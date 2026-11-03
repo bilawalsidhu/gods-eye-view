@@ -24,11 +24,13 @@ import {
   normalizeInputOptions,
   BLOOM_INITIAL,
   CLOUD_COVER_INITIAL,
+  CONTACT_SONAR_INITIAL,
   SHARPEN_INITIAL,
   STYLE_INITIAL,
   createEngineEvent,
   mergeBloom,
   mergeCloudCover,
+  mergeContactSonar,
   mergeSharpen,
   mergeStyle,
 } from '../contract.js';
@@ -233,6 +235,19 @@ function rectangleFromCartographics(points) {
   return { west, south, east, north };
 }
 
+// render.setContactSonar/contactSonar when asked; nothing otherwise.
+function fakeContactSonar(enabled, record) {
+  if (!enabled) return {};
+  let sonar = { ...CONTACT_SONAR_INITIAL };
+  return {
+    setContactSonar(options) {
+      record('render.setContactSonar', [options]);
+      sonar = mergeContactSonar(sonar, options);
+    },
+    contactSonar: () => ({ ...sonar }),
+  };
+}
+
 // render.setCloudCover/cloudCover when asked; nothing otherwise.
 function fakeCloudCover(enabled, record) {
   if (!enabled) return {};
@@ -295,7 +310,7 @@ function fakeStyles(visualStyles, record) {
  *   container?: object, canvas?: object, nowMs?: number,
  *   appClock?: import('../../time/clock.js').AppClock,
  *   visualStyles?: Record<string, string[]>, bloom?: boolean,
- *   cloudCover?: boolean }} [options]
+ *   cloudCover?: boolean, contactSonar?: boolean }} [options]
  *   Canvas size in CSS px, angles in radians; `container`/`canvas` stand in
  *   for the host elements (DOM mocks for shell tests). The initial pose looks straight
  *   down from `altitude` metres (10 000 km). The engine clock reads
@@ -305,7 +320,8 @@ function fakeStyles(visualStyles, record) {
  *   `visualStyles` ({ style: its uniform names }) adds the optional
  *   visualStyles capability (render.setStyle), each uniform starting at 0;
  *   `bloom: true` the optional bloom capability (render.setBloom);
- *   `cloudCover: true` the optional cloudCover one (render.setCloudCover).
+ *   `cloudCover: true` the optional cloudCover one (render.setCloudCover);
+ *   `contactSonar: true` the contactSonar one (render.setContactSonar).
  * @returns {import('../contract.js').GlobeEngine & { fake: object }}
  */
 export function createFakeEngine(options = {}) {
@@ -994,6 +1010,7 @@ export function createFakeEngine(options = {}) {
       ...fakeStyles(options.visualStyles, record),
       ...fakeBloom(options.bloom, record),
       ...fakeCloudCover(options.cloudCover, record),
+      ...fakeContactSonar(options.contactSonar, record),
     },
     surface: {
       sampleHeight(position, exclude) {

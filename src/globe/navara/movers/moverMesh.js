@@ -30,6 +30,7 @@ import {
   OVERLAY_DEPTH_MODES,
   OVERLAY_DEPTH_VERTEX,
 } from '../overlayDepth.js';
+import { DETACHED_SONAR, SONAR_VERTEX } from '../sonar.js';
 
 const VERTEX_HEAD = /* glsl */ `
 attribute vec4 gevStyle;
@@ -48,7 +49,10 @@ varying vec2 vGevLocal;
 varying float vGevOutline;
 varying float vGevPixelDistance;
 varying float vGevTranslucency;
+varying float vGevSonarFactor;
+uniform vec2 uGevResolution;
 ${OVERLAY_DEPTH_VERTEX}
+${SONAR_VERTEX}
 `;
 
 const VERTEX_PROJECT = /* glsl */ `
@@ -96,7 +100,10 @@ vec2 gevTurned = vec2(
 vec4 mvPosition = mvCenter;
 mvPosition.xy += gevTurned * gevSizePx * uGevFootprint * max(-mvCenter.z, 0.0);
 gl_Position = projectionMatrix * mvPosition;
-vGevColor = gevColor;
+// The Cyber sonar (sonar.js): by the anchor's place on screen, never the
+// corner's, so a contact is treated whole; the position stays as it is.
+vGevSonarFactor = gevSonarFactor(projectionMatrix * mvCenter, uGevResolution);
+vGevColor = gevSonarColor(gevColor, vGevSonarFactor);
 vGevLocal = gevCorner;
 #ifndef GEV_ALWAYS_VISIBLE
 vGevDepthFree = gevDistance < uGevDisableWithinM ? 1.0 : 0.0;
@@ -117,6 +124,7 @@ varying vec2 vGevLocal;
 varying float vGevOutline;
 varying float vGevPixelDistance;
 varying float vGevTranslucency;
+varying float vGevSonarFactor;
 ${OVERLAY_DEPTH_FRAGMENT}
 `;
 
@@ -135,7 +143,8 @@ float gevDistanceToCenter = gevRadius * 0.5;
 float gevWholeAlpha = 1.0 - smoothstep(gevMaxDistance, 0.5, gevDistanceToCenter);
 float gevInner = 1.0 - vGevOutline;
 float gevInnerAlpha = 1.0 - smoothstep(gevMaxDistance * gevInner, 0.5 * gevInner, gevDistanceToCenter);
-diffuseColor *= sRGBTransferEOTF(mix(uGevOutlineColor, vGevColor, gevInnerAlpha));
+vec4 gevOutline = vec4(uGevOutlineColor.rgb, uGevOutlineColor.a * vGevSonarFactor);
+diffuseColor *= sRGBTransferEOTF(mix(gevOutline, vGevColor, gevInnerAlpha));
 diffuseColor.a *= gevWholeAlpha * vGevTranslucency;
 if (diffuseColor.a < 0.005) discard;
 `
@@ -290,6 +299,12 @@ export function createMoverMesh(
     uGevResolution: overlayUniforms.uGevResolution,
     uGevDisplayBlend:
       overlayUniforms.uGevDisplayBlend ?? DETACHED_OVERLAY.uGevDisplayBlend,
+    // Shared by every overlay of the view: the Cyber sonar (sonar.js).
+    uGevSonar: overlayUniforms.uGevSonar ?? DETACHED_SONAR.uGevSonar,
+    uGevSonarSector:
+      overlayUniforms.uGevSonarSector ?? DETACHED_SONAR.uGevSonarSector,
+    uGevSonarEnabled:
+      overlayUniforms.uGevSonarEnabled ?? DETACHED_SONAR.uGevSonarEnabled,
   };
   // A canvas atlas is there at once; a URL one once its image loads.
   let textureReady = point || Boolean(options.sprite.atlas.canvas);

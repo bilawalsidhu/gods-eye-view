@@ -7,6 +7,7 @@ import {
   MODIFIERS,
   BLOOM_INITIAL,
   CLOUD_COVER_INITIAL,
+  CONTACT_SONAR_INITIAL,
   ENGINE_CAPABILITIES,
   OPTIONAL_ENGINE_MEMBERS,
   SHARPEN_INITIAL,
@@ -16,6 +17,7 @@ import {
   isEngineEvent,
   mergeBloom,
   mergeCloudCover,
+  mergeContactSonar,
   mergeSharpen,
   mergeStyle,
 } from './contract.js';
@@ -499,6 +501,37 @@ test('the cloudCover capability: whole or absent, null for the engine own', asyn
   const checks = createContractSuite(engine, {
     waitFrames: async (count) => engine.fake.frames(count),
   }).filter(({ name }) => /\(cloudCover\)/.test(name));
+  assert.equal(checks.length, 1);
+  for (const check of checks) await t.test(check.name, () => check.run());
+});
+
+test('the contactSonar capability: whole or absent, merged and checked', async (t) => {
+  assert.deepEqual(ENGINE_CAPABILITIES, [
+    'visualStyles',
+    'bloom',
+    'cloudCover',
+    'contactSonar',
+  ]);
+  const engine = createFakeEngine({ contactSonar: true });
+  assert.equal(engineCapabilities(engine).contactSonar, true);
+  assert.deepEqual(engine.render.contactSonar(), CONTACT_SONAR_INITIAL);
+  const half = {
+    ...engine,
+    render: { ...engine.render, contactSonar: undefined },
+  };
+  assert.throws(() => assertGlobeEngine(half), /render\.contactSonar\b/);
+  assert.deepEqual(
+    mergeContactSonar(CONTACT_SONAR_INITIAL, { enabled: true, angleDeg: 400 }),
+    { ...CONTACT_SONAR_INITIAL, enabled: true, angleDeg: 400 },
+  );
+  for (const bad of [{ opacity: -1 }, { range: -5 }, { active: 'no' }])
+    assert.throws(
+      () => mergeContactSonar(CONTACT_SONAR_INITIAL, bad),
+      TypeError,
+    );
+  const checks = createContractSuite(engine, {
+    waitFrames: async (count) => engine.fake.frames(count),
+  }).filter(({ name }) => /\(contactSonar\)/.test(name));
   assert.equal(checks.length, 1);
   for (const check of checks) await t.test(check.name, () => check.run());
 });
