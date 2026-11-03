@@ -146,6 +146,7 @@ export function createBikeshareNavaraRenderer(engine, context) {
             show: true,
           },
           capacity: parts.model.toNonNegativeInteger(station.capacity),
+          publishedCapacity: parts.model.toNonNegativeInteger(station.capacity),
           bikesAvailable: null,
           docksAvailable: null,
           isInstalled: station.isInstalled,
@@ -178,7 +179,12 @@ export function createBikeshareNavaraRenderer(engine, context) {
         const record = state._stationRenderMap.get(key);
         if (!record) continue;
         const status = statusMap.get(record.stationId) || null;
-        record.capacity = resolveCapacity(parts.model, record.capacity, status);
+        // Resolve from the published capacity, not last poll's derived value.
+        record.capacity = resolveCapacity(
+          parts.model,
+          record.publishedCapacity,
+          status,
+        );
         record.bikesAvailable = parts.model.toNonNegativeInteger(
           status?.bikesAvailable,
         );

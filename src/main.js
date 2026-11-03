@@ -16,6 +16,12 @@ import { useDisplayStore } from './ui/stores/display.js';
 import { applicationPinia } from './ui/vueRuntime.js';
 import { t } from './i18n/index.js';
 
+// The Vite boundary exposes only undefined, null, or a validated URL.
+const photonSetting = import.meta.env.PHOTON_URL;
+// Every engine start composes the same place-search endpoints.
+const geospatial =
+  photonSetting === undefined ? {} : { endpoints: { photon: photonSetting } };
+
 const display = useDisplayStore(applicationPinia());
 const loading = document.getElementById('loading-screen');
 let application;
@@ -54,6 +60,7 @@ function createApplication(kind, engineSwitch) {
   application = createStandaloneApplication({
     googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
+    geospatial,
     allowQaRegistration: import.meta.env.DEV,
     engineKind: kind,
     rendererCache: renderers,

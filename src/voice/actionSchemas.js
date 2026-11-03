@@ -174,6 +174,7 @@ const schemas = [
             'cctv-panel',
             'radio-panel',
             'scene-panel',
+            'utilities-panel',
             'pp-toggles',
             'global-context-panel',
             'weather-panel',
