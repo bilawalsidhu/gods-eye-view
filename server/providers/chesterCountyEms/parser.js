@@ -1,7 +1,7 @@
 /** Decode text only; upstream HTML is never forwarded or executed. */
 function text(html) {
   return html
-    .replace(/<[^>]*>/g, '')
+    .replace(/<[^>]*>/g, ' ')
     .replace(
       /&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,
       (all, entity) => {
@@ -17,6 +17,84 @@ function text(html) {
     )
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Accept only the county's category-specific detail link for this incident. */
+export function webCadDetailUrl(href, { category, incidentNumber }) {
+  try {
+    const url = new URL(text(href), 'https://webcad.chesco.org/WebCad/');
+    if (
+      !['fire', 'ems', 'traffic'].includes(category) ||
+      url.origin !== 'https://webcad.chesco.org' ||
+      url.username ||
+      url.password ||
+      url.hash ||
+      url.pathname !== `/WebCad/livecadcomments-${category}.asp` ||
+      url.searchParams.get('incidentno') !== incidentNumber ||
+      !/^\d{1,12}$/.test(url.searchParams.get('eid') || '') ||
+      [...url.searchParams].some(
+        ([key, value]) =>
+          ![
+            'eid',
+            'incidentno',
+            'incidenttype',
+            'location',
+            'mun',
+            'station',
+          ].includes(key) ||
+          url.searchParams.getAll(key).length !== 1 ||
+          value.length > 500,
+      )
+    )
+      return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Parse public unit status rows, including the county's unclosed header tr. */
+export function parseWebCadDetails(html, { category, incidentNumber }) {
+  const plain = text(html);
+  if (!plain.match(new RegExp(`Incident No\\.\\s*${incidentNumber}\\b`)))
+    throw new Error('Wrong incident detail page');
+  const updated = plain.match(
+    /Last Updated\s+(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}\s+[AP]M)/i,
+  );
+  if (!updated) throw new Error('Missing detail timestamp');
+  const units = [];
+  if (category !== 'traffic') {
+    const table = [...html.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)]
+      .map((m) => m[1])
+      .find((body) => /Date\/Time Entered/i.test(text(body)));
+    if (!table) throw new Error('Missing unit status table');
+    const rows = table
+      .split(/<tr\b[^>]*>/i)
+      .slice(1)
+      .map((row) =>
+        [...row.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((m) =>
+          text(m[1]),
+        ),
+      );
+    if (
+      JSON.stringify(rows.shift()) !==
+      JSON.stringify(['Date/Time Entered', 'Unit', 'Status'])
+    )
+      throw new Error('Unknown unit status schema');
+    if (rows.length > 128) throw new Error('Too many unit statuses');
+    for (const fields of rows) {
+      if (fields.length !== 3 || fields.some((s) => !s || s.length > 200))
+        throw new Error('Invalid unit status');
+      const [entered, unit, rawStatus] = fields;
+      units.push({
+        unit,
+        status: rawStatus.replace(/^>\s*/, ''),
+        entered,
+        enteredAt: easternTime(entered),
+      });
+    }
+  }
+  return { incidentNumber, observedAt: easternTime(updated[1]), units };
 }
 
 /** Convert the county's Eastern wall clock to UTC, checking DST round trips. */
@@ -114,6 +192,9 @@ export function parseWebCad(html) {
       if (!/^[FP]\d{8}$/.test(incidentNumber) || seen.has(id))
         throw new Error('Invalid incident identity');
       seen.add(id);
+      const href = row[1].match(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/i)?.[1];
+      const detailUrl =
+        href && webCadDetailUrl(href, { category, incidentNumber });
       rows.push({
         id,
         incidentNumber,
@@ -124,6 +205,7 @@ export function parseWebCad(html) {
         dispatched,
         dispatchedAt: easternTime(dispatched),
         station,
+        ...(detailUrl ? { detailUrl } : {}),
       });
     }
   }

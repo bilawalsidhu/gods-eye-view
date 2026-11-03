@@ -23,11 +23,38 @@ try {
   await page.setViewport({ width: 1440, height: 1000 });
   await page.evaluateOnNewDocument(() => {
     const original = window.fetch;
+    window.__emsPaintedText = new Set();
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+      if (/MEDIC01|AMB02|Approximate intersection/.test(String(text)))
+        window.__emsPaintedText.add(String(text));
+      return fillText.call(this, text, ...args);
+    };
     let empty = false;
     window.__emsEmpty = () => {
       empty = true;
     };
     window.fetch = (input, options) => {
+      if (String(input).includes('/api/chester-county-ems/details?'))
+        return Promise.resolve(
+          Response.json({
+            incidentNumber: 'F26000001',
+            observedAt: Date.now(),
+            stale: false,
+            units: [
+              {
+                unit: 'MEDIC01',
+                status: 'On Scene',
+                entered: '11-03-2026 10:05:00',
+              },
+              {
+                unit: 'AMB02',
+                status: 'Enroute',
+                entered: '11-03-2026 10:04:00',
+              },
+            ],
+          }),
+        );
       if (String(input).includes('/api/chester-county-ems'))
         return Promise.resolve(
           new Response(
@@ -44,7 +71,10 @@ try {
                 ? []
                 : [
                     {
-                      id: 'F26000001',
+                      id: 'ems:F26000001',
+                      incidentNumber: 'F26000001',
+                      detailUrl:
+                        'https://webcad.chesco.org/WebCad/livecadcomments-ems.asp?eid=123&incidentno=F26000001',
                       type: 'SYNTHETIC EMS TEST',
                       location: 'EXAMPLE RD & TEST ST',
                       municipality: 'West Chester Borough',
@@ -64,6 +94,7 @@ try {
                         ...row,
                         category,
                         id: i ? `${category}:test` : row.id,
+                        detailUrl: i ? null : row.detailUrl,
                         type: `SYNTHETIC ${category.toUpperCase()} TEST`,
                         mapPosition: {
                           ...row.mapPosition,
@@ -118,15 +149,19 @@ try {
       degraded: layer.getStats().degraded,
       list: layer.getRowControls().list.items.length,
       info: layer.getRowControls().info,
+      unselected: layer
+        .getRowControls()
+        .list.items.every((item) => !item.active),
     };
   });
+  assert.equal(result.unselected, true);
   assert.equal(result.count, 4);
   assert.equal(result.degraded, false);
   assert.equal(result.list, 4);
   assert.match(result.info, /3 mapped · 1 unresolved · 0 lookup errors/);
   assert.match(result.info, /Street locations are approximate/);
   const incidentSelector =
-    '[data-layer-id="chester-county-ems"] button[data-list-item-id="F26000001"]';
+    '[data-layer-id="chester-county-ems"] button[data-list-item-id="ems:F26000001"]';
   const incidentVisible = await page.evaluate((selector) => {
     const item = document.querySelector(selector);
     return item?.checkVisibility({ visibilityProperty: true }) || false;
@@ -146,18 +181,88 @@ try {
     });
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
-  const incident = await page.waitForSelector(incidentSelector, {
-    visible: true,
+  // Move to the fixture without selecting it, then click its actual billboard.
+  await page.evaluate(async () => {
+    const app = window.__godsEyeView;
+    const Cesium = window.Cesium;
+    app.viewer.camera.cancelFlight();
+    app.viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(-75.603, 39.96, 1800),
+    });
+    app.viewer.scene.requestRender();
   });
-  await incident.click();
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await page
+    .waitForFunction(
+      () => {
+        const app = window.__godsEyeView;
+        const Cesium = window.Cesium;
+        const entity =
+          app.viewer.dataSources.getByName('chester-county-ems')[0].entities
+            .values[0];
+        const point = Cesium.SceneTransforms.worldToWindowCoordinates(
+          app.viewer.scene,
+          entity.position.getValue(Cesium.JulianDate.now()),
+        );
+        if (!point) return false;
+        const icon = { x: point.x, y: point.y - 12 };
+        window.__emsIcon = icon;
+        const picked = app.viewer.scene.pick(
+          new Cesium.Cartesian2(icon.x, icon.y),
+        );
+        window.__emsPick = {
+          id: picked?.id?.id,
+          camera: [
+            app.viewer.camera.positionCartographic.longitude,
+            app.viewer.camera.positionCartographic.latitude,
+            app.viewer.camera.positionCartographic.height,
+          ],
+          icon,
+        };
+        return picked?.id?.id === 'chester-county-ems:ems:F26000001';
+      },
+      { timeout: 45000 },
+    )
+    .catch(async (error) => {
+      console.log(
+        'Icon pick diagnostics:',
+        await page.evaluate(() => window.__emsPick),
+      );
+      throw error;
+    });
+  const icon = await page.evaluate(() => window.__emsIcon);
+  await page.mouse.click(icon.x, icon.y);
   await page.waitForFunction(
     () =>
       document
         .querySelector(
-          '[data-layer-id="chester-county-ems"] button[data-list-item-id="F26000001"]',
+          '[data-layer-id="chester-county-ems"] button[data-list-item-id="ems:F26000001"]',
         )
         ?.getAttribute('aria-pressed') === 'true',
   );
+  await page.waitForFunction(() =>
+    [...window.__emsPaintedText].some(
+      (text) => text.includes('MEDIC01') && text.includes('On Scene'),
+    ),
+  );
+  assert.equal(
+    await page.evaluate(() =>
+      [...window.__emsPaintedText].some((text) =>
+        text.includes('Approximate intersection'),
+      ),
+    ),
+    false,
+  );
+  // Empty map space dismisses the card; list selection remains available.
+  await page.mouse.click(1100, 700);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('button[data-list-item-id="ems:F26000001"]')
+        ?.getAttribute('aria-pressed') === 'false',
+  );
+  const item = await page.waitForSelector(incidentSelector, { visible: true });
+  await item.click();
   await new Promise((resolve) => setTimeout(resolve, 4000));
   await mkdir('qa-shots/chester-county-ems', { recursive: true });
   await page.screenshot({ path: 'qa-shots/chester-county-ems/selected.png' });
@@ -173,7 +278,7 @@ try {
   });
   assert.deepEqual(cleared, { count: 0, enabled: false });
   console.log(
-    'PASS: county incidents, three category icons, street selection, empty refresh and disable',
+    'PASS: county icons, actual map click, unit details, empty refresh and disable',
   );
 } finally {
   await recorder?.stop();

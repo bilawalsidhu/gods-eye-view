@@ -1,6 +1,10 @@
 import { createCountyLocationResolver } from './chesterCountyEms/locations.js';
 import { readResponseBytesCapped } from './common/http.js';
-import { parseWebCad } from './chesterCountyEms/parser.js';
+import {
+  parseWebCad,
+  parseWebCadDetails,
+  webCadDetailUrl,
+} from './chesterCountyEms/parser.js';
 
 export const WEBCAD_URL = 'https://webcad.chesco.org/WebCad/webcad.asp';
 /** One shared, bounded, on-demand county feed; no archive or background polling. */
@@ -119,12 +123,99 @@ export function createChesterCountyFeed({
   };
 }
 
+/** Fetch only selected active incidents; share minute caches and bound concurrency. */
+export function createChesterCountyDetails({
+  getSnapshot,
+  fetchImpl = globalThis.fetch,
+  now = Date.now,
+}) {
+  const cache = new Map();
+  const pending = new Map();
+  return async (id) => {
+    const snapshot = await getSnapshot();
+    const active = new Set(snapshot.rows.map((row) => row.id));
+    for (const key of cache.keys()) if (!active.has(key)) cache.delete(key);
+    const row = snapshot.rows.find((row) => row.id === id);
+    if (!row)
+      throw Object.assign(new Error('Incident is no longer active'), {
+        statusCode: 404,
+      });
+    const url = row.detailUrl && webCadDetailUrl(row.detailUrl, row);
+    if (!url) throw new Error('Incident details unavailable');
+    const previous = cache.get(id);
+    const stale = (data) => ({ ...data, stale: true });
+    if (snapshot.stale) {
+      if (previous?.url === url && previous.data) return stale(previous.data);
+      throw new Error('Incident details unavailable');
+    }
+    if (pending.has(id)) return pending.get(id);
+    if (previous?.url === url && now() - previous.attemptedAt < 60000) {
+      if (!previous.data) throw new Error('Incident details unavailable');
+      return {
+        ...previous.data,
+        stale:
+          previous.failed ||
+          now() - previous.data.observedAt > 180000 ||
+          previous.data.observedAt > now() + 60000,
+      };
+    }
+    if (pending.size >= 4) throw new Error('Incident details busy');
+    const load = async () => {
+      const entry = {
+        url,
+        attemptedAt: now(),
+        data: previous?.url === url ? previous.data : null,
+        failed: true,
+      };
+      if (cache.size >= 128) cache.delete(cache.keys().next().value);
+      cache.set(id, entry);
+      try {
+        const signal = AbortSignal.timeout(6000);
+        const response = await fetchImpl(url, { signal, redirect: 'error' });
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw new Error('County details unavailable');
+        }
+        const html = new TextDecoder('windows-1252').decode(
+          await readResponseBytesCapped(response, 256000, signal),
+        );
+        entry.data = {
+          ...parseWebCadDetails(html, row),
+          fetchedAt: now(),
+          sourceUrl: url,
+        };
+        entry.failed = false;
+        return {
+          ...entry.data,
+          stale:
+            now() - entry.data.observedAt > 180000 ||
+            entry.data.observedAt > now() + 60000,
+        };
+      } catch {
+        if (entry.data) return stale(entry.data);
+        throw new Error('Incident details unavailable');
+      }
+    };
+    const work = load();
+    pending.set(id, work);
+    try {
+      return await work;
+    } finally {
+      pending.delete(id);
+    }
+  };
+}
+
 /** Install the same fixed endpoint in development and production preview. */
 export function chesterCountyEmsProxy(options) {
   const acquire = createChesterCountyFeed(options);
+  const details = createChesterCountyDetails({
+    ...options,
+    getSnapshot: acquire,
+  });
   async function handler(req, res, next) {
     const url = new URL(req.url, 'http://localhost');
-    if (url.pathname !== '/') return next();
+    if (!['/', '/details'].includes(url.pathname)) return next();
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET') {
@@ -132,14 +223,24 @@ export function chesterCountyEmsProxy(options) {
       res.setHeader('Allow', 'GET');
       return res.end('{}');
     }
-    if (url.search) {
+    const incident = url.searchParams.get('incident');
+    if (
+      url.pathname === '/details'
+        ? !/^(fire|ems|traffic):[FP]\d{8}$/.test(incident || '') ||
+          [...url.searchParams.keys()].length !== 1
+        : Boolean(url.search)
+    ) {
       res.statusCode = 400;
       return res.end('{}');
     }
     try {
-      res.end(JSON.stringify(await acquire()));
-    } catch {
-      res.statusCode = 502;
+      res.end(
+        JSON.stringify(
+          await (url.pathname === '/details' ? details(incident) : acquire()),
+        ),
+      );
+    } catch (error) {
+      res.statusCode = error.statusCode === 404 ? 404 : 502;
       res.end(
         JSON.stringify({ error: 'Chester County incidents unavailable' }),
       );

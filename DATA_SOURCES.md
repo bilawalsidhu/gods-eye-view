@@ -487,3 +487,9 @@ provides approximate named-place positions from primary, nonsensitive records.
 has no open license identified. It is not covered by the road/address CC license
 or the code MIT license. Runtime only; no source records are bundled. A documented
 Tredyffrin junction name correction is an additional road matching modification.
+
+The county incident layer also reads category-specific WebCAD
+`livecadcomments-fire.asp`, `livecadcomments-ems.asp` and
+`livecadcomments-traffic.asp` links published by that active feed, on selection
+only. Public unit IDs, status text and entry timestamps retain the same county
+copyright terms. No live detail pages or unit records are bundled or archived.

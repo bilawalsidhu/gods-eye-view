@@ -6698,9 +6698,10 @@ The Events group includes an off-by-default **Chester County, PA incidents**
 layer. It reads Fire, EMS and Traffic tables from public WebCAD through the
 `/api/chester-county-ems` endpoint every 60 seconds while enabled.
 County road-centerline junctions resolve reported intersections; county address
-points resolve numbered addresses. Map labels preserve the source location and
-say approximate intersection/address. Flame, red-cross and siren billboards
-identify fire, EMS and traffic. Unresolved or ambiguous reports stay listed
+points resolve numbered addresses. Flame, red-cross and siren billboards identify fire, EMS and traffic.
+Only icons show by default; clicking an icon opens a labelled detail card, and
+clicking empty map space dismisses it. Repeated approximate-location tags are
+omitted; the layer-level GIS accuracy notice remains. Unresolved or ambiguous reports stay listed
 without a marker or municipality-center fallback. Successful empty
 snapshots clear reports and failures retain last-good data marked stale.
 All sources load at runtime into memory, with bounded county GIS lookups and
@@ -6711,4 +6712,11 @@ Coverage counts expose mapped, unresolved and lookup-error totals; only actual
 lookup failures degrade a fresh feed. WebCAD retries transient failures once.
 County Common Place provides approximate named-place positions, and a documented
 Tredyffrin-only junction alias resolves Valley Forge/Yellow Springs using the
-GIS Valley Creek road name. Original reports and approximate labels are retained.
+GIS Valley Creek road name. Original report locations and GIS provenance are retained.
+
+County incident cards acquire public unit IDs, statuses and status-entry times
+from the selected report's official WebCAD detail page. Detail requests are
+on demand through a fixed-origin active-incident lookup, shared/cached for 60
+seconds and limited to four concurrent upstream requests. Detail outages retain
+the report, label old unit fields stale, and leave main-feed health unchanged.
+Cards link to the incident source; no private dispatch notes or history are stored.

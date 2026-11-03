@@ -158,6 +158,11 @@ test('Vite registration returns no post-hook and fixed route rejects input befor
   for (const [url, method, code] of [
     ['/', 'POST', 405],
     ['/?url=https://example.com', 'GET', 400],
+    ['/details', 'GET', 400],
+    ['/details?incident=ems:F26000001&incident=ems:F26000002', 'GET', 400],
+    ['/details?incident=ems:F26000001&url=https://example.com', 'GET', 400],
+    ['/details?incident=bad', 'GET', 400],
+    ['/details?incident=ems:F26000001', 'POST', 405],
   ]) {
     const res = { setHeader() {}, end() {} };
     await handler({ url, method }, res, () => assert.fail('unexpected next'));
@@ -233,4 +238,140 @@ test('WebCAD rate limiting is not retried inside the shared cooldown', async () 
   await assert.rejects(feed());
   await assert.rejects(feed());
   assert.equal(calls, 1);
+});
+
+const detailRow = {
+  id: 'ems:F26000001',
+  category: 'ems',
+  incidentNumber: 'F26000001',
+  detailUrl:
+    'https://webcad.chesco.org/WebCad/livecadcomments-ems.asp?eid=123&incidentno=F26000001',
+};
+const detailPage = (
+  rows = [['11-03-2026 10:05:00', 'MEDIC01', '&gt; On Scene']],
+) =>
+  `Last Updated 11/3/2026&nbsp;10:06:00 AM <b>Unit Status for Incident No. F26000001</b><table><tr>${headerCells(['Date/Time Entered', 'Unit', 'Status'])}${rows.map(tr).join('')}</table>`;
+const headerCells = (cells) =>
+  cells.map((s) => `<td><b>${s}</b></td>`).join('');
+
+test('summary preserves only category-matched, fixed-origin detail links', async () => {
+  const { webCadDetailUrl } = await import('./chesterCountyEms/parser.js');
+  const html = page([
+    [
+      `<a href="livecadcomments-ems.asp?eid=123&amp;incidentno=F26000001">${row[0]}</a>`,
+      ...row.slice(1),
+    ],
+  ]);
+  assert.equal(parseWebCad(html).rows[0].detailUrl, detailRow.detailUrl);
+  for (const bad of [
+    detailRow.detailUrl.replace('webcad.chesco.org', 'example.com'),
+    detailRow.detailUrl.replace('-ems.asp', '-fire.asp'),
+    detailRow.detailUrl.replace('F26000001', 'F26000002'),
+    `${detailRow.detailUrl}&url=https://example.com`,
+    `${detailRow.detailUrl}&eid=999`,
+    'javascript:alert(1)',
+  ])
+    assert.equal(webCadDetailUrl(bad, detailRow), null);
+});
+test('unit details tolerate unclosed header rows, decode text and reject identity/schema changes', async () => {
+  const { parseWebCadDetails } = await import('./chesterCountyEms/parser.js');
+  const details = parseWebCadDetails(detailPage(), detailRow);
+  assert.equal(details.units[0].unit, 'MEDIC01');
+  assert.equal(details.units[0].status, 'On Scene');
+  assert.equal(details.units[0].enteredAt, Date.parse('2026-11-03T15:05:00Z'));
+  assert.deepEqual(parseWebCadDetails(detailPage([]), detailRow).units, []);
+  for (const bad of [
+    detailPage().replace('F26000001', 'F26000002'),
+    detailPage().replace('Status</b>', 'Other</b>'),
+    detailPage([['bad', 'U1', 'Ready']]),
+  ])
+    assert.throws(() => parseWebCadDetails(bad, detailRow));
+  const traffic = detailPage().replace(/<table>[\s\S]*/, '');
+  assert.deepEqual(
+    parseWebCadDetails(traffic, { ...detailRow, category: 'traffic' }).units,
+    [],
+  );
+});
+test('selected detail requests share a minute cache, preserve stale units on failure and reject inactive ids', async () => {
+  const { createChesterCountyDetails } = await import('./chesterCountyEms.js');
+  let clock = easternTime('11-03-2026 10:06:00'),
+    calls = 0,
+    fail = false,
+    rows = [detailRow];
+  const get = createChesterCountyDetails({
+    getSnapshot: async () => ({ rows, stale: false }),
+    now: () => clock,
+    fetchImpl: async () => {
+      calls++;
+      if (fail) throw new Error('offline');
+      return new Response(detailPage());
+    },
+  });
+  const [a, b] = await Promise.all([get(detailRow.id), get(detailRow.id)]);
+  assert.deepEqual(a, b);
+  assert.equal(calls, 1);
+  assert.equal(a.stale, false);
+  await get(detailRow.id);
+  assert.equal(calls, 1);
+  clock += 60000;
+  fail = true;
+  assert.equal((await get(detailRow.id)).stale, true);
+  assert.equal((await get(detailRow.id)).units[0].unit, 'MEDIC01');
+  assert.equal(calls, 2);
+  rows = [];
+  await assert.rejects(get(detailRow.id), (e) => e.statusCode === 404);
+  assert.equal(calls, 2);
+});
+test('detail cold failures are throttled and oversized or unrelated pages are rejected', async () => {
+  const { createChesterCountyDetails } = await import('./chesterCountyEms.js');
+  for (const response of [
+    () => new Response('', { status: 503 }),
+    () => new Response('x', { headers: { 'content-length': '999999' } }),
+    () => new Response(detailPage().replace('F26000001', 'F26000099')),
+  ]) {
+    let calls = 0;
+    const get = createChesterCountyDetails({
+      getSnapshot: async () => ({ rows: [detailRow] }),
+      fetchImpl: async () => {
+        calls++;
+        return response();
+      },
+    });
+    await assert.rejects(get(detailRow.id));
+    await assert.rejects(get(detailRow.id));
+    assert.equal(calls, 1);
+  }
+});
+
+test('detail fan-out is capped at four requests across active incidents', async () => {
+  const { createChesterCountyDetails } = await import('./chesterCountyEms.js');
+  const rows = Array.from({ length: 5 }, (_, i) => {
+    const number = `F2600000${i + 1}`;
+    return {
+      ...detailRow,
+      id: `ems:${number}`,
+      incidentNumber: number,
+      detailUrl: detailRow.detailUrl.replace('F26000001', number),
+    };
+  });
+  const replies = [];
+  const get = createChesterCountyDetails({
+    getSnapshot: async () => ({ rows }),
+    fetchImpl: (url) =>
+      new Promise((resolve) => replies.push({ url, resolve })),
+  });
+  const inflight = rows.slice(0, 4).map((row) => get(row.id));
+  await new Promise((resolve) => setImmediate(resolve));
+  await assert.rejects(get(rows[4].id), /busy/);
+  assert.equal(replies.length, 4);
+  for (const { url, resolve } of replies)
+    resolve(
+      new Response(
+        detailPage().replace(
+          'F26000001',
+          new URL(url).searchParams.get('incidentno'),
+        ),
+      ),
+    );
+  await Promise.all(inflight);
 });

@@ -7,13 +7,20 @@ Enable **Data Layers → Events → Chester County, PA incidents**, then choose
 - **EMS:** red cross icon.
 - **Traffic:** red/blue police-siren icon.
 
-Each resolved report has its own marker labeled with the reported intersection
-or address and **Approximate intersection**, **Approximate address**, or
-**Approximate named place**. Selecting
-a list item opens its details and flies to street scale. The card retains the
-incident number/type, original location, municipality, dispatch time, and
-station or agency. Times are labeled America/New_York. **County WebCAD** opens
-the official source. Coverage remains Chester County, Pennsylvania only.
+Resolved reports show category icons only. Click an icon to open its card;
+click empty map space to dismiss it. The list can also select an incident and
+fly to its location. The card shows labelled location/municipality fields,
+incident number/type, dispatch time, station or agency, and the county's public
+unit IDs, statuses and status-entry timestamps when available. Cards show up to eight public unit updates, with a link to the full county page.
+Unit counts and a separate unit-status update time distinguish these details
+from feed freshness.
+Click the card's source link to open that incident's official county page.
+Times are labelled America/New_York. Coverage is Chester County, Pennsylvania only.
+
+Repeated approximate-intersection/address/place tags are omitted from icons,
+cards and list entries. The layer-level notice and matching limitations below
+still explain that GIS positions are approximate. Source locations and documented
+GIS name corrections remain visible; no scene coordinates are invented.
 
 ## How street placement works
 
@@ -68,7 +75,18 @@ attempt per 60 seconds, including failures. Source responses have byte caps and
 two bounded 6-second attempts for transient transport errors or HTTP 502/503/504
 (no immediate retry for HTTP 429); GIS resolution has an 8-second deadline per report, four workers,
 and a 16-second aggregate location budget. Browser acquisition has a 45-second
-deadline. Fixed endpoints only; redirects refused, GET only, no URL parameters.
+deadline. Fixed endpoints only; redirects refused, GET only. The snapshot accepts no URL parameters.
+
+Selecting an incident loads `/api/chester-county-ems/details?incident=<category:id>`.
+Only validated detail links from the active snapshot can be fetched; client-supplied
+URLs are never accepted. Details load on demand, with a shared 60-second per-incident
+cache/cooldown, at most four concurrent requests, 128 cached incidents, a six-second
+upstream deadline and a 256 KB body cap. Detail HTML becomes bounded plain-text unit
+fields; it is never forwarded or executed. IDs absent from the shared snapshot return 404.
+Unit lookup failures preserve the summary and mark retained unit details stale,
+without changing the main feed's health. Empty public status tables are shown as
+such; no private dispatch notes, patient records or inferred unit information is added.
+Selection changes and disable cancel client requests; late replies cannot repaint.
 
 Resolved locations cache in memory for 24 hours; unmatched names for five minutes,
 failed lookups for one minute,
@@ -121,7 +139,7 @@ QA_BASE_URL=http://localhost:4177 node scripts/qa-chester-county-ems.mjs
 ```
 
 The browser gate uses synthetic records only and checks all three categories,
-list selection, mapping coverage, empty-snapshot clearing and disable. It writes
+actual icon selection, public unit fields, mapping coverage, empty-snapshot clearing and disable. It writes
 its screenshot to `qa-shots/chester-county-ems/selected.png`. Set
 `QA_RECORDING_PATH` to an `.mp4` path to also record the interaction.
 
