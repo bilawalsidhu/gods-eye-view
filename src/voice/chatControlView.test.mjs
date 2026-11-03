@@ -319,6 +319,41 @@ test('the conversation follows new messages only while read at the bottom', asyn
   assert.equal(top, 800);
 });
 
+test('a message sent from higher up a full, capped log is still followed', async (t) => {
+  manualFrames(t);
+  const { pinia, settle } = mountVoiceView(t);
+  const { ui, session, send, reply } = chat(t, { pinia });
+  ui.emit('chat-button');
+  for (let turn = 1; turn <= 30; turn++) {
+    await send(`Request ${turn}`);
+    reply(`Answer ${turn}`, { itemId: `reply-${turn}`, final: true });
+    session.emit({ type: 'completion', status: 'completed' });
+  }
+  await settle();
+  // The log keeps its newest 60 messages, so sending no longer lengthens it.
+  assert.equal(ui.chatMessages.length, 60);
+  const list = $('#gev-chat-messages');
+  let top = 800;
+  Object.defineProperties(list, {
+    scrollHeight: { configurable: true, get: () => 1000 },
+    clientHeight: { configurable: true, get: () => 200 },
+    scrollTop: {
+      configurable: true,
+      get: () => top,
+      set: (value) => {
+        top = Math.min(value, 800);
+      },
+    },
+  });
+  top = 300;
+  list.dispatchEvent(new Event('scroll'));
+  await send('Show live flights');
+  await settle();
+  assert.equal(ui.chatMessages.length, 60);
+  assert.equal(ui.chatMessages.at(-1).text, 'Show live flights');
+  assert.equal(top, 800, 'the new request is brought into view');
+});
+
 test('the chat gear is named for the settings it opens', async (t) => {
   const { pinia, settle } = mountVoiceView(t);
   const { ui } = chat(t, { pinia });

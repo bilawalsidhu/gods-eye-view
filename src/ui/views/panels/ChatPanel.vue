@@ -37,9 +37,12 @@ const onListScroll = () => {
   const el = list.value;
   if (el) stuck = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
 };
+// A send is a new newest user message. The log is capped, so a full one
+// does not grow as it takes a message: compare ids, not lengths.
+const lastSent = (list) => list?.findLast((entry) => entry.role === 'user')?.id;
 watch(messages, (next, previous) => {
   const sent =
-    next.length > (previous?.length ?? 0) && next.at(-1)?.role === 'user';
+    next.at(-1)?.role === 'user' && lastSent(next) !== lastSent(previous);
   if (!stuck && !sent) return;
   void nextTick(() => {
     if (list.value) list.value.scrollTop = list.value.scrollHeight;
