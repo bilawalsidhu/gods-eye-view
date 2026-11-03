@@ -91,10 +91,12 @@ function createApplication(kind, engineSwitch) {
   return application;
 }
 
+// The running application while a globe is attached to it; null while the
+// page has no engine (between engines, or after a failed recovery).
 function liveComponents() {
-  return application?.getState().status === 'ready'
-    ? application.getComponents()
-    : null;
+  if (application?.getState().status !== 'ready') return null;
+  const components = application.getComponents();
+  return components.scene?.engine ? components : null;
 }
 
 // The page's application is created once; a switch detaches and attaches
@@ -108,7 +110,7 @@ const legacySwitch =
 // parked for a later switch back.
 async function leave(from) {
   const components = liveComponents();
-  const attached = Boolean(components?.scene.engine);
+  const attached = Boolean(components);
   if (attached) {
     cover ??= keepGlobeFrame(components.scene.engine);
     cockpit = components.controls.styleManager.getCockpitState();
@@ -206,6 +208,9 @@ async function settle() {
   layerSession.handoffLayers = null;
   cockpit = null;
   withdrawEngineRetry();
+  // An engine runs again after a failed recovery showed its error: the
+  // application, built once, does not start its loading chrome again.
+  loading.classList.add('hidden');
   // The running engine owns the address again, including an entry visited
   // before its share link listened or while it was held.
   components.controls.styleManager.shareLinkManager?.resumeNavigation?.();
