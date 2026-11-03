@@ -1,11 +1,18 @@
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { attachSceneDepth, createSceneDepthTest } from './navaraSceneDepth.js';
 
 const KEY = 'gevInfrastructureStems';
 const views = new WeakSet();
 /** All visible stems use one draw and one fixed buffer; tips are a point bank. */
-export function createStemBatch({ view, MeshDesc }, color, capacity, width = 3.5, opacity = 1) {
+export function createStemBatch(
+  { view, MeshDesc },
+  color,
+  capacity,
+  width = 3.5,
+  opacity = 1,
+) {
   if (!views.has(view)) {
     view.registerMesh(
       KEY,
@@ -14,10 +21,13 @@ export function createStemBatch({ view, MeshDesc }, color, capacity, width = 3.5
           super(host, ctx, config);
           this.batch = config[KEY];
         }
+        // Transparent, so the effects leave its look alone; the scene-depth
+        // test hides a stem behind terrain, 3D tiles and the Earth.
         getPassKey() {
           return 'transparent';
         }
         createMesh() {
+          attachSceneDepth(this.batch.line, this.ctx);
           return this.batch.line;
         }
         onDestroy() {
@@ -39,7 +49,9 @@ export function createStemBatch({ view, MeshDesc }, color, capacity, width = 3.5
     transparent: true,
     toneMapped: false,
   });
-  const line = new LineSegments2(geometry, material);
+  const depthTest = createSceneDepthTest();
+  depthTest.material(material);
+  const line = depthTest.object(new LineSegments2(geometry, material));
   line.frustumCulled = false;
   const holder = view.addMesh({
     [KEY]: {

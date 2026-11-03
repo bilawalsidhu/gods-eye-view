@@ -11,6 +11,10 @@ import {
   SRGBColorSpace,
   Texture,
 } from 'three';
+import {
+  attachSceneDepth,
+  createSceneDepthTest,
+} from '../../layers/shared/render/navaraSceneDepth.js';
 const KEY = 'gevScenePack',
   registered = new WeakSet();
 const cyan = [0, 1, 1, 1],
@@ -24,10 +28,13 @@ export function createNavaraPackRenderer(engine, { view, MeshDesc }) {
           super(host, ctx, config);
           this.object = config[KEY];
         }
+        // Transparent, so the effects leave its look alone; the scene-depth
+        // test hides a pack behind terrain, 3D tiles and the Earth.
         getPassKey() {
           return 'transparent';
         }
         createMesh() {
+          attachSceneDepth(this.object.group, this.ctx);
           return this.object.group;
         }
         onDestroy() {
@@ -39,7 +46,8 @@ export function createNavaraPackRenderer(engine, { view, MeshDesc }) {
     registered.add(view);
   }
   const meshGroup = (handle) => {
-    const group = new Group(),
+    const depthTest = createSceneDepthTest();
+    const group = depthTest.object(new Group()),
       owned = [];
     let released = false;
     const dispose = () => {
@@ -62,7 +70,7 @@ export function createNavaraPackRenderer(engine, { view, MeshDesc }) {
         dispose();
       }
     });
-    return { group, owned };
+    return { group, owned, depthTest };
   };
   function addMesh(batch, shape, properties, id, texture) {
     if (!shape) return;
@@ -99,6 +107,8 @@ export function createNavaraPackRenderer(engine, { view, MeshDesc }) {
         .copy(pigment)
         .multiplyScalar(1 / Math.max(1, view.toneMappingExposure ?? 1));
     };
+    batch.depthTest.material(material);
+    batch.depthTest.object(mesh);
     mesh.position.set(origin.x, origin.y, origin.z);
     mesh.userData.pickId = id;
     batch.group.add(mesh);
