@@ -199,6 +199,7 @@ class CockpitCloudEffectsController {
 
     this.gl = null;
     this.program = null;
+    this.buffer = null;
     this.locations = null;
     this.frame = null;
     this.refreshTimer = null;
@@ -275,8 +276,9 @@ class CockpitCloudEffectsController {
   }
 
   initializeRenderer() {
+    let gl = null;
     try {
-      const gl = this.canvas.getContext('webgl', {
+      gl = this.canvas.getContext('webgl', {
         alpha: true,
         antialias: false,
         depth: false,
@@ -318,6 +320,7 @@ class CockpitCloudEffectsController {
 
       this.gl = gl;
       this.program = program;
+      this.buffer = buffer;
       this.locations = {
         resolution: gl.getUniformLocation(program, 'uResolution'),
         time: gl.getUniformLocation(program, 'uTime'),
@@ -327,6 +330,7 @@ class CockpitCloudEffectsController {
     } catch (error) {
       console.warn('[Cockpit clouds] Renderer unavailable:', error);
       this.canvas.dataset.status = 'unavailable';
+      if (gl && !this.gl) gl.getExtension('WEBGL_lose_context')?.loseContext();
     }
   }
 
@@ -605,8 +609,25 @@ class CockpitCloudEffectsController {
       'gev:cockpit-weather-toggle',
       this.onEnabledChange,
     );
-    if (this.program && this.gl) this.gl.deleteProgram(this.program);
+    this.releaseRenderer();
     this.canvas.remove();
+  }
+
+  /**
+   * Free the GPU objects and the canvas's WebGL context. The application is
+   * rebuilt on every globe switch, and browsers cap live contexts, so a
+   * destroyed controller must not leave its context for garbage collection.
+   */
+  releaseRenderer() {
+    const gl = this.gl;
+    this.gl = null;
+    this.locations = null;
+    if (!gl) return;
+    if (this.buffer) gl.deleteBuffer(this.buffer);
+    if (this.program) gl.deleteProgram(this.program);
+    this.buffer = null;
+    this.program = null;
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
   }
 }
 
