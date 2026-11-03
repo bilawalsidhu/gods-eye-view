@@ -11,17 +11,20 @@ export function createApplicationData({
   layerSession,
   onData,
   defer,
+  signal = null,
 }) {
   // Initialize data layer manager
   // The modules get { signal, engine } on every call (viewer null on Navara).
-  const dataManager = layerSession?.manager ?? new LayerLifecycle(viewer, {
-    engine,
-    allowQaRegistration,
-    // A panel's host may report it hidden while it is on screen; its layers
-    // keep polling (see keepPanelRendering in embed.js).
-    visibilityTarget: panelAwareVisibility(document),
-    getSourceAvailability: catalog?.getSourceAvailability,
-  });
+  const dataManager =
+    layerSession?.manager ??
+    new LayerLifecycle(viewer, {
+      engine,
+      allowQaRegistration,
+      // A panel's host may report it hidden while it is on screen; its layers
+      // keep polling (see keepPanelRendering in embed.js).
+      visibilityTarget: panelAwareVisibility(document),
+      getSourceAvailability: catalog?.getSourceAvailability,
+    });
   if (layerSession) layerSession.manager = dataManager;
   defer(async () => {
     if (layerSession && !layerSession.lifetime.signal.aborted) {
@@ -34,12 +37,15 @@ export function createApplicationData({
         `Data layers could not be destroyed: ${[...dataManager.layers.keys()].join(', ')}`,
       );
   });
-  const presentation = layerSession?.presentation ?? new LayerPresentation(dataManager, {
-    weatherClock: catalog?.weatherClock,
-  });
+  const presentation =
+    layerSession?.presentation ??
+    new LayerPresentation(dataManager, {
+      weatherClock: catalog?.weatherClock,
+    });
   if (layerSession) layerSession.presentation = presentation;
   defer(() => {
-    if (layerSession && !layerSession.lifetime.signal.aborted) presentation.suspend();
+    if (layerSession && !layerSession.lifetime.signal.aborted)
+      presentation.suspend();
     else presentation.destroy();
   });
   onData?.(dataManager);
@@ -47,7 +53,9 @@ export function createApplicationData({
     throw new TypeError('An application layer catalog is required');
   for (const layer of catalog.layers)
     layer.attachMapStackController?.(mapStackController);
-  const attached = dataManager.bindCatalog(viewer, engine, catalog, { waitForCameraRestore: layerSession?.restoringView === true });
+  const attached = dataManager.bindCatalog(viewer, engine, catalog, {
+    waitForCameraRestore: layerSession?.restoringView === true,
+  });
   for (const layer of catalog.layers) layer.attachDataManager?.(dataManager);
 
   if (allowQaRegistration) {
@@ -70,11 +78,31 @@ export function createApplicationData({
         delete window.__gevQaUnregisterLayer;
     });
   }
-  presentation.mount(document.getElementById('data-toggles'), catalog.weatherClock);
+  presentation.mount(
+    document.getElementById('data-toggles'),
+    catalog.weatherClock,
+  );
   styleManager.attachDataManager(dataManager);
   // The sonar scene draws on the viewer; the Navara engine has none.
   if (viewer) defer(createCyberSonarScene(viewer, dataManager));
 
   const data = { dataManager, catalog, presentation };
-  return attached ? attached.then(() => data) : data;
+  if (!attached) return data;
+  // A teardown during startup must not wait for slow layer attachments: it
+  // ends this wait, and the data cleanup above releases the scene.
+  return new Promise((resolve, reject) => {
+    const onAbort = () => resolve(data);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
+    attached.then(
+      () => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve(data);
+      },
+      (error) => {
+        signal?.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }

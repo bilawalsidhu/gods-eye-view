@@ -256,3 +256,45 @@ test('a catalog for an engine gives stand-ins only for the layers it leaves out'
     /Control layer missing from catalog: traffic/,
   );
 });
+
+test('a teardown during startup ends the wait for a stalled layer attachment', async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  const layer = {
+    id: 'slow',
+    init: () => true,
+    enable: () => true,
+    update: () => true,
+    disable: () => true,
+    destroy: () => true,
+    attachRenderer: (viewer) =>
+      viewer?.second ? new Promise(() => {}) : undefined,
+    detachRenderer() {},
+  };
+  const layerSession = { lifetime: new AbortController() };
+  const start = (viewer, signal = null) => {
+    const releases = [];
+    const data = createApplicationData({
+      scene: { viewer },
+      controls: { styleManager: { attachDataManager() {} } },
+      catalog: createLayerCatalog([layer], metadata([layer])),
+      layerSession,
+      signal,
+      defer: (release) => releases.push(release),
+    });
+    return { data, releases };
+  };
+  const first = start({ first: true });
+  assert.equal(await layerSession.manager.setEnabled('slow', true), true);
+  for (const release of first.releases.reverse()) await release();
+
+  const application = new AbortController();
+  const second = start({ second: true }, application.signal);
+  application.abort();
+  const { dataManager } = await second.data;
+  assert.equal(dataManager, layerSession.manager);
+});
