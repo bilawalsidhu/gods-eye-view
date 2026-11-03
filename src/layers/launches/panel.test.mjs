@@ -164,7 +164,7 @@ test('the selected mission is presented with its rows and returns to the top', (
   assert.equal(views.at(-1).mission, null);
 });
 
-test('the panel commands act on the selected mission', () => {
+test('mission selection preserves the view while explicit focus and replay commands act on the selected mission', () => {
   const { state, panel, calls } = fixture();
   state._launches = [launch('a'), launch('b'), launch('c')];
   state._selectedLaunchId = 'b';
@@ -182,9 +182,7 @@ test('the panel commands act on the selected mission', () => {
   commands.deselectMission();
   assert.deepEqual(calls, [
     ['select', 'a', true],
-    ['focus-mission', 'a'],
     ['select', 'c', true],
-    ['focus-mission', 'c'],
     ['focus-site', 'b'],
     ['replay', 'b'],
     ['pause'],

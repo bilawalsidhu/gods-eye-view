@@ -1,3 +1,4 @@
+import { selectionMovesCamera } from '../../data/selectionCameraPolicy.js';
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
@@ -857,7 +858,10 @@ export function createTracking({
    * @param {string} icao24 - ICAO hex identifier of the aircraft to track
    */
 
-  function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
+  function _trackFlight(
+    icao24,
+    { origin = 'programmatic', follow = true } = {},
+  ) {
     _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
     const bb = flightState._billboards.get(icao24);
@@ -998,15 +1002,17 @@ export function createTracking({
     flightState._trackedEntity.gevVisualPosition =
       parts.motion._trackedVisualCached;
     refreshTrackedReadout(flightState._trackedEntity);
-    flightState._viewer.camera.cancelFlight();
-    // Camera follows the tracked entity
-    flightState._viewer.trackedEntity = flightState._trackedEntity;
-    flightState._trackedCameraFrameStop =
-      applyTrackedCameraFrame(
-        flightState._viewer,
-        flightState._trackedEntity,
-        flightState._trackedEntity.viewFrom,
-      ) || null;
+    if (follow) {
+      flightState._viewer.camera.cancelFlight();
+      // Camera follows the tracked entity
+      flightState._viewer.trackedEntity = flightState._trackedEntity;
+      flightState._trackedCameraFrameStop =
+        applyTrackedCameraFrame(
+          flightState._viewer,
+          flightState._trackedEntity,
+          flightState._trackedEntity.viewFrom,
+        ) || null;
+    }
 
     // Track-history trail (PRD F2): seed from local history + async backfill.
     // Ground traffic draws NO trail — if the plane takes off while tracked, the
@@ -1111,7 +1117,10 @@ export function createTracking({
           flightState._billboards.has(billboard.id)
         ) {
           _cancelPendingTrackingRestore();
-          _trackFlight(billboard.id, { origin: 'user' });
+          _trackFlight(billboard.id, {
+            origin: selectionMovesCamera() ? 'user' : 'inspect',
+            follow: selectionMovesCamera(),
+          });
           return;
         }
         // Fallback: some CesiumJS versions surface the id string at picked.id
@@ -1121,7 +1130,10 @@ export function createTracking({
           flightState._billboards.has(picked.id)
         ) {
           _cancelPendingTrackingRestore();
-          _trackFlight(picked.id, { origin: 'user' });
+          _trackFlight(picked.id, {
+            origin: selectionMovesCamera() ? 'user' : 'inspect',
+            follow: selectionMovesCamera(),
+          });
           return;
         }
       }

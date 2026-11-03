@@ -400,7 +400,10 @@ export function createTracking({ state: layerState, services, parts, source }) {
     refreshTrackedReadout(layerState._trackedEntity);
   }
 
-  function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
+  function _trackSatellite(
+    noradId,
+    { origin = 'programmatic', follow = true } = {},
+  ) {
     _clearTracking(false, { origin });
 
     const point = layerState._points.get(noradId);
@@ -471,7 +474,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
     layerState._contextRefreshedAtMs = Date.now();
 
-    layerState._viewer.trackedEntity = layerState._trackedEntity;
+    if (follow) layerState._viewer.trackedEntity = layerState._trackedEntity;
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);
   }
   return {

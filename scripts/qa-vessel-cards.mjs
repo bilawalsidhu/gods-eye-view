@@ -335,7 +335,20 @@ async function main() {
         .then(() => true)
         .catch(() => false);
 
-      // Let two visibility/declutter cycles (800 ms) and host rendering settle.
+      // Cards are selection-only: a loaded fleet has icons and no ambient details.
+      await page.evaluate(() => {
+        const gev = window.__godsEyeView;
+        const layer = gev.dataManager.layers.get('ais-live-vessels').module;
+        layer.clearSelection();
+        const diagnostics = window.__gevWorldOverlay?.getDiagnostics?.();
+        if ((diagnostics?.entriesBySource?.['ais-live-vessels'] || 0) !== 0)
+          throw new Error('Unselected vessels must not publish detail cards');
+        const visible = layer.__focusEvidence?.snapshot?.().find((row) => row.show && Number.isFinite(row.x) && Number.isFinite(row.y));
+        const mmsi = visible?.id || layer.getAnalystRecords(1)[0]?.mmsi;
+        if (!mmsi || !layer.selectById(mmsi)) throw new Error('No vessel available for selected-card evidence');
+      });
+
+      // Let the selected card and host rendering settle.
       await new Promise((r) => setTimeout(r, 2500));
       const expectedFixtureIds = syntheticRows.map((row) => row.mmsi);
       const overlayEvidence = await page.evaluate((fixtureIds) => {
