@@ -72,6 +72,18 @@ const layers = [
     noQuery: 'published third-party intel placemarks; not analyst records',
   },
   {
+    id: 'sea-marks',
+    aliases: ['seamarks', 'nautical charts', 'buoys', 'openseamap'],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
+    id: 'ski-pistes',
+    aliases: ['ski slopes', 'ski runs', 'snow map', 'opensnowmap'],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -405,6 +417,23 @@ const layers = [
     aliases: ['submarine cables', 'undersea cables', 'cables', 'telegeography'],
     context: false,
     noQuery: 'cable records are not loaded for queries',
+  },
+  {
+    // Results of the last osm_query ("hospitals in Kathmandu").
+    id: 'osm-places',
+    aliases: ['osm places', 'map search results', 'search results'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        kind: ['t'],
+        operator: ['t'],
+        emergency: ['t'],
+        wheelchair: ['t'],
+        openingHours: ['t'],
+        city: ['t'],
+      },
+    },
   },
   {
     // Global Context owns this layer; voice reaches it through

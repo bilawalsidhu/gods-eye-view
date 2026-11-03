@@ -89,7 +89,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## ⚡ Quick Start
 
-**Start without an account or API keys.** Every path opens the same app with
+**Local setup needs no account or API keys.** The app opens with
 Esri satellite imagery and keyless terrain. OSM is the fallback if Esri is
 unreachable. Flights, military traffic, satellites, earthquakes, public
 cameras, radio, and launches are available without keys.
@@ -212,7 +212,7 @@ Keep the `env`: bash treats `UID` as read-only, so a plain `UID=1026` in front o
 
 On SELinux hosts (Fedora, RHEL), compose mounts the checkout with `:z` so the container may read it; Docker may relabel the checkout for container access, which can take a moment on a large checkout. Without that, the start fails with `Cannot find module '/app/scripts/docker-start.mjs'`.
 
-Behind a reverse proxy, put your keys in `.env` or pass them as environment variables - Provider Settings refuses proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)).
+Behind a reverse proxy, put your keys in `.env` or pass them as environment variables - Provider Settings refuses proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)). The map routes compare the browser's `Origin` with the `Host` the server sees, so the proxy must pass the original `Host` and, when it terminates TLS, `X-Forwarded-Proto`. Caddy does both by default; for nginx add `proxy_set_header Host $http_host;`, `proxy_set_header X-Forwarded-Proto $scheme;` and `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`. On an install outside Docker, that forwarding header also rate-limits the proxy's users apart from your own browser. Under the default Docker bridge network every client on the host, your browser included, reaches the container from its gateway address and shares one Overpass bucket.
 
 </details>
 
@@ -236,7 +236,11 @@ the container.
 
 ### Path 4 — GitHub Codespaces (cloud, no local install)
 
-Runs the same dev server in a cloud workspace, so Node and the dependencies
+Codespaces requires a GitHub account. Overpass queries and OpenAI voice token
+requests return HTTP 403 through its forwarded HTTPS URL, even with API keys
+in `.env` and `GEV_ALLOWED_HOSTS` configured. Use a local setup for these features.
+
+The codespace runs the dev server in a cloud workspace, so Node and the dependencies
 never touch your machine. The globe still renders in your own browser, so it
 needs the same graphics there as any other path. GitHub Free includes 120
 core-hours a month with no card on file — about 60 hours on the default 2-core
@@ -265,14 +269,13 @@ ignored on purpose, so pass that exact name.
 
 ⚠️ **A codespace is reachable from the internet.** Treat it as the
 wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
-Settings does not open on the forwarded URL, so put keys in the workspace
-`.env` by hand. `.env` is gitignored — never commit it. [SECURITY.md](SECURITY.md) has the
-threat model.
+Settings is unavailable on the forwarded URL. Never commit your workspace
+`.env`. [SECURITY.md](SECURITY.md) has the threat model.
 
 ### Then power it up — in the app, not in a file
 
-Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**
-chip in the bottom-right corner: Provider Settings lists every supported key,
+For a local setup, keys are upgrades, not prerequisites. When you want one,
+click the **POWER UP** chip in the bottom-right corner: Provider Settings lists every supported key,
 what it switches on, and where to get it. Paste, hit **SAVE KEYS**, and the app
 restarts itself with the new capability on. Once everything is configured the
 chip reads **POWERED UP** — and if a compact layout hides it, `?setup=1`
@@ -442,6 +445,7 @@ Twenty-one layers and map sources. **Nineteen have a keyless path.** Some offer 
 | 🚌 **Transit**              | Live buses, trams, metros, trains and ferries with delayed playback between reports, selected-vehicle trails, and mode-coloured DETECT labels — Boston, Austin, Minneapolis, Helsinki, the Netherlands, Norway, South East Queensland, and nine in Ontario: Toronto (surface vehicles; the subway publishes no positions), Mississauga, Hamilton, Durham Region, York Region, Guelph, Burlington, Barrie and Kingston                                                                                                                                               | Operator GTFS-Realtime feeds            | 🟢                                                                                                  |
 | 🚲 **Bikeshare**            | Live station availability                                                                                                                                                                                                                                                                                                                                                           | GBFS                                    | 🟢                                                                                                  |
 | 🧭 **Directions**           | Click A and B on the globe for a street-following drive, walk or cycle route draped on the terrain with turn-by-turn steps — then FLY the camera along it. No key, no geocoder, no mic                                                                                                                                                                                              | OSRM on FOSSGIS servers (OpenStreetMap) | 🟢                                                                                                  |
+| ⌖ **OSM Places**           | Voice place search ("hospitals in Kathmandu") from OpenStreetMap, drawn as numbered points that follow-up questions can filter. Needs your own Overpass server (`OVERPASS_UPSTREAMS`); off otherwise                                                                                                                                                                                                                                                                                                                               |
 | 🔥 **Active Fires**         | Live NASA FIRMS detections, trailing 24h                                                                                                                                                                                                                                                                                                                                            | NASA FIRMS                              | 🟡                                                                                                  |
 | 🚀 **Space Missions**       | Rolling 30-day launches with payload, stage, and recovery detail                                                                                                                                                                                                                                                                                                                    | Launch Library 2                        | 🟢 (🔴 optional paid token raises the allowance)                                                         |
 | 🎖️ **Mapped Installations** | Viewport-bounded military-site context from community mapping — incomplete by nature, and labeled that way                                                                                                                                                                                                                                                                          | OpenStreetMap                           | 🟢                                                                                                  |
@@ -452,7 +456,7 @@ Twenty-one layers and map sources. **Nineteen have a keyless path.** Some offer 
 
 **Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline in the **WEATHER** panel (step back, **Play**, **Latest**); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
 
-In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions sits in the separate **Utilities** panel with Draw and Import.
+In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions and OSM Places sit in the separate **Utilities** panel with Draw and Import.
 
 **The basemap ladder — what each tier buys you:**
 

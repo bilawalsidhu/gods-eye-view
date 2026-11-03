@@ -65,6 +65,8 @@ const PANEL_GROUPS = [
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'sea-marks',
+      'ski-pistes',
     ],
   },
   {
@@ -93,7 +95,7 @@ const PANEL_GROUPS = [
   // needs no heading there.
   {
     label: msg('Utilities'),
-    ids: ['directions'],
+    ids: ['directions', 'osm-places'],
     containerId: 'utilities-toggles',
   },
   {

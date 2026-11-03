@@ -591,41 +591,50 @@ test('replacement input invalidates an in-flight Radio preflight immediately', (
   assert.equal(controller.radioHandoffEpoch, priorEpoch + 1);
 });
 
-test('direct Radio pause or stop cancels a pending voice handoff', async () => {
-  const order = [];
-  let playbackControl = null;
-  const ui = createTestVoiceUi();
-  const controller = new GevRealtimeController({
-    ui,
-    runner: async () => ({ ok: true }),
-    radioLayer: {
-      subscribePlaybackControls(listener) {
-        playbackControl = listener;
-        return () => { playbackControl = null; };
+for (const [name, control, message] of [
+  ['direct Radio pause or stop cancels a pending voice handoff', 'stop', 'the explicit stop remains authoritative'],
+  [
+    'a direct Radio Next that does not play cancels a pending voice handoff',
+    { action: 'select', origin: 'user', attemptId: null },
+    'the user selection is not overridden by voice playback',
+  ],
+]) {
+  test(name, async () => {
+    const order = [];
+    let playbackControl = null;
+    const ui = createTestVoiceUi();
+    const controller = new GevRealtimeController({
+      ui,
+      runner: async () => ({ ok: true }),
+      radioLayer: {
+        subscribePlaybackControls(listener) {
+          playbackControl = listener;
+          return () => { playbackControl = null; };
+        },
+        playForVoice: async () => {
+          order.push('radio-play');
+          return true;
+        },
+        stopPlayback: () => order.push('radio-stop'),
       },
-      playForVoice: async () => {
-        order.push('radio-play');
-        return true;
-      },
-      stopPlayback: () => order.push('radio-stop'),
-    },
-  });
-  controller.debugLog = () => {};
-  controller.dc = {
-    readyState: 'open',
-    send() {},
-    close() { order.push('voice-stop'); },
-  };
-  controller.pendingRadioPlaybackResult = { ok: true, radioPlaybackRequested: true };
+    });
+    controller.debugLog = () => {};
+    controller.dc = {
+      readyState: 'open',
+      send() {},
+      close() { order.push('voice-stop'); },
+    };
+    controller.pendingRadioPlaybackResult = { ok: true, radioPlaybackRequested: true };
 
-  playbackControl('stop');
-  await controller.handleRealtimeEvent({
-    data: JSON.stringify({ type: 'response.done', response: { status: 'completed' } }),
-  });
+    playbackControl(control);
+    await controller.handleRealtimeEvent({
+      data: JSON.stringify({ type: 'response.done', response: { status: 'completed' } }),
+    });
 
-  assert.equal(controller.pendingRadioPlaybackResult, null);
-  assert.deepEqual(order, [], 'the explicit stop remains authoritative');
-});
+    assert.equal(controller.pendingRadioPlaybackResult, null);
+    assert.deepEqual(order, [], message);
+  });
+}
 
 test('confirmed manual Radio playback closes active voice without stopping Radio', () => {
   const order = [];
@@ -887,6 +896,42 @@ test('Radio handoff waits for response.done so later multi-intent tools execute 
     'assistant-confirmation-requested',
     'radio-play',
     'voice-stop',
+  ]);
+});
+
+test('Realtime gives analyst siblings one authority group and a newer response a new group', async () => {
+  const groups = [];
+  const ui = createTestVoiceUi();
+  const controller = new GevRealtimeController({
+    ui,
+    runner: async (name, _args, options) => {
+      groups.push([name, options.authorityGroup]);
+      return { ok: true, action: name, count: 0, items: [] };
+    },
+  });
+  controller.debugLog = () => {};
+  controller.sendVisualContextIfUseful = async () => false;
+  controller.dc = { readyState: 'open', send() {}, close() {} };
+  const event = (payload) => ({ data: JSON.stringify(payload) });
+  for (const [responseId, callId] of [
+    ['response-1', 'analyst-a'],
+    ['response-1', 'analyst-b'],
+    ['response-2', 'analyst-c'],
+  ]) {
+    await controller.handleRealtimeEvent(
+      event({
+        type: 'response.function_call_arguments.done',
+        response_id: responseId,
+        call_id: callId,
+        name: 'analyst_query',
+        arguments: '{"layers":["flights"],"scope":{"kind":"anywhere"}}',
+      }),
+    );
+  }
+  assert.deepEqual(groups, [
+    ['analyst_query', 'response-1'],
+    ['analyst_query', 'response-1'],
+    ['analyst_query', 'response-2'],
   ]);
 });
 
