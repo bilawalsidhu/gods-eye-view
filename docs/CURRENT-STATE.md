@@ -3638,7 +3638,8 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   and mapped installations write explicit `labelModel` objects and
 >   `displayPosition` getters, backed by their layer-owned frame/display cache,
 >   into Core's entity records (`src/data/entityRecords.js`), never onto the
->   Cesium entity.
+>   Cesium entity. A layer's private per-entity state goes in its own store from
+>   `createEntityStore()` (ALPR markers: `src/layers/alpr/markerState.js`).
 >   Selected AIS vessels continue using the vessel source's protected selected
 >   card, so they do not create a duplicate tracked readout. The host registers
 >   the active readout in the protected tracked lane with a zero ambient quota;

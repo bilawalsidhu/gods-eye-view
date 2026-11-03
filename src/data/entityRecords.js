@@ -12,9 +12,34 @@
  * - `visualPosition()`: where a 3D model is actually drawn, for the tracked card.
  * - `labelModel`: the tracked card's `{ title, details, accent, … }`.
  * - `selectionOrigin`: what started the selection (`'user'`, …).
+ *
+ * A layer's private per-entity state goes in its own store ({@link createEntityStore}).
  */
 
-const records = new WeakMap();
+/**
+ * A store of one record per renderer object, held by Core and dropped with the object.
+ * @returns {{ write: (entity: Object) => Object, read: (entity: unknown) => Object|null }}
+ *   `write` makes the record empty on first use; `read` gives null when there is none.
+ */
+export function createEntityStore() {
+  const records = new WeakMap();
+  return {
+    write(entity) {
+      let record = records.get(entity);
+      if (!record) {
+        record = {};
+        records.set(entity, record);
+      }
+      return record;
+    },
+    read(entity) {
+      if (!entity || typeof entity !== 'object') return null;
+      return records.get(entity) ?? null;
+    },
+  };
+}
+
+const shared = createEntityStore();
 
 /**
  * The record for `entity`, made empty on first use. For layers writing their own state.
@@ -22,12 +47,7 @@ const records = new WeakMap();
  * @returns {Object}
  */
 export function entityRecord(entity) {
-  let record = records.get(entity);
-  if (!record) {
-    record = {};
-    records.set(entity, record);
-  }
-  return record;
+  return shared.write(entity);
 }
 
 /**
@@ -36,8 +56,7 @@ export function entityRecord(entity) {
  * @returns {Object|null}
  */
 export function readEntityRecord(entity) {
-  if (!entity || typeof entity !== 'object') return null;
-  return records.get(entity) ?? null;
+  return shared.read(entity);
 }
 
 /**

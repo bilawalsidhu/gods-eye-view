@@ -8,6 +8,7 @@ import {
   alprLabelDetails,
   markerScale,
 } from './visuals.js';
+import { alprMarkers } from './markerState.js';
 
 function harness(t, count = 2, { floor = null } = {}) {
   const previousImage = globalThis.Image;
@@ -144,7 +145,9 @@ test('the overlay bounds its cohort and promotes selection while leaving farther
   h.state.selectedId = 'camera:69';
   h.overlay.sync(h.records);
   h.paint();
-  const hidden = h.entities.values.filter((e) => e.gevAlprNativeAppearance);
+  const hidden = h.entities.values.filter(
+    (e) => alprMarkers.read(e)?.nativeAppearance,
+  );
   assert.equal(hidden.length, 64);
   assert.ok(hidden.some((e) => e.id === 'camera:69'));
   assert.equal(
@@ -161,16 +164,16 @@ test('surface changes invalidate cached anchors, and disable/disposal release pa
   h.overlay.sync(h.records);
   h.paint();
   const entity = h.entities.getById('camera:0');
-  const first = entity.gevAlprCanvasPosition;
+  const first = alprMarkers.read(entity)?.canvasPosition;
   h.paint();
   assert.equal(
-    entity.gevAlprCanvasPosition,
+    alprMarkers.read(entity)?.canvasPosition,
     first,
     'stable anchor across frames',
   );
   h.state.viewer.scene.globe.show = false;
   h.mapChanged();
-  assert.equal(entity.gevAlprCanvasPosition, null);
+  assert.equal(alprMarkers.read(entity)?.canvasPosition, null);
   h.state.enabled = false;
   h.overlay.clear();
   assert.equal(h.active, false);
@@ -260,7 +263,7 @@ test('a still view replaces floor anchors with the rendered surface, within the 
   h.paint();
   const height = (id) =>
     Cesium.Cartographic.fromCartesian(
-      h.entities.getById(id).gevAlprCanvasPosition,
+      alprMarkers.read(h.entities.getById(id))?.canvasPosition,
     ).height;
   assert.equal(
     samples,

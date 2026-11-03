@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { entityRecord, readEntityRecord, withEntityRecord } from './entityRecords.js';
+import {
+  createEntityStore,
+  entityRecord,
+  readEntityRecord,
+  withEntityRecord,
+} from './entityRecords.js';
 
 test('an entity record is made on first write and read back by the same entity', () => {
   const entity = {};
@@ -28,4 +33,16 @@ test('withEntityRecord writes fields into the record and returns the entity', ()
   assert.equal(entity.id, 'alpr:42');
   assert.equal(readEntityRecord(entity)?.trackedId, 'alpr:42');
   assert.equal(Object.hasOwn(entity, 'trackedId'), false);
+});
+
+test('a layer store is separate from the shared records and from other stores', () => {
+  const entity = {};
+  const a = createEntityStore();
+  const b = createEntityStore();
+  a.write(entity).canvasPosition = 1;
+  assert.equal(a.read(entity)?.canvasPosition, 1);
+  assert.equal(b.read(entity), null);
+  assert.equal(readEntityRecord(entity), null);
+  assert.equal(a.read(null), null);
+  assert.deepEqual(Object.keys(entity), []);
 });

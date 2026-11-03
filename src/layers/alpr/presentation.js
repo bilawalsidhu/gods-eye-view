@@ -24,6 +24,7 @@ import {
   validAlprGroundHeight,
 } from './visuals.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
+import { alprMarkers } from './markerState.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;
@@ -171,7 +172,7 @@ export function createAlprPresentation({ state, services, source }) {
     const heightReference = clamped
       ? Cesium.HeightReference.CLAMP_TO_GROUND
       : Cesium.HeightReference.NONE;
-    const saved = entity.gevAlprNativeAppearance;
+    const saved = alprMarkers.read(entity)?.nativeAppearance;
     if (saved) {
       saved.position = position;
       saved.heightReference = heightReference;
@@ -179,7 +180,7 @@ export function createAlprPresentation({ state, services, source }) {
       entity.position = position;
       entity.billboard.heightReference = heightReference;
     }
-    entity.gevAlprClamped = clamped;
+    alprMarkers.write(entity).clamped = clamped;
   }
 
   /** Refresh all native placements, including the appearances held by the canvas. */
@@ -187,7 +188,9 @@ export function createAlprPresentation({ state, services, source }) {
     if (!state.enabled || !state.dataSource) return;
     clampedMarkers.clear();
     for (const entity of state.dataSource.entities.values) {
-      const { position, clamped } = markerPlacement(entity.gevAlprRecord);
+      const { position, clamped } = markerPlacement(
+        alprMarkers.read(entity)?.record,
+      );
       setMarkerPosition(entity, position, clamped);
       if (clamped) clampedMarkers.set(entity.id, entity);
     }
@@ -203,10 +206,10 @@ export function createAlprPresentation({ state, services, source }) {
     const batch = [...clampedMarkers.values()];
     const request = Promise.resolve(
       floors.resolve(
-        batch.map((entity) => ({
-          lat: entity.gevAlprRecord.latitude,
-          lon: entity.gevAlprRecord.longitude,
-        })),
+        batch.map((entity) => {
+          const { record } = alprMarkers.read(entity);
+          return { lat: record.latitude, lon: record.longitude };
+        }),
       ),
     )
       .catch(() => {})
@@ -218,7 +221,9 @@ export function createAlprPresentation({ state, services, source }) {
         for (const entity of batch) {
           if (clampedMarkers.get(entity.id) !== entity) continue;
           clampedMarkers.delete(entity.id);
-          const { position, clamped } = markerPlacement(entity.gevAlprRecord);
+          const { position, clamped } = markerPlacement(
+            alprMarkers.read(entity)?.record,
+          );
           if (clamped) continue;
           setMarkerPosition(entity, position, false);
           moved = true;
@@ -370,7 +375,7 @@ export function createAlprPresentation({ state, services, source }) {
     removeEntityContextsForLayer(LAYER_ID, { retainIds: visibleIds });
     for (const record of visible) {
       const existing = state.dataSource.entities.getById(record.id);
-      if (existing?.gevAlprRecord === record) {
+      if (alprMarkers.read(existing)?.record === record) {
         updateAppearance(existing, record.id === state.selectedId);
         continue;
       }
@@ -401,37 +406,39 @@ export function createAlprPresentation({ state, services, source }) {
       let entity = existing;
       // Keep the Cesium entity and its ground-clamping subscription while its
       // geometry is unchanged. Updating metadata must not rebuild the marker.
-      const previous = entity?.gevAlprRecord;
+      const previous = alprMarkers.read(entity)?.record;
       if (!entity) {
         entity = state.dataSource.entities.add(entityDef);
-        entity.gevAlprClamped = clamped;
         changed = true;
+      }
+      const marker = alprMarkers.write(entity);
+      if (!existing) {
+        marker.clamped = clamped;
       } else {
         if (
           previous.latitude !== record.latitude ||
           previous.longitude !== record.longitude
         ) {
           setMarkerPosition(entity, position, clamped);
-          entity.gevAlprCanvasPosition = null;
-          entity.gevAlprDisplayPosition = null;
+          marker.canvasPosition = null;
+          marker.displayPosition = null;
         }
         if (
           previous.latitude !== record.latitude ||
           previous.longitude !== record.longitude ||
           previous.directionDeg !== record.directionDeg
         ) {
-          entity.gevAlprCanvasPosition = null;
-          entity.gevAlprWedge = null;
+          marker.canvasPosition = null;
+          marker.wedge = null;
         }
       }
-      entity.gevAlprRecord = record;
+      marker.record = record;
       entityRecord(entity).trackedId = record.id;
       // The mapped camera datum has no elevation; it is not the clamped marker's
       // visual anchor. Only the selected marker samples the rendered surface,
       // at most once per second, through Cesium's public height APIs.
-      entity.gevAlprDisplayPosition ??= null;
-      entityRecord(entity).displayPosition = () =>
-        entity.gevAlprDisplayPosition;
+      marker.displayPosition ??= null;
+      entityRecord(entity).displayPosition = () => marker.displayPosition;
       entityRecord(entity).labelModel = {
         title: alprDisplayId(record),
         details: alprLabelDetails(record, source),
@@ -473,7 +480,8 @@ export function createAlprPresentation({ state, services, source }) {
     if (changed) state.renderRevision += 1;
     state.onScreen = countOnScreen();
     for (const entity of state.dataSource.entities.values)
-      if (entity.gevAlprClamped) clampedMarkers.set(entity.id, entity);
+      if (alprMarkers.read(entity)?.clamped)
+        clampedMarkers.set(entity.id, entity);
     resolveClampedFloors();
     const selectedEntity = state.selectedId
       ? state.dataSource.entities.getById(state.selectedId)
@@ -577,8 +585,9 @@ export function createAlprPresentation({ state, services, source }) {
     }
     const entity = state.dataSource?.entities.getById(state.selectedId);
     const record = state.recordById.get(state.selectedId);
-    if (entity?.gevAlprCanvasPosition) {
-      entity.gevAlprDisplayPosition = entity.gevAlprCanvasPosition;
+    const marker = alprMarkers.read(entity);
+    if (marker?.canvasPosition) {
+      marker.displayPosition = marker.canvasPosition;
       return;
     }
     if (!entity || !record || Date.now() - state.lastAnchorSampleAt < 1000)
@@ -607,11 +616,9 @@ export function createAlprPresentation({ state, services, source }) {
       record.latitude,
       height,
     );
-    if (
-      !entity.gevAlprDisplayPosition ||
-      Cesium.Cartesian3.distance(next, entity.gevAlprDisplayPosition) > 0.1
-    ) {
-      entity.gevAlprDisplayPosition = next;
+    const shown = marker?.displayPosition;
+    if (!shown || Cesium.Cartesian3.distance(next, shown) > 0.1) {
+      alprMarkers.write(entity).displayPosition = next;
       governorRequestRender('alpr-anchor');
     }
   }
