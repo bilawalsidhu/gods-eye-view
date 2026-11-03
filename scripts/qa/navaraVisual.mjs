@@ -11,6 +11,29 @@ import sharp from 'sharp';
 export const STILL_VIEW =
   'v=2&lat=30.2672&lon=-97.7431&alt=20000&heading=0&pitch=-70&map=osm&l=';
 
+/**
+ * Before the app loads: the page's Date runs from `utc` on, so the look's
+ * sun (and with it the frame's brightness, which the bloom threshold and
+ * the styles' signatures read) does not follow the time of day the
+ * scenario happens to run at. Default: Austin early afternoon.
+ */
+export function pinDaytime(page, utc = '2026-11-03T18:30:00Z') {
+  return page.evaluateOnNewDocument((utc) => {
+    const offset = Date.parse(utc) - Date.now();
+    const RealDate = Date;
+    class ShiftedDate extends RealDate {
+      constructor(...args) {
+        if (args.length === 0) super(RealDate.now() + offset);
+        else super(...args);
+      }
+      static now() {
+        return RealDate.now() + offset;
+      }
+    }
+    globalThis.Date = ShiftedDate;
+  }, utc);
+}
+
 /** The keyless page on `engine` with the still view (and `extra` hash). */
 export const visualPageUrl = (origin, engine, extra = '', view = STILL_VIEW) =>
   `${origin}/?engine=${engine}&welcome=0&look=cinematic#${view}${extra}`;
