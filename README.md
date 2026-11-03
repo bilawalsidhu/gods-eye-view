@@ -92,3 +92,7 @@ Abra o navegador no endere√ßo mostrado (geralmente http://localhost:4173).
 
 Este fork brasileiro prioriza **PortuguÍs (Brasil)** e oferece uma ponte com o [Habblaud Geo Mission](https://github.com/WalneyNF/habblaud/tree/feature/geo-mission-public): o globo incorporado expıe a posiÁ„o atual da c‚mera (n„o o GPS do usu·rio) para cadastrar favoritos. A integraÁ„o usa mensagens entre janelas com validaÁ„o de origem na Central e preserva os controles de camadas. Veja o [manual de presets](docs/HABBLAUD-PRESETS.md) e os demais documentos da integraÁ„o. O uso È local e experimental; dados e provedores externos est„o sujeitos ‡s suas licenÁas e permissıes.
 
+
+### üåç Roadmap p√∫blico da integra√ß√£o Geo Mission BR
+
+[Explore o roadmap HTML](roadmap.html) com os dez m√≥dulos e seus crit√©rios de aceite. O fork tamb√©m responde √†s mensagens `gev:cinema-fly` e `gev:cinema-stop` enviadas pela Central de Miss√µes para anima√ß√µes experimentais de c√¢mera Cesium. [Manual da integra√ß√£o](docs/HABBLAUD-ROADMAP-GEO-CINEMA.md). Nenhum m√≥dulo planejado deve ser confundido com implementa√ß√£o conclu√≠da.

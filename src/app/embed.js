@@ -265,6 +265,25 @@ export function installViews({
       if (pos) post({type:'gev:camera-response', id:event.data.id ?? null, camera:{lat:Cesium.Math.toDegrees(pos.latitude),lon:Cesium.Math.toDegrees(pos.longitude),alt:pos.height,heading:Cesium.Math.toDegrees(c.heading),pitch:Cesium.Math.toDegrees(c.pitch)}}, event.origin && event.origin !== 'null' ? event.origin : '*');
       return;
     }
+    if (event.data?.type === 'gev:cinema-fly') {
+      const d = event.data;
+      const lat=Number(d.lat),lon=Number(d.lon),alt=Number(d.alt),duration=Number(d.duration);
+      const replyOrigin=event.origin && event.origin!=='null'?event.origin:'*';
+      if (![lat,lon,alt,duration].every(Number.isFinite)||Math.abs(lat)>90||Math.abs(lon)>180||alt<30||alt>100000000||duration<1||duration>30) {
+        post({type:'gev:cinema-done',id:d.id,ok:false,error:'Parâmetros de câmera inválidos'},replyOrigin);return;
+      }
+      viewer.camera.cancelFlight();
+      viewer.camera.flyTo({
+        destination:Cesium.Cartesian3.fromDegrees(lon,lat,alt),
+        duration,
+        complete:()=>post({type:'gev:cinema-done',id:d.id,ok:true},replyOrigin),
+        cancel:()=>post({type:'gev:cinema-done',id:d.id,ok:false,error:'Voo interrompido'},replyOrigin)
+      });
+      return;
+    }
+    if (event.data?.type === 'gev:cinema-stop') {
+      viewer.camera.cancelFlight();return;
+    }
     if (event.data?.type !== EMBED_VIEW_MESSAGE) return;
     const { id = null } = event.data;
     const replyOrigin =
