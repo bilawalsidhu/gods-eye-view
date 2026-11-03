@@ -1,29 +1,38 @@
-import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
-import { switchGlobe } from './qa-switch-globe.mjs';
+import { fromDegrees } from '../src/geo/cartesian3.js';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 import { installTransitFixture } from './fixtures/w2/transit.mjs';
-import { installCombinedFixture } from './fixtures/w2/combined.mjs';
-const url = new URL(process.argv[2]),
+import {
+  combinedPayloads,
+  installCombinedFixture,
+} from './fixtures/w2/combined.mjs';
+const url = localPreview(process.argv[2]),
   bus = process.argv.includes('--transit'),
   id = bus ? 'transit' : 'bikeshare';
-if (
-  !['localhost', '127.0.0.1'].includes(url.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    url.port,
-  )
-)
-  throw Error('Supply local keyless preview URL');
+// Boston, where the fixtures put the city's stations and vehicles. Transit
+// starts outside every feed region (central Vermont) and is approached.
+const CITY = { lat: 42.3554, lon: -71.0605, alt: 2700 };
+const start = bus ? { lat: 44.2, lon: -72.6, alt: 2700 } : CITY;
 url.search = '?engine=navara&welcome=0';
-url.hash =
-  'v=2&lat=42.3554&lon=-71.0605&alt=2700&pitch=-90&heading=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+url.hash = `v=2&lat=${start.lat}&lon=${start.lon}&alt=${start.alt}&pitch=-90&heading=0&map=sentinel2&l=`;
+// Every station of the bikeshare fixture reports 7 bikes and 13 docks; the
+// transit fixture has 12 fresh vehicles (and one stale, dropped).
+const STATIONS = combinedPayloads.bikes.length;
+const VEHICLES = 12;
+const strict = createStrict({
+  origin: url.origin,
+  layers: [id],
+  // installCombinedFixture answers these hosts too.
+  fixtures: bus
+    ? []
+    : [
+        'https://earthquake.usgs.gov/*',
+        'https://tiles.dontgetflocked.com/*',
+        '*://*.earthdata.nasa.gov/*',
+      ],
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1280, height: 900 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -48,35 +57,141 @@ try {
     window.qaUrban = dataManager.layers.get(id).module;
     await dataManager.setEnabled(id, true, { origin: 'user' });
   }, id);
+  const vehicleReads = () =>
+    fx.requests.filter((path) => path.startsWith('/api/transit/vehicles/'))
+      .length;
+  if (bus) {
+    // Outside every feed region the layer waits and reads no feed.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const outside = await p.evaluate(() => window.qaUrban.getStats());
+    await strict.check(
+      p,
+      'transit',
+      'outside every feed region: no vehicles, no feed read, asks to move to a covered region',
+      outside.count === 0 &&
+        outside.status === 'zoom-in' &&
+        vehicleReads() === 0,
+      { stats: outside, reads: vehicleReads() },
+    );
+    // Approach the city: the MBTA feed turns on and its vehicles arrive.
+    await p.evaluate(
+      (destination) => {
+        const { camera, render } = window.__godsEyeView.engine;
+        camera.setView({
+          destination,
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        render.request('qa-approach');
+      },
+      fromDegrees(CITY.lon, CITY.lat, CITY.alt),
+    );
+    await p.waitForFunction(
+      (n) =>
+        window.qaUrban.getStats().count === n &&
+        window.qaUrban.getStats().feeds?.includes('mbta'),
+      { timeout: 30000 },
+      VEHICLES,
+    );
+    await strict.check(
+      p,
+      'transit',
+      `approaching Boston from outside turns on the MBTA feed: ${VEHICLES} vehicles`,
+      vehicleReads() > 0,
+      { reads: vehicleReads() },
+    );
+  }
   await p.waitForFunction(() => window.qaUrban.getStats().count > 0, {
     timeout: 30000,
   });
-  const handle = await p.waitForFunction(
-    () => {
-      const a = window.__godsEyeView;
-      for (const r of window.qaUrban.getDetectableObjects({
-        maxCount: 500,
-        seed: 0,
-      })) {
-        const s = a.engine.projector.worldToWindow(r.position);
-        if (!s || s.x < 420 || s.x > 860 || s.y < 205 || s.y > 670) continue;
-        const pk = a.engine.picker.pick(s);
-        if (pk?.id === r.sourceId || pk?.id?.id === r.sourceId)
-          return { x: s.x, y: s.y, id: r.sourceId };
-      }
-      return false;
-    },
-    { timeout: 30000 },
-  );
-  const target = await handle.jsonValue();
+  // A station or vehicle the engine's own picker returns, uncovered.
+  const findTarget = (key = null) =>
+    p
+      .waitForFunction(
+        (key) => {
+          const a = window.__godsEyeView;
+          const canvas = a.engine.host.canvas;
+          const box = canvas.getBoundingClientRect();
+          for (const r of window.qaUrban.getDetectableObjects({
+            maxCount: 500,
+            seed: 0,
+          })) {
+            if (key && r.sourceId !== key) continue;
+            const s = a.engine.projector.worldToWindow(r.position);
+            if (!s || s.x < 420 || s.x > 860 || s.y < 205 || s.y > 600)
+              continue;
+            if (
+              !canvas.contains(
+                document.elementFromPoint(box.left + s.x, box.top + s.y),
+              )
+            )
+              continue;
+            const pk = a.engine.picker.pick(s);
+            if (pk?.id === r.sourceId || pk?.id?.id === r.sourceId)
+              return { x: box.left + s.x, y: box.top + s.y, id: r.sourceId };
+          }
+          return false;
+        },
+        { timeout: 30000 },
+        key,
+      )
+      .then((handle) => handle.jsonValue());
+  const selected = (key) =>
+    p.waitForFunction(
+      (key) =>
+        window.qaUrban
+          .getDetectableObjects({ maxCount: 500, seed: 0 })
+          .some((r) => r.sourceId === key && r.skipLabel),
+      { timeout: 20000 },
+      key,
+    );
+  // A click on empty ground (nothing picked around it, nothing covering it).
+  const clickEmpty = async () => {
+    const handle = await p.waitForFunction(
+      () => {
+        const { engine } = window.__godsEyeView;
+        const canvas = engine.host.canvas;
+        const box = canvas.getBoundingClientRect();
+        for (let y = 230; y < 600; y += 9)
+          for (let x = 440; x < 840; x += 9) {
+            if (
+              !canvas.contains(
+                document.elementFromPoint(box.left + x, box.top + y),
+              )
+            )
+              continue;
+            let free = true;
+            for (const [dx, dy] of [
+              [0, 0],
+              [8, 0],
+              [-8, 0],
+              [0, 8],
+              [0, -8],
+            ])
+              if (engine.picker.pick({ x: x + dx, y: y + dy })) free = false;
+            if (free) return { x: box.left + x, y: box.top + y };
+          }
+        return false;
+      },
+      { timeout: 15000 },
+    );
+    const at = await handle.jsonValue();
+    await p.mouse.click(at.x, at.y);
+    await p.waitForFunction(
+      () =>
+        !window.qaUrban
+          .getDetectableObjects({ maxCount: 500, seed: 0 })
+          .some((r) => r.skipLabel),
+      { timeout: 15000 },
+    );
+  };
+  const target = await findTarget();
   await p.mouse.click(target.x, target.y);
-  await p.waitForFunction(
-    (key) =>
-      window.qaUrban
-        .getDetectableObjects({ maxCount: 500, seed: 0 })
-        .some((r) => r.sourceId === key && r.skipLabel),
-    {},
-    target.id,
+  await selected(target.id);
+  await strict.passed(
+    p,
+    id,
+    bus ? 'a click on a vehicle selects it' : 'a click on a station selects it',
+    target,
   );
   const reads = () =>
     fx.requests.filter((path) =>
@@ -88,20 +203,43 @@ try {
     await p.waitForFunction(
       () => window.qaUrban.getDetectableObjects({ maxCount: 500 }).length > 0,
     );
-  const original = reads();
+  let original = reads();
   const first = await p.evaluate(() =>
     window.qaUrban.getAnalystRecords(500).map((v) => v.id),
   );
-  for (const kind of ['cesium', 'navara']) {
-    await switchGlobe(p, kind);
-    await p.waitForFunction(
-      (key) =>
-        window.qaUrban
-          .getDetectableObjects({ maxCount: 500, seed: 0 })
-          .some((r) => r.sourceId === key && r.skipLabel),
-      { timeout: 20000 },
-      target.id,
+  const checkData = async () => {
+    const stats = await p.evaluate(() => window.qaUrban.getStats());
+    if (bus) {
+      await strict.check(
+        p,
+        'transit',
+        `${VEHICLES} fresh vehicles (the stale one dropped)`,
+        stats.count === VEHICLES,
+        stats.count,
+      );
+      return;
+    }
+    const rows = await p.evaluate(() =>
+      window.qaUrban.getAnalystRecords(1000).map((r) => ({
+        bikes: r.bikesAvailable,
+        docks: r.docksAvailable,
+        renting: r.renting,
+      })),
     );
+    await strict.check(
+      p,
+      'bikeshare',
+      `${STATIONS} stations, each with 7 bikes and 13 docks available and renting`,
+      stats.count === STATIONS &&
+        rows.length === STATIONS &&
+        rows.every((r) => r.bikes === 7 && r.docks === 13 && r.renting),
+      { count: stats.count, rows: rows.length, sample: rows[0] },
+    );
+  };
+  await checkData();
+  for (const kind of ['cesium', 'navara']) {
+    await strict.switchTo(p, kind);
+    await selected(target.id);
     const v = await p.evaluate(
       (id) => ({
         same:
@@ -116,12 +254,32 @@ try {
     assert.ok(v.same);
     assert.deepEqual(v.ids, first);
     assert.equal(reads(), original);
+    await strict.passed(
+      p,
+      id,
+      'same model, same records, the clicked object still selected, no source read again',
+    );
+    await checkData();
+    if (kind === 'cesium') {
+      // Click-picking on Cesium: clear with a click on empty ground, then
+      // click the same object again.
+      await clickEmpty();
+      const again = await findTarget(target.id);
+      await p.mouse.click(again.x, again.y);
+      await selected(target.id);
+      await strict.passed(
+        p,
+        id,
+        'a click on empty ground clears the selection; a click on the object selects it again',
+        again,
+      );
+      // Selecting a vehicle again reads its trail again.
+      original = reads();
+    }
   }
   assert.deepEqual(errors, []);
   await fx.dispose?.();
   console.log(
     'PASS viewport activation, real pick and original city data across two switches',
   );
-} finally {
-  await b.close();
-}
+});

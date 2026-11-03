@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * The cache entry for a GET of `url` with `accept` (terrain answers by its
  * Accept header), or null for a host that is not cached.
  */
-export function tileCacheFile(url, accept, dir) {
+export function tileCacheFile(url, accept, dir, hosts = CACHED_TILE_HOSTS) {
   let host;
   try {
     const parsed = new URL(url);
@@ -36,7 +36,7 @@ export function tileCacheFile(url, accept, dir) {
   } catch {
     return null;
   }
-  if (!CACHED_TILE_HOSTS.includes(host)) return null;
+  if (!hosts.includes(host)) return null;
   const key = createHash('sha256')
     .update(`${url}\n${accept ?? ''}`)
     .digest('hex')
@@ -121,12 +121,15 @@ export function createMissLoader({
 }
 
 /**
- * Serves the page's requests to CACHED_TILE_HOSTS from the cache (filling
- * it on a miss). Returns the counts.
+ * Serves the page's requests to CACHED_TILE_HOSTS (or `hosts`) from the
+ * cache (filling it on a miss). Returns the counts.
  */
 export async function installTileCache(
   page,
-  { dir = path.join(os.tmpdir(), 'gev-qa-tiles') } = {},
+  {
+    dir = path.join(os.tmpdir(), 'gev-qa-tiles'),
+    hosts = CACHED_TILE_HOSTS,
+  } = {},
 ) {
   fs.mkdirSync(dir, { recursive: true });
   const stats = { hits: 0, fetched: 0, cancelled: 0, failed: 0, errors: {} };
@@ -137,7 +140,9 @@ export async function installTileCache(
       ([name]) => name.toLowerCase() === 'accept',
     )?.[1];
     const file =
-      request.method === 'GET' ? tileCacheFile(request.url, accept, dir) : null;
+      request.method === 'GET'
+        ? tileCacheFile(request.url, accept, dir, hosts)
+        : null;
     try {
       if (!file)
         return await client.send('Fetch.continueRequest', { requestId });
@@ -187,7 +192,7 @@ export async function installTileCache(
     }
   });
   await client.send('Fetch.enable', {
-    patterns: CACHED_TILE_HOSTS.map((host) => ({
+    patterns: hosts.map((host) => ({
       urlPattern: `https://${host}/*`,
     })),
   });

@@ -1,17 +1,8 @@
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import puppeteer from 'puppeteer';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
-import { switchGlobe } from './qa-switch-globe.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
-const url = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(url.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    url.port,
-  )
-)
-  throw Error('Supply local keyless preview URL');
+const url = localPreview(process.argv[2]);
 url.search = '?engine=navara&welcome=0';
 url.hash =
   'v=2&lat=30.2672&lon=-97.742&alt=4000&pitch=-90&heading=0&map=sentinel2&l=';
@@ -137,13 +128,15 @@ const project = {
     },
   ],
 };
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+// Scene Director is not a catalog layer; the scenario answers the scene's
+// earthquake feed itself.
+const strict = createStrict({
+  origin: url.origin,
+  layers: [],
+  fixtures: ['https://earthquake.usgs.gov/*'],
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1280, height: 900 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -223,7 +216,7 @@ try {
     }, world);
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind)
-      await switchGlobe(p, kind);
+      await strict.switchTo(p, kind);
     await new Promise((r) => setTimeout(r, 500));
     const st = await p.evaluate(() => ({
       same: window.director === window.__godsEyeView.sceneDirector,
@@ -290,7 +283,7 @@ try {
       window.director.running &&
       window.director.getPlaybackTimingState().snapshot?.shotId === 'one',
   );
-  await switchGlobe(p, 'cesium');
+  await strict.switchTo(p, 'cesium');
   assert.ok(
     await p.evaluate(
       () =>
@@ -302,13 +295,11 @@ try {
     () => window.director.getPlaybackTimingState().snapshot?.shotId === 'two',
     { timeout: 20000 },
   );
-  await switchGlobe(p, 'navara');
+  await strict.switchTo(p, 'navara');
   const complete = await p.evaluate(() => window.qaRun);
   assert.ok(complete.started && complete.shots === 2);
   assert.deepEqual(errors, []);
   console.log(
     'PASS authored packs, geographic picks, same player, original multi-shot timeline',
   );
-} finally {
-  await b.close();
-}
+});

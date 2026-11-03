@@ -1,0 +1,736 @@
+// The strict acceptance harness shared by every browser scenario that
+// qa-all-layer-switches.mjs runs.
+//
+// - Network: a default-deny request policy on every page, frame and worker
+//   of the browser, installed before the target runs (CDP auto-attach with
+//   waitForDebuggerOnStart). Paid hosts and paid preview routes are blocked,
+//   then only the preview origin, the scenario's declared fixture URLs and
+//   the free tile hosts (answered from a disk cache) are allowed. A blocked
+//   request, a fixture or tile URL answered by the real network, or a socket
+//   to another origin is a violation and fails the scenario with its URL.
+// - Coverage: the runner passes the layer ids (--layers=a,b). The scenario
+//   records each assertion it made per layer id and engine; finish() fails
+//   when a declared layer has no assertion on either engine, and writes the
+//   manifest (--evidence=FILE) the runner cross-checks against the catalog.
+// - Engine picks: pickEngine() switches with real input on the picker (a
+//   pointer click on its label, then keyboard type-ahead), never page.select.
+
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import puppeteer from 'puppeteer';
+import os from 'node:os';
+import {
+  KEYLESS_PROBES,
+  probePattern,
+  strictBlockPatterns,
+  STRICT_TILE_HOSTS,
+} from './qa-map-policy.mjs';
+import { createMissLoader, tileCacheFile } from './qa/tileCache.mjs';
+
+export const ENGINES = Object.freeze(['cesium', 'navara']);
+const RESERVED_PORTS = ['', '4173', '4185', '4186', '4187', '4188', '4189'];
+const RESERVED = [...RESERVED_PORTS, '4194', '4196'];
+
+/** The values of --layers=a,b and --evidence=FILE (null when absent). */
+export function strictArguments(argv = process.argv) {
+  const value = (name) =>
+    argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
+  const layers = value('layers');
+  return {
+    layers: layers ? layers.split(',').filter(Boolean) : null,
+    evidence: value('evidence') ?? process.env.QA_STRICT_EVIDENCE ?? null,
+  };
+}
+
+/** Refuse anything but an unreserved local preview. */
+export function localPreview(href) {
+  const url = new URL(href);
+  if (
+    !['localhost', '127.0.0.1'].includes(url.hostname) ||
+    RESERVED.includes(url.port)
+  )
+    throw Error('Supply an unreserved local keyless preview URL');
+  return url;
+}
+
+/** The URL with no remote IP: fulfilled by a fixture or a cache, or a data URL. */
+const live = (response) => Boolean(response.remoteIPAddress);
+
+/**
+ * Follow every request of every target of `browser` under the strict policy.
+ * Returns the ledger the policy fills in.
+ */
+export async function installStrictNetwork(
+  browser,
+  { origin, fixtures = [], routes = [], tileHosts = STRICT_TILE_HOSTS, ledger },
+) {
+  const preview = new URL(origin);
+  fixtures = [...fixtures, ...routes.map((route) => route.pattern)];
+  const urlPatterns = strictBlockPatterns(origin, { fixtures, tileHosts });
+  const answers = routes.map((route) => ({
+    ...route,
+    test: new URLPattern(route.pattern),
+  }));
+  const fixturePatterns = fixtures.map((p) => new URLPattern(p));
+  const isFixture = (url) => fixturePatterns.some((p) => p.test(url));
+  const root = await browser.target().createCDPSession();
+  const connection = root.connection();
+  const probes = KEYLESS_PROBES.map((probe) => ({
+    ...probe,
+    test: new URLPattern(probePattern(origin, probe)),
+  }));
+  const misses = createMissLoader();
+  const cacheDir = path.join(os.tmpdir(), 'gev-qa-tiles');
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const tiles = ledger.tileCache;
+  // One CDP Fetch handler per target: the keyless probes and the tile hosts
+  // (from the disk cache, filled on a miss). Nothing else is paused, so
+  // workers' own requests are never held.
+  const intercept = async (session, type) => {
+    session.on('Fetch.requestPaused', async ({ requestId, request }) => {
+      const fulfil = (status, headers, body) =>
+        session.send('Fetch.fulfillRequest', {
+          requestId,
+          responseCode: status,
+          responseHeaders: headers,
+          ...(body == null
+            ? {}
+            : { body: Buffer.from(body).toString('base64') }),
+        });
+      try {
+        const route = answers.find((r) => r.test.test(request.url));
+        if (route) {
+          ledger.routes[route.pattern] =
+            (ledger.routes[route.pattern] ?? 0) + 1;
+          const answer = await route.respond(request);
+          return await fulfil(
+            answer.status ?? 200,
+            [
+              ...(answer.contentType
+                ? [{ name: 'Content-Type', value: answer.contentType }]
+                : []),
+              { name: 'Access-Control-Allow-Origin', value: '*' },
+            ],
+            answer.body ?? '',
+          );
+        }
+        const probe = probes.find((p) => p.test.test(request.url));
+        if (probe) {
+          if (request.method !== probe.method && request.method !== 'HEAD') {
+            violation('probe-method', request.url, { method: request.method });
+            return await session.send('Fetch.failRequest', {
+              requestId,
+              errorReason: 'BlockedByClient',
+            });
+          }
+          ledger.probes[probe.pattern] =
+            (ledger.probes[probe.pattern] ?? 0) + 1;
+          return await fulfil(
+            probe.status,
+            [
+              ...(probe.contentType
+                ? [{ name: 'Content-Type', value: probe.contentType }]
+                : []),
+              { name: 'Cache-Control', value: 'no-store' },
+              { name: 'Access-Control-Allow-Origin', value: '*' },
+            ],
+            probe.body ?? null,
+          );
+        }
+        const accept = Object.entries(request.headers ?? {}).find(
+          ([name]) => name.toLowerCase() === 'accept',
+        )?.[1];
+        const file =
+          request.method === 'GET'
+            ? tileCacheFile(request.url, accept, cacheDir, tileHosts)
+            : null;
+        if (!file) {
+          violation('unhandled-intercept', request.url, { target: type });
+          return await session.send('Fetch.failRequest', {
+            requestId,
+            errorReason: 'BlockedByClient',
+          });
+        }
+        let entry;
+        if (fs.existsSync(`${file}.json`)) {
+          entry = {
+            ...JSON.parse(fs.readFileSync(`${file}.json`, 'utf8')),
+            body: fs.readFileSync(file),
+          };
+          tiles.hits++;
+        } else {
+          entry = await misses.load(request.url, accept);
+          if (entry.status === 200) {
+            fs.writeFileSync(file, entry.body);
+            fs.writeFileSync(
+              `${file}.json`,
+              JSON.stringify({ status: 200, contentType: entry.contentType }),
+            );
+            tiles.fetched++;
+          } else tiles.failed++;
+          const host = new URL(request.url).host;
+          tiles.fetchedByHost[host] = (tiles.fetchedByHost[host] ?? 0) + 1;
+        }
+        await fulfil(
+          entry.status,
+          [
+            ...(entry.contentType
+              ? [{ name: 'Content-Type', value: entry.contentType }]
+              : []),
+            { name: 'Access-Control-Allow-Origin', value: '*' },
+          ],
+          entry.body,
+        );
+      } catch (error) {
+        if (
+          /Invalid InterceptionId|closed|detached/i.test(String(error?.message))
+        )
+          return void tiles.cancelled++;
+        tiles.failed++;
+        await session
+          .send('Fetch.failRequest', { requestId, errorReason: 'Failed' })
+          .catch(() => {});
+      }
+    });
+    await session
+      .send('Fetch.enable', {
+        patterns: [
+          ...probes.map((probe) => ({
+            urlPattern: probePattern(origin, probe).replace(/\*$/, '') + '*',
+          })),
+          ...tileHosts.map((host) => ({ urlPattern: `https://${host}/*` })),
+          ...routes.map((route) => ({ urlPattern: route.pattern })),
+        ],
+      })
+      .catch((error) =>
+        ledger.setupErrors.push(
+          type + ' Fetch.enable: ' + String(error?.message).slice(0, 120),
+        ),
+      );
+  };
+  const violation = (kind, url, detail = {}) => {
+    ledger.violations.push({ kind, url: String(url).slice(0, 300), ...detail });
+  };
+  const setup = async (session, info) => {
+    const type = info.type;
+    const urls = new Map();
+    session.on('Network.requestWillBeSent', (event) => {
+      const { url } = event.request;
+      urls.set(event.requestId, url);
+      if (!/^https?:/.test(url)) return;
+      ledger.requests++;
+      const address = new URL(url);
+      if (address.origin === preview.origin) {
+        ledger.preview++;
+        if (address.pathname.startsWith('/api/')) {
+          const route = address.pathname.split('/').slice(0, 4).join('/');
+          ledger.previewApi[route] = (ledger.previewApi[route] ?? 0) + 1;
+        }
+      } else {
+        ledger.external[address.host] =
+          (ledger.external[address.host] ?? 0) + 1;
+      }
+    });
+    session.on('Network.loadingFailed', (event) => {
+      if (!event.blockedReason) return;
+      violation('blocked', urls.get(event.requestId) ?? '?', {
+        reason: event.blockedReason,
+        target: type,
+        resource: event.type,
+      });
+    });
+    session.on('Network.responseReceived', ({ response, type: resource }) => {
+      if (!/^https?:/.test(response.url)) return;
+      const address = new URL(response.url);
+      if (probes.some((p) => p.test.test(response.url)) && live(response))
+        violation('probe-live', response.url, { target: type });
+      if (address.origin === preview.origin) return;
+      if (!live(response)) {
+        if (isFixture(response.url)) ledger.fixtureResponses++;
+        return;
+      }
+      // A fixture or tile URL answered by the real network, or any other
+      // external host that slipped past the block (a frame navigation).
+      violation('live', response.url, {
+        remote: response.remoteIPAddress,
+        target: type,
+        resource,
+      });
+    });
+    session.on('Network.webSocketCreated', ({ url }) => {
+      const address = new URL(url);
+      if (address.host !== preview.host)
+        violation('socket', url, { target: type });
+    });
+    session.on('Target.attachedToTarget', (event) =>
+      attach(event.sessionId, event.targetInfo, event.waitingForDebugger),
+    );
+    const steps = [
+      session.send('Network.enable'),
+      session.send('Network.setBlockedURLs', { urlPatterns }),
+      session
+        .send('Target.setAutoAttach', {
+          autoAttach: true,
+          waitForDebuggerOnStart: true,
+          flatten: true,
+        })
+        .catch(() => {}),
+    ];
+    // Workers have no Fetch domain; the page's interception answers their
+    // requests, and a live answer would still show up as a violation.
+    if (type === 'page' || type === 'iframe')
+      steps.push(intercept(session, type));
+    await Promise.all(steps);
+  };
+  const attach = async (sessionId, info, waiting) => {
+    const session = connection.session(sessionId);
+    if (!session) return;
+    try {
+      await setup(session, info);
+    } catch (error) {
+      // A target that closes while it attaches has nothing left to load.
+      if (!/closed|detached|not found/i.test(String(error?.message)))
+        ledger.setupErrors.push(String(error?.message ?? error).slice(0, 200));
+    } finally {
+      if (waiting)
+        await session.send('Runtime.runIfWaitingForDebugger').catch(() => {});
+    }
+  };
+  root.on('Target.attachedToTarget', (event) =>
+    attach(event.sessionId, event.targetInfo, event.waitingForDebugger),
+  );
+  await root.send('Target.setAutoAttach', {
+    autoAttach: true,
+    waitForDebuggerOnStart: true,
+    flatten: true,
+    filter: [
+      { type: 'page' },
+      { type: 'iframe' },
+      { type: 'worker' },
+      { type: 'shared_worker' },
+      { type: 'service_worker' },
+      { type: 'tab', exclude: true },
+      { type: 'browser', exclude: true },
+    ],
+  });
+  return ledger;
+}
+
+/** A new, empty network ledger. */
+export function networkLedger() {
+  return {
+    requests: 0,
+    preview: 0,
+    previewApi: {},
+    external: {},
+    fixtureResponses: 0,
+    probes: {},
+    routes: {},
+    tileCache: {
+      hits: 0,
+      fetched: 0,
+      failed: 0,
+      cancelled: 0,
+      fetchedByHost: {},
+    },
+    violations: [],
+    setupErrors: [],
+  };
+}
+
+/**
+ * Switch to `kind` with real input on the Globe Engine picker: a pointer
+ * click on its label (which focuses the select without opening its menu)
+ * and keyboard type-ahead. Opens the control panel with a pointer click if
+ * it is collapsed and collapses it again once the switch has settled
+ * (`settle: false` returns as soon as the picker reports the change;
+ * `afterInput` runs right after the key, before anything is read back).
+ */
+export async function pickEngine(
+  page,
+  kind,
+  { settle = true, afterInput = null } = {},
+) {
+  assert.ok(ENGINES.includes(kind), kind);
+  const expanded = () =>
+    page.$eval(
+      '#control-panel-toggle',
+      (el) => el.getAttribute('aria-expanded') === 'true',
+    );
+  const opened = !(await expanded());
+  if (opened) {
+    await page.click('#control-panel-toggle').catch(async (error) => {
+      const state = await page.evaluate(() => {
+        const el = document.querySelector('#control-panel-toggle');
+        const box = el?.getBoundingClientRect();
+        const style = el && getComputedStyle(el);
+        const hit =
+          box &&
+          document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          );
+        return {
+          box: box && [box.x, box.y, box.width, box.height],
+          display: style?.display,
+          visibility: style?.visibility,
+          hidden: el?.closest('[hidden]')?.id ?? null,
+          hit: hit?.id || hit?.className || null,
+          body: document.body.className,
+        };
+      });
+      throw Error(
+        `cannot click the control panel toggle (${error.message}): ` +
+          JSON.stringify(state),
+      );
+    });
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('#control-panel-toggle')
+          ?.getAttribute('aria-expanded') === 'true',
+    );
+  }
+  await page.waitForSelector('#globe-engine:not([disabled])', {
+    visible: true,
+    timeout: 90000,
+  });
+  const from = await page.$eval('#globe-engine', (el) => el.value);
+  assert.notEqual(from, kind, `the picker already shows ${kind}`);
+  // Where a pointer can reach the picker: the label's own text (focuses the
+  // select without opening its menu), else the select itself.
+  const target = await page.$eval('#globe-engine', (el) => {
+    const box = el.closest('label').getBoundingClientRect();
+    const select = el.getBoundingClientRect();
+    // at: the change event (the person's input reached the page);
+    // idleAt: the picker enabled again after the switch.
+    window.__qaPick = { busy: false, changed: false, at: null, idleAt: null };
+    el.addEventListener(
+      'change',
+      () => {
+        window.__qaPick.changed = true;
+        window.__qaPick.at = performance.now();
+      },
+      { once: true },
+    );
+    window.__qaPickObserver?.disconnect();
+    window.__qaPickObserver = new MutationObserver(() => {
+      const disabled = document.querySelector('#globe-engine')?.disabled;
+      if (disabled) window.__qaPick.busy = true;
+      else if (window.__qaPick.busy && window.__qaPick.idleAt == null)
+        window.__qaPick.idleAt = performance.now();
+    });
+    window.__qaPickObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['disabled'],
+      subtree: true,
+    });
+    const describe = (hit) =>
+      hit
+        ? `${hit.tagName.toLowerCase()}#${hit.id}.${String(hit.className).slice(0, 60)}`
+        : 'nothing';
+    const label = {
+      x: box.left + Math.max(4, (select.left - box.left) / 2),
+      y: box.top + box.height / 2,
+    };
+    const onLabel = document.elementFromPoint(label.x, label.y);
+    if (
+      onLabel === el.closest('label') ||
+      (onLabel?.closest('label') === el.closest('label') && onLabel !== el)
+    )
+      return { ...label, via: 'label' };
+    const middle = {
+      x: select.left + select.width / 2,
+      y: select.top + select.height / 2,
+    };
+    const onSelect = document.elementFromPoint(middle.x, middle.y);
+    if (onSelect === el)
+      return { ...middle, via: 'select', labelCoveredBy: describe(onLabel) };
+    return { covered: describe(onLabel) + ' / ' + describe(onSelect) };
+  });
+  assert.ok(!target.covered, 'the picker is covered by ' + target.covered);
+  await page.mouse.click(target.x, target.y);
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.id),
+    'globe-engine',
+    'the click focuses the picker',
+  );
+  await page.keyboard.type(kind[0]);
+  // Whatever the person does next, right after the key (no round trip to
+  // the page in between).
+  if (afterInput) await afterInput();
+  await page.waitForFunction(() => window.__qaPick?.changed, {
+    timeout: 5000,
+    polling: 50,
+  });
+  // Headless Chrome opens no menu for a click on the select: the key
+  // events above reached the page, so there is nothing to dismiss.
+  const how = {
+    opened,
+    clicked: target.via,
+    ...(target.labelCoveredBy ? { labelCoveredBy: target.labelCoveredBy } : {}),
+  };
+  if (!settle) return how;
+  await page.waitForFunction(
+    () =>
+      (window.__qaPick.busy &&
+        !document.querySelector('#globe-engine')?.disabled &&
+        document.querySelector('#loading-screen.hidden') &&
+        !document.querySelector('.engine-switch-frame')) ||
+      document.querySelector('.engine-switch-retry'),
+    { timeout: 120000, polling: 50 },
+  );
+  await page.evaluate(() => window.__qaPickObserver?.disconnect());
+  Object.assign(
+    how,
+    await page.evaluate(() => ({
+      at: window.__qaPick.at,
+      idleAt: window.__qaPick.idleAt,
+    })),
+  );
+  if (opened && (await expanded().catch(() => false))) {
+    await page.click('#control-panel-toggle');
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('#control-panel-toggle')
+          ?.getAttribute('aria-expanded') !== 'true',
+    );
+  }
+  return how;
+}
+
+/** Wait until `kind` runs, its picker is idle and its view is restored. */
+export async function waitForEngine(page, kind, { timeout = 120000 } = {}) {
+  await page.waitForFunction(
+    (expected) =>
+      window.__godsEyeView?.engine?.kind === expected &&
+      document.querySelector('#globe-engine')?.value === expected &&
+      !document.querySelector('#globe-engine')?.disabled &&
+      !document.querySelector('.engine-switch-frame') &&
+      document.querySelector('#loading-screen.hidden'),
+    { timeout },
+    kind,
+  );
+  await page.evaluate(
+    () => window.__godsEyeView.styleManager.initialRestorePromise,
+  );
+}
+
+/**
+ * The strict context of one scenario run.
+ *
+ * @param {object} options
+ * @param {string} options.origin The preview origin.
+ * @param {string[]} options.layers The layer ids this scenario covers (the
+ *   runner's --layers wins when given; both must agree).
+ * @param {string[]} [options.fixtures] URLPattern strings for external
+ *   requests the scenario answers itself.
+ * @param {{pattern: string, respond: (request: object) => ({status?: number,
+ *   contentType?: string, body?: string|Buffer}|Promise<object>)}[]} [options.routes]
+ *   External URLs the harness answers for the scenario (the pattern is both
+ *   a URLPattern and a CDP Fetch glob, e.g. `https://i.ytimg.com/*`).
+ * @param {readonly string[]} [options.tileHosts] Hosts the disk cache
+ *   answers (default STRICT_TILE_HOSTS).
+ * @param {string} [options.name] Scenario name for the manifest.
+ */
+export function createStrict({
+  origin,
+  layers,
+  fixtures = [],
+  routes = [],
+  tileHosts = STRICT_TILE_HOSTS,
+  name = path.basename(process.argv[1] ?? 'scenario', '.mjs'),
+}) {
+  const args = strictArguments();
+  if (args.layers)
+    assert.deepEqual(
+      [...args.layers].sort(),
+      [...layers].sort(),
+      `${name} covers ${layers.join(',')}, the runner passed ${args.layers.join(',')}`,
+    );
+  const declared = args.layers ?? layers;
+  const ledger = networkLedger();
+  const assertions = [];
+  const picks = [];
+  const timings = [];
+  const extra = {};
+  let finished = false;
+
+  const record = (ids, engine, claim, detail) => {
+    for (const id of [ids].flat()) {
+      assert.ok(declared.includes(id), `${id} is not declared by ${name}`);
+      assert.ok(ENGINES.includes(engine), `unknown engine ${engine}`);
+      assertions.push({
+        layer: id,
+        engine,
+        claim,
+        ...(detail === undefined ? {} : { detail }),
+      });
+    }
+  };
+  const engineOf = (page) =>
+    page.evaluate(() => window.__godsEyeView?.engine?.kind ?? null);
+
+  const strict = {
+    name,
+    layers: declared,
+    ledger,
+    extra,
+    timings,
+    /** Launch Chrome with the policy on every target. */
+    async launch(options = {}) {
+      const browser = await puppeteer.launch({ headless: true, ...options });
+      await installStrictNetwork(browser, {
+        origin,
+        fixtures,
+        routes,
+        tileHosts,
+        ledger,
+      });
+      return browser;
+    },
+    /** Launch, run `body(browser)`, close, then finish(). */
+    async run(options, body) {
+      const browser = await strict.launch(options);
+      let failed = null;
+      try {
+        await body(browser);
+      } catch (error) {
+        failed = error;
+      } finally {
+        await browser.close().catch(() => {});
+      }
+      await strict.finish({ failed });
+      if (failed) throw failed;
+    },
+    /** Record an assertion that already passed. */
+    record,
+    /** Record a passed assertion on the engine the page runs now. */
+    async passed(page, ids, claim, detail) {
+      const engine = await engineOf(page);
+      record(ids, engine, claim, detail);
+    },
+    /** Assert `value` and record it on the engine the page runs now. */
+    async check(page, ids, claim, value, detail) {
+      assert.ok(
+        value,
+        claim + (detail === undefined ? '' : ' ' + JSON.stringify(detail)),
+      );
+      await strict.passed(page, ids, claim, detail);
+    },
+    /** Switch with real input and log the pick. */
+    async pick(page, kind, options) {
+      const result = await pickEngine(page, kind, options);
+      picks.push({ to: kind, via: 'pointer+keyboard', ...result });
+      return result;
+    },
+    /**
+     * Switch through the select element without input, only where no
+     * person can reach the picker (`reason` says why); logged as such.
+     */
+    async selectEngine(page, kind, reason) {
+      assert.ok(reason, 'say why the picker cannot be used');
+      await page.select('#globe-engine', kind);
+      picks.push({ to: kind, via: 'page.select', reason });
+    },
+    /**
+     * Switch with real input in the same document and wait until `kind`
+     * runs (the picker counterpart of qa-switch-globe.mjs).
+     */
+    async switchTo(page, kind) {
+      const origin = await page.evaluate(() => performance.timeOrigin);
+      await strict.pick(page, kind);
+      await waitForEngine(page, kind);
+      assert.equal(
+        await page.evaluate(() => performance.timeOrigin),
+        origin,
+        'same document after switching globes',
+      );
+    },
+    /** Write the manifest; fail on violations or missing coverage. */
+    async finish({ failed = null } = {}) {
+      if (finished) return;
+      finished = true;
+      const coverage = Object.fromEntries(
+        declared.map((id) => [
+          id,
+          Object.fromEntries(
+            ENGINES.map((engine) => [
+              engine,
+              assertions.filter((a) => a.layer === id && a.engine === engine)
+                .length,
+            ]),
+          ),
+        ]),
+      );
+      const missing = Object.entries(coverage).flatMap(([id, byEngine]) =>
+        ENGINES.filter((engine) => !byEngine[engine]).map(
+          (engine) => `${id} on ${engine}`,
+        ),
+      );
+      const network = {
+        requests: ledger.requests,
+        preview: ledger.preview,
+        previewApi: ledger.previewApi,
+        external: ledger.external,
+        fixtureResponses: ledger.fixtureResponses,
+        probes: ledger.probes,
+        routes: ledger.routes,
+        tileCache: ledger.tileCache,
+        violations: ledger.violations,
+        setupErrors: ledger.setupErrors,
+        fixtures,
+        tileHosts: [...tileHosts],
+      };
+      const manifest = {
+        scenario: name,
+        argv: process.argv.slice(2),
+        status: failed ? 'fail' : 'pass',
+        error: failed ? String(failed?.stack ?? failed).slice(0, 2000) : null,
+        layers: declared,
+        coverage,
+        missing,
+        picks,
+        assertions,
+        network,
+        timings,
+        ...extra,
+      };
+      if (args.evidence) {
+        fs.mkdirSync(path.dirname(args.evidence), { recursive: true });
+        fs.writeFileSync(
+          args.evidence,
+          JSON.stringify(manifest, null, 2) + '\n',
+        );
+      }
+      console.log(
+        'STRICT',
+        JSON.stringify({
+          scenario: name,
+          assertions: assertions.length,
+          coverage,
+          picks: picks.length,
+          requests: ledger.requests,
+          violations: ledger.violations.length,
+        }),
+      );
+      for (const v of ledger.violations.slice(0, 20))
+        console.log('NETWORK VIOLATION', JSON.stringify(v));
+      if (failed) return;
+      assert.equal(
+        ledger.violations.length,
+        0,
+        'network policy violations: ' +
+          JSON.stringify(ledger.violations.slice(0, 5)),
+      );
+      assert.deepEqual(missing, [], 'layers without an assertion');
+      assert.ok(
+        picks.some((pick) => pick.via === 'pointer+keyboard'),
+        'switch at least once with real input on the picker',
+      );
+    },
+  };
+  return strict;
+}

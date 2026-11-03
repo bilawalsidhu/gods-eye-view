@@ -1,26 +1,33 @@
 import { fromDegrees } from '../src/geo/cartesian3.js';
-import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { readFileSync } from 'node:fs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=41.5340&lon=-90.5070&alt=20000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+// Every geometry of the bundled files (a Multi* feature counts each part),
+// read from the files this checkout builds.
+const geometries = (name) =>
+  readFileSync(
+    new URL(`../src/data/local_data/${name}/${name}.geojsonl`, import.meta.url),
+    'utf8',
+  )
+    .split('\n')
+    .filter((line) => line.trim())
+    .reduce((sum, line) => {
+      const { type, coordinates } = JSON.parse(line).geometry;
+      return sum + (type.startsWith('Multi') ? coordinates.length : 1);
+    }, 0);
+const DATACENTERS = geometries('datacenters');
+const DAMS = geometries('dams');
+const strict = createStrict({
+  origin: base.origin,
+  layers: ['local-dams', 'local-datacenters'],
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -39,12 +46,16 @@ try {
       if (detail?.layerId?.startsWith('local-'))
         window.qaSelections.push(detail.id);
     });
+    window.qaCleared = 0;
+    window.addEventListener('gev:entity-selection-cleared', () => {
+      window.qaCleared++;
+    });
   });
   await p.goto(base.href);
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -77,8 +88,10 @@ try {
     }
     return records;
   }, ids);
-  assert.ok(
-    dataset[0].count >= 4351 && dataset[1].count >= 704,
+  // The bundled files are fixed: every record is loaded.
+  assert.deepEqual(
+    dataset.map((d) => d.count),
+    [DATACENTERS, DAMS],
     JSON.stringify(dataset),
   );
   const record = await p.evaluate(() =>
@@ -103,13 +116,75 @@ try {
       { timeout: 15000 },
     );
   };
+  // A dam in view, clicked where its record is.
+  const dam = await p.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('local-dams')
+      .module.getAnalystRecords(5000)
+      .find((r) => r.name === 'Arsenal Power Dam'),
+  );
+  assert.ok(dam);
+  const clickDam = async () => {
+    const screen = await p.evaluate(
+      (world) => {
+        const { engine } = window.__godsEyeView;
+        const at = engine.projector.worldToWindow(world, {});
+        const box = engine.host.canvas.getBoundingClientRect();
+        window.qaSelections = [];
+        return { x: box.left + at.x, y: box.top + at.y };
+      },
+      fromDegrees(dam.lon, dam.lat),
+    );
+    await p.mouse.click(screen.x, screen.y);
+    await p
+      .waitForFunction(
+        () => window.qaSelections.at(-1) === 'local-dams:-12841971',
+        { timeout: 15000 },
+      )
+      .catch(async (error) => {
+        console.log(
+          'dam click',
+          JSON.stringify(screen),
+          JSON.stringify(
+            await p.evaluate(({ x, y }) => {
+              const { engine } = window.__godsEyeView;
+              const box = engine.host.canvas.getBoundingClientRect();
+              const id = engine.picker.pick({
+                x: x - box.left,
+                y: y - box.top,
+              })?.id;
+              return {
+                selections: window.qaSelections,
+                cleared: window.qaCleared,
+                pick: String(id?.id ?? id),
+                hit: document.elementFromPoint(x, y)?.tagName,
+              };
+            }, screen),
+          ),
+        );
+        throw error;
+      });
+  };
+  const start = fromDegrees(-90.507, 41.534, 20000);
+  const home = async () => {
+    await p.evaluate((destination) => {
+      const { camera, render } = window.__godsEyeView.engine;
+      camera.cancelFlight();
+      camera.setView({
+        destination,
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      render.request('qa-home');
+    }, start);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  };
   const counts = { ...reads };
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
       await p.evaluate(() => {
         window.qaSelections = [];
       });
-      await p.select('#globe-engine', kind);
+      await strict.pick(p, kind);
       await ready(kind);
       await p.waitForFunction(
         () => window.qaSelections.includes('local-datacenters:342664739'),
@@ -142,15 +217,37 @@ try {
       assert.equal(layer.count, dataset[i].count);
       assert.equal(layer.name, dataset[i].name);
     }
-    if (
-      kind === 'navara' &&
-      !(await p.evaluate(() => window.qaSelections.length))
-    )
-      await clickSite();
     assert.deepEqual(
       reads,
       counts,
       'Do not reload bundled data on scene handoff',
+    );
+    await strict.passed(
+      p,
+      ids,
+      'same model, every bundled record, bounded LOD stems, no file read again',
+      result.map((r) => r.count),
+    );
+    if (
+      kind !== 'navara' ||
+      (await p.evaluate(() => window.qaSelections.length))
+    )
+      await strict.passed(
+        p,
+        'local-datacenters',
+        'the clicked datacenter stays selected across the switch',
+      );
+    // Click-picking on this engine: a dam, then the datacenter again, each
+    // from the starting view (a selection flies the camera to it).
+    await home();
+    await clickDam();
+    await strict.passed(p, 'local-dams', 'a click on a dam selects it');
+    await home();
+    await clickSite();
+    await strict.passed(
+      p,
+      'local-datacenters',
+      'a click on the datacenter selects it',
     );
   }
   assert.equal(counts.datacenters, 1);
@@ -159,6 +256,4 @@ try {
   console.log(
     'PASS complete bundled datasets, bounded stems, retained selection and one read per file',
   );
-} finally {
-  await b.close();
-}
+});

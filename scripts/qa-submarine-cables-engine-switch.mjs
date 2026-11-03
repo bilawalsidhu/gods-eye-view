@@ -1,26 +1,34 @@
 import { fromDegrees } from '../src/geo/cartesian3.js';
-import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { readFileSync } from 'node:fs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=55.3241&lon=10.7995&alt=25000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+const CABLES = 'telegeography-submarine-cables';
+// Cables plus landing points in the bundled TeleGeography files.
+const FEATURES = ['cable-geo', 'landing-point-geo']
+  .map(
+    (name) =>
+      JSON.parse(
+        readFileSync(
+          new URL(
+            `../src/data/local_data/telegeography_submarine_cables/${name}.json`,
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      ).features.length,
+  )
+  .reduce((a, b) => a + b, 0);
+const strict = createStrict({
+  origin: base.origin,
+  layers: ['telegeography-submarine-cables'],
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -40,7 +48,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -63,7 +71,7 @@ try {
   });
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await p.select('#globe-engine', kind);
+      await strict.pick(p, kind);
       await ready(kind);
     }
     await p.waitForFunction(
@@ -79,10 +87,31 @@ try {
     });
     console.log(kind, check);
     assert.equal(check.same, true);
-    assert.equal(check.count, 2629);
+    assert.equal(check.count, FEATURES);
     assert.ok(check.referenceLabelCount <= 160);
     assert.equal(check.error, null);
-    if (kind === 'navara') {
+    await strict.passed(
+      p,
+      CABLES,
+      `same model, all ${FEATURES} cables and landing points of the bundled files, at most 160 labels`,
+      { count: check.count, labels: check.referenceLabelCount },
+    );
+    {
+      // Click-picking on this engine, from the starting view: a click on a
+      // landing point flies the camera to it.
+      await p.evaluate(
+        (destination) => {
+          const { camera, render } = window.__godsEyeView.engine;
+          camera.cancelFlight();
+          camera.setView({
+            destination,
+            orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+          });
+          render.request('qa-home');
+        },
+        fromDegrees(10.7995, 55.3241, 25000),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2500));
       const screen = await p.evaluate(
         (world) => {
           const { engine } = window.__godsEyeView;
@@ -103,13 +132,22 @@ try {
         },
         { timeout: 20000 },
       );
+      await strict.passed(
+        p,
+        CABLES,
+        'a click on a landing point flies the camera to it',
+      );
     }
   }
-  assert.equal(reads.length, 2, JSON.stringify(reads));
+  await strict.check(
+    p,
+    CABLES,
+    'each bundled file read once',
+    reads.length === 2,
+    reads,
+  );
   assert.deepEqual(errors, []);
   console.log(
     'PASS full bundled cable dataset, bounded labels, landing-point fly-to and one read per file',
   );
-} finally {
-  await b.close();
-}
+});

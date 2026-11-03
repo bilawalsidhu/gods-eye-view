@@ -1,9 +1,6 @@
-import {switchGlobe} from './qa-switch-globe.mjs';
 import fs from 'node:fs/promises';
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
-import { installTileCache } from './qa/tileCache.mjs';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 import { isExpectedPreviewSetupError, redact } from './qa-browserEvidence.mjs';
 
 const args = process.argv.slice(2);
@@ -26,8 +23,17 @@ const report = {
 };
 let failLandsat = false,
   failedTiles = 0;
+// The engine the page runs, for the strict assertion manifest.
+let engine = null;
+const strict = createStrict({
+  origin: localPreview(url).origin,
+  layers: ['recent-imagery'],
+  // The scenario answers the NASA catalog and imagery tiles itself.
+  fixtures: ['*://*.earthdata.nasa.gov/*'],
+});
 const check = (name, value) => {
   report.checks.push({ name, pass: Boolean(value) });
+  if (value && engine) strict.record('recent-imagery', engine, name);
   console.log(`${value ? 'PASS' : 'FAIL'} ${name}`);
 };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -38,7 +44,7 @@ const colors = await Promise.all(
       .toBuffer(),
   ),
 );
-const browser = await puppeteer.launch({
+const browser = await strict.launch({
   headless: true,
   args: [
     '--no-sandbox',
@@ -51,8 +57,6 @@ const browser = await puppeteer.launch({
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
-  await blockPaidQaMaps(page);
-  await installTileCache(page);
   page.on('pageerror', (e) => report.errors.push(redact(e.message)));
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
@@ -152,6 +156,7 @@ try {
     () => window.__gevRecentImagery && window.__godsEyeView,
     { timeout: 90000 },
   );
+  engine = await page.evaluate(() => window.__godsEyeView.engine.kind);
   await page.evaluate(async () => {
     const app = window.__godsEyeView;
     await app.styleManager.initialRestorePromise;
@@ -231,20 +236,31 @@ try {
       window.qaImageryOwner = window.__gevRecentImagery.layer;
       return window.qaImageryOwner.diagnostics().pins;
     });
-    const reads = () => report.requests.filter(r => r.host === 'cmr.earthdata.nasa.gov').length;
+    const reads = () =>
+      report.requests.filter((r) => r.host === 'cmr.earthdata.nasa.gov').length;
     const expectedReads = reads();
     const initial = await page.evaluate(() => window.__godsEyeView.engine.kind);
     for (const kind of [initial === 'navara' ? 'cesium' : 'navara', initial]) {
-      await switchGlobe(page, kind);
+      await strict.switchTo(page, kind);
+      engine = kind;
       const state = await page.evaluate(() => ({
         same: window.__gevRecentImagery.layer === window.qaImageryOwner,
         ...window.qaImageryOwner.diagnostics(),
       }));
-      check(kind+' holds both original pins',state.same && state.mode === 'ab' && state.pins.a === first.a && state.pins.b === first.b);
+      check(
+        kind + ' holds both original pins',
+        state.same &&
+          state.mode === 'ab' &&
+          state.pins.a === first.a &&
+          state.pins.b === first.b,
+      );
       await sleep(1800);
-      const pixels=await capture('switch-'+kind);
-      check(kind+' renders both pinned dates',red(pixels.left) && green(pixels.right));
-      check(kind+' reuses the STAC search', reads() === expectedReads);
+      const pixels = await capture('switch-' + kind);
+      check(
+        kind + ' renders both pinned dates',
+        red(pixels.left) && green(pixels.right),
+      );
+      check(kind + ' reuses the STAC search', reads() === expectedReads);
     }
   }
   await page.evaluate(() => window.__gevRecentImagery.layer.swapSides());
@@ -452,4 +468,6 @@ try {
   await browser.close();
   await fs.writeFile(output, JSON.stringify(report, null, 2));
 }
-if (report.checks.some((c) => !c.pass)) process.exitCode = 1;
+const failed = report.checks.some((c) => !c.pass);
+await strict.finish({ failed: failed ? 'imagery checks failed' : null });
+if (failed) process.exitCode = 1;

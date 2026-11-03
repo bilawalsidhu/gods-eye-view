@@ -1,28 +1,65 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
 import { APPLICATION_LAYER_DIRECTORY } from '../src/app/layers/directory.js';
+import {
+  createStrict,
+  ENGINES,
+  localPreview,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 
-// Runs every browser scenario against one keyless local preview and writes
-// <output>/acceptance.json plus one log per scenario.
+// The strict acceptance: every browser scenario against one keyless local
+// preview, under the strict network policy (scripts/qa-strict-harness.mjs),
+// writing <output>/acceptance.json, one log and one assertion manifest per
+// scenario.
+//
+//   node scripts/qa-all-layer-switches.mjs http://127.0.0.1:4208 <output>
+//     [--serve[=<commit>]]  build <commit> (default HEAD) keyless in a clean
+//                           worktree and serve it with every .env key blank
+//     [--scratch=DIR]       where --serve puts its checkout and build
+//     [--only=a,b]          run only these labels
+//     [--quick]             the soak with 2 runs of 10 switches and 100
+//                           switches for the long run
+//
+// The run fails when a scenario fails, when any catalog layer (read from
+// the live page and cross-checked with src/app/layers/directory.js) has no
+// assertion on either engine, or when any network policy violation shows.
 
-const base = new URL(process.argv[2]);
-if (
-  !['127.0.0.1', 'localhost'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw Error('Supply an unreserved keyless local preview URL');
-const output = process.argv[3]
-  ? resolve(process.argv[3])
-  : mkdtempSync(join(tmpdir(), 'gev-layer-switch-'));
-mkdirSync(output, { recursive: true });
+const base = localPreview(process.argv[2]);
+const output = process.argv[3]?.startsWith('--')
+  ? mkdtempSync(join(tmpdir(), 'gev-acceptance-'))
+  : resolve(process.argv[3] ?? mkdtempSync(join(tmpdir(), 'gev-acceptance-')));
+const flag = (name) =>
+  process.argv
+    .find((arg) => arg === `--${name}` || arg.startsWith(`--${name}=`))
+    ?.split('=')[1] ?? (process.argv.includes(`--${name}`) ? true : null);
+const only = flag('only') ? String(flag('only')).split(',') : null;
+const quick = Boolean(flag('quick'));
+mkdirSync(join(output, 'evidence'), { recursive: true });
+const root = fileURLToPath(new URL('..', import.meta.url));
+const git = (...args) =>
+  execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+const dirty = () =>
+  git('status', '--porcelain')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => line.slice(3));
 
 // Fail once, with the fix, instead of once per scenario.
 let chrome;
@@ -42,6 +79,136 @@ try {
   );
   process.exit(2);
 }
+
+// Every name the checkout's .env files define, plus key-like names in this
+// environment: all blank for the build and the preview.
+const envNames = () => {
+  const names = new Set();
+  for (const file of ['.env', '.env.local'])
+    if (existsSync(join(root, file)))
+      for (const line of readFileSync(join(root, file), 'utf8').split('\n')) {
+        const name = line.match(/^\s*([A-Z0-9_]+)\s*=/)?.[1];
+        if (name) names.add(name);
+      }
+  for (const name of Object.keys(process.env))
+    if (/(_KEY|_TOKEN|_SECRET|_CLIENT_ID|PASSWORD)$/.test(name))
+      names.add(name);
+  return [...names].sort();
+};
+const envValues = () => {
+  const values = [];
+  for (const file of ['.env', '.env.local'])
+    if (existsSync(join(root, file)))
+      for (const line of readFileSync(join(root, file), 'utf8').split('\n')) {
+        const value = line
+          .match(/^\s*[A-Z0-9_]+\s*=\s*(.*)$/)?.[1]
+          ?.trim()
+          .replace(/^["']|["']$/g, '');
+        // Long enough to be a credential rather than a setting.
+        if (value && value.length >= 16) values.push(value);
+      }
+  return values;
+};
+const scrubbed = () => ({
+  ...process.env,
+  ...Object.fromEntries(envNames().map((name) => [name, ''])),
+});
+
+let served = null;
+let preview = null;
+const cleanup = () => {
+  if (preview && !preview.killed) preview.kill('SIGTERM');
+  if (served?.worktree)
+    try {
+      git('worktree', 'remove', '--force', served.worktree);
+    } catch {
+      // Already gone.
+    }
+};
+process.on('exit', cleanup);
+process.on('SIGINT', () => process.exit(130));
+
+if (flag('serve')) {
+  const commit = git(
+    'rev-parse',
+    flag('serve') === true ? 'HEAD' : String(flag('serve')),
+  ).trim();
+  // --scratch=DIR keeps the checkout and build out of the system temp.
+  const scratchRoot = flag('scratch')
+    ? resolve(String(flag('scratch')))
+    : tmpdir();
+  mkdirSync(scratchRoot, { recursive: true });
+  const scratch = mkdtempSync(join(scratchRoot, 'gev-acceptance-build-'));
+  const worktree = join(scratch, 'checkout');
+  const dist = join(scratch, 'dist');
+  git('worktree', 'add', '--detach', worktree, commit);
+  symlinkSync(join(root, 'node_modules'), join(worktree, 'node_modules'));
+  served = {
+    commit,
+    worktree,
+    dist,
+    blankedEnv: envNames(),
+    envFilesInCheckout: ['.env', '.env.local'].filter((f) =>
+      existsSync(join(worktree, f)),
+    ),
+  };
+  console.log('Building', commit, 'keyless into', dist);
+  const build = spawnSync(
+    process.execPath,
+    [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', dist],
+    { cwd: worktree, env: scrubbed(), encoding: 'utf8', maxBuffer: 1 << 26 },
+  );
+  if (build.status !== 0) {
+    console.error(build.stdout + build.stderr);
+    process.exit(2);
+  }
+  // No .env credential value may reach the built files.
+  const values = envValues();
+  let leaks = 0;
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const file = join(dir, name);
+      if (statSync(file).isDirectory()) walk(file);
+      else if (/\.(js|html|json|css|webmanifest)$/.test(name)) {
+        const text = readFileSync(file, 'utf8');
+        for (const value of values) if (text.includes(value)) leaks++;
+      }
+    }
+  };
+  walk(dist);
+  served.distCredentialValuesFound = leaks;
+  served.mainChunk = JSON.parse(
+    spawnSync(
+      process.execPath,
+      [join(root, 'scripts/check-main-chunk.mjs'), `--dist=${dist}`, '--json'],
+      { cwd: root, encoding: 'utf8' },
+    ).stdout || 'null',
+  );
+  preview = spawn(
+    process.execPath,
+    [
+      join(root, 'node_modules/vite/bin/vite.js'),
+      'preview',
+      '--outDir',
+      dist,
+      '--host',
+      base.hostname,
+      '--port',
+      base.port,
+      '--strictPort',
+    ],
+    { cwd: worktree, env: scrubbed(), stdio: 'ignore' },
+  );
+  for (let i = 0; i < 60; i++) {
+    try {
+      if ((await fetch(base.origin + '/')).ok) break;
+    } catch {
+      // Not up yet.
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
 try {
   const response = await fetch(base.origin + '/', {
     signal: AbortSignal.timeout(10000),
@@ -53,29 +220,56 @@ try {
   );
   process.exit(2);
 }
-const root = fileURLToPath(new URL('..', import.meta.url));
-const git = (...args) =>
-  execFileSync('git', args, { cwd: root, encoding: 'utf8' });
-// Other work may change the tree while the run lasts; record both ends.
-const dirty = () =>
-  git('status', '--porcelain')
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => line.slice(3));
+
+// The preview reports no paid key: its own keyless status routes.
+const probe = async (path) => {
+  try {
+    const r = await fetch(base.origin + path, {
+      headers: { 'Sec-Fetch-Site': 'same-origin' },
+    });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  } catch (error) {
+    return { error: error.message };
+  }
+};
+const keys = {
+  openaiHudSummary: await probe('/api/openai/hud-summary/status'),
+  firms: await probe('/api/firms/status'),
+  tomtom: await probe('/api/tomtom/status'),
+  mapillary: await probe('/api/mapillary/status'),
+};
+const paidKeysConfigured = [
+  keys.openaiHudSummary.body?.configured !== false && 'OpenAI',
+  keys.firms.body?.hasKey !== false && 'FIRMS',
+  keys.tomtom.body?.hasKey !== false && 'TomTom',
+  keys.mapillary.body?.configured !== false && 'Mapillary',
+].filter(Boolean);
+
 const dirtyFiles = dirty();
+const soakRuns = quick
+  ? ['--runs=2', '--swaps=10']
+  : ['--runs=6', '--swaps=50'];
+const longRun = quick ? '--swaps=100' : '--swaps=500';
+// label, script, layers, extra arguments, timeout in seconds.
 const runs = [
-  ['engine-switch', ['earthquakes']],
-  ['director-engine-switch', []],
-  ['layer-handoff', ['flights']],
-  ['layer-handoff', ['military'], '--military'],
+  ['engine-switch', 'engine-switch', ['earthquakes']],
+  ['director-engine-switch', 'director-engine-switch', []],
+  ['layer-handoff', 'layer-handoff', ['flights']],
+  ['layer-handoff--military', 'layer-handoff', ['military'], ['--military']],
   [
+    'ground-layer-switch',
     'ground-layer-switch',
     ['ais-live-vessels', 'air-quality', 'gnss-integrity', 'fire-perimeters'],
   ],
-  ['contact-switch', ['military-awareness', 'military-installations']],
-  ['local-adsb-engine-switch', ['local-adsb']],
-  ['ghostmaps-switch', ['s2-ghostmaps']],
   [
+    'contact-switch',
+    'contact-switch',
+    ['military-awareness', 'military-installations'],
+  ],
+  ['local-adsb-engine-switch', 'local-adsb-engine-switch', ['local-adsb']],
+  ['ghostmaps-switch', 'ghostmaps-switch', ['s2-ghostmaps']],
+  [
+    'weather-engine-switch',
     'weather-engine-switch',
     [
       'weather-radar',
@@ -84,32 +278,113 @@ const runs = [
       'weather-cyclones',
     ],
   ],
-  ['wind-engine-switch', ['wind']],
-  ['infrastructure-engine-switch', ['local-dams', 'local-datacenters']],
-  ['submarine-cables-engine-switch', ['telegeography-submarine-cables']],
-  ['directions-engine-switch', ['directions']],
-  ['nepal-locator-switch', ['bhote-koshi-locator']],
-  ['nepal-event-switch', ['bhote-koshi-2026']],
-  ['traffic-engine-switch', ['traffic']],
-  ['traffic-engine-switch', ['traffic'], '--simulation'],
-  ['street-level-engine-switch', ['street-level']],
-  ['street-level-engine-switch', ['street-level'], '--panoramax'],
-  ['radio-engine-switch', ['radio']],
-  ['w2-imagery', ['recent-imagery']],
-  ['fire-camera-switch', ['alpr-cameras']],
-  ['fire-camera-switch', ['local-firms'], '--fires'],
-  ['urban-engine-switch', ['bikeshare']],
-  ['urban-engine-switch', ['transit'], '--transit'],
-  ['cctv-engine-switch', ['cctv']],
-  ['space-engine-switch', ['satellites']],
-  ['space-engine-switch', ['rocket-launches'], '--missions'],
+  ['wind-engine-switch', 'wind-engine-switch', ['wind']],
+  [
+    'infrastructure-engine-switch',
+    'infrastructure-engine-switch',
+    ['local-dams', 'local-datacenters'],
+  ],
+  [
+    'submarine-cables-engine-switch',
+    'submarine-cables-engine-switch',
+    ['telegeography-submarine-cables'],
+  ],
+  ['directions-engine-switch', 'directions-engine-switch', ['directions']],
+  ['nepal-locator-switch', 'nepal-locator-switch', ['bhote-koshi-locator']],
+  ['nepal-event-switch', 'nepal-event-switch', ['bhote-koshi-2026']],
+  ['traffic-engine-switch', 'traffic-engine-switch', ['traffic']],
+  [
+    'traffic-engine-switch--simulation',
+    'traffic-engine-switch',
+    ['traffic'],
+    ['--simulation'],
+  ],
+  [
+    'street-level-engine-switch',
+    'street-level-engine-switch',
+    ['street-level'],
+  ],
+  [
+    'street-level-engine-switch--panoramax',
+    'street-level-engine-switch',
+    ['street-level'],
+    ['--panoramax'],
+  ],
+  ['radio-engine-switch', 'radio-engine-switch', ['radio']],
+  ['w2-imagery', 'w2-imagery', ['recent-imagery']],
+  ['fire-camera-switch', 'fire-camera-switch', ['alpr-cameras']],
+  [
+    'fire-camera-switch--fires',
+    'fire-camera-switch',
+    ['local-firms'],
+    ['--fires'],
+  ],
+  ['urban-engine-switch', 'urban-engine-switch', ['bikeshare']],
+  [
+    'urban-engine-switch--transit',
+    'urban-engine-switch',
+    ['transit'],
+    ['--transit'],
+  ],
+  ['cctv-engine-switch', 'cctv-engine-switch', ['cctv']],
+  ['space-engine-switch', 'space-engine-switch', ['satellites']],
+  [
+    'space-engine-switch--missions',
+    'space-engine-switch',
+    ['rocket-launches'],
+    ['--missions'],
+  ],
+  // Stage 3's own checks (one application per page, voice across a switch).
+  // They block paid routes themselves but do not run under the strict
+  // harness, so they add no assertion manifest and no network ledger.
+  ['app-once', 'app-once', [], [], 600, true],
+  ['voice-engine-switch', 'voice-engine-switch', [], [], 300, true],
+  ['strict-rapid-switch', 'strict-rapid-switch', []],
+  ['strict-hidden-switch', 'strict-hidden-switch', []],
+  ['strict-context-loss', 'strict-context-loss', []],
+  ['strict-failure-matrix', 'strict-failure-matrix', [], [], 600],
+  ['strict-cold-chunks', 'strict-cold-chunks', []],
+  ['strict-soak', 'strict-soak', [], soakRuns, 1200],
+  [
+    'strict-soak--long',
+    'strict-soak',
+    [],
+    ['--runs=1', longRun, '--assert'],
+    1800,
+  ],
 ];
-const ids = [...new Set(runs.flatMap(([, ids]) => ids))].sort();
-assert.deepEqual(
-  ids,
-  APPLICATION_LAYER_DIRECTORY.map((l) => l.id).sort(),
-  'Every catalog layer must have a browser scenario',
-);
+const scenarioIds = [...new Set(runs.flatMap(([, , ids]) => ids))].sort();
+const directoryIds = APPLICATION_LAYER_DIRECTORY.map((l) => l.id).sort();
+
+// The catalog as the live page has it, on both engines.
+const liveCatalog = {};
+{
+  const strict = createStrict({
+    origin: base.origin,
+    layers: [],
+    name: 'catalog',
+  });
+  const browser = await strict.launch({
+    args: ['--use-angle=metal', '--enable-gpu'],
+  });
+  try {
+    for (const engine of ENGINES) {
+      const page = await browser.newPage();
+      await page.goto(
+        `${base.origin}/?engine=${engine}&welcome=0#v=2&lat=30.27&lon=-97.74&alt=12000&pitch=-90&map=osm&l=`,
+      );
+      await waitForEngine(page, engine);
+      liveCatalog[engine] = await page.evaluate(() =>
+        [...window.__godsEyeView.dataManager.layers.keys()].sort(),
+      );
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+  }
+  liveCatalog.violations = strict.ledger.violations;
+}
+
 const scenarios = [];
 const report = {
   commit: git('rev-parse', 'HEAD').trim(),
@@ -121,11 +396,41 @@ const report = {
   node: process.version,
   platform: process.platform + ' ' + process.arch,
   baseUrl: base.origin,
+  preview: served
+    ? {
+        servedByRunner: true,
+        appCommit: served.commit,
+        appCheckoutClean: true,
+        envFilesInCheckout: served.envFilesInCheckout,
+        blankedEnv: served.blankedEnv,
+        distCredentialValuesFound: served.distCredentialValuesFound,
+      }
+    : { servedByRunner: false },
+  keyProbes: keys,
+  paidKeysConfigured,
+  mainChunk: served?.mainChunk ?? null,
+  networkPolicy: {
+    blockedFirst:
+      'Google (*.googleapis.com, *.google.com, maps.google.*, *.gstatic.com), Cesium ion (*.cesium.com), preview /api/openai/*, /api/realtime/*, /api/google/*',
+    allowed:
+      'the preview origin, each scenario’s declared fixture URLs, keyless probes answered by the harness, and the free tile hosts answered from the disk cache',
+    keylessProbes: (await import('./qa-map-policy.mjs')).KEYLESS_PROBES.map(
+      (p) => p.pattern,
+    ),
+    tileHosts: (await import('./qa-map-policy.mjs')).STRICT_TILE_HOSTS,
+  },
+  catalog: {
+    directory: directoryIds,
+    live: liveCatalog,
+    scenarios: scenarioIds,
+  },
   startedAt: new Date().toISOString(),
   finishedAt: null,
-  layers: ids,
   passed: 0,
   failed: 0,
+  networkViolations: 0,
+  coverage: null,
+  uncovered: null,
   scenarios,
 };
 const save = () =>
@@ -133,26 +438,32 @@ const save = () =>
     join(output, 'acceptance.json'),
     JSON.stringify(report, null, 2) + '\n',
   );
-for (const [name, layers, flag] of runs) {
-  const label = name + (flag ?? '');
+save();
+
+for (const [label, name, layers, extra = [], seconds = 300, external] of runs) {
+  if (only && !only.includes(label)) continue;
   const script = 'scripts/qa-' + name + '.mjs';
+  const evidence = join(output, 'evidence', label + '.json');
+  rmSync(evidence, { force: true });
   const args =
     name === 'w2-imagery'
       ? [
           '--url',
           base.origin + '/?engine=navara',
           '--report',
-          join(output, 'imagery.json'),
+          join(output, 'evidence', 'imagery-report.json'),
           '--switch',
           '--preview',
         ]
-      : [base.origin, ...(flag ? [flag] : [])];
+      : [base.origin, ...extra];
+  if (external) args.splice(0, 1, base.origin + '/');
+  else args.push(`--layers=${layers.join(',')}`, `--evidence=${evidence}`);
   const start = Date.now();
   const run = spawnSync(process.execPath, [join(root, script), ...args], {
     encoding: 'utf8',
-    timeout: 240000,
-    maxBuffer: 8388608,
-    env: { ...process.env, GOOGLE_MAPS_API_KEY: '', CESIUM_ION_TOKEN: '' },
+    timeout: seconds * 1000,
+    maxBuffer: 1 << 26,
+    env: scrubbed(),
   });
   const status =
     run.status === 0
@@ -163,34 +474,94 @@ for (const [name, layers, flag] of runs) {
   const log =
     (run.stdout || '') + (run.stderr || '') + (run.error?.message || '');
   writeFileSync(join(output, label + '.log'), log);
+  const manifest = existsSync(evidence)
+    ? JSON.parse(readFileSync(evidence, 'utf8'))
+    : null;
   scenarios.push({
     label,
     script,
     args: args.map((arg) =>
-      arg.startsWith(output) ? '<output>' + arg.slice(output.length) : arg,
+      arg.includes(output) ? arg.replace(output, '<output>') : arg,
     ),
     layers,
+    external: Boolean(external),
     status,
     exitCode: run.status,
     seconds: Math.round((Date.now() - start) / 100) / 10,
     log: label + '.log',
     logSha256: createHash('sha256').update(log).digest('hex'),
+    evidence: manifest ? 'evidence/' + label + '.json' : null,
+    assertions: manifest?.assertions.length ?? 0,
+    coverage: manifest?.coverage ?? null,
+    picks: manifest?.picks ?? [],
+    network: manifest
+      ? {
+          requests: manifest.network.requests,
+          violations: manifest.network.violations,
+          external: manifest.network.external,
+          tileCache: manifest.network.tileCache,
+          probes: manifest.network.probes,
+          routes: manifest.network.routes,
+          previewApi: manifest.network.previewApi,
+          fixtures: manifest.network.fixtures,
+        }
+      : null,
+    contracts: manifest?.contracts ?? null,
+    error: manifest?.error ?? null,
   });
+  if (manifest?.soak) scenarios.at(-1).soak = manifest.soak;
   report.passed = scenarios.filter((row) => row.status === 'pass').length;
   report.failed = scenarios.length - report.passed;
+  report.networkViolations =
+    scenarios.reduce(
+      (sum, row) => sum + (row.network?.violations.length ?? 0),
+      0,
+    ) + liveCatalog.violations.length;
   save();
   console.log(status.toUpperCase(), label, scenarios.at(-1).seconds);
 }
+
+// Coverage that cannot be faked: every catalog id needs an assertion on each
+// engine from some scenario's manifest.
+const catalogIds = [
+  ...new Set([...directoryIds, ...(liveCatalog.navara ?? [])]),
+].sort();
+report.coverage = Object.fromEntries(
+  catalogIds.map((id) => [
+    id,
+    Object.fromEntries(
+      ENGINES.map((engine) => [
+        engine,
+        scenarios.reduce(
+          (sum, row) => sum + (row.coverage?.[id]?.[engine] ?? 0),
+          0,
+        ),
+      ]),
+    ),
+  ]),
+);
+report.uncovered = Object.entries(report.coverage).flatMap(([id, counts]) =>
+  ENGINES.filter((engine) => !counts[engine]).map(
+    (engine) => `${id}@${engine}`,
+  ),
+);
+report.catalogMatches =
+  JSON.stringify(liveCatalog.navara) === JSON.stringify(directoryIds) &&
+  JSON.stringify(liveCatalog.cesium) === JSON.stringify(directoryIds) &&
+  JSON.stringify(scenarioIds) === JSON.stringify(directoryIds);
 report.finishedAt = new Date().toISOString();
 report.dirtyFilesAtEnd = dirty();
 save();
 console.log(
-  ids.length +
-    ' layers, ' +
-    report.passed +
-    '/' +
-    runs.length +
-    ' browser scenarios. ' +
-    join(output, 'acceptance.json'),
+  `${catalogIds.length} catalog layers, ${report.uncovered.length} engine slots without an assertion, ` +
+    `${report.networkViolations} network violations, ${report.passed}/${scenarios.length} scenarios, ` +
+    `paid keys configured: ${paidKeysConfigured.join(', ') || 'none'}. ${join(output, 'acceptance.json')}`,
 );
-if (report.failed) process.exitCode = 1;
+if (
+  report.failed ||
+  (!only && report.uncovered.length) ||
+  report.networkViolations ||
+  paidKeysConfigured.length ||
+  !report.catalogMatches
+)
+  process.exitCode = 1;

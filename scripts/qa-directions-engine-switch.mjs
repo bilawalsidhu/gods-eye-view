@@ -1,25 +1,13 @@
-import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=55.3241&lon=10.7995&alt=25000&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
-});
-try {
+const strict = createStrict({ origin: base.origin, layers: ['directions'] });
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -70,7 +58,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -98,7 +86,12 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 450));
   }
   assert.equal(routeReads, 1);
-  await p.select('#globe-engine', 'cesium');
+  await strict.passed(
+    p,
+    'directions',
+    'A and B set by clicks on the globe; one route request',
+  );
+  await strict.pick(p, 'cesium');
   await ready('cesium');
   release();
   await p.waitForFunction(() => window.qaRoute.getStats().count === 3);
@@ -106,8 +99,13 @@ try {
     window.qaRoute.setParams({ step: 1 });
     return window.qaRoute.getRowControls().list.items[1]?.active;
   });
+  await strict.passed(
+    p,
+    'directions',
+    'the route asked for on Navara arrives on Cesium; a step is selectable',
+  );
   const transfer = async (kind) => {
-    await p.select('#globe-engine', kind);
+    await strict.pick(p, kind);
     await ready(kind);
     assert.equal(
       await p.evaluate(
@@ -118,6 +116,11 @@ try {
       true,
     );
     assert.equal(routeReads, 1);
+    await strict.passed(
+      p,
+      'directions',
+      'same model; the switch requests no route',
+    );
   };
   await transfer('navara');
   assert.equal(
@@ -153,13 +156,51 @@ try {
     progress = resumed;
     console.log(kind, 'moved', d(at, next), 'handoff', d(at, before));
     assert.ok(d(at, next) > 1, 'dolly advances after switch to ' + kind);
+    await strict.passed(
+      p,
+      'directions',
+      'FLY continues with the same motion and advances',
+      { moved: d(at, next) },
+    );
   }
   await p.evaluate(() => window.qaRoute.setParams({ clear: true }));
   assert.equal(await p.evaluate(() => window.qaRoute.getStats().count), 0);
+  // CLEAR releases the camera: the route's motion ends, the camera stays
+  // where it is, and a wheel zoom by the person moves it and is kept.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const released = await p.evaluate(() => ({
+    motion: window.qaRoute.getFlightProgress(),
+    fly: window.qaRoute.getRowControls().chips.find((c) => c.id === 'fly')
+      ?.active,
+  }));
+  const still = await pos();
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const later = await pos();
+  const height = () =>
+    p.evaluate(() => window.__godsEyeView.engine.camera.height());
+  const beforeZoom = await height();
+  await p.mouse.move(512, 300);
+  for (let i = 0; i < 4; i++) {
+    await p.mouse.wheel({ deltaY: -240 });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const zoomed = await height();
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const kept = await height();
+  await strict.check(
+    p,
+    'directions',
+    'CLEAR removes the route and releases the camera: no route motion, the camera stays put, a wheel zoom moves it and is kept',
+    released.motion === null &&
+      !released.fly &&
+      d(still, later) < 1 &&
+      zoomed < beforeZoom * 0.95 &&
+      Math.abs(kept - zoomed) < 0.02 * zoomed,
+    { released, drift: d(still, later), beforeZoom, zoomed, kept },
+  );
   assert.deepEqual(errors, []);
   console.log(
     'PASS route delivery during handoff, A/B clicks, step selection, ongoing FLY, clear and single route request',
   );
-} finally {
-  await b.close();
-}
+});

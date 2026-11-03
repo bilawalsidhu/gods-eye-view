@@ -1,27 +1,29 @@
 import { trafficFixtureResponse } from './traffic-fixtures.mjs';
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
-import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import { STRICT_TILE_HOSTS } from './qa-map-policy.mjs';
 
-const base = new URL(process.argv[2]);
-if (
-  !['localhost', '127.0.0.1'].includes(base.hostname) ||
-  ['', '4173', '4185', '4186', '4187', '4188', '4189', '4194'].includes(
-    base.port,
-  )
-)
-  throw new Error('Supply an unreserved local keyless preview URL');
+const base = localPreview(process.argv[2]);
 base.search = '?engine=navara&welcome=0&look=cinematic';
 base.hash =
   'v=2&lat=30.2670&lon=-97.7440&alt=1800&heading=0&pitch=-90&roll=0&map=sentinel2&l=';
-const b = await puppeteer.launch({
-  headless: true,
-  args: ['--use-angle=metal', '--enable-gpu'],
+// The scenario answers the Sentinel-2 host itself (a fixed dark ground) and
+// the OpenFreeMap road tiles from its fixtures; the disk cache keeps the
+// other tile hosts.
+// The fixed fixture gives 1 093 vehicles and 35 congestion corridors with
+// flow and 618 simulated vehicles without it; the bands allow 5%.
+const BAND = process.argv.includes('--simulation')
+  ? { vehicles: [587, 649], corridors: [0, 0] }
+  : { vehicles: [1038, 1148], corridors: [33, 37] };
+const strict = createStrict({
+  origin: base.origin,
+  layers: ['traffic'],
+  fixtures: ['https://tiles.maps.eox.at/*', 'https://tiles.openfreemap.org/*'],
+  tileHosts: STRICT_TILE_HOSTS.filter((host) => host !== 'tiles.maps.eox.at'),
 });
-try {
+await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   const p = await b.newPage();
-  await blockPaidQaMaps(p);
   await p.setViewport({ width: 1024, height: 768 });
   const errors = [];
   p.on('pageerror', (e) => {
@@ -79,7 +81,7 @@ try {
   const ready = async (kind) => {
     await p.waitForFunction(
       (k) =>
-        window.__godsEyeView?.engine.kind === k &&
+        window.__godsEyeView?.engine?.kind === k &&
         !document.querySelector('#globe-engine')?.disabled &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
@@ -101,9 +103,16 @@ try {
   });
   const waitTraffic = async () => {
     try {
-      await p.waitForFunction(() => window.qaTraffic.getStats().count >= 10, {
-        timeout: 40000,
-      });
+      // Vehicles, and with flow the congestion corridors, which the layer
+      // publishes again once the next globe has attached.
+      await p.waitForFunction(
+        (keyless) => {
+          const stats = window.qaTraffic.getStats();
+          return stats.count >= 10 && (keyless || stats.heatLines > 0);
+        },
+        { timeout: 40000 },
+        keyless,
+      );
     } catch (e) {
       console.log(
         'no traffic',
@@ -190,7 +199,7 @@ try {
   );
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind) {
-      await p.select('#globe-engine', kind);
+      await strict.pick(p, kind);
       await ready(kind);
     }
     await waitTraffic();
@@ -228,9 +237,22 @@ try {
       assert.ok(check.heatLines > 0, 'congestion corridors are published');
     if (keyless) assert.equal(check.flowBuckets.sim, check.count);
     else assert.ok(check.flowBuckets.slow + check.flowBuckets.jam > 0);
+    await strict.check(
+      p,
+      'traffic',
+      keyless
+        ? `same module, parameters and vehicle ids; ${BAND.vehicles.join('-')} simulated vehicles, no flow`
+        : `same module, parameters and vehicle ids; ${BAND.vehicles.join('-')} vehicles with flow, ${BAND.corridors.join('-')} congestion corridors`,
+      check.count >= BAND.vehicles[0] &&
+        check.count <= BAND.vehicles[1] &&
+        check.heatLines >= BAND.corridors[0] &&
+        check.heatLines <= BAND.corridors[1],
+      { count: check.count, corridors: check.heatLines },
+    );
   }
   if (keyless)
     assert.ok(![...reads.keys()].some((u) => u.includes('/tomtom/flow/')));
+
   // Compare the same view with the layer shown and hidden, vehicle by
   // vehicle.
   const raw = async () =>
@@ -333,6 +355,16 @@ try {
       `the population after the round trip (${count}) stays within 80-125% of the ${population} before it`,
     );
   assert.ok(aboveGround >= 12, 'at least 12 vehicles above ground in view');
+  await strict.check(
+    p,
+    'traffic',
+    'after the round trip the population stays at 80-125% and at least 90% of the vehicles above ground in view are drawn where the layer places them',
+    visible.drawn >= 0.9 * aboveGround &&
+      [settledCount, finalCount].every(
+        (count) => count >= 0.8 * population && count <= 1.25 * population,
+      ),
+    { population, settledCount, finalCount, aboveGround, drawn: visible.drawn },
+  );
   assert.ok(
     visible.drawn >= 0.9 * aboveGround,
     'at least 90% of vehicles above the ground are drawn where the layer places them',
@@ -345,6 +377,4 @@ try {
   console.log(
     'PASS kept the traffic module, parameters, flow and vehicle identities across both globes; vehicles in view are drawn where the layer places them',
   );
-} finally {
-  await b.close();
-}
+});
