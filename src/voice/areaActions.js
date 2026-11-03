@@ -603,6 +603,12 @@ export function createVoiceAreas({
       return { ok: false, code: 'BAD_AREA', error: 'Name a landmark.' };
     const budget = AbortSignal.timeout(AROUND_BUDGET_MS);
     const combined = signal ? AbortSignal.any([signal, budget]) : budget;
+    // A radius the user gave always draws a buffer, so the enclosing outline
+    // (and its Nominatim request) is never looked up for it.
+    const explicitRadius =
+      args.radiusM !== undefined &&
+      args.radiusM !== null &&
+      Number.isFinite(Number(args.radiusM));
     let resolved;
     let outline = null;
     try {
@@ -618,7 +624,10 @@ export function createVoiceAreas({
         allowDistant: true,
         signal: combined,
       });
-      outline = resolved ? await awaitOutline(resolved, aroundOutlineMs) : null;
+      outline =
+        resolved && !explicitRadius
+          ? await awaitOutline(resolved, aroundOutlineMs)
+          : null;
     } catch {
       resolved = null;
     }
@@ -636,10 +645,6 @@ export function createVoiceAreas({
             error: `Could not find ${target}.`,
           };
     }
-    const explicitRadius =
-      args.radiusM !== undefined &&
-      args.radiusM !== null &&
-      Number.isFinite(Number(args.radiusM));
     const radiusM = Math.max(
       50,
       Math.min(

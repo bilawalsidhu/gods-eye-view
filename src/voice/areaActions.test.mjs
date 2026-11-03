@@ -588,11 +588,33 @@ test('an area around a landmark uses its enclosing outline, else a labelled buff
   const buffered = await slow.areas.resolveAreaAction({
     query: 'Ferry Building',
     around: true,
-    radiusM: 400,
   });
   assert.ok(Date.now() - started < 1000);
   assert.equal(buffered.approximate, true);
-  assert.equal(buffered.display.basis, '400 m around the landmark');
+  assert.equal(buffered.display.basis, '250 m around the landmark');
+
+  // A radius the user gave never needs the outline, so it is never looked up.
+  let outlineLookups = 0;
+  const radius = makeAreas({
+    annotationResolver: {
+      resolveAnnotationTarget: async () => ({
+        lat: 37.7955,
+        lon: -122.3937,
+        ring: null,
+        resolveOutline: async () => {
+          outlineLookups += 1;
+          return null;
+        },
+      }),
+    },
+  });
+  const sizedBuffer = await radius.areas.resolveAreaAction({
+    query: 'Ferry Building',
+    around: true,
+    radiusM: 400,
+  });
+  assert.equal(sizedBuffer.display.basis, '400 m around the landmark');
+  assert.equal(outlineLookups, 0, 'no outline request for a sized buffer');
 
   const missing = makeAreas({
     annotationResolver: { resolveAnnotationTarget: async () => null },
