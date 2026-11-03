@@ -50,7 +50,6 @@ export const CONTEXT_RIM_HEIGHT_M = 2500;
  *  luminance contrast on light and dark ground alike, and luminance is what
  *  the monochrome styles keep. The core is the Context panel's blue; the halo
  *  is the map-card ink. Widths are screen pixels; `outlineWidth` is per side. */
-
 export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
   color: 'rgba(98, 181, 255, 0.95)',
   outlineColor: 'rgba(4, 12, 16, 0.8)',

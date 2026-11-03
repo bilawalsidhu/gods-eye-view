@@ -21,7 +21,7 @@ import { formatAwarenessDirection } from './presentation.js';
  * A closed ring of positions `radiusM` along the surface from `groundCenter`,
  * raised to `heightM`. Each bearing steps over a sphere with the ellipsoid's
  * radius of curvature in that direction (Euler's formula), which keeps the
- * ring within a few metres of the true geodesic radius at 250 km.
+ * ring within ~50 m of the true geodesic radius at 250 km.
  * @param {Cesium.Cartesian3} groundCenter Ring centre on the ellipsoid.
  * @param {number} radiusM Surface radius in metres.
  * @param {number} heightM Height of the ring above the ellipsoid.
