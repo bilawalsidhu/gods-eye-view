@@ -59,11 +59,13 @@ test('the scene constructs the engine with the viewer and returns it beside the 
 
 test('the debug handle exposes the engine beside the viewer', () => {
   const tools = read('src/app/tools.js');
+  // The handle belongs to the application; its globe fields are the
+  // attached scene's.
+  assert.match(tools, /window\.__godsEyeView = debug;/);
   assert.match(
     tools,
-    /const \{ viewer, engine, tileset, mapStackController, operations \} = scene;/,
+    /Object\.assign\(debug, \{\n\s+viewer: next\.viewer \?\? null,\n\s+engine: next\.engine,/,
   );
-  assert.match(tools, /window\.__godsEyeView = \{\n\s+viewer,\n\s+engine,/);
 });
 
 test('the scene engine is the one engineFromViewer returns for its viewer until teardown', async () => {

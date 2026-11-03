@@ -2,9 +2,17 @@ import { LayerLifecycle } from '../data/lifecycle.js';
 import { LayerPresentation } from './layerPresentation.js';
 import { createCyberSonarScene } from '../cyberSonarScene.js';
 import { panelAwareVisibility } from './embed.js';
-/** Register the application layer catalog before allowing state restoration. */
+import { attachScenePart, currentSceneOf } from './sceneParts.js';
+
+/**
+ * Register the application layer catalog before allowing state restoration.
+ * The layer manager and presentation belong to the application (to the page
+ * session when there is one); each globe binds its catalog to them, and an
+ * engine switch only detaches the layers' drawing (LayerLifecycle
+ * detachScene).
+ */
 export function createApplicationData({
-  scene: { viewer, engine, mapStackController },
+  scene,
   controls: { styleManager },
   catalog,
   allowQaRegistration,
@@ -13,12 +21,13 @@ export function createApplicationData({
   defer,
   signal = null,
 }) {
+  const first = currentSceneOf(scene);
   // Initialize data layer manager
   // The modules get { signal, engine } on every call (viewer null on Navara).
   const dataManager =
     layerSession?.manager ??
-    new LayerLifecycle(viewer, {
-      engine,
+    new LayerLifecycle(first.viewer, {
+      engine: first.engine,
       allowQaRegistration,
       // A panel's host may report it hidden while it is on screen; its layers
       // keep polling (see keepPanelRendering in embed.js).
@@ -26,11 +35,10 @@ export function createApplicationData({
       getSourceAvailability: catalog?.getSourceAvailability,
     });
   if (layerSession) layerSession.manager = dataManager;
+  const sessionGoes = () =>
+    !layerSession || layerSession.lifetime.signal.aborted;
   defer(async () => {
-    if (layerSession && !layerSession.lifetime.signal.aborted) {
-      await dataManager.detachScene();
-      return;
-    }
+    if (!sessionGoes()) return;
     await dataManager.destroyAll();
     if (dataManager.layers.size)
       throw new Error(
@@ -44,19 +52,11 @@ export function createApplicationData({
     });
   if (layerSession) layerSession.presentation = presentation;
   defer(() => {
-    if (layerSession && !layerSession.lifetime.signal.aborted)
-      presentation.suspend();
-    else presentation.destroy();
+    if (sessionGoes()) presentation.destroy();
   });
   onData?.(dataManager);
   if (!catalog?.layers || !catalog?.metadata)
     throw new TypeError('An application layer catalog is required');
-  for (const layer of catalog.layers)
-    layer.attachMapStackController?.(mapStackController);
-  const attached = dataManager.bindCatalog(viewer, engine, catalog, {
-    waitForCameraRestore: layerSession?.restoringView === true,
-  });
-  for (const layer of catalog.layers) layer.attachDataManager?.(dataManager);
 
   if (allowQaRegistration) {
     window.__gevQaRegisterLayer = (targetManager, layerModule) => {
@@ -78,31 +78,76 @@ export function createApplicationData({
         delete window.__gevQaUnregisterLayer;
     });
   }
-  presentation.mount(
-    document.getElementById('data-toggles'),
-    catalog.weatherClock,
-  );
-  styleManager.attachDataManager(dataManager);
-  // The sonar scene draws on the viewer; the Navara engine has none.
-  if (viewer) defer(createCyberSonarScene(viewer, dataManager));
 
-  const data = { dataManager, catalog, presentation };
-  if (!attached) return data;
-  // A teardown during startup must not wait for slow layer attachments: it
-  // ends this wait, and the data cleanup above releases the scene.
-  return new Promise((resolve, reject) => {
-    const onAbort = () => resolve(data);
-    if (signal?.aborted) onAbort();
-    else signal?.addEventListener('abort', onAbort, { once: true });
-    attached.then(
-      () => {
-        signal?.removeEventListener('abort', onAbort);
-        resolve(data);
+  // Each globe binds its catalog: the layers' drawing, the Data panel and
+  // the shell's layer bindings follow the engine.
+  let current = catalog;
+  const attached = attachScenePart(
+    scene,
+    {
+      name: 'data',
+      attachScene(next, { signal: attachment, defer: release }) {
+        const nextCatalog = next.catalog ?? catalog;
+        current = nextCatalog;
+        for (const layer of nextCatalog.layers)
+          layer.attachMapStackController?.(next.mapStackController);
+        const binding = dataManager.bindCatalog(
+          next.viewer,
+          next.engine,
+          nextCatalog,
+          { waitForCameraRestore: layerSession?.restoringView === true },
+        );
+        for (const layer of nextCatalog.layers)
+          layer.attachDataManager?.(dataManager);
+        presentation.mount(
+          document.getElementById('data-toggles'),
+          nextCatalog.weatherClock,
+        );
+        styleManager.attachDataManager(dataManager);
+        // The sonar scene draws on the viewer; the Navara engine has none.
+        if (next.viewer)
+          release(createCyberSonarScene(next.viewer, dataManager));
+        if (!binding) return;
+        // A teardown or switch during the attachment must not wait for slow
+        // layer attachments: it ends this wait, and the detach releases the
+        // scene.
+        return new Promise((resolve, reject) => {
+          const waits = [signal, attachment].filter(Boolean);
+          const onAbort = () => {
+            for (const wait of waits)
+              wait.removeEventListener('abort', onAbort);
+            resolve();
+          };
+          if (waits.some((wait) => wait.aborted)) return onAbort();
+          for (const wait of waits)
+            wait.addEventListener('abort', onAbort, { once: true });
+          binding.then(
+            () => onAbort(),
+            (error) => {
+              for (const wait of waits)
+                wait.removeEventListener('abort', onAbort);
+              reject(error);
+            },
+          );
+        });
       },
-      (error) => {
-        signal?.removeEventListener('abort', onAbort);
-        reject(error);
+      async detachScene() {
+        if (sessionGoes()) {
+          await dataManager.destroyAll();
+          return;
+        }
+        await dataManager.detachScene();
+        presentation.suspend();
       },
-    );
-  });
+    },
+    { defer },
+  );
+  const data = {
+    dataManager,
+    get catalog() {
+      return current;
+    },
+    presentation,
+  };
+  return attached?.then ? attached.then(() => data) : data;
 }

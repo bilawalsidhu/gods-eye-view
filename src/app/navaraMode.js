@@ -12,7 +12,6 @@ import {
   registerLayerRenderers,
 } from './layers/renderers.js';
 import {
-  getRenderGovernorDiagnostics,
   governorRequestRender,
   installRenderGovernor,
   uninstallRenderGovernor,
@@ -389,24 +388,25 @@ export async function createNavaraScene({
 }
 
 /**
- * The tools without a viewer (the experimental Navara engine): the startup
- * chrome, the render governor on the engine, hidden-tab handling, voice on
- * the engine and the debug handle. The shell shows which features are
- * unavailable.
+ * The tools without a viewer (the experimental Navara engine), attached to
+ * one Navara scene: the render governor on the engine, hidden-tab handling,
+ * the imagery box, the engine notice and voice on the engine. The shell
+ * shows which features are unavailable. Returns its annotations (none) and
+ * voice.
  */
-export function createViewerlessTools({
-  scene: { engine, mapStackController, operations },
-  controls: { styleManager },
-  data,
-  loadingScreen,
-  placeSearch,
-  voice = {},
-  startChrome,
-  sceneDirector,
-  layerSession = null,
-  signal,
-  defer,
-}) {
+export function attachViewerlessTools(
+  { engine },
+  {
+    data,
+    operations,
+    placeSearch,
+    voice = {},
+    sceneDirector,
+    layerSession = null,
+    styleManager,
+  },
+  { signal, defer },
+) {
   const { dataManager } = data;
   void styleManager.initialRestorePromise?.then(() => {
     if (!signal.aborted)
@@ -441,18 +441,8 @@ export function createViewerlessTools({
       tool.destroy();
     });
   }
-  // No first-run welcome: its choices turn on data layers.
-  if (startChrome)
-    defer(
-      startChrome({
-        loadingScreen,
-        styleManager,
-        dataManager,
-        signal,
-        initializeWelcome: null,
-      }),
-    );
-  // Holds drive engine.render.setContinuous; requests go to the engine.
+  // Holds drive engine.render.setContinuous; requests go to the engine. A
+  // parked engine uninstalls it (createNavaraScene suspend).
   installRenderGovernor(engine);
   const syncVisibility = () => {
     if (document.hidden && !isEmbeddedInline()) return;
@@ -469,26 +459,8 @@ export function createViewerlessTools({
     detail: notice.detail,
     persistent: true,
   });
-  window.__godsEyeView = {
-    viewer: null,
-    engine,
-    styleManager,
-    tileset: null,
-    dataManager,
-    sceneDirector,
-    mapStackController,
-    annotations: null,
-    weatherEffects: null,
-    cockpitCloudEffects: null,
-    voiceCommands: null,
-    getRenderGovernorDiagnostics,
-    surfaceServices: operations.surface,
-    requestRender: governorRequestRender,
-  };
-  const debug = window.__godsEyeView;
-  defer(() => {
-    if (window.__godsEyeView === debug) delete window.__godsEyeView;
-  });
+  // The notice is this engine's: it goes when the engine does.
+  defer(() => styleManager._clearPersistentStatusNotice?.());
   // Voice on the engine (phase 3, Task 9): the W1 tools drive the engine;
   // the Director uses the shared session; viewer-only tools declare availability.
   const voiceCommands = attachSessionVoice({
@@ -507,6 +479,5 @@ export function createViewerlessTools({
     signal,
     defer,
   });
-  debug.voiceCommands = voiceCommands;
-  return { sceneDirector, annotations: null, voiceCommands };
+  return { annotations: null, voiceCommands };
 }
