@@ -419,6 +419,23 @@ const layers = [
     noQuery: 'cable records are not loaded for queries',
   },
   {
+    // Results of the last osm_query ("hospitals in Kathmandu").
+    id: 'osm-places',
+    aliases: ['osm places', 'map search results', 'search results'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        kind: ['t'],
+        operator: ['t'],
+        emergency: ['t'],
+        wheelchair: ['t'],
+        openingHours: ['t'],
+        city: ['t'],
+      },
+    },
+  },
+  {
     // Global Context owns this layer; voice reaches it through
     // set_context_mode, never a bare toggle.
     id: 'military-awareness',
@@ -436,6 +453,10 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
+  // The Realtime prompt is at its 52,000-character budget; voice toggle and
+  // query for this layer wait until there is room.
+  'drone-airspace':
+    'informational airspace layer; no room in the prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({

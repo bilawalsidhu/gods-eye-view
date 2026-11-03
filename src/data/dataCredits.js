@@ -181,6 +181,13 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'faa-sua',
+    html:
+      'Prohibited & restricted airspace: ' +
+      '<a href="https://adds-faa.opendata.arcgis.com/" target="_blank" rel="noopener">FAA Special Use Airspace</a>' +
+      ' (prohibited and restricted zones; informational only)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
@@ -577,6 +584,15 @@ export const WOF_CREDIT = {
     'Neighborhood boundaries: ' +
     '<a href="https://whosonfirst.org/docs/licenses/" target="_blank" rel="noopener">Who\'s On First</a> and contributors, simplified (' +
     '<a href="https://github.com/bilawalsidhu/gods-eye-view/blob/main/src/data/local_data/wof_neighborhoods/ATTRIBUTION.md" target="_blank" rel="noopener">sources and licences</a>)',
+};
+
+/** Registered when a voice place search (a configured Overpass) first shows places. */
+export const OSM_PLACES_CREDIT = {
+  key: 'osm-places',
+  html:
+    'Places found by voice: ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+    '(ODbL 1.0)',
 };
 
 /**
