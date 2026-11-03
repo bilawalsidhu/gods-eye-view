@@ -133,3 +133,32 @@ test('duplicate ids and a missing collection reject or skip as documented', () =
   assert.equal(droneAirspaceTypeLabel('R'), 'Restricted');
   assert.equal(droneAirspaceTypeLabel('MOA'), null);
 });
+
+test("FAA's % line-break markers in times of use read as separators", () => {
+  const timesOfUse = (TIMESOFUSE) =>
+    normalizeDroneAirspaceSnapshot({
+      features: [
+        feature({
+          properties: {
+            NAME: 'R-2508',
+            TYPE_CODE: 'R',
+            OBJECTID: 400,
+            TIMESOFUSE,
+          },
+        }),
+      ],
+    })[0].timesOfUse;
+  // The shape 56 live records carry: a marker after the semicolon.
+  assert.equal(
+    timesOfUse(
+      '0700 - 2200 MON - FRI; 0800 - 1600 SAT - SUN; %OTHER TIMES BY NOTAM',
+    ),
+    '0700 - 2200 MON - FRI; 0800 - 1600 SAT - SUN; OTHER TIMES BY NOTAM',
+  );
+  assert.equal(
+    timesOfUse('SR - SS DAILY %OTHER TIMES BY NOTAM'),
+    'SR - SS DAILY; OTHER TIMES BY NOTAM',
+  );
+  assert.equal(timesOfUse('%CONTINUOUS%'), 'CONTINUOUS');
+  assert.equal(timesOfUse(' % '), null);
+});

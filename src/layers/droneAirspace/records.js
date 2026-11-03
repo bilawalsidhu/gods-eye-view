@@ -18,6 +18,14 @@ const textOrNull = (value) => {
   return text ? text : null;
 };
 
+/** FAA marks line breaks in TIMESOFUSE with `%`; read them as `; ` separators. */
+const timesOfUseOrNull = (value) =>
+  textOrNull(
+    typeof value === 'string'
+      ? value.replace(/\s*;?\s*%\s*/g, '; ').replace(/^[;\s]+|[;\s]+$/g, '')
+      : value,
+  );
+
 function validRing(ring) {
   if (!Array.isArray(ring) || ring.length < 4) return false;
   for (const position of ring) {
@@ -116,7 +124,7 @@ export function normalizeDroneAirspaceSnapshot(geojson) {
         properties.UPPER_UOM,
         properties.UPPER_CODE,
       ),
-      timesOfUse: textOrNull(properties.TIMESOFUSE),
+      timesOfUse: timesOfUseOrNull(properties.TIMESOFUSE),
       agency: textOrNull(properties.CONT_AGENT),
       city: textOrNull(properties.CITY),
       state: textOrNull(properties.STATE),
