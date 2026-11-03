@@ -402,9 +402,14 @@ export function geocodeProxy({
   function admit(req, res, limiter) {
     if (admitSameSite(req, res)) return null;
     if (req.method !== 'GET') {
-      sendJson(res, 405, { error: 'Method Not Allowed' }, {
-        Allow: allowedMethods('GET'),
-      });
+      sendJson(
+        res,
+        405,
+        { error: 'Method Not Allowed' },
+        {
+          Allow: allowedMethods('GET'),
+        },
+      );
       return null;
     }
     if (!limiter(clientKey(req))) {

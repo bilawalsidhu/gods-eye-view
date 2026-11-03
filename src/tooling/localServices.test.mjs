@@ -21,6 +21,7 @@ import { openAiRealtimeProxy } from 'gods-eye-view/server/providers/openai';
 import { keySetupEndpoint } from 'gods-eye-view/server/standalone/key-setup';
 import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+import { geocodeProxy } from '../../server/providers/regional/place.js';
 import { allowedMethods } from '../../server/providers/common/methods.js';
 import { createDebugLogHandler } from '../../server/providers/openai/debug-log.js';
 import { attachVoiceResult } from '../voice/speech.js';
@@ -148,6 +149,27 @@ test('405 responses declare the methods each route accepts', async (t) => {
   const probe = await request(overpass, { method: 'HEAD', url: '/status' });
   assert.equal(probe.status, 405);
   assert.equal(probe.headers.allow, 'GET, POST');
+});
+
+test('geocode search and outline reject methods with Allow in dev and preview', async () => {
+  const unavailable = () => {
+    throw Error('rejected methods must not acquire upstream');
+  };
+  for (const preview of [false, true]) {
+    const routes = install(
+      geocodeProxy({ search: unavailable, outline: unavailable }),
+      preview,
+    );
+    for (const url of ['/?q=Austin', '/outline?query=Austin']) {
+      const rejected = await request(routes.get('/api/geocode'), {
+        method: 'POST',
+        url,
+      });
+      assert.equal(rejected.status, 405);
+      assert.equal(rejected.headers.allow, 'GET');
+      assert.deepEqual(rejected.json(), { error: 'Method Not Allowed' });
+    }
+  }
 });
 
 test('allowedMethods keeps route order, drops repeats and rejects malformed methods', () => {
