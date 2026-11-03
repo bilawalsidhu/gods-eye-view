@@ -20,9 +20,16 @@ const HISTORY_BYTES = 180000;
 const REQUEST_BYTES = 512 * 1024;
 // Results from earlier turns keep their outcome and say line, not their records.
 const COMPACT_RESULT_BYTES = 1500;
+// How a stopped reply answers its calls: the one under way may have taken
+// effect, the ones after it never started.
+const STOPPED_RUNNING = {
+  ok: false,
+  cancelled: true,
+  reason: 'reply-stopped-while-running',
+};
 const NOT_RUN = { ok: false, skipped: true, reason: 'reply-stopped' };
 const PARTIAL_NOTE =
-  'This reply stopped before it finished. The map actions above already ran.';
+  'This reply stopped before it finished; the results above are final.';
 
 /** Text-only HTTP turns: no Live token, socket, microphone or audio context. */
 export function createTextChat({
@@ -157,23 +164,28 @@ export function createTextChat({
       : '';
     mapEvents = [];
     let contents = [protocol.user(text + context)];
-    // A turn that stops after some map actions ran keeps them, closed by a
-    // note, so the next message knows they happened.
+    // A turn that stops after map actions started keeps them, closed by a
+    // note, so the next message knows what ran.
     let settled = 0;
     // The round in progress: its calls, and the results of those that ran.
     let openRound = null;
     partial = {
       owner,
       keep() {
-        const ran = openRound?.pairs.length ? contents.length : settled;
+        const ran = openRound ? contents.length : settled;
         if (!ran) return;
-        // Calls that never ran are answered as skipped, so every call in the
-        // kept history stays paired with a result.
-        const closing = openRound?.pairs.length
+        // Every kept call stays paired with a result.
+        const closing = openRound
           ? protocol.results(
               openRound.calls.map(
                 (call, index) =>
-                  openRound.pairs[index] ?? { call, result: NOT_RUN },
+                  openRound.pairs[index] ?? {
+                    call,
+                    result:
+                      index === openRound.pairs.length
+                        ? STOPPED_RUNNING
+                        : NOT_RUN,
+                  },
               ),
             )
           : [];

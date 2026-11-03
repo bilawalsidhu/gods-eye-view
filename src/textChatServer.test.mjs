@@ -479,6 +479,41 @@ for (const [name, provider] of Object.entries(providers)) {
     await f.send();
     assert.equal(upstream, 2);
   });
+  test(`${name} refusal bodies are read within 16 KB and released when unread`, async (t) => {
+    // An oversized error body is not parsed, so its reason does not count.
+    const padded = await fixture(t, provider, async () =>
+      Response.json(
+        {
+          error: {
+            message: 'x'.repeat(20 * 1024),
+            details: [{ reason: 'API_KEY_INVALID' }],
+          },
+        },
+        { status: 400 },
+      ),
+    );
+    const reply = await padded.send();
+    assert.equal(reply.status, 502);
+    assert.equal((await reply.json()).code, undefined);
+    // A 401 body is never read, and is cancelled rather than left open.
+    let cancelled = false;
+    const unread = await fixture(
+      t,
+      provider,
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull: () => {},
+            cancel: () => {
+              cancelled = true;
+            },
+          }),
+          { status: 401 },
+        ),
+    );
+    assert.equal((await (await unread.send()).json()).code, 'API_KEY_REJECTED');
+    assert.equal(cancelled, true);
+  });
   test(`${name} throttled replies say they are rate limited`, async (t) => {
     const local = await fixture(t, provider, undefined, {
       resolveRateLimit: () => '1',

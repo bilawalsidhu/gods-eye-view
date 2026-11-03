@@ -219,7 +219,14 @@ test('Gemini composite: chat Stop keeps the conversation and voice start ends ch
     requests[2].contents
       .filter((item) => item.parts[0].text)
       .map((item) => item.parts[0].text),
-    ['First', 'Done', 'Third'],
+    // The stopped turn stays, closed by its note.
+    [
+      'First',
+      'Done',
+      'Second',
+      'This reply stopped before it finished; the results above are final.',
+      'Third',
+    ],
   );
   // Starting voice retires the typed turn in progress.
   adapter.controller.start = async () => {};

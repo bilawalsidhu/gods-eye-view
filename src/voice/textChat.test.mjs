@@ -131,12 +131,15 @@ for (const provider of ['openai', 'gemini']) {
     const note = items.at(-2);
     const noteText = provider === 'openai' ? note.content : note.parts[0].text;
     assert.equal(note.role, provider === 'openai' ? 'assistant' : 'model');
-    assert.match(noteText, /map actions above already ran/);
+    assert.match(
+      noteText,
+      /stopped before it finished; the results above are final/,
+    );
     assert.equal(items.length, 5);
     h.chat.stop();
   });
 
-  test(`${provider}: Stop during the second action keeps the first, pairing the rest as skipped`, async () => {
+  test(`${provider}: Stop during the second action keeps the first and marks the second cancelled`, async () => {
     let runs = 0;
     const h = harness(
       provider,
@@ -166,11 +169,44 @@ for (const provider of ['openai', 'gemini']) {
           );
     assert.equal(results.length, 2);
     assert.equal(results[0].ok, true);
-    assert.equal(results[1].skipped, true);
+    assert.equal(results[1].cancelled, true, 'the action under way');
     const note = items.at(-2);
     assert.match(
       provider === 'openai' ? note.content : note.parts[0].text,
-      /map actions above already ran/,
+      /stopped before it finished; the results above are final/,
+    );
+    h.chat.stop();
+  });
+
+  test(`${provider}: Stop during the first of three actions keeps the round`, async () => {
+    const h = harness(
+      provider,
+      (n) => (n === 1 ? w.calls(3) : w.final('Done')),
+      {
+        runAction: () => new Promise(() => {}),
+      },
+    );
+    h.chat.start();
+    h.chat.sendText('Do three');
+    await settle();
+    assert.equal(h.chat.cancelTurn(), true);
+    h.chat.sendText('Continue');
+    await settle();
+    const items = w.items(h.requests[1]);
+    assert.deepEqual(w.userTexts(items), ['Do three', 'Continue']);
+    const results =
+      provider === 'openai'
+        ? items
+            .filter((item) => item.role === 'tool')
+            .map((item) => JSON.parse(item.content))
+        : items.flatMap((item) =>
+            item.parts
+              .filter((part) => part.functionResponse)
+              .map((part) => part.functionResponse.response),
+          );
+    assert.deepEqual(
+      results.map((result) => result.reason),
+      ['reply-stopped-while-running', 'reply-stopped', 'reply-stopped'],
     );
     h.chat.stop();
   });
@@ -203,7 +239,12 @@ for (const provider of ['openai', 'gemini']) {
     assert.equal(h.chat.sendText('Third'), true);
     await settle();
     assert.equal(h.requests.length, 3);
-    assert.deepEqual(w.userTexts(w.items(h.requests[2])), ['First', 'Third']);
+    // The stopped turn stays, with its action answered as cancelled.
+    assert.deepEqual(w.userTexts(w.items(h.requests[2])), [
+      'First',
+      'Second',
+      'Third',
+    ]);
     // Ending the session still starts the next one fresh.
     h.chat.stop();
     h.chat.start();
