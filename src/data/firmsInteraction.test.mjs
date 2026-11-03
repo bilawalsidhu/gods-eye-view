@@ -521,7 +521,7 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
     assert.equal(markers.get(0).color.alpha, 1);
 
     // Mid hand-off both are drawn, half each, in either band.
-    setHeight(3_000_000);
+    setHeight(4_500_000);
     h.layer._applyHandoffFadeForTest();
     assert.equal(added[0].alpha, 0.5);
     assert.equal(markers.show, true);

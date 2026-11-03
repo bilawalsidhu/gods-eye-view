@@ -232,17 +232,30 @@ export function createModel({
   }
 
   /**
+   * The anchor already built for a detection, without the floor lookup;
+   * for the far marker band, where floors are never warmed and the height
+   * difference is invisible, so tens of thousands of markers skip a cache
+   * read each per rebuild. Builds one through {@link firePosition} once.
+   * @param {Object} fire - Detection record.
+   * @returns {Cesium.Cartesian3}
+   */
+
+  function fireBuiltPosition(fire) {
+    return fire.position ?? firePosition(fire);
+  }
+
+  /**
    * Occlusion-test anchor for one detection. Returns the render position
    * outright for anchors comfortably above the ellipsoid (the common case) and
    * a lazily-cached lifted point otherwise — see CULL_LIFT_THRESHOLD_M. This
    * NEVER feeds rendering: the datum-correct anchor from {@link firePosition}
    * is what the sprite and the card are drawn at.
    * @param {Object} fire - Detection record.
+   * @param {Cesium.Cartesian3} [position] Its render anchor, if at hand.
    * @returns {Cesium.Cartesian3}
    */
 
-  function fireCullPosition(fire) {
-    const position = firePosition(fire);
+  function fireCullPosition(fire, position = firePosition(fire)) {
     if (fire.positionHeight >= CULL_LIFT_THRESHOLD_M) return position;
     if (!fire.cullPosition) {
       fire.cullPosition = Cesium.Cartesian3.fromDegrees(
@@ -587,6 +600,7 @@ export function createModel({
     sizeBucket,
     glowSprite,
     firePosition,
+    fireBuiltPosition,
     fireCullPosition,
     cellCullPosition,
     applyHorizonCull,

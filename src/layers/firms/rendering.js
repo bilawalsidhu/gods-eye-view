@@ -354,10 +354,15 @@ export function createRendering({
     }
 
     const markers = [];
+    // Only the close band warms terrain floors (renderDetections).
+    const anchor =
+      lod.id === 'close'
+        ? components.model.firePosition
+        : components.model.fireBuiltPosition;
     for (const fire of candidates) {
       const coreSize = components.model.frpPixelSize(fire.frp);
-      const position = components.model.firePosition(fire);
-      const cullPosition = components.model.fireCullPosition(fire);
+      const position = anchor(fire);
+      const cullPosition = components.model.fireCullPosition(fire, position);
       const pickId = `firms-${fire.index}`;
       layerState._pickIndexById.set(pickId, fire);
       layerState._cullPositions.push(cullPosition);

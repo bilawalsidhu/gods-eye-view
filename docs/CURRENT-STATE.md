@@ -2205,7 +2205,7 @@ none is a cold hue, so the brightest marks are the strongest fires; ~90% of
 detections are under 20 MW and stay dim red. Glow sprites and fire-card
 accents read that ramp; confidence and brightness do not affect the color.
 
-At far zoom (camera above ~3,000 km) the layer drapes a Snap Map–style
+At far zoom (camera above ~4,500 km) the layer drapes a Snap Map–style
 heatmap instead of individual markers: the shown detections are linearly binned
 (each detection's weight shared between the four nearest pixel centres, so spots
 sit at the true position and stay round) on a
@@ -2221,14 +2221,15 @@ nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
 tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
 on each data refresh or filter change (the first far-band paint at once,
 later ones 150 ms after the last change). Heatmap and markers are both kept
-built at every zoom and cross-fade by camera height between 2,400 and
-3,600 km, every frame, so a fast zoom never shows a gap: the heatmap fades by
+built at every zoom and cross-fade by camera height between 3,600 and
+5,400 km, every frame, so a fast zoom never shows a gap: the heatmap fades by
 imagery `alpha` (a hidden Cesium imagery layer is unmapped from the globe
 tiles and re-mapped late when shown), the markers by sprite alpha, and the
-marker collection is hidden once the heatmap is whole. The 750–3,000 km
-markers band draws up to 20,000 detections (the strongest in the padded
+marker collection is hidden once the heatmap is whole. The 750–4,500 km
+markers band draws up to 40,000 detections (the strongest in the padded
 view), so the weak fires the heatmap shows stay on screen as markers when it
-fades out. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
+fades out; it reads each marker's already-built anchor instead of the ground
+floor cache, which only the close band warms. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
 areas; their accent is the strongest fire's FRP color.
 
 The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale

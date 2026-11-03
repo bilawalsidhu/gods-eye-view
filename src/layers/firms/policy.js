@@ -7,7 +7,7 @@ import * as Cesium from 'cesium';
 export const REFRESH_INTERVAL_MS = 600_000;
 
 /**
- * LOD bands keyed by camera height. `heat` bands (above ~3,000 km) drape a
+ * LOD bands keyed by camera height. `heat` bands (above ~4,500 km) drape a
  * Snap Map–style heatmap over the globe (firmsHeatRaster.js); their
  * `gridDegrees` aggregation only feeds the "N FIRES" cards. `detections`
  * bands render individual fire detections as glow-sprite billboards.
@@ -26,21 +26,21 @@ export const LOD_LEVELS = [
   },
   {
     id: 'regional',
-    minHeight: 3000000,
+    minHeight: 4500000,
     mode: 'heat',
     gridDegrees: 1.0,
     maxCells: 3600,
     labelDistance: 8500000,
   },
   {
-    // Up to 20,000 markers: at the 2,400 km end of the hand-off the padded
-    // view over Africa, the densest region, holds ~21,000 detections, and a
+    // Up to 40,000 markers: at the 3,600 km end of the hand-off the padded
+    // view over Africa, the densest region, holds ~40,000 detections, and a
     // tighter cap left the heatmap's weak spots dissolving into nothing.
     // A rebuild of that many costs ~60 ms, only there.
     id: 'local',
     minHeight: 750000,
     mode: 'detections',
-    maxDetections: 20000,
+    maxDetections: 40000,
     labelDistance: 4500000,
   },
   {
@@ -55,7 +55,7 @@ export const LOD_LEVELS = [
 /**
  * Global heat raster for the `heat` bands: ≈0.09° (≈10 km) per pixel and a
  * one-pixel Gaussian σ, so a lone fire is a spot about the size of its
- * marker at the 3,000 km hand-off and the two cross-fade without a jump;
+ * marker near the hand-off and the two cross-fade without a jump;
  * neighbours merge only when they nearly touch (σ 3 on a 2048 grid smeared
  * each fire over ~200 km). Built once per data refresh or filter change,
  * never per camera move.
@@ -69,12 +69,12 @@ export const HEAT_RASTER = Object.freeze({
 
 /**
  * Camera heights, in metres, over which the heatmap and the markers
- * cross-fade around the 3,000 km band edge: markers alone below `from`,
+ * cross-fade around the 4,500 km band edge: markers alone below `from`,
  * heatmap alone above `to`. Wider than the ±10 % band hysteresis, so
  * whichever band is active inside it, both layers are already built.
  */
 
-export const HANDOFF_FADE = Object.freeze({ from: 2_400_000, to: 3_600_000 });
+export const HANDOFF_FADE = Object.freeze({ from: 3_600_000, to: 5_400_000 });
 
 /**
  * Trailing delay before a stale heatmap is rebuilt while one is already on
