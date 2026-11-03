@@ -29,7 +29,7 @@ import {
  * A closed ring of positions `radiusM` along the surface from `groundCenter`,
  * raised to `heightM`. Each bearing steps over a sphere with the ellipsoid's
  * radius of curvature in that direction (Euler's formula), which keeps the
- * ring within a few metres of the true geodesic radius at 250 km.
+ * ring within ~50 m of the true geodesic radius at 250 km.
  * @param {Cesium.Cartesian3} groundCenter Ring centre on the ellipsoid.
  * @param {number} radiusM Surface radius in metres.
  * @param {number} heightM Height of the ring above the ellipsoid.
@@ -48,31 +48,32 @@ export function awarenessRangeRingPositions(
   const e2 = 1 - (b * b) / (a * a);
   const sinLat = Math.sin(latitude);
   const cosLat = Math.cos(latitude);
+  const sinLon = Math.sin(longitude);
+  const cosLon = Math.cos(longitude);
   const w = 1 - e2 * sinLat * sinLat;
   const meridional = (a * (1 - e2)) / (w * Math.sqrt(w));
   const primeVertical = a / Math.sqrt(w);
-  const positions = new Array(segments + 1);
+  // Step along the great circle in 3D from the centre's up, north and east
+  // unit vectors. Unlike the latitude/longitude destination formula, this
+  // stays well conditioned at and next to the poles.
+  const up = [cosLat * cosLon, cosLat * sinLon, sinLat];
+  const north = [-sinLat * cosLon, -sinLat * sinLon, cosLat];
+  const east = [-sinLon, cosLon, 0];
+  const positions = [];
   for (let i = 0; i <= segments; i++) {
     const bearing = ((i % segments) / segments) * Cesium.Math.TWO_PI;
     const cosB = Math.cos(bearing);
     const sinB = Math.sin(bearing);
     const angular =
       radiusM * ((cosB * cosB) / meridional + (sinB * sinB) / primeVertical);
-    const lat = Math.asin(
-      sinLat * Math.cos(angular) + cosLat * Math.sin(angular) * cosB,
+    const cosA = Math.cos(angular);
+    const sinA = Math.sin(angular);
+    const [x, y, z] = up.map(
+      (u, k) => u * cosA + (north[k] * cosB + east[k] * sinB) * sinA,
     );
-    const lon =
-      longitude +
-      Math.atan2(
-        sinB * Math.sin(angular) * cosLat,
-        Math.cos(angular) - sinLat * Math.sin(lat),
-      );
-    positions[i] = Cesium.Cartesian3.fromRadians(
-      lon,
-      lat,
-      heightM,
-      Cesium.Ellipsoid.WGS84,
-    );
+    const lat = Math.atan2(z, Math.hypot(x, y));
+    const lon = Math.atan2(y, x);
+    positions.push(Cesium.Cartesian3.fromRadians(lon, lat, heightM));
   }
   return positions;
 }

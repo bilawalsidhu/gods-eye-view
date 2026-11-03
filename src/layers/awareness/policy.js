@@ -57,7 +57,6 @@ export const CONTEXT_RIM_HEIGHT_M = 2500;
  *  keeps the 250 km edge readable between flashes, in screenshots and for
  *  low-vision viewers. Once the pulses rest, and without pulses (reduced
  *  motion, or a scene that cannot animate), it stays on screen at full. */
-
 export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
   color: 'rgba(98, 181, 255, 0.95)',
   outlineColor: 'rgba(4, 12, 16, 0.8)',

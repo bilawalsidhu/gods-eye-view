@@ -234,6 +234,41 @@ for (const [place, lat, lon] of [
   });
 }
 
+for (const [place, lat, lon] of [
+  ['the North Pole', 90, 0],
+  ['the South Pole', -90, 0],
+  ['1e-7° from the North Pole', 90 - 1e-7, 45],
+  ['1e-8° from the South Pole', -90 + 1e-8, -120],
+]) {
+  test(`the ring stays a full circle at ${place}`, () => {
+    const center = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+    const segments = AWARENESS_RANGE_RING_STYLE.segments;
+    const positions = awarenessRangeRingPositions(
+      center,
+      AWARENESS_RADIUS_M,
+      CONTEXT_RIM_HEIGHT_M,
+    );
+    assert.equal(positions.length, segments + 1);
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(positions[0], positions.at(-1), 0, 1e-6),
+      'the ring closes on itself',
+    );
+    const distinct = new Set(
+      positions
+        .slice(0, segments)
+        .map(({ x, y, z }) => [x, y, z].map((v) => v.toFixed(1)).join()),
+    );
+    assert.equal(distinct.size, segments, 'every vertex is its own point');
+    // Ordinary chords are 2π × 250 km / 128 ≈ 12.3 km long.
+    for (let i = 0; i < segments; i++) {
+      const chord = Cesium.Cartesian3.distance(positions[i], positions[i + 1]);
+      assert.ok(chord > 11_500 && chord < 13_000, `chord ${i}: ${chord} m`);
+    }
+    for (const distance of surfaceDistances(center, positions))
+      assert.ok(Math.abs(distance - AWARENESS_RADIUS_M) < 100, `${distance} m`);
+  });
+}
+
 test('the ring core and halo contrast on light and dark ground', () => {
   const core = Cesium.Color.fromCssColorString(
     AWARENESS_RANGE_RING_STYLE.color,
