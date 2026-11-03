@@ -1669,7 +1669,7 @@ async function main() {
         const prims = window.__godsEyeView.viewer.scene.primitives;
         let n = 0;
         for (let i = 0; i < prims.length; i++) {
-          if (prims.get(i) && prims.get(i)._gevViewshed) n += 1;
+          if (window.__godsEyeView.entityRecords.read(prims.get(i))?.viewshedCameraId) n += 1;
         }
         return n;
       });
@@ -1729,7 +1729,7 @@ async function main() {
       const prims = window.__godsEyeView.viewer.scene.primitives;
       window.__qaViewshedRefs = [];
       for (let i = 0; i < prims.length; i++) {
-        if (prims.get(i) && prims.get(i)._gevViewshed)
+        if (window.__godsEyeView.entityRecords.read(prims.get(i))?.viewshedCameraId)
           window.__qaViewshedRefs.push(prims.get(i));
       }
     });
@@ -1738,7 +1738,7 @@ async function main() {
       const prims = window.__godsEyeView.viewer.scene.primitives;
       const now = [];
       for (let i = 0; i < prims.length; i++) {
-        if (prims.get(i) && prims.get(i)._gevViewshed) now.push(prims.get(i));
+        if (window.__godsEyeView.entityRecords.read(prims.get(i))?.viewshedCameraId) now.push(prims.get(i));
       }
       const before = window.__qaViewshedRefs || [];
       const sameCount = now.length === before.length;

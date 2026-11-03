@@ -3,6 +3,7 @@ import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from './policy.js';
 import { entityRecord } from '../../data/entityRecords.js';
+import { installationMarkers } from './markerState.js';
 
 export function createRendering({
   state: layerState,
@@ -219,13 +220,14 @@ export function createRendering({
         : null;
       if (retained) {
         // Same geometry: update the marker in place (selection, floor height).
-        if (retained.gevInstallationHeightM !== surfaceHeightM) {
-          retained.gevInstallationHeightM = surfaceHeightM;
+        const marker = installationMarkers.write(retained);
+        if (marker.heightM !== surfaceHeightM) {
+          marker.heightM = surfaceHeightM;
           retained.position = displayPosition;
           entityRecord(retained).displayPosition = () => displayPosition;
         }
-        if (retained.gevInstallationSelected !== selectedRecord) {
-          retained.gevInstallationSelected = selectedRecord;
+        if (marker.selected !== selectedRecord) {
+          marker.selected = selectedRecord;
           retained.point.pixelSize = selectedRecord ? 13 : 9;
           retained.point.color = selectedRecord ? Cesium.Color.WHITE : color;
         }
@@ -268,8 +270,10 @@ export function createRendering({
         outline.installationId = record.id;
         entityIds.push(outline.id);
       }
-      entity.gevInstallationHeightM = surfaceHeightM;
-      entity.gevInstallationSelected = selectedRecord;
+      Object.assign(installationMarkers.write(entity), {
+        heightM: surfaceHeightM,
+        selected: selectedRecord,
+      });
       entityRecord(entity).trackedId = `installations:${record.id}`;
       entityRecord(entity).displayPosition = () => displayPosition;
       entityRecord(entity).labelModel = {
