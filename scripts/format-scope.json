@@ -1223,5 +1223,6 @@
   "src/voice/areaActions.test.mjs",
   "src/voice/imageryActions.test.mjs",
   "src/voice/osmActions.test.mjs",
-  "src/voice/realtimeProtocol.test.mjs"
+  "src/voice/realtimeProtocol.test.mjs",
+  "src/layers/awareness/rangeRing.test.mjs"
 ]

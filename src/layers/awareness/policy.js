@@ -44,6 +44,20 @@ export const AWARENESS_MAX_NAVIGATION_EXAMPLES = 10000;
 
 export const CONTEXT_RIM_HEIGHT_M = 2500;
 
+/** @constant The 250 km range ring around the Global Context subject.
+ *  The old 1 px ellipse outline vanished over desert, snow and under
+ *  the FLIR, NVG and CRT styles. A bright core inside a dark halo keeps
+ *  luminance contrast on light and dark ground alike, and luminance is what
+ *  the monochrome styles keep. The core is the Context panel's blue; the halo
+ *  is the map-card ink. Widths are screen pixels; `outlineWidth` is per side. */
+export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
+  color: 'rgba(98, 181, 255, 0.95)',
+  outlineColor: 'rgba(4, 12, 16, 0.8)',
+  width: 4,
+  outlineWidth: 1,
+  segments: 128,
+});
+
 export const VESSEL_FOCUS_RADIUS_M = 3000;
 
 export const SOURCE_LABEL = {
