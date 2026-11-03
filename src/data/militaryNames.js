@@ -55,7 +55,24 @@ function nameRecord(classes, row) {
   };
 }
 
-/** Share a bounded acquisition; failed assets become retryable after cooldown. */
+function sortedNames(byId) {
+  const records = [...byId.values()].sort(
+    (a, b) => b.areaM2 - a.areaM2 || a.osmKey.localeCompare(b.osmKey),
+  );
+  return { records, byId };
+}
+
+function indexNamePacks(packs) {
+  const byId = new Map();
+  for (const { classes, records } of packs)
+    for (const row of records) {
+      const record = nameRecord(classes, row);
+      if (!byId.has(record.osmKey)) byId.set(record.osmKey, record);
+    }
+  return sortedNames(byId);
+}
+
+/** Share bounded acquisitions; optional packs retry without discarding base names. */
 export function createMilitaryNamesLoader({
   loadPack = (signal) =>
     loadBundledJson(
@@ -74,23 +91,46 @@ export function createMilitaryNamesLoader({
   timeoutMs = MILITARY_NAMES_TIMEOUT_MS,
   ...retryOptions
 } = {}) {
-  return createRetryableLoader(async () => {
-    const [pack, supplements] = await requestWithDeadline(
-      (signal) => Promise.all([loadPack(signal), loadSupplements(signal)]),
-      { timeoutMs },
-    );
-    const byId = new Map();
-    for (const { classes, records } of [pack, ...supplements])
-      for (const row of records) {
-        const record = nameRecord(classes, row);
-        // Supplements only name what the pack leaves unnamed.
-        if (!byId.has(record.osmKey)) byId.set(record.osmKey, record);
-      }
-    const records = [...byId.values()].sort(
-      (a, b) => b.areaM2 - a.areaM2 || a.osmKey.localeCompare(b.osmKey),
-    );
-    return { records, byId };
+  // Keep both successful acquisition and indexing cached independently: a
+  // small supplement outage must not reload/reindex the worldwide base pack.
+  const baseNames = createRetryableLoader(async () => {
+    const pack = await requestWithDeadline(loadPack, { timeoutMs });
+    return indexNamePacks([pack]);
   }, retryOptions);
+  const supplementNames = createRetryableLoader(async () => {
+    const packs = await requestWithDeadline(loadSupplements, { timeoutMs });
+    return indexNamePacks(packs);
+  }, retryOptions);
+  let inFlight = null;
+  let complete = null;
+  return function loadNames() {
+    if (complete) return complete;
+    if (inFlight) return inFlight;
+    let supplemented = false;
+    const attempt = Promise.all([
+      baseNames(),
+      supplementNames().catch(() => null),
+    ]).then(([base, supplement]) => {
+      if (!supplement) return base;
+      supplemented = true;
+      const byId = new Map(base.byId);
+      // Supplements only name what the base pack leaves unnamed.
+      for (const [key, record] of supplement.byId)
+        if (!byId.has(key)) byId.set(key, record);
+      return sortedNames(byId);
+    });
+    inFlight = attempt;
+    attempt.then(
+      () => {
+        inFlight = null;
+        if (supplemented) complete = attempt;
+      },
+      () => {
+        inFlight = null;
+      },
+    );
+    return attempt;
+  };
 }
 
 /** Load and index the separate data asset only when installation context needs it. */
