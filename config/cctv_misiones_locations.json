@@ -1,0 +1,87 @@
+{
+  "coordinate_system": "WGS84",
+  "status": "definitive",
+  "requires_further_review": false,
+  "finalized_at": "2026-10-15T02:26:04.444Z",
+  "catalog_source": "https://feeder.camarasdemisiones.com/streams",
+  "verification": {
+    "scope": "physical_camera_location",
+    "source": "user_review",
+    "method": "Revisión de capturas y mapa OSM, aceptada por el usuario como definitiva para el proyecto."
+  },
+  "cameras": [
+    {
+      "camera_id": "cam01",
+      "name": "Domo - Misiones - Posadas - Parque Cantera Puente",
+      "latitude": -27.38219513094531,
+      "longitude": -55.88645052907941,
+      "stream_url": "https://stream.camarasdemisiones.com/cam01/index.m3u8",
+      "certainty": "definitive",
+      "confirmed_at": "2026-10-15T02:10:15.471Z"
+    },
+    {
+      "camera_id": "cam02",
+      "name": "Domo - Misiones - Posadas - Arco - Acceso",
+      "latitude": -27.4514,
+      "longitude": -56.0433,
+      "stream_url": "https://stream.camarasdemisiones.com/cam02/index.m3u8",
+      "certainty": "definitive",
+      "confirmed_at": "2026-10-15T02:10:37.489Z"
+    },
+    {
+      "camera_id": "cam03",
+      "name": "Domo - Misiones - San José - Centinela - Acceso",
+      "latitude": -27.7828,
+      "longitude": -55.8184,
+      "stream_url": "https://stream.camarasdemisiones.com/cam03/index.m3u8",
+      "certainty": "definitive",
+      "confirmed_at": "2026-10-15T02:11:12.275Z"
+    },
+    {
+      "camera_id": "cam04",
+      "name": "Domo - Misiones - Posadas - Costanera",
+      "latitude": -27.35849447789777,
+      "longitude": -55.890438020398506,
+      "stream_url": "https://stream.camarasdemisiones.com/cam04/index.m3u8",
+      "certainty": "definitive",
+      "confirmed_at": "2026-10-15T02:12:10.961Z"
+    },
+    {
+      "camera_id": "cam05",
+      "name": "Domo - Misiones - Posadas - Brete",
+      "latitude": -27.35358266750948,
+      "longitude": -55.90307354924789,
+      "stream_url": "https://stream.camarasdemisiones.com/cam05/index.m3u8",
+      "certainty": "definitive",
+      "confirmed_at": "2026-10-15T02:12:47.746Z"
+    },
+    {
+      "camera_id": "cam06",
+      "name": "Domo - Misiones - Posadas - Punta acceso Puente",
+      "latitude": -27.374856,
+      "longitude": -55.8806145,
+      "stream_url": "https://stream.camarasdemisiones.com/cam06/index.m3u8",
+      "certainty": "definitive",
+      "confirmed_at": "2026-10-15T02:13:02.537Z"
+    },
+    {
+      "camera_id": "cam07",
+      "name": "Domo - Misiones - Posadas - Zaiman - Puente",
+      "latitude": -27.4022518,
+      "longitude": -55.8923532,
+      "stream_url": "https://stream.camarasdemisiones.com/cam07/index.m3u8",
+      "certainty": "definitive",
+      "confirmed_at": "2026-10-15T02:15:11.271Z"
+    },
+    {
+      "camera_id": "cam08",
+      "name": "Domo - Posadas - Andresito",
+      "latitude": -27.362031860473184,
+      "longitude": -55.88805103305458,
+      "stream_url": "https://stream.camarasdemisiones.com/cam08/index.m3u8",
+      "certainty": "definitive",
+      "confirmed_at": "2026-10-15T02:16:09.821Z"
+    }
+  ],
+  "map_data_attribution": "© OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright"
+}

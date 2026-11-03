@@ -1,0 +1,36 @@
+{
+  "cameras": [
+    {
+      "camera_id": "cam01",
+      "verified_camera_position": null
+    },
+    {
+      "camera_id": "cam02",
+      "verified_camera_position": null
+    },
+    {
+      "camera_id": "cam03",
+      "verified_camera_position": null
+    },
+    {
+      "camera_id": "cam04",
+      "verified_camera_position": null
+    },
+    {
+      "camera_id": "cam05",
+      "verified_camera_position": null
+    },
+    {
+      "camera_id": "cam06",
+      "verified_camera_position": null
+    },
+    {
+      "camera_id": "cam07",
+      "verified_camera_position": null
+    },
+    {
+      "camera_id": "cam08",
+      "verified_camera_position": null
+    }
+  ]
+}
