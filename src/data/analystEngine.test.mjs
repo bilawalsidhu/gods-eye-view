@@ -1097,6 +1097,7 @@ test('analyst: an ambiguous region asks instead of counting', async () => {
   assert.equal(r.ok, false);
   assert.equal(r.code, 'NEEDS_CLARIFICATION');
   assert.equal(r.candidates.length, 1);
+  assert.match(r.then, /resolve_area.*candidateId.*analyst_query.*kind.*area/, 'the model gets a route back');
   assert.equal(engine.hasMemory(), false);
 });
 
@@ -1201,4 +1202,24 @@ test('a follow-up on handed-off places keeps the area they were found in', async
   assert.equal(result.count, 1);
   assert.equal(result.scopeLabel, 'inside Kathmandu');
   assert.equal(result.coverage.scope, 'area:area-1');
+});
+
+test('a slow scan yields on a time budget, not only every 20,000 rows', async () => {
+  // 4,000 rows that each cost ~0.05 ms to read: ~200 ms of work in one slice
+  // under a row-count budget alone.
+  const slow = () => {
+    const until = performance.now() + 0.05;
+    while (performance.now() < until);
+    return 5;
+  };
+  const rows = Array.from({ length: 4_000 }, (_, i) => ({ id: `S${i}`, lat: 0, lon: 0, get frp() { return slow(); } }));
+  const engine = createAnalystEngine({ getRecords: () => rows, getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }) });
+  // Count the scan's yields (other timers run only when it yields), not wall
+  // gaps, so a loaded machine cannot fail it.
+  let ticks = 0;
+  const timer = setInterval(() => ticks++, 0);
+  const result = await engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, filters: [{ field: 'frp', op: 'gt', value: 1 }] });
+  clearInterval(timer);
+  assert.equal(result.count, 4_000);
+  assert.ok(ticks >= 5, `the scan yielded ${ticks} times in ~200 ms of work`);
 });

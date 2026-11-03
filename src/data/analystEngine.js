@@ -487,7 +487,16 @@ const ANSWERABLE = new Set(['ok', 'empty']);
 
 /** Rows per scan slice before yielding to the page. */
 const SCAN_CHUNK = 20_000;
+/**
+ * A slice also ends after this long: a row inside a large area pays a ray
+ * cast over every edge (a 6,000-vertex outline takes ~200 ms per 20,000 rows),
+ * so the row count alone would still make long tasks.
+ */
+const SCAN_BUDGET_MS = 8;
+/** Rows between clock checks. */
+const SCAN_CLOCK_EVERY = 256;
 const yieldToPage = () => new Promise((resolve) => setTimeout(resolve, 0));
+const clockMs = () => globalThis.performance?.now?.() ?? Date.now();
 
 /**
  * Compile the filters into one predicate over (layerKey, row).
@@ -628,12 +637,19 @@ export async function selectAnalystRows(
   let min = Infinity;
   let max = -Infinity;
   let seen = 0;
+  let sliceStart = clockMs();
   for (const { key, rows } of groups) {
     const kept = [];
     for (const row of rows) {
-      if (++seen % SCAN_CHUNK === 0) {
+      seen += 1;
+      if (
+        seen % SCAN_CHUNK === 0 ||
+        (seen % SCAN_CLOCK_EVERY === 0 &&
+          clockMs() - sliceStart >= SCAN_BUDGET_MS)
+      ) {
         await yieldToPage();
         if (!isCurrent()) return null;
+        sliceStart = clockMs();
       }
       if (inScope && !inScope(row)) continue;
       if (!passes(key, row)) continue;
@@ -901,6 +917,8 @@ export function createAnalystEngine(providers) {
             needsClarification: true,
             query: scope.name,
             candidates: region.candidates || [],
+            // The way back once the user picks: count over that area.
+            then: 'After the user picks, call resolve_area with that candidateId, then analyst_query with scope {kind:"area", areaId}.',
             coverage: {
               layersQueried,
               scope: `region:${scope.name}:ambiguous`,
