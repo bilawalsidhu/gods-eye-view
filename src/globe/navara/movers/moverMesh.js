@@ -217,7 +217,14 @@ function atlasTexture(atlas, encoded, onLoad) {
   const texture = cesiumSampling(new Texture(), encoded);
   const image = new Image();
   image.crossOrigin = 'anonymous';
+  const release = () => {
+    image.onload = null;
+    texture.image = null;
+    texture.removeEventListener('dispose', release);
+  };
+  texture.addEventListener('dispose', release);
   image.onload = () => {
+    image.onload = null;
     texture.image = image;
     texture.needsUpdate = true;
     onLoad();

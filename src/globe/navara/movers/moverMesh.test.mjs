@@ -23,6 +23,37 @@ const spriteOptions = normalizeMoverSetOptions({
   },
 });
 
+test('disposing a sprite atlas drops decoded images and detaches pending load callbacks', (t) => {
+  const previous = globalThis.Image;
+  let image;
+  globalThis.Image = class {
+    constructor() { image = this; }
+  };
+  t.after(() => {
+    if (previous) globalThis.Image = previous;
+    else delete globalThis.Image;
+  });
+  const options = normalizeMoverSetOptions({
+    ...spriteOptions, sprite: {
+      sizePx: 24, atlas: { url: '/bracket.svg', cells: { a: [0, 0, 1, 1] } },
+    },
+  });
+  for (const loaded of [false, true]) {
+    let frames = 0;
+    const mover = createMoverMesh(options, createMoverStore(options), {
+      onTextureLoad: () => frames++,
+    });
+    if (loaded) {
+      image.onload();
+      assert.equal(mover.mesh.material.map.image, image);
+    }
+    mover.dispose();
+    assert.equal(image.onload, null);
+    assert.equal(mover.mesh.material.map.image, null);
+    assert.equal(frames, Number(loaded));
+  }
+});
+
 const basicShader = () => ({
   uniforms: UniformsUtils.clone(ShaderLib.basic.uniforms),
   vertexShader: ShaderLib.basic.vertexShader,
