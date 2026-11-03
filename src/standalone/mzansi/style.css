@@ -1,0 +1,346 @@
+/* MzansiView identity, layered after the retained globe controls. */
+:root {
+  --accent: #66dfb7;
+  --accent-dim: rgba(102, 223, 183, 0.14);
+  --accent-glow: rgba(102, 223, 183, 0.25);
+}
+#title-bar h1 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+#title-bar .subtitle {
+  letter-spacing: 0.13em;
+}
+.mz-ribbon {
+  position: fixed;
+  top: 110px;
+  left: 36px;
+  z-index: 171;
+  display: flex;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid #47796b;
+  border-radius: 30px;
+  background: #102c29ee;
+  box-shadow: 0 8px 24px #0004;
+}
+.mz-ribbon button,
+.mz-panel button {
+  cursor: pointer;
+  font: inherit;
+}
+.mz-ribbon button {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 24px;
+  background: transparent;
+  color: #e8f2ee;
+  font-size: 12px;
+}
+.mz-ribbon button:first-child {
+  background: #cdebdc;
+  color: #132d25;
+  font-weight: 600;
+}
+.mz-ribbon span {
+  margin-left: 12px;
+}
+.mz-panel {
+  position: fixed;
+  z-index: 172;
+  top: 168px;
+  left: 36px;
+  width: 360px;
+  max-height: calc(100dvh - 260px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: #ecf3ee;
+  background: #10231ff5;
+  border: 1px solid #416453;
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 20px 60px #0007;
+  font: 13px/1.55 var(--font-sans);
+  scrollbar-width: thin;
+}
+.mz-panel-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mz-eyebrow {
+  color: #b3c8b9;
+  font-size: 10px;
+  letter-spacing: 0.17em;
+}
+.mz-panel h2 {
+  font-size: 25px;
+  letter-spacing: -0.045em;
+  margin: 5px 0 10px;
+  font-weight: 500;
+}
+.mz-panel h2 span {
+  color: #e7bf74;
+}
+.mz-panel .mz-close {
+  background: transparent;
+  color: #fff;
+  border: 1px solid #587466;
+  border-radius: 50%;
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 22px;
+}
+.mz-intro {
+  color: #c4d4cb;
+  margin-bottom: 18px;
+}
+.mz-search,
+.mz-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #bfcec4;
+  font-size: 11px;
+}
+.mz-panel input[type='search'],
+.mz-panel select {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 9px;
+  border: 1px solid #526e5d;
+  background: #172e26;
+  color: #f1f5ed;
+  padding: 10px;
+  font: 12px var(--font-sans);
+}
+.mz-panel input::placeholder {
+  color: #b7c5bc;
+}
+.mz-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+.mz-centre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  font-size: 11px;
+  margin-top: 10px;
+  color: #c3d2c7;
+}
+.mz-centre button,
+.mz-place-actions button {
+  min-height: 36px;
+  background: transparent;
+  color: #a7ebc9;
+  border: 0;
+  padding: 5px 0;
+  font-size: 11px;
+}
+.mz-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 10px;
+}
+.mz-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  cursor: pointer;
+}
+.mz-options input {
+  accent-color: #66dfb7;
+  width: 16px;
+  height: 16px;
+}
+.mz-count {
+  color: #adbdaf;
+  font-size: 10px;
+  margin: 12px 0;
+}
+.mz-place {
+  padding: 14px;
+  margin-bottom: 10px;
+  border: 1px solid #365345;
+  border-radius: 12px;
+  background: #172d25;
+}
+.mz-place.is-selected {
+  border-color: #83c8a1;
+}
+.mz-place-meta {
+  display: flex;
+  justify-content: space-between;
+  color: #c9bd94;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.mz-panel .mz-place-name {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: #f0f5eb;
+  min-height: 44px;
+  padding: 8px 0;
+  font-size: 14px;
+}
+.mz-place-actions {
+  display: flex;
+  justify-content: space-between;
+}
+.mz-detail {
+  border-top: 1px solid #476454;
+  padding-top: 10px;
+  font-size: 11px;
+  color: #c8d8cd;
+}
+.mz-detail p {
+  margin-bottom: 8px;
+}
+.mz-panel a {
+  color: #b3ebd1;
+  text-underline-offset: 3px;
+}
+.mz-empty,
+.mz-status {
+  padding: 12px 0;
+  color: #e9c88f;
+  font-size: 12px;
+}
+.mz-footer {
+  padding-top: 15px;
+  margin-top: 12px;
+  border-top: 1px solid #365345;
+  font-size: 10px;
+  color: #b2c1b8;
+}
+.mz-footer p + p {
+  margin-top: 8px;
+}
+body.cockpit-mode .mz-ribbon,
+body.cockpit-mode .mz-panel {
+  display: none;
+}
+@media (max-width: 720px) {
+  .mz-ribbon {
+    top: calc(env(safe-area-inset-top, 0px) + 76px);
+    left: 14px;
+  }
+  .mz-panel {
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: calc(var(--mobile-tab-space, 58px) + 8px);
+    width: auto;
+    max-height: min(62dvh, calc(100dvh - 208px));
+    padding: 18px;
+    border-radius: 18px;
+  }
+  .mz-panel button {
+    min-height: 44px;
+  }
+  body.mobile-shell #title-bar h1 > span:last-child {
+    display: inline;
+    font-size: 15px;
+  }
+  body.mobile-shell #title-bar .title-logo {
+    display: none;
+  }
+  body.mobile-shell #title-bar {
+    max-width: 120px;
+  }
+  body.mobile-shell[data-mobile-sheet] .mz-panel {
+    display: none;
+  }
+}
+@media (min-width: 721px) and (max-height: 650px) {
+  .mz-panel {
+    top: 150px;
+    max-height: calc(100dvh - 220px);
+  }
+  .mz-ribbon {
+    top: 95px;
+  }
+}
+.mz-tabs,
+.mz-account-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.mz-tabs button,
+.mz-account button,
+.mz-panel > div > button {
+  min-height: 44px;
+  padding: 8px 12px;
+  background: #233f34;
+  color: #ecf3ee;
+  border: 1px solid #6b8f7a;
+  border-radius: 8px;
+}
+.mz-account {
+  margin: 16px 0;
+  padding: 12px 0;
+  border-top: 1px solid #476454;
+}
+.mz-account label {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+}
+.mz-account input {
+  min-height: 44px;
+  width: 100%;
+  padding: 10px;
+  background: #172e26;
+  color: #fff;
+  border: 1px solid #6b8f7a;
+  border-radius: 8px;
+}
+.mz-account article {
+  padding: 12px 0;
+  border-bottom: 1px solid #476454;
+}
+.mz-account li {
+  margin: 8px 0;
+}
+.mz-panel button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.mz-panel :focus-visible,
+.mz-ribbon :focus-visible {
+  outline: 3px solid #f6d491;
+  outline-offset: 3px;
+}
+.mz-summary {
+  font-size: 12px;
+  margin: 16px 0;
+}
+.mz-summary meter {
+  width: 100px;
+  accent-color: #66dfb7;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mz-panel *,
+  .mz-ribbon * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

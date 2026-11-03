@@ -1,3 +1,4 @@
+import { hostedCatalog } from './mzansi/hosted.js';
 import { createSurfaceServices } from '../app/surfaceServices.js';
 import { createApplicationRequestServices } from '../services/requests.js';
 import { createApplicationCatalog } from '../app/constructCatalog.js';
@@ -15,7 +16,7 @@ export function createStandaloneCatalog({
     signal,
   }),
 } = {}) {
-  return createApplicationCatalog({
+  return hostedCatalog(createApplicationCatalog({
     nepalBoundaryResolver,
     surface,
     sources: createStandaloneLayerSources(sources),
@@ -25,7 +26,7 @@ export function createStandaloneCatalog({
       maxRows: import.meta.env?.VITE_AIS_LIVE_MAX_ROWS,
       maxLabels: import.meta.env?.VITE_AIS_LIVE_LABEL_MAX_ROWS,
     },
-  });
+  }));
 }
 
 // Direct compatibility callers share one catalog; application startup supplies its own.
