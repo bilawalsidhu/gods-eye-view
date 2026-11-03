@@ -556,7 +556,7 @@ test('distinct area lookups are hard-bounded while same-key callers still coales
   assert.equal(b.ok, true);
 });
 
-test('settled lookups leave no listener on the caller\'s signal', async () => {
+test("settled lookups leave no listener on the caller's signal", async () => {
   const { resolver } = makeResolver();
   const controller = new AbortController();
   let added = 0;
@@ -581,7 +581,10 @@ test('settled lookups leave no listener on the caller\'s signal', async () => {
   aborted.addEventListener = () => {
     attached += 1;
   };
-  const late = await resolver.resolve({ query: 'Punjab, Pakistan' }, { signal: aborted });
+  const late = await resolver.resolve(
+    { query: 'Punjab, Pakistan' },
+    { signal: aborted },
+  );
   assert.equal(late.code, 'CANCELLED');
   assert.equal(attached, 0, 'an aborted signal gets no listener');
 });

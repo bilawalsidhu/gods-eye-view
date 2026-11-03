@@ -374,7 +374,10 @@ test('a capped list stays incomplete through analyst follow-ups', async () => {
       filters: [{ field: 'emergency', op: 'eq', value: 'yes' }],
     });
     // And a follow-up of the follow-up.
-    const again = await engine.query({ layers: ['osm-places'], followUp: true });
+    const again = await engine.query({
+      layers: ['osm-places'],
+      followUp: true,
+    });
     return { first, followUp, again };
   };
   const capped = await run(true);
@@ -382,10 +385,16 @@ test('a capped list stays incomplete through analyst follow-ups', async () => {
   assert.equal(capped.followUp.ok, true);
   assert.equal(capped.followUp.count, 1);
   assert.equal(capped.followUp.complete, false, 'the count is a floor');
-  assert.equal(capped.followUp.display.caveat, 'listed the first 1; there are more');
+  assert.equal(
+    capped.followUp.display.caveat,
+    'listed the first 1; there are more',
+  );
   assert.equal(capped.followUp.scopeLabel, 'inside Kathmandu');
   assert.equal(capped.again.complete, false);
-  assert.equal(capped.again.display.caveat, 'listed the first 1; there are more');
+  assert.equal(
+    capped.again.display.caveat,
+    'listed the first 1; there are more',
+  );
 
   const whole = await run(false);
   assert.equal(whole.first.complete, true);
