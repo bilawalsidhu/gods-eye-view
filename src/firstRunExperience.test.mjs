@@ -1018,6 +1018,7 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // the legacy camera fields to keep the pin.
   const camera = legacyTools.find((tool) => tool.name === 'move_camera')
     .parameters.properties;
+  assert.equal(camera.pitchDeg.type, 'number');
   delete camera.pitchDeg;
   camera.direction.description =
     'Required for pan/tilt/rotate; orbit/rotate_globe default right.';

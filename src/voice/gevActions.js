@@ -48,6 +48,7 @@ import {
   interruptCameraMotion,
   adjustOrbitRange,
   manualCameraInputCount,
+  moveCameraArgsError,
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
@@ -1198,8 +1199,26 @@ export function createGevActionRunner({
         voiceFlight &&
         !voiceFlight.done
       ) {
-        const flight = voiceFlight;
-        const status = await waitForVoiceFlight(flight, runOptions.signal);
+        // Bad arguments are refused now, not after waiting on the flight.
+        const argsError = moveCameraArgsError(args);
+        if (argsError) return argsError;
+        const deadline = Date.now() + VOICE_FLIGHT_WAIT_MS;
+        let flight = voiceFlight;
+        let status = await waitForVoiceFlight(
+          flight,
+          runOptions.signal,
+          deadline,
+        );
+        // A later fly-to in the same reply cancels this one: follow it to
+        // where the camera lands, within the same deadline.
+        while (status === 'cancelled' && voiceFlight !== flight && current()) {
+          flight = voiceFlight;
+          status = await waitForVoiceFlight(
+            flight,
+            runOptions.signal,
+            deadline,
+          );
+        }
         if (!current())
           return { ok: false, action: 'move_camera', cancelled: true };
         if (status !== 'arrived')
@@ -2759,8 +2778,12 @@ function trackVoiceFlight(inputCount = manualCameraInputCount()) {
   return flight;
 }
 
-/** Longest a motion waits for a flight (geocode plus flight) before giving up. */
-const VOICE_FLIGHT_WAIT_MS = 30_000;
+/**
+ * Longest a motion waits for its flight (geocode plus flight, which is about
+ * 2 s) before giving up. The wait also holds the tool output, and on Gemini
+ * the later tools in the turn.
+ */
+const VOICE_FLIGHT_WAIT_MS = 15_000;
 
 /**
  * Motions that act on the place the camera ends up at, so one sent beside a
@@ -2775,7 +2798,7 @@ const VOICE_FLIGHT_WAITING_MOTIONS = new Set([
 ]);
 
 /** Wait for a voice flight to end; 'timeout' or 'aborted' if it does not. */
-function waitForVoiceFlight(flight, signal) {
+function waitForVoiceFlight(flight, signal, deadline) {
   if (signal?.aborted) return Promise.resolve('aborted');
   return new Promise((resolve) => {
     const finish = (status) => {
@@ -2784,7 +2807,10 @@ function waitForVoiceFlight(flight, signal) {
       resolve(status);
     };
     const onAbort = () => finish('aborted');
-    const timer = setTimeout(() => finish('timeout'), VOICE_FLIGHT_WAIT_MS);
+    const timer = setTimeout(
+      () => finish('timeout'),
+      Math.max(0, deadline - Date.now()),
+    );
     signal?.addEventListener?.('abort', onAbort, { once: true });
     flight.ended.then(finish);
   });

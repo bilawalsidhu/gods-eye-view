@@ -57,6 +57,11 @@ const TILT_TO_DEG_S = 30;
  * range × sin|pitch|. It swings no lower than this; the rest tilts in place.
  */
 const TILT_MIN_CLEARANCE_M = 150;
+/**
+ * Beyond this range a pivot would swing the camera thousands of km about the
+ * crosshair point, so the tilt happens in place instead.
+ */
+const TILT_PIVOT_MAX_RANGE_M = 1_000_000;
 
 /* ── Route dolly: cinematic tuning ──────────────────────────────────────────
  * Every knob an owner may want to retune lives in this block. The shaping is
@@ -1322,11 +1327,15 @@ function tiltPivotPitchMax(range) {
 
 /**
  * Where a tilt starts. It swings about the ground under the crosshair so the
- * place stays centred; the follow camera owns a tracked view's frame.
+ * place stays centred. It tilts in place with no ground there, from globe
+ * range, or while an entity is tracked (the follow camera owns that frame;
+ * voice releases it before moving, so a voice tilt still pivots).
  */
-function tiltStartFrame(cam) {
-  const target = _viewer.trackedEntity ? null : _getTarget?.(_viewer);
-  const pivot = target ? tiltPivot(cam, target) : null;
+function tiltStartFrame(cam, { releasesTracking = false } = {}) {
+  const tracked = Boolean(_viewer.trackedEntity) && !releasesTracking;
+  const target = tracked ? null : _getTarget?.(_viewer);
+  let pivot = target ? tiltPivot(cam, target) : null;
+  if (pivot && pivot.range > TILT_PIVOT_MAX_RANGE_M) pivot = null;
   return { target, pivot, from: pivot ? pivot.pitch : cam.pitch };
 }
 
@@ -1543,6 +1552,83 @@ export function initCameraVerbs(
 }
 
 /**
+ * A tilt's angle: the one asked for, the default oblique view when a bare
+ * "tilt the camera" names neither angle nor direction, or null for a nudge.
+ */
+function requestedTiltPitch(args, direction) {
+  // Only a real number or numeric text: Number('') and Number(null) are 0,
+  // which would swing the camera to the horizon.
+  const raw = args.pitchDeg;
+  const requested =
+    typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '')
+      ? Number(raw)
+      : NaN;
+  // The camera never looks above the horizon, so a positive angle can only
+  // mean the same angle below it ("tilt 45 degrees" sent as 45).
+  if (Number.isFinite(requested))
+    return Cesium.Math.clamp(
+      Cesium.Math.toRadians(-Math.abs(requested)),
+      PITCH_MIN,
+      PITCH_MAX,
+    );
+  return direction === null
+    ? Cesium.Math.toRadians(TILT_DEFAULT_PITCH_DEG)
+    : null;
+}
+
+/**
+ * Argument errors move_camera refuses whatever the camera is doing, so a
+ * caller holding a motion back behind a flight can refuse it before waiting.
+ * @param {Object} args
+ * @returns {Object|null} The refusal, or null when the arguments are usable.
+ */
+export function moveCameraArgsError(args = {}) {
+  const motion = String(args.motion || '').toLowerCase();
+  const direction = args.direction
+    ? String(args.direction).toLowerCase()
+    : null;
+  if (motion === 'stop') return null;
+  if (!['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe'].includes(motion)) {
+    return {
+      ok: false,
+      action: 'move_camera',
+      error: `Unknown motion "${args.motion}" — use orbit, pan, tilt, rotate, rotate_globe, or stop.`,
+    };
+  }
+  if (
+    motion !== 'orbit' &&
+    motion !== 'rotate_globe' &&
+    (motion !== 'tilt' || requestedTiltPitch(args, direction) === null) &&
+    !['left', 'right', 'up', 'down'].includes(direction)
+  ) {
+    return {
+      ok: false,
+      action: 'move_camera',
+      error: `${motion} needs a direction (left/right${motion !== 'rotate' ? '/up/down' : ''}).`,
+    };
+  }
+  if (motion === 'rotate' && !['left', 'right'].includes(direction)) {
+    return {
+      ok: false,
+      action: 'move_camera',
+      error: 'rotate needs left or right.',
+    };
+  }
+  if (
+    motion === 'rotate_globe' &&
+    direction !== null &&
+    !['left', 'right'].includes(direction)
+  ) {
+    return {
+      ok: false,
+      action: 'move_camera',
+      error: 'rotate_globe needs left or right.',
+    };
+  }
+  return null;
+}
+
+/**
  * move_camera implementation. Returns the house result shape; rejections are
  * plain-English `ok:false` errors.
  * @param {Object} args
@@ -1574,69 +1660,17 @@ export function moveCamera(args = {}, runNavigation = null) {
     };
     return typeof runNavigation === 'function' ? runNavigation(stop) : stop();
   }
-  if (!['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe'].includes(motion)) {
-    return {
-      ok: false,
-      action: 'move_camera',
-      error: `Unknown motion "${args.motion}" — use orbit, pan, tilt, rotate, rotate_globe, or stop.`,
-    };
-  }
-  // Tilt to an angle: the one asked for, or a default oblique view when a
-  // bare "tilt the camera" names neither angle nor direction.
-  let tiltToPitch = null;
-  if (motion === 'tilt') {
-    // Only a real number or numeric text: Number('') and Number(null) are 0,
-    // which would swing the camera to the horizon.
-    const raw = args.pitchDeg;
-    const requested =
-      typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '')
-        ? Number(raw)
-        : NaN;
-    // The camera never looks above the horizon, so a positive angle can only
-    // mean the same angle below it ("tilt 45 degrees" sent as 45).
-    if (Number.isFinite(requested))
-      tiltToPitch = Cesium.Math.clamp(
-        Cesium.Math.toRadians(-Math.abs(requested)),
-        PITCH_MIN,
-        PITCH_MAX,
-      );
-    else if (direction === null)
-      tiltToPitch = Cesium.Math.toRadians(TILT_DEFAULT_PITCH_DEG);
-  }
-  if (
-    motion !== 'orbit' &&
-    motion !== 'rotate_globe' &&
-    tiltToPitch === null &&
-    !['left', 'right', 'up', 'down'].includes(direction)
-  ) {
-    return {
-      ok: false,
-      action: 'move_camera',
-      error: `${motion} needs a direction (left/right${motion !== 'rotate' ? '/up/down' : ''}).`,
-    };
-  }
-  if (motion === 'rotate' && !['left', 'right'].includes(direction)) {
-    return {
-      ok: false,
-      action: 'move_camera',
-      error: 'rotate needs left or right.',
-    };
-  }
-  if (
-    motion === 'rotate_globe' &&
-    direction !== null &&
-    !['left', 'right'].includes(direction)
-  ) {
-    return {
-      ok: false,
-      action: 'move_camera',
-      error: 'rotate_globe needs left or right.',
-    };
-  }
+  const argsError = moveCameraArgsError(args);
+  if (argsError) return argsError;
+  const tiltToPitch =
+    motion === 'tilt' ? requestedTiltPitch(args, direction) : null;
+  // A managed (voice) navigation releases the follow camera before start(),
+  // so checks made now must judge from the frame start() will see.
+  const releasesTracking = typeof runNavigation === 'function';
   if (motion === 'tilt' && tiltToPitch !== null) {
     // Judge from the pitch the motion will start at: the pivot's, which at
     // regional range is a degree or two shallower than the camera's.
-    const { from } = tiltStartFrame(_viewer.camera);
+    const { from } = tiltStartFrame(_viewer.camera, { releasesTracking });
     if (Math.abs(tiltToPitch - from) < Cesium.Math.toRadians(0.5)) {
       return {
         ok: true,
@@ -1661,7 +1695,8 @@ export function moveCamera(args = {}, runNavigation = null) {
   } else if (motion === 'tilt') {
     // Honest limits: at the clamp a tilt is a no-op — say so instead of
     // reporting success and letting the model gaslight itself (field test).
-    const pitch = _viewer.camera.pitch;
+    // The clamp reads the pitch the motion starts from.
+    const pitch = tiltStartFrame(_viewer.camera, { releasesTracking }).from;
     if (direction === 'up' && pitch >= PITCH_MAX - Cesium.Math.toRadians(0.5)) {
       return {
         ok: false,

@@ -368,3 +368,35 @@ test('a zoom out during a far orbit never pulls the camera in', (t) => {
   h.tick();
   assert.ok(pivotRange(h) >= before - 1, `range fell to ${pivotRange(h)} m`);
 });
+
+test('from globe range a tilt happens in place', (t) => {
+  // A pivot 2,000 km out would swing the camera thousands of km.
+  const h = harness(t, { height: 2_000_000 });
+  const before = Cesium.Cartesian3.clone(h.camera.positionWC);
+  assert.equal(moveCamera({ motion: 'tilt', pitchDeg: -45 }).ok, true);
+  h.finish();
+  assert.ok(Math.abs(pitchDeg(h.camera) - -45) < 0.5);
+  assert.ok(Cesium.Cartesian3.distance(h.camera.positionWC, before) < 1e-3);
+});
+
+test('a regional tilt-up nudge at the pivot limit refuses honestly', (t) => {
+  // 20 km up at -7°, the pivot 186 km out sits at -5.3°: already at the limit.
+  harness(t, { height: 20000, pitch: -7 });
+  const result = moveCamera({ motion: 'tilt', direction: 'up' });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /upper tilt limit/);
+  assert.equal(getActiveCameraMotion(), null);
+});
+
+test('a voice tilt from a tracked view judges its limit from the pivot it will use', (t) => {
+  const h = harness(t, { height: 20000, pitch: -7 });
+  h.viewer.trackedEntity = { id: 'tracked' };
+  // Voice releases the follow camera before the motion starts.
+  const release = (start) => {
+    h.viewer.trackedEntity = undefined;
+    return start();
+  };
+  const result = moveCamera({ motion: 'tilt', direction: 'up' }, release);
+  assert.equal(result.ok, false);
+  assert.match(result.error, /upper tilt limit/);
+});
