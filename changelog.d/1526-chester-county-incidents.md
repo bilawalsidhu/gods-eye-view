@@ -1,0 +1,1 @@
+- Add an optional Chester County, Pennsylvania Fire, EMS and Traffic incident layer, with approximate county-GIS locations, category icons, report details, mapping-coverage counts and stale-feed handling. Unresolved reports remain listed without guessed map pins. Data loads only at runtime. Thanks @dylanmaniatakes.

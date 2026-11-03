@@ -124,3 +124,6 @@ The browser gate uses synthetic records only and checks all three categories,
 list selection, mapping coverage, empty-snapshot clearing and disable. It writes
 its screenshot to `qa-shots/chester-county-ems/selected.png`. Set
 `QA_RECORDING_PATH` to an `.mp4` path to also record the interaction.
+
+PR evidence uses only synthetic records: [screenshot](media/chester-county-incidents-synthetic.png)
+and [demo recording](media/chester-county-incidents-demo.mp4) (2× playback).

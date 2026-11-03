@@ -96,7 +96,6 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
     timeout: 60000,
   });
-  await page.locator('[data-rail-item="data-panel"]').click();
   if (process.env.QA_RECORDING_PATH) {
     await mkdir(dirname(process.env.QA_RECORDING_PATH), { recursive: true });
     recorder = await page.screencast({
@@ -126,18 +125,31 @@ try {
   assert.equal(result.list, 4);
   assert.match(result.info, /3 mapped · 1 unresolved · 0 lookup errors/);
   assert.match(result.info, /Street locations are approximate/);
+  const incidentSelector =
+    '[data-layer-id="chester-county-ems"] button[data-list-item-id="F26000001"]';
+  const incidentVisible = await page.evaluate((selector) => {
+    const item = document.querySelector(selector);
+    return item?.checkVisibility({ visibilityProperty: true }) || false;
+  }, incidentSelector);
+  if (!incidentVisible)
+    await page.locator('[data-rail-item="data-panel"]').click();
   if (recorder) {
     await page.evaluate(() => {
-      const layer = window.__godsEyeView.dataManager.layers.get('chester-county-ems').module;
-      layer.getRowControls().chips.find((chip) => chip.id === 'county').onClick();
+      const layer =
+        window.__godsEyeView.dataManager.layers.get(
+          'chester-county-ems',
+        ).module;
+      layer
+        .getRowControls()
+        .chips.find((chip) => chip.id === 'county')
+        .onClick();
     });
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
-  await page
-    .locator(
-      '[data-layer-id="chester-county-ems"] button[data-list-item-id="F26000001"]',
-    )
-    .click();
+  const incident = await page.waitForSelector(incidentSelector, {
+    visible: true,
+  });
+  await incident.click();
   await page.waitForFunction(
     () =>
       document
