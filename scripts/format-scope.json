@@ -1104,6 +1104,7 @@
   "scripts/qa-anime-sky.mjs",
   "scripts/qa-sky-model-lighting.mjs",
   "server/providers/overpass/requestAdmission.test.mjs",
+  "src/tooling/trackArrivalObservation.mjs",
   "src/tooling/trackArrivalObservation.test.mjs",
   "src/ui/styles/status-badge.css",
   "src/ui/cctvBadges.test.mjs",
@@ -1208,5 +1209,6 @@
   "src/standalone/layerSources.test.mjs",
   "src/tooling/nominatimGuardLifecycle.test.mjs",
   "src/tooling/nominatimLockOwnership.test.mjs",
-  "src/tooling/nominatimOutlineRoute.test.mjs"
+  "src/tooling/nominatimOutlineRoute.test.mjs",
+  "server/providers/common/rateLimitKeys.test.mjs"
 ]
