@@ -8,9 +8,11 @@
 
 import * as geo from '../../geo/index.js';
 import {
+  BLOOM_INITIAL,
   SHARPEN_INITIAL,
   STYLE_INITIAL,
   createEngineEvent,
+  mergeBloom,
   mergeSharpen,
   mergeStyle,
 } from '../contract.js';
@@ -90,12 +92,15 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   clock?: object,
  *   appClock?: import('../../time/clock.js').AppClock,
  *   sharpen?: { set: (state: { enabled: boolean, amount: number }) => void, destroy: () => void },
+ *   bloom?: { set: (state: { enabled: boolean, strength: number }) => void, destroy: () => void },
  *   styles?: { names: readonly string[], uniformNames: (name: string) => string[], defaults: (name: string) => Record<string, number>, set: (name: string, state: { intensity: number, uniforms: Record<string, number> }) => void, destroy: () => void },
  * }} options `hooks` are internals.js; `container` defaults to the
  *   canvas's parent; `sharpen` draws render.setSharpen (sharpen.js; without
  *   it the engine only keeps the state) and the engine destroys it;
  *   `styles` draws render.setStyle (stylePasses.js; without it the engine
- *   has no visualStyles capability) and the engine destroys it;
+ *   has no visualStyles capability) and the engine destroys it; `bloom`
+ *   draws render.setBloom (bloom.js; without it no bloom capability), also
+ *   destroyed with the engine;
  *   `appClock` (the engine clock's time) defaults to the page's app clock;
  *   `movers` is engine.movers on the view's three runtime (movers/index.js;
  *   without it createSet throws), `lines` engine.lines (lines/index.js;
@@ -115,6 +120,7 @@ export function createNavaraEngine(
     lines: linesPort = null,
     sharpen: sharpenPort = null,
     styles: stylesPort = null,
+    bloom: bloomPort = null,
   } = {},
 ) {
   if (!view?.camera?.raw)
@@ -310,6 +316,21 @@ export function createNavaraEngine(
         },
       }
     : {};
+  let bloom = { ...BLOOM_INITIAL };
+  const bloomRender = bloomPort
+    ? {
+        setBloom(options) {
+          const next = mergeBloom(bloom, options);
+          const changed =
+            next.enabled !== bloom.enabled || next.strength !== bloom.strength;
+          bloom = next;
+          if (!changed || destroyed) return;
+          bloomPort.set({ ...next });
+          view.forceUpdate();
+        },
+        bloom: () => ({ ...bloom }),
+      }
+    : {};
   return {
     kind: 'navara',
     host: { container: container ?? canvas.parentElement, canvas, size },
@@ -339,6 +360,7 @@ export function createNavaraEngine(
       },
       sharpen: () => ({ ...sharpen }),
       ...styleRender,
+      ...bloomRender,
     },
     surface,
     input: input.input,
@@ -360,13 +382,23 @@ export function createNavaraEngine(
       maps.destroy();
       sharpenPort?.destroy();
       stylesPort?.destroy();
+      bloomPort?.destroy();
       moversPort?.destroy();
       linesPort?.destroy();
     },
     isDestroyed: () => destroyed,
     // Navara only, not contract: the post pipeline as QA reads it (the
     // passes in draw order, whether the styles pass shows).
-    pipeline: () => stylesPort?.diagnostics?.() ?? null,
+    pipeline: () => {
+      const styles = stylesPort?.diagnostics?.();
+      const glow = bloomPort?.diagnostics?.();
+      if (!styles && !glow) return null;
+      return {
+        shown: styles?.shown ?? false,
+        bloomShown: glow?.shown ?? false,
+        passes: styles?.passes ?? glow?.passes ?? null,
+      };
+    },
     // Navara only, not contract: the ground the floor last sampled under
     // the camera and the margin it keeps above it (QA measures against it).
     groundFloor: {

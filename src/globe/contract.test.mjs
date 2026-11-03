@@ -5,6 +5,7 @@ import {
   GLOBE_ENGINE_MEMBERS,
   INPUT_TYPES,
   MODIFIERS,
+  BLOOM_INITIAL,
   ENGINE_CAPABILITIES,
   OPTIONAL_ENGINE_MEMBERS,
   SHARPEN_INITIAL,
@@ -12,6 +13,7 @@ import {
   createEngineEvent,
   engineCapabilities,
   isEngineEvent,
+  mergeBloom,
   mergeSharpen,
   mergeStyle,
 } from './contract.js';
@@ -448,4 +450,29 @@ test('a fake engine with visual styles passes the optional style check', async (
     waitFrames: async () => {},
   });
   assert.ok(!plain.some(({ name }) => /visualStyles/.test(name)));
+});
+
+test('the bloom capability: whole or absent, merged and checked', async (t) => {
+  assert.ok(ENGINE_CAPABILITIES.includes('bloom'));
+  assert.deepEqual(OPTIONAL_ENGINE_MEMBERS.bloom, [
+    'render.setBloom',
+    'render.bloom',
+  ]);
+  const engine = createFakeEngine({ bloom: true });
+  assert.equal(engineCapabilities(engine).bloom, true);
+  assert.equal(engineCapabilities(engine).visualStyles, false);
+  assert.deepEqual(engine.render.bloom(), BLOOM_INITIAL);
+  const half = { ...engine, render: { ...engine.render, bloom: undefined } };
+  assert.throws(() => assertGlobeEngine(half), /render\.bloom\b/);
+  assert.deepEqual(mergeBloom(BLOOM_INITIAL, { strength: 0.5 }), {
+    enabled: false,
+    strength: 0.5,
+  });
+  for (const bad of [{ enabled: 'on' }, { strength: 2 }, { strength: -1 }])
+    assert.throws(() => mergeBloom(BLOOM_INITIAL, bad), TypeError);
+  const checks = createContractSuite(engine, {
+    waitFrames: async (count) => engine.fake.frames(count),
+  }).filter(({ name }) => /\(bloom\)/.test(name));
+  assert.equal(checks.length, 1);
+  for (const check of checks) await t.test(check.name, () => check.run());
 });

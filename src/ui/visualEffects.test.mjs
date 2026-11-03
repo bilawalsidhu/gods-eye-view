@@ -459,6 +459,33 @@ test('Anime on an engine without a viewer reaches no sky box', () => {
   effects.destroy();
 });
 
+test('without a viewer an engine that blooms gets the slider strength and dead zone', () => {
+  const { engine, effects, requests } = engineFixture(
+    createFakeEngine({ kind: 'navara', bloom: true }),
+  );
+  engine.render.setBloom({ enabled: true, strength: 1 });
+  effects.initPostProcess(0.49);
+  assert.deepEqual(
+    engine.render.bloom(),
+    { enabled: false, strength: 0 },
+    'a new owner starts the engine from its own bloom',
+  );
+  effects.applyBloomIntensity(150);
+  assert.deepEqual(engine.render.bloom(), { enabled: false, strength: 0.75 });
+  effects.setBloomEnabled(true);
+  assert.deepEqual(engine.render.bloom(), { enabled: true, strength: 0.75 });
+  // Cesium's dead zone: the toggle stays on, nothing glows.
+  effects.applyBloomIntensity(10);
+  assert.deepEqual(engine.render.bloom(), { enabled: false, strength: 0.05 });
+  effects.applyBloomIntensity(200);
+  assert.deepEqual(engine.render.bloom(), { enabled: true, strength: 1 });
+  effects.setBloomEnabled(false);
+  assert.equal(engine.render.bloom().enabled, false);
+  assert.ok(requests.includes('bloom'));
+  assert.equal(effects.bloomStage, null);
+  effects.destroy();
+});
+
 test('without the visualStyles capability an engine gets no stages', () => {
   const { effects } = engineFixture(createFakeEngine({ kind: 'navara' }));
   effects.initStyles();
