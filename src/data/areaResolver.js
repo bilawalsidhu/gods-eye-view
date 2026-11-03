@@ -25,6 +25,7 @@
 
 import { AREA_LEVELS } from './areaStore.js';
 import { pointInPreparedArea, prepareArea } from './areaGeometry.js';
+import { adminQueryIdentity, normalizeAdminName } from './adminBoundaries.js';
 import {
   isAreaCandidateId,
   MAX_AREA_CANDIDATE_ID_LENGTH,
@@ -149,8 +150,18 @@ function explicitAdminName(text) {
   };
 }
 
-/** Fail closed when a bundled unit's own name contradicts the requested unit. */
-function bundledAdminIdentityRefusal(admin, query, wantedLevel) {
+/**
+ * Fail closed when a bundled unit's own name contradicts the requested unit.
+ * With `aliases`, an ask the administrative matcher reads as naming this very
+ * unit at its level ("State of Texas", "USA") also matches; the natural-region
+ * check leaves it off, since "Great Britain" is not the United Kingdom.
+ */
+function bundledAdminIdentityRefusal(
+  admin,
+  query,
+  wantedLevel,
+  { aliases = true } = {},
+) {
   const source = explicitAdminName(admin?.name || '');
   const requested = explicitAdminName(query);
   const expectedLevel = wantedLevel || requested.level;
@@ -161,8 +172,16 @@ function bundledAdminIdentityRefusal(admin, query, wantedLevel) {
       code: 'AREA_IDENTITY_UNVERIFIED',
       error: `The bundled boundary is ${admin?.name || 'an unverified administrative unit'}, not a verified current match for "${query}".`,
     };
+  const alias = aliases ? adminQueryIdentity(query) : null;
+  const named =
+    source.bare === requested.bare ||
+    Boolean(
+      alias &&
+      alias.level === emittedLevel &&
+      alias.name === normalizeAdminName(admin.name),
+    );
   if (
-    source.bare !== requested.bare ||
+    !named ||
     (source.level && expectedLevel && source.level !== expectedLevel) ||
     (expectedLevel && emittedLevel !== expectedLevel)
   )
@@ -343,7 +362,10 @@ export function createAreaResolver({
         places.length > 0 &&
         level !== 'natural' &&
         (await findAdminCandidates(query, { signal }).catch(() => [])).some(
-          (admin) => !bundledAdminIdentityRefusal(admin, query, null),
+          (admin) =>
+            !bundledAdminIdentityRefusal(admin, query, null, {
+              aliases: false,
+            }),
         );
       signal?.throwIfAborted?.();
       if (places.length > 1 && !shadowsAdmin) {

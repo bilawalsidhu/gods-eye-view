@@ -21,7 +21,10 @@ import { createAreaStore, summarizeArea } from '../data/areaStore.js';
 import { createAreaResolver, foldLatinMarks } from '../data/areaResolver.js';
 import { circleRing, displayParts } from '../data/areaGeometry.js';
 import { findNaturalRegion } from '../data/naturalEarthRegions.js';
-import { findAdminCandidates as findBundledAdminCandidates } from '../data/adminBoundaries.js';
+import {
+  adminQueryIdentity,
+  findAdminCandidates as findBundledAdminCandidates,
+} from '../data/adminBoundaries.js';
 import {
   NATURAL_EARTH_CREDIT,
   US_CENSUS_CREDIT,
@@ -87,6 +90,16 @@ function administrativeIdentity(value) {
     .toLocaleLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
     .trim();
+  // Forms the administrative matcher reads as one unit's name: "State of
+  // Texas" is Texas at admin level 1, "USA" is United States of America.
+  const named = adminQueryIdentity(value);
+  if (named?.level === 'admin1')
+    return {
+      name: foldLatinMarks(normalized.replace(/^(?:the )?.+? of /, '')),
+      level: 'admin1',
+    };
+  if (named?.level === 'country')
+    return { name: foldLatinMarks(named.name), level: 'country' };
   const match = normalized.match(
     /\b(country|nation|province|state|region|zone|oblast|prefecture|canton|governorate|county|district|department)$/,
   );

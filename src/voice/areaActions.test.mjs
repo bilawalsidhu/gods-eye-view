@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { createVoiceAreas, spokenArea } from './areaActions.js';
 import { pointInPreparedArea } from '../data/areaGeometry.js';
 import { presentResult } from './resultDisplay.js';
+import { findAdminCandidates as findBundledAdminCandidates } from '../data/adminBoundaries.js';
 
 const square = (w, s, e, n) => [
   [w, s],
@@ -390,6 +391,49 @@ test('a verified province accepts a bare query with a separate level', async () 
   assert.equal(retiredRefusal.ok, false);
   assert.equal(retiredRefusal.code, 'AREA_IDENTITY_MISMATCH');
   assert.equal(retired.areas.store.size, 0);
+});
+
+test('an explicit level accepts the names the administrative matcher reads as that unit', async () => {
+  const bundled = () =>
+    makeAreas({ findAdminCandidates: findBundledAdminCandidates }).areas;
+  for (const [query, level, name] of [
+    ['State of Texas', 'admin1', 'Texas'],
+    ['State of Texas', undefined, 'Texas'],
+    ['USA', 'country', 'United States of America'],
+    ['UK', 'country', 'United Kingdom'],
+  ]) {
+    const result = await bundled().resolveAreaAction({ query, level });
+    assert.equal(result.ok, true, `${query} (${level}): ${result.error}`);
+    assert.equal(result.name, name);
+    assert.equal(result.level, level || 'admin1');
+  }
+  // The level still has to match the unit.
+  for (const [query, level] of [
+    ['State of Texas', 'country'],
+    ['USA', 'admin1'],
+  ]) {
+    const areas = bundled();
+    const result = await areas.resolveAreaAction({ query, level });
+    assert.equal(result.ok, false, `${query} is not a ${level}`);
+    assert.equal(areas.store.size, 0);
+  }
+
+  // The outline ladder's identity check reads the same forms.
+  const prefixed = makeAreas().areas;
+  const bagmati = await prefixed.resolveAreaAction({
+    query: 'Province of Bagmati',
+    level: 'admin1',
+  });
+  assert.equal(bagmati.ok, true, bagmati.error);
+  assert.equal(bagmati.name, 'Bagmati Province');
+  const wrongLevel = makeAreas().areas;
+  const county = await wrongLevel.resolveAreaAction({
+    query: 'Province of Bagmati',
+    level: 'admin2',
+  });
+  assert.equal(county.ok, false);
+  assert.equal(county.code, 'AREA_IDENTITY_MISMATCH');
+  assert.equal(wrongLevel.store.size, 0);
 });
 
 test('a current Zone the source verified is not refused as retired', async () => {
