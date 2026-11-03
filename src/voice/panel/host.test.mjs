@@ -511,7 +511,7 @@ test('the voice inactivity timeout never ends a typed chat session', async (t) =
 
 async function directActions(
   t,
-  { storage = null, delayExit = false, exposePanel = true } = {},
+  { storage = null, delayExit = false, exposePanel = true, typed = false } = {},
 ) {
   let f, releaseExit;
   const state = { active: true, exits: 0, visual: [] };
@@ -544,7 +544,12 @@ async function directActions(
       exposePanel ? f?.commands.captureVoicePanelOperation() : undefined,
   });
   f = mounted(t, { native: true, runner, storage });
-  await f.commands.session.start();
+  // A typed chat session starts from chat's first send instead.
+  if (typed) {
+    const adapter = f.instances[0];
+    adapter.getStartOptions = () => ({ textOnly: true });
+    adapter.sendText = () => true;
+  } else await f.commands.session.start();
   return {
     ...f,
     runner,
@@ -617,6 +622,53 @@ test('named voice settings exits Cockpit directly; Preview stays disabled and vi
     'an unnamed settings target never guesses a panel',
   );
 });
+
+for (const minimized of [false, true])
+  test(`an explicit voice panel request from ${minimized ? 'minimized ' : ''}typed chat shows the panel and keeps the chat`, async (t) => {
+    const f = await directActions(t, { typed: true });
+    const adapter = f.instances[0];
+    f.ui.emit('chat-button');
+    f.ui.emit('chat-input', 'Fly to Tokyo');
+    f.ui.emit('chat-submit');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(f.ui.state.chat.busy, true, 'the typed turn is running');
+    if (minimized) f.ui.emit('chat-minimize');
+    assert.equal(f.ui.state.root.chatOpen, true);
+    for (const [panelId, view] of [
+      ['voice-settings', 'settings'],
+      ['voice-preview', 'preview'],
+    ]) {
+      const result = await f.run('set_panel_open', { panelId, open: true });
+      assert.equal(result.ok, true);
+      // `[data-chat-open='true'] .gev-voice-panel` is display:none.
+      assert.equal(f.ui.state.root.chatOpen, false, panelId);
+      assert.equal(f.ui.state.chat.open, false);
+      assert.equal(f.ui.state.voicePanel.hidden, false);
+      assert.equal(f.ui.state.voicePanel.view, view);
+    }
+    assert.equal(adapter.stops, 0, 'the typed session continues');
+    assert.equal(f.commands.session.isActive(), true);
+    assert.equal(f.ui.state.chat.busy, true, 'the turn is not cancelled');
+    adapter.hooks.emit({
+      type: 'transcript',
+      role: 'assistant',
+      text: 'Flying to Tokyo.',
+      final: true,
+      itemId: 'reply',
+    });
+    adapter.hooks.emit({ type: 'completion', status: 'completed' });
+    assert.equal(f.ui.state.chat.busy, false);
+    f.ui.emit('chat-button');
+    assert.equal(f.ui.state.root.chatOpen, true);
+    assert.equal(f.ui.state.voicePanel.hidden, true);
+    assert.deepEqual(
+      f.ui.chatMessages.map(({ role }) => role),
+      ['user', 'assistant'],
+      'reopened chat shows the whole conversation',
+    );
+    assert.equal(f.ui.chatMessages[0].text, 'Fly to Tokyo');
+    assert.equal(adapter.stops, 0);
+  });
 
 test('canonical exit reveals requested voice UI; newer manual choice or Stop defeats pending reveal', async (t) => {
   const f = await directActions(t, { delayExit: true });

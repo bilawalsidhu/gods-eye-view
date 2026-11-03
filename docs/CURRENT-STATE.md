@@ -767,7 +767,10 @@ starts. Settings opened from chat keep chat's frame and show the shared AI
 provider and the quick-commands option, with Back to chat; voice Settings show
 Back to voice. Escape steps back from either Settings view, closes Voice
 Preview, and does nothing in chat. Closing chat ends a typed session, and the
-voice panel's close turns voice off.
+voice panel's close turns voice off. Asking the assistant from chat to open
+Voice Settings or Voice Preview puts chat away, minimized or not, and shows the
+voice panel; the typed conversation and its running reply carry on, and the
+chat button brings them back.
 
 Contacts nearest-aircraft follow-ups retain the snapshot's distance basis even
 after the camera moves. An explicit new scope replaces that basis. Provider

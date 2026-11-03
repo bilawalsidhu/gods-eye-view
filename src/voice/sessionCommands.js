@@ -157,7 +157,20 @@ export function createVoiceCommands({
   controls.voiceCard = card;
   if (panelMount) {
     controls.voicePanel = panelMount.panel;
-    controls.captureVoicePanelOperation = panelMount.captureOperation;
+    // An explicit, successful show hands the frame from chat to the voice
+    // panel, which chat's open state hides. Closing chat keeps its typed
+    // session, running turn and messages; reopening chat restores them.
+    controls.captureVoicePanelOperation = () => {
+      const operation = panelMount.captureOperation();
+      return {
+        ...operation,
+        show(view, open = true) {
+          const result = operation.show(view, open);
+          if (open && result.ok) chat?.close();
+          return result;
+        },
+      };
+    };
     controls.getVoicePanelState = panelMount.snapshot;
     controls.getVoicePreferences = panelHost.snapshot;
   }
