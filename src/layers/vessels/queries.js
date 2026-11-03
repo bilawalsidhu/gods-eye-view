@@ -548,6 +548,8 @@ export function createQueries({
         // backing off, say how long until the next attempt instead of leaving
         // the user to guess whether anything is still happening.
         retryInSec: aisRetryInSec(),
+        // The provider the last snapshot named, as flights and military report it.
+        source: layer.source,
       };
     },
   };

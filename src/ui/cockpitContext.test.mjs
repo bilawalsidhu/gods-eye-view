@@ -96,6 +96,13 @@ test('before the controller presents, the card shows the state it starts in', (t
     ),
     ['—', '—', '—', '—'],
   );
+  // No provider is named before a snapshot reports one.
+  assert.deepEqual(
+    [...document.querySelectorAll('[data-context-cohort] small')].map(
+      (source) => source.textContent,
+    ),
+    ['—', '—', '—', '—'],
+  );
   assert.equal(text('#cockpit-context-nearest-label'), 'NO AVAILABLE EXAMPLE');
   assert.equal(
     $('#cockpit-context-nearest-label').hasAttribute('aria-label'),
@@ -157,6 +164,45 @@ test('a snapshot fills the card and keeps classes other code sets', async (t) =>
   );
   assert.equal(text('#cockpit-context-updated'), '12:34:56Z');
   assert.equal(layouts.length, 1);
+});
+
+test('each count names the provider its snapshot reports, with its feed state', async (t) => {
+  // HAL-721: the counters named fixed providers while the layer and the
+  // Contacts list named the one that answered.
+  const reported = snapshot();
+  reported.cohorts[0].source = 'adsb.lol';
+  reported.cohorts[0].sourceStatus = 'fallback';
+  reported.cohorts[1].source = 'Plane Finder';
+  reported.cohorts.push(
+    {
+      id: 'ais-live-vessels',
+      label: 'AIS vessels',
+      source: 'Datalastic',
+      sourceStatus: 'stale',
+      count: 3,
+      relationship: 'OBSERVED',
+      nearest: [],
+    },
+    {
+      id: 'military-installations',
+      label: 'Mapped installations',
+      source: 'OpenStreetMap',
+      sourceStatus: null,
+      count: 0,
+      relationship: 'MAPPED',
+      nearest: [],
+    },
+  );
+  const { $, owner } = fixture(t, reported);
+  updateContext.call(owner, INFO, 0);
+  await nextTick();
+  const source = (id) => $(`[data-context-cohort="${id}"] small`);
+  assert.equal(source('flights').textContent, 'adsb.lol · FALLBACK');
+  assert.equal(source('military').textContent, 'Plane Finder');
+  assert.equal(source('ais-live-vessels').textContent, 'Datalastic · STALE');
+  assert.equal(source('military-installations').textContent, 'OpenStreetMap');
+  // The tile ellipsizes; the full name stays readable on hover.
+  assert.equal(source('flights').title, 'adsb.lol · FALLBACK');
 });
 
 test('a lost contact holds its readout behind the CONTACT LOST cue', async (t) => {

@@ -409,3 +409,17 @@ test('empty coverage cannot hide stale, incomplete or rejected source data', asy
     assert.ok(layer.getStats().error, JSON.stringify(patch));
   }
 });
+
+test('vessel stats name the provider the last snapshot reported', async () => {
+  // HAL-721: Contacts named a fixed AIS provider while this layer showed the
+  // one its server reported.
+  const { layer } = setup({
+    label: 'Vessels',
+    async getSnapshot() {
+      return snapshot([observation('111')], { source: 'Datalastic' });
+    },
+  });
+  assert.equal(layer.getStats().source, 'Vessels');
+  await layer.update();
+  assert.equal(layer.getStats().source, 'Datalastic');
+});

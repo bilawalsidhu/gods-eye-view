@@ -1,6 +1,7 @@
 /** Contact readouts and nearby-signal presentation for the Cockpit controller. */
 import * as Cesium from 'cesium';
 import { formatNumber, t, tn } from '../i18n/index.js';
+import { sourceStatusLabel } from './layerNames.js';
 import { unitLabel } from './unitLabels.js';
 import {
   bearingBetweenCoordinates,
@@ -110,6 +111,8 @@ export function updateContext(info, heading) {
     if (shown) {
       shown.count = cohort.count === null ? '?' : String(cohort.count);
       shown.unknown = cohort.relationship === 'UNKNOWN';
+      // The provider that answered, named as the Layers panel names it.
+      shown.source = sourceStatusLabel(cohort.source, cohort.sourceStatus);
     }
     if (cohort.count === null) unknownCount += 1;
     for (const item of cohort.nearest) nearest.push({ ...item, cohort });
