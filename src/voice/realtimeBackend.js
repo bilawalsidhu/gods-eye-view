@@ -1,4 +1,5 @@
 import { DEFAULT_VOICE_TIER, resolveVoiceModel } from './voiceCost.js';
+import { resolveVoiceLanguage } from './voiceLanguage.js';
 
 /** Realtime-compatible token and SDP requests, independent of microphone/UI ownership. */
 export function createRealtimeBackend({
@@ -18,6 +19,7 @@ export function createRealtimeBackend({
     async requestToken({
       tier = DEFAULT_VOICE_TIER,
       authMode = 'api-key',
+      language,
       signal,
     } = {}) {
       signal = scoped(signal);
@@ -27,6 +29,9 @@ export function createRealtimeBackend({
         tier: resolveVoiceModel(tier).tier,
       });
       if (authMode === 'oauth') query.set('auth', 'oauth');
+      // The interface language; English sends nothing, as before.
+      const lang = resolveVoiceLanguage(language);
+      if (lang) query.set('lang', lang);
       const url = `${tokenEndpoint}${separator}${query}`;
       const response = await tokenTransport(url, {
         signal,
