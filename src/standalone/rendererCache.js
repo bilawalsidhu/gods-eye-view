@@ -9,11 +9,8 @@ export function createRendererCache() {
     let entry = idle.get(kind);
     idle.delete(kind);
     // loseContext() takes effect before its queued DOM event is delivered.
-    // Check the existing context too, before resuming a parked render loop.
-    const canvas = entry?.scene.engine.host.canvas;
-    const context =
-      canvas?.getContext?.('webgl2') ?? canvas?.getContext?.('webgl');
-    if (entry && (entry.lost || context?.isContextLost())) {
+    // Check the context itself too, before resuming a parked render loop.
+    if (entry && (entry.lost || entry.context?.isContextLost?.())) {
       entry.dispose();
       entry = null;
     }
@@ -39,7 +36,13 @@ export function createRendererCache() {
           container,
           defer: (fn) => cleanups.push(fn),
         });
-        entry = { container, scene, dispose, lost: false };
+        // The context the globe draws with, read once while it is new: a
+        // switch reads its state and never asks the canvas again (a canvas
+        // asked for another context type would create one).
+        const canvas = scene.engine.host.canvas;
+        const context =
+          canvas.getContext?.('webgl2') ?? canvas.getContext?.('webgl') ?? null;
+        entry = { container, scene, dispose, lost: false, context };
         scene.engine.host.canvas.addEventListener(
           'webglcontextlost',
           () => {
