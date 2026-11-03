@@ -32,10 +32,12 @@ export async function createApplicationScene({
   layerSession,
   ...options
 }) {
-  const operations = layerSession?.operations ?? createApplicationOperations({
-    requests: requestServices,
-    signal: layerSession?.lifetime.signal ?? signal,
-  });
+  const operations =
+    layerSession?.operations ??
+    createApplicationOperations({
+      requests: requestServices,
+      signal: layerSession?.lifetime.signal ?? signal,
+    });
   if (layerSession) layerSession.operations = operations;
   defer(initLogoGaze());
   const previousKey = window.__GOOGLE_MAPS_API_KEY__;
@@ -47,6 +49,12 @@ export async function createApplicationScene({
       else window.__GOOGLE_MAPS_API_KEY__ = previousKey;
     });
   }
+  // A cached renderer is built once, by the first application that asks for
+  // its engine, and later applications reuse it warm. Everything this closure
+  // captures from that application (its abort signal, the loader status
+  // element, Navara's `?look=` read from location.search) is read only while
+  // the renderer is being built; nothing in the built scene keeps using it.
+  // A changed `?look=` therefore applies to a renderer built after it.
   const build = (resources) =>
     createRenderer({
       ...options,
@@ -54,9 +62,10 @@ export async function createApplicationScene({
       signal,
       ...resources,
     });
-  const { viewer, engine, tileset, mapStackController, packRenderer } = rendererCache
-    ? await rendererCache.acquire(options.engineKind, build, defer)
-    : await build({ defer });
+  const { viewer, engine, tileset, mapStackController, packRenderer } =
+    rendererCache
+      ? await rendererCache.acquire(options.engineKind, build, defer)
+      : await build({ defer });
   if (layerSession) {
     // DEM cells belong to the session. Mesh samples came from the outgoing
     // scene, including when the incoming canvas was warm in the cache.
