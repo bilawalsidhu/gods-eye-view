@@ -454,7 +454,8 @@ function globeOf(target) {
 export function installScopeMask(target) {
   if (_canvas) return;
   const globe = globeOf(target);
-  if (!globe.container) return;
+  // Only a DOM container can hold the mask (an engine double's cannot).
+  if (typeof globe.container?.appendChild !== 'function') return;
   syncScopeMaskAppearance();
   _container = globe.container;
   _globe = globe;
