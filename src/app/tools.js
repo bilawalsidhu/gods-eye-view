@@ -162,7 +162,8 @@ export async function createApplicationTools({
     { defer },
   );
 
-  // The application's debug handle; its globe fields follow the engine.
+  // The application's debug handle, the same object on every globe; its
+  // globe fields follow the engine.
   const debug = {
     viewer: null,
     engine: null,
@@ -179,7 +180,6 @@ export async function createApplicationTools({
     surfaceServices: operations.surface,
     requestRender: governorRequestRender,
   };
-  window.__godsEyeView = debug;
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
@@ -232,8 +232,12 @@ export async function createApplicationTools({
           cockpitCloudEffects: controls.cockpitCloudEffects ?? null,
           voiceCommands: attached.voiceCommands,
         });
+        // Present only while a globe is attached, as when every engine
+        // built its own application: scripts read `engine.kind` from it.
+        window.__godsEyeView = debug;
       },
       detachScene() {
+        if (window.__godsEyeView === debug) delete window.__godsEyeView;
         Object.assign(debug, {
           viewer: null,
           engine: null,
