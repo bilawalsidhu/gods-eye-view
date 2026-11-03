@@ -2958,7 +2958,7 @@
   "Attach a map layer": "附加地圖圖層",
   "Choose a layer…": "選擇圖層…",
   "Attach a file": "附加檔案",
-  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB each. Attachments are sent to your AI provider with your message.": "TXT、Markdown、CSV、JSON 或 GeoJSON · 每個最多 10 KB。附件會隨訊息傳送給你的 AI 供應商。",
+  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB in total. Attachments are sent to your AI provider with your message.": "TXT、Markdown、CSV、JSON 或 GeoJSON · 總計最多 10 KB。附件會隨訊息傳送給你的 AI 供應商。",
   "Latest AI response": "最新 AI 回覆",
   "Expand conversation": "展開對話",
   "Command suggestions": "指令建議",

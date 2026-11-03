@@ -2958,7 +2958,7 @@
   "Attach a map layer": "地図レイヤーを添付",
   "Choose a layer…": "レイヤーを選択…",
   "Attach a file": "ファイルを添付",
-  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB each. Attachments are sent to your AI provider with your message.": "TXT、Markdown、CSV、JSON、GeoJSON · 各 10 KB まで。添付はメッセージとともに AI プロバイダーへ送信されます。",
+  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB in total. Attachments are sent to your AI provider with your message.": "TXT、Markdown、CSV、JSON、GeoJSON · 合計 10 KB まで。添付はメッセージとともに AI プロバイダーへ送信されます。",
   "Latest AI response": "最新の AI の応答",
   "Expand conversation": "会話を展開",
   "Command suggestions": "コマンドの候補",

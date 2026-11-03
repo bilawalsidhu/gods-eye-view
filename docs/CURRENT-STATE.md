@@ -737,9 +737,9 @@ Only one mode runs at a time: the microphone closes chat, and opening chat
 stops voice. Enter sends, Shift+Enter adds a line, and Up or Down at the start
 of the field recall recent messages and restore the draft. Attachments are up
 to four map-layer references or UTF-8 TXT, Markdown, CSV, JSON and GeoJSON
-files, 10 KB each and bounded together, sent only with the message; a layer
-reference names the layer without exporting its records. The conversation and
-recent commands stay in memory for the page.
+files, 10 KB in total, sent only with the message; a layer reference names
+the layer without exporting its records. The conversation and recent commands
+stay in memory for the page.
 
 The chat routes answer a missing key with `503` and code `API_KEY_MISSING`.
 OpenAI chat can only bill `OPENAI_API_KEY`, so while `GEV_PREFER_CODEX_OAUTH`

@@ -3321,7 +3321,7 @@
   "Attach a map layer": "إرفاق طبقة خريطة",
   "Choose a layer…": "اختر طبقة…",
   "Attach a file": "إرفاق ملف",
-  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB each. Attachments are sent to your AI provider with your message.": "TXT أو Markdown أو CSV أو JSON أو GeoJSON · حتى 10 كيلوبايت لكل ملف. تُرسل المرفقات إلى مزوّد الذكاء الاصطناعي مع رسالتك.",
+  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB in total. Attachments are sent to your AI provider with your message.": "TXT أو Markdown أو CSV أو JSON أو GeoJSON · حتى 10 كيلوبايت إجمالًا. تُرسل المرفقات إلى مزوّد الذكاء الاصطناعي مع رسالتك.",
   "Latest AI response": "أحدث رد من الذكاء الاصطناعي",
   "Expand conversation": "توسيع المحادثة",
   "Command suggestions": "اقتراحات الأوامر",

@@ -3108,7 +3108,7 @@
   "Attach a map layer": "Allega un livello della mappa",
   "Choose a layer…": "Scegli un livello…",
   "Attach a file": "Allega un file",
-  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB each. Attachments are sent to your AI provider with your message.": "TXT, Markdown, CSV, JSON o GeoJSON · fino a 10 KB ciascuno. Gli allegati vengono inviati al tuo fornitore di IA insieme al messaggio.",
+  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB in total. Attachments are sent to your AI provider with your message.": "TXT, Markdown, CSV, JSON o GeoJSON · fino a 10 KB in totale. Gli allegati vengono inviati al tuo fornitore di IA insieme al messaggio.",
   "Latest AI response": "Ultima risposta dell’IA",
   "Expand conversation": "Espandi conversazione",
   "Command suggestions": "Suggerimenti di comandi",

@@ -108,6 +108,17 @@ test('attachments over 10 KB together are refused', async (t) => {
   ]);
 });
 
+test('the attach menu states the 10 KB limit for all attachments together', async (t) => {
+  const { pinia, settle } = mountVoiceView(t);
+  const ui = createTestVoiceUi({ panel: true, pinia });
+  attachments(t, { ui });
+  ui.update('chat', { open: true });
+  await settle();
+  const hint = $('#gev-chat-attach-menu > p').textContent;
+  assert.match(hint, /up to 10 KB in total\./);
+  assert.doesNotMatch(hint, /each/);
+});
+
 test('Escape closes the attach menu and returns to the Attach button', async (t) => {
   const { pinia, settle } = mountVoiceView(t);
   const ui = createTestVoiceUi({ panel: true, pinia });

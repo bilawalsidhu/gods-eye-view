@@ -3033,7 +3033,7 @@
   "Attach a map layer": "Kartenebene anhängen",
   "Choose a layer…": "Ebene wählen…",
   "Attach a file": "Datei anhängen",
-  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB each. Attachments are sent to your AI provider with your message.": "TXT, Markdown, CSV, JSON oder GeoJSON · je bis zu 10 KB. Anhänge werden mit deiner Nachricht an deinen KI-Anbieter gesendet.",
+  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB in total. Attachments are sent to your AI provider with your message.": "TXT, Markdown, CSV, JSON oder GeoJSON · insgesamt bis zu 10 KB. Anhänge werden mit deiner Nachricht an deinen KI-Anbieter gesendet.",
   "Latest AI response": "Neueste KI-Antwort",
   "Expand conversation": "Unterhaltung erweitern",
   "Command suggestions": "Befehlsvorschläge",

@@ -95,7 +95,7 @@ const quickPrompts = () => [t('Fly to Tokyo'), t('Show live flights')];
         <button id="gev-chat-layer-attach" type="button" :disabled="props.view.chat.locked || !layerChoice" @click="attachLayer()">{{ t('Attach layer') }}</button>
       </div>
       <button id="gev-chat-file-button" type="button" :disabled="props.view.chat.locked" @click="emit('chat-file-button')">{{ t('Attach a file') }}</button>
-      <p>{{ t('TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB each. Attachments are sent to your AI provider with your message.') }}</p>
+      <p>{{ t('TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB in total. Attachments are sent to your AI provider with your message.') }}</p>
       <input id="gev-chat-file" type="file" accept=".txt,.md,.csv,.json,.geojson" multiple hidden @change="emit('chat-files', $event.target)" />
     </div>
     <aside id="gev-chat-mini-reply" :hidden="!props.view.chat.miniReply" :aria-label="t('Latest AI response')">

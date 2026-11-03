@@ -3108,7 +3108,7 @@
   "Attach a map layer": "Anexar uma camada do mapa",
   "Choose a layer…": "Escolha uma camada…",
   "Attach a file": "Anexar um arquivo",
-  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB each. Attachments are sent to your AI provider with your message.": "TXT, Markdown, CSV, JSON ou GeoJSON · até 10 KB cada. Os anexos são enviados ao seu provedor de IA com a sua mensagem.",
+  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB in total. Attachments are sent to your AI provider with your message.": "TXT, Markdown, CSV, JSON ou GeoJSON · até 10 KB no total. Os anexos são enviados ao seu provedor de IA com a sua mensagem.",
   "Latest AI response": "Última resposta da IA",
   "Expand conversation": "Expandir conversa",
   "Command suggestions": "Sugestões de comandos",

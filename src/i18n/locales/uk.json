@@ -3183,7 +3183,7 @@
   "Attach a map layer": "Прикріпити шар мапи",
   "Choose a layer…": "Виберіть шар…",
   "Attach a file": "Прикріпити файл",
-  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB each. Attachments are sent to your AI provider with your message.": "TXT, Markdown, CSV, JSON або GeoJSON · до 10 КБ кожен. Вкладення надсилаються вашому постачальнику ШІ разом із повідомленням.",
+  "TXT, Markdown, CSV, JSON or GeoJSON · up to 10 KB in total. Attachments are sent to your AI provider with your message.": "TXT, Markdown, CSV, JSON або GeoJSON · до 10 КБ загалом. Вкладення надсилаються вашому постачальнику ШІ разом із повідомленням.",
   "Latest AI response": "Остання відповідь ШІ",
   "Expand conversation": "Розгорнути розмову",
   "Command suggestions": "Підказки команд",
