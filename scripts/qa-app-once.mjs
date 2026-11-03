@@ -320,6 +320,46 @@ try {
       'ids changed after the rollback',
       idDifference(boot.ids, final.ids),
     );
+
+    // A candidate failing after the shell attached to it: a layer's
+    // drawing refuses to attach on Navara. The shell lets go of the failed
+    // globe and Cesium attaches again; the next switch works.
+    await page.evaluate(() => {
+      window.__qaDataRefused = false;
+      const module =
+        window.__godsEyeView.dataManager.layers.get('earthquakes').module;
+      const attach = module.attachRenderer;
+      module.attachRenderer = function () {
+        module.attachRenderer = attach;
+        window.__qaDataRefused = true;
+        return Promise.reject(new Error('QA data attach failure'));
+      };
+    });
+    const beforeDataFailure = await page.evaluate(() => history.length);
+    await requestEngine(page, 'navara');
+    await page.waitForFunction(() => window.__qaDataRefused === true, {
+      timeout: 60_000,
+    });
+    await waitReady(page, 'cesium');
+    const afterDataFailure = await readSession(page);
+    report.dataFailure = {
+      ids: idDifference(boot.ids, afterDataFailure.ids),
+      counters: afterDataFailure.counters,
+      history: (await page.evaluate(() => history.length)) - beforeDataFailure,
+    };
+    check(
+      Object.keys(report.dataFailure.ids).length === 0 &&
+        report.dataFailure.history === 0,
+      'a candidate failing in the data part changed the session',
+      report.dataFailure,
+    );
+    await switchEngine(page, 'navara');
+    await switchEngine(page, 'cesium');
+    check(
+      Object.keys(idDifference(boot.ids, (await readSession(page)).ids))
+        .length === 0,
+      'ids changed after the data-part failure',
+    );
   }
   report.errors = errors;
   check(errors.length === 0, 'page errors', errors);

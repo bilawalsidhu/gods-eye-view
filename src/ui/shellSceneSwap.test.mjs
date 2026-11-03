@@ -195,3 +195,24 @@ test('a Context transition in flight is restored before the globe goes', async (
   assert.equal(session.context._contextModeGeneration, 5);
   assert.equal(session.context._contextModeChanging, false);
 });
+
+test('an attachment that throws part-way leaves the shell detached and attachable', async () => {
+  const { shell, log } = fakeShell();
+  await shell.detachScene({ handoff: true });
+  shell._initSceneOverlays = () => {
+    throw new Error('overlay host failed');
+  };
+  assert.throws(
+    () => shell.attachScene({ engine: { kind: 'navara' } }),
+    /overlay host failed/,
+  );
+  // The shell releases what it built and is detached when that settles.
+  await shell.detachScene();
+  assert.equal(shell.engine, null);
+  log.length = 0;
+  shell._initSceneOverlays = () => log.push('_initSceneOverlays');
+  const engine = { kind: 'cesium' };
+  shell.attachScene({ engine });
+  assert.equal(shell.engine, engine);
+  assert.ok(log.includes('shareRestoration.start'));
+});

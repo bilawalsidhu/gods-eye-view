@@ -18,7 +18,7 @@ test('the controls pass the scene engine to the shell', () => {
   assert.match(controls, /new Controls\(viewer, \{[\s\S]*?\n\s+engine,\n/);
   // A later globe reaches the shell with its own engine.
   assert.match(
-    controls,
+    read('./shellPart.js'),
     /styleManager\.attachScene\(\{\s+viewer: next\.viewer,\s+engine: next\.engine,/,
   );
 });

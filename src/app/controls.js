@@ -4,6 +4,7 @@ import { flyToAustin } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
 import { t } from '../i18n/index.js';
 import { attachScenePart, currentSceneOf } from './sceneParts.js';
+import { shellScenePart } from './shellPart.js';
 
 /**
  * Construct the existing controls and camera presentation. `initialShareCode`
@@ -15,7 +16,7 @@ import { attachScenePart, currentSceneOf } from './sceneParts.js';
  * engines it attaches to each later one (StyleManager.attachScene) with that
  * engine's catalog, and the Cockpit cloud effects follow the viewer.
  */
-export function createApplicationControls({
+export async function createApplicationControls({
   scene,
   loaderStatus,
   Controls = StyleManager,
@@ -59,28 +60,9 @@ export function createApplicationControls({
   defer(() => styleManager.hud.destroy());
   defer(() => styleManager.dispose());
   // The shell was built on this globe; later globes attach to it.
-  let builtOn = currentSceneOf(scene);
-  attachScenePart(
+  await attachScenePart(
     scene,
-    {
-      name: 'shell',
-      attachScene(next) {
-        if (next === builtOn) {
-          builtOn = null;
-          return;
-        }
-        builtOn = null;
-        styleManager.attachScene({
-          viewer: next.viewer,
-          engine: next.engine,
-          mapStackController: next.mapStackController,
-          services: catalogControlServices(next.catalog ?? catalog),
-          engineSwitch: true,
-        });
-      },
-      // The shell leaves its globe in 'shell-release' (the tools phase),
-      // before the data layers detach, as its teardown always did.
-    },
+    shellScenePart(styleManager, { builtOn: currentSceneOf(scene), catalog }),
     { defer },
   );
   // The previous multi-canvas weather compositor remains disabled. Cockpit
@@ -88,7 +70,7 @@ export function createApplicationControls({
   // Cesium fog or post-process stages and is fully stopped in map mode.
   const weatherEffects = null;
   let cockpitCloudEffects = null;
-  attachScenePart(
+  await attachScenePart(
     scene,
     {
       name: 'cockpit-clouds',

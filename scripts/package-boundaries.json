@@ -2662,6 +2662,7 @@
       "src/app/tools.js",
       "src/app/sessionVoice.js",
       "src/app/sceneParts.js",
+      "src/app/shellPart.js",
       "src/app/viewer.js",
       "src/sky/starrySky.js",
       "src/sky/stars.js",

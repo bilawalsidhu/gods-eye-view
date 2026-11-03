@@ -113,7 +113,7 @@ export async function createApplicationTools({
     scene,
     {
       name: 'shell-release',
-      detachScene: () => styleManager.detachScene?.(),
+      detachScene: (options) => styleManager.detachScene?.(options),
     },
     { defer },
   );
