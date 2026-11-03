@@ -2,7 +2,7 @@
 // the product way (viewOptions.js) and the GlobeEngine on it. Load it with a
 // dynamic import() so Navara stays out of the Cesium-mode bundle.
 
-import { withFrameUpdates } from './frameDescriptor.js';
+import { layerEffectDesc, withFrameUpdates } from './frameDescriptor.js';
 import ThreeView, {
   Color as NavaraColor,
   MeshDesc,
@@ -241,7 +241,7 @@ export async function createNavaraGlobe({
     NavaraColor,
     MeshDesc,
     EffectDesc,
-    LayerEffectDesc: withFrameUpdates(EffectDesc),
+    LayerEffectDesc: layerEffectDesc(EffectDesc),
     NavaraEffect,
     DrapedMesh,
     setupMaterialForDrape,
