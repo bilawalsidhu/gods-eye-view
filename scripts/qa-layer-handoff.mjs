@@ -300,6 +300,9 @@ try {
   console.log(
     'PASS warm Navara failure rolled back to Cesium with the same flight and cockpit',
   );
+  await page.evaluate(() => {
+    window.__parkedCesium = window.__godsEyeView.engine;
+  });
   await page.select('#globe-engine', 'navara');
   await ready('navara');
   assert.ok(
@@ -315,6 +318,73 @@ try {
     'the retry starts a new Navara renderer on the same session',
   );
   console.log('PASS retry after the warm failure started Navara cold');
+
+  // Both engines fail: the warm Cesium resume and the warm Navara recovery.
+  // No engine runs, but the error screen offers the engine picker, and a
+  // retry starts Cesium cold on the same session without a reload.
+  const lengthBeforeDoubleFailure = await page.evaluate(() => {
+    window.__failResume = true;
+    for (const engine of [window.__godsEyeView.engine, window.__parkedCesium]) {
+      const request = engine.render.request;
+      engine.render.request = function (reason, ...args) {
+        if (reason === 'engine-resume' && window.__failResume) {
+          window.__refusedResumes = (window.__refusedResumes ?? 0) + 1;
+          throw new Error('QA parked renderer failure');
+        }
+        return request.call(this, reason, ...args);
+      };
+    }
+    window.__startDocument = document;
+    return history.length;
+  });
+  await page.select('#globe-engine', 'cesium');
+  await page.waitForSelector('#loading-screen .engine-switch-retry button', {
+    visible: true,
+    timeout: 90000,
+  });
+  assert.ok(
+    await page.evaluate(
+      (length) =>
+        window.__refusedResumes === 2 &&
+        !window.__godsEyeView &&
+        history.length === length &&
+        !document
+          .querySelector('#loading-screen')
+          .classList.contains('hidden') &&
+        /QA parked renderer failure/.test(
+          document.querySelector('#loading-screen .loader-status').textContent,
+        ),
+      lengthBeforeDoubleFailure,
+    ),
+    'a failed recovery shows its error and the engine picker',
+  );
+  await page.evaluate(() => {
+    window.__failResume = false;
+  });
+  await page.click(
+    '#loading-screen .engine-switch-retry [data-engine="cesium"]',
+  );
+  await ready('cesium');
+  assert.ok(
+    await page.evaluate(() => {
+      const { dataManager, styleManager } = window.__godsEyeView;
+      return (
+        window.__startDocument === document &&
+        !document.querySelector('.engine-switch-retry') &&
+        dataManager === window.__handoff.dataManager &&
+        dataManager.layers.get(window.__qaAircraft.layerId) ===
+          window.__handoff.entry &&
+        styleManager.getCockpitState().active &&
+        styleManager.getAircraftTrackingTarget()?.id ===
+          window.__qaAircraft.aircraftId &&
+        new URL(location.href).searchParams.get('engine') === 'cesium'
+      );
+    }),
+    'the retry restores the same session on Cesium',
+  );
+  console.log(
+    'PASS failed recovery offered the picker; the retry restored the session on Cesium',
+  );
   await page.evaluate(() =>
     window.__godsEyeView.styleManager.controlCockpit('exit'),
   );

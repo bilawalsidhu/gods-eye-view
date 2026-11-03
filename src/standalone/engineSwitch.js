@@ -1,11 +1,16 @@
 // The page's engine switch: one layer session, one engine at a time.
 //
-// The address (?engine=) is the source of truth. A switch from the picker
-// (select) and a history visit (Back/Forward, a pasted address) are the same
-// operation: the running engine hands the session off and is released, the
-// requested engine starts on the retained session. Requests that arrive while
-// a switch or a recovery runs are never dropped: once the current attempt
-// settles, the address is read again and reconciled.
+// The address (?engine=) is the source of truth, except while a picked
+// engine starts: that choice lives here until the engine runs, and only then
+// is written to the address as a new history entry. A switch from the picker
+// (select) and a history visit (Back/Forward, a pasted address) both hand the
+// session off: the running engine is released, the requested engine starts on
+// the retained session. They differ in what the incoming engine shows: a pick
+// keeps the running view and layers, a visit restores the entry's view and
+// the layers its entry changed (as a same-engine Back does) on the retained
+// layer models.
+// Requests that arrive while a switch or a recovery runs are never dropped:
+// once the current attempt settles, the address is read again and reconciled.
 
 const ENGINES = Object.freeze(['cesium', 'navara']);
 
@@ -25,13 +30,13 @@ export const FIRST_FRAME_WAIT_MS = 10_000;
  * @param {string} options.kind The engine already running.
  * @param {() => string} options.requested The engine the address asks for now.
  * @param {AbortSignal} options.signal The page lifetime.
- * @param {(from: string, to: string) => Promise<void>} options.leave Hand the
- *   session off from the running engine and release that engine.
+ * @param {(from: string, to: string, change: {visit: boolean}) => Promise<void>} options.leave
+ *   Hand the session off from the running engine and release that engine.
  * @param {(kind: string, attempt: {generation: number, recovery: boolean}) => Promise<void>} options.enter
  *   Start an engine on the retained session. It resolves once the engine runs
  *   with the session attached; when it rejects it has already released what
  *   it started.
- * @param {{select: (from: ?string, to: string) => *, commit: (token: *) => void, restore: (kind: string) => void}} options.address
+ * @param {{select: (from: ?string) => *, commit: (token: *, kind: string) => void, restore: (kind: string) => void}} options.address
  * @param {(state: {failed: boolean}) => Promise<void>|void} [options.settle] Runs
  *   once the address is reconciled, before the machine reports idle.
  * @param {(kind: string) => void} [options.remember] Store a picked engine.
@@ -61,10 +66,12 @@ export function createEngineSwitch({
   let busy = false;
   let generation = 0;
   // Every request (select or address visit) bumps this; a visit also bumps
-  // `visits`, which retires a select's pending history entry.
+  // `visits`.
   let requests = 0;
   let visits = 0;
   let queued = null;
+  // The pick being started, held here rather than in the address: a visit
+  // made meanwhile retires it and leaves every entry as it was.
   let pending = null;
   let running = null;
 
@@ -79,7 +86,7 @@ export function createEngineSwitch({
   const publish = () => onChange?.(state());
 
   function prepare(next) {
-    pending = { to: next, visits, token: address.select(current, next) };
+    pending = { to: next, token: address.select(current) };
   }
 
   /** The picker's choice. While a switch runs it is queued, not dropped. */
@@ -100,8 +107,9 @@ export function createEngineSwitch({
     if (signal.aborted) return Promise.resolve();
     requests++;
     visits++;
-    // A later visit supersedes a select queued before it.
+    // A later visit supersedes a pick queued or starting before it.
     queued = null;
+    pending = null;
     return busy ? running : run();
   }
 
@@ -109,7 +117,9 @@ export function createEngineSwitch({
     busy = true;
     publish();
     running = drive()
-      .catch((error) => onFailure?.(error, { recovered: false, kind: null }))
+      .catch((error) =>
+        onFailure?.(error, { recovered: current !== null, kind: current }),
+      )
       .finally(() => {
         busy = false;
         running = null;
@@ -123,7 +133,12 @@ export function createEngineSwitch({
       await reconcileAddress();
       if (signal.aborted) return;
       const seen = requests;
-      await settle?.({ failed });
+      try {
+        await settle?.({ failed });
+      } catch (error) {
+        // Revealing the globe is cosmetic; the engine runs either way.
+        console.error('The globe switch could not settle:', error);
+      }
       if (signal.aborted || seen === requests) return;
     }
   }
@@ -137,7 +152,7 @@ export function createEngineSwitch({
         queued = null;
         if (next !== current) prepare(next);
       }
-      const target = requested();
+      const target = pending?.to ?? requested();
       if (target === current) return;
       // After a failed recovery, wait for the person's next request instead
       // of retrying the same address in a loop.
@@ -150,12 +165,13 @@ export function createEngineSwitch({
   async function attempt(target) {
     const id = ++generation;
     const visitsAtStart = visits;
+    const visit = pending?.to !== target;
     publish();
     try {
       if (current !== null) {
         const from = current;
         try {
-          await leave(from, target);
+          await leave(from, target, { visit });
         } finally {
           current = null;
         }
@@ -166,18 +182,17 @@ export function createEngineSwitch({
       if (signal.aborted) return;
       current = working = target;
       failed = false;
-      if (pending?.to === target && pending.visits === visits) {
-        address.commit(pending.token);
+      if (!visit && pending?.to === target) {
+        address.commit(pending.token, target);
         remember?.(target);
       }
       pending = null;
     } catch (error) {
       if (signal.aborted) return;
       pending = null;
-      // Point this history entry back at the working engine unless the
-      // person has since moved to another entry. Nothing is pushed, so a
-      // failed switch leaves no extra entry behind.
-      if (visits === visitsAtStart && requested() === target)
+      // A failed pick never touched the address. A failed visit points its
+      // entry at the working engine, unless the person has since moved on.
+      if (visit && visits === visitsAtStart && requested() === target)
         address.restore(working);
       if (working === target) {
         live = null;
@@ -205,10 +220,10 @@ export function createEngineSwitch({
 }
 
 /**
- * The engine choice in the page address. A picked engine replaces the
- * current entry while it starts; only a successful switch adds the history
- * entry (the earlier entry keeps the outgoing engine and view), so Back
- * returns to the previous engine and a failed switch adds nothing.
+ * The engine choice in the page address. A pick leaves the address alone
+ * while its engine starts; a successful one adds the history entry (the
+ * earlier entry keeps the outgoing engine and view), so Back returns to the
+ * previous engine, and a failed or superseded pick changes no entry.
  */
 export function createEngineAddress({ location, history, flush = () => {} }) {
   const withEngine = (engine) => {
@@ -217,15 +232,15 @@ export function createEngineAddress({ location, history, flush = () => {} }) {
     return url.href;
   };
   return Object.freeze({
-    select(from, to) {
+    /** Snapshot the outgoing entry: its engine and its latest view. */
+    select(from) {
       flush();
-      const previous = from ? withEngine(from) : null;
-      history.replaceState(history.state, '', withEngine(to));
-      return previous;
+      return from ? withEngine(from) : null;
     },
-    commit(previous) {
-      if (!previous) return;
-      const next = location.href;
+    commit(previous, engine) {
+      const next = withEngine(engine);
+      // Without a running engine to return to, the pick names this entry.
+      if (!previous) return history.replaceState(history.state, '', next);
       history.replaceState(history.state, '', previous);
       history.pushState(null, '', next);
     },
@@ -236,21 +251,26 @@ export function createEngineAddress({ location, history, flush = () => {} }) {
 }
 
 /**
- * Hand the session off before the running engine is released: record which
- * layers run so the next engine retains them, and park the cameras and the
+ * Hand the session off before the running engine is released: record the
+ * layer models so the next engine retains them, and park the cameras and the
  * Director scene instead of ending them. Every engine change in this page
- * hands off, whatever started it; the incoming engine reads the view
- * (camera, style, map) from the address it starts with, which for a history
- * visit may differ from the view that was showing.
+ * hands off, whatever started it. The incoming engine reads the view
+ * (camera, style, map) from the address it starts with. Each layer records
+ * whether it runs and whether the outgoing address listed it
+ * (`addressLayerIds`): the layer-state coordinator keeps it running as it
+ * was where the incoming address agrees (always after a pick) and follows a
+ * visited entry where it differs (handoffTargetEnabled).
  */
-export function handOffSession(session) {
+export function handOffSession(session, { addressLayerIds = null } = {}) {
   const manager = session.manager;
+  const listed = addressLayerIds ? new Set(addressLayerIds) : null;
   session.handoffLayers = new Map(
     [...manager.layers].map(([id, entry]) => [
       id,
       {
         entry: entry.module.attachRenderer ? entry : null,
         enabled: manager.isEffectivelyEnabled(id),
+        durable: listed ? listed.has(id) : undefined,
       },
     ]),
   );

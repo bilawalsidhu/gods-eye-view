@@ -434,6 +434,26 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   animation: pulse 2s ease-in-out infinite;
 }
 
+/* After a failed globe switch: start an engine again without a reload. */
+.engine-switch-retry {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.engine-switch-retry button {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 @keyframes pulse {
   0%,
   100% {

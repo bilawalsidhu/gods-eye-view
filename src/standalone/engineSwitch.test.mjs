@@ -127,7 +127,7 @@ function harness({
     signal: lifetime.signal,
     async leave(from, to) {
       log.push(`leave:${from}->${to}`);
-      handOffSession(session);
+      handOffSession(session, { addressLayerIds: session.addressLayerIds });
       parked.add(from);
       running = null;
     },
@@ -189,13 +189,25 @@ test('a picked engine hands the session off and adds one history entry', async (
 
 test('Back and Forward hand the session off exactly like the picker', async () => {
   const h = harness();
-  await h.machine.select('navara');
-  const picked = h.log.splice(0).filter((line) => line !== 'flush');
+  // The outgoing address lists flights; directions run off the record.
+  h.session.addressLayerIds = ['flights'];
   let captured;
   h.session.director.suspendScene = () => {
     captured = h.session.handoffLayers;
     h.log.push('suspend:director');
   };
+  await h.machine.select('navara');
+  const picked = h.log.splice(0).filter((line) => line !== 'flush');
+  const record = (handoff) =>
+    Object.fromEntries(
+      [...handoff].map(([id, { enabled, durable }]) => [
+        id,
+        { enabled, durable },
+      ]),
+    );
+  const afterPick = record(captured);
+  assert.deepEqual(afterPick.flights, { enabled: true, durable: true });
+  assert.deepEqual(afterPick.directions, { enabled: false, durable: false });
   h.browser.go(-1);
   await h.machine.reconcile();
   assert.equal(h.machine.state().kind, 'cesium');
@@ -210,7 +222,9 @@ test('Back and Forward hand the session off exactly like the picker', async () =
     ),
   );
   assert.ok(!h.log.includes('destroy:director'));
-  assert.deepEqual(captured.get('flights').enabled, true);
+  // The visit records the same running state and outgoing address; the
+  // layer-state coordinator compares that with the visited entry.
+  assert.deepEqual(record(captured), afterPick);
   assert.equal(
     captured.get('flights').entry,
     h.session.manager.layers.get('flights'),
@@ -249,9 +263,30 @@ test('a visit during a switch is reconciled once the attempt settles', async () 
       'enter:cesium:warm',
     ],
   );
-  // The pick was superseded before it settled: no entry was pushed for it.
-  assert.equal(h.browser.entries.length, 2);
+  // The pick was superseded before it settled: no entry was pushed for it,
+  // and neither entry was rewritten.
+  assert.deepEqual(h.browser.engines(), ['cesium', 'cesium']);
   assert.deepEqual(h.remembered, []);
+});
+
+test('a pick that fails after Back rewrites no entry', async () => {
+  const gate = deferred();
+  const h = harness({
+    urls: ['/?engine=cesium#a', '/?engine=cesium#b'],
+    outcome: (kind) => (kind === 'navara' ? gate.promise : undefined),
+  });
+  const switching = h.machine.select('navara');
+  h.browser.go(-1);
+  void h.machine.reconcile();
+  gate.reject(new Error('Navara refused'));
+  await switching;
+  assert.equal(h.machine.state().kind, 'cesium');
+  assert.equal(h.browser.index, 0);
+  assert.deepEqual(h.browser.engines(), ['cesium', 'cesium']);
+  assert.deepEqual(
+    h.browser.entries.map(({ url }) => new URL(url).hash),
+    ['#a', '#b'],
+  );
 });
 
 test('rollback goes to the last engine that worked, not the one that just failed', async () => {
@@ -279,7 +314,7 @@ test('rollback goes to the last engine that worked, not the one that just failed
   ]);
   // The visited entry now names the engine that runs; no entry was added.
   assert.equal(h.browser.index, 0);
-  assert.deepEqual(h.browser.engines(), ['navara', 'navara']);
+  assert.deepEqual(h.browser.engines(), ['navara', 'cesium']);
 });
 
 test('a pick made during a switch is queued, not dropped', async () => {
@@ -388,6 +423,8 @@ test('after a failed recovery the page stays usable and the next pick starts an 
   assert.equal(h.machine.state().kind, 'navara');
   assert.equal(h.machine.state().failed, false);
   assert.equal(h.log.filter((line) => line.startsWith('leave')).length, 1);
+  // Nothing ran to return to: the pick names the current entry.
+  assert.deepEqual(h.browser.engines(), ['navara']);
 });
 
 test('pagehide during a start neither rolls back nor starts another engine', async () => {
@@ -537,15 +574,16 @@ test('the address keeps the outgoing view on the earlier entry', () => {
     location: browser.location,
     history: browser.history,
   });
-  const token = address.select('cesium', 'navara');
-  assert.deepEqual(browser.engines(), ['navara']);
+  const token = address.select('cesium');
+  // The address stays as it is while the picked engine starts.
+  assert.deepEqual(browser.engines(), [null]);
   // The incoming engine writes its own view while it starts.
   browser.history.replaceState(
     null,
     '',
     '/?look=cinematic&engine=navara#lat=2',
   );
-  address.commit(token);
+  address.commit(token, 'navara');
   assert.deepEqual(
     browser.entries.map(({ url }) => url.replace(ORIGIN, '/')),
     [
@@ -553,4 +591,41 @@ test('the address keeps the outgoing view on the earlier entry', () => {
       '/?look=cinematic&engine=navara#lat=2',
     ],
   );
+});
+
+test('a settle failure is not fatal and later requests are still reconciled', async () => {
+  const h = harness();
+  let settles = 0;
+  const errors = [];
+  const original = console.error;
+  console.error = (...args) => errors.push(args);
+  try {
+    const machine = createEngineSwitch({
+      kind: 'cesium',
+      requested: h.browser.requested,
+      signal: h.lifetime.signal,
+      leave: async () => {},
+      enter: async () => {},
+      settle: async () => {
+        settles += 1;
+        if (settles === 1) {
+          // A pick arrives while the first reveal fails.
+          void machine.select('cesium');
+          throw new Error('cover failed');
+        }
+      },
+      address: createEngineAddress({
+        location: h.browser.location,
+        history: h.browser.history,
+      }),
+      onFailure: () => assert.fail('a settle error must not report a failure'),
+    });
+    await machine.select('navara');
+    assert.equal(machine.state().kind, 'cesium');
+    assert.equal(machine.state().failed, false);
+    assert.equal(settles, 2);
+    assert.equal(errors.length, 1);
+  } finally {
+    console.error = original;
+  }
 });

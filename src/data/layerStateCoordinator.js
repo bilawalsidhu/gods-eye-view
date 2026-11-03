@@ -46,6 +46,24 @@ function currentLayerOutcome(dataManager, layerId) {
 }
 
 /**
+ * Whether a layer handed off by an engine switch runs on the incoming engine.
+ * The handoff records the layer's running state and whether the outgoing
+ * address listed it. Where the incoming address agrees with that, the layer
+ * keeps running as it was, operational intents included (a Contacts session
+ * runs layers its address never lists). Where it differs, the person visited
+ * an entry with another layer set (Back/Forward), and the entry wins, as it
+ * does for a same-engine Back.
+ * @param {{enabled?: boolean, durable?: boolean}|undefined} live
+ * @param {boolean} addressEnabled
+ */
+export function handoffTargetEnabled(live, addressEnabled) {
+  if (typeof live?.enabled !== 'boolean') return addressEnabled;
+  if (typeof live.durable === 'boolean' && live.durable !== addressEnabled)
+    return addressEnabled;
+  return live.enabled;
+}
+
+/**
  * Owns durable user layer preferences independently from transient runtime
  * choreography, and coordinates passive post-registration restoration.
  */
@@ -382,7 +400,10 @@ export class LayerStateCoordinator {
         LAYER_STATE_REGISTRY.map(async (entry) => {
           const controller = controllers.get(entry.id);
           const live = handoffLayers?.get(entry.id);
-          const targetEnabled = live?.enabled ?? enabled.has(entry.id);
+          const targetEnabled = handoffTargetEnabled(
+            live,
+            enabled.has(entry.id),
+          );
           // A same-document engine choice retains operational layer intents.
           // The share still owns durable preferences and later history visits.
           if (live && this.dataManager.layers.get(entry.id) === live.entry &&

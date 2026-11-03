@@ -255,12 +255,91 @@ try {
     ),
   );
   assert.equal(await stored(), 'navara');
-  // Back/Forward must hand the session off like the picker: the Contacts
-  // subject and its navigation history, the layers it owns and the Director
-  // survive, although the earlier entry carries an older view.
+  await page.goBack({ waitUntil: 'domcontentloaded' });
+  await ready('cesium');
+  assert.equal((await sharpen()).intensityPct, 49);
+  await page.goForward();
+  await ready('navara');
+  assert.equal((await sharpen()).intensityPct, 80);
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setSharpen({
+      enabled: false,
+      intensityPct: 49,
+    }),
+  );
+  await switchTo('cesium');
+  await switchTo('navara');
+  assert.deepEqual(await sharpen(), { enabled: false, intensityPct: 49 });
+  // The address carries the running layer set once its debounced write lands.
+  const settledAddress = async () => {
+    let previous;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const current = await page.evaluate(() =>
+        new URLSearchParams(location.hash.slice(1)).get('l'),
+      );
+      if (current === previous) return current;
+      previous = current;
+    }
+  };
+  const pick = async (kind) => {
+    await page.select('#globe-engine', kind);
+    await ready(kind);
+    await page.waitForFunction(
+      () => !document.querySelector('.engine-switch-frame'),
+    );
+  };
+  const visit = async (direction, kind) => {
+    await (direction === 'back'
+      ? page.goBack({ waitUntil: 'domcontentloaded' })
+      : page.goForward());
+    await ready(kind);
+    await page.waitForFunction(
+      () => !document.querySelector('.engine-switch-frame'),
+    );
+  };
+  const quakes = () =>
+    page.evaluate(() => {
+      const { dataManager } = window.__godsEyeView;
+      return {
+        model: window.__quakeModel === dataManager.layers.get('earthquakes'),
+        enabled: dataManager.getEnabledLayerIds().has('earthquakes'),
+      };
+    });
+  // Like a same-engine Back, each entry brings back its own layer set, on
+  // the same layer models.
+  await page.evaluate(() => {
+    window.__quakeModel =
+      window.__godsEyeView.dataManager.layers.get('earthquakes');
+  });
+  const navaraLayers = await settledAddress();
+  await pick('cesium');
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.setEnabled('earthquakes', false, {
+      origin: 'user',
+    }),
+  );
+  const cesiumLayers = await settledAddress();
+  assert.notEqual(cesiumLayers, navaraLayers);
+  await visit('back', 'navara');
+  assert.deepEqual(await quakes(), { model: true, enabled: true });
+  assert.equal(await settledAddress(), navaraLayers, 'Back keeps its entry');
+  await visit('forward', 'cesium');
+  assert.deepEqual(await quakes(), { model: true, enabled: false });
+  assert.equal(await settledAddress(), cesiumLayers, 'Forward keeps its entry');
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.setEnabled('earthquakes', true, {
+      origin: 'user',
+    }),
+  );
+  await pick('navara');
+  console.log(
+    "PASS Back/Forward restore each entry's layers on the same models",
+  );
+  // Back/Forward hand the session off like the picker: the Contacts subject
+  // and its navigation history, its layers and the Director survive.
   await page.evaluate(async () => {
     const { dataManager, styleManager, sceneDirector } = window.__godsEyeView;
-    window.qaLayersBefore = [...dataManager.getEnabledLayerIds()].sort();
     await dataManager.setEnabled('ais-live-vessels', true, { origin: 'user' });
     const outcome = await styleManager.setContextMode('contacts');
     if (!outcome.ok) throw Error(JSON.stringify(outcome));
@@ -297,20 +376,16 @@ try {
   assert.equal(live.mode, 'flights');
   assert.equal(live.subject, '223456789');
   assert.ok(live.history.includes('ais-live-vessels:123456789'));
-  await page.goBack({ waitUntil: 'domcontentloaded' });
-  await ready('cesium');
-  await page.waitForFunction(
-    () => !document.querySelector('.engine-switch-frame'),
-  );
-  assert.equal((await sharpen()).intensityPct, 49);
+  await settledAddress();
+  const historyLength = await page.evaluate(() => history.length);
+  await pick('cesium');
+  assert.deepEqual(await session(), live, 'a pick keeps the session');
+  await settledAddress();
+  await visit('back', 'navara');
   assert.deepEqual(await session(), live, 'Back keeps the session');
-  await page.goForward();
-  await ready('navara');
-  await page.waitForFunction(
-    () => !document.querySelector('.engine-switch-frame'),
-  );
-  assert.equal((await sharpen()).intensityPct, 80);
+  await visit('forward', 'cesium');
   assert.deepEqual(await session(), live, 'Forward keeps the session');
+  assert.equal(await page.evaluate(() => history.length), historyLength + 1);
   assert.ok(
     await page.evaluate(async () => {
       const { dataManager, styleManager } = window.__godsEyeView;
@@ -318,26 +393,13 @@ try {
       await dataManager.setEnabled('ais-live-vessels', false, {
         origin: 'user',
       });
-      return (
-        result.ok &&
-        JSON.stringify([...dataManager.getEnabledLayerIds()].sort()) ===
-          JSON.stringify(window.qaLayersBefore)
-      );
+      return result.ok;
     }),
-    'leaving Contacts after Back/Forward restores the layers it took',
   );
+  await pick('navara');
   console.log(
     'PASS Back/Forward keep Contacts subject, history, layers and Director',
   );
-  await page.evaluate(() =>
-    window.__godsEyeView.styleManager.setSharpen({
-      enabled: false,
-      intensityPct: 49,
-    }),
-  );
-  await switchTo('cesium');
-  await switchTo('navara');
-  assert.deepEqual(await sharpen(), { enabled: false, intensityPct: 49 });
   await page.goto(base.href, { waitUntil: 'domcontentloaded' });
   await ready('navara');
   await switchTo('cesium');

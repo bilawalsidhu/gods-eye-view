@@ -122,6 +122,9 @@ export class ShareLinkManager {
     // the app's own state, never an incoming share.
     this._knownHash = null;
     this._unwatchNavigation = null;
+    this._onNavigate = null;
+    // Held while the page leaves this engine for another (holdNavigation).
+    this._navigationHeld = false;
     this._restoreAuthority = {
       visual: 0,
       map: 0,
@@ -308,6 +311,7 @@ export class ShareLinkManager {
     if (this._destroyed || typeof onNavigate !== 'function') return;
     const target = globalThis.window;
     if (typeof target?.addEventListener !== 'function') return;
+    this._onNavigate = onNavigate;
     const handler = () => this._handleLocationChange(onNavigate);
     target.addEventListener('hashchange', handler);
     target.addEventListener('popstate', handler);
@@ -318,8 +322,31 @@ export class ShareLinkManager {
     };
   }
 
-  _handleLocationChange(onNavigate) {
+  /**
+   * The page is leaving this engine: a history visit asked for another one.
+   * The address now belongs to the visited entry, so this manager neither
+   * writes its view there (a pending debounced write included) nor restores
+   * that entry itself; the incoming engine reads it as it starts.
+   */
+  holdNavigation() {
+    this._navigationHeld = true;
+    clearTimeout(this._debounceTimer);
+    this._debounceTimer = null;
+  }
+
+  /**
+   * Take the address back (the engine was kept after all, or it has just
+   * started): end a hold and restore an entry visited while this manager was
+   * held or not yet watching.
+   */
+  resumeNavigation() {
     if (this._destroyed) return;
+    this._navigationHeld = false;
+    if (this._onNavigate) this._handleLocationChange(this._onNavigate);
+  }
+
+  _handleLocationChange(onNavigate) {
+    if (this._destroyed || this._navigationHeld) return;
     const hash = window.location.hash.slice(1);
     // Back/Forward fires both popstate and hashchange for one entry.
     if (hash === this._knownHash) return;
@@ -483,6 +510,11 @@ export class ShareLinkManager {
     this._layerStateProvider = typeof provider === 'function' ? provider : null;
   }
 
+  /** The durable layer state this address carries, or null without one. */
+  currentLayerState() {
+    return this._layerStateProvider?.() ?? null;
+  }
+
   /**
    * Install the source of the entity the camera follows, used for share links:
    * `({ nowMs }) => ({ kind, id, offset, lastKnown }) | null`, in the share
@@ -643,13 +675,15 @@ export class ShareLinkManager {
   }
 
   _scheduleUpdate() {
-    if (this._destroyed || this._initialRestorePending) return;
+    if (this._destroyed || this._initialRestorePending || this._navigationHeld)
+      return;
     clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this._updateHash(), DEBOUNCE_MS);
   }
 
   _updateHash() {
-    if (this._destroyed || this._initialRestorePending) return;
+    if (this._destroyed || this._initialRestorePending || this._navigationHeld)
+      return;
     const params = this._buildHashParams();
     if (!params) return;
     // The hash belongs to this page's address, not the document base the
