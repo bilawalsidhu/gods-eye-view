@@ -1,5 +1,4 @@
 import { PostProcessStage } from 'cesium';
-import { engineCapabilities } from '../globe/contract.js';
 import {
   bloomStrengthFromIntensity,
   clampBloomIntensity,
@@ -77,11 +76,23 @@ export class VisualEffects {
       typeof engine?.render?.setSharpen === 'function' ? engine.render : null;
     // Without a viewer, an engine that draws the styles itself
     // (render.setStyle) gets them through stand-in stages (initStyles).
-    const capabilities = engineCapabilities(engine);
+    // (The visualStyles and bloom capabilities of src/globe/contract.js
+    // engineCapabilities, read by member: this package stays engine-free.)
+    const render = engine?.render;
     this.engineStyles =
-      !viewer && capabilities.visualStyles ? engine.render : null;
+      !viewer &&
+      Array.isArray(render?.visualStyles) &&
+      typeof render.setStyle === 'function' &&
+      typeof render.style === 'function'
+        ? render
+        : null;
     // Likewise the bloom (render.setBloom) for Cesium's bloom stage.
-    this.engineBloom = !viewer && capabilities.bloom ? engine.render : null;
+    this.engineBloom =
+      !viewer &&
+      typeof render?.setBloom === 'function' &&
+      typeof render.bloom === 'function'
+        ? render
+        : null;
     this.requestRender = requestRender;
     this.holdRender = holdRender;
     this.releaseRender = releaseRender;
