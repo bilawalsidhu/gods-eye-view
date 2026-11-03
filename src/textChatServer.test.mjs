@@ -4,6 +4,7 @@ import http from 'node:http';
 import { once } from 'node:events';
 import { createGeminiChatHandler } from '../server/providers/gemini/chat.js';
 import { createOpenAiChatHandler } from '../server/providers/openai/chat.js';
+import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
 import {
   realtimeDirectives,
   realtimeInstructions,
@@ -513,6 +514,27 @@ for (const [name, provider] of Object.entries(providers)) {
     );
     assert.equal((await (await unread.send()).json()).code, 'API_KEY_REJECTED');
     assert.equal(cancelled, true);
+  });
+  test(`${name} offers osm_query, and names it, only with Overpass, as voice does`, async (t) => {
+    for (const overpass of [false, true]) {
+      const f = await fixture(t, provider, undefined, {
+        tools: GEV_REALTIME_TOOLS,
+        overpassConfigured: () => overpass,
+      });
+      assert.equal((await f.send()).status, 200);
+      const { body } = f.calls[0];
+      const offered =
+        name === 'openai'
+          ? body.tools.map((tool) => tool.function.name)
+          : body.tools[0].functionDeclarations.map((tool) => tool.name);
+      const prompt =
+        name === 'openai'
+          ? body.messages[0].content
+          : body.systemInstruction.parts[0].text;
+      assert.equal(offered.includes('osm_query'), overpass);
+      assert.equal(prompt.includes('osm_query'), overpass);
+      assert.ok(offered.includes('resolve_area'));
+    }
   });
   test(`${name} throttled replies say they are rate limited`, async (t) => {
     const local = await fixture(t, provider, undefined, {

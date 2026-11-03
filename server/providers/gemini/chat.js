@@ -1,7 +1,8 @@
 import { createTextChatHandler } from '../common/textChat.js';
 import { invalidCalls } from '../common/textTools.js';
 import { textInstructions } from '../common/textInstructions.js';
-import { GEV_REALTIME_TOOLS } from '../openai/tools.js';
+import { GEV_REALTIME_TOOLS, offeredTools } from '../openai/tools.js';
+import { resolveOverpassUpstreams } from '../overpass/constants.js';
 import { normalizeGeminiModel } from './config.js';
 
 // The Gemini token route's throttle default (GEV_RATELIMIT_GEMINI_PER_MIN).
@@ -80,6 +81,9 @@ export function validChatContents(contents, names) {
 export function createGeminiChatHandler({
   annotationGuidance,
   tools = GEV_REALTIME_TOOLS,
+  // osm_query is offered, and the prompt names it, only with Overpass, as
+  // for voice.
+  overpassConfigured = () => resolveOverpassUpstreams().length > 0,
   resolveChatModel = () =>
     process.env.GEMINI_CHAT_MODEL || 'gemini-3.5-flash-lite',
   resolveApiKey = () => process.env.GEMINI_API_KEY,
@@ -102,17 +106,20 @@ export function createGeminiChatHandler({
       )
         return null;
       if (!pairedContents(input.contents)) return null;
+      const overpass = overpassConfigured();
       return {
         endpoint: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         headers: (key) => ({ 'x-goog-api-key': key }),
         body: {
           contents: input.contents,
           systemInstruction: {
-            parts: [{ text: textInstructions(annotationGuidance) }],
+            parts: [
+              { text: textInstructions(annotationGuidance, { overpass }) },
+            ],
           },
           tools: [
             {
-              functionDeclarations: tools.map(
+              functionDeclarations: offeredTools(tools, { overpass }).map(
                 ({ name, description, parameters }) => ({
                   name,
                   description,
@@ -144,7 +151,10 @@ export function createGeminiChatHandler({
       return {
         content,
         finishReason: candidate.finishReason,
-        invalidCalls: invalidCalls(calls, tools),
+        invalidCalls: invalidCalls(
+          calls,
+          offeredTools(tools, { overpass: overpassConfigured() }),
+        ),
       };
     },
   });

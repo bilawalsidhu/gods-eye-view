@@ -3,7 +3,8 @@ import { preferCodexOAuth } from './codex-auth.js';
 import { OPENAI_DEFAULT_PER_MIN } from './rate-limit.js';
 import { invalidCalls } from '../common/textTools.js';
 import { textInstructions } from '../common/textInstructions.js';
-import { GEV_REALTIME_TOOLS } from './tools.js';
+import { GEV_REALTIME_TOOLS, offeredTools } from './tools.js';
+import { resolveOverpassUpstreams } from '../overpass/constants.js';
 
 const object = (value) =>
   value && typeof value === 'object' && !Array.isArray(value);
@@ -66,6 +67,9 @@ function validMessages(messages) {
 export function createOpenAiChatHandler({
   annotationGuidance,
   tools = GEV_REALTIME_TOOLS,
+  // osm_query is offered, and the prompt names it, only with Overpass, as
+  // for voice.
+  overpassConfigured = () => resolveOverpassUpstreams().length > 0,
   resolveApiKey = () => process.env.OPENAI_API_KEY,
   resolveChatModel = () => process.env.OPENAI_CHAT_MODEL || 'gpt-4.1-mini',
   resolveProviderRateLimit = () => process.env.GEV_RATELIMIT_OPENAI_PER_MIN,
@@ -102,6 +106,7 @@ export function createOpenAiChatHandler({
         !validMessages(input.messages)
       )
         return null;
+      const overpass = overpassConfigured();
       return {
         endpoint: 'https://api.openai.com/v1/chat/completions',
         headers: (key) => ({ Authorization: `Bearer ${key}` }),
@@ -112,13 +117,18 @@ export function createOpenAiChatHandler({
           store: false,
           max_completion_tokens: 4096,
           messages: [
-            { role: 'system', content: textInstructions(annotationGuidance) },
+            {
+              role: 'system',
+              content: textInstructions(annotationGuidance, { overpass }),
+            },
             ...input.messages,
           ],
-          tools: tools.map(({ name, description, parameters }) => ({
-            type: 'function',
-            function: { name, description, parameters, strict: false },
-          })),
+          tools: offeredTools(tools, { overpass }).map(
+            ({ name, description, parameters }) => ({
+              type: 'function',
+              function: { name, description, parameters, strict: false },
+            }),
+          ),
         },
       };
     },
@@ -149,7 +159,10 @@ export function createOpenAiChatHandler({
       return {
         content,
         finishReason: choice.finish_reason,
-        invalidCalls: invalidCalls(calls, tools),
+        invalidCalls: invalidCalls(
+          calls,
+          offeredTools(tools, { overpass: overpassConfigured() }),
+        ),
       };
     },
   });

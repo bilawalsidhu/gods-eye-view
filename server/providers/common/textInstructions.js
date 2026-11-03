@@ -15,8 +15,9 @@ export const TEXT_WORDING = Object.freeze([
 
 // Shared-manual adaptation follows Darren Dignam's GEV COMMAND approach (#976).
 // Keep our Radio handoff and annotation outcome policies from the shared manual.
-export function textInstructions(annotationGuidance) {
-  return realtimeDirectives(annotationGuidance)
+// `options.overpass` matches the tools offered, as for voice.
+export function textInstructions(annotationGuidance, options) {
+  return realtimeDirectives(annotationGuidance, options)
     .map((line, index) => {
       if (index === 0)
         return "You are GEV Chat, a concise text assistant for a Cesium geospatial app called God's Eye View.";
