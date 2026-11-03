@@ -276,7 +276,8 @@ export function createPointerTracker({
   let held = null;
   let active = null;
   let destroyed = false;
-  const listeners = new AbortController();
+  // The element's own listeners; replaced with the element (setElement).
+  let listeners = new AbortController();
 
   function size() {
     return {
@@ -328,12 +329,14 @@ export function createPointerTracker({
     cancelDwell();
   }
 
-  if (element?.addEventListener) {
+  function listen() {
+    if (!element?.addEventListener) return;
     const options = { passive: true, signal: listeners.signal };
     element.addEventListener('pointermove', onMove, options);
     element.addEventListener('pointerdown', onMove, options);
     element.addEventListener('pointerleave', onLeave, options);
   }
+  listen();
 
   /** Is the pointer a referent right now? */
   function isFresh(recentMs = POINTER_FRESH_MS) {
@@ -372,7 +375,21 @@ export function createPointerTracker({
   }
 
   return {
-    element,
+    get element() {
+      return element;
+    },
+    /**
+     * Follow another element (the next globe's canvas after an engine
+     * switch), or none. The pointer starts outside it.
+     */
+    setElement(next) {
+      if (destroyed || next === element) return;
+      listeners.abort();
+      listeners = new AbortController();
+      element = next ?? null;
+      onLeave();
+      listen();
+    },
     capture,
     isFresh,
     /** Push-to-talk keydown: snapshot now, keep it for the hold. */

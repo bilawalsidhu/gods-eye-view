@@ -6,7 +6,7 @@ import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
-import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { attachSessionVoice } from './sessionVoice.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
@@ -42,10 +42,15 @@ export function createApplicationTools({
   const { viewer, engine, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
-  const isMapStackAvailable = id => mapStackController?.isStackAvailable(id) === true;
-  const sceneDirector = layerSession?.director ?? new SceneDirector(viewer, styleManager, dataManager, {
-    engine, dataPacks: {...sceneDataPacks,native:scene.packRenderer}, isMapStackAvailable,
-  });
+  const isMapStackAvailable = (id) =>
+    mapStackController?.isStackAvailable(id) === true;
+  const sceneDirector =
+    layerSession?.director ??
+    new SceneDirector(viewer, styleManager, dataManager, {
+      engine,
+      dataPacks: { ...sceneDataPacks, native: scene.packRenderer },
+      isMapStackAvailable,
+    });
   if (layerSession?.director)
     sceneDirector.attachScene(
       viewer,
@@ -79,6 +84,7 @@ export function createApplicationTools({
         voice,
         sceneDirector,
         startChrome,
+        layerSession,
         signal,
         defer,
       }),
@@ -239,24 +245,15 @@ export function createApplicationTools({
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
-  const voiceCommands = initGevVoiceCommands({
-    ...voice,
-    floorServices: operations.surface.groundFloor,
-    annotationResolver: operations.annotationResolver,
-    searchNavigation: operations.searchAndFlyTo,
-    signal,
+  const voiceCommands = attachSessionVoice({
+    layerSession,
+    voice,
+    operations,
     placeSearch,
-    viewer,
-    engine,
-    styleManager,
     dataManager,
-    sceneDirector,
-    annotations,
-  });
-  defer(() => {
-    voiceCommands.stop({ removeUi: true });
-    if (window.__gevVoiceCommands === voiceCommands)
-      delete window.__gevVoiceCommands;
+    scene: { viewer, engine, styleManager, sceneDirector, annotations },
+    signal,
+    defer,
   });
   debug.voiceCommands = voiceCommands;
   defer(
