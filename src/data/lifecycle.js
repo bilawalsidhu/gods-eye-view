@@ -15,6 +15,9 @@ function cloneLayerParams(value) {
 }
 
 const SUPERSEDED_VISIBILITY_INTENT = Symbol('superseded-visibility-intent');
+// A scene bind or detach waits this long for asynchronous layer attachments.
+// A late attachment sees its scene signal aborted and releases its own work.
+const ATTACH_SETTLE_TIMEOUT_MS = 5000;
 const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
   'enabled-only',
   'enabled+options',
@@ -83,6 +86,8 @@ export class LayerLifecycle {
    *   allowQaRegistration?: boolean, getSourceAvailability?: Function }} [options]
    *   `engine` (default: the viewer's registered engine): every module call
    *   gets `{ signal, engine }` as its second argument.
+   *   `attachSettleTimeoutMs`: how long a scene bind or detach waits for
+   *   asynchronous layer attachments before it continues without them.
    */
   constructor(
     viewer,
@@ -91,6 +96,7 @@ export class LayerLifecycle {
       getSourceAvailability,
       engine,
       visibilityTarget = null,
+      attachSettleTimeoutMs = ATTACH_SETTLE_TIMEOUT_MS,
     } = {},
   ) {
     this._catalogSourceAvailability = getSourceAvailability;
@@ -113,6 +119,11 @@ export class LayerLifecycle {
     this._sceneController = null;
     this._sceneDetached = false;
     this._pendingAttachments = new Set();
+    this._attachSettleTimeoutMs = attachSettleTimeoutMs;
+    // Lifecycle work and explicit refreshes that wait for the next scene.
+    // detachScene() does not wait for parked work, which waits for it.
+    this._sceneWaiters = new Set();
+    this._parkListeners = new Set();
   }
 
   /** The second argument of every layer module call: `{ signal, engine }`. */
@@ -136,7 +147,8 @@ export class LayerLifecycle {
    * always left unbound, so the next bindCatalog() can attach a scene. The
    * failures are reported together. A layer whose release failed keeps it
    * pending: a repeated detachScene(), or the next bindCatalog(), retries it.
-   * Periodic refreshes due while no scene is bound wait for the next one.
+   * Periodic refreshes, explicit refreshes and enables requested while no
+   * scene is bound wait for the next one.
    */
   async detachScene() {
     // Attachments still in flight stop at their next checkpoint; their
@@ -148,10 +160,10 @@ export class LayerLifecycle {
     const errors = [];
     const droppedQaLayers = [];
     try {
-      await Promise.allSettled([...this._pendingAttachments]);
+      await this._awaitAttachments([...this._pendingAttachments], 'detach');
       for (const [id, entry] of [...this.layers]) {
         try {
-          await entry.toggleChain.catch(() => {});
+          await this._lifecycleIdleOrParked(entry);
           if (entry.module.attachRenderer && entry.module.detachRenderer) {
             await this._detachEntryRenderer(entry, viewer);
           } else {
@@ -206,7 +218,6 @@ export class LayerLifecycle {
     this._catalogSourceAvailability = catalog.getSourceAvailability;
     const scene = new AbortController();
     this._sceneController = scene;
-    this._sceneDetached = false;
     // An attachment that is still running when the scene detaches sees this
     // signal aborted and must stop touching the scene.
     const context = { ...this._moduleContext(scene.signal), ...options };
@@ -231,10 +242,97 @@ export class LayerLifecycle {
     }
     this.finalizeRegistrations(catalog.metadata);
     const pending = attachments.filter((ready) => ready?.then);
-    const settled = Promise.allSettled(pending).then(() => {
-      if (this._sceneController === scene) this._runDeferredRefreshes();
+    // The scene counts as bound for refreshes and parked enables once its
+    // attachments settled (or the wait for them timed out).
+    const bound = () => {
+      if (this._sceneController !== scene) return;
+      this._sceneDetached = false;
+      this._runDeferredRefreshes();
+      this._settleSceneWaiters(true);
+    };
+    if (!pending.length) {
+      bound();
+      return undefined;
+    }
+    return this._awaitAttachments(pending, 'bind').then((settled) => {
+      bound();
+      const failure = settled?.find(({ status }) => status === 'rejected');
+      if (failure) throw failure.reason;
     });
-    if (pending.length) return settled.then(() => Promise.all(pending));
+  }
+
+  /**
+   * Wait for attachments to settle, at most attachSettleTimeoutMs. Returns
+   * their allSettled results, or null when the wait timed out.
+   */
+  async _awaitAttachments(attachments, phase) {
+    if (!attachments.length) return [];
+    let timer;
+    const timedOut = new Promise((resolve) => {
+      timer = setTimeout(resolve, this._attachSettleTimeoutMs, null);
+    });
+    const settled = await Promise.race([
+      Promise.allSettled(attachments),
+      timedOut,
+    ]);
+    clearTimeout(timer);
+    if (!settled)
+      console.warn(
+        `[Data] layer attachments still running after ${this._attachSettleTimeoutMs} ms; scene ${phase} continues without them`,
+      );
+    return settled;
+  }
+
+  /**
+   * Wait until a scene is bound. Resolves true then, or false when the
+   * signal aborts or the entry is destroyed. `refresh` marks an explicit
+   * refresh, which replaces the entry's deferred periodic one.
+   */
+  _waitForScene(entry, signal = null, { refresh = false } = {}) {
+    if (!this._sceneDetached) return Promise.resolve(true);
+    if (signal?.aborted) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const onAbort = () => waiter.settle(false);
+      const waiter = {
+        entry,
+        refresh,
+        settle: (bound) => {
+          if (!this._sceneWaiters.delete(waiter)) return;
+          if (refresh) entry.sceneRefreshWaiters -= 1;
+          signal?.removeEventListener?.('abort', onAbort);
+          resolve(bound);
+        },
+      };
+      if (refresh) entry.sceneRefreshWaiters += 1;
+      this._sceneWaiters.add(waiter);
+      signal?.addEventListener?.('abort', onAbort, { once: true });
+      for (const listener of [...this._parkListeners]) listener(entry);
+    });
+  }
+
+  _settleSceneWaiters(bound, entry = null) {
+    for (const waiter of [...this._sceneWaiters])
+      if (!entry || waiter.entry === entry) waiter.settle(bound);
+  }
+
+  /** The entry's queued lifecycle work settled, or is parked for a scene. */
+  _lifecycleIdleOrParked(entry) {
+    const parked = () =>
+      [...this._sceneWaiters].some(
+        (waiter) => waiter.entry === entry && !waiter.refresh,
+      );
+    if (parked()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        this._parkListeners.delete(listener);
+        resolve();
+      };
+      const listener = (parkedEntry) => {
+        if (parkedEntry === entry && parked()) done();
+      };
+      this._parkListeners.add(listener);
+      entry.toggleChain.catch(() => {}).then(done);
+    });
   }
 
   /**
@@ -272,6 +370,8 @@ export class LayerLifecycle {
     for (const [layerId, entry] of this.layers) {
       if (!entry.refreshDeferred) continue;
       entry.refreshDeferred = false;
+      // An explicit refresh waiting for this scene runs instead.
+      if (entry.sceneRefreshWaiters > 0) continue;
       void this._runPeriodicUpdate(layerId, entry);
     }
   }
@@ -359,6 +459,7 @@ export class LayerLifecycle {
       sceneDetached: false,
       pendingSceneDetach: null,
       refreshDeferred: false,
+      sceneRefreshWaiters: 0,
     });
   }
 
@@ -467,6 +568,7 @@ export class LayerLifecycle {
       signal?.aborted
     )
       return false;
+    entry.refreshDeferred = false;
     const refreshEpoch = ++entry.refreshEpoch;
     entry.refreshing = true;
     this._publishActivity({ type: 'status' });
@@ -568,14 +670,19 @@ export class LayerLifecycle {
    */
   async refreshLayer(layerId, { signal = null } = {}) {
     const entry = this.layers.get(layerId);
-    if (
-      !entry ||
-      !entry.enabled ||
-      entry.lifecycleState !== 'enabled' ||
-      entry.destroying ||
-      signal?.aborted
-    )
-      return false;
+    const refreshable = () =>
+      this.layers.get(layerId) === entry &&
+      entry.enabled &&
+      entry.lifecycleState === 'enabled' &&
+      !entry.destroying &&
+      !signal?.aborted;
+    if (!entry || !refreshable()) return false;
+    // Between two scenes (an engine switch) the refresh runs once the next
+    // scene is bound, so callers never read the switch as a failed refresh.
+    if (this._sceneDetached) {
+      const bound = await this._waitForScene(entry, signal, { refresh: true });
+      if (!bound || !refreshable()) return false;
+    }
 
     if (entry.refreshing) {
       const settled = await new Promise((resolve) => {
@@ -614,6 +721,10 @@ export class LayerLifecycle {
         return false;
     }
 
+    if (this._sceneDetached) {
+      const bound = await this._waitForScene(entry, signal, { refresh: true });
+      if (!bound || !refreshable()) return false;
+    }
     return this._runPeriodicUpdate(layerId, entry, { signal });
   }
 
@@ -1189,6 +1300,13 @@ export class LayerLifecycle {
         return false;
       };
       signal?.addEventListener('abort', cancelEnable, { once: true });
+      if (this._sceneDetached) {
+        // Between two scenes (an engine switch): init and enable get the
+        // next scene instead of a null viewer and engine.
+        this._setVisibilityIntentPhase(entry, intentEpoch, 'scene');
+        if (!(await this._waitForScene(entry, signal)))
+          return finishCancelledEnable('scene');
+      }
       if (!entry.initialized) {
         this._setVisibilityIntentPhase(entry, intentEpoch, 'init');
         try {
@@ -2371,6 +2489,8 @@ export class LayerLifecycle {
     if (!entry || entry.destroying) return false;
     cancelCameraArrival(this.viewer);
     entry.destroying = true;
+    // Work parked for the next scene ends now; teardown waits for its queue.
+    this._settleSceneWaiters(false, entry);
     this._invalidateRefresh(layerId, entry, 'layer-destroyed');
     // Teardown becomes authoritative before the first await. Advancing the
     // intent epoch and aborting active work prevents a pending enable/update
