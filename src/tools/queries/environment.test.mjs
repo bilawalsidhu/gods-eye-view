@@ -873,18 +873,25 @@ test('installation names wait for the name pack, briefly', async (t) => {
   assert.match(slow.summary, /site names are still loading\)\.$/);
 });
 
-
 test('earthquake tools preserve partial and empty coverage rather than claim exact totals', async () => {
   for (const missing of ['USGS', 'EMSC']) {
-    for (const rows of [[], [{ stableId: 'fixture', mag: 3, lat: 0, lon: 0, time: 0 }]]) {
+    for (const rows of [
+      [],
+      [{ stableId: 'fixture', mag: 3, lat: 0, lon: 0, time: 0 }],
+    ]) {
       let unavailable = true;
       const earthquakes = createEarthquakeSource({
-        ...Object.fromEntries(['USGS', 'EMSC'].map((name) => [name.toLowerCase(), {
-          async getSnapshot() {
-            if (unavailable && name === missing) throw new Error('offline');
-            return name === missing ? [] : rows;
-          },
-        }])),
+        ...Object.fromEntries(
+          ['USGS', 'EMSC'].map((name) => [
+            name.toLowerCase(),
+            {
+              async getSnapshot() {
+                if (unavailable && name === missing) throw new Error('offline');
+                return name === missing ? [] : rows;
+              },
+            },
+          ]),
+        ),
       });
       const catalog = catalogWith({ earthquakes });
       const partial = await catalog.call('get_earthquakes', {});
@@ -900,4 +907,40 @@ test('earthquake tools preserve partial and empty coverage rather than claim exa
       assert.doesNotMatch(recovered.summary, /At least|partial coverage/);
     }
   }
+});
+
+test('stale fire perimeters say so, with when they were fetched', async () => {
+  const fetchedAt = Date.UTC(2026, 9, 22, 6);
+  const ring = [
+    [
+      [-118.5, 35.2],
+      [-118.4, 35.2],
+      [-118.4, 35.3],
+      [-118.5, 35.2],
+    ],
+  ];
+  const perimeters = {
+    getSnapshot: async () => [],
+    getSnapshotDetail: async () => ({
+      rows: [
+        {
+          stableId: 'held',
+          name: 'Held Fire',
+          acres: 300,
+          polygons: [ring],
+        },
+      ],
+      stale: true,
+      fetchedAt,
+    }),
+  };
+  const result = await catalogWith({ perimeters }).call('get_fire_perimeters', {
+    area: { bbox: [-120, 34, -117, 36] },
+  });
+  assert.equal(
+    result.summary,
+    '1 mapped wildfire perimeter in the requested box (data may be stale).',
+  );
+  assert.equal(result.data.stale, true);
+  assert.equal(result.data.retrieved_at, new Date(fetchedAt).toISOString());
 });

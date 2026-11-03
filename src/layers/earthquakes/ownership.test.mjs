@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEarthquakesLayer } from './index.js';
-import { createEarthquakeSource, createUsgsEarthquakeSource } from './source.js';
+import {
+  createEarthquakeSource,
+  createUsgsEarthquakeSource,
+} from './source.js';
 import { layerFeedState } from '../../data/feedState.js';
 function harness(source) {
   const sources = [];
@@ -90,17 +93,21 @@ test('USGS body completion honors cancellation even with an uncooperative transp
   });
 });
 
-
 test('partial catalog coverage is visible in layer stats until both sources recover', async () => {
   for (const missing of ['USGS', 'EMSC']) {
     let unavailable = true;
     const source = createEarthquakeSource({
-      ...Object.fromEntries(['USGS', 'EMSC'].map((name) => [name.toLowerCase(), {
-        async getSnapshot() {
-          if (unavailable && name === missing) throw new Error('offline');
-          return name === missing ? [] : [row];
-        },
-      }])),
+      ...Object.fromEntries(
+        ['USGS', 'EMSC'].map((name) => [
+          name.toLowerCase(),
+          {
+            async getSnapshot() {
+              if (unavailable && name === missing) throw new Error('offline');
+              return name === missing ? [] : [row];
+            },
+          },
+        ]),
+      ),
     });
     const h = harness(source);
     try {

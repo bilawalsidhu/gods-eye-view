@@ -48,7 +48,9 @@ export function emscQueryUrl(nowMs, page = 0) {
   const params = new URLSearchParams({
     format: 'json',
     minmag: '2.5',
-    starttime: new Date(Math.floor(nowMs / 60_000) * 60_000 - DAY_MS).toISOString().slice(0, 19),
+    starttime: new Date(Math.floor(nowMs / 60_000) * 60_000 - DAY_MS)
+      .toISOString()
+      .slice(0, 19),
     orderby: 'time',
     limit: String(EMSC_PAGE_SIZE),
   });
@@ -138,22 +140,22 @@ export function createEarthquakeSource({
   emsc = createEmscEarthquakeSource({ fetchImpl }),
 } = {}) {
   async function getSnapshotWithStatus({ signal } = {}) {
-      const [usgsResult, emscResult] = await Promise.allSettled([
-        usgs.getSnapshot({ signal }),
-        emsc.getSnapshot({ signal }),
-      ]);
-      signal?.throwIfAborted();
-      if (usgsResult.status === 'rejected' && emscResult.status === 'rejected')
-        throw usgsResult.reason;
-      const rows = mergeEarthquakeSnapshots(
-        usgsResult.status === 'fulfilled' ? usgsResult.value : [],
-        emscResult.status === 'fulfilled' ? emscResult.value : [],
-      );
-      const missingSources = [
-        ...(usgsResult.status === 'rejected' ? ['USGS'] : []),
-        ...(emscResult.status === 'rejected' ? ['EMSC'] : []),
-      ];
-      return { rows, complete: missingSources.length === 0, missingSources };
+    const [usgsResult, emscResult] = await Promise.allSettled([
+      usgs.getSnapshot({ signal }),
+      emsc.getSnapshot({ signal }),
+    ]);
+    signal?.throwIfAborted();
+    if (usgsResult.status === 'rejected' && emscResult.status === 'rejected')
+      throw usgsResult.reason;
+    const rows = mergeEarthquakeSnapshots(
+      usgsResult.status === 'fulfilled' ? usgsResult.value : [],
+      emscResult.status === 'fulfilled' ? emscResult.value : [],
+    );
+    const missingSources = [
+      ...(usgsResult.status === 'rejected' ? ['USGS'] : []),
+      ...(emscResult.status === 'rejected' ? ['EMSC'] : []),
+    ];
+    return { rows, complete: missingSources.length === 0, missingSources };
   }
   return {
     getSnapshotWithStatus,

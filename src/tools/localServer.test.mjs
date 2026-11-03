@@ -74,11 +74,11 @@ test('the stdio server answers newline-delimited requests using only its data so
   );
   assert.equal(
     byId.get(3).result.content[0].text,
-    '1 earthquake of M2.5+ in the last 24 hours worldwide; strongest M5.1 near Hualien.',
+    'At least 1 earthquake of M2.5+ in the last 24 hours worldwide; strongest M5.1 near Hualien (partial coverage; no data from EMSC).',
   );
   // The earthquake feeds (USGS, then EMSC) are fetched directly; nothing
   // else was contacted. The stub's USGS body is not a valid EMSC feed, so the
-  // answer rests on USGS alone.
+  // answer rests on USGS alone and must disclose the missing catalog.
   assert.deepEqual(contacted, [
     'https://earthquake.usgs.gov',
     'https://www.seismicportal.eu',

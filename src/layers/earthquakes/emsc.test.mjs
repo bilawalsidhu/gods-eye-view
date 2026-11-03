@@ -294,52 +294,133 @@ test('either catalog alone still yields a snapshot; both failing is an error', a
   await assert.rejects(neither.getSnapshot(), /USGS HTTP 503/);
 });
 
-
 test('combined snapshots identify each missing catalog without changing the array API', async () => {
   const row = { stableId: 'fixture', lon: 0, lat: 0, mag: 3, time: 0 };
   for (const missing of ['USGS', 'EMSC']) {
     let unavailable = true;
     const source = createEarthquakeSource({
-      ...Object.fromEntries(['USGS', 'EMSC'].map((name) => [name.toLowerCase(), {
-        async getSnapshot() {
-          if (unavailable && name === missing) throw new Error('offline');
-          return name === missing ? [] : [row];
-        },
-      }])),
+      ...Object.fromEntries(
+        ['USGS', 'EMSC'].map((name) => [
+          name.toLowerCase(),
+          {
+            async getSnapshot() {
+              if (unavailable && name === missing) throw new Error('offline');
+              return name === missing ? [] : [row];
+            },
+          },
+        ]),
+      ),
     });
     assert.deepEqual(await source.getSnapshot(), [row]);
     assert.deepEqual(await source.getSnapshotWithStatus(), {
-      rows: [row], complete: false, missingSources: [missing],
+      rows: [row],
+      complete: false,
+      missingSources: [missing],
     });
     unavailable = false;
     assert.deepEqual(await source.getSnapshotWithStatus(), {
-      rows: [row], complete: true, missingSources: [],
+      rows: [row],
+      complete: true,
+      missingSources: [],
     });
   }
 });
 
-test('a stalled USGS does not hold the healthy EMSC snapshot indefinitely', { timeout: 1000 }, async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  let requestSignal;
-  const usgs = createUsgsEarthquakeSource({
-    timeoutMs: 20,
-    fetchImpl: (url, { signal }) => {
-      requestSignal = signal;
-      return new Promise((resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-      });
-    },
-  });
-  const row = { stableId: 'emsc:fixture', lon: 0, lat: 0, mag: 3, time: 0 };
-  const source = createEarthquakeSource({ usgs, emsc: { getSnapshot: async () => [row] } });
-  const pending = source.getSnapshot();
-  t.mock.timers.tick(20);
-  assert.equal(requestSignal.aborted, true);
-  assert.deepEqual(await pending, [row]);
-});
+test(
+  'a stalled USGS does not hold the healthy EMSC snapshot indefinitely',
+  { timeout: 1000 },
+  async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let requestSignal;
+    const usgs = createUsgsEarthquakeSource({
+      timeoutMs: 20,
+      fetchImpl: (url, { signal }) => {
+        requestSignal = signal;
+        return new Promise((resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
+        });
+      },
+    });
+    const row = { stableId: 'emsc:fixture', lon: 0, lat: 0, mag: 3, time: 0 };
+    const source = createEarthquakeSource({
+      usgs,
+      emsc: { getSnapshot: async () => [row] },
+    });
+    const pending = source.getSnapshot({
+      signal: new AbortController().signal,
+    });
+    t.mock.timers.tick(20);
+    assert.equal(requestSignal.aborted, true);
+    assert.deepEqual(await pending, [row]);
+  },
+);
 
 test('EMSC requests in one refresh minute share a query URL', () => {
   const start = Date.parse('2026-10-11T12:00:00Z');
   assert.equal(emscQueryUrl(start + 1), emscQueryUrl(start + 59_999));
   assert.notEqual(emscQueryUrl(start + 59_999), emscQueryUrl(start + 60_000));
+});
+
+test(
+  'the USGS deadline also cancels a stalled response body',
+  { timeout: 1000 },
+  async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let bodyStarted;
+    let bodySignal;
+    const started = new Promise((resolve) => {
+      bodyStarted = resolve;
+    });
+    const source = createUsgsEarthquakeSource({
+      timeoutMs: 20,
+      fetchImpl: async (url, { signal }) => ({
+        ok: true,
+        json: () =>
+          new Promise((resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+            bodySignal = signal;
+            bodyStarted();
+          }),
+      }),
+    });
+    const pending = source.getSnapshot({
+      signal: new AbortController().signal,
+    });
+    const rejected = assert.rejects(pending, /USGS request timed out/);
+    await started;
+    t.mock.timers.tick(20);
+    assert.equal(bodySignal.aborted, true);
+    await rejected;
+  },
+);
+
+test('caller cancellation wins before and during a combined source request', async () => {
+  for (const before of [true, false]) {
+    const controller = new AbortController();
+    const reason = new Error('caller cancelled');
+    let calls = 0;
+    const usgs = createUsgsEarthquakeSource({
+      fetchImpl: (url, { signal }) => {
+        calls++;
+        return new Promise((resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
+        });
+      },
+    });
+    const source = createEarthquakeSource({
+      usgs,
+      emsc: { getSnapshot: async () => [] },
+    });
+    if (before) controller.abort(reason);
+    const pending = source.getSnapshotWithStatus({ signal: controller.signal });
+    if (!before) controller.abort(reason);
+    await assert.rejects(pending, (error) => error === reason);
+    assert.equal(calls, before ? 0 : 1);
+  }
 });

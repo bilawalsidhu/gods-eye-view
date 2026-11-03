@@ -81,7 +81,10 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       try {
         const snapshot = source.getSnapshotWithStatus
           ? await source.getSnapshotWithStatus({ signal: request.signal })
-          : { rows: await source.getSnapshot({ signal: request.signal }), missingSources: [] };
+          : {
+              rows: await source.getSnapshot({ signal: request.signal }),
+              missingSources: [],
+            };
         const { rows } = snapshot;
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
