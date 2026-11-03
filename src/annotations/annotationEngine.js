@@ -130,10 +130,20 @@ export function normalizeTargetKey(target) {
   return head || raw;
 }
 
+// While no globe draws the marks (an engine without annotation drawing, or
+// between two engines) they stay on the board and this draws nothing.
+const DETACHED_RENDERER = Object.freeze({
+  add() {},
+  update() {},
+  remove() {},
+  sync() {},
+  destroy() {},
+});
+
 export function createAnnotationEngine({
   placeSearch = defaultGeospatial,
-  viewer,
-  renderer,
+  viewer = null,
+  renderer = DETACHED_RENDERER,
   outlineRetryDelaysMs = OUTLINE_RETRY_DELAYS_MS,
   resolveTarget = resolveAnnotationTarget,
 }) {
@@ -410,14 +420,16 @@ export function createAnnotationEngine({
    * @returns {Promise<{ok, drawn, failed, ids, results}>}
    */
   async function annotate(requests, opts = {}) {
-    if (destroyed)
+    if (destroyed || !viewer)
       return {
         ok: false,
         drawn: 0,
         failed: 0,
         ids: [],
         results: [],
-        error: 'destroyed',
+        error: destroyed
+          ? 'destroyed'
+          : 'Annotations are drawn on the Cesium globe only.',
       };
     const list = (Array.isArray(requests) ? requests : [requests]).map(
       promoteStreetHighlight,
@@ -1630,7 +1642,7 @@ export function createAnnotationEngine({
   /** Fly the camera to one mark; a line is framed whole, not by its start. */
   function frame(id) {
     const anno = annotations.get(id);
-    if (!anno) return false;
+    if (!anno || !viewer) return false;
     if (anno.type === 'route' && anno.path?.length) {
       const ring = anno.path.map((p) => [p.lon, p.lat]);
       // Unwrap around the first vertex, as ringRange does, so a line across
@@ -1793,6 +1805,60 @@ export function createAnnotationEngine({
       if (destroyed || typeof listener !== 'function') return () => {};
       changeListeners.add(listener);
       return () => changeListeners.delete(listener);
+    },
+    /**
+     * The globe leaves: take every mark off it and release its drawing. The
+     * marks stay on the board (list, count, Draw's rows) for attachRenderer.
+     */
+    detachRenderer() {
+      if (destroyed || renderer === DETACHED_RENDERER) return;
+      // Work begun for this globe (outline lookups, a flight to a mark) ends
+      // with it; the marks already on the board stay.
+      abortPending();
+      dropQueuedOutlineUpgrades();
+      generation++;
+      const previous = renderer;
+      renderer = DETACHED_RENDERER;
+      viewer = null;
+      for (const anno of annotations.values()) {
+        anno.pendingOutline = false;
+        try {
+          previous.remove(anno);
+        } catch {
+          /* the globe is going; its drawing goes with it */
+        }
+      }
+      try {
+        previous.destroy();
+      } finally {
+        releaseContinuousRender('annotations');
+      }
+    },
+    /**
+     * Draw the board on a globe: `viewer` and the `renderer` built for it.
+     * Marks kept while no globe drew them appear again as they were.
+     */
+    attachRenderer({ viewer: nextViewer, renderer: nextRenderer }) {
+      if (destroyed) return;
+      engine.detachRenderer();
+      viewer = nextViewer;
+      renderer = nextRenderer ?? DETACHED_RENDERER;
+      for (const anno of annotations.values()) {
+        try {
+          const completion = renderer.add(anno);
+          completion?.catch?.(() => {});
+        } catch {
+          rollbackRendererState(anno);
+        }
+      }
+      renderer.sync(annotations);
+      syncAnnotationHold();
+      ensureTicking();
+      governorRequestRender('annotations');
+    },
+    /** Whether a globe draws the marks now. */
+    get attached() {
+      return renderer !== DETACHED_RENDERER;
     },
     destroy() {
       if (destroyed) return;
