@@ -389,6 +389,10 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
 }
 
 @media (max-width: 900px) {
+  #command-dock #location-bar .location-toolbar-label {
+    overflow: hidden;
+  }
+
   #command-dock {
     --dock-popover-mobile-width: calc(100vw - 1.5rem);
   }

@@ -5,7 +5,10 @@ import { getEventListeners } from 'node:events';
 import { createFlowTileSource } from './flowSource.js';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 import { decodeFlowTile } from './flowDecode.js';
-import { decodeOpenFreeMapTile } from '../../sources/openFreeMap.js';
+import {
+  clearSharedOpenFreeMapTiles,
+  decodeOpenFreeMapTile,
+} from '../../sources/openFreeMap.js';
 import {
   RoadRequestError,
   roadRequestError,
@@ -516,6 +519,26 @@ test('late closures hide and stop dots; coverage counts shown matched dots, and 
   assert.equal(controls.getStats().flowCoveragePct, 80);
 });
 
+test('coverage never rounds to "no matches" or full coverage while both kinds of dot are shown', async () => {
+  const { state, controls } = await matchingContext(async () => []);
+  state._bucketCounts = { free: 1, slow: 0, jam: 0, sim: 300 };
+  assert.equal(controls.getStats().flowCoveragePct, 1);
+  assert.equal(
+    controls.getStats().loadingLabel,
+    'LIVE · Roads: OpenStreetMap · Flow: TomTom · 1% cov · Unmatched: simulated',
+  );
+  state._bucketCounts = { free: 300, slow: 0, jam: 0, sim: 1 };
+  assert.equal(controls.getStats().flowCoveragePct, 99);
+  assert.equal(
+    controls.getStats().loadingLabel,
+    'LIVE · Roads: OpenStreetMap · Flow: TomTom · 99% cov · Unmatched: simulated',
+  );
+  state._bucketCounts = { free: 300, slow: 0, jam: 0, sim: 0 };
+  assert.equal(controls.getStats().flowCoveragePct, 100);
+  state._bucketCounts = { free: 0, slow: 0, jam: 0, sim: 300 };
+  assert.equal(controls.getStats().flowCoveragePct, 0);
+});
+
 test('refresh failure removes cached matches and reports simulated flow', async () => {
   const { flow, state, model, controls } = await matchingContext(async () => {
     throw new Error('HTTP 429');
@@ -831,6 +854,8 @@ test('failed detail cores retain real coarse roads while successful cores replac
 });
 
 test('traffic separates API and public tile transports, including the default tile fetch', async (t) => {
+  clearSharedOpenFreeMapTiles();
+  t.after(clearSharedOpenFreeMapTiles);
   const publicUrls = [],
     apiUrls = [];
   const publicFetch = async (url) => {
@@ -866,7 +891,12 @@ test('traffic separates API and public tile transports, including the default ti
       (await (await source.requestOsmRoads(bounds)).json()).roads.length,
     );
   }
-  assert.ok(publicUrls.length >= 4);
+  assert.equal(
+    publicUrls.filter((url) => url.endsWith('.pbf')).length,
+    1,
+    'compatible sources reuse the shared decoded public tile',
+  );
+  assert.equal(publicUrls.filter((url) => url.endsWith('/planet')).length, 2);
   assert.ok(apiUrls.length >= 4);
 });
 

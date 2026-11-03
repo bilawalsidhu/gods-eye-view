@@ -1,4 +1,6 @@
 import { readShellSource } from '../testSupport/readShellSource.mjs';
+import { useStatusStore } from '../ui/stores/status.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 // Director-level pins for scene playback.
 //
 // scenePolicy.test.mjs pins the pure decisions; these pin the wiring, which is
@@ -1928,7 +1930,7 @@ test('invalid authored edits cannot persist an unreadable project over a good sa
   try {
     const before = localStorage.getItem('godsEyeView.sceneProject.v2');
     let notice;
-    director._toastStorageError = (message) => { notice = message; };
+    director._toastStorageError = (message) => { notice = message(); };
     director._project.scenes[0].shots[0].camera.lat = 91;
     director._saveProject();
     assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), before);
@@ -1995,6 +1997,9 @@ test('a capture, update or import that cannot be saved keeps the "Scene not save
       { prepared: { project: structuredClone(PROJECT_FIXTURE), assets: [] } },
     ), true);
     assert.match(status, /^Scene not saved/, 'failed import keeps the save failure');
+    const toast = useStatusStore(applicationPinia()).toast;
+    assert.equal(toast.visible, true);
+    assert.match(toast.text, /^Scene not saved/, 'the page toast says so too');
   } finally { console.warn = warn; await director.destroy(); restore(); }
 });
 
