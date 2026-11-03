@@ -117,7 +117,7 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
   // Seam 1: a new tracker handoff stamps; restoring the session does not.
   assert.match(
     ui,
-    /viewer\.trackedEntityChanged\.addEventListener\(\s*\(entity\) => \{[\s\S]*?if \(\s*entity &&\s*!this\._disposed &&\s*entity\.gevSelectionOrigin !== 'share-restore'\s*\)\s*this\._stampNavigation\(\{\s*cancelPendingSelection: false,?\s*\}\);/,
+    /viewer\.trackedEntityChanged\.addEventListener\(\s*\(entity\) => \{[\s\S]*?if \(entity && !this\._disposed && !entity\.gevRestoring\)\s*this\._stampNavigation\(\{\s*cancelPendingSelection: false,?\s*\}\);/,
     'tracker handoff must stamp',
   );
   // Seam 2 is pinned by "Cockpit takeover invalidates deferred work" above.

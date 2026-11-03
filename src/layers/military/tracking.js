@@ -971,10 +971,20 @@ export function createTracking({
     refreshTrackedReadout(flightState._trackedEntity);
     // Camera follows the tracked entity (the renderer cancels any flight
     // first and applies the one exact tracked frame).
+    // A resumed binding or a share restore re-follows the session's own
+    // subject: marked only while the follow starts, so the shell does not
+    // read it as new navigation (LayerBindings.observeCamera) yet any later
+    // follow of the same aircraft still is.
     if (follow) {
-      flightState._trackedCameraFrameStop = flightState._renderer.follow.start(
-        flightState._trackedEntity,
-      );
+      const entity = flightState._trackedEntity;
+      const restoring = resume || origin === 'share-restore';
+      if (restoring) entity.gevRestoring = true;
+      try {
+        flightState._trackedCameraFrameStop =
+          flightState._renderer.follow.start(entity);
+      } finally {
+        if (restoring) delete entity.gevRestoring;
+      }
     }
     if (resume) {
       _attachTrail();

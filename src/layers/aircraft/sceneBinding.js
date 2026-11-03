@@ -9,6 +9,9 @@ export function createAircraftSceneBinding({
   enable,
 }) {
   let resumeFollow = false;
+  // The tracked aircraft's selection origin outlives the renderer, as the
+  // tracking itself does.
+  let resumeOrigin = 'programmatic';
   function removeSceneListeners() {
     parts.tracking._removeClickHandler();
     services.picking.unregisterPickOwner(id);
@@ -58,7 +61,7 @@ export function createAircraftSceneBinding({
         parts.snapshots.presentRecords();
         if (flightState._trackedIcao) {
           parts.tracking._trackFlight(flightState._trackedIcao, {
-            origin: 'share-restore',
+            origin: resumeOrigin,
             resume: true,
             follow: resumeFollow,
           });
@@ -84,6 +87,8 @@ export function createAircraftSceneBinding({
       flightState._trackedCameraFrameStop?.();
       flightState._trackedCameraFrameStop = null;
       if (flightState._trackedEntity) {
+        resumeOrigin =
+          flightState._trackedEntity.gevSelectionOrigin ?? 'programmatic';
         resumeFollow = renderer.follow.isFollowing(flightState._trackedEntity);
         if (resumeFollow) renderer.follow.release();
         renderer.tracked.remove(flightState._trackedEntity);

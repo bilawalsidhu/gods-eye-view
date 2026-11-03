@@ -485,7 +485,16 @@ export function createTracking({
       layerState._contextRefreshedAtMs = Date.now();
     }
 
-    getRenderer().follow.start(layerState._trackedEntity);
+    // Resumed or share-restored: not new navigation, only while the follow
+    // starts (see flights/tracking.js).
+    const entity = layerState._trackedEntity;
+    const restoring = resuming || origin === 'share-restore';
+    if (restoring) entity.gevRestoring = true;
+    try {
+      getRenderer().follow.start(entity);
+    } finally {
+      if (restoring) delete entity.gevRestoring;
+    }
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);
   }
   return {
