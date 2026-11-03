@@ -12,6 +12,7 @@ import {
   waitForFirstFrame,
 } from './standalone/engineSwitch.js';
 import { ENGINE_STORAGE_KEY } from './app/engineChoice.js';
+import { createSessionDiagnostics } from './app/sessionDiagnostics.js';
 import { useDisplayStore } from './ui/stores/display.js';
 import { applicationPinia } from './ui/vueRuntime.js';
 import { t } from './i18n/index.js';
@@ -31,6 +32,25 @@ let cockpit = null;
 const renderers = createRendererCache();
 const layerSession = { lifetime: new AbortController() };
 const { signal } = layerSession.lifetime;
+// Which session objects this page holds now (scripts/qa-app-once.mjs).
+const session = createSessionDiagnostics(() => {
+  const components = application?.getComponents?.() ?? {};
+  const style = components.controls?.styleManager;
+  return {
+    application,
+    shell: style,
+    shareLink: style?.shareLinkManager,
+    hud: style?.hud,
+    navigation: style?._navigation,
+    placeSearch: style?.placeSearch,
+    dataManager: components.data?.dataManager,
+    voice: components.tools?.voiceCommands,
+    annotations: components.tools?.annotations,
+    geoImport: window.__gevGeoImport,
+    drawTool: window.__gevDrawTool,
+  };
+});
+window.__gevSession = session;
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   layerSession.lifetime.abort();
@@ -56,6 +76,7 @@ window.addEventListener('popstate', () => {
 });
 
 function createApplication(kind, engineSwitch) {
+  session.count('applications');
   layerSession.restoringView = engineSwitch;
   application = createStandaloneApplication({
     googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
@@ -91,6 +112,7 @@ async function leave(from) {
     renderers.retain(from);
   }
   await application?.destroy();
+  session.count('detaches');
 }
 
 // Start an engine on the retained session. Success means the engine runs
@@ -105,6 +127,7 @@ async function enter(kind) {
     await style.initialRestorePromise;
     signal.throwIfAborted();
     layerSession.restoringView = false;
+    session.count('attachments');
     resumeSession(layerSession);
     // Only resume the aircraft that actually survived the handoff. A history
     // entry may select a different subject, and a stale track may disappear.
@@ -215,6 +238,7 @@ const initialKind = pageEngineKind();
 createApplication(initialKind, false)
   .start()
   .then(() => {
+    session.count('attachments');
     engineSwitch = createEngineSwitch({
       kind: initialKind,
       requested: pageEngineKind,
