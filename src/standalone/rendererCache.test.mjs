@@ -27,7 +27,11 @@ test('a parked renderer is reused, but a lost context is disposed before rebuild
     defer(() => {
       released += 1;
     });
+    const canvas = new EventTarget();
+    const context = { lost: false, isContextLost: () => context.lost };
+    canvas.getContext = (type) => (type === 'webgl2' ? context : null);
     return {
+      context,
       suspend() {
         this.running = false;
       },
@@ -35,7 +39,7 @@ test('a parked renderer is reused, but a lost context is disposed before rebuild
         this.running = true;
       },
       engine: {
-        host: { container, canvas: new EventTarget() },
+        host: { container, canvas },
         render: { request() {} },
       },
     };
@@ -49,13 +53,23 @@ test('a parked renderer is reused, but a lost context is disposed before rebuild
   release();
   assert.equal(first.running, false);
   assert.equal(first.engine.host.container.isConnected, false);
+  // A parked renderer whose canvas no longer hands out contexts is still
+  // reused when its own context is alive.
+  first.engine.host.canvas.getContext = () => {
+    throw new Error('getContext called during a switch');
+  };
   assert.equal(await open(), first);
   assert.equal(first.running, true);
   assert.equal(first.engine.host.container.isConnected, true);
   cache.retain('navara');
   release();
   // The WebGL context is already lost, but its DOM event has not fired.
-  first.engine.host.canvas.getContext = () => ({ isContextLost: () => true });
+  // The switch reads the context the globe was built with and never asks
+  // the canvas again (a QA or driver failure of getContext must not decide).
+  first.context.lost = true;
+  first.engine.host.canvas.getContext = () => {
+    throw new Error('getContext called during a switch');
+  };
   const second = await open();
   assert.notEqual(second, first);
   assert.equal(released, 1);
