@@ -34,7 +34,11 @@ export const OSM_QUERY_LIMITS = Object.freeze({
   maxCountDeg2: 36,
   defaultLimit: 500,
   maxLimit: 1000,
-  /** The answer waits this long before cancelling its provider request. */
+  /**
+   * The answer waits this long before cancelling its provider request. It
+   * must outlast the server's whole search (`OSM_FEATURE_LIMITS.upstreamBudgetMs`,
+   * 22 s), or the cancelled search caches nothing for the retry.
+   */
   budgetMs: 25_000,
 });
 

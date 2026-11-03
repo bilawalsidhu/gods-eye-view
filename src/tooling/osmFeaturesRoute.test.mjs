@@ -18,6 +18,23 @@ import {
 } from '../../server/providers/overpass/osmFeatures.js';
 import { installOsmFeaturesRoute } from '../../server/providers/overpass/osmFeaturesRoute.js';
 import { sanitizeOverpassBody } from '../../server/providers/overpass/query.js';
+import { OSM_QUERY_LIMITS } from '../voice/osmActions.js';
+
+test('the server finishes its whole search before the voice answer gives up', () => {
+  // When the browser stops waiting, the route aborts the upstream query, so
+  // an OSM_TIMEOUT retry could never be served from the cache.
+  assert.ok(
+    OSM_FEATURE_LIMITS.timeoutS * 1000 < OSM_FEATURE_LIMITS.upstreamTimeoutMs,
+    'Overpass gives up before the server stops waiting for it',
+  );
+  assert.ok(
+    OSM_FEATURE_LIMITS.upstreamTimeoutMs <= OSM_FEATURE_LIMITS.upstreamBudgetMs,
+  );
+  assert.ok(
+    OSM_FEATURE_LIMITS.upstreamBudgetMs + 2_000 <= OSM_QUERY_LIMITS.budgetMs,
+    `server budget ${OSM_FEATURE_LIMITS.upstreamBudgetMs} ms must end before the client's ${OSM_QUERY_LIMITS.budgetMs} ms`,
+  );
+});
 
 test('a preset and a small box compile to a bounded query', () => {
   const compiled = compileOsmFeatureQuery({
@@ -28,7 +45,7 @@ test('a preset and a small box compile to a bounded query', () => {
   assert.equal(compiled.ok, true);
   assert.equal(
     compiled.ql,
-    '[out:json][timeout:25][maxsize:67108864];(nwr["amenity"="hospital"](27.6,85.2,27.8,85.4););out center tags 50;',
+    '[out:json][timeout:20][maxsize:67108864];(nwr["amenity"="hospital"](27.6,85.2,27.8,85.4););out center tags 50;',
   );
   assert.doesNotMatch(compiled.ql, /area/, 'no boundary-area scan');
   const count = compileOsmFeatureQuery({

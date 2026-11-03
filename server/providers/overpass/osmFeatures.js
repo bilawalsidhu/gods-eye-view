@@ -24,16 +24,22 @@ export const OSM_FEATURE_LIMITS = Object.freeze({
   maxCountDeg2: 36,
   /** Most features one fetch returns. */
   maxLimit: 1000,
-  /** Overpass server-side timeout, seconds. */
-  timeoutS: 25,
+  /** Overpass server-side timeout, seconds: it gives up before we stop waiting. */
+  timeoutS: 20,
   /** Overpass server-side memory cap, bytes. */
   maxsize: 64 * 1024 * 1024,
   /** Response bytes read from the upstream. */
   maxResponseBytes: 16 * 1024 * 1024,
-  /** Per-upstream wait: a busy Overpass answers these in 10–30 s. */
-  upstreamTimeoutMs: 40_000,
-  /** The whole search, across every configured endpoint in turn. */
-  upstreamBudgetMs: 45_000,
+  /** Per-upstream wait: the Overpass timeout plus transfer time. */
+  upstreamTimeoutMs: 22_000,
+  /**
+   * The whole search, across every configured endpoint in turn. It ends
+   * before the voice answer's own deadline (`OSM_QUERY_LIMITS.budgetMs` in
+   * `src/voice/osmActions.js`, 25 s): a browser that gives up first closes
+   * the request, which cancels the upstream query, so nothing would be
+   * cached for the retry.
+   */
+  upstreamBudgetMs: 22_000,
 });
 
 /** Tags a returned feature keeps, besides the preset's own. */
