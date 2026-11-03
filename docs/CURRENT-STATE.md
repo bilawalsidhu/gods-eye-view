@@ -263,6 +263,10 @@ that names Operator restores the default Tactical layout. Operator was the
 only layout that showed the HUD's top banner bar, so its markup and styles are
 removed too.
 
+Minimal no longer shows the centred MGRS / LAT / LON bar near the bottom of the
+globe (November 3, 2026, #1523): the bottom-left readout already carries the
+same position, and the bar sat across the globe.
+
 ## Cyber HUD — September 30, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
