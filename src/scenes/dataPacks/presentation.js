@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
-import { renderPackGeometry } from './geometry.js';
+import { renderDecodedGeometry } from './geometry.js';
+import { decodePackGeoJSON } from '../../director/packs/geojson.js';
 import { useDataPacksStore } from '../../ui/stores/dataPacks.js';
 import { applicationPinia } from '../../ui/vueRuntime.js';
 
@@ -18,15 +19,20 @@ let panelKeys = 0,
 export function createPackPresentations(
   viewer,
   targets = new Map(),
-  { store = useDataPacksStore(applicationPinia()) } = {},
+  {
+    store = useDataPacksStore(applicationPinia()),
+    native = null,
+    container = viewer?.container,
+  } = {},
 ) {
   const owner = {};
+  const resources = new Set();
   let key,
     cards = [];
   function present() {
     store.publish(
       owner,
-      cards.length ? { key, container: viewer.container, cards } : null,
+      cards.length ? { key, container, cards } : null,
     );
   }
   function addCard(pack) {
@@ -59,8 +65,31 @@ export function createPackPresentations(
       urls = [];
     const featureKeys = [];
     let card,
+      draw,
       destroyed = false;
-    return {
+    const nativeRemovers = [];
+    const handle = {
+      own(remove) {
+        nativeRemovers.push(remove);
+      },
+      display(render) {
+        draw = render;
+        if (viewer || native) draw(native);
+      },
+      redraw() {
+        if (!destroyed && (viewer || native)) draw?.(native);
+      },
+      detach() {
+        for (const key of featureKeys.splice(0)) targets.delete(key);
+        for (const remove of nativeRemovers.splice(0).reverse()) remove();
+        for (const entity of entities.splice(0)) viewer.entities.remove(entity);
+        for (const primitive of primitives.splice(0))
+          viewer.scene.primitives.remove(primitive);
+        for (const material of materials.splice(0)) {
+          if (!material.isDestroyed()) material.destroy();
+        }
+        viewer?.scene.requestRender();
+      },
       feature(id, pickedId) {
         const key = JSON.stringify([id.packId, id.featureId]);
         targets.set(key, pickedId);
@@ -94,19 +123,14 @@ export function createPackPresentations(
       dispose() {
         if (destroyed) return;
         destroyed = true;
-        for (const key of featureKeys.splice(0)) targets.delete(key);
-        // The view stops a removed card's player as it goes.
+        handle.detach();
+        resources.delete(handle);
         if (card) removeCard(card);
-        for (const entity of entities.splice(0)) viewer.entities.remove(entity);
-        for (const primitive of primitives.splice(0))
-          viewer.scene.primitives.remove(primitive);
-        for (const material of materials.splice(0)) {
-          if (!material.isDestroyed()) material.destroy();
-        }
         for (const url of urls.splice(0)) URL.revokeObjectURL(url);
-        viewer.scene.requestRender();
       },
     };
+    resources.add(handle);
+    return handle;
   }
   function guarded(render) {
     return async (context) => {
@@ -128,7 +152,26 @@ export function createPackPresentations(
     };
   }
   return {
-    geojson: guarded(renderPackGeometry),
+    setScene(nextViewer, nextNative, nextContainer) {
+      for (const handle of resources) handle.detach();
+      viewer = nextViewer;
+      native = nextNative;
+      if (nextContainer) container = nextContainer;
+      for (const handle of resources) handle.redraw();
+      if (cards.length) present();
+    },
+    geojson: guarded(({ asset, pack }, handle) => {
+      if (
+        !['application/json', 'application/geo+json'].includes(asset.mimeType)
+      )
+        throw new Error('Expected GeoJSON');
+      const features = decodePackGeoJSON(asset.bytes);
+      handle.display((native) =>
+        native
+          ? native.geometry(pack, features, handle)
+          : renderDecodedGeometry(features, pack, handle),
+      );
+    }),
     image: guarded(async ({ asset, pack, signal }, handle) => {
       if (asset.mimeType !== 'image/png') throw new Error('Expected PNG image');
       const bytes = asset.bytes;
@@ -162,7 +205,7 @@ export function createPackPresentations(
       signal.throwIfAborted();
       if (image.naturalWidth * image.naturalHeight > 16 * 1024 * 1024)
         throw new Error('Image dimensions exceed limit');
-      handle.primitive(
+      handle.display(native => native ? native.image(pack,image,handle) : handle.primitive(
         new Cesium.Primitive({
           asynchronous: false,
           geometryInstances: new Cesium.GeometryInstance({
@@ -182,7 +225,7 @@ export function createPackPresentations(
             translucent: true,
           }),
         }),
-      );
+      ));
     }),
     media: guarded(({ asset, pack, anchors }, handle) => {
       if (
@@ -200,7 +243,7 @@ export function createPackPresentations(
         (item) => item.id === pack.placement.anchorId,
       );
       if (!anchor) throw new Error('Missing media anchor');
-      handle.add({
+      handle.display(native => native ? native.media(pack,anchor,handle) : handle.add({
         name: pack.id,
         position: xyz([anchor.lon, anchor.lat, anchor.alt]),
         point: { pixelSize: 16, color: Cesium.Color.YELLOW },
@@ -209,7 +252,7 @@ export function createPackPresentations(
           font: '14px sans-serif',
           pixelOffset: new Cesium.Cartesian2(0, -24),
         },
-      });
+      }));
       handle.media({
         kind: asset.mimeType.startsWith('video/') ? 'video' : 'audio',
         src: handle.url(new Blob([asset.bytes], { type: asset.mimeType })),

@@ -280,7 +280,9 @@ export function createReplay({
       return false;
     layerState._replayPausedAtMs = appClock.now();
     layerState._replayPaused = true;
-    layerState._replayTracks.get(layerState._replayCameraLaunchId)?.beginReplayFrame?.();
+    layerState._replayTracks
+      ?.get(layerState._replayCameraLaunchId)
+      ?.beginReplayFrame?.();
     syncReplayButton();
     return true;
   }

@@ -6,7 +6,10 @@ const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 export function renderPackGeometry({ asset, pack }, handle) {
   if (!['application/json', 'application/geo+json'].includes(asset.mimeType))
     throw new Error('Expected GeoJSON');
-  const features = decodePackGeoJSON(asset.bytes);
+  return renderDecodedGeometry(decodePackGeoJSON(asset.bytes), pack, handle);
+}
+
+export function renderDecodedGeometry(features, pack, handle) {
   const polygons = [];
   let lines;
   for (const feature of features) {

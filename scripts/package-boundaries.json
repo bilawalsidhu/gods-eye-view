@@ -3681,6 +3681,7 @@
       "src/layers/directions/render/navara.js",
       "src/layers/traffic/render/navara.js",
       "src/layers/streetLevel/render/navara.js",
+      "src/scenes/dataPacks/navara.js",
       "src/layers/shared/render/navaraStory.js",
       "src/layers/bhoteKoshi/render/navara.js",
       "src/layers/weather/render/navara.js",

@@ -310,9 +310,22 @@ export async function createNavaraScene({
     engine,
     (credits ?? DATA_CREDITS).filter(({ key }) => NAVARA_CREDIT_KEYS.has(key)),
   );
+  let packRenderer;
+  const { createNavaraPackRenderer } =
+    await import('../scenes/dataPacks/navara.js');
+  const packGraphics = () =>
+    (packRenderer ??= createNavaraPackRenderer(
+      engine,
+      navaraViews.get(engine),
+    ));
   return {
     viewer: null,
     engine,
+    packRenderer: {
+      geometry: (...args) => packGraphics().geometry(...args),
+      image: (...args) => packGraphics().image(...args),
+      media: (...args) => packGraphics().media(...args),
+    },
     tileset: null,
     suspend() {
       uninstallRenderGovernor(engine);

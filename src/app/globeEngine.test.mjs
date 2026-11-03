@@ -52,8 +52,8 @@ test('the scene constructs the engine with the viewer and returns it beside the 
   assert.ok(engineAt > viewerTeardown, 'engine teardown must precede viewer');
   assert.match(scene, /tilesetRef\.current = tileset;/);
   assert.match(
-    scene,
-    /return \{ viewer, engine, tileset, mapStackController, operations \};/,
+    scene.replace(/\s+/g, ' '),
+    /return \{ viewer, engine, tileset, mapStackController, operations, packRenderer,? \};/,
   );
 });
 

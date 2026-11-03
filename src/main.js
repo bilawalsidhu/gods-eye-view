@@ -41,6 +41,7 @@ async function start(next, engineSwitch = false, cockpit = null) {
     layerSession.restoringView = false;
     for (const {module} of layerSession.manager.layers.values()) module.resumeViewport?.();
     if (layerSession.handoffLayers) layerSession.manager.layers.get('directions')?.module.resumeCamera?.();
+    layerSession.director?.resumeScene();
     // Only resume the aircraft that actually survived the handoff. A history
     // entry may select a different subject, and a stale track may disappear.
     const target = style.getAircraftTrackingTarget();
@@ -144,6 +145,7 @@ async function reconcile(remember = false) {
       if (layerSession.handoffLayers) {
         manager.layers.get('directions')?.module.suspendCamera?.();
         manager.layers.get('satellites')?.module.suspendCamera?.();
+        layerSession.director?.suspendScene();
       }
       renderers.retain(kind);
       await application.destroy();

@@ -2065,3 +2065,44 @@ test('a caught run failure resolves as run-failed, not success (#971)', async ()
     );
   } finally { console.warn = warn; await director.destroy(); restore(); }
 });
+
+test('a failed scene-pack rebind releases the partial renderer and a stopped shot unblocks', async () => {
+  const director = Object.create(SceneDirector.prototype);
+  const drawn = new Set();
+  director.engine = { host: { container: {} } };
+  director._dataPacks = {
+    setScene(viewer) {
+      if (!viewer) drawn.clear();
+      else {
+        drawn.add('point');
+        throw new Error('could not attach polygon');
+      }
+    },
+  };
+  director._interactions = { setScene() {} };
+  director.suspendScene();
+  const gate = director._sceneGate;
+  const abort = new AbortController();
+  const stopped = director._waitForScene({ signal: abort.signal });
+  assert.throws(
+    () =>
+      director.attachScene(
+        {},
+        { host: { container: {} } },
+        {},
+        null,
+        () => true,
+      ),
+    /could not attach polygon/,
+  );
+  assert.equal(director.engine, null);
+  assert.equal(director._sceneGate, gate);
+  assert.equal(drawn.size, 0);
+  abort.abort();
+  assert.equal(await stopped, false);
+  const waiting = director._waitForScene();
+  director.engine = { host: {} };
+  director.styleManager = {};
+  director.resumeScene();
+  assert.equal(await waiting, true);
+});

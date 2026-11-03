@@ -35,22 +35,37 @@ export function createApplicationTools({
   startChrome,
   onSceneDirector,
   sceneDataPacks,
+  layerSession,
   signal,
   defer,
 }) {
   const { viewer, engine, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
-  const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
-    engine,
-    dataPacks: sceneDataPacks,
-    isMapStackAvailable: (id) =>
-      mapStackController?.isStackAvailable(id) === true,
+  const isMapStackAvailable = id => mapStackController?.isStackAvailable(id) === true;
+  const sceneDirector = layerSession?.director ?? new SceneDirector(viewer, styleManager, dataManager, {
+    engine, dataPacks: {...sceneDataPacks,native:scene.packRenderer}, isMapStackAvailable,
   });
+  if (layerSession?.director)
+    sceneDirector.attachScene(
+      viewer,
+      engine,
+      styleManager,
+      scene.packRenderer,
+      isMapStackAvailable,
+    );
+  if (layerSession) layerSession.director = sceneDirector;
   dataManager.layers
     .get('bhote-koshi-2026')
     ?.module.attachSceneController(sceneDirector);
-  defer(() => sceneDirector.destroy());
+  defer(() => {
+    if (layerSession?.handoffLayers && !layerSession.lifetime.signal.aborted) {
+      sceneDirector.suspendScene();
+    } else {
+      if (layerSession) layerSession.director = null;
+      return sceneDirector.destroy();
+    }
+  });
   onSceneDirector?.(sceneDirector);
   // Without a viewer (the Navara mode) the tools load with that mode's code.
   if (!viewer) {
