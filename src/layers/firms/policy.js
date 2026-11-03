@@ -33,10 +33,14 @@ export const LOD_LEVELS = [
     labelDistance: 8500000,
   },
   {
+    // Up to 20,000 markers: at the 2,400 km end of the hand-off the padded
+    // view over Africa, the densest region, holds ~21,000 detections, and a
+    // tighter cap left the heatmap's weak spots dissolving into nothing.
+    // A rebuild of that many costs ~60 ms, only there.
     id: 'local',
     minHeight: 750000,
     mode: 'detections',
-    maxDetections: 2500,
+    maxDetections: 20000,
     labelDistance: 4500000,
   },
   {

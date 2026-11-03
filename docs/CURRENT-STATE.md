@@ -2225,7 +2225,10 @@ built at every zoom and cross-fade by camera height between 2,400 and
 3,600 km, every frame, so a fast zoom never shows a gap: the heatmap fades by
 imagery `alpha` (a hidden Cesium imagery layer is unmapped from the globe
 tiles and re-mapped late when shown), the markers by sprite alpha, and the
-marker collection is hidden once the heatmap is whole. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
+marker collection is hidden once the heatmap is whole. The 750–3,000 km
+markers band draws up to 20,000 detections (the strongest in the padded
+view), so the weak fires the heatmap shows stay on screen as markers when it
+fades out. "N FIRES" cards from a 2° / 1° aggregation still label the hottest
 areas; their accent is the strongest fire's FRP color.
 
 The Active Fires row carries a "Fire intensity (FRP)" slider on a log scale

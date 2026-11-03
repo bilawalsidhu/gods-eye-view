@@ -5,7 +5,7 @@
   High confidence switch and an "N of M shown" counter to the layer row. Far
   zoom shows a Snap Map–style heatmap in the same colors instead of squares,
   one distinct spot per fire, empty where nothing burns, and cross-fades with
-  the markers around 3,000 km with no gap. The filter applies once before
+  the markers around 3,000 km with no gap, keeping weak fires as markers. The filter applies once before
   rendering, so markers, cards, the heatmap, context and the top-fires query
   agree; share links keep it (`w` token: `f`, `c`), and `get_active_fires`
   takes matching `min_frp_mw` and `confidence` arguments. Default 0 MW / All
