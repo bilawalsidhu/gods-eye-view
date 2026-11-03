@@ -1,3 +1,31 @@
+# MzansiView
+
+South Africa in perspective. A geographic explorer by Phindile Sandi, built on
+[God’s Eye View by Bilawal Sidhu](https://github.com/bilawalsidhu/gods-eye-view).
+The original MIT licence and third-party attribution are retained below and in LICENSE.
+
+## Durban foundation
+
+The default camera opens over Durban; shared views keep their original camera.
+Choose **Explore Durban** to search the three curated reference locations, filter
+by category or distance, select a search centre on the map, and save favourites.
+Favourites are stored only in the current browser, not in a cloud account.
+The reference set is deliberately small and is not a live facility directory.
+Each location includes its source and review date. Distances are straight-line
+estimates, not travel routes. Existing globe controls and optional data feeds remain.
+
+Run `npm ci`, `npm run doctor`, then `npm run dev` with Node 24.14+ (24.x) or 26.x.
+Open http://localhost:4173. The globe needs internet access to retrieve map imagery.
+
+## Backend status
+
+The dedicated Supabase project has not been provisioned: the account reached its
+active free-project limit. No existing database has been modified. See
+[the backend integration plan](docs/MZANSI_BACKEND.md) for the next stage.
+This release does not claim cloud authentication or cloud-synced bookmarks.
+
+## Upstream documentation
+
 <div align="center">
 
 # 🌐 God's Eye View

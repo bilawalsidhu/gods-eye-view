@@ -2,8 +2,9 @@ import { createAssetDirectorySource } from '../director/packs/source.js';
 import { createApplicationTools } from '../app/tools.js';
 import { startStandaloneChrome } from './startupChrome.js';
 import { loadToolCatalog } from './toolCatalog.js';
+import { mountMzansiExplorer } from './mzansi/mount.js';
 export function createStandaloneTools(options) {
-  return createApplicationTools({
+  const tools = createApplicationTools({
     startChrome: startStandaloneChrome,
     sceneDataPacks: {
       sources: {
@@ -24,4 +25,11 @@ export function createStandaloneTools(options) {
       ...options?.voice,
     },
   });
+  options.defer(
+    mountMzansiExplorer({
+      viewer: options.scene.viewer,
+      navigation: options.controls.styleManager,
+    }),
+  );
+  return tools;
 }

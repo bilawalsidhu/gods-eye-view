@@ -1,8 +1,8 @@
 {
   "id": ".",
-  "name": "God's Eye View",
-  "short_name": "God's Eye",
-  "description": "Live spatial intelligence in the browser.",
+  "name": "MzansiView",
+  "short_name": "MzansiView",
+  "description": "Explore South Africa through an interactive geographic globe.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
