@@ -139,7 +139,9 @@ export function createSceneRunner({
     const previous = inner;
     inner = null;
     kind = null;
-    previous?.dispose?.();
+    // The conversation (the analyst's last answer) continues on the next
+    // engine: only this runner ends.
+    previous?.dispose?.({ keepMemory: true });
   };
   /** The page's switch settled: waiting calls look again. */
   run.wake = wake;
