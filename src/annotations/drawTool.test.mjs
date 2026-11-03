@@ -21,14 +21,14 @@ const tool = () => read('src/annotations/drawTool.js');
 
 test('the application composition wires the draw tool and owns its teardown', () => {
   const tools = read('src/app/tools.js');
-  const engineAt = tools.indexOf('const annotations = initAnnotations({');
+  const engineAt = tools.indexOf('const annotations = sessionAnnotations({');
   const drawAt = tools.indexOf(
     'const drawTool = initDrawTool({\n    viewer,\n    annotations,\n    navigation: styleManager,\n    publish: (view) => displayStore.publishDraw(view),',
   );
-  assert.ok(engineAt >= 0, 'initAnnotations call missing');
+  assert.ok(engineAt >= 0, 'the session annotation board is missing');
   assert.ok(
     drawAt > engineAt,
-    'initDrawTool must follow initAnnotations and receive its engine',
+    'initDrawTool must follow the annotation board and receive it',
   );
   assert.match(
     tools,

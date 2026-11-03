@@ -1,5 +1,5 @@
 import { SceneDirector } from '../scenes/director.js';
-import { initAnnotations } from '../annotations/index.js';
+import { createSessionAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { useDisplayStore } from '../ui/stores/display.js';
@@ -17,6 +17,38 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
+
+/**
+ * The annotation board: the page session's when there is one (created once,
+ * destroyed with the page), else this application's.
+ */
+export function sessionAnnotations({
+  layerSession,
+  placeSearch,
+  resolver,
+  defer,
+}) {
+  const create = () => createSessionAnnotations({ placeSearch, resolver });
+  if (!layerSession) {
+    const annotations = create();
+    defer(() => destroyAnnotations(annotations));
+    return annotations;
+  }
+  if (!layerSession.annotations) {
+    const annotations = (layerSession.annotations = create());
+    layerSession.lifetime.signal.addEventListener(
+      'abort',
+      () => destroyAnnotations(annotations),
+      { once: true },
+    );
+  }
+  return layerSession.annotations;
+}
+
+function destroyAnnotations(annotations) {
+  if (window.__gevAnnotations === annotations) delete window.__gevAnnotations;
+  annotations.destroy();
+}
 
 /**
  * Attach scene tools, rendering listeners and the application debug handle.
@@ -90,16 +122,16 @@ export function createApplicationTools({
       }),
     );
   }
-  const annotations = initAnnotations({
-    viewer,
-    tileset,
+  // The annotation board belongs to the page session when there is one: an
+  // engine switch only takes its drawing off this viewer.
+  const annotations = sessionAnnotations({
+    layerSession,
     placeSearch,
     resolver: operations.annotationResolver,
+    defer,
   });
-  defer(() => {
-    if (window.__gevAnnotations === annotations) delete window.__gevAnnotations;
-    annotations.destroy();
-  });
+  annotations.attachScene({ viewer, tileset });
+  defer(() => annotations.detachScene());
   const displayStore = useDisplayStore(applicationPinia());
   // The Display panel's controls answer through the store; returns the
   // disconnect.

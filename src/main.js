@@ -45,7 +45,7 @@ const session = createSessionDiagnostics(() => {
     placeSearch: style?.placeSearch,
     dataManager: components.data?.dataManager,
     voice: layerSession.voice?.commands ?? components.tools?.voiceCommands,
-    annotations: components.tools?.annotations,
+    annotations: layerSession.annotations ?? components.tools?.annotations,
     geoImport: window.__gevGeoImport,
     drawTool: window.__gevDrawTool,
   };
