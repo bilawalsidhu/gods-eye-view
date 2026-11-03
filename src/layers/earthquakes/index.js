@@ -168,9 +168,11 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         _count = count;
         _lastUpdate = Date.now();
         _missingSources = snapshot.missingSources || [];
-        _lastError = _missingSources.length
-          ? `Partial earthquake coverage: no data from ${_missingSources.join(', ')}`
-          : null;
+        _lastError = _missingSources.includes('USGS')
+          ? msg('Partial earthquake coverage: USGS unavailable')
+          : _missingSources.includes('EMSC')
+            ? msg('Partial earthquake coverage: EMSC unavailable')
+            : null;
         console.log(`[Data:Earthquakes] Updated: ${_count} events (M2.5+)`);
         return true;
       } catch (e) {

@@ -3014,5 +3014,7 @@
   "Exit cockpit to fly to a drawing": "Sal de la cabina para volar a un dibujo",
   "Directions, drawing and your own files": "Indicaciones, dibujo y tus propios archivos",
   "Sea Marks": "Señales marítimas",
-  "Ski Pistes": "Pistas de esquí"
+  "Ski Pistes": "Pistas de esquí",
+  "Partial earthquake coverage: USGS unavailable": "Cobertura parcial de terremotos: USGS no disponible",
+  "Partial earthquake coverage: EMSC unavailable": "Cobertura parcial de terremotos: EMSC no disponible"
 }
