@@ -124,6 +124,18 @@ const scrubbed = () => ({
   ...Object.fromEntries(envNames().map((name) => [name, ''])),
 });
 
+// The report names no local directory: the output, the served checkout and
+// this repository become placeholders (logs carry stack traces).
+const machinePaths = (text) => {
+  let out = String(text);
+  for (const [path, name] of [
+    [served?.scratch, '<scratch>'],
+    [output, '<output>'],
+    [root.replace(/\/$/, ''), '<repo>'],
+  ])
+    if (path) out = out.split(path).join(name);
+  return out;
+};
 let served = null;
 let preview = null;
 const cleanup = () => {
@@ -155,6 +167,7 @@ if (flag('serve')) {
   git('worktree', 'add', '--detach', worktree, commit);
   symlinkSync(join(root, 'node_modules'), join(worktree, 'node_modules'));
   served = {
+    scratch,
     commit,
     worktree,
     dist,
@@ -454,7 +467,7 @@ const report = {
 const save = () =>
   writeFileSync(
     join(output, 'acceptance.json'),
-    JSON.stringify(report, null, 2) + '\n',
+    machinePaths(JSON.stringify(report, null, 2)) + '\n',
   );
 save();
 
@@ -492,12 +505,15 @@ for (const [label, name, layers, extra = [], seconds = 300, external] of runs) {
       : run.error?.code === 'ETIMEDOUT'
         ? 'timeout'
         : 'fail';
-  const log =
-    (run.stdout || '') + (run.stderr || '') + (run.error?.message || '');
+  const log = machinePaths(
+    (run.stdout || '') + (run.stderr || '') + (run.error?.message || ''),
+  );
   writeFileSync(join(output, label + '.log'), log);
   const manifest = existsSync(evidence)
-    ? JSON.parse(readFileSync(evidence, 'utf8'))
+    ? JSON.parse(machinePaths(readFileSync(evidence, 'utf8')))
     : null;
+  if (manifest)
+    writeFileSync(evidence, JSON.stringify(manifest, null, 2) + '\n');
   scenarios.push({
     label,
     script,
