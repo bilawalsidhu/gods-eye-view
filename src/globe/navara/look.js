@@ -16,6 +16,7 @@ import {
   cloudTerrainOffset,
   landscapeSunTime,
   CUMULUS_BASES,
+  LOCAL_CLOUD_COVERAGE,
   globeLightingAt,
   starsVisibleAt,
   sunDateStale,
@@ -205,11 +206,27 @@ export function buildNavaraLook(
     plan.meshes.find((desc) => Object.hasOwn(desc, 'stars'))?.stars
       ?.intensity ?? NAVARA_STARS_INTENSITY;
   let starsDimmed = 0;
+  let cloudCoverage = LOCAL_CLOUD_COVERAGE;
   return {
     handles,
     frame,
     resetDaylight() {
       daylightTime = null;
+    },
+    /** Whether the look draws volumetric clouds (cinematic, not on mobile). */
+    hasClouds: Boolean(clouds),
+    /**
+     * The clouds' cover (0..1), or null for the look's own
+     * (LOCAL_CLOUD_COVERAGE); true when it changed. Where and when they
+     * show stays the look's rule (height, sunlight).
+     */
+    setCloudCoverage(coverage) {
+      if (!clouds) return false;
+      const next = coverage ?? LOCAL_CLOUD_COVERAGE;
+      if (next === cloudCoverage) return false;
+      cloudCoverage = next;
+      clouds.update({ clouds: { coverage: next } });
+      return true;
     },
     /** Dims the stars by `amount` (0 none, 1 hidden); true when it changed. */
     setStarsDimmed(amount) {

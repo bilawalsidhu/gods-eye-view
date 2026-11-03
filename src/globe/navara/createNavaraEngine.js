@@ -9,10 +9,12 @@
 import * as geo from '../../geo/index.js';
 import {
   BLOOM_INITIAL,
+  CLOUD_COVER_INITIAL,
   SHARPEN_INITIAL,
   STYLE_INITIAL,
   createEngineEvent,
   mergeBloom,
+  mergeCloudCover,
   mergeSharpen,
   mergeStyle,
 } from '../contract.js';
@@ -93,6 +95,7 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   appClock?: import('../../time/clock.js').AppClock,
  *   sharpen?: { set: (state: { enabled: boolean, amount: number }) => void, destroy: () => void },
  *   bloom?: { set: (state: { enabled: boolean, strength: number }) => void, destroy: () => void },
+ *   clouds?: { set: (state: { coverage: number | null }) => void, destroy: () => void },
  *   styles?: { names: readonly string[], uniformNames: (name: string) => string[], defaults: (name: string) => Record<string, number>, set: (name: string, state: { intensity: number, uniforms: Record<string, number> }) => void, destroy: () => void },
  * }} options `hooks` are internals.js; `container` defaults to the
  *   canvas's parent; `sharpen` draws render.setSharpen (sharpen.js; without
@@ -100,7 +103,9 @@ function rayRaisedEllipsoid({ origin, direction }, height) {
  *   `styles` draws render.setStyle (stylePasses.js; without it the engine
  *   has no visualStyles capability) and the engine destroys it; `bloom`
  *   draws render.setBloom (bloom.js; without it no bloom capability), also
- *   destroyed with the engine;
+ *   destroyed with the engine; `clouds` draws render.setCloudCover
+ *   (cockpitClouds.js; without it, as on a look without clouds, no
+ *   cloudCover capability), destroyed with the engine;
  *   `appClock` (the engine clock's time) defaults to the page's app clock;
  *   `movers` is engine.movers on the view's three runtime (movers/index.js;
  *   without it createSet throws), `lines` engine.lines (lines/index.js;
@@ -121,6 +126,7 @@ export function createNavaraEngine(
     sharpen: sharpenPort = null,
     styles: stylesPort = null,
     bloom: bloomPort = null,
+    clouds: cloudsPort = null,
   } = {},
 ) {
   if (!view?.camera?.raw)
@@ -331,6 +337,20 @@ export function createNavaraEngine(
         bloom: () => ({ ...bloom }),
       }
     : {};
+  let cloudCover = { ...CLOUD_COVER_INITIAL };
+  const cloudRender = cloudsPort
+    ? {
+        setCloudCover(options) {
+          const next = mergeCloudCover(cloudCover, options);
+          const changed = next.coverage !== cloudCover.coverage;
+          cloudCover = next;
+          if (!changed || destroyed) return;
+          cloudsPort.set({ ...next });
+          view.forceUpdate();
+        },
+        cloudCover: () => ({ ...cloudCover }),
+      }
+    : {};
   return {
     kind: 'navara',
     host: { container: container ?? canvas.parentElement, canvas, size },
@@ -361,6 +381,7 @@ export function createNavaraEngine(
       sharpen: () => ({ ...sharpen }),
       ...styleRender,
       ...bloomRender,
+      ...cloudRender,
     },
     surface,
     input: input.input,
@@ -383,6 +404,7 @@ export function createNavaraEngine(
       sharpenPort?.destroy();
       stylesPort?.destroy();
       bloomPort?.destroy();
+      cloudsPort?.destroy();
       moversPort?.destroy();
       linesPort?.destroy();
     },

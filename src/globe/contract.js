@@ -259,6 +259,16 @@
  *   Cesium mode the app drives the scene's own bloom stage.
  * @property {() => { enabled: boolean, strength: number }} [bloom] The bloom
  *   last set (a copy).
+ * @property {(options: { coverage?: number | null }) => void} [setCloudCover]
+ *   Optional, with cloudCover (capability `cloudCover`): how much of the sky
+ *   the engine's own volumetric clouds cover, 0..1, or null for the
+ *   engine's own cover (its look). Where the clouds show (height, daylight)
+ *   stays the engine's. The cockpit drives it from the weather under the
+ *   camera (src/cockpitCloudEffects.js). A coverage outside 0..1 that is not
+ *   null throws a TypeError. Null until set. Cesium has none: in Cesium
+ *   mode the cockpit draws its own cloud pass.
+ * @property {() => { coverage: number | null }} [cloudCover] The cover last
+ *   set (a copy).
  *
  * @typedef {{ intensity: number, uniforms: Record<string, number> }} StyleState
  *
@@ -681,6 +691,10 @@ const OPTIONAL_SHAPE = {
     'render.setBloom': isFunction,
     'render.bloom': isFunction,
   },
+  cloudCover: {
+    'render.setCloudCover': isFunction,
+    'render.cloudCover': isFunction,
+  },
 };
 
 /** The optional capability flags, e.g. 'visualStyles'. */
@@ -842,4 +856,23 @@ export function mergeBloom(current, { enabled, strength } = {}) {
     enabled: enabled ?? current.enabled,
     strength: strength ?? current.strength,
   };
+}
+
+/** The cloud cover an engine starts with (GlobeRender.cloudCover): its own. */
+export const CLOUD_COVER_INITIAL = Object.freeze({ coverage: null });
+
+/**
+ * GlobeRender.setCloudCover's argument merged onto `current`: a new state,
+ * or a TypeError for a coverage that is neither null nor in 0..1.
+ */
+export function mergeCloudCover(current, { coverage } = {}) {
+  if (
+    coverage !== undefined &&
+    coverage !== null &&
+    !(isNumber(coverage) && coverage >= 0 && coverage <= 1)
+  )
+    throw new TypeError(
+      `Cloud coverage must be null or a number in 0..1: ${coverage}`,
+    );
+  return { coverage: coverage === undefined ? current.coverage : coverage };
 }

@@ -23,10 +23,12 @@ import {
   MODIFIERS,
   normalizeInputOptions,
   BLOOM_INITIAL,
+  CLOUD_COVER_INITIAL,
   SHARPEN_INITIAL,
   STYLE_INITIAL,
   createEngineEvent,
   mergeBloom,
+  mergeCloudCover,
   mergeSharpen,
   mergeStyle,
 } from '../contract.js';
@@ -231,6 +233,19 @@ function rectangleFromCartographics(points) {
   return { west, south, east, north };
 }
 
+// render.setCloudCover/cloudCover when asked; nothing otherwise.
+function fakeCloudCover(enabled, record) {
+  if (!enabled) return {};
+  let cover = { ...CLOUD_COVER_INITIAL };
+  return {
+    setCloudCover(options) {
+      record('render.setCloudCover', [options]);
+      cover = mergeCloudCover(cover, options);
+    },
+    cloudCover: () => ({ ...cover }),
+  };
+}
+
 // render.setBloom/bloom when asked; nothing otherwise.
 function fakeBloom(enabled, record) {
   if (!enabled) return {};
@@ -279,7 +294,8 @@ function fakeStyles(visualStyles, record) {
  *   longitude?: number, latitude?: number, altitude?: number,
  *   container?: object, canvas?: object, nowMs?: number,
  *   appClock?: import('../../time/clock.js').AppClock,
- *   visualStyles?: Record<string, string[]>, bloom?: boolean }} [options]
+ *   visualStyles?: Record<string, string[]>, bloom?: boolean,
+ *   cloudCover?: boolean }} [options]
  *   Canvas size in CSS px, angles in radians; `container`/`canvas` stand in
  *   for the host elements (DOM mocks for shell tests). The initial pose looks straight
  *   down from `altitude` metres (10 000 km). The engine clock reads
@@ -288,7 +304,8 @@ function fakeStyles(visualStyles, record) {
  *   `fake.advanceTime(ms)` (a given appClock keeps its own wall clock).
  *   `visualStyles` ({ style: its uniform names }) adds the optional
  *   visualStyles capability (render.setStyle), each uniform starting at 0;
- *   `bloom: true` the optional bloom capability (render.setBloom).
+ *   `bloom: true` the optional bloom capability (render.setBloom);
+ *   `cloudCover: true` the optional cloudCover one (render.setCloudCover).
  * @returns {import('../contract.js').GlobeEngine & { fake: object }}
  */
 export function createFakeEngine(options = {}) {
@@ -976,6 +993,7 @@ export function createFakeEngine(options = {}) {
       sharpen: () => ({ ...sharpen }),
       ...fakeStyles(options.visualStyles, record),
       ...fakeBloom(options.bloom, record),
+      ...fakeCloudCover(options.cloudCover, record),
     },
     surface: {
       sampleHeight(position, exclude) {

@@ -291,10 +291,34 @@ test('setBloom hands changed states to the bloom port and draws a frame', () => 
   assert.equal(destroyed, 1);
 });
 
+test('setCloudCover hands changed covers to the clouds port and draws a frame', () => {
+  const view = fakeView();
+  const shown = [];
+  let destroyed = 0;
+  const engine = createNavaraEngine(view, {
+    hooks,
+    clouds: { set: (state) => shown.push(state), destroy: () => destroyed++ },
+  });
+  assertGlobeEngine(engine);
+  assert.equal(engineCapabilities(engine).cloudCover, true);
+  assert.deepEqual(engine.render.cloudCover(), { coverage: null });
+  engine.render.setCloudCover({ coverage: 0.6 });
+  assert.deepEqual(view.calls.at(-1), ['forceUpdate']);
+  const calls = view.calls.length;
+  engine.render.setCloudCover({ coverage: 0.6 });
+  assert.equal(view.calls.length, calls, 'an unchanged cover draws nothing');
+  engine.render.setCloudCover({ coverage: null });
+  assert.throws(() => engine.render.setCloudCover({ coverage: 7 }), TypeError);
+  assert.deepEqual(shown, [{ coverage: 0.6 }, { coverage: null }]);
+  engine.destroy();
+  assert.equal(destroyed, 1);
+});
+
 test('without a styles port the engine has no visualStyles capability', () => {
   const { engine } = setup();
   assert.equal(engineCapabilities(engine).visualStyles, false);
   assert.equal(engineCapabilities(engine).bloom, false);
+  assert.equal(engineCapabilities(engine).cloudCover, false);
   assert.equal(engine.render.setStyle, undefined);
   assert.equal(engine.render.setBloom, undefined);
 });

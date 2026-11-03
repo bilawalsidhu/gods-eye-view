@@ -6,6 +6,7 @@ import {
   INPUT_TYPES,
   MODIFIERS,
   BLOOM_INITIAL,
+  CLOUD_COVER_INITIAL,
   ENGINE_CAPABILITIES,
   OPTIONAL_ENGINE_MEMBERS,
   SHARPEN_INITIAL,
@@ -14,6 +15,7 @@ import {
   engineCapabilities,
   isEngineEvent,
   mergeBloom,
+  mergeCloudCover,
   mergeSharpen,
   mergeStyle,
 } from './contract.js';
@@ -473,6 +475,30 @@ test('the bloom capability: whole or absent, merged and checked', async (t) => {
   const checks = createContractSuite(engine, {
     waitFrames: async (count) => engine.fake.frames(count),
   }).filter(({ name }) => /\(bloom\)/.test(name));
+  assert.equal(checks.length, 1);
+  for (const check of checks) await t.test(check.name, () => check.run());
+});
+
+test('the cloudCover capability: whole or absent, null for the engine own', async (t) => {
+  assert.ok(ENGINE_CAPABILITIES.includes('cloudCover'));
+  const engine = createFakeEngine({ cloudCover: true });
+  assert.equal(engineCapabilities(engine).cloudCover, true);
+  assert.equal(engineCapabilities(createFakeEngine()).cloudCover, false);
+  assert.deepEqual(engine.render.cloudCover(), CLOUD_COVER_INITIAL);
+  const half = {
+    ...engine,
+    render: { ...engine.render, cloudCover: undefined },
+  };
+  assert.throws(() => assertGlobeEngine(half), /render\.cloudCover\b/);
+  assert.deepEqual(mergeCloudCover({ coverage: 0.3 }, {}), { coverage: 0.3 });
+  assert.deepEqual(mergeCloudCover({ coverage: 0.3 }, { coverage: null }), {
+    coverage: null,
+  });
+  for (const bad of [{ coverage: 2 }, { coverage: -1 }, { coverage: 'x' }])
+    assert.throws(() => mergeCloudCover(CLOUD_COVER_INITIAL, bad), TypeError);
+  const checks = createContractSuite(engine, {
+    waitFrames: async (count) => engine.fake.frames(count),
+  }).filter(({ name }) => /\(cloudCover\)/.test(name));
   assert.equal(checks.length, 1);
   for (const check of checks) await t.test(check.name, () => check.run());
 });

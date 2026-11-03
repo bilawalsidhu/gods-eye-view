@@ -1,7 +1,11 @@
 import { catalogControlServices } from './catalog.js';
 import { StyleManager } from '../ui/composition.js';
 import { flyToAustin } from '../camera.js';
-import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
+import {
+  initCockpitCloudEffects,
+  initEngineCockpitClouds,
+} from '../cockpitCloudEffects.js';
+import { engineCapabilities } from '../globe/contract.js';
 import { t } from '../i18n/index.js';
 import { attachScenePart, currentSceneOf } from './sceneParts.js';
 import { shellScenePart } from './shellPart.js';
@@ -67,7 +71,9 @@ export async function createApplicationControls({
   );
   // The previous multi-canvas weather compositor remains disabled. Cockpit
   // clouds use a separate, capped low-resolution GPU pass that never attaches
-  // Cesium fog or post-process stages and is fully stopped in map mode.
+  // Cesium fog or post-process stages and is fully stopped in map mode. An
+  // engine that draws its own clouds (Navara, render.setCloudCover) gets
+  // their cover from the same weather instead, with no canvas of its own.
   const weatherEffects = null;
   let cockpitCloudEffects = null;
   await attachScenePart(
@@ -75,10 +81,13 @@ export async function createApplicationControls({
     {
       name: 'cockpit-clouds',
       attachScene(next, { defer: release }) {
-        if (!next.viewer) return;
-        const effects = initCockpitCloudEffects(next.viewer, {
-          weatherService: operations.requests.weather,
-        });
+        const weatherService = operations.requests.weather;
+        let effects = null;
+        if (next.viewer)
+          effects = initCockpitCloudEffects(next.viewer, { weatherService });
+        else if (engineCapabilities(next.engine).cloudCover)
+          effects = initEngineCockpitClouds(next.engine, { weatherService });
+        if (!effects) return;
         cockpitCloudEffects = effects;
         release(() => {
           if (cockpitCloudEffects === effects) cockpitCloudEffects = null;

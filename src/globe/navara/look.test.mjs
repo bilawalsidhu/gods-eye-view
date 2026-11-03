@@ -509,3 +509,33 @@ test('Anime fades the stars from the look own brightness and back', () => {
   );
   assert.equal(photoreal.setStarsDimmed(1), false);
 });
+
+test('the cockpit sets the cinematic clouds cover and null gives the look its own', async () => {
+  const { LOCAL_CLOUD_COVERAGE } = await import('./viewOptions.js');
+  const view = fakeView(0);
+  const look = warmCinematic(view);
+  const clouds = view.added.find(({ desc }) => Object.hasOwn(desc, 'clouds'));
+  assert.equal(look.hasClouds, true);
+  assert.equal(look.setCloudCoverage(null), false, 'already the look own');
+  assert.equal(look.setCloudCoverage(0.7), true);
+  assert.equal(look.setCloudCoverage(0.7), false);
+  assert.equal(look.setCloudCoverage(0), true);
+  assert.equal(look.setCloudCoverage(null), true);
+  assert.deepEqual(
+    clouds.updates.filter((update) => update.clouds),
+    [
+      { clouds: { coverage: 0.7 } },
+      { clouds: { coverage: 0 } },
+      { clouds: { coverage: LOCAL_CLOUD_COVERAGE } },
+    ],
+  );
+  // The mobile cinematic and the minimal looks draw no clouds.
+  const mobile = buildNavaraLook(
+    fakeView(0),
+    plugin([]),
+    navaraScenePlan('cinematic', { mobile: true }),
+    () => 0,
+  );
+  assert.equal(mobile.hasClouds, false);
+  assert.equal(mobile.setCloudCoverage(0.5), false);
+});
