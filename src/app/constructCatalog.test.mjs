@@ -72,8 +72,6 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.ok(first.get('transit'));
   assert.equal(first.get('local-usgs-water')?.name, 'USGS Rivers & Streams');
   assert.equal(first.get('local-usgs-lakes')?.name, 'USGS Lakes & Reservoirs');
-  assert.equal(first.get('local-usgs-water')?.name, 'USGS Rivers & Streams');
-  assert.equal(first.get('local-usgs-lakes')?.name, 'USGS Lakes & Reservoirs');
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
     order.slice(order.indexOf('traffic'), order.indexOf('directions') + 1),
