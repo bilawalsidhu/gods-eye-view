@@ -346,16 +346,16 @@ ui-visuals.md:74	unit	src/locations.test.mjs::the globe flight publishes its cal
 ui-visuals.md:75	unit	src/worldFocus.test.mjs::the transfer flight supersedes any flight in progress and keeps the operator heading	Перенос камеры к цели слоя отменяет текущий полёт, сохраняет курс.
 ui-visuals.md:75	unit	src/ui/shellLifetime.test.mjs::world focus uses the engine when the shell has no Cesium viewer	Без Cesium viewer фокус на цель летит через движок.
 ui-visuals.md:77	fail	src/maps/sourceFactories.test.mjs::on the Navara engine photoreal keys on the browser key and ion imagery is unavailable	На Navara Bing Aerial и Bing Labels недоступны даже с токеном ion.
-ui-visuals.md:83	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальный стиль недоступен: пресеты и их переход не применяются.
-ui-visuals.md:84	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальные стили (в том числе Retro) недоступны.
-ui-visuals.md:85	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальные стили (в том числе Surveillance) недоступны.
-ui-visuals.md:86	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara стиль thermal отклоняется как недоступный.
-ui-visuals.md:87	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальные стили (в том числе Anime) недоступны.
-ui-visuals.md:88	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara визуальные стили (в том числе Noir) недоступны.
+ui-visuals.md:83	qa	navara-visual-styles	На Navara каждый стиль включается переходом: оба стиля рисуются вместе в середине перехода, переход завершается меньше чем за 1,5 с, Normal возвращает кадр; на Cesium стиль остаётся стадией Cesium.
+ui-visuals.md:84	qa	navara-visual-styles	На Navara CRT меняет кадр относительно Normal (средняя разница больше 6, изменено больше 25 % точек) и сдвигает гистограмму.
+ui-visuals.md:85	qa	navara-visual-styles	На Navara NVG меняет кадр и делает его зелёным: G больше R и B в 1,3 раза.
+ui-visuals.md:86	qa	navara-visual-styles	На Navara FLIR делает кадр серым (насыщенность вдвое ниже Normal), Ironbow доходит до движка и окрашивает кадр; на Cesium FLIR меняет кадр своей стадией.
+ui-visuals.md:87	qa	navara-visual-styles	На Navara Anime меняет кадр и повышает насыщенность или сдвигает гистограмму.
+ui-visuals.md:88	qa	navara-visual-styles	На Navara Noir меняет кадр, снижает насыщенность и затемняет углы.
 ui-visuals.md:90	unit	src/ui/commandDock.test.mjs::before VisualSettings publishes, the dock shows NORMAL	Док показывает NORMAL до первой публикации.
 ui-visuals.md:90	unit	src/ui/commandDock.test.mjs::the active style marks its button and labels the dock and the corner	Активный стиль отмечается в доке и угловом индикаторе.
 ui-visuals.md:90	unit	src/locationReadouts.test.mjs::the ACTIVE STYLE indicator is written from the style name and nothing else	Индикатор ACTIVE STYLE пишется из имени стиля.
-ui-visuals.md:91	fail	src/voice/gevActionsEngine.test.mjs::without a viewer the visual style and post-processing refuse and record nothing	На Navara пост-обработка (bloom) отклоняется как недоступная.
+ui-visuals.md:91	qa	navara-bloom	На Navara bloom рисуется своим проходом перед стилями: при 200 кадр ярче, при меньшем значении слабее, выключение возвращает кадр; на Cesium свечение даёт стадия Cesium.
 ui-visuals.md:92	unit	src/ui/visualEffects.test.mjs::without a viewer the engine sharpens with the same amount scale	Без viewer (Navara) движок получает amount = 0.1 + v*2 и переключатель.
 ui-visuals.md:92	unit	src/ui/visualEffects.test.mjs::with a viewer the Cesium stage sharpens and the engine mirrors its state	На Cesium стадия sharpen получает тот же amount и состояние.
 ui-visuals.md:92	qa	engine-switch	На Navara движок рисует sharpen с amount 1.7 при 80 %, переключатель и значение переживают смены.
@@ -555,17 +555,13 @@ voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::bundle r
 voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::asset caps and declared integrity are enforced before creating a downloadable bundle	Не больше 8 МиБ на файл.
 voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::oversized files fail before reading and cancellation settles a stalled file without a late result	Общий лимит 50 МиБ.
 voice-tools-platform.md:149	unit	src/director/sharing/sharing.test.mjs::bundle byte owner releases replacement data and has no network fallback	Байты пакета только в памяти.
-voice-tools-platform.md:166	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций не создаётся: tools.annotations равен null.
+voice-tools-platform.md:166	qa	navara-annotations	На Navara те же метки (область и две булавки) рисуются и переживают смену на Cesium и обратно.
 voice-tools-platform.md:166	unit	src/voice/gevActionsCapabilities.test.mjs::cesium: annotate_map runs with its capability and reports the engine	Voice uses the attached scene capability; this unit test does not verify GPU rendering.
 voice-tools-platform.md:166	unit	src/voice/gevActionsCapabilities.test.mjs::navara: annotate_map runs with its capability and reports the engine	Voice uses the attached scene capability; this unit test does not verify GPU rendering.
 voice-tools-platform.md:167	unit	src/voice/gevActionsCapabilities.test.mjs::cesium: annotate_map runs with its capability and reports the engine	Voice uses the attached scene capability; this unit test does not verify GPU rendering.
 voice-tools-platform.md:167	unit	src/voice/gevActionsCapabilities.test.mjs::navara: annotate_map runs with its capability and reports the engine	Voice uses the attached scene capability; this unit test does not verify GPU rendering.
-voice-tools-platform.md:168	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, типы меток не рисуются.
-voice-tools-platform.md:169	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, мировой рендерер меток не создаётся.
-voice-tools-platform.md:170	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, экранный рендерер меток не создаётся.
-voice-tools-platform.md:171	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, гибридный рендерер не создаётся.
-voice-tools-platform.md:172	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций, через который идут ручные фигуры, не создаётся.
-voice-tools-platform.md:173	fail	src/app/viewerlessTools.test.mjs::without a viewer the tools run the governor on the engine, show the notice, create no viewer tools and run voice on the engine	На Navara движок аннотаций отсутствует, контуры регионов как метки не рисуются.
+voice-tools-platform.md:170	qa	navara-annotations	На обоих движках выноска ближней булавки видна, дальняя булавка скрыта за горизонтом.
+voice-tools-platform.md:171	qa	navara-annotations	На обоих движках область рисуется по поверхности (янтарные точки на холсте), булавки — выносками.
 voice-tools-platform.md:174	unit	src/data/inputOwnership.test.mjs::the pointer starts free and a claim hands back a lease	Указатель свободен, захват выдаёт одну аренду владельцу.
 voice-tools-platform.md:174	unit	src/data/pickRegistry.test.mjs::ownership: sibling layers recognize each other via String-coerced ids	Общий реестр владения кликами распознаёт пики соседних слоёв.
 voice-tools-platform.md:174	unit	src/data/pickRegistry.test.mjs::engine pick results (input payloads) resolve like scene picks	Пики движка разрешаются так же, как пики сцены Cesium.
