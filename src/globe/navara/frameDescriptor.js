@@ -16,3 +16,20 @@ export function withFrameUpdates(Base) {
     }
   };
 }
+
+// Navara's EffectDesc.onDestroy takes its pass out of the composer, and
+// EffectComposer.removePass does not dispose it: the pass's render targets,
+// materials and shader programs would stay on the GPU for every effect
+// added and deleted. A GEV effect disposes its own raw pass once removed.
+export function withPassDisposal(Base) {
+  return class extends Base {
+    onDestroy() {
+      const pass = this.raw?.rawPass;
+      try {
+        super.onDestroy();
+      } finally {
+        pass?.dispose();
+      }
+    }
+  };
+}

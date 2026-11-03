@@ -6,13 +6,14 @@
 
 import { EffectDesc, Pass as NavaraPass } from '@navaramap/three';
 import { pipelinePassNames } from './internals.js';
+import { withPassDisposal } from './frameDescriptor.js';
 import {
   GevStylesPass,
   STYLES_EFFECT_KEY,
   createStylesPort,
 } from './stylePass.js';
 
-class StylesEffectDesc extends EffectDesc {
+class StylesEffectDesc extends withPassDisposal(EffectDesc) {
   static key = STYLES_EFFECT_KEY;
   // Last before Navara's final copy: after bloom when it is on, else after
   // everything the scene and its overlays draw (nothing anchors after it).
@@ -30,15 +31,6 @@ class StylesEffectDesc extends EffectDesc {
     // Navara inserts a bare pass only when it comes from its own
     // postprocessing copy: wrap it (as overlay.js does).
     return new NavaraPass(new GevStylesPass(this.controller), null);
-  }
-
-  onDestroy() {
-    const pass = this.raw?.rawPass;
-    try {
-      super.onDestroy();
-    } finally {
-      pass?.dispose();
-    }
   }
 }
 

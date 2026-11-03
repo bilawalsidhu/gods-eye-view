@@ -12,7 +12,7 @@
 // FIRMS opts into a separate native-stage overlay before sharpening/AA.
 // Only that stage owns an encoded-RGBA8 blend target; W1 stays in place.
 
-import { withFrameUpdates } from './frameDescriptor.js';
+import { withFrameUpdates, withPassDisposal } from './frameDescriptor.js';
 import { EffectDesc, Pass as NavaraPass } from '@navaramap/three';
 import { GevOverlayPass } from './overlayPass.js';
 import { sonarUniformsFor } from './sonar.js';
@@ -22,7 +22,10 @@ export const OVERLAY_EFFECT_KEY = 'gevOverlay';
 const PRE_SHARPEN_KEY = 'gevPreSharpenOverlay';
 const registeredViews = new WeakMap();
 
-class GevOverlayEffectDesc extends withFrameUpdates(EffectDesc) {
+// The pass owns its GPU target and context event handlers until disposed.
+class GevOverlayEffectDesc extends withPassDisposal(
+  withFrameUpdates(EffectDesc),
+) {
   static key = OVERLAY_EFFECT_KEY;
   // Navara takes the first existing anchor, so the latest pass comes first.
   static insertAfter = ['fxaa', 'smaa', 'gevSharpen', 'toneMapping'];
@@ -43,17 +46,6 @@ class GevOverlayEffectDesc extends withFrameUpdates(EffectDesc) {
       new GevOverlayPass(this.overlay.scene, camera, this.overlay),
       null,
     );
-  }
-
-  onDestroy() {
-    // Navara removes the pass from its composer; our pass owns its GPU target
-    // and context event handlers until it is explicitly disposed.
-    const pass = this.raw?.rawPass;
-    try {
-      super.onDestroy();
-    } finally {
-      pass?.dispose();
-    }
   }
 
   // Each drawn frame: the scene depth the overlays test against, then each

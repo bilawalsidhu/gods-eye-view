@@ -9,6 +9,7 @@ import { Effect as NavaraEffect, EffectDesc } from '@navaramap/three';
 import { BloomEffect } from 'postprocessing';
 import { createBloomPort } from './bloomSettings.js';
 import { pipelinePassNames } from './internals.js';
+import { withPassDisposal } from './frameDescriptor.js';
 
 export const BLOOM_EFFECT_KEY = 'gevBloom';
 
@@ -20,7 +21,7 @@ function apply(effect, settings) {
 }
 
 /** config.gevBloom: { settings } (bloomSettingsFromStrength). */
-class BloomEffectDesc extends EffectDesc {
+class BloomEffectDesc extends withPassDisposal(EffectDesc) {
   static key = BLOOM_EFFECT_KEY;
   // Nothing anchors after it but the styles: before them, else before the
   // final copy (the styles anchor after it).
