@@ -2882,21 +2882,21 @@
   "natural region": "自然地域",
   "Which {place}?": "どの{place}ですか？",
   "Which place?": "どの場所ですか？",
-  "Not drawn: {parts}": "未描画: {parts}",
+  "Not drawn: {parts}": "未描画：{parts}",
   "approximate": "概算",
   "{pct}% cloud": "雲量{pct}%",
   "Over {area}": "{area}上空",
   "{count} of {total} acquisitions match": {
-    "other": "一致した画像: {count}/{total}件"
+    "other": "一致した画像：{count}/{total}件"
   },
   "{n} acquisitions searched": {
-    "other": "検索した画像: {n}件"
+    "other": "検索した画像：{n}件"
   },
   "No matching imagery": "一致する画像はありません",
-  "Unknown number of {kind}": "{kind}: 件数不明",
-  "About {count} {kind}": "{kind}: 約{count}件",
-  "At least {count} {kind}": "{kind}: {count}件以上",
-  "{count} {kind}": "{kind}: {count}件",
+  "Unknown number of {kind}": "{kind}：件数不明",
+  "About {count} {kind}": "{kind}：約{count}件",
+  "At least {count} {kind}": "{kind}：{count}件以上",
+  "{count} {kind}": "{kind}：{count}件",
   "In {area}": "{area}内",
   "Area around {place}": "{place}周辺のエリア",
   "Area around landmark": "ランドマーク周辺のエリア",

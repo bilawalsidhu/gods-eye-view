@@ -3022,9 +3022,9 @@
   "natural region": "regione naturale",
   "Which {place}?": "Quale {place}?",
   "Which place?": "Quale luogo?",
-  "Not drawn: {parts}": "Non disegnato: {parts}",
+  "Not drawn: {parts}": "Non disegnati: {parts}",
   "approximate": "approssimativo",
-  "{pct}% cloud": "{pct}% di nuvolosità",
+  "{pct}% cloud": "{pct}% di nuvole",
   "Over {area}": "Sopra {area}",
   "{count} of {total} acquisitions match": {
     "many": "Acquisizioni corrispondenti: {count} su {total}",
@@ -3041,11 +3041,11 @@
   "About {count} {kind}": "{kind}: circa {count}",
   "At least {count} {kind}": "{kind}: almeno {count}",
   "{count} {kind}": "{kind}: {count}",
-  "In {area}": "Zona: {area}",
+  "In {area}": "Area: {area}",
   "Area around {place}": "Area intorno a {place}",
-  "Area around landmark": "Area intorno a un punto di riferimento",
-  "Outline {place}": "Contorna {place}",
-  "Outline area": "Contorna area",
+  "Area around landmark": "Area intorno a un punto di interesse",
+  "Outline {place}": "Traccia contorno di {place}",
+  "Outline area": "Traccia contorno area",
   "Find {place}": "Trova {place}",
   "Find area": "Trova area",
   "Find recent imagery": "Trova immagini recenti",
@@ -3055,5 +3055,5 @@
   "Searching imagery catalog": "Ricerca nel catalogo immagini",
   "Loading imagery": "Caricamento immagini",
   "Searching OpenStreetMap": "Ricerca in OpenStreetMap",
-  "voice area|Area": "Zona"
+  "voice area|Area": "Area"
 }

@@ -2874,7 +2874,7 @@
   "UTILITIES": "工具",
   "Exit cockpit to fly to a drawing": "請先退出座艙，再飛往繪製位置",
   "Directions, drawing and your own files": "路線導航、繪製和你自己的文件",
-  "Voice place search (needs an Overpass server)": "語音地點搜尋（需要 Overpass 伺服器）",
+  "Voice place search (needs an Overpass server)": "語音地點搜索（需要 Overpass 伺服器）",
   "OSM Places": "OSM 地點",
   "state or province": "州或省",
   "county or district": "縣或區",
@@ -2887,12 +2887,12 @@
   "{pct}% cloud": "雲量 {pct}%",
   "Over {area}": "{area} 上空",
   "{count} of {total} acquisitions match": {
-    "other": "相符影像：{count}/{total}"
+    "other": "匹配影像：{count}/{total}"
   },
   "{n} acquisitions searched": {
-    "other": "已搜尋影像：{n} 幅"
+    "other": "已搜索影像：{n} 景"
   },
-  "No matching imagery": "沒有相符的影像",
+  "No matching imagery": "沒有匹配的影像",
   "Unknown number of {kind}": "{kind}：數量未知",
   "About {count} {kind}": "{kind}：約 {count}",
   "At least {count} {kind}": "{kind}：至少 {count}",
@@ -2908,8 +2908,8 @@
   "Find {what}": "查找 {what}",
   "Find places": "查找地點",
   "Drawing outline": "正在勾勒輪廓",
-  "Searching imagery catalog": "正在搜尋影像目錄",
-  "Loading imagery": "正在載入影像",
-  "Searching OpenStreetMap": "正在搜尋 OpenStreetMap",
+  "Searching imagery catalog": "正在搜索影像目錄",
+  "Loading imagery": "正在加載影像",
+  "Searching OpenStreetMap": "正在搜索 OpenStreetMap",
   "voice area|Area": "區域"
 }
