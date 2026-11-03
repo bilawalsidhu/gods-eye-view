@@ -673,6 +673,60 @@ test('Global Context echo brackets reach the canvas in the detection style colou
         `${style} echoes take the style line colour, got ${strokes}`,
       );
     }
+
+  } finally {
+    clearAwarenessEchoField();
+    env.cleanup();
+  }
+});
+
+test('resting Global Context pulses skip echo work for the whole frame, not per contact', () => {
+  const env = installEnvironment();
+  // Six echo-eligible flights on screen; the identity camera maps x/y
+  // straight to device coordinates.
+  const flights = Array.from({ length: 6 }, (_, index) => ({
+    position: new Cesium.Cartesian3(-0.5 + index * 0.2, 0, 6_356_752),
+    sourceId: `flight-${index}`,
+    id: `ECHO${index}`,
+    metric: `FL${300 + index}`,
+    type: 'AIR',
+  }));
+  const layer = { id: 'flights', getDetectableObjects: () => flights };
+  let levelCalls = 0;
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo: {
+        layerIds: ['flights'],
+        fadeMs: 60_000,
+        color: 'rgb(1, 2, 3)',
+        spreadPx: 8,
+        lineWidth: 3.25,
+      },
+      level: () => {
+        levelCalls++;
+        return 0;
+      },
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [layer], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    levelCalls = 0;
+    settleFrame(env);
+    const painted = getDetectionDiagnostics()?.visibleCount ?? flights.length;
+    assert.ok(painted >= 2, `contacts on screen: ${painted}`);
+    // One check per painted frame, however many contacts are on screen.
+    assert.ok(levelCalls >= 1, 'the frame asks whether echoes are live');
+    assert.ok(levelCalls < painted, `${levelCalls} level checks for ${painted} contacts`);
+    assert.ok(
+      !env.detectionCtx.calls.some(
+        ([name, , style]) => name === 'stroke' && style === 'rgb(1, 2, 3)',
+      ),
+      'no echoes while the pulses rest',
+    );
   } finally {
     clearAwarenessEchoField();
     env.cleanup();

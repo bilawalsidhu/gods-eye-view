@@ -54,6 +54,7 @@ import {
   isCyberContactThemeActive as isCyberMapThemeActive,
 } from '../cyberSonar.js';
 import {
+  awarenessEchoActive,
   awarenessEchoBracket,
   awarenessEchoColor,
   getAwarenessEchoField,
@@ -1344,7 +1345,8 @@ function _drawOverlay(frame) {
   const bracketPaths = new Map();
   // Global Context sonar echoes: a second bracket, banded by strength, around
   // each flight or vessel a pulse front has just crossed.
-  const echoField = getAwarenessEchoField();
+  // Resting pulses light nothing, so the per-contact echo work is skipped.
+  const echoField = awarenessEchoActive(now) ? getAwarenessEchoField() : null;
   const echoPaths = echoField ? new Array(ECHO_ALPHA_STEPS + 1) : null;
   const pathFor = (map, color, alpha) => {
     const band = Math.max(

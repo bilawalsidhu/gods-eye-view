@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
+  awarenessEchoActive,
   awarenessEchoAt,
   awarenessEchoStrength,
   clearAwarenessEchoField,
@@ -114,8 +115,13 @@ test('echoes scale with the field level and rest with the pulses', (t) => {
   assert.ok(
     Math.abs(awarenessEchoAt('flights', contact, t0) - full / 2) < 1e-9,
   );
+  assert.equal(awarenessEchoActive(t0), true);
   level = 0;
   assert.equal(awarenessEchoAt('flights', contact, t0), 0);
+  // At rest the overlay skips echoes for the whole frame.
+  assert.equal(awarenessEchoActive(t0), false);
+  clearAwarenessEchoField();
+  assert.equal(awarenessEchoActive(t0), false);
 });
 
 test('near the subject an echo is no brighter than the fading-in front', () => {

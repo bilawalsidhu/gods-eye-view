@@ -46,6 +46,17 @@ export function getAwarenessEchoField() {
 }
 
 /**
+ * Whether any echo can light at `nowMs`: a field is set and its pulses are
+ * running. The overlay checks this once per frame, so resting pulses cost no
+ * per-contact work.
+ * @param {number} nowMs Monotonic clock in milliseconds.
+ * @returns {boolean}
+ */
+export function awarenessEchoActive(nowMs) {
+  return Boolean(field) && (field.level?.(nowMs) ?? 1) > 0;
+}
+
+/**
  * How lit a contact's echo is at `nowMs`: 1 the moment a pulse front reaches
  * its distance, fading as (1 - elapsed / `fadeMs`) squared, 0 otherwise. The
  * strongest pulse wins. A front that has wrapped back to the centre still
@@ -99,13 +110,13 @@ export function awarenessEchoStrength(nowMs, distanceM, radiusM, pulse, echo) {
  */
 export function awarenessEchoAt(layerId, position, nowMs) {
   if (!field || !position || !layerIds.has(layerId)) return 0;
+  const level = field.level?.(nowMs) ?? 1;
+  if (!(level > 0)) return 0;
   const ground = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(
     position,
     groundScratch,
   );
   if (!ground) return 0;
-  const level = field.level?.(nowMs) ?? 1;
-  if (!(level > 0)) return 0;
   return (
     level *
     awarenessEchoStrength(

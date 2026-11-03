@@ -76,15 +76,17 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
  *  `fadeOutPower` down to `endOpacityFraction` of `peakOpacity`, so a pulse
  *  is dim but still visible when it reaches the ring and the ring flashes.
  *  Each line is `width` CSS pixels wide, its outer `outlineWidth` a dark
- *  halo, in the ring's colours, as Cesium's polyline outline material draws. Behind each line a radial gradient in the same blue
- *  fades inward over `gradientDepthFraction` of the radius, at most
+ *  halo, in the ring's colours, as Cesium's polyline outline material draws.
+ *  Behind each line a radial gradient in the same blue fades inward over
+ *  `gradientDepthFraction` of the radius, at most
  *  `gradientOpacity` strong. One unpickable disc draws the lines and the
  *  gradient, so pulses never catch a click meant for a contact; its shader
  *  takes at most four pulses. The disc is rebuilt only after the subject
  *  moves `gradientRebuildM`, so the pulses sit at most that far off the ring's
  *  centre, about a pixel when the ring fills the screen; while the pulses
- *  rest the hidden disc is left alone and catches up when they wake. The disc is hidden
- *  while the camera is below its height, where it would sweep the sky.
+ *  rest the hidden disc is left alone and catches up when they wake. The
+ *  disc is hidden while the camera is below its height, where it would sweep
+ *  the sky.
  *  The pulses run for `activeMs` (three ring flashes) after a selection or
  *  a camera move, fading in and out over `settleMs`, then rest: the ring
  *  stays on screen, static, and nothing asks for frames, so a parked view
@@ -95,7 +97,6 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
  *  Cyber sonar's 80 ms cadence, so the two never beat. When something else
  *  already renders continuously they update every frame. Skipped under
  *  prefers-reduced-motion. */
-
 export const AWARENESS_RANGE_PULSE = Object.freeze({
   count: 3,
   periodMs: 9000,
@@ -120,7 +121,6 @@ export const AWARENESS_RANGE_PULSE = Object.freeze({
  *  bracket. It starts on the bracket and spreads outward by up to `spreadPx`
  *  as it fades over `fadeMs`, so the frame pulses. Only `layerIds` echo;
  *  mapped installations have no detection bracket. */
-
 export const AWARENESS_RANGE_ECHO = Object.freeze({
   layerIds: ['flights', 'military', 'ais-live-vessels'],
   fadeMs: 1400,
