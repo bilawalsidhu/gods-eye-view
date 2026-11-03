@@ -97,7 +97,12 @@ await strict.run({ args: ['--use-angle=metal', '--enable-gpu'] }, async (b) => {
   await p.waitForFunction(
     () => window.qaAdsb.mod.getAllPositions().length === 1,
   );
-  assert.ok(await p.evaluate(() => window.qaAdsb.mod.selectAircraft('abc123')));
+  // The selection hook the selectable layers share, by the row's own id.
+  assert.ok(
+    await p.evaluate(() =>
+      window.qaAdsb.mod.selectById(window.qaAdsb.mod.getAllPositions()[0].id),
+    ),
+  );
   for (const kind of ['cesium', 'navara']) {
     await p.evaluate(() => {
       window.qaSelections = [];
