@@ -1,14 +1,25 @@
+import { interruptGlobeRotation } from '../cameraVerbs.js';
 import {
   layerSnapshot,
-  layerSnapshots,
   feedProvenanceEnvelope,
 } from '../data/layerSnapshot.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
+import { SPEECH_BUILDERS, attachVoiceResult } from './speech.js';
+import { resolveDeicticArgs } from './deixis.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
+import { msg } from '../i18n/index.js';
+import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 import * as Cesium from 'cesium';
+import { CITY_POIS } from '../cityPois.js';
+import { greatCircleKm } from '../geoDistance.js';
 import {
-  CITY_POIS,
+  hudViewportSamples,
+  placeLookupView,
+  placeLookupViewChanged,
+} from '../hudPlaceLookup.js';
+import {
   findPoiByName,
   flyToGlobeView,
   flyToLandmark,
@@ -23,8 +34,12 @@ import {
   isContextRecordActive,
 } from '../data/contextStore.js';
 import { CCTV_FOCUS_RESULT } from '../layers/cctv/index.js';
-import { contextModeWord } from '../contextModePolicy.js';
-import { createAnalystEngine } from '../data/analystEngine.js';
+import {
+  createAnalystEngine,
+  normalizeAnalystSpec,
+  selectAnalystRows,
+} from '../data/analystEngine.js';
+import { voiceLayer, voiceLayerAliasMap } from './layerManifest.js';
 import { layerFeedState } from '../data/feedState.js';
 import {
   initCameraVerbs,
@@ -39,6 +54,12 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
+import {
+  getWorldPacket,
+  withContextModeVocabulary,
+  activeContactsWindow,
+  TRACKABLE_FAMILIES,
+} from '../agent/worldPacket.js';
 
 const ALLOWED_STYLES = new Set([
   'normal',
@@ -47,7 +68,6 @@ const ALLOWED_STYLES = new Set([
   'thermal',
   'anime',
   'noir',
-  'snow',
 ]);
 const PANEL_ALIASES = new Map([
   ['data', 'data-panel'],
@@ -60,8 +80,17 @@ const PANEL_ALIASES = new Map([
   ['styles', 'control-panel'],
   ['filters', 'control-panel'],
   ['visual styles', 'control-panel'],
+  ['visual preset', 'control-panel'],
+  ['visual presets', 'control-panel'],
+  ['provider settings', 'provider-settings'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
+  ['voice settings', 'voice-settings'],
+  ['voice-settings', 'voice-settings'],
+  ['voice preview', 'voice-preview'],
+  ['voice-preview', 'voice-preview'],
+  ['voice control', 'voice-preview'],
+  ['voice controls', 'voice-preview'],
   ['radio', 'radio-panel'],
   ['internet radio', 'radio-panel'],
   ['radio stations', 'radio-panel'],
@@ -70,6 +99,13 @@ const PANEL_ALIASES = new Map([
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],
   ['context right panel', 'global-context-panel'],
+  ['utilities', 'utilities-panel'],
+  ['utilities panel', 'utilities-panel'],
+  ['draw', 'utilities-panel'],
+  ['drawing', 'utilities-panel'],
+  ['import', 'utilities-panel'],
+  ['import files', 'utilities-panel'],
+  ['authoring', 'scene-panel'],
   ['scenes', 'scene-panel'],
   ['scene', 'scene-panel'],
   ['post processing', 'pp-toggles'],
@@ -79,6 +115,10 @@ const PANEL_ALIASES = new Map([
   ['basemap', 'control-panel'],
   ['map sources', 'control-panel'],
   ['sources', 'control-panel'],
+  ['weather', 'weather-panel'],
+  ['weather panel', 'weather-panel'],
+  ['recent imagery', 'recent-imagery-panel'],
+  ['imagery panel', 'recent-imagery-panel'],
 ]);
 
 const PANEL_IDS = new Set([
@@ -88,8 +128,12 @@ const PANEL_IDS = new Set([
   'cctv-panel',
   'radio-panel',
   'global-context-panel',
+  'utilities-panel',
   'scene-panel',
   'pp-toggles',
+  'weather-panel',
+  'recent-imagery-panel',
+  'provider-settings',
 ]);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
@@ -104,64 +148,6 @@ const CONTEXT_MODE_ALIASES = new Map([
   ['space-missions', 'space-missions'],
   ['missions', 'space-missions'],
 ]);
-/**
- * Every model-readable field that carries a context-mode id, and what an
- * absent value means for each.
- *
- * `mode` always names a mode, so nothing is 'off'. `entering` and `priorMode`
- * are absent when there is no such mode at all — calling those 'off' would
- * assert a state that does not exist.
- */
-const CONTEXT_MODE_RESULT_FIELDS = Object.freeze([
-  { field: 'mode', emptyAs: 'off' },
-  { field: 'entering', emptyAs: null },
-  { field: 'priorMode', emptyAs: null },
-]);
-
-/** Nested results that are themselves context-mode payloads the model reads. */
-const NESTED_CONTEXT_RESULT_FIELDS = Object.freeze([
-  'context',
-  'contextRollback',
-]);
-
-/**
- * Report a context-mode payload in the tools' own vocabulary.
- *
- * `set_context_mode` accepts 'contacts' while the mode's internal id is
- * 'flights'. Reporting the internal id back made the model read
- * `mode:'flights'` as "Contacts is off" and refuse to answer from the Contacts
- * window counts sitting in the very same payload (owner field session
- * 2026-08-21). Secondary fields and nested transition/rollback results are
- * translated too — one leaked internal id is enough to recreate the confusion,
- * and a rollback result is exactly what the model reads when something went
- * wrong. Each internal id is kept alongside as `<field>Internal` for anything
- * reasoning about layers.
- * @param {object|null|undefined} state Any payload carrying context-mode fields.
- * @returns {object|null|undefined} The same payload, modes translated.
- */
-function withContextModeVocabulary(state) {
-  if (!state || typeof state !== 'object') return state;
-  let out = state;
-  const mutable = () => {
-    if (out === state) out = { ...state };
-    return out;
-  };
-  for (const { field, emptyAs } of CONTEXT_MODE_RESULT_FIELDS) {
-    if (!(field in state)) continue;
-    const internal = state[field] ?? null;
-    const target = mutable();
-    target[field] = contextModeWord(internal, { emptyAs });
-    target[`${field}Internal`] = internal;
-  }
-  for (const field of NESTED_CONTEXT_RESULT_FIELDS) {
-    const nested = state[field];
-    if (!nested || typeof nested !== 'object') continue;
-    const translated = withContextModeVocabulary(nested);
-    if (translated !== nested) mutable()[field] = translated;
-  }
-  return out;
-}
-
 const COCKPIT_ACTION_ALIASES = new Map([
   ['next', 'next'],
   ['previous', 'previous'],
@@ -185,57 +171,9 @@ const COCKPIT_TARGET_LAYERS = new Set([
   'military-installations',
 ]);
 
-const LAYER_ALIASES = new Map([
-  ['flights', 'flights'],
-  ['planes', 'flights'],
-  ['aircraft', 'flights'],
-  ['military', 'military'],
-  ['military flights', 'military'],
-  ['earthquakes', 'earthquakes'],
-  ['quakes', 'earthquakes'],
-  ['satellites', 'satellites'],
-  ['space mission', 'rocket-launches'],
-  ['space missions', 'rocket-launches'],
-  ['missions', 'rocket-launches'],
-  ['traffic', 'traffic'],
-  ['street traffic', 'traffic'],
-  ['cctv', 'cctv'],
-  ['cameras', 'cctv'],
-  ['radio', 'radio'],
-  ['internet radio', 'radio'],
-  ['radio stations', 'radio'],
-  ['bikeshare', 'bikeshare'],
-  ['bikes', 'bikeshare'],
-  ['ais', 'ais-live-vessels'],
-  ['ships', 'ais-live-vessels'],
-  ['vessels', 'ais-live-vessels'],
-  ['live vessels', 'ais-live-vessels'],
-  ['datacenters', 'local-datacenters'],
-  ['data centers', 'local-datacenters'],
-  ['data centres', 'local-datacenters'],
-  ['dams', 'local-dams'],
-  ['submarine cables', 'telegeography-submarine-cables'],
-  ['cables', 'telegeography-submarine-cables'],
-  ['telegeography', 'telegeography-submarine-cables'],
-  ['fire perimeters', 'fire-perimeters'],
-  ['perimeters', 'fire-perimeters'],
-  ['wildfire perimeters', 'fire-perimeters'],
-  ['firms', 'local-firms'],
-  ['fires', 'local-firms'],
-  ['active fires', 'local-firms'],
-  ['alpr', 'alpr-cameras'],
-  ['alpr cameras', 'alpr-cameras'],
-  ['flock cameras', 'alpr-cameras'],
-  ['license plate readers', 'alpr-cameras'],
-  ['license plate cameras', 'alpr-cameras'],
-  ['plate readers', 'alpr-cameras'],
-  ['local-adsb', 'local-adsb'],
-  ['local adsb', 'local-adsb'],
-  ['local ads-b', 'local-adsb'],
-  ['my receiver', 'local-adsb'],
-  ['my antenna', 'local-adsb'],
-  ['my sdr', 'local-adsb'],
-]);
+// Spoken layer names come from the voice layer manifest, the same source the
+// Realtime tool enums are generated from.
+const LAYER_ALIASES = voiceLayerAliasMap();
 
 const CITY_ALIASES = new Map([
   ['new york', 'nyc'],
@@ -278,14 +216,6 @@ const STACK_ALIASES = new Map([
   ['roads', 'osm'],
   ['road map', 'osm'],
 ]);
-
-/** Search order for track_entity across entity layer families. */
-const TRACKABLE_FAMILIES = [
-  { layerId: 'flights', kind: 'aircraft' },
-  { layerId: 'military', kind: 'aircraft' },
-  { layerId: 'ais-live-vessels', kind: 'vessel' },
-  { layerId: 'satellites', kind: 'satellite' },
-];
 
 const FRAME_TARGETS = new Map([
   ['flights', 'flights'],
@@ -335,19 +265,126 @@ export function createGevActionRunner({
   floorServices = defaultFloorServices,
   annotationResolver = defaultAnnotationResolver,
   searchNavigation = searchAndFlyTo,
+  speechBuilders = null,
+  deixis = null,
+  readVoicePanelOperation = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
+  // Speech builders turn results into say/display envelopes; callers extend
+  // them (e.g. an analyst_query builder) without replacing the defaults.
+  const builders = speechBuilders
+    ? { ...SPEECH_BUILDERS, ...speechBuilders }
+    : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
   let analystEngine;
-  const resolveRegionRing = (name) =>
-    annotationResolver.resolveRegionRingForQuery(name, undefined, placeSearch);
+  const resolveRegionRing = (name, signal) =>
+    annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
+  const ensureAnalystEngine = () =>
+    (analystEngine ||= createAnalystEngine(
+      analystProviders(viewer, dataManager, {
+        placeSearch,
+        resolveRegionRing,
+        isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
+      }),
+    ));
   installViewTargetPrewarm(viewer);
-  initCameraVerbs(viewer, getViewTargetCartesian);
-  return async function runGevAction(name, rawArgs = {}, runOptions = {}) {
+  initCameraVerbs(viewer, getViewTargetCartesian, {
+    isCockpitActive: () => Boolean(styleManager?.getCockpitState?.()?.active),
+  });
+  // Nested calls (select_nearest_aircraft composing layer + flight) use the
+  // raw runner; only the outer call gets a voice envelope.
+  const voiceUnavailable = (action) => ({
+    ok: false,
+    action,
+    applied: false,
+    unavailable: true,
+    error: 'Voice panel controls are unavailable in this host.',
+    say: 'Voice panel controls are unavailable in this host.',
+  });
+  async function showVoicePanel(
+    view,
+    open,
+    options,
+    operation = readVoicePanelOperation?.(),
+  ) {
+    const current = () =>
+      !options.signal?.aborted &&
+      (!options.isCurrent || options.isCurrent()) &&
+      operation?.isCurrent();
+    if (!operation) return voiceUnavailable('set_panel_open');
+    if (!current())
+      return {
+        ok: false,
+        action: 'set_panel_open',
+        applied: false,
+        cancelled: true,
+      };
+    let exit = null;
+    if (open) {
+      if (typeof styleManager?.getCockpitState !== 'function')
+        return voiceUnavailable('set_panel_open');
+      if (styleManager.getCockpitState()?.active) {
+        if (typeof styleManager.controlCockpit !== 'function')
+          return voiceUnavailable('set_panel_open');
+        exit = await styleManager.controlCockpit('exit');
+        if (styleManager.getCockpitState()?.active)
+          return {
+            ok: false,
+            action: 'set_panel_open',
+            applied: false,
+            exit,
+            error: exit?.error || 'Cockpit did not exit.',
+          };
+      }
+    }
+    if (!current())
+      return {
+        ok: false,
+        action: 'set_panel_open',
+        applied: false,
+        cancelled: true,
+        exit,
+        cockpitExited: Boolean(exit && !styleManager.getCockpitState()?.active),
+        say:
+          exit && !styleManager.getCockpitState()?.active
+            ? 'Cockpit exited; the voice panel was left as you last set it.'
+            : 'The voice panel was left as you last set it.',
+      };
+    const result = operation.show(view, open);
+    return {
+      ...result,
+      action: 'set_panel_open',
+      panelId: view === 'settings' ? 'voice-settings' : 'voice-preview',
+      exit,
+      state: styleManager?.getCockpitState?.() ?? null,
+      say: !result.ok
+        ? 'The voice panel was not changed.'
+        : result.settingsOpen
+          ? 'Voice Settings is open.'
+          : result.panelOpen
+            ? result.previewEnabled
+              ? 'Voice Preview is open.'
+              : 'Voice control is open; Preview remains off.'
+            : 'The voice panel is closed.',
+    };
+  }
+  const runGevAction = async function runGevAction(
+    name,
+    rawArgs = {},
+    runOptions = {},
+  ) {
     const args = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
     const current = () =>
       !runOptions.signal?.aborted &&
       (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+    // Step reports for voice narration and the voice card; never fatal.
+    const reportProgress = (step, label = '') => {
+      try {
+        runOptions.progress?.({ step, label: String(label || '') });
+      } catch {
+        /* Progress is advisory. */
+      }
+    };
 
     // Navigation tools interrupt any continuous camera motion (spec §1.1) —
     // checked FIRST because each handler returns.
@@ -364,6 +401,7 @@ export function createGevActionRunner({
     // Zoom during an active orbit adjusts the orbit RADIUS (spiral in/out) —
     // a straight camera move would be snapped back by the per-frame lookAt.
     if (name === 'adjust_camera_zoom') {
+      interruptGlobeRotation('voice-zoom-intent');
       const zoomOut = String(args.direction || '').toLowerCase() === 'out';
       const amt = String(args.amount || 'medium').toLowerCase();
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
@@ -396,6 +434,10 @@ export function createGevActionRunner({
         throw new Error(`Unknown data layer: ${args.layerId || 'missing'}`);
       }
       const enabled = Boolean(args.enabled);
+      if (enabled) {
+        const pending = dataManager.getAll?.().find((l) => l.id === layerId);
+        reportProgress('layer', pending?.name || layerId);
+      }
       const changeOptions = { origin: 'voice' };
       if (runOptions.signal) changeOptions.signal = runOptions.signal;
       let changed = false;
@@ -491,12 +533,15 @@ export function createGevActionRunner({
       }
       if (enabled) _layerEnabledAt.set(layerId, Date.now());
       const layer = dataManager.getAll().find((item) => item.id === layerId);
+      const snapshot = layer && enabled ? layerSnapshot(layer) : null;
       return {
         ok: true,
         action: 'set_layer_visibility',
         layerId,
         label: layer?.name || layerId,
         ...lifecycleSummary,
+        ...(snapshot?.feedState ? { feedState: snapshot.feedState } : {}),
+        ...(snapshot?.source ? { source: snapshot.source } : {}),
       };
     }
 
@@ -577,6 +622,7 @@ export function createGevActionRunner({
 
       const layerModule = dataManager.layers.get(layerId)?.module || null;
       let refreshed = false;
+      reportProgress('refresh', location.label);
       try {
         if (typeof dataManager.refreshLayer === 'function') {
           refreshed = await dataManager.refreshLayer(layerId, {
@@ -615,6 +661,7 @@ export function createGevActionRunner({
           : null,
       };
 
+      reportProgress('nearest', location.label);
       const nearest = await createAnalystEngine(
         analystProviders(viewer, dataManager, {
           recordLimitByLayer: { [layerId]: Number.MAX_SAFE_INTEGER },
@@ -688,8 +735,27 @@ export function createGevActionRunner({
       const style = normalizeStyle(args.style);
       if (!style)
         throw new Error(`Unknown visual style: ${args.style || 'missing'}`);
-      styleManager.setStyle(style);
+      styleManager.setStyle(style, { userInitiated: true });
       return { ok: true, action: 'set_visual_style', style };
+    }
+
+    if (name === 'set_voice_inactivity_timeout') {
+      const operation = readVoicePanelOperation?.();
+      if (!operation) return voiceUnavailable(name);
+      if (!current() || !operation.isCurrent())
+        return { ok: false, action: name, applied: false, cancelled: true };
+      const result = operation.setMinutes(args.minutes);
+      const duration =
+        result.minutes === 0 ? 'disabled' : `${result.minutes} minutes`;
+      return {
+        ...result,
+        action: name,
+        say: !result.applied
+          ? 'Voice inactivity was not changed.'
+          : result.persisted
+            ? `Voice inactivity is ${duration}, saved in this browser.`
+            : `Voice inactivity is ${duration} for now, but could not be saved in this browser.`,
+      };
     }
 
     if (name === 'set_panel_open') {
@@ -699,7 +765,76 @@ export function createGevActionRunner({
           `Unknown panel: ${args.panelId || args.panel || 'missing'}`,
         );
       const open = args.open !== false;
-      setPanelOpen(styleManager, panelId, open);
+      if (panelId === 'voice-settings' || panelId === 'voice-preview')
+        return showVoicePanel(
+          panelId === 'voice-settings' ? 'settings' : 'preview',
+          open,
+          runOptions,
+        );
+      if (panelId === 'provider-settings') {
+        if (!current())
+          return {
+            ok: false,
+            action: name,
+            panelId,
+            applied: false,
+            cancelled: true,
+          };
+        const doc = globalThis.document;
+        // The setup owner (src/keySetup.js) publishes the dialog and takes
+        // its open and close requests.
+        const settings = useProviderSettingsStore(applicationPinia());
+        const concealed =
+          open &&
+          [
+            'ui-clean-view',
+            'recording-mode',
+            'cockpit-mode',
+            'scene-playback-mode',
+          ].some((mode) => doc?.body?.classList?.contains(mode));
+        if (concealed || settings.view?.ready !== true || !settings.controls) {
+          const error = concealed
+            ? 'Provider Settings is hidden in the current view. Leave that view before opening it.'
+            : 'Provider Settings is unavailable in this runtime.';
+          return {
+            ok: false,
+            action: name,
+            panelId,
+            applied: false,
+            unavailable: true,
+            error,
+            say: error,
+          };
+        }
+        if (open) settings.controls.open();
+        else settings.controls.close();
+        // Opening unhides at once; closing drops visible before its fade ends.
+        const dialog = settings.view.dialog;
+        const applied = open ? !dialog.hidden : !dialog.visible;
+        const say = applied
+          ? `Provider Settings is ${open ? 'open' : 'closed'}.`
+          : 'Provider Settings did not change.';
+        return {
+          ok: applied,
+          action: name,
+          panelId,
+          applied,
+          open: applied ? open : !dialog.hidden,
+          say,
+          ...(!applied ? { error: say } : {}),
+        };
+      }
+      if (!setPanelOpen(styleManager, panelId, open)) {
+        const say = 'There is no panel to open here.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          say,
+          error: say,
+        };
+      }
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
@@ -785,6 +920,25 @@ export function createGevActionRunner({
           ok: false,
           action: 'control_cockpit',
           error: `Unknown cockpit action: ${args.action || args.command || 'missing'}`,
+        };
+      }
+      if (args.voicePanel !== undefined) {
+        if (
+          action !== 'exit' ||
+          !['preview', 'settings'].includes(args.voicePanel)
+        )
+          return {
+            ok: false,
+            action: 'control_cockpit',
+            applied: false,
+            error: 'Voice panel reveal requires exit and a valid view.',
+          };
+        const result = await showVoicePanel(args.voicePanel, true, runOptions);
+        return {
+          ...result,
+          action: 'control_cockpit',
+          cockpitAction: 'exit',
+          voicePanel: args.voicePanel,
         };
       }
       const inferred = normalizeCockpitNavigationHints(rawAction);
@@ -906,15 +1060,18 @@ export function createGevActionRunner({
 
     if (name === 'show_data_layers_menu') {
       const layerId = normalizeLayerId(args.layerId || args.layer);
-      setPanelOpen(styleManager, 'data-panel', true);
-      const focusedLayer =
+      const row =
         layerId && dataManager.layers.has(layerId)
-          ? focusDataLayerRow(layerId)
+          ? findDataLayerRow(layerId)
           : null;
+      // Open the panel that holds the row: Directions lives in Utilities.
+      const panelId = row?.closest('[data-panel-id]')?.id || 'data-panel';
+      setPanelOpen(styleManager, panelId, true);
+      const focusedLayer = row ? focusDataLayerRow(row, layerId) : null;
       return {
         ok: true,
         action: 'show_data_layers_menu',
-        panelId: 'data-panel',
+        panelId,
         focusedLayer,
         layers: dataManager
           .getAll()
@@ -929,7 +1086,25 @@ export function createGevActionRunner({
     }
 
     if (name === 'fly_to_location') {
+      // A referenced contact moves: locate it now, not from the old list.
+      if (args.entity?.layerId && args.entity?.id) {
+        const located = locateLayerEntity(dataManager, args.entity);
+        if (!located) {
+          return {
+            ok: false,
+            action: 'fly_to_location',
+            error: `${args.entity.label || args.entity.id} is no longer loaded`,
+          };
+        }
+        const { entity: _entity, ...rest } = args;
+        return runGevAction(
+          name,
+          { ...rest, latitude: located.lat, longitude: located.lon },
+          runOptions,
+        );
+      }
       return flyToRequestedLocation(viewer, args, {
+        onProgress: reportProgress,
         placeSearch,
         searchNavigation,
         signal: runOptions.signal,
@@ -987,13 +1162,14 @@ export function createGevActionRunner({
     }
 
     if (name === 'analyst_query') {
-      analystEngine ||= createAnalystEngine(
-        analystProviders(viewer, dataManager, {
-          placeSearch,
-          resolveRegionRing,
-        }),
+      return runAnalystQuery(
+        ensureAnalystEngine(),
+        dataManager,
+        args,
+        _layerEnabledAt,
+        current,
+        runOptions.signal,
       );
-      return runAnalystQuery(analystEngine, dataManager, args, _layerEnabledAt);
     }
 
     if (name === 'move_camera') {
@@ -1130,6 +1306,18 @@ export function createGevActionRunner({
     }
 
     if (name === 'control_cctv') {
+      const action = String(args.action || '').toLowerCase();
+      if (
+        (action === 'enable' || action === 'disable') &&
+        dataManager.layers.get('cctv')?.module
+      ) {
+        const result = await runGevAction(
+          'set_layer_visibility',
+          { layerId: 'cctv', enabled: action === 'enable' },
+          runOptions,
+        );
+        return { ...result, action: 'control_cctv' };
+      }
       return controlCctv(dataManager, args, styleManager);
     }
 
@@ -1141,7 +1329,9 @@ export function createGevActionRunner({
     }
 
     if (name === 'track_entity') {
-      return trackEntity(viewer, dataManager, styleManager, args);
+      return trackEntity(viewer, dataManager, styleManager, args, {
+        isCurrent: current,
+      });
     }
 
     if (name === 'stop_tracking') {
@@ -1153,7 +1343,7 @@ export function createGevActionRunner({
     }
 
     if (name === 'annotate_map') {
-      return annotateMap(annotations, args);
+      return annotateMap(annotations, args, reportProgress);
     }
 
     if (name === 'clear_annotations') {
@@ -1162,6 +1352,79 @@ export function createGevActionRunner({
 
     throw new Error(`Unknown GEV tool: ${name}`);
   };
+  // Lifetimes: the runner lives for the page; conversation state — the
+  // analyst's follow-up memory and any write still in flight — lives for one
+  // voice session and is dropped by resetConversation().
+  let conversation = 0;
+  let disposed = false;
+  async function runVoiceAction(name, rawArgs = {}, callerOptions = {}) {
+    if (disposed)
+      return {
+        ok: false,
+        action: name,
+        cancelled: true,
+        error: 'Voice ended.',
+      };
+    const epoch = conversation;
+    const runOptions = {
+      ...callerOptions,
+      isCurrent: () =>
+        epoch === conversation &&
+        !disposed &&
+        (typeof callerOptions.isCurrent !== 'function' ||
+          callerOptions.isCurrent()),
+    };
+    const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+    // Point-and-ask: 'pointer' and referent:n become real targets here, from
+    // the turn's pointer snapshot and the latest numbered result.
+    const deictic = resolveDeicticArgs(name, input, {
+      pointer: deixis?.pointer?.activeSnapshot?.() || null,
+      referents: deixis?.referents || null,
+      imageFrame: deixis?.imageFrame?.() || null,
+      cameraKey: deixis?.cameraKey?.() || null,
+    });
+    if (deictic.error) {
+      return attachVoiceResult(
+        name,
+        { ok: false, action: name, error: deictic.error },
+        input,
+        builders,
+      );
+    }
+    const referentGeneration = deixis?.referents?.generation?.();
+    let result = await runGevAction(name, deictic.args, runOptions);
+    if (deictic.used && result && typeof result === 'object')
+      result = { ...result, resolvedFrom: deictic.used };
+    const out = attachVoiceResult(name, result, deictic.args, builders);
+    // Only an accepted, still-current result may become "the last list": a
+    // cancelled turn or one finishing after the session ended must not
+    // repopulate a cleared registry.
+    const stillCurrent =
+      !runOptions.signal?.aborted &&
+      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+    if (stillCurrent)
+      deixis?.referents?.recordResult?.(name, out, {
+        since: referentGeneration,
+      });
+    if (stillCurrent && deictic.used?.source === 'pointer')
+      deixis?.onPointerUsed?.();
+    return out;
+  }
+  /**
+   * A voice session ended: invalidate every write still in flight, then
+   * forget the analyst's "last answer".
+   */
+  runVoiceAction.resetConversation = () => {
+    conversation++;
+    analystEngine?.reset();
+  };
+  /** Voice was removed: nothing may run or write again. */
+  runVoiceAction.dispose = () => {
+    if (disposed) return;
+    runVoiceAction.resetConversation();
+    disposed = true;
+  };
+  return runVoiceAction;
 }
 
 function selectedCockpitTarget(dataManager) {
@@ -1217,7 +1480,7 @@ function sanitizeAnnotationSpec(spec) {
  * talking about. Place names are resolved to real-world coordinates (and OSM
  * footprints) by the annotation engine, so the agent never has to guess pixels.
  */
-async function annotateMap(annotations, args = {}) {
+async function annotateMap(annotations, args = {}, reportProgress = () => {}) {
   if (!annotations || typeof annotations.annotate !== 'function') {
     return {
       ok: false,
@@ -1241,6 +1504,8 @@ async function annotateMap(annotations, args = {}) {
     };
   }
   const requests = raw.map(sanitizeAnnotationSpec);
+  const firstTarget = requests.find((spec) => spec?.target || spec?.label);
+  reportProgress('resolve', firstTarget?.target || firstTarget?.label || '');
   const result = await annotations.annotate(requests, {
     // C1 invariant enforced in CODE (not just the prompt): the VOICE path NEVER clears as
     // a side effect of drawing — annotations accumulate/persist, and only an explicit
@@ -1255,6 +1520,11 @@ async function annotateMap(annotations, args = {}) {
   const drewSome = result.drawn > 0;
   const someFailed = result.failed > 0;
   const failedLabels = [];
+  const pendingOutline = (result.results || []).find(
+    (r) => r.ok && r.outlinePending,
+  );
+  if (pendingOutline)
+    reportProgress('outline', pendingOutline.label || pendingOutline.target);
   for (const r of result.results || []) {
     if (r.ok) continue;
     // Route failures carry the specific missing waypoint name(s) in failedTargets;
@@ -1338,7 +1608,7 @@ function controlScene(sceneDirector, args = {}) {
     };
   }
   if (sceneAction === 'stop') {
-    sceneDirector.stopScene('Stopped by voice');
+    sceneDirector.stopScene(msg('Stopped by voice'));
     return { ok: true, action: 'control_scene', running: false };
   }
   if (sceneAction === 'next') {
@@ -1388,13 +1658,10 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
   }
 
   if (action === 'enable' || action === 'disable') {
-    await dataManager.setEnabled('cctv', action === 'enable', {
-      origin: 'voice',
-    });
     return {
-      ok: true,
+      ok: false,
       action: 'control_cctv',
-      enabled: dataManager.isEnabled('cctv'),
+      error: 'Enable or disable CCTV through set_layer_visibility',
     };
   }
   if (!dataManager.isEnabled('cctv')) {
@@ -1410,9 +1677,8 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
     return {
       activeCameraId: ui.activeCameraId || null,
       activeCamera: ui.activeCamera?.name || ui.activeCamera?.id || null,
-      cameraCount: Array.isArray(ui.cameras)
-        ? ui.cameras.length
-        : ui.count || 0,
+      // `count`, not `cameras.length`: reading `cameras` builds every camera.
+      cameraCount: Number.isFinite(ui.count) ? ui.count : 0,
       showCoverage: !!ui.showCoverage,
       coverageMode: ui.coverageMode || (ui.showCoverage ? 'on' : 'off'),
       showProjection: !!ui.showProjection,
@@ -1539,14 +1805,18 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
 }
 
 const RADIO_COUNTRY_CENTERS = new Map([
+  // i18n-ignore: place name in tool data
   ['us', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
+  // i18n-ignore: place name in tool data
   ['usa', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
   [
     'united states',
+    // i18n-ignore: place name in tool data
     { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' },
   ],
   [
     'united states of america',
+    // i18n-ignore: place name in tool data
     { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' },
   ],
 ]);
@@ -1957,7 +2227,11 @@ export async function controlRadio(
     if (!radioActionIsCurrent(options)) return cancelled(summarize);
     const prepared = state.selected
       ? true
-      : radio.cycleStation?.(1, { focus: false, autoplay: false });
+      : radio.cycleStation?.(1, {
+          focus: false,
+          autoplay: false,
+          fallback: true,
+        });
     return {
       ok: Boolean(prepared),
       action: 'control_radio',
@@ -1981,6 +2255,7 @@ export async function controlRadio(
     const selected = radio.cycleStation?.(action === 'next' ? 1 : -1, {
       focus: false,
       autoplay: false,
+      fallback: true,
     });
     return {
       ok: Boolean(selected),
@@ -2081,7 +2356,20 @@ export function formatTrackedEntityLabel(found, query = '') {
 }
 
 /** Finds and tracks/selects an entity by spoken query across layer families. */
-async function trackEntity(viewer, dataManager, styleManager, args = {}) {
+async function trackEntity(
+  viewer,
+  dataManager,
+  styleManager,
+  args = {},
+  { isCurrent = () => true } = {},
+) {
+  const cancelled = () => ({
+    ok: false,
+    cancelled: true,
+    action: 'track_entity',
+    error: 'Tracking request was superseded by a newer voice turn',
+  });
+  if (!isCurrent()) return cancelled();
   const query = String(args.query || '').trim();
   if (!query) throw new Error('track_entity needs a query');
 
@@ -2116,6 +2404,7 @@ async function trackEntity(viewer, dataManager, styleManager, args = {}) {
         error: 'The strongest fire has no usable position',
       };
     }
+    if (!isCurrent()) return cancelled();
     return runManagedVoiceNavigation(
       styleManager,
       'fire',
@@ -2133,6 +2422,7 @@ async function trackEntity(viewer, dataManager, styleManager, args = {}) {
           action: 'track_entity',
           kind: 'fire',
           layerId: 'local-firms',
+          // i18n-ignore: entity name in a tool result for the voice model
           label: strongest.label || 'Strongest fire',
           latitude: strongest.latitude,
           longitude: strongest.longitude,
@@ -2157,6 +2447,8 @@ async function trackEntity(viewer, dataManager, styleManager, args = {}) {
     if (!module || typeof module.findByQuery !== 'function') continue;
     const found = module.findByQuery(query);
     if (!found) continue;
+
+    if (!isCurrent()) return cancelled();
 
     if (
       family.kind === 'vessel' &&
@@ -2392,6 +2684,9 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
         detectionEnabled,
         nearest: entries.slice(0, 5).map((entry) => ({
           id: entry.id || entry.icao24 || entry.mmsi || null,
+          // Canonical identity: `id` is a display label for aircraft.
+          ...(entry.icao24 ? { icao24: String(entry.icao24) } : {}),
+          ...(entry.mmsi ? { mmsi: String(entry.mmsi) } : {}),
           label: entry.label || entry.callsign || entry.name || null,
         })),
       };
@@ -2423,33 +2718,20 @@ function runManagedVoiceNavigation(
   };
 }
 
-/** Gathers tracked/selected entities across layer families for read-back. */
-function collectTrackedEntities(dataManager) {
-  const tracked = [];
-  for (const family of TRACKABLE_FAMILIES) {
-    const module = dataManager.layers.get(family.layerId)?.module;
-    if (!module) continue;
-    try {
-      const info =
-        family.kind === 'vessel'
-          ? module.getSelectedInfo?.()
-          : module.getTrackedInfo?.();
-      if (info)
-        tracked.push({ kind: family.kind, layerId: family.layerId, ...info });
-    } catch {
-      // layer not ready
-    }
-  }
-  return tracked;
-}
-
+/**
+ * Place labels for the HUD's passive summary. It geocodes the view center
+ * and one more point. While the view still shows about the same area (see
+ * hudPlaceLookup.js) it answers for the points the last lookup asked about
+ * instead, so a settled camera does not buy a new set of Google requests for
+ * every small pan; those points are cache hits, and only what the last
+ * lookup did not get (a timeout, a failure, an empty answer) is asked again.
+ * `cachedOnly` reads the shared caches and makes no request.
+ */
 export async function getBasemapLabelContext(
   viewer,
   service = defaultGeospatial,
-  { cachedOnly = false } = {},
+  { cachedOnly = false, previous = null } = {},
 ) {
-  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
-  const samples = sampleViewportCartographics(viewer);
   const cameraHeightM = viewer.camera.positionCartographic.height;
   const target = getViewTargetCartographic(viewer);
   if (!target) {
@@ -2457,11 +2739,77 @@ export async function getBasemapLabelContext(
       placeLabels: [],
       streetLabels: [],
       nearbyPlaceLabels: [],
+      view: null,
+      lookup: null,
     };
   }
 
   const latitude = Number(Cesium.Math.toDegrees(target.latitude).toFixed(6));
   const longitude = Number(Cesium.Math.toDegrees(target.longitude).toFixed(6));
+  const view = placeLookupView({
+    latitude,
+    longitude,
+    rangeM: viewTargetRangeM(viewer, target, cameraHeightM),
+    fovRad: viewer.camera.frustum?.fov,
+    aspectRatio: viewer.camera.frustum?.aspectRatio,
+    tier: basemapLookupTier(cameraHeightM),
+  });
+  if (
+    !cachedOnly &&
+    previous?.lookup &&
+    !placeLookupViewChanged(previous.view, view)
+  ) {
+    // The same points again: what the last lookup got is a cache hit, and
+    // only what it did not (a timeout, a failure, an empty answer) is asked.
+    const labels = await basemapLabelsAt(previous.lookup, service, {
+      cachedOnly: false,
+    });
+    return { ...labels, view: previous.view, lookup: previous.lookup };
+  }
+  const samples = sampleViewportCartographics(viewer);
+  const lookup = {
+    latitude,
+    longitude,
+    cameraHeightM,
+    // Cache reads are free, so a cached-only host keeps every sample.
+    samples: cachedOnly
+      ? samples
+      : hudViewportSamples(samples, shouldReverseGeocode(cameraHeightM)),
+  };
+  return {
+    ...(await basemapLabelsAt(lookup, service, { cachedOnly })),
+    view,
+    lookup,
+  };
+}
+
+/** Which of the height-gated lookups a camera height calls for. */
+function basemapLookupTier(cameraHeightM) {
+  return [
+    shouldReverseGeocode(cameraHeightM),
+    shouldReverseGeocodeViewport(cameraHeightM) && cameraHeightM > 10000,
+    shouldFetchNearbyPlaces(cameraHeightM) &&
+      nearbyPlacesRadiusM(cameraHeightM),
+  ].join(':');
+}
+
+/** Camera distance to the view target, or the camera height without one. */
+function viewTargetRangeM(viewer, target, cameraHeightM) {
+  const position = viewer.camera.positionWC;
+  if (!position) return cameraHeightM;
+  const range = Cesium.Cartesian3.distance(
+    position,
+    Cesium.Cartographic.toCartesian(target),
+  );
+  return Number.isFinite(range) ? range : cameraHeightM;
+}
+
+async function basemapLabelsAt(
+  { latitude, longitude, cameraHeightM, samples },
+  service,
+  { cachedOnly },
+) {
+  const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const cachedViewportPlaces = viewportPlacesFromCache(
     samples,
     cameraHeightM,
@@ -2499,7 +2847,6 @@ export async function getBasemapLabelContext(
     resolveWithin(placePromise, BASEMAP_CONTEXT_WAIT_MS, null),
     resolveWithin(nearbyPromise, BASEMAP_CONTEXT_WAIT_MS, []),
   ]);
-
   return {
     placeLabels: uniqueStrings([
       place?.formattedAddress,
@@ -2821,13 +3168,14 @@ function normalizeAircraftClassFilter(value) {
   return raw.replace(/[\s-]+/g, '') === TR3B_CLASS ? TR3B_CLASS : raw;
 }
 
+/**
+ * @returns {boolean} Whether a shell took the change: its panel chrome owns
+ *   panel state, so without one there is no panel to open.
+ */
 function setPanelOpen(styleManager, panelId, open) {
-  if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
-    styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
-  } else {
-    const panel = document.getElementById(panelId);
-    if (panel) panel.classList.toggle('collapsed', !open);
-  }
+  if (typeof styleManager?.setPanelCollapsed !== 'function') return false;
+  styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
+  return true;
 }
 
 function normalizeContextMode(value) {
@@ -2864,17 +3212,24 @@ function normalizeCockpitAction(value) {
   return null;
 }
 
-function focusDataLayerRow(layerId) {
-  const row = document.querySelector(
-    `#data-toggles [data-layer-id="${CSS.escape(layerId)}"]`,
+function findDataLayerRow(layerId) {
+  const selector = `[data-layer-id="${CSS.escape(layerId)}"]`;
+  return document.querySelector(
+    `#data-toggles ${selector}, #utilities-toggles ${selector}`,
   );
-  if (!row) return null;
+}
+
+function focusDataLayerRow(row, layerId) {
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;
   row.classList.add('gev-voice-focus');
   window.setTimeout(() => row.classList.remove('gev-voice-focus'), 3000);
-  const name = row.querySelector('.data-name')?.textContent?.trim() || layerId;
+  // The English name: tool results stay English whatever the UI language.
+  const name =
+    row.dataset.layerName ||
+    row.querySelector('.data-name')?.textContent?.trim() ||
+    layerId;
   return { id: layerId, name };
 }
 
@@ -2897,6 +3252,7 @@ async function flyToRequestedLocation(
     placeSearch = unavailablePlaceSearch,
     searchNavigation = searchAndFlyTo,
     signal,
+    onProgress = () => {},
     onStart = null,
     runImmediate = null,
     beginDeferred = null,
@@ -2932,6 +3288,7 @@ async function flyToRequestedLocation(
     : {};
   const afterArrival = async (result, label) => {
     if (!arrival || result?.ok !== true) return result;
+    onProgress('fly', label);
     const status = await arrival;
     settleArrival = null;
     return status === 'arrived'
@@ -3026,6 +3383,7 @@ async function flyToRequestedLocation(
     const generation =
       typeof beginDeferred === 'function' ? beginDeferred() : null;
     if (generation === false) return cancelled(query);
+    onProgress('search', query);
     const managedDeferred = typeof reassertDeferred === 'function';
     const destination = await searchNavigation(viewer, query, {
       placeSearch,
@@ -3073,53 +3431,12 @@ function getCurrentViewState(
   dataManager,
   sceneDirector = null,
 ) {
-  const cartographic = Cesium.Cartographic.fromCartesian(
-    viewer.camera.positionWC,
-  );
-  return {
-    ok: true,
-    action: 'get_current_view_state',
-    camera: {
-      latitude: Cesium.Math.toDegrees(cartographic.latitude),
-      longitude: Cesium.Math.toDegrees(cartographic.longitude),
-      heightM: cartographic.height,
-    },
-    style: styleManager.activeStyle || 'normal',
-    context:
-      typeof styleManager.getContextModeState === 'function'
-        ? {
-            ...withContextModeVocabulary(styleManager.getContextModeState()),
-            // The numbers on the operator's Contacts panel, so a window/count
-            // question can be answered from what they are looking at.
-            ...(activeContactsWindow(dataManager)
-              ? { contactsWindow: activeContactsWindow(dataManager) }
-              : {}),
-          }
-        : null,
-    cockpit:
-      typeof styleManager.getCockpitState === 'function'
-        ? styleManager.getCockpitState()
-        : null,
-    controls:
-      typeof styleManager.getControlState === 'function'
-        ? styleManager.getControlState()
-        : null,
-    scenePlayback: sceneDirector?.getPlaybackStatus?.() || null,
-    tracked: collectTrackedEntities(dataManager),
-    layers: dataManager.getAll().map((layer) => ({
-      id: layer.id,
-      name: layer.name,
-      enabled: layer.enabled,
-      count: layer.stats?.count || 0,
-      error: layer.stats?.error || null,
-      feedState: layerSnapshot(layer).feedState,
-      source: layerSnapshot(layer).source,
-      lastUpdate: layerSnapshot(layer).lastUpdate,
-    })),
-    feedProvenance: feedProvenanceEnvelope(
-      layerSnapshots(dataManager.getAll()).filter((layer) => layer.enabled),
-    ),
-  };
+  return getWorldPacket({
+    viewer,
+    styleManager,
+    dataManager,
+    sceneDirector,
+  });
 }
 
 async function getEntityContext(
@@ -3131,6 +3448,9 @@ async function getEntityContext(
 ) {
   const startedAt = performance.now();
   const scope = String(args.scope || 'auto').toLowerCase();
+  if (scope === 'target' && args.target) {
+    return getTargetContext(viewer, dataManager, styleManager, args, service);
+  }
   const layerId = normalizeLayerId(args.layerId || args.layer);
   const limit = Math.round(clampNumber(args.limit, 1, 12, 5));
   const selected = selectedEntityContext(dataManager);
@@ -3179,6 +3499,177 @@ async function getEntityContext(
   };
 }
 
+const AIRCRAFT_LAYERS = new Set(['flights', 'military']);
+
+/** Live position of a layer record by id, or null when it is gone. */
+function locateLayerEntity(dataManager, { layerId, id, lat, lon }) {
+  if (!layerId || !id) return null;
+  if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return null;
+  let found = null;
+  try {
+    found =
+      dataManager?.layers?.get(layerId)?.module?.findByQuery?.(String(id)) ||
+      null;
+  } catch {
+    found = null;
+  }
+  if (Number.isFinite(found?.latitude) && Number.isFinite(found?.longitude))
+    return { lat: found.latitude, lon: found.longitude, found };
+  const record = getContextStore().entities.get(String(id));
+  if (
+    record?.layerId === layerId &&
+    Number.isFinite(record.latitude) &&
+    Number.isFinite(record.longitude)
+  )
+    return { lat: record.latitude, lon: record.longitude, record };
+  // Analyst-only layers (e.g. bikeshare) have no pick/context lookup. Read
+  // their current snapshot, so a removed or moved record is not resurrected.
+  try {
+    const matches =
+      dataManager?.layers
+        ?.get(layerId)
+        ?.module?.getAnalystRecords?.()
+        .filter(
+          (item) =>
+            String(item.icao24 ?? item.mmsi ?? item.noradId ?? item.id) ===
+            String(id),
+        ) || [];
+    // Bikeshare uses station names as IDs: retain the coordinate identity
+    // even if a namesake disappears. Moving records use their fresh fix.
+    const row =
+      matches.length === 1 && layerId !== 'bikeshare'
+        ? matches[0]
+        : matches.find((item) => item.lat === lat && item.lon === lon);
+    if (Number.isFinite(row?.lat) && Number.isFinite(row?.lon))
+      return {
+        lat: row.lat,
+        lon: row.lon,
+        found: { ...row, latitude: row.lat, longitude: row.lon },
+      };
+  } catch {
+    // A missing or unavailable snapshot cannot establish a live position.
+  }
+  return null;
+}
+
+/**
+ * Describe one pointed or referenced thing without changing the selection:
+ * a live aircraft descriptor for contacts, the context-store record for
+ * everything else. Aircraft fields use the same names as a selected contact,
+ * so the spoken identity line is identical.
+ */
+function describeTargetEntity(dataManager, target) {
+  if (!target?.layerId) return null;
+  const located = locateLayerEntity(dataManager, target);
+  if (located?.record)
+    return summarizeContextRecord(located.record, { includeProperties: true });
+  const found = located?.found;
+  if (!found) {
+    const record = getContextStore().entities.get(String(target.id));
+    return record
+      ? summarizeContextRecord(record, { includeProperties: true })
+      : null;
+  }
+  const name = formatTrackedEntityLabel(found, target.label || target.id);
+  const aircraft = AIRCRAFT_LAYERS.has(target.layerId);
+  const route =
+    found.origin && found.destination
+      ? `${found.origin} → ${found.destination}`
+      : '';
+  return {
+    id: String(target.id),
+    name,
+    layerId: target.layerId,
+    layerName: layerTitle(target.layerId),
+    source: null,
+    latitude: found.latitude ?? null,
+    longitude: found.longitude ?? null,
+    properties: compactProperties(
+      aircraft
+        ? {
+            name,
+            callsign: found.callsign || '',
+            registration: found.registration || '',
+            operator: found.airline || '',
+            type: found.typeName || found.typeCode || '',
+            route,
+            altitude: Number.isFinite(found.altitudeM)
+              ? `${Math.round(found.altitudeM * 3.28084)} ft`
+              : '',
+          }
+        : { name, mmsi: found.mmsi || '', noradId: found.noradId || '' },
+    ),
+    active: true,
+  };
+}
+
+/** get_entity_context for a pointed/referenced target (scope 'target'). */
+async function getTargetContext(
+  viewer,
+  dataManager,
+  styleManager,
+  args,
+  service,
+) {
+  const target = args.target;
+  // Number(null) is 0: a coordinate-less referent must not become (0, 0).
+  const coordinate = (value) =>
+    value === null || value === undefined || value === '' ? NaN : Number(value);
+  let lat = coordinate(target.lat);
+  let lon = coordinate(target.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    const located = locateLayerEntity(dataManager, target);
+    lat = located?.lat ?? NaN;
+    lon = located?.lon ?? NaN;
+  }
+  const hasPosition = Number.isFinite(lat) && Number.isFinite(lon);
+  const viewTarget = hasPosition
+    ? Cesium.Cartographic.fromDegrees(lon, lat)
+    : getViewTargetCartographic(viewer);
+  const selected = describeTargetEntity(dataManager, target);
+  const scene = await getSceneContext(
+    viewer,
+    styleManager,
+    dataManager,
+    viewTarget,
+    service,
+  );
+  if (selected) {
+    return {
+      ok: true,
+      action: 'get_entity_context',
+      scope: 'pointer',
+      scene,
+      selected,
+    };
+  }
+  const cameraHeightM = viewer.camera.positionCartographic.height;
+  const visible = shouldScanVisibleEntities(cameraHeightM)
+    ? visibleEntityContexts(viewer, dataManager, {
+        layerId: normalizeLayerId(args.layerId || args.layer),
+        limit: Math.round(clampNumber(args.limit, 1, 12, 5)),
+        target: viewTarget,
+      })
+    : [];
+  return {
+    ok: true,
+    action: 'get_entity_context',
+    scope: 'pointer',
+    scene,
+    selected: null,
+    ...(hasPosition
+      ? {
+          pointer: {
+            latitude: Number(lat.toFixed(5)),
+            longitude: Number(lon.toFixed(5)),
+          },
+        }
+      : {}),
+    visible,
+    count: visible.length,
+  };
+}
+
 /**
  * Answer an entity-centred "how many aircraft nearby" from the Contacts
  * engine, or null when the question is not that.
@@ -3192,15 +3683,24 @@ async function getEntityContext(
  * @param {object} result The general engine's result, reused for scope text.
  * @returns {object|null} A unified-count payload, or null.
  */
-function aircraftProximityWindowForQuery(dataManager, args, result) {
+async function aircraftProximityWindowForQuery(
+  dataManager,
+  args,
+  result,
+  isCurrent = () => true,
+) {
+  // Follow-ups re-filter the engine's retained answer. Re-projecting a fresh
+  // Contacts snapshot here would restore rows a previous filter removed.
+  if (result?.coverage?.followUp) return null;
+  const spec = normalizeAnalystSpec(args, args?.layers || []);
+  if (!spec) return null;
   const scope = args?.scope;
   if (String(scope?.kind || '').toLowerCase() !== 'radius') return null;
   const layers = Array.isArray(args.layers) ? args.layers : [];
   if (!layers.some((layer) => layer === 'flights' || layer === 'military'))
     return null;
-  const snapshot = dataManager?.layers
-    ?.get('military-awareness')
-    ?.module?.getContextSnapshot?.();
+  const awareness = dataManager?.layers?.get('military-awareness')?.module;
+  const snapshot = awareness?.getAircraftQuerySnapshot?.();
   const subject = snapshot?.subject;
   if (!subject?.position) return null;
   // An explicit centre only qualifies when it IS the subject; otherwise the
@@ -3210,61 +3710,180 @@ function aircraftProximityWindowForQuery(dataManager, args, result) {
   const radiusM = Number.isFinite(scope.km)
     ? scope.km * 1000
     : snapshot.radiusM || 250_000;
-  const window = dataManager.layers
-    .get('military-awareness')
-    .module.collectAircraftProximityWindow(subject.position, {
-      radiusM,
-      subject,
-    });
-  if (!window) return null;
+  // A different radius is a different question. Let the general analyst
+  // engine answer it instead of relabelling the panel's 250 km snapshot.
+  if (
+    Number.isFinite(snapshot.radiusM) &&
+    Math.abs(radiusM - snapshot.radiusM) > 1
+  )
+    return null;
   const label = subject.label || subject.id || 'the selected contact';
   const radiusKm = Math.round(radiusM / 1000);
-  const wanted = new Set(layers);
-  const items = [
-    ...(wanted.has('flights')
-      ? window.flights.map((item) => ({ ...item, layerKey: 'flights' }))
-      : []),
-    ...(wanted.has('military')
-      ? window.military.map((item) => ({ ...item, layerKey: 'military' }))
-      : []),
-  ];
-  const count = items.length;
-  return {
+  const wanted = layers.filter(
+    (layer) => layer === 'flights' || layer === 'military',
+  );
+  // Provenance belongs to the Awareness evaluation, not the current layer
+  // registry. The panel deliberately retains a cohort between render-cadence
+  // refreshes, so a live registry read here could already describe a newer
+  // source state than the count and items the operator is looking at.
+  const retainedProvenance = wanted
+    .map((key) => snapshot.cohorts?.[key]?.provenance)
+    .filter(Boolean);
+  const feedProvenance = feedProvenanceEnvelope(retainedProvenance);
+  const sourceSnapshotsById = new Map(
+    feedProvenance.layers.map((layer) => [layer.id, layer]),
+  );
+  // The cohort is the panel's; each contact is joined to its loaded analyst
+  // record so the same filters, ranking and item shape apply as everywhere
+  // else. The cohort still owns membership and distance.
+  const distanceKm = new WeakMap();
+  const groups = wanted.map((key) => {
+    const records = new Map();
+    for (const record of dataManager.layers
+      .get(key)
+      ?.module?.getAnalystRecords?.(ANALYST_RECORD_CAP) || [])
+      if (record?.icao24) records.set(record.icao24, record);
+    const rows = (snapshot.cohorts?.[key]?.items || []).map((item) => {
+      const record = records.get(item.icao24);
+      let lat = record?.lat;
+      let lon = record?.lon;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        const carto = item.position
+          ? Cesium.Cartographic.fromCartesian(item.position)
+          : null;
+        lat = carto ? Cesium.Math.toDegrees(carto.latitude) : null;
+        lon = carto ? Cesium.Math.toDegrees(carto.longitude) : null;
+      }
+      const row = {
+        ...(record || {
+          id: item.id,
+          icao24: item.icao24,
+          callsign: item.callsign ?? null,
+          altitudeM: item.altitudeM ?? null,
+          speedMps: item.velocityMps ?? null,
+          aircraftClass: item.aircraftClass ?? null,
+        }),
+        lat,
+        lon,
+      };
+      // Rank the retained cohort at its original precision; display rounding
+      // must not turn nearby contacts into artificial ID-sorted ties.
+      if (Number.isFinite(item.distance))
+        distanceKm.set(row, item.distance / 1000);
+      return row;
+    });
+    return { key, rows };
+  });
+  const selection = await selectAnalystRows(groups, {
+    filters: spec.filters,
+    sortBy: spec.sortBy,
+    sortDir: spec.sortDir,
+    limit: Math.round(clampNumber(args.limit, 1, 50, 12)),
+    layerKeys: wanted,
+    distanceOf: (row) => distanceKm.get(row),
+    isCurrent,
+  });
+  if (!selection || !isCurrent()) return null;
+  const items = selection.items.map(compactAnalystItem);
+  const complete = wanted.every((key) => {
+    const cohort = snapshot.cohorts?.[key];
+    return Number.isFinite(cohort?.count) && cohort.complete !== false;
+  });
+  const genericLayers = new Map(
+    (result?.coverage?.layersQueried || []).map((layer) => [
+      layer.layerKey,
+      layer,
+    ]),
+  );
+  const layersQueried = wanted.map((key) => {
+    const cohort = snapshot.cohorts?.[key] || {};
+    const generic = genericLayers.get(key) || {};
+    const sourceSnapshot = sourceSnapshotsById.get(key);
+    const returned = Number.isFinite(cohort.count)
+      ? cohort.count
+      : cohort.items?.length || 0;
+    return {
+      layerKey: key,
+      ...(generic.status ? { status: generic.status } : {}),
+      ...(generic.note ? { note: generic.note } : {}),
+      ...(generic.window ? { window: generic.window } : {}),
+      returned,
+      total: cohort.complete === false ? null : returned,
+      truncated: cohort.complete === false,
+      ...(cohort.source ? { source: cohort.source } : {}),
+      ...(sourceSnapshot
+        ? {
+            feedState: sourceSnapshot.feedState,
+            source: sourceSnapshot.source,
+            lastUpdate: sourceSnapshot.lastUpdate,
+            enabled: sourceSnapshot.enabled,
+            error: sourceSnapshot.error,
+          }
+        : {}),
+    };
+  });
+  const coverage = {
+    layersQueried,
+    records: {
+      returned: selection.count,
+      total: complete ? selection.count : null,
+      truncated: !complete,
+    },
+    scope: `window:${radiusKm}km@${label}`,
+    followUp: false,
+    feedProvenance,
+    note: `Contacts panel snapshot${snapshot.evaluatedAt ? ` at ${new Date(snapshot.evaluatedAt).toISOString()}` : ''} — the same retained cohort supplies the card, speech, and follow-up memory${complete ? '' : '; the count is a lower bound because at least one layer reached its retained limit'}.`,
+  };
+  const answer = {
     ok: true,
     action: 'analyst_query',
-    count,
+    count: selection.count,
+    complete,
     scopeLabel: `within ${radiusKm} km of ${label}`,
-    truncated: false,
-    items: items
-      .slice(0, Math.round(clampNumber(args.limit, 1, 50, 12)))
-      .map((item) => ({
-        layerKey: item.layerKey,
-        id: item.id,
-        ...(item.icao24 ? { icao24: item.icao24 } : {}),
-        ...(item.callsign ? { callsign: item.callsign } : {}),
-        ...(Number.isFinite(item.distance)
-          ? { distanceKm: Math.round(item.distance / 100) / 10 }
-          : {}),
-      })),
-    summary: { count },
-    coverage: {
-      layersQueried: result?.coverage?.layersQueried || [],
-      scope: `window:${radiusKm}km@${label}`,
-      followUp: false,
-      note: 'Contacts window engine — the same computation and cohort the Contacts panel displays, so this count matches the panel exactly — counts cover loaded data; the flights layer loads by viewport.',
+    listed: items.length,
+    items,
+    summary: selection.summary,
+    ...(result?.partial
+      ? { partial: true, unanswered: [...(result.unanswered || [])] }
+      : {}),
+    display: {
+      scope: `within ${radiusKm} km of ${label} (Contacts window)`,
     },
+    coverage,
     // (D) The answer always says whose window it is and which engine produced it.
     window: {
       engine: 'contacts-window',
       centeredOn: label,
       radiusKm,
-      flights: window.flights.length,
-      military: window.military.length,
-      aircraft: window.aircraft,
+      flights: snapshot.cohorts?.flights?.count ?? 'unknown',
+      military: snapshot.cohorts?.military?.count ?? 'unknown',
+      aircraft:
+        Number.isFinite(snapshot.cohorts?.flights?.count) &&
+        Number.isFinite(snapshot.cohorts?.military?.count)
+          ? snapshot.cohorts.flights.count + snapshot.cohorts.military.count
+          : 'unknown',
+      complete,
+      evaluatedAt: snapshot.evaluatedAt || null,
     },
-    ...(activeContactsWindow(dataManager)
-      ? { contactsWindow: activeContactsWindow(dataManager) }
+    ...(snapshot.contactsWindow
+      ? { contactsWindow: { ...snapshot.contactsWindow } }
       : {}),
+    feedProvenance,
+    feedState: feedProvenance.overall,
+  };
+  return {
+    answer,
+    memory: {
+      matched: selection.matched,
+      // Follow-up ranking belongs to this retained Contacts evaluation, not
+      // the camera's current position. Keep the accessor with its row owners.
+      distanceOf: (row) => distanceKm.get(row),
+      layerKeys: wanted,
+      coverage,
+      unanswered: [...(result?.unanswered || [])],
+      scopeLabel: answer.scopeLabel,
+      scopeDetail: answer.display.scope,
+    },
   };
 }
 
@@ -3297,8 +3916,10 @@ function centerMatchesSubject(center, subjectPosition) {
   const subjectLat = Cesium.Math.toDegrees(carto.latitude);
   const subjectLon = Cesium.Math.toDegrees(carto.longitude);
   return (
-    haversineKm(subjectLat, subjectLon, center.lat, center.lon) <=
-    SUBJECT_CENTER_TOLERANCE_KM
+    greatCircleKm(
+      { lat: subjectLat, lon: subjectLon },
+      { lat: center.lat, lon: center.lon },
+    ) <= SUBJECT_CENTER_TOLERANCE_KM
   );
 }
 
@@ -3588,7 +4209,7 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   for (const [cityId, city] of Object.entries(CITY_POIS)) {
     for (let poiIndex = 0; poiIndex < city.pois.length; poiIndex++) {
       const poi = city.pois[poiIndex];
-      const distanceKm = haversineKm(latitude, longitude, poi.lat, poi.lon);
+      const distanceKm = greatCircleKm({ lat: latitude, lon: longitude }, poi);
       if (distanceKm > maxDistanceKm) continue;
       matches.push({
         name: poi.name,
@@ -3601,20 +4222,6 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
     }
   }
   return matches.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 5);
-}
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const toRad = (value) => Cesium.Math.toRadians(value);
-  const radiusKm = 6371.0088;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  return 2 * radiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function coarseBasemapPlace(
@@ -4056,46 +4663,6 @@ function dominantValue(values) {
   };
 }
 
-function summarizeEntity(viewer, entity, { includeProperties = false } = {}) {
-  const now = Cesium.JulianDate.now();
-  if (entity.__gevContextId) {
-    const store = window.__gevContextStore;
-    const record = store?.entities?.get(entity.__gevContextId);
-    if (record) return summarizeContextRecord(record, { includeProperties });
-  }
-  const props = propertyObject(entity);
-  const layerId = entity.__localLayerId || props.layerId || null;
-  const tags = props.tags || {};
-  const label = cleanText(
-    props.name ||
-      tags.name ||
-      tags['name:en'] ||
-      tags.official_name ||
-      tags.operator ||
-      props.operator ||
-      entity.name ||
-      layerTitle(layerId),
-  );
-  const position =
-    entity.__localBaseCartesian ||
-    entity.position?.getValue?.(now) ||
-    polygonCenter(entity, now);
-  const carto = position ? Cesium.Cartographic.fromCartesian(position) : null;
-  return {
-    id: String(entity.id || ''),
-    name: label || layerTitle(layerId),
-    layerId,
-    layerName: layerTitle(layerId),
-    latitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.latitude).toFixed(6))
-      : null,
-    longitude: carto
-      ? Number(Cesium.Math.toDegrees(carto.longitude).toFixed(6))
-      : null,
-    properties: includeProperties ? compactProperties(props) : undefined,
-  };
-}
-
 function summarizeContextRecord(record, { includeProperties = false } = {}) {
   return {
     id: String(record.id || ''),
@@ -4112,31 +4679,6 @@ function summarizeContextRecord(record, { includeProperties = false } = {}) {
       : undefined,
     active: isContextRecordActive(record),
   };
-}
-
-function polygonCenter(entity, now) {
-  const hierarchy = entity.polygon?.hierarchy?.getValue?.(now);
-  const positions = hierarchy?.positions;
-  if (!positions?.length) return null;
-  return Cesium.BoundingSphere.fromPoints(positions).center;
-}
-
-function propertyObject(entity) {
-  const raw = entity?.properties?.getValue?.(Cesium.JulianDate.now()) || {};
-  return unwrapProperties(raw);
-}
-
-function unwrapProperties(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(unwrapProperties);
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    out[key] =
-      entry && typeof entry.getValue === 'function'
-        ? unwrapProperties(entry.getValue(Cesium.JulianDate.now()))
-        : unwrapProperties(entry);
-  }
-  return out;
 }
 
 function compactProperties(props) {
@@ -4200,24 +4742,20 @@ function clampNumber(value, min, max, fallback) {
  * the voice payload. One engine per runner keeps follow-up memory
  * ("which of those is closest?") scoped to the session.
  */
-/** Layers whose loaded set follows the camera, so a loaded count is not a world count. */
-const VIEWPORT_LOADED_LAYERS = new Set(['flights']);
 
 /**
- * The Contacts panel's own counts, or null when Contacts has no subject.
- * Read through the awareness snapshot the panel renders, so the two cannot
- * diverge no matter which surface asks.
- * @returns {object|null} Panel-equivalent window counts.
+ * Most records one layer hands a single query. Above every loaded feed seen
+ * so far (flights ~8k, vessels ~12k, a 24 h global FIRMS day ~160k), so
+ * answers count the whole loaded set; a feed past it reports
+ * returned/total/truncated rather than a silently short count.
  */
-function activeContactsWindow(dataManager) {
-  try {
-    const layer = dataManager?.layers?.get('military-awareness')?.module;
-    return (
-      layer?.contactsWindowFromSnapshot?.(layer.getContextSnapshot?.()) ?? null
-    );
-  } catch {
-    return null;
-  }
+const ANALYST_RECORD_CAP = 250_000;
+/** A voice-enabled layer is still filling its first poll for this long. */
+const ANALYST_WARMUP_MS = 45_000;
+
+function layerIsWarming(enabledAt, layerKey) {
+  const at = enabledAt.get(layerKey);
+  return Boolean(at && Date.now() - at < ANALYST_WARMUP_MS);
 }
 
 function analystProviders(
@@ -4232,18 +4770,29 @@ function analystProviders(
         undefined,
         placeSearch,
       ),
+    isWarming = () => false,
   } = {},
 ) {
+  // Per-layer truncation seen by the last getRecords call.
+  const truncatedBy = new Map();
   return {
     getRecords(layerKey) {
+      truncatedBy.delete(layerKey);
       const layer = dataManager.layers.get(layerKey);
       if (!layer || !dataManager.isEnabled(layerKey)) return [];
       const mod = layer.module;
       if (typeof mod?.getAnalystRecords !== 'function') return [];
       const requestedLimit = recordLimitByLayer?.[layerKey];
-      return Number.isFinite(requestedLimit)
-        ? mod.getAnalystRecords(requestedLimit) || []
-        : mod.getAnalystRecords() || [];
+      const cap = Number.isFinite(requestedLimit)
+        ? requestedLimit
+        : ANALYST_RECORD_CAP;
+      // One past the cap proves whether anything was left out.
+      const rows = mod.getAnalystRecords(Math.min(cap + 1, 2 ** 31)) || [];
+      if (rows.length > cap) {
+        truncatedBy.set(layerKey, true);
+        return rows.slice(0, cap);
+      }
+      return rows;
     },
     getLayerSnapshot(layerKey) {
       const row = dataManager.getAll?.().find((layer) => layer.id === layerKey);
@@ -4256,17 +4805,24 @@ function analystProviders(
       });
     },
     getRecordCoverage(layerKey, rows) {
-      if (!['satellites', 'local-datacenters', 'local-dams'].includes(layerKey))
-        return null;
-      const module = dataManager.layers.get(layerKey)?.module;
-      const loaded = module?.getStats?.().count;
+      if (!truncatedBy.get(layerKey)) return { total: rows.length };
+      const loaded = dataManager.layers
+        .get(layerKey)
+        ?.module?.getStats?.().count;
       return {
-        basis: 'bounded-loaded-records',
-        recordsExamined: rows.length,
-        loadedCount: Number.isFinite(loaded) ? loaded : null,
-        sourceTruncated: Number.isFinite(loaded) ? loaded > rows.length : null,
-        note: 'Counts and ranks apply only to these examined loaded records, not all satellites or infrastructure; distance is ground great-circle distance.',
+        total: Number.isFinite(loaded) && loaded > rows.length ? loaded : null,
+        truncated: true,
       };
+    },
+    isWarming,
+    /** The layer's own status text for an empty result, e.g. "Fly below 400 km". */
+    getEmptyNote(layerKey) {
+      const stats =
+        dataManager.layers.get(layerKey)?.module?.getStats?.() || {};
+      const note = [stats.coverage, stats.statusMessage].find(
+        (value) => typeof value === 'string' && value.trim(),
+      );
+      return note ? note.trim() : null;
     },
     resolveRegionRing,
     /**
@@ -4304,118 +4860,194 @@ function analystProviders(
   };
 }
 
+/** Identity fields every compact analyst item keeps when present. */
+const ANALYST_IDENTITY_FIELDS = Object.freeze([
+  'icao24',
+  'mmsi',
+  'registration',
+  'label',
+  'callsign',
+  'name',
+  'noradId',
+]);
+
+/**
+ * Compact one analyst record for the voice payload: identity, position (so a
+ * follow-up can fly to it), distance, and that layer's manifest fields with
+ * times as ISO text. The full record set stays engine-side for follow-ups.
+ *
+ * `icao24`/`mmsi` ride along because the tool instructions tell the model to
+ * hand this result straight to track_entity, and `id` is a DISPLAY label
+ * (callsign, else registration, else hex). A callsign-less contact therefore
+ * handed track_entity a tail number the lookup could not resolve, and the
+ * model burned the turn on retries (owner field session 2026-08-21, 23:48).
+ * @param {object} r Engine record.
+ * @returns {object} Compact item.
+ */
+function compactAnalystItem(r) {
+  const compact = { layerKey: r.layerKey, id: r.id };
+  const present = (value) => value !== null && value !== undefined;
+  for (const key of ANALYST_IDENTITY_FIELDS)
+    if (present(r[key])) compact[key] = r[key];
+  if (Number.isFinite(r.lat) && Number.isFinite(r.lon)) {
+    compact.lat = Math.round(r.lat * 1e4) / 1e4;
+    compact.lon = Math.round(r.lon * 1e4) / 1e4;
+  }
+  if (present(r.distanceKm)) compact.distanceKm = r.distanceKm;
+  const fields = voiceLayer(r.layerKey)?.query?.fields || {};
+  for (const [key, spec] of Object.entries(fields)) {
+    if (!present(r[key]) || key in compact) continue;
+    if (spec.type === 'time') {
+      const ms = Number(r[key]);
+      // A finite value can still be past Date's range, where toISOString throws.
+      const time = new Date(ms);
+      if (Number.isFinite(time.getTime())) {
+        if (key === 'lastContactAtMs') compact.lastContactAtMs = ms;
+        else compact.time = time.toISOString();
+      }
+    } else compact[key] = r[key];
+  }
+  if (present(r.ageHours)) compact.ageHours = r.ageHours;
+  return compact;
+}
+
+/** Refusal fields the analyst engine owns and the model must receive. */
+const ANALYST_REFUSAL_FIELDS = Object.freeze([
+  'allowed',
+  'field',
+  'expected',
+  'layers',
+  'layerStatus',
+  'cancelled',
+]);
+
+const VIEWPORT_COVERAGE_NOTE = 'the flights layer loads by viewport';
+
+/** Resolve omitted follow-up scope from the engine's retained coverage. */
+function effectiveAnalystScopeKind(args, coverage) {
+  const explicit = String(args.scope?.kind || '').toLowerCase();
+  if (explicit) return explicit;
+  const retained = String(coverage?.scope || '')
+    .split(':', 1)[0]
+    .toLowerCase();
+  if (retained === 'window') return 'radius';
+  if (['anywhere', 'radius', 'region', 'view'].includes(retained))
+    return retained;
+  return args.followUp ? 'anywhere' : 'view';
+}
+
+/** Add the viewport qualification without replacing retained provenance. */
+function withViewportCoverageNote(coverage) {
+  if (!coverage) return coverage;
+  const current = typeof coverage.note === 'string' ? coverage.note : '';
+  if (current.includes(VIEWPORT_COVERAGE_NOTE)) return coverage;
+  const separator = current ? '; ' : '';
+  return {
+    ...coverage,
+    note: current
+      ? `${current}${separator}${VIEWPORT_COVERAGE_NOTE}`
+      : VIEWPORT_COVERAGE_NOTE,
+  };
+}
+
+/** Whether this query counts records from a viewport-loaded layer. */
+function isViewportScopedAnalystResult(args, coverage) {
+  const scopeKind = effectiveAnalystScopeKind(args, coverage);
+  return (
+    (scopeKind === 'radius' || scopeKind === 'view') &&
+    (coverage?.layersQueried || []).some(
+      (layer) => voiceLayer(layer.layerKey)?.query?.viewportLoaded,
+    )
+  );
+}
+
 async function runAnalystQuery(
   analystEngine,
   dataManager,
   args = {},
   _layerEnabledAt,
+  isCurrent = () => true,
+  signal = undefined,
 ) {
-  const result = await analystEngine.query({
-    layers: Array.isArray(args.layers) ? args.layers : undefined,
-    scope: args.scope,
-    filters: Array.isArray(args.filters) ? args.filters : [],
-    sortBy: args.sortBy || null,
-    sortDir: args.sortDir,
-    limit: args.limit,
-    followUp: Boolean(args.followUp),
-  });
-  if (!result.ok)
-    return {
+  let entityWindow = null;
+  const result = await analystEngine.query(
+    {
+      layers: Array.isArray(args.layers) ? args.layers : undefined,
+      scope: args.scope,
+      filters: Array.isArray(args.filters) ? args.filters : [],
+      sortBy: args.sortBy || null,
+      sortDir: args.sortDir,
+      limit: args.limit,
+      followUp: Boolean(args.followUp),
+    },
+    {
+      isCurrent,
+      signal,
+      beforeCommit: async (candidate) => {
+        const projected = await aircraftProximityWindowForQuery(
+          dataManager,
+          args,
+          candidate,
+          isCurrent,
+        );
+        if (
+          projected?.answer &&
+          projected?.memory &&
+          isViewportScopedAnalystResult(args, projected.answer.coverage)
+        ) {
+          const coverage = withViewportCoverageNote(projected.answer.coverage);
+          projected.answer.coverage = coverage;
+          projected.memory.coverage = coverage;
+        }
+        entityWindow = projected?.answer || null;
+        return projected?.memory || null;
+      },
+    },
+  );
+  if (!result.ok) {
+    const refusal = {
       ok: false,
       action: 'analyst_query',
-      ...(result.code ? { code: result.code } : {}),
+      code: result.code || null,
       error: result.error,
-      coverage: result.coverage,
     };
-  // Compact payload for the voice model: identity + the fields queries sort/
-  // filter on. The full record set stays engine-side for follow-ups.
-  //
-  // `icao24`/`mmsi` ride along because the tool instructions tell the model to
-  // hand this result straight to track_entity, and `id` is a DISPLAY label
-  // (callsign, else registration, else hex). A callsign-less contact therefore
-  // handed track_entity a tail number the lookup could not resolve, and the
-  // model burned the turn on retries (owner field session 2026-08-21, 23:48).
-  const items = result.items.map((r) => {
-    const compact = { layerKey: r.layerKey, id: r.id };
-    for (const k of [
-      'icao24',
-      'mmsi',
-      'registration',
-      'label',
-      'callsign',
-      'name',
-      'altitudeM',
-      'speedMps',
-      'speedKts',
-      'frp',
-      'magnitude',
-      'shipType',
-      'destination',
-      'operator',
-      'routeOrigin',
-      'routeDestination',
-      'aircraftClass',
-      'military',
-      'onGround',
-      'distanceKm',
-      'confidence',
-      'place',
-      'noradId',
-      'satelliteClass',
-      'group',
-      'river',
-      'output',
-      'capacity',
-    ]) {
-      if (r[k] !== null && r[k] !== undefined) compact[k] = r[k];
-    }
-    return compact;
-  });
+    // The engine's semantic fields pass through unchanged: a cancellation
+    // stays a cancellation.
+    for (const key of ANALYST_REFUSAL_FIELDS)
+      if (result[key] !== undefined) refusal[key] = result[key];
+    if (result.coverage) refusal.coverage = result.coverage;
+    return refusal;
+  }
+  const items = result.items.map(compactAnalystItem);
   // Warm-up honesty: a layer enabled seconds ago hasn't finished its first
-  // poll (entity layers render one interval behind live BY DESIGN) — tell the
-  // model so a low count is narrated as "still loading", not as fact.
+  // poll (entity layers render one interval behind live BY DESIGN) — so a low
+  // count is "still loading", not fact.
   const warming = (result.coverage?.layersQueried || [])
-    .filter((l) => {
-      const at = _layerEnabledAt.get(l.layerKey);
-      return at && Date.now() - at < 45_000;
-    })
+    .filter((l) => layerIsWarming(_layerEnabledAt, l.layerKey))
     .map((l) => l.layerKey);
   if (warming.length) {
-    result.coverage.warmup = `${warming.join(', ')} enabled moments ago — data is still loading; counts will rise for ~30-45s. Say so.`;
+    const note = `${warming.join(', ')} just turned on — still loading, counts will rise`;
+    result.display.caveat = result.display.caveat
+      ? `${note}; ${result.display.caveat}`
+      : note;
   }
   // A radius/view count over a viewport-loaded layer counts what is LOADED, and
   // the flights layer reloads as the camera moves — so this number can sit well
-  // under the Contacts cohort without either being wrong. Say which is which.
-  const scopeKind = String(args.scope?.kind || 'view').toLowerCase();
-  const viewportScoped =
-    (scopeKind === 'radius' || scopeKind === 'view') &&
-    (result.coverage?.layersQueried || []).some((l) =>
-      VIEWPORT_LOADED_LAYERS.has(l.layerKey),
-    );
+  // under the Contacts cohort without either being wrong.
+  const scopeKind = effectiveAnalystScopeKind(args, result.coverage);
+  const viewportScoped = isViewportScopedAnalystResult(args, result.coverage);
   if (viewportScoped && result.coverage) {
-    result.coverage.note = `${result.coverage.note} — counts cover loaded data; the flights layer loads by viewport`;
+    // The engine's follow-up memory retains this same object, so update its
+    // note in place after deriving the qualified copy.
+    result.coverage.note = withViewportCoverageNote(result.coverage).note;
   }
   // ENTITY-CENTRED NEARBY: answered by the SAME engine that fills the Contacts
   // panel, so the spoken number and the panel readout for one centre cannot
   // differ. The generic record/scope engine still owns explicit regions and
   // arbitrary points — only "how many aircraft around <this contact>" is
   // unified, because that is the question the panel is already answering.
-  const entityWindow = aircraftProximityWindowForQuery(
-    dataManager,
-    args,
-    result,
-  );
   if (entityWindow) {
-    const provenance = feedProvenanceEnvelope(
-      layerSnapshots(dataManager.getAll?.() || []).filter(
-        (layer) => layer.enabled && ['flights', 'military'].includes(layer.id),
-      ),
-    );
-    return {
-      ...entityWindow,
-      feedProvenance: provenance,
-      feedState: provenance.overall,
-    };
+    return entityWindow;
   }
 
   const contactsWindow = activeContactsWindow(dataManager);
@@ -4448,12 +5080,21 @@ async function runAnalystQuery(
     ok: true,
     action: 'analyst_query',
     count: result.count,
+    // False when a layer was capped: the count is a floor ("at least").
+    complete: result.complete !== false,
+    ...(result.partial
+      ? { partial: true, unanswered: result.unanswered || [] }
+      : {}),
+    ...(result.centeredOn ? { centeredOn: result.centeredOn } : {}),
     // Every count names its scope in words; a bare number is what made two
     // honest answers look like a contradiction.
     scopeLabel: result.scopeLabel,
-    truncated: result.truncated,
+    // More matched than listed; the count above is still complete.
+    listed: items.length,
     items,
     summary: result.summary,
+    // On-screen detail (scope, feed window, caveats); not for recital.
+    display: result.display,
     coverage: result.coverage,
     feedProvenance: result.coverage?.feedProvenance || null,
     feedState: result.coverage?.feedProvenance?.overall || null,

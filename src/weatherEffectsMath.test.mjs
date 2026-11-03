@@ -10,6 +10,15 @@ test('missing weather fails clear instead of inventing effects', () => {
   assert.equal(profile.storm, 0);
 });
 
+test('a missing weather code is unavailable, not clear', () => {
+  for (const weatherCode of [null, undefined, '']) {
+    const profile = deriveWeatherEffectProfile({ weatherCode, cloudCoverPct: 90 });
+    assert.equal(profile.available, false, `weatherCode ${weatherCode}`);
+    assert.equal(profile.cloud, 0);
+  }
+  assert.equal(deriveWeatherEffectProfile({ weatherCode: 0 }).available, true);
+});
+
 test('clear weather follows observed cloud cover without precipitation', () => {
   const profile = deriveWeatherEffectProfile({
     weatherCode: 1,

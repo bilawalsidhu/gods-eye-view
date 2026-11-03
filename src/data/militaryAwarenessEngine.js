@@ -1,5 +1,11 @@
 /** Pure proximity helpers for Global Context. No capability modeling. */
 
+import { msg, t } from '../i18n/index.js';
+import { UNNAMED_PLACE_NAMES } from './installationNames.js';
+import { formatDistanceText } from './distanceFormat.js';
+
+const UNNAMED_NAMES = new Set(UNNAMED_PLACE_NAMES);
+
 export const AWARENESS_RADIUS_M = 250000;
 export const AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M = 16000000;
 export const AWARENESS_RELATIONSHIP = Object.freeze({
@@ -41,13 +47,14 @@ export function findByDoublingRadius(
 
 /** @param {number} meters @returns {string} */
 export function formatAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
-  return meters < 1000
-    ? `${Math.round(meters)} m`
-    : `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+  return formatDistanceText(meters) ?? '—';
 }
 
-/** Return a stable visible label without leaking missing values into UI text. */
+/**
+ * Return a stable visible label without leaking missing values into UI text.
+ * The English name the data gives an unnamed installation ("Military area")
+ * is shown in the UI language; mapped names and callsigns show as they are.
+ */
 export function formatAwarenessLabel(value) {
   if (value && typeof value === 'object') {
     for (const candidate of [
@@ -63,7 +70,11 @@ export function formatAwarenessLabel(value) {
     }
     return '—';
   }
-  if (typeof value === 'string') return value.trim() || '—';
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return '—';
+    return UNNAMED_NAMES.has(text) ? t(text) : text;
+  }
   if (Number.isFinite(value)) return String(value);
   return '—';
 }
@@ -71,7 +82,8 @@ export function formatAwarenessLabel(value) {
 /**
  * Summarize sorted nearby results without promoting missing/stale feeds to a
  * negative finding. `UNKNOWN` is an input-data state, never an out-of-range
- * claim in this MVP.
+ * claim in this MVP. `reason` is English data; the awareness panel shows it
+ * in the UI language.
  */
 export function summarizeAwarenessCohort(
   items,
@@ -82,14 +94,14 @@ export function summarizeAwarenessCohort(
       relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
       count: null,
       nearest: [],
-      reason: 'feed unavailable',
+      reason: msg('feed unavailable'),
     };
   if (stale)
     return {
       relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
       count: null,
       nearest: [],
-      reason: 'feed stale',
+      reason: msg('feed stale'),
     };
   const normalized = (Array.isArray(items) ? items : [])
     .filter(
@@ -106,8 +118,8 @@ export function summarizeAwarenessCohort(
     count: normalized.length,
     nearest: normalized.slice(0, limit),
     reason: normalized.length
-      ? 'observed or mapped nearby context'
-      : 'no observed or mapped objects in current feeds',
+      ? msg('observed or mapped nearby context')
+      : msg('no observed or mapped objects in current feeds'),
   };
 }
 

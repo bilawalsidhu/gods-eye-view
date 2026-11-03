@@ -1,7 +1,7 @@
 import { validTransitIdentifier } from './transitHistory.js';
 export { validTransitIdentifier } from './transitHistory.js';
 /** Bounded, process-local operator position history. No upstream or scene access. */
-export const TRANSIT_HISTORY_LIMITS = Object.freeze({
+const TRANSIT_HISTORY_LIMITS = Object.freeze({
   retentionMs: 900000,
   fixes: 128,
   feedBytes: 16 * 1024 * 1024,
@@ -328,8 +328,12 @@ export function createTransitHistory({
           t > now + 10000
         )
           continue;
+        const byVehicle = feed.vehicleMode?.(record.id);
         const mode =
-          feed.routeMode?.(record.routeId) || feed.defaultMode || 'unknown';
+          (byVehicle !== 'unknown' && byVehicle) ||
+          feed.routeMode?.(record.routeId) ||
+          feed.defaultMode ||
+          'unknown';
         const context = contextOf(record, mode);
         if (!context) continue;
         const key = `${feed.id}\u0000${record.id}`;

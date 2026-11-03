@@ -132,6 +132,18 @@ test('cockpit refuses without stamping or releasing anything', () => {
   }
 });
 
+test('weather layers name their destination in the Cockpit refusal', () => {
+  const expected = {
+    weather: 'Exit cockpit to view weather coverage',
+    cyclone: 'Exit cockpit to fly to a cyclone',
+  };
+  for (const [noun, text] of Object.entries(expected)) {
+    const s = spy();
+    runExplicitNavigation({ cockpitActive: true, noun, ...s });
+    assert.deepEqual(s.log, [`toast:${text}`]);
+  }
+});
+
 test('disposed navigation is inert before any camera or UI mutation', () => {
   const s = spy();
   const result = runExplicitNavigation({ disposed: true, cockpitActive: true, ...s });

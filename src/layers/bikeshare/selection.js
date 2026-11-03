@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
@@ -22,7 +23,9 @@ export function createSelection({
     const stationName = String(record?.stationName || '').trim();
     const stationLabel =
       stationName ||
-      (record?.stationId ? `Station ${record.stationId}` : 'Station');
+      (record?.stationId
+        ? t('Station {id}', { id: record.stationId })
+        : t('Station'));
     const bikes = Number.isFinite(record?.bikesAvailable)
       ? record.bikesAvailable
       : '?';
@@ -33,14 +36,18 @@ export function createSelection({
 
     const lines = [
       stationLabel,
-      `🚲 ${bikes} avail · ${docks} docks · ${capacity} cap`,
+      t('🚲 {bikes} avail · {docks} docks · {capacity} cap', {
+        bikes,
+        docks,
+        capacity,
+      }),
     ];
 
     // Append warnings for stations that are offline or partially non-operational
     const abnormal = [];
-    if (record?.isInstalled === false) abnormal.push('⚠️ Not installed');
-    if (record?.isRenting === false) abnormal.push('⚠️ Not renting');
-    if (record?.isReturning === false) abnormal.push('⚠️ Not returning');
+    if (record?.isInstalled === false) abnormal.push(t('⚠️ Not installed'));
+    if (record?.isRenting === false) abnormal.push(t('⚠️ Not renting'));
+    if (record?.isReturning === false) abnormal.push(t('⚠️ Not returning'));
     if (abnormal.length > 0) {
       lines.push(abnormal.join(' · '));
     }

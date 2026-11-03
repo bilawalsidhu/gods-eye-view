@@ -1,11 +1,25 @@
 import * as Cesium from 'cesium';
+import { t, msg } from '../../i18n/index.js';
+
+// ingestion.js is a portable export (package.json) and writes English labels
+// into state; translate the known ones here, pass anything else through.
+const FEED_STATE_LABEL_KEYS = Object.freeze({
+  'refreshing...': msg('refreshing...'),
+  'loading...': msg('loading...'),
+  'awaiting first AIS position…': msg('awaiting first AIS position…'),
+});
+
+function localizeFeedLabel(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return raw;
+  const key = FEED_STATE_LABEL_KEYS[raw.trim()];
+  return key ? t(key) : raw;
+}
 import {
   AIS_DEGRADED_STATUSES,
   AIS_HEALTHY_STATUSES,
   AIS_STATUS_REASON,
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
-  AIS_FIRST_CONNECT_LABEL,
 } from './policy.js';
 
 export function createQueries({
@@ -36,7 +50,7 @@ export function createQueries({
   /**
    * Chip text for a feed the server has reported as not delivering.
    * @param {string} status - 'stale' | 'reconnecting' | 'down'
-   * @param {Object} payload - Parsed /api/ais-live JSON.
+   * @param {Object} payload - Parsed /api/vessels JSON.
    * @returns {string}
    */
 
@@ -44,29 +58,31 @@ export function createQueries({
     if (status === 'auth-failed') {
       // Actionable, not a countdown: retrying cannot fix a rejected credential,
       // so the chip asks the operator to do the one thing that can.
-      return 'API key rejected — check AISSTREAM_API_KEY';
+      return t('API key rejected — check AISSTREAM_API_KEY');
     }
     if (status === 'stale') {
       const silentSec = Math.round(Number(payload?.silentForMs) / 1000);
       return Number.isFinite(silentSec) && silentSec > 0
-        ? `feed silent ${silentSec}s — no AIS data`
-        : 'feed silent — no AIS data';
+        ? t('feed silent {seconds}s — no AIS data', { seconds: silentSec })
+        : t('feed silent — no AIS data');
     }
     const attempt = Number(payload?.reconnectAttempt);
-    const suffix =
-      Number.isFinite(attempt) && attempt >= 1 ? ` (attempt ${attempt})` : '';
+    if (Number.isFinite(attempt) && attempt >= 1)
+      return status === 'down'
+        ? t('feed down — retrying slowly (attempt {attempt})', { attempt })
+        : t('reconnecting to feed… (attempt {attempt})', { attempt });
     return status === 'down'
-      ? `feed down — retrying slowly${suffix}`
-      : `reconnecting to feed…${suffix}`;
+      ? t('feed down — retrying slowly')
+      : t('reconnecting to feed…');
   }
 
   /**
-   * Derive a surfaced error string from an /api/ais-live payload, or null when the
+   * Derive a surfaced error string from an /api/vessels payload, or null when the
    * feed has accepted product data. Socket transport, message receipt, and usable
    * vessel positions are separate health stages: an open socket with no message
    * or no accepted positions must not read as a fresh successful update.
    *
-   * @param {Object|null|undefined} payload - Parsed /api/ais-live JSON.
+   * @param {Object|null|undefined} payload - Parsed /api/vessels JSON.
    * @param {number} acceptedRowCount - Number of rows accepted by vessel normalization.
    * @returns {string|null} A short reason for the chip, or null if healthy.
    */
@@ -82,15 +98,16 @@ export function createQueries({
     if (acceptedRowCount > 0) return null; // accepted rows may be stale while reconnecting, but remain usable
     if (AIS_HEALTHY_STATUSES.has(status)) {
       return payload?.lastMessageAt
-        ? 'awaiting usable AIS positions…'
-        : 'awaiting first AIS message…';
+        ? t('awaiting usable AIS positions…')
+        : t('awaiting first AIS message…');
     }
     if (!status) return null;
     const detail =
       typeof payload.error === 'string' && payload.error.trim()
         ? payload.error.trim()
         : '';
-    const reason = AIS_STATUS_REASON[status] || 'feed unavailable';
+    // The reasons are English in policy.js (msg) and shown in the UI language.
+    const reason = t(AIS_STATUS_REASON[status] || msg('feed unavailable'));
     return detail && !AIS_STATUS_REASON[status]
       ? `${reason} (${detail})`
       : reason;
@@ -106,8 +123,8 @@ export function createQueries({
 
   /**
    * Classify one server snapshot before any destructive reconciliation.
-   * @param {Object|null|undefined} payload - Parsed /api/ais-live payload.
-   * @returns {{transportStatus: string|null, lastMessageAt: number|string|null,
+   * @param {Object|null|undefined} payload - Parsed /api/vessels payload.
+   * @returns {{emptyCoverage: boolean, transportStatus: string|null, lastMessageAt: number|string|null,
    *   rawRows: Array<Object>, acceptedRows: Array<Object>, rawRowCount: number,
    *   acceptedRowCount: number, error: string|null}}
    */
@@ -119,7 +136,16 @@ export function createQueries({
       typeof payload?.status === 'string' ? payload.status : null;
     const lastMessageAt = payload?.lastMessageAt ?? null;
     const acceptedRowCount = acceptedRows.length;
+    const emptyCoverage =
+      rawRows.length === 0 &&
+      payload?.rawRowCount === 0 &&
+      payload?.complete === true &&
+      payload?.freshness === 'current' &&
+      AIS_HEALTHY_STATUSES.has(transportStatus) &&
+      Number.isFinite(Number(lastMessageAt)) &&
+      Number(lastMessageAt) > 0;
     return {
+      emptyCoverage,
       transportStatus,
       lastMessageAt,
       rawRows,
@@ -130,9 +156,10 @@ export function createQueries({
           ? payload.rawRowCount
           : rawRows.length,
       acceptedRowCount,
-      error:
-        deriveAisFeedError(payload, acceptedRowCount) ||
-        (acceptedRowCount === 0 ? 'awaiting usable AIS positions…' : null),
+      error: emptyCoverage
+        ? null
+        : deriveAisFeedError(payload, acceptedRowCount) ||
+          (acceptedRowCount === 0 ? t('awaiting usable AIS positions…') : null),
     };
   }
 
@@ -140,7 +167,7 @@ export function createQueries({
    * Map one internal vessel record to a plain JSON-safe analyst record
    * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
    * fields are null, never NaN/undefined. navStatus is always null: the
-   * /api/ais-live proxy does not surface AIS NavigationalStatus, so it
+   * /api/vessels proxy does not surface AIS NavigationalStatus, so it
    * cannot be derived client-side.
    * @param {Object|null|undefined} record - `state.records.byMmsi`/`state.records.all` entry.
    * @returns {{id: string|null, mmsi: string|null, name: string|null,
@@ -504,8 +531,8 @@ export function createQueries({
         lastUpdate: state.feed.lastUpdate,
         loading: state.feed.loading || waitingForFirstPosition,
         loadingLabel: waitingForFirstPosition
-          ? AIS_FIRST_CONNECT_LABEL
-          : state.feed.loadingLabel,
+          ? t('awaiting first AIS position…')
+          : localizeFeedLabel(state.feed.loadingLabel),
         error: state.feed.error,
         stale: state.feed.stale,
         partial: state.feed.partial,

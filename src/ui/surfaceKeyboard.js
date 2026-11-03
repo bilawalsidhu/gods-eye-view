@@ -39,7 +39,11 @@ export function createSurfaceKeyboard({
       ),
     ].filter(
       (node) =>
-        !node.hasAttribute('disabled') && node.getClientRects().length > 0,
+        !node.hasAttribute('disabled') &&
+        !node.matches?.(':disabled') &&
+        !(Number(node.getAttribute?.('tabindex')) < 0) &&
+        !node.closest?.('[inert]') &&
+        node.getClientRects().length > 0,
     );
     if (!order.length) return;
     const first = order[0];

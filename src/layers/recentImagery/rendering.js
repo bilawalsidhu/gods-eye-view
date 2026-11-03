@@ -70,6 +70,8 @@ function admitTileRequests(provider, admission, requestRender, retry) {
  */
 export function createRecentImageryRenderer({
   cesium = Cesium,
+  tileTemplate = gibsTemplate,
+  credit = 'NASA GIBS',
   maxTileRequests = 6,
   requestRender = () => {},
   setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
@@ -101,7 +103,7 @@ export function createRecentImageryRenderer({
   function createProvider(candidate, box) {
     const spec = PRODUCTS[candidate.product];
     const provider = new cesium.UrlTemplateImageryProvider({
-      url: gibsTemplate(candidate.product, candidate.day),
+      url: tileTemplate(candidate.product, candidate.day),
       subdomains: ['a', 'b', 'c'],
       minimumLevel: 0,
       maximumLevel: spec.maxLevel,
@@ -112,7 +114,7 @@ export function createRecentImageryRenderer({
         box.east,
         box.north,
       ),
-      credit: 'NASA GIBS',
+      credit,
       hasAlphaChannel: spec.format === 'png',
     });
     return admitTileRequests(provider, admission, requestRender, retry);

@@ -14,16 +14,34 @@ async function readRequestBodyCapped(req, maxBytes) {
   return Buffer.concat(chunks);
 }
 
-function readRequestBody(req, maxBytes = 1024 * 1024) {
+/** Optional cancellation discards buffered data while the request drains. */
+function readRequestBody(req, maxBytes = 1024 * 1024, signal) {
   return new Promise((resolve, reject) => {
     let total = 0;
     let bodyTooLarge = false;
+    let settled = false;
     const chunks = [];
-    req.on('data', (chunk) => {
+    const stopReading = () => {
+      if (!signal) return;
+      req.off('data', data);
+      req.off('end', end);
+      signal.removeEventListener('abort', abort);
+    };
+    const fail = (error) => {
+      if (signal) {
+        if (settled) return;
+        settled = true;
+        chunks.length = 0;
+        signal.removeEventListener('abort', abort);
+      }
+      reject(error);
+    };
+    const abort = () => fail(signal.reason);
+    const data = (chunk) => {
       // Keep draining after the cap without retaining more bytes. Destroying
       // the request also destroys its socket, so the handler cannot deliver
       // the fixed error response it constructs for BODY_TOO_LARGE.
-      if (bodyTooLarge) return;
+      if (bodyTooLarge || settled) return;
       total += chunk.length;
       if (total > maxBytes) {
         // Same marker readRequestBodyCapped sets, so a caller can tell an
@@ -32,15 +50,42 @@ function readRequestBody(req, maxBytes = 1024 * 1024) {
         chunks.length = 0;
         const error = new Error(`Request body exceeds ${maxBytes} bytes`);
         error.code = 'BODY_TOO_LARGE';
-        reject(error);
+        fail(error);
         return;
       }
       chunks.push(chunk);
-    });
-    req.on('end', () => {
+    };
+    const end = () => {
+      if (settled) {
+        stopReading();
+        return;
+      }
       if (!bodyTooLarge) resolve(Buffer.concat(chunks).toString('utf8'));
-    });
-    req.on('error', reject);
+      if (signal) {
+        settled = true;
+        chunks.length = 0;
+        stopReading();
+      }
+    };
+    const close = () => {
+      fail(
+        new DOMException('Request closed before its body ended', 'AbortError'),
+      );
+      stopReading();
+      req.off('error', fail);
+      req.off('close', close);
+    };
+    if (signal) {
+      // Abort/overflow release retained bytes but keep draining. Retain an
+      // error handler until close, including a late error after end/abort.
+      req.on('close', close);
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+    }
+    req.on('data', data);
+    req.on('end', end);
+    req.on('error', fail);
+    if (signal && req.destroyed) close();
   });
 }
 
