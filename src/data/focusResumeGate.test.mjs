@@ -4,6 +4,7 @@ import { applyVesselFocusDeemphasis } from './aisLiveVessels.js';
 import { applyCctvFocusDeemphasis } from './cctv.js';
 import { applySatellitePointFocusDeemphasis } from './satellites.js';
 import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
+import { mirrorBillboard } from './billboardMirror.js';
 
 const params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS, paddingPx: 0 };
 const target = {
@@ -51,14 +52,14 @@ function assertResumeGate(name, makePass) {
 }
 
 assertResumeGate('vessel', () => {
-  const billboard = {
+  const billboard = mirrorBillboard({
     position: { x: 1, y: 2, z: 3 },
     show: true,
     width: 32,
     height: 32,
     scale: 1,
     color: color(),
-  };
+  });
   return {
     pass: ({ nowMs, target: focusTarget, previousActiveCount }) => (
       applyVesselFocusDeemphasis({
@@ -76,14 +77,14 @@ assertResumeGate('vessel', () => {
 });
 
 assertResumeGate('CCTV', () => {
-  const billboard = {
+  const billboard = mirrorBillboard({
     position: { x: 1, y: 2, z: 3 },
     show: true,
     width: 24,
     height: 24,
     scale: 1,
     color: color(),
-  };
+  });
   const record = { camera: { id: 'cam-1' }, billboard };
   return {
     pass: ({ nowMs, target: focusTarget, previousActiveCount }) => (

@@ -79,6 +79,7 @@ import {
   IDLE_CAMERA_COLOR,
   LIVE_CAMERA_COLOR,
 } from '../layers/cctv/policy.js';
+import { mirrorBillboard } from './billboardMirror.js';
 
 const ASPECT = 16 / 9;
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -355,7 +356,7 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
 test('camera icons are violet for video feeds, cyan for stills, amber when active', () => {
   const record = (id, feedType) => ({
     camera: { ...UNCLAMPED_CAMERA, id, feedType, groundElevationM: 0 },
-    billboard: {},
+    billboard: mirrorBillboard({}),
     coverageEntities: [],
     projection: null,
   });
@@ -682,7 +683,7 @@ test('CCTV disable hide sweep hides record visuals and destroys viewsheds withou
       camera: { id: 'a' },
       activationDone: true,
       probeClampRangeM: 105,
-      billboard: { color: 'keep-color', scale: 1.25 },
+      billboard: mirrorBillboard({ color: 'keep-color', scale: 1.25 }),
       coverageEntities: [{ show: true }, { show: true }],
       projection: { planeEntity: { show: true } },
       viewshedPrimitive: viewshedA,
@@ -691,7 +692,7 @@ test('CCTV disable hide sweep hides record visuals and destroys viewsheds withou
       camera: { id: 'b' },
       activationDone: true,
       probeClampRangeM: 146,
-      billboard: { color: 'keep-color', scale: 1 },
+      billboard: mirrorBillboard({ color: 'keep-color', scale: 1 }),
       projection: null,
       viewshedPrimitive: viewshedB,
     },

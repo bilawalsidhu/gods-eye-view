@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
+import { billboardState } from '../../data/billboardMirror.js';
 
 export function createEvidence({
   vesselState,
@@ -40,15 +41,16 @@ export function createEvidence({
     if (!FOCUS_EVIDENCE_DEV || !state.viewer) return [];
     return state.records.all.map((record) => {
       const bb = components.rendering.getVisual(record).billboard;
-      const screen = bb?.position
+      const icon = billboardState(bb);
+      const screen = icon?.position
         ? Cesium.SceneTransforms.worldToWindowCoordinates(
             state.viewer.scene,
-            bb.position,
+            icon.position,
           )
         : null;
       return {
         id: record.mmsi,
-        show: bb?.show === true,
+        show: icon?.show === true,
         alpha: bb?.color?.alpha ?? null,
         x: screen?.x ?? null,
         y: screen?.y ?? null,

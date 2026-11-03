@@ -15,6 +15,7 @@ import {
 } from './groundFloor.js';
 import { unregisterSpriteCollection } from './spriteOrder.js';
 import { isOverlayPointVisible, normalizeOverlayEntry } from '../overlays/worldOverlay.js';
+import { mirrorBillboard } from './billboardMirror.js';
 
 const AUSTIN = { lon: -97.7, lat: 30.2 };
 /** Antipode of Austin — as far behind the limb as a point on Earth can be. */
@@ -34,13 +35,13 @@ const LIMB_DLON = 41.87;
  * the pass does not dirty the collection's vertex buffer needlessly.
  */
 function billboard(position, show = true) {
-  return {
+  return mirrorBillboard({
     position,
     _show: show,
     writes: 0,
     get show() { return this._show; },
     set show(value) { this._show = value; this.writes += 1; },
-  };
+  });
 }
 
 /** Cesium BillboardCollection-shaped stub. */

@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
+import { setBillboard } from '../../data/billboardMirror.js';
 
 export function createSelection({
   vesselState,
@@ -131,9 +132,7 @@ export function createSelection({
       kind: 'vessel',
       id: record.mmsi,
       label: record.name || record.mmsi,
-      position:
-        components.rendering.getVisual(record).billboard?.position ||
-        components.rendering.getVisual(record).position,
+      position: components.rendering.iconPosition(record),
     });
     return true;
   }
@@ -174,8 +173,11 @@ export function createSelection({
     if (components.rendering.getVisual(record).billboard) {
       components.rendering.getVisual(record).billboard.image =
         components.rendering.shipIcon(record, true);
-      components.rendering.getVisual(record).billboard.scale =
-        components.rendering.shipScale(record) * 1.2;
+      setBillboard(
+        components.rendering.getVisual(record).billboard,
+        'scale',
+        components.rendering.shipScale(record) * 1.2,
+      );
     }
     // Rebuild the card set immediately so the full-detail card appears on the
     // click, not up to VISIBILITY_UPDATE_MS later.
@@ -230,8 +232,11 @@ export function createSelection({
     if (components.rendering.getVisual(record)?.billboard) {
       components.rendering.getVisual(record).billboard.image =
         components.rendering.shipIcon(record, false);
-      components.rendering.getVisual(record).billboard.scale =
-        components.rendering.shipScale(record);
+      setBillboard(
+        components.rendering.getVisual(record).billboard,
+        'scale',
+        components.rendering.shipScale(record),
+      );
     }
     state.selectedRecord = null;
     // Drop the full-detail card right away (no-op when the layer is disabled —
