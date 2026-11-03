@@ -58,6 +58,7 @@
   "src/app/startupCamera.test.mjs",
   "src/app/viewer.js",
   "src/app/zoomOutGuard.test.mjs",
+  "src/app/controls.test.mjs",
   "scripts/qa-zoom-out-guard.mjs",
   "src/app/atmosphereCompat.test.mjs",
   "src/standalone/application.js",
