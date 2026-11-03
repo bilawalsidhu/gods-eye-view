@@ -33,7 +33,8 @@
  * Bosch MIC order codes end in a colour letter (B black, G grey, W white)
  * on one shared datasheet; those siblings,
  * and the `x` wildcard registries write for the colour letter, are listed as
- * aliases of the one vendored record.
+ * aliases of the one vendored record. Its `model` leaves the colour out, so
+ * the HUD never names a variant the source did not.
  */
 const RECORDS = [
   {
@@ -276,11 +277,12 @@ const RECORDS = [
   {
     id: 'bosch-mic-7130-pb4',
     brand: 'Bosch',
-    model: 'MIC-7130-PB4',
+    model: 'MIC-7130-P_4',
     type: 'ptz',
     url: 'https://www.cctv-database.com/camera/bosch-mic-7130-pb4/',
     aliases: [
       'MIC IP starlight 7000 HD',
+      'MIC-7130-PB4',
       'MIC-7130-PG4',
       'MIC-7130-PW4',
       'MIC-7130-Px4',
@@ -295,10 +297,15 @@ const RECORDS = [
   {
     id: 'bosch-mic-7502-z30b',
     brand: 'Bosch',
-    model: 'MIC-7502-Z30B',
+    model: 'MIC-7502-Z30',
     type: 'ptz',
     url: 'https://www.cctv-database.com/camera/bosch-mic-7502-z30b/',
-    aliases: ['MIC-7502-Z30G', 'MIC-7502-Z30W', 'MIC-7502-Z30x'],
+    aliases: [
+      'MIC-7502-Z30B',
+      'MIC-7502-Z30G',
+      'MIC-7502-Z30W',
+      'MIC-7502-Z30x',
+    ],
     fov_deg: '2.3-63.7',
     resolution: { mp: 2.13, w: 1920, h: 1080, label: '1080p' },
     ptz: true,
@@ -310,10 +317,15 @@ const RECORDS = [
   {
     id: 'bosch-mic-7522-z30b',
     brand: 'Bosch',
-    model: 'MIC-7522-Z30B',
+    model: 'MIC-7522-Z30',
     type: 'ptz',
     url: 'https://www.cctv-database.com/camera/bosch-mic-7522-z30b/',
-    aliases: ['MIC-7522-Z30G', 'MIC-7522-Z30W', 'MIC-7522-Z30x'],
+    aliases: [
+      'MIC-7522-Z30B',
+      'MIC-7522-Z30G',
+      'MIC-7522-Z30W',
+      'MIC-7522-Z30x',
+    ],
     fov_deg: '2.1-58.3',
     // i18n-ignore: datasheet label
     resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD' },

@@ -291,6 +291,26 @@ test('Bosch MIC colour aliases resolve without accepting unknown variants', () =
   }
 });
 
+test('Bosch MIC HUD summary never names a colour the source did not', () => {
+  assert.equal(
+    specSummary(lookupModelSpec('MIC-7522-Z30W')),
+    'Bosch MIC-7522-Z30 · 1080p HD · COLOR · PTZ',
+  );
+  assert.equal(
+    specSummary(lookupModelSpec('Bosch MIC-7522-Z30x')),
+    'Bosch MIC-7522-Z30 · 1080p HD · COLOR · PTZ',
+  );
+  for (const pattern of ['MIC-7130-P?4', 'MIC-7502-Z30?', 'MIC-7522-Z30?']) {
+    for (const colour of ['B', 'G', 'W', 'x']) {
+      const spec = lookupModelSpec(pattern.replace('?', colour));
+      const summary = specSummary(spec);
+      for (const other of ['B', 'G', 'W', 'x']) {
+        assert.ok(!summary.includes(pattern.replace('?', other)), summary);
+      }
+    }
+  }
+});
+
 test('Bosch MIC catalog enrichment preserves estimated and explicit optics', () => {
   for (const model of [
     'Bosch MIC-7130-Px4',
