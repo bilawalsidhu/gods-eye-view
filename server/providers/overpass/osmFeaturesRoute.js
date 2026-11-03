@@ -6,7 +6,10 @@ import {
   OSM_FEATURE_LIMITS,
   summarizeOsmFeatures,
 } from './osmFeatures.js';
-import { resolveOverpassUpstreams } from './constants.js';
+import {
+  resolveOverpassUpstreams,
+  resolveOverpassUpstreamTag,
+} from './constants.js';
 import { fetchOverpassPayload, overpassPayloadIsData } from './transport.js';
 
 /** Places of interest change slowly: answers are kept a day. */
@@ -148,13 +151,16 @@ function sender(res) {
  * substitute for bulk place search.
  *
  * @param {{use: Function}} middlewares
- * @param {{fetchPayload?: Function, featuresCache?: object, cacheRoot?: string|null, configured?: () => boolean}} [deps]
+ * @param {{fetchPayload?: Function, featuresCache?: object, cacheRoot?: string|null, configured?: () => boolean, upstreamTag?: () => string}} [deps]
  */
 export function installOsmFeaturesRoute(
   middlewares,
   {
     fetchPayload = fetchOverpassPayload,
     configured = () => resolveOverpassUpstreams().length > 0,
+    // Keys each answer to the instance that gave it, as the other Overpass
+    // caches do, so repointing OVERPASS_UPSTREAMS never serves the old one's.
+    upstreamTag = resolveOverpassUpstreamTag,
     cacheRoot = path.join(process.cwd(), '.gev-cache'),
     featuresCache = createBoundedCache({
       dir: cacheRoot ? path.join(cacheRoot, 'osm-features') : null,
@@ -203,7 +209,7 @@ export function installOsmFeaturesRoute(
     res.once?.('close', abort);
     try {
       const answer = await features(
-        `${CACHE_VERSION}|features|${compiled.ql}`,
+        `${CACHE_VERSION}|features|${upstreamTag()}|${compiled.ql}`,
         compiled.ql,
         (parsed) => summarizeOsmFeatures(parsed, compiled),
         controller.signal,

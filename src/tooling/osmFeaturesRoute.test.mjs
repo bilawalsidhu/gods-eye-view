@@ -158,7 +158,10 @@ test('answers are compacted: centres, kept tags, truncation and counts', () => {
   assert.equal(count.count, 5);
 });
 
-function mount(fetchPayload, { featuresCache, configured = () => true } = {}) {
+function mount(
+  fetchPayload,
+  { featuresCache, configured = () => true, upstreamTag } = {},
+) {
   const routes = new Map();
   const writes = [];
   const memoryCache = () => {
@@ -177,6 +180,7 @@ function mount(fetchPayload, { featuresCache, configured = () => true } = {}) {
       fetchPayload,
       cacheRoot: null,
       configured,
+      ...(upstreamTag ? { upstreamTag } : {}),
       featuresCache: featuresCache || memoryCache(),
     },
   );
@@ -252,6 +256,35 @@ test('the route answers, caches, and runs one upstream query at a time', async (
   const refused = await request('preset=hospital&bbox=0,0,9,9');
   assert.equal(refused.status, 400);
   assert.equal(refused.body.code, 'AREA_TOO_LARGE');
+});
+
+test('a cached answer is served only by the Overpass instance that gave it', async () => {
+  let tag = 'instance-a';
+  let upstream = 0;
+  const { request } = mount(
+    async () => {
+      upstream += 1;
+      return {
+        status: 200,
+        body: JSON.stringify({
+          elements: [{ type: 'node', id: 7, lat: 1, lon: 1, tags: {} }],
+        }),
+      };
+    },
+    { upstreamTag: () => tag },
+  );
+  assert.equal((await request('preset=hospital&bbox=0,0,2,2')).status, 200);
+  const hit = await request('preset=hospital&bbox=0,0,2,2');
+  assert.equal(hit.headers['X-OSM-Cache'], 'HIT');
+  assert.equal(upstream, 1);
+  tag = 'instance-b';
+  const switched = await request('preset=hospital&bbox=0,0,2,2');
+  assert.equal(switched.headers['X-OSM-Cache'], 'MISS');
+  assert.equal(
+    upstream,
+    2,
+    'the new instance is asked, not the old answer served',
+  );
 });
 
 test('an upstream refusal is not an empty answer', async () => {
