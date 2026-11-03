@@ -747,6 +747,8 @@ test('Realtime service configuration selects compatible endpoint/model without f
         endpoint: 'https://voice.example/client-secrets',
         models: { standard: 'configured-model' },
         resolveApiKey: () => 'server-fixture',
+        // Pinned, so the expected tool list never depends on this machine's env.
+        overpassConfigured: () => false,
         fetchImpl: async (url, options) => {
           assert.equal(url, 'https://voice.example/client-secrets');
           assert.equal(options.redirect, 'error');
@@ -754,10 +756,8 @@ test('Realtime service configuration selects compatible endpoint/model without f
           const payload = JSON.parse(options.body);
           assert.equal(payload.session.model, 'configured-model');
           assert.deepEqual(
-            payload.session.tools.map((tool) => tool.name),
-            realtimeTools({
-              overpass: Boolean(process.env.OVERPASS_UPSTREAMS),
-            }).map((tool) => tool.name),
+            payload.session.tools,
+            realtimeTools({ overpass: false }),
           );
           return Response.json({ value: 'short-lived-fixture' });
         },

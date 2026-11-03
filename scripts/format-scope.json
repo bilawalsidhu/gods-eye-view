@@ -1211,6 +1211,7 @@
   "src/tooling/nominatimOutlineRoute.test.mjs",
   "src/data/areaGeometry.test.mjs",
   "src/data/areaResolver.test.mjs",
+  "src/sources/osmFeatures.test.mjs",
   "src/layers/osmPlaces/index.test.mjs",
   "src/tooling/boundedCache.test.mjs",
   "src/tooling/osmFeaturesRoute.test.mjs",

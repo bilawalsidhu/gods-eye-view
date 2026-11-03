@@ -49,6 +49,14 @@ export function createOsmFeatureSource({
         error:
           body?.error || `OpenStreetMap search failed (${response.status}).`,
       };
+    // A garbled success (a proxy's error page) is a failure, not zero places.
+    if (!body || typeof body !== 'object')
+      return {
+        ok: false,
+        status: response.status,
+        code: null,
+        error: 'OpenStreetMap search returned an unreadable answer.',
+      };
     return { ok: true, ...body };
   };
 }

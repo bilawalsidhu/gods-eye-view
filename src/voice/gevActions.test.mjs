@@ -5257,6 +5257,76 @@ test('different OSM siblings from one response do not race the server slot or me
   assert.deepEqual(resultKinds, ['hospital', 'school']);
 });
 
+test('an analyst follow-up on OSM places keeps the area they were found in', async () => {
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: {
+      moveEnd: { addEventListener() {} },
+      positionCartographic: { height: 300_000, latitude: 0, longitude: 0 },
+    },
+  };
+  let rows = [];
+  const osmLayer = {
+    setResults(next) {
+      rows = next;
+    },
+    getAnalystRecords: () => rows,
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: {},
+    dataManager: {
+      layers: new Map([['osm-places', { module: osmLayer }]]),
+      isEnabled: (id) => id === 'osm-places',
+      getAll: () => [],
+    },
+    areaOptions: {
+      findRegion: async () => null,
+      findAdminCandidates: async () => [
+        {
+          kind: 'state',
+          name: 'Test Province',
+          country: 'Testland',
+          source: 'natural-earth',
+          polygons: [
+            [
+              [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+                [0, 1],
+                [0, 0],
+              ],
+            ],
+          ],
+        },
+      ],
+    },
+    osmSearch: async () => ({
+      ok: true,
+      truncated: false,
+      features: [
+        { id: 'node/1', lat: 0.5, lon: 0.5, tags: { name: 'North Hospital', emergency: 'yes' } },
+        { id: 'node/2', lat: 0.4, lon: 0.6, tags: { name: 'South Hospital', emergency: 'no' } },
+      ],
+    }),
+  });
+  const area = await runner('resolve_area', { query: 'Test Province', level: 'admin1' });
+  assert.equal(area.ok, true);
+  const found = await runner('osm_query', { what: 'hospitals', areaId: area.areaId });
+  assert.equal(found.ok, true, found.error);
+  assert.equal(found.count, 2);
+  const followUp = await runner('analyst_query', {
+    layers: ['osm-places'],
+    followUp: true,
+    filters: [{ field: 'emergency', op: 'eq', value: 'yes' }],
+  });
+  assert.equal(followUp.ok, true, followUp.error);
+  assert.equal(followUp.count, 1);
+  assert.equal(followUp.scopeLabel, 'inside Test Province');
+});
+
 test('a capped Contacts snapshot is a lower bound from one immutable cohort', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
