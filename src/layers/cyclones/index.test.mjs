@@ -8,6 +8,8 @@ import {
 } from '../../data/inputOwnership.js';
 import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
 import * as contextStore from '../../data/contextStore.js';
+import { createGevActionRunner } from '../../voice/gevActions.js';
+import * as Cesium from 'cesium';
 
 const time = '2026-09-16T03:00:00.000Z';
 const storm = (id = 'ep152026') => ({
@@ -506,12 +508,56 @@ test('shared cyclone context distinguishes switches, deliberate clears and feed 
   host.addEventListener('gev:entity-selection-cleared', ({ detail }) =>
     events.push(['cleared', detail.reason]),
   );
-  let next = snapshot([storm(), storm('ep162026')]);
+  // The voice runner reads the same store and bounds its basemap wait.
+  Object.assign(host, { setTimeout, clearTimeout });
+  const position = Cesium.Cartesian3.fromDegrees(-125.8, 15.5, 5_000_000);
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: position,
+        positionCartographic: Cesium.Cartographic.fromCartesian(position),
+        heading: 0,
+        pitch: 0,
+      },
+    },
+    styleManager: {},
+    dataManager: {
+      layers: new Map(),
+      isEnabled: (id) => id === 'weather-cyclones',
+      getAll: () => [],
+    },
+  });
+  const selectedProperties = async () => {
+    const result = await runner('get_entity_context', { scope: 'selected' });
+    assert.equal(result.scope, 'selected');
+    return result.selected.properties;
+  };
+  let next = snapshot([
+    { ...storm(), movement: { directionDegrees: 315, speedKt: 12 } },
+    { ...storm('ep162026'), movement: { directionDegrees: 0, speedKt: 0 } },
+  ]);
   h = harness({ getSnapshot: async () => next }, { context: contextStore });
   h.layer.enable();
   await h.layer.update();
   h.layer.setParams({ stormId: 'ep152026' });
+  let properties = await selectedProperties();
+  assert.equal(
+    properties.movementDirectionDegrees,
+    '315',
+    'selected storm movement should survive voice summarization',
+  );
+  assert.equal(properties.movementSpeedKt, '12');
   h.layer.setParams({ stormId: 'ep162026' });
+  properties = await selectedProperties();
+  assert.equal(
+    properties.movementDirectionDegrees,
+    '0',
+    'a due-north heading is a value, not a missing one',
+  );
+  assert.equal(properties.movementSpeedKt, '0', 'stationary is a value');
   assert.deepEqual(events, [
     ['selected', 'cyclone:ep152026'],
     ['selected', 'cyclone:ep162026'],

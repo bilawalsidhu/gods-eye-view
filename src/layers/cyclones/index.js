@@ -123,7 +123,9 @@ export function createCyclonesLayer({
         positionAt: storm.positionAt,
         windKt: storm.windKt,
         pressureHpa: storm.pressureHpa,
-        movement: storm.movement,
+        // Flat scalars: the voice context summary drops nested objects.
+        movementDirectionDegrees: storm.movement?.directionDegrees,
+        movementSpeedKt: storm.movement?.speedKt,
         advisoryUrl: storm.advisoryUrl,
       },
     });
