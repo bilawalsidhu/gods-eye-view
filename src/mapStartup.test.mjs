@@ -59,7 +59,9 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
   )
     // Imports may span lines (`import {\n  a,\n  b,\n} from '…';`).
     .replace(/^import [^;]*;\n/gm, '')
-    .replace(/^export /gm, '');
+    .replace(/^export /gm, '')
+    // A classic script has no import.meta; the dev-only branches stay off.
+    .replace(/import\.meta\.env/g, '({}).env');
   const context = vm.createContext({
     document: {
       getElementById: () => ({ querySelector: () => ({}) }),
@@ -72,7 +74,8 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     applyDocumentLanguage() {},
     applyDocumentTranslations() {},
     CITY_POIS: [],
-    createApplication: (options) => options,
+    createApplication: (options) => ({ ...options, subscribe() {} }),
+    resolveEngineKind: () => 'cesium',
     createStandalonePlaceSearch: () => ({}),
     createStandaloneCatalog: () => ({}),
     createGoogleTokenSource: () => createGoogleTokenSource({ fetchImpl }),
