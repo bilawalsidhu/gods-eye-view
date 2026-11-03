@@ -236,6 +236,26 @@ test('push-to-talk starts from Cesium canvases and the document background', (t)
   assert.equal(f.key('keyup', background).defaultPrevented, true);
 });
 
+test('push-to-talk starts from the Navara canvas inside its renderer host', (t) => {
+  // src/standalone/rendererCache.js mounts each engine in a .globe-renderer
+  // div inside #cesiumContainer; Navara's canvas has no tabindex.
+  const f = createPushToTalkFixture(t);
+  const host = pushToTalkTarget({ tagName: 'DIV', id: 'cesiumContainer' });
+  const renderer = pushToTalkTarget({ tagName: 'DIV', parentElement: host });
+  const navaraCanvas = pushToTalkTarget({
+    tagName: 'CANVAS',
+    parentElement: renderer,
+  });
+  assert.equal(isPushToTalkSurface(navaraCanvas), true);
+  assert.equal(isInteractiveSpaceTarget(navaraCanvas), false);
+  assert.equal(f.key('keydown', navaraCanvas).defaultPrevented, true);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(f.starts.length, 1);
+  assert.equal(f.controller.pushToTalkKeyHeld, true);
+  assert.equal(f.key('keyup', navaraCanvas).defaultPrevented, true);
+  assert.equal(f.controller.pushToTalkKeyHeld, false);
+});
+
 test('short Space on a focused control preserves release activation', (t) => {
   const f = createPushToTalkFixture(t);
   const button = pushToTalkTarget({ tagName: 'BUTTON' });
