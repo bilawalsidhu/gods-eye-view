@@ -702,7 +702,17 @@ export class StyleManager extends ShellFacade {
    * stay; the parts bound to a globe are built for this one and the
    * address's view is restored on it.
    */
-  attachScene({
+  attachScene(options = {}) {
+    return this._queueSceneTransition(() => this._attachScene(options));
+  }
+
+  _queueSceneTransition(work) {
+    const run = (this._sceneTransition ?? Promise.resolve()).then(work, work);
+    this._sceneTransition = run.catch(() => {});
+    return run;
+  }
+
+  async _attachScene({
     viewer = null,
     engine = engineFromViewer(viewer),
     mapStackController = null,
@@ -710,6 +720,7 @@ export class StyleManager extends ShellFacade {
     engineSwitch = true,
   } = {}) {
     if (this._disposed) return;
+    if (this._scene.engine === engine && this._scene.viewer === viewer) return;
     if (this._scene.engine)
       throw new Error('The shell is attached to a globe already');
     // An attachment that fails part-way releases what it built: the shell
@@ -770,7 +781,7 @@ export class StyleManager extends ShellFacade {
         });
       }
     } catch (error) {
-      void this.detachScene().catch((cleanupError) =>
+      await this._detachScene().catch((cleanupError) =>
         console.error(
           'The shell could not leave a failed globe:',
           cleanupError,
@@ -787,11 +798,7 @@ export class StyleManager extends ShellFacade {
    * Context mode for the next globe.
    */
   detachScene(options = {}) {
-    // One detach at a time: a second request joins the one under way.
-    this._sceneDetach ??= this._detachScene(options).finally(() => {
-      this._sceneDetach = null;
-    });
-    return this._sceneDetach;
+    return this._queueSceneTransition(() => this._detachScene(options));
   }
 
   async _detachScene({

@@ -18,7 +18,7 @@ export function shellScenePart(styleManager, { builtOn, catalog }) {
         return;
       }
       first = null;
-      styleManager.attachScene({
+      return styleManager.attachScene({
         viewer: next.viewer,
         engine: next.engine,
         mapStackController: next.mapStackController,
