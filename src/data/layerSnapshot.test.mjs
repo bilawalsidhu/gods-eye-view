@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   hudSummaryLayerContext,
-  hudSummaryMatchesProvenance,
   hudTelemetryProvenance,
 } from '../hudSummaryResponse.js';
 import {
+  hudSummaryMatchesProvenance,
   FEED_STATE_SEVERITY,
   LAYER_FEED_STATE_LABELS,
   LAYER_FEED_STATES,
@@ -236,7 +236,10 @@ for (const withNominal of [false, true]) {
     assert.equal(envelope.layers[0].count, 2);
     assert.match(envelope.note, /Partial fixture is PARTIAL/);
     assert.match(envelope.note, /Generic fixture source/);
-    assert.match(envelope.note, /do not describe this as live/i);
+    assert.match(
+      envelope.note,
+      /coverage is incomplete.*do not claim full coverage/i,
+    );
     assert.doesNotMatch(envelope.note, /is off|are nominal/);
     assert.equal(viewStateLayerRow(partial, { now: NOW }).feedState, 'partial');
     const hud = hudSummaryLayerContext(layers, { now: NOW });
@@ -247,14 +250,14 @@ for (const withNominal of [false, true]) {
     });
     assert.equal(
       hudSummaryMatchesProvenance(
-        'Nominal observations in this view',
+        { summary: 'Observations in this view', feedState: 'nominal' },
         hud.feedProvenance,
       ),
       false,
     );
     assert.equal(
       hudSummaryMatchesProvenance(
-        'Partial observations in this view',
+        { summary: 'Observations in this view', feedState: 'partial' },
         hud.feedProvenance,
       ),
       true,
