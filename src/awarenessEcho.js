@@ -15,6 +15,8 @@ import * as Cesium from 'cesium';
  * @property {number} radiusM Range the pulses grow to.
  * @property {{count: number, periodMs: number, startFraction: number}} pulse
  * @property {{fadeMs: number, layerIds: string[]}} echo
+ * @property {(nowMs: number) => number} [level] How far the pulses are
+ *   switched on, 0 to 1; echoes scale with it, so they rest with the pulses.
  */
 
 /** @type {AwarenessEchoField|null} */
@@ -94,11 +96,16 @@ export function awarenessEchoAt(layerId, position, nowMs) {
     groundScratch,
   );
   if (!ground) return 0;
-  return awarenessEchoStrength(
-    nowMs,
-    Cesium.Cartesian3.distance(field.center, ground),
-    field.radiusM,
-    field.pulse,
-    field.echo,
+  const level = field.level?.(nowMs) ?? 1;
+  if (!(level > 0)) return 0;
+  return (
+    level *
+    awarenessEchoStrength(
+      nowMs,
+      Cesium.Cartesian3.distance(field.center, ground),
+      field.radiusM,
+      field.pulse,
+      field.echo,
+    )
   );
 }

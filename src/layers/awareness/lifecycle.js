@@ -62,6 +62,8 @@ export function createLifecycle({
         if (poseSig !== layerState.lastCameraPoseSig) {
           layerState.lastCameraPoseSig = poseSig;
           layerState.lastCameraPoseChangeMs = now;
+          // A camera move runs the range pulses again; parked, they rest.
+          parts.rendering.wakePulses();
         }
         const decision = parts.model.awarenessRefreshDecision({
           nowMs: now,

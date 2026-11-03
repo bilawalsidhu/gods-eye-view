@@ -16,14 +16,18 @@ import {
   AWARENESS_RANGE_RING_STYLE,
   CONTEXT_RIM_HEIGHT_M,
 } from './policy.js';
+import { CYBER_SONAR_RENDER_INTERVAL_MS } from '../../cyberSonar.js';
 import {
   AWARENESS_PULSE_GRADIENT_MAX,
+  awarenessPulseLevel,
   awarenessPulseState,
   awarenessRangeRingPositions,
   awarenessRingFlash,
   createRendering,
+  wakeAwarenessPulses,
 } from './rendering.js';
 import { getAwarenessEchoField } from '../../awarenessEcho.js';
+import { createLifecycle } from './lifecycle.js';
 import { createState } from './state.js';
 
 /** WCAG relative luminance of a Cesium colour, ignoring alpha. */
@@ -39,22 +43,48 @@ function luminance(color) {
 
 /**
  * The rendering part over a bare entity collection, counting render asks and
- * by reason. `reducedMotion` stubs the media query for
- * the length of the test.
+ * by reason. `reducedMotion` stubs the media query for the length of the
+ * test; `motion.set(on)` flips it later and tells its listeners, as the
+ * browser does.
  */
 function ringRendering(t, { reducedMotion = false } = {}) {
   const previous = globalThis.matchMedia;
-  globalThis.matchMedia = (query) => ({
-    matches: query === '(prefers-reduced-motion: reduce)' && reducedMotion,
-  });
+  const listeners = new Set();
+  const query = {
+    get matches() {
+      return reducedMotion;
+    },
+    addEventListener(type, listener) {
+      if (type === 'change') listeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      if (type === 'change') listeners.delete(listener);
+    },
+  };
+  globalThis.matchMedia = (media) =>
+    media === '(prefers-reduced-motion: reduce)'
+      ? query
+      : { matches: false, addEventListener() {}, removeEventListener() {} };
   t.after(() => {
     globalThis.matchMedia = previous;
   });
+  const motion = {
+    set(on) {
+      reducedMotion = on;
+      for (const listener of [...listeners]) listener({ matches: on });
+    },
+    /** Change the preference without a change event, as old browsers do. */
+    setQuietly(on) {
+      reducedMotion = on;
+    },
+    listeners: () => listeners.size,
+  };
   const state = createState({ services: {} });
   const entities = new Cesium.EntityCollection();
   const scene = {
     primitives: new Cesium.PrimitiveCollection(),
     preRender: new Cesium.Event(),
+    postRender: new Cesium.Event(),
   };
   state.viewer = { entities, scene };
   const reasons = [];
@@ -77,8 +107,39 @@ function ringRendering(t, { reducedMotion = false } = {}) {
     entities,
     scene,
     rendering,
+    motion,
+    reasons,
     renders: () => reasons.filter((r) => r === 'awareness-visual').length,
     pulseFrames: () => reasons.filter((r) => r === 'awareness-pulse').length,
+  };
+}
+
+/**
+ * A request-render scene on a fake clock: `performance.now()` and the
+ * timers advance together, and any render ask is drawn (preRender, then
+ * postRender) on the next millisecond, as Cesium's request-render mode does.
+ * `draw()` draws a frame someone else asked for.
+ */
+function frameLoop(t, ring) {
+  let clock = 1_000_000;
+  t.mock.method(performance, 'now', () => clock);
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  let drawn = 0;
+  const draw = () => {
+    drawn = ring.reasons.length;
+    ring.scene.preRender.raiseEvent(ring.scene);
+    ring.scene.postRender.raiseEvent(ring.scene);
+  };
+  return {
+    now: () => clock,
+    draw,
+    advance(ms) {
+      for (let step = 0; step < ms; step++) {
+        clock++;
+        t.mock.timers.tick(1);
+        if (ring.reasons.length > drawn) draw();
+      }
+    },
   };
 }
 
@@ -284,15 +345,17 @@ test('a pulse grows slowly from the subject and arrives dim at the ring', () => 
   );
 });
 
-test('pulses ask for a frame every 80 ms instead of holding continuous rendering', (t) => {
-  t.mock.timers.enable({ apis: ['setInterval'] });
-  const { entities, rendering, pulseFrames } = ringRendering(t);
+test('pulses ask for a frame 80 ms after each drawn frame instead of holding continuous rendering', (t) => {
+  const ring = ringRendering(t);
+  const { entities, rendering, pulseFrames } = ring;
+  const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
-  // A parked Contacts view repaints at the Cyber sonar cadence, ~12.5 fps,
-  // never every display frame.
+  // A Contacts view repaints at the Cyber sonar cadence, ~12.5 fps, while
+  // the pulses run, never every display frame.
   assert.equal(pulseFrames(), 0);
-  t.mock.timers.tick(AWARENESS_RANGE_PULSE.frameIntervalMs * 10);
-  assert.equal(pulseFrames(), 10);
+  loop.advance(1); // the frame the new ring asked for arms the first request
+  loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS * 10);
+  assert.ok(Math.abs(pulseFrames() - 10) <= 1, `${pulseFrames()} frames`);
   const now = Cesium.JulianDate.now();
   const core = Cesium.Color.fromCssColorString(
     AWARENESS_RANGE_RING_STYLE.color,
@@ -316,15 +379,167 @@ test('pulses ask for a frame every 80 ms instead of holding continuous rendering
     );
     assert.ok(Math.max(...radii) <= AWARENESS_RADIUS_M + 100);
   }
+  const frames = pulseFrames();
   rendering.clearVisual();
   assert.equal(entities.values.length, 0);
-  t.mock.timers.tick(AWARENESS_RANGE_PULSE.frameIntervalMs * 10);
-  assert.equal(pulseFrames(), 10, 'no frames once the ring is gone');
+  assert.equal(ring.scene.postRender.numberOfListeners, 0);
+  loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS * 10);
+  assert.equal(pulseFrames(), frames, 'no frames once the ring is gone');
+});
+
+test('a parked view stops asking for frames once the pulses rest', (t) => {
+  const ring = ringRendering(t);
+  const { entities, scene, rendering, pulseFrames } = ring;
+  const loop = frameLoop(t, ring);
+  const { activeMs, count, periodMs } = AWARENESS_RANGE_PULSE;
+  // Long enough for three ring flashes, then quiet.
+  assert.ok(activeMs >= 3 * (periodMs / count));
+  rendering.renderVisual(flight(3));
+  loop.advance(activeMs + 500);
+  const frames = pulseFrames();
+  assert.ok(frames >= activeMs / CYBER_SONAR_RENDER_INTERVAL_MS - 2);
+  // Parked: a minute later not one more request.
+  loop.advance(60_000);
+  assert.equal(pulseFrames(), frames, 'render requests stop after the bound');
+  // At rest the ring stands on screen at full, as without pulses, and the
+  // pulses, gradient and echoes are hidden.
+  const now = Cesium.JulianDate.now();
+  const core = Cesium.Color.fromCssColorString(
+    AWARENESS_RANGE_RING_STYLE.color,
+  );
+  const [ringEntity, ...pulses] = entities.values;
+  assert.ok(
+    Math.abs(
+      ringEntity.polyline.material.color.getValue(now).alpha - core.alpha,
+    ) < 1e-9,
+  );
+  for (const pulse of pulses)
+    assert.equal(pulse.polyline.show.getValue(now), false);
+  assert.equal(pulsePrimitives(scene).disc.show, false);
+  assert.equal(getAwarenessEchoField().level(loop.now()), 0);
+});
+
+test('a camera move wakes resting pulses for another bounded run', (t) => {
+  const ring = ringRendering(t);
+  const { rendering, pulseFrames } = ring;
+  const loop = frameLoop(t, ring);
+  const { activeMs } = AWARENESS_RANGE_PULSE;
+  rendering.renderVisual(flight(3));
+  loop.advance(activeMs + 500);
+  const rested = pulseFrames();
+  // The camera moves: lifecycle wakes the pulses inside the frame it draws,
+  // and that frame arms the next request. Waking asks for none of its own.
+  rendering.wakePulses();
+  assert.equal(pulseFrames(), rested);
+  loop.draw();
+  loop.advance(activeMs + 500);
+  const woke = pulseFrames() - rested;
+  assert.ok(woke >= activeMs / CYBER_SONAR_RENDER_INTERVAL_MS - 2, `${woke}`);
+  loop.advance(60_000);
+  assert.equal(pulseFrames(), rested + woke, 'and rest again');
+  // The subject moving does not wake them: a flying subject moves on every
+  // refresh, which would bring the endless repaint back.
+  rendering.renderVisual(flight(3.01));
+  loop.advance(10_000);
+  assert.equal(pulseFrames(), rested + woke);
+});
+
+test('a camera move seen by the lifecycle wakes resting pulses; a parked camera does not', (t) => {
+  const ring = ringRendering(t);
+  const { state, rendering, pulseFrames } = ring;
+  const loop = frameLoop(t, ring);
+  const { activeMs } = AWARENESS_RANGE_PULSE;
+  state.enabled = true;
+  state.viewer.camera = {
+    positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
+    heading: 0,
+    pitch: -1,
+    roll: 0,
+  };
+  const lifecycle = createLifecycle({
+    state,
+    services: {
+      render: { holdContinuousRender() {}, releaseContinuousRender() {} },
+    },
+    parts: {
+      rendering,
+      model: {
+        awarenessRefreshDecision: () => ({ moving: false, refresh: false }),
+        awarenessNeedsContinuousRender: () => false,
+      },
+    },
+  });
+  lifecycle.attachRuntimeListeners();
+  t.after(() => lifecycle.detachRuntimeListeners());
+  rendering.renderVisual(flight(3));
+  loop.advance(activeMs + 500);
+  const rested = pulseFrames();
+  // Parked: frames other owners draw do not wake the pulses.
+  loop.draw();
+  loop.advance(activeMs);
+  assert.equal(pulseFrames(), rested);
+  // The camera pans 50 km: the next frame wakes them for another run.
+  state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+    3.5,
+    20,
+    800_000,
+  );
+  loop.draw();
+  loop.advance(activeMs + 500);
+  assert.ok(
+    pulseFrames() - rested >= activeMs / CYBER_SONAR_RENDER_INTERVAL_MS - 2,
+  );
+  const woke = pulseFrames();
+  loop.advance(60_000);
+  assert.equal(pulseFrames(), woke, 'and rest again once it parks');
+});
+
+test('pulse requests wait 80 ms after any frame, so they cannot beat the Cyber sonar', (t) => {
+  const ring = ringRendering(t);
+  const { rendering, pulseFrames } = ring;
+  const loop = frameLoop(t, ring);
+  rendering.renderVisual(flight(3));
+  loop.advance(1);
+  const frames = pulseFrames();
+  // Another owner (the Cyber sonar, a data update) draws 67 ms after ours.
+  loop.advance(67);
+  loop.draw();
+  loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS - 1);
+  assert.equal(pulseFrames(), frames, 'no request 13 ms after that frame');
+  loop.advance(1);
+  assert.equal(pulseFrames(), frames + 1, 'one request 80 ms after it');
+});
+
+test('the pulse level fades in, holds, fades out and keeps its level when woken', () => {
+  const { activeMs, settleMs } = AWARENESS_RANGE_PULSE;
+  const wake = wakeAwarenessPulses(
+    { startMs: -Infinity, untilMs: -Infinity },
+    0,
+  );
+  assert.equal(awarenessPulseLevel(0, wake), 0);
+  assert.ok(Math.abs(awarenessPulseLevel(settleMs / 2, wake) - 0.5) < 1e-9);
+  assert.equal(awarenessPulseLevel(activeMs / 2, wake), 1);
+  assert.ok(
+    Math.abs(awarenessPulseLevel(activeMs - settleMs / 4, wake) - 0.25) < 1e-9,
+  );
+  assert.equal(awarenessPulseLevel(activeMs, wake), 0);
+  assert.equal(awarenessPulseLevel(activeMs * 10, wake), 0);
+  // Woken mid-fade-out: no jump back to full, then a fresh run.
+  const at = activeMs - settleMs / 4;
+  wakeAwarenessPulses(wake, at);
+  assert.ok(Math.abs(awarenessPulseLevel(at, wake) - 0.25) < 1e-9);
+  assert.equal(awarenessPulseLevel(at + settleMs, wake), 1);
+  assert.equal(awarenessPulseLevel(at + activeMs, wake), 0);
 });
 
 test('a scene without primitives or preRender gets the static ring only', (t) => {
   const { state, entities, rendering, pulseFrames } = ringRendering(t);
-  for (const scene of [{}, { primitives: { add() {} } }, undefined]) {
+  for (const scene of [
+    {},
+    { primitives: { add() {} } },
+    { primitives: { add() {} }, preRender: new Cesium.Event() },
+    undefined,
+  ]) {
     state.viewer = { entities, scene };
     rendering.clearVisual();
     rendering.renderVisual(flight(3));
@@ -336,7 +551,9 @@ test('a scene without primitives or preRender gets the static ring only', (t) =>
 });
 
 test('a gradient disc behind the pulses fades inward and follows the subject', (t) => {
-  const { scene, rendering } = ringRendering(t);
+  const ring = ringRendering(t);
+  const { scene, rendering } = ring;
+  const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
   assert.ok(AWARENESS_RANGE_PULSE.count <= AWARENESS_PULSE_GRADIENT_MAX);
   const { disc, count } = pulsePrimitives(scene);
@@ -357,26 +574,20 @@ test('a gradient disc behind the pulses fades inward and follows the subject', (
     ) < 1e-6,
   );
   // Each frame writes the pulses' radius (as a fraction of the range) and
-  // opacity into the shader, from the same curve the lines use.
+  // opacity into the shader, from the same curve the lines use, once the
+  // pulses have faded in.
   assert.equal(scene.preRender.numberOfListeners, 1);
-  const before = performance.now();
+  loop.advance(AWARENESS_RANGE_PULSE.settleMs + 500);
   scene.preRender.raiseEvent(scene);
-  const after = performance.now();
+  assert.equal(disc.show, true);
   const { radii, alphas } = material.uniforms;
   for (let index = 0; index < AWARENESS_RANGE_PULSE.count; index++) {
     const radius = Cesium.Cartesian4.pack(radii, [])[index];
     const alpha = Cesium.Cartesian4.pack(alphas, [])[index];
-    const low = awarenessPulseState(before, index);
-    const high = awarenessPulseState(after, index);
-    // A few milliseconds pass during the raise; allow for that drift.
-    assert.ok(
-      Math.abs(radius - low.radiusM / AWARENESS_RADIUS_M) < 0.01 ||
-        Math.abs(radius - high.radiusM / AWARENESS_RADIUS_M) < 0.01,
-    );
+    const expected = awarenessPulseState(loop.now(), index);
+    assert.ok(Math.abs(radius - expected.radiusM / AWARENESS_RADIUS_M) < 1e-6);
     assert.ok(alpha >= 0 && alpha <= AWARENESS_RANGE_PULSE.peakOpacity);
-    assert.ok(
-      Math.abs(alpha - low.alpha) < 0.02 || Math.abs(alpha - high.alpha) < 0.02,
-    );
+    assert.ok(Math.abs(alpha - expected.alpha) < 1e-6);
   }
   // Unused shader slots stay empty.
   assert.equal(
@@ -425,7 +636,7 @@ test('pulses evaluate every frame without breaking, reusing their positions', (t
 });
 
 test('reduced motion keeps the static ring and drops the pulses', (t) => {
-  t.mock.timers.enable({ apis: ['setInterval'] });
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   const { entities, scene, rendering, pulseFrames } = ringRendering(t, {
     reducedMotion: true,
   });
@@ -436,16 +647,58 @@ test('reduced motion keeps the static ring and drops the pulses', (t) => {
   assert.equal(pulseFrames(), 0);
   assert.equal(scene.primitives.length, 0);
   assert.equal(scene.preRender.numberOfListeners, 0);
+  assert.equal(scene.postRender.numberOfListeners, 0);
+});
+
+test('turning reduced motion on mid-session stops the pulses, and off restarts them', (t) => {
+  const ring = ringRendering(t);
+  const { entities, scene, rendering, motion, state } = ring;
+  const loop = frameLoop(t, ring);
+  state.subject = flight(3);
+  rendering.renderVisual(state.subject);
+  assert.equal(entities.values.length, 1 + AWARENESS_RANGE_PULSE.count);
+  loop.advance(1000);
+  // The OS setting changes while the same aircraft stays tracked.
+  motion.set(true);
+  assert.equal(entities.values.length, 1);
+  assert.equal(entities.values[0].polyline.material.color.isConstant, true);
+  assert.equal(scene.primitives.length, 0);
+  assert.equal(scene.preRender.numberOfListeners, 0);
+  assert.equal(scene.postRender.numberOfListeners, 0);
+  assert.equal(getAwarenessEchoField(), null);
+  const frames = ring.pulseFrames();
+  loop.advance(5000);
+  assert.equal(ring.pulseFrames(), frames);
+  motion.set(false);
+  assert.equal(entities.values.length, 1 + AWARENESS_RANGE_PULSE.count);
+  assert.ok(getAwarenessEchoField());
+  // One media-query listener per visual; none once the ring is gone.
+  assert.equal(motion.listeners(), 1);
+  rendering.clearVisual();
+  assert.equal(motion.listeners(), 0);
+});
+
+test('a refresh after reduced motion changed rebuilds the visual too', (t) => {
+  const { entities, rendering, motion } = ringRendering(t);
+  rendering.renderVisual(flight(3));
+  assert.equal(entities.values.length, 1 + AWARENESS_RANGE_PULSE.count);
+  // No change event: the next same-subject refresh notices on its own.
+  motion.setQuietly(true);
+  rendering.renderVisual(flight(3));
+  assert.equal(entities.values.length, 1);
+  assert.equal(entities.values[0].polyline.positions.isConstant, true);
 });
 
 test('while pulses run the ring flashes as each one arrives, then rests', (t) => {
-  const { entities, rendering } = ringRendering(t);
+  const ring = ringRendering(t);
+  const { entities, rendering } = ring;
+  const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
-  const ring = entities.values[0];
+  const ringEntity = entities.values[0];
   const core = Cesium.Color.fromCssColorString(
     AWARENESS_RANGE_RING_STYLE.color,
   );
-  assert.equal(ring.polyline.material.color.isConstant, false);
+  assert.equal(ringEntity.polyline.material.color.isConstant, false);
   const { periodMs, count } = AWARENESS_RANGE_PULSE;
   const { flashMs, restOpacity } = AWARENESS_RANGE_RING_STYLE;
   // Full the moment a front reaches 250 km, gone `flashMs` later.
@@ -453,7 +706,8 @@ test('while pulses run the ring flashes as each one arrives, then rests', (t) =>
   assert.ok(Math.abs(awarenessRingFlash(arrival) - 1) < 1e-6);
   assert.ok(awarenessRingFlash(arrival + flashMs / 2) > 0.2);
   assert.equal(awarenessRingFlash(arrival + flashMs + 1), 0);
-  assert.equal(restOpacity, 0);
+  // Between flashes the 250 km edge stays readable, dimmed, not gone.
+  assert.ok(restOpacity >= 0.35 && restOpacity <= 0.5, `${restOpacity}`);
   // Once per arriving pulse: `count` flashes in any one-period window that
   // starts after a flash has faded.
   let flashes = 0;
@@ -465,16 +719,18 @@ test('while pulses run the ring flashes as each one arrives, then rests', (t) =>
     wasLit = lit;
   }
   assert.equal(flashes, count);
-  // The live colour tracks the flash at this instant.
-  const before = awarenessRingFlash(performance.now());
-  const alpha = ring.polyline.material.color.getValue(
-    Cesium.JulianDate.now(),
-  ).alpha;
-  const after = awarenessRingFlash(performance.now());
-  assert.ok(
-    alpha >= core.alpha * Math.min(before, after) - 0.02 &&
-      alpha <= core.alpha * Math.max(before, after) + 0.02,
-  );
+  // Once the pulses have faded in, the live colour tracks the flash, and
+  // never drops below `restOpacity`.
+  loop.advance(AWARENESS_RANGE_PULSE.settleMs);
+  for (let step = 0; step < 40; step++) {
+    loop.advance(100);
+    const alpha = ringEntity.polyline.material.color.getValue(
+      Cesium.JulianDate.now(),
+    ).alpha;
+    const expected =
+      core.alpha * Math.max(restOpacity, awarenessRingFlash(loop.now()));
+    assert.ok(Math.abs(alpha - expected) < 1e-9, `${alpha} vs ${expected}`);
+  }
 });
 
 test('without pulses the ring stays on screen at full strength', (t) => {

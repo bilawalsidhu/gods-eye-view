@@ -82,3 +82,28 @@ test('awarenessEchoAt reads the published field, by layer, at ground level', (t)
   assert.equal(getAwarenessEchoField(), null);
   assert.equal(awarenessEchoAt('flights', contact, t0), 0);
 });
+
+test('echoes scale with the field level and rest with the pulses', (t) => {
+  t.after(clearAwarenessEchoField);
+  const center = Cesium.Cartesian3.fromDegrees(3, 27, 0);
+  // ~100 km east of the subject, on the ground.
+  const contact = Cesium.Cartesian3.fromDegrees(4.008, 27, 0);
+  let level = 1;
+  setAwarenessEchoField({
+    center,
+    radiusM: R,
+    pulse,
+    echo,
+    level: () => level,
+  });
+  const d = Cesium.Cartesian3.distance(center, contact);
+  const t0 = arrival(d);
+  const full = awarenessEchoAt('flights', contact, t0);
+  assert.ok(full > 0.99);
+  level = 0.5;
+  assert.ok(
+    Math.abs(awarenessEchoAt('flights', contact, t0) - full / 2) < 1e-9,
+  );
+  level = 0;
+  assert.equal(awarenessEchoAt('flights', contact, t0), 0);
+});

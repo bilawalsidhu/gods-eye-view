@@ -50,9 +50,11 @@ export const CONTEXT_RIM_HEIGHT_M = 2500;
  *  luminance contrast on light and dark ground alike, and luminance is what
  *  the monochrome styles keep. The core is the Context panel's blue; the halo
  *  is the map-card ink. Widths are screen pixels; `outlineWidth` is per side.
- *  While the sonar pulses run, the ring rests at `restOpacity` and flashes
- *  to full as each pulse reaches it, fading over `flashMs`. Without pulses
- *  (reduced motion, or a scene that cannot animate) it stays on screen. */
+ *  While the sonar pulses run, the ring dims to `restOpacity` and flashes
+ *  to full as each pulse reaches it, fading over `flashMs`. `restOpacity`
+ *  keeps the 250 km edge readable between flashes, in screenshots and for
+ *  low-vision viewers. Once the pulses rest, and without pulses (reduced
+ *  motion, or a scene that cannot animate), it stays on screen at full. */
 
 export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
   color: 'rgba(98, 181, 255, 0.95)',
@@ -61,7 +63,7 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
   outlineWidth: 1,
   segments: 128,
   flashMs: 1800,
-  restOpacity: 0,
+  restOpacity: 0.4,
 });
 
 /** @constant Sonar-style pulses that grow slowly from the subject to the
@@ -75,11 +77,16 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
  *  `gradientOpacity` strong. The gradient disc is rebuilt only after the
  *  subject moves `gradientRebuildM`, since a soft band 2 km off centre on a
  *  250 km disc does not show. The gradient shader takes at most four pulses.
- *  The pulses do not hold continuous rendering: a parked Contacts view must
- *  not repaint every frame. They ask for a frame every `frameIntervalMs`
- *  instead, the cadence the Cyber sonar uses for parked scenes; when
- *  something else already renders continuously they update every frame.
- *  Skipped under prefers-reduced-motion. */
+ *  The pulses run for `activeMs` (three ring flashes) after a selection or
+ *  a camera move, fading in and out over `settleMs`, then rest: the ring
+ *  stays on screen, static, and nothing asks for frames, so a parked view
+ *  goes quiet again. A moving subject does not wake them, since a flying
+ *  subject moves on every refresh, but a camera that follows it does; the
+ *  follow already renders every frame. While they run they never hold
+ *  continuous rendering; each drawn frame arms one more request after the
+ *  Cyber sonar's 80 ms cadence, so the two never beat. When something else
+ *  already renders continuously they update every frame. Skipped under
+ *  prefers-reduced-motion. */
 
 export const AWARENESS_RANGE_PULSE = Object.freeze({
   count: 3,
@@ -96,7 +103,8 @@ export const AWARENESS_RANGE_PULSE = Object.freeze({
   gradientOpacity: 0.22,
   gradientGranularityDeg: 0.25,
   gradientRebuildM: 2000,
-  frameIntervalMs: 80,
+  activeMs: 9000,
+  settleMs: 1200,
 });
 
 /** @constant Sonar echoes on contact brackets. When a pulse front reaches a

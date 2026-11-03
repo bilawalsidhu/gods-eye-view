@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
+  CYBER_SONAR_RENDER_INTERVAL_MS,
   createCyberSonarSampler,
   isCyberContactSonarActive as isCyberSonarActive,
 } from '../../cyberSonar.js';
@@ -112,12 +113,51 @@ export function awarenessPulseState(
   };
 }
 
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
 /** Whether the viewer asked the system for less motion. */
 function prefersReducedMotion() {
-  return (
-    globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ??
-    false
+  return globalThis.matchMedia?.(REDUCED_MOTION_QUERY)?.matches ?? false;
+}
+
+/**
+ * How far the pulses are switched on at `nowMs`: 0 at rest, rising to 1 over
+ * `settleMs` from `wake.startMs` and falling back to 0 over `settleMs` up to
+ * `wake.untilMs`.
+ * @param {number} nowMs Monotonic clock in milliseconds.
+ * @param {{startMs: number, untilMs: number}} wake Window from `wakeAwarenessPulses`.
+ * @param {object} [pulse] Timing, see `AWARENESS_RANGE_PULSE`.
+ * @returns {number} 0 to 1.
+ */
+export function awarenessPulseLevel(
+  nowMs,
+  wake,
+  pulse = AWARENESS_RANGE_PULSE,
+) {
+  const level = Math.min(
+    (nowMs - wake.startMs) / pulse.settleMs,
+    (wake.untilMs - nowMs) / pulse.settleMs,
   );
+  return Math.max(0, Math.min(1, level));
+}
+
+/**
+ * Run the pulses for `activeMs` from `nowMs`. A wake while they already run
+ * keeps their current level, so they never jump back to full mid-fade.
+ * @param {{startMs: number, untilMs: number}} wake Updated in place.
+ * @param {number} nowMs Monotonic clock in milliseconds.
+ * @param {object} [pulse] Timing, see `AWARENESS_RANGE_PULSE`.
+ * @returns {{startMs: number, untilMs: number}} `wake`.
+ */
+export function wakeAwarenessPulses(
+  wake,
+  nowMs,
+  pulse = AWARENESS_RANGE_PULSE,
+) {
+  wake.startMs =
+    nowMs - awarenessPulseLevel(nowMs, wake, pulse) * pulse.settleMs;
+  wake.untilMs = nowMs + pulse.activeMs;
+  return wake;
 }
 
 /**
@@ -457,9 +497,19 @@ export function createRendering({
     presentDirection({ hidden: false, ring, heading, labels, markers });
   }
 
+  /**
+   * Run the range pulses again for `activeMs`, after a camera move. Call it
+   * during a frame (lifecycle's preRender): that frame's postRender arms the
+   * next request, so waking asks for no extra frame of its own.
+   */
+  function wakePulses() {
+    const wake = layerState.visual?.wake;
+    if (wake) wakeAwarenessPulses(wake, performance.now());
+  }
+
   function clearVisual() {
-    globalThis.clearInterval(layerState.visual?.pulseTimer);
-    layerState.visual?.removePulseListener?.();
+    layerState.visual?.stopPulses?.();
+    layerState.visual?.removeMotionListener?.();
     if (layerState.visual?.gradient && layerState.viewer)
       layerState.viewer.scene.primitives.remove(layerState.visual.gradient);
     clearAwarenessEchoField();
@@ -482,7 +532,12 @@ export function createRendering({
       0,
     );
     const key = `${subject.layerId}:${subject.id}`;
-    if (layerState.visual?.key === key) {
+    const reducedMotion = prefersReducedMotion();
+    // A reduced-motion change rebuilds the visual, with or without pulses.
+    if (
+      layerState.visual?.key === key &&
+      layerState.visual.reducedMotion === reducedMotion
+    ) {
       // Move the ring only after a meaningful displacement so live tracking
       // does not rebuild its geometry for sub-pixel motion every 750 ms.
       if (
@@ -527,10 +582,19 @@ export function createRendering({
     // tools, partial stubs) gets the static ring only, as the Cyber sonar
     // scene does. So does a viewer who prefers reduced motion.
     const animate = Boolean(
-      !prefersReducedMotion() &&
+      !reducedMotion &&
       scene?.primitives?.add &&
-      scene?.preRender?.addEventListener,
+      scene?.preRender?.addEventListener &&
+      scene?.postRender?.addEventListener,
     );
+    // Pulses run from now until `wake.untilMs`, then rest.
+    const wake = animate
+      ? wakeAwarenessPulses(
+          { startMs: -Infinity, untilMs: -Infinity },
+          performance.now(),
+        )
+      : null;
+    const levelAt = (nowMs) => (wake ? awarenessPulseLevel(nowMs, wake) : 0);
 
     // A polyline, not an ellipse outline: WebGL draws ellipse outlines at
     // 1 px whatever `outlineWidth` says, and the ring needs a halo.
@@ -538,12 +602,13 @@ export function createRendering({
     const core = Cesium.Color.fromCssColorString(ring.color);
     const halo = Cesium.Color.fromCssColorString(ring.outlineColor);
     // While pulses run, the ring flashes as each one arrives and otherwise
-    // rests at `restOpacity`; without pulses it stays on screen.
+    // dims to `restOpacity`; as they settle it returns to full and stays.
     const flashing = (base) => {
       const color = base.clone();
       return new Cesium.CallbackProperty(() => {
-        const flash = awarenessRingFlash(performance.now());
-        color.alpha = base.alpha * Math.max(ring.restOpacity, flash);
+        const nowMs = performance.now();
+        const pulsed = Math.max(ring.restOpacity, awarenessRingFlash(nowMs));
+        color.alpha = base.alpha * (1 - levelAt(nowMs) * (1 - pulsed));
         return color;
       }, false);
     };
@@ -569,18 +634,26 @@ export function createRendering({
 
     const center = Cesium.Cartesian3.clone(groundCenter);
     let gradient = null;
-    let removePulseListener = null;
-    let pulseTimer = null;
+    let stopPulses = null;
     if (animate) {
       const pulse = AWARENESS_RANGE_PULSE;
       for (let index = 0; index < pulse.count; index++) {
         const positions = [];
         const coreColor = core.clone();
         const haloColor = halo.clone();
-        const stateAt = () => awarenessPulseState(performance.now(), index);
+        const stateAt = () => {
+          const nowMs = performance.now();
+          const state = awarenessPulseState(nowMs, index);
+          state.alpha *= levelAt(nowMs);
+          return state;
+        };
         entities.push(
           layerState.viewer.entities.add({
             polyline: {
+              show: new Cesium.CallbackProperty(
+                () => levelAt(performance.now()) > 0,
+                false,
+              ),
               positions: new Cesium.CallbackProperty(
                 () =>
                   awarenessRangeRingPositions(
@@ -626,16 +699,40 @@ export function createRendering({
       );
       const radii = [0, 0, 0, 0];
       const alphas = [0, 0, 0, 0];
-      removePulseListener = scene.preRender.addEventListener(() => {
+      const removePreRender = scene.preRender.addEventListener(() => {
         const nowMs = performance.now();
+        const level = levelAt(nowMs);
+        // The disc is looked up each frame: a subject move swaps it.
+        const disc = layerState.visual?.gradient;
+        if (disc) disc.show = level > 0;
         for (let index = 0; index < count; index++) {
           const state = awarenessPulseState(nowMs, index);
           radii[index] = state.radiusM / AWARENESS_RADIUS_M;
-          alphas[index] = state.alpha;
+          alphas[index] = state.alpha * level;
         }
         Cesium.Cartesian4.fromArray(radii, 0, material.uniforms.radii);
         Cesium.Cartesian4.fromArray(alphas, 0, material.uniforms.alphas);
       });
+      // Each drawn frame, whoever asked for it, arms one request a Cyber
+      // sonar interval later, as the Cyber sonar scene does. Requests never
+      // land within 80 ms of a frame, so they cannot beat the detection
+      // lane's 80 ms gate, and they stop once the pulses rest.
+      let timer = null;
+      const removePostRender = scene.postRender.addEventListener(() => {
+        globalThis.clearTimeout(timer);
+        timer = null;
+        if (performance.now() < wake.untilMs)
+          timer = globalThis.setTimeout(() => {
+            timer = null;
+            governorRequestRender('awareness-pulse');
+          }, CYBER_SONAR_RENDER_INTERVAL_MS);
+      });
+      stopPulses = () => {
+        removePreRender();
+        removePostRender();
+        globalThis.clearTimeout(timer);
+        timer = null;
+      };
       // The detection overlay pulses the brackets of flights and vessels a
       // front crosses; it reads the centre in place, so it follows too.
       setAwarenessEchoField({
@@ -643,12 +740,16 @@ export function createRendering({
         radiusM: AWARENESS_RADIUS_M,
         pulse,
         echo: AWARENESS_RANGE_ECHO,
+        level: levelAt,
       });
-      pulseTimer = globalThis.setInterval(
-        () => governorRequestRender('awareness-pulse'),
-        pulse.frameIntervalMs,
-      );
     }
+
+    // Turning reduced motion on or off mid-session rebuilds the visual.
+    const motionQuery = globalThis.matchMedia?.(REDUCED_MOTION_QUERY);
+    const onMotionChange = () => {
+      if (layerState.subject) renderVisual(layerState.subject);
+    };
+    motionQuery?.addEventListener?.('change', onMotionChange);
 
     layerState.visual = {
       key,
@@ -657,8 +758,11 @@ export function createRendering({
       center,
       gradient,
       gradientCenter: Cesium.Cartesian3.clone(groundCenter),
-      removePulseListener,
-      pulseTimer,
+      reducedMotion,
+      wake,
+      stopPulses,
+      removeMotionListener: () =>
+        motionQuery?.removeEventListener?.('change', onMotionChange),
     };
     governorRequestRender('awareness-visual');
   }
@@ -672,5 +776,6 @@ export function createRendering({
     updateDirectionOverlay,
     clearVisual,
     renderVisual,
+    wakePulses,
   };
 }
