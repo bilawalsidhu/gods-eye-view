@@ -1,7 +1,7 @@
 /* ============================================================
    Bottom-right corner row: the POWER UP chip (provider-settings.css)
    and, in the very corner, the interface language picker
-   (src/ui/localePicker.js). Logical properties throughout, so a
+   (src/ui/views/panels/LocalePicker.vue). Logical properties throughout, so a
    right-to-left page mirrors the row and the list.
    ============================================================ */
 

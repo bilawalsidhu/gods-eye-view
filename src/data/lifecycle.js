@@ -1650,6 +1650,15 @@ export class LayerLifecycle {
         }
       }
     }
+    // Clear All owns the whole selection, not only the layers it switched off
+    // itself. A layer already off for a passive reason (isolated by a context
+    // mode, released by a dependency owner, or superseded mid-batch) gets no
+    // OFF of its own here, so publish the set that is still on afterwards.
+    this._notifyListeners({
+      type: 'selection-cleared',
+      origin,
+      enabledLayerIds: [...this.getEnabledLayerIds()],
+    });
     const items = targetIds.map((id) => {
       const state = this.getLayerLifecycleState(id) || {
         enabled: false,

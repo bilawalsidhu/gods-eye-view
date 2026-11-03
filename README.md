@@ -61,7 +61,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🎯 Click-to-track anything:** Camera locks on, draws a fading trail, surfaces full metadata — and a tracked fire or vessel hands you off to the nearest live camera in one click.
 - **🖊️ Voice whiteboard:** Speak annotations onto the world — real boundary polygons, marks, and routes.
 - **🛫 3D hangar:** Real per-class aircraft models — 787, ATR-72, Citation, Bell 206, MQ-9 — and a tracked contact swaps from glyph to 3D model as you close in.
-- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir, Snow.
+- **🎨 Reskin reality:** GLSL sensor looks over the normal globe — CRT, NVG, FLIR/thermal, Noir.
 - **🟩 Detection overlay:** Screen-space bounding boxes and IDs on everything in view.
 - **🎖️ Military HUD:** Tactical heads-up display with intelligence-style telemetry.
 - **🌐 Global Context:** Stage the full situational picture with one switch — and get your exact view back when you leave.
@@ -89,7 +89,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## ⚡ Quick Start
 
-**Start without an account or API keys.** Both paths open the same app with
+**Local setup needs no account or API keys.** The app opens with
 Esri satellite imagery and keyless terrain. OSM is the fallback if Esri is
 unreachable. Flights, military traffic, satellites, earthquakes, public
 cameras, radio, and launches are available without keys.
@@ -129,8 +129,9 @@ hardware; it does not establish a minimum GPU requirement.
 
 ### Path 2 — Terminal / coding agent
 
-Use **Node.js 24.x (24.14.0 or later) or 26.x**. The setup doctor warns about
-Node 25, which is end-of-life.
+Use **Node.js 24.x (24.14.0 or later) or 26.x**; 24.22.1 or later (26.12.1 or
+later on 26) includes the October 21, 2026 security fixes, among them
+CVE-2026-111497. The setup doctor warns about Node 25, which is end-of-life.
 
 ```bash
 git clone https://github.com/bilawalsidhu/gods-eye-view.git
@@ -233,10 +234,48 @@ the container.
 
 </details>
 
+### Path 4 — GitHub Codespaces (cloud, no local install)
+
+Codespaces requires a GitHub account. Overpass queries and OpenAI voice token
+requests return HTTP 403 through its forwarded HTTPS URL, even with API keys
+in `.env` and `GEV_ALLOWED_HOSTS` configured. Use a local setup for these features.
+
+The codespace runs the dev server in a cloud workspace, so Node and the dependencies
+never touch your machine. The globe still renders in your own browser, so it
+needs the same graphics there as any other path. GitHub Free includes 120
+core-hours a month with no card on file — about 60 hours on the default 2-core
+machine. Org and Enterprise plans include no free quota; current terms and
+quotas apply.
+
+1. Fork this repository, then open **your fork** on GitHub.
+2. Click the green **Code** button, the **Codespaces** tab, then **Create codespace on main**.
+3. In the codespace terminal:
+   ```bash
+   nvm install 24 && nvm use 24
+   npm ci
+   npm run doctor
+   GEV_ALLOWED_HOSTS="$CODESPACE_NAME-4173.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN" npm run dev
+   ```
+4. Open the **Ports** tab, find `4173`, and click the globe icon to open it in
+   the browser. The port is private by default, so the URL asks for your GitHub
+   login. Keep it private: a public port lets anyone use the app and the keys
+   in your `.env`.
+
+`GEV_ALLOWED_HOSTS` there is required, not optional. The dev server answers only
+the hostnames it trusts, and a forwarded port arrives on
+`$CODESPACE_NAME-4173.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`. Without it the
+page is `Blocked request. This host is not allowed.` Leading-dot wildcards are
+ignored on purpose, so pass that exact name.
+
+⚠️ **A codespace is reachable from the internet.** Treat it as the
+wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
+Settings is unavailable on the forwarded URL. Never commit your workspace
+`.env`. [SECURITY.md](SECURITY.md) has the threat model.
+
 ### Then power it up — in the app, not in a file
 
-Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**
-chip in the bottom-right corner: Provider Settings lists every supported key,
+For a local setup, keys are upgrades, not prerequisites. When you want one,
+click the **POWER UP** chip in the bottom-right corner: Provider Settings lists every supported key,
 what it switches on, and where to get it. Paste, hit **SAVE KEYS**, and the app
 restarts itself with the new capability on. Once everything is configured the
 chip reads **POWERED UP** — and if a compact layout hides it, `?setup=1`
@@ -294,14 +333,14 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Tracking the ISS along its orbital path as it crosses over Ukraine](docs/media/14-iss-over-ukraine.gif)
 
-6. **Switch the optics.** Tap `1`–`7` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
+6. **Switch the optics.** Tap `1`–`6` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
 7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
 
-**Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
+**Keyboard:** `1`–`6` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
 
 ---
 
@@ -357,7 +396,7 @@ camera input stops rotation.
 
 > 🗣️ _"Outline the state of Texas."_ · _"Annotate the Texas State Capitol and its grounds"_ — it draws the **actual enclosing boundary**, not a circle. · _"How far is the Eiffel Tower from the Louvre?"_ — a connector arrow appears and it speaks the distance. Everything persists until you say _"clear the map."_
 
-**✍️ Or draw it yourself** — DISPLAY ▸ **Draw**: pick Area, Line or Pin, click the vertices on the real world, double-click to finish, label it. Same whiteboard, same persistence, no microphone needed.
+**✍️ Or draw it yourself** — UTILITIES ▸ **Draw**: pick Area, Line or Pin and a colour, click the vertices on the real world, double-click to finish, then name, recolour, hide or fly to each shape from its row. Same whiteboard, same persistence, no microphone needed.
 
 ![Zilker Park and Lady Bird Lake drawing onto the 3D city as persistent vector annotations, by voice](docs/media/01-voice-annotate-zilker.gif)
 
@@ -399,7 +438,7 @@ Twenty layers and map sources. **Eighteen have a keyless path.** Some offer addi
 | 🌍 **Earthquakes**          | Global seismic activity, last 24h                                                                                                                                                                                                                                                                                                                                                   | USGS                                    | 🟢                                                                                                  |
 | ◍ **Air quality**           | Live AQHI on the published 1–10+ health-risk scale, with a Weather-panel card showing the band legend and the highest readings in view. **Canada only** — ECCC is the first registered provider | ECCC MSC GeoMet                          | 🟢                                                                                                  |
 | 🚗 **Traffic**              | Simulated vehicles on OSM roads. With TomTom, live flow speeds drive the simulation and congestion colors below ~8 km; individual vehicle positions are not live observations                                                                                                                                                                                                       | TomTom + OSM                            | 🟢 simulation · 🟡 live flow speeds                                                                 |
-| 📹 **CCTV Mesh**            | ~4,000 public cameras (shared cap) projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511, free developer key) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · Delaware (DelDOT live video) · New South Wales (Live Traffic NSW) · Calgary · Norway (Statens vegvesen) · Toronto · King County (WA) · Washington (WSDOT) · Catalonia (Servei Català de Trànsit) · Hong Kong (Transport Department) · Taiwan (Freeway Bureau, MOTC), plus opt-in New York City (NYC DOT TMC, needs your own NYC DOT agreement), opt-in Lithuania (Via Lietuva / Eismoinfo, photo licence unconfirmed) and opt-in Florida (FL511, individual personal use only; other use needs FDOT's written consent). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
+| 📹 **CCTV Mesh**            | ~4,000 public cameras (shared cap) projected _into_ the 3D space — Austin · Texas (TxDOT) · California (Caltrans) · London (TfL) · Ontario (511, free developer key) · Finland (Fintraffic) · British Columbia (DriveBC) · Estonia (Tallinn, Tarktee) · Delaware (DelDOT live video) · New South Wales (Live Traffic NSW) · Calgary · Norway (Statens vegvesen) · Toronto · King County (WA) · Washington (WSDOT) · Catalonia (Servei Català de Trànsit) · Hong Kong (Transport Department) · Taiwan (Freeway Bureau, MOTC) · Italy (A22 Brennero motorway), plus opt-in New York City (NYC DOT TMC, needs your own NYC DOT agreement), opt-in Lithuania (Via Lietuva / Eismoinfo, photo licence unconfirmed) and opt-in Florida (FL511, individual personal use only; other use needs FDOT's written consent). Positions are published; poses are estimated priors **you calibrate by dragging a gizmo on the camera itself** | City APIs                               | 🟢                                                                                                  |
 | 📷 **Mapped ALPR Cameras**  | License-plate-reader camera locations tagged by OpenStreetMap contributors, loaded one city-sized view at a time, with **SHOW NEAREST**. Locations and tags only: no plate data, no video                                                                                                                                                                                           | OpenStreetMap (incl. DeFlock mapping)   | 🟢                                                                                                  |
 | 📷 **Street Level**         | Street-level photos behind one panel, one chip per provider: coverage on the streets, image cones, an embedded viewer with full-screen **EXPAND**. Mapillary, Google Street View, KartaView and Panoramax | Mapillary · Google · KartaView · Panoramax | 🟢 KartaView, Panoramax · 🟡 Mapillary token · 🔴 Google Maps key |
 | 📻 **Radio**                | Geolocated world radio with an **analog tuner** — drag the needle across up to 750 stations and the globe flies to each broadcaster                                                                                                                                                                                                                                                 | Radio Browser / broadcasters            | 🟢                                                                                                  |
@@ -415,7 +454,7 @@ Twenty layers and map sources. **Eighteen have a keyless path.** Some offer addi
 
 **Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline in the **WEATHER** panel (step back, **Play**, **Latest**); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
 
-In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Utilities.
+In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions sits in the separate **Utilities** panel with Draw and Import.
 
 **The basemap ladder — what each tier buys you:**
 
@@ -491,12 +530,12 @@ How the globe handles live data:
 - **Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
 - **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
-- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
+- **A small stack.** **Vue 3** and **Pinia** for the interface, **CesiumJS** for the globe and **Vite** to build it — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
 
 ```
 src/
 ├── main.js                 # Bootstrap: Google 3D tiles, layer registration
-├── ui/                     # Runtime UI — panels, HUD, styles, controls
+├── ui/                     # Runtime UI — Vue views, Pinia stores, kit, controllers, styles
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
