@@ -125,6 +125,10 @@ const frameStyle = (panel) => ({
               <UiSelect id="gev-voice-provider" class="gev-field" :aria-label="t('AI Provider')" :title="view.provider.title" :model-value="view.provider.value" @update:model-value="emit('provider-change', $event)"><option v-for="option in view.provider.options" :key="option.value" :value="option.value">{{ option.label }}</option></UiSelect>
             </label>
             <p class="gev-voice-settings-note">{{ t('The selected AI provider is shared by voice and chat.') }}</p>
+            <div id="gev-settings-chat">
+              <label class="gev-voice-preference gev-voice-preference-toggle"><input id="gev-chat-quick" type="checkbox" v-checked="view.chat.quickChecked" @change="emit('chat-quick-change', $event.target.checked)" /><span>{{ t('Show quick commands') }}</span></label>
+              <p>{{ t('Chat replies are silent. No microphone access is needed.') }}</p>
+            </div>
             <div id="gev-settings-voice">
             <label class="gev-voice-preference gev-voice-preference-toggle"><input id="gev-voice-preview-enabled" type="checkbox" aria-describedby="gev-voice-preview-note" v-checked="view.preferences.previewChecked" @change="emit('preview-change', $event.target.checked)" /><span>{{ t('Show Voice Preview') }}</span></label>
             <p id="gev-voice-preview-note" class="gev-voice-settings-note">{{ view.preferences.previewNote }}</p>
@@ -151,10 +155,6 @@ const frameStyle = (panel) => ({
                 <span id="gev-voice-cost-value" class="gev-voice-cost-value" :hidden="view.cost.hidden" :data-level="view.cost.level" :title="view.cost.title">{{ view.cost.text }}</span>
               </div>
             </div>
-            </div>
-            <div id="gev-settings-chat">
-              <label class="gev-voice-preference gev-voice-preference-toggle"><input id="gev-chat-quick" type="checkbox" v-checked="view.chat.quickChecked" @change="emit('chat-quick-change', $event.target.checked)" /><span>{{ t('Show quick commands') }}</span></label>
-              <p>{{ t('Chat replies are silent. No microphone access is needed.') }}</p>
             </div>
           </section>
         </div>

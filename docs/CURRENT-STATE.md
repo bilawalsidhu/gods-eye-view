@@ -764,8 +764,9 @@ again once the trays close and the pointer leaves the wings. Panel height animat
 other or the voice view changes. Minimized voice shows the last sentence from
 each side, and the empty Voice Preview suggests things to say until voice
 starts. Settings opened from chat keep chat's frame and show the shared AI
-provider and the quick-commands option, with Back to chat; voice Settings show
-Back to voice. Escape steps back from either Settings view, closes Voice
+provider, the quick-commands option and then the voice preferences (Voice
+Preview, inactivity timeout and model tier), so they stay in reach while
+Preview is off, with Back to chat; voice Settings show Back to voice. Escape steps back from either Settings view, closes Voice
 Preview, and does nothing in chat. Closing chat ends a typed session, and the
 voice panel's close turns voice off. Asking the assistant from chat to open
 Voice Settings or Voice Preview puts chat away, minimized or not, and shows the

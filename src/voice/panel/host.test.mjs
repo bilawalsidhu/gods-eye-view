@@ -1,6 +1,7 @@
 import '../../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createPinia } from 'pinia';
 import { createVoiceControl } from '../control.js';
 import { useVoiceStore } from '../../ui/stores/voice.js';
@@ -1005,6 +1006,61 @@ test('chat Settings keep chat context until the panel closes', async (t) => {
   await f.settle();
   assert.equal($('#gev-chat-panel').hidden, false);
   assert.equal(f.ui.state.chat.backVisible, false);
+});
+
+// Shown once neither the element nor an ancestor is hidden by the page's
+// chat stylesheet or a hidden attribute.
+function shown(selector) {
+  for (let node = $(selector); node?.nodeType === 1; node = node.parentElement)
+    if (node.hidden || globalThis.getComputedStyle(node).display === 'none')
+      return false;
+  return true;
+}
+
+test('with Preview off, chat Settings reach the voice preferences', async (t) => {
+  const style = globalThis.document.createElement('style');
+  style.textContent = readFileSync(
+    new URL('../../ui/styles/ai-chat.css', import.meta.url),
+    'utf8',
+  );
+  globalThis.document.head.append(style);
+  t.after(() => style.remove());
+  const f = mounted(t, { view: true });
+  // The control renders into the command dock, as the page does.
+  globalThis.document.body.firstElementChild.id = 'command-dock';
+  f.ui.emit('preview-change', false);
+  f.commands.voicePanel.close();
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  $('#gev-voice-settings-button').click();
+  await f.settle();
+  assert.equal(f.ui.state.voicePanel.context, 'chat');
+  for (const selector of [
+    '#gev-settings-chat',
+    '#gev-settings-voice',
+    '#gev-voice-preview-enabled',
+    '#gev-voice-timeout-select',
+  ])
+    assert.equal(shown(selector), true, selector);
+  // Chat's frame keeps the voice tabs and dock layout buttons away.
+  assert.equal(shown('.gev-voice-panel-tabs'), false);
+  const preview = $('#gev-voice-preview-enabled');
+  preview.checked = true;
+  preview.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(f.commands.getVoicePreferences().previewEnabled, true);
+  const timeout = $('#gev-voice-timeout-select');
+  timeout.value = '10';
+  timeout.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(f.commands.getVoicePreferences().minutes, 10);
+  f.ui.update('tier', { hidden: false });
+  await f.settle();
+  assert.equal(shown('#gev-voice-tier'), true);
+  let tiers = 0;
+  t.after(f.ui.on('tier', () => tiers++));
+  $('#gev-voice-tier').click();
+  assert.equal(tiers, 1);
+  assert.equal(f.ui.state.voicePanel.context, 'chat', 'still chat Settings');
 });
 
 test('chat Settings keep only the quick commands preference', async (t) => {

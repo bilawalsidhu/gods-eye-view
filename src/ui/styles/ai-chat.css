@@ -1242,13 +1242,19 @@ body[data-assistant-docked='true'] #right-context-rail {
   display: none;
 }
 
-/* Settings opened from chat: same frame as chat, chat options only. */
+/* Settings opened from chat: same frame as chat, chat options first, then
+   the voice preferences, the only pointer route to them while Preview is off. */
 #command-dock
   #gev-voice-control
   #gev-voice-panel[data-context='chat']
-  :is(.gev-voice-panel-tabs, .gev-panel-layout, #gev-settings-voice),
+  :is(.gev-voice-panel-tabs, .gev-panel-layout),
 #gev-voice-panel:not([data-context='chat']) #gev-settings-chat {
   display: none;
+}
+#gev-voice-panel[data-context='chat'] #gev-settings-voice {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--glass-border);
 }
 #gev-voice-control
   #gev-voice-panel[data-context='chat'][data-placement='compact']:not(
