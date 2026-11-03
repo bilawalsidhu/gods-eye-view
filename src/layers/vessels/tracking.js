@@ -6,6 +6,7 @@ import {
   TRAIL_MAX_POINTS,
   TRAIL_MIN_MOVE_M,
 } from './policy.js';
+import { setBillboard } from '../../data/billboardMirror.js';
 
 export function createTracking({
   vesselState,
@@ -71,7 +72,8 @@ export function createTracking({
         record.lat,
         heightM,
       );
-      if (visual.billboard) visual.billboard.position = visual.position;
+      if (visual.billboard)
+        setBillboard(visual.billboard, 'position', visual.position);
     }
   }
 

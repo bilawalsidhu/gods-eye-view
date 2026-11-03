@@ -1,4 +1,6 @@
 /** Connect portable vessel reconciliation to scene and selection operations. */
+import { setBillboard } from '../../data/billboardMirror.js';
+
 export function createVesselSnapshotRenderer({
   state,
   records,
@@ -29,9 +31,12 @@ export function createVesselSnapshotRenderer({
           const selected = record === state.selectedRecord;
           const visual = rendering.prepareRecordVisual(record);
           if (visual.billboard) {
-            visual.billboard.position = visual.position;
-            visual.billboard.scale =
-              rendering.shipScale(record) * (selected ? 1.2 : 1);
+            setBillboard(visual.billboard, 'position', visual.position);
+            setBillboard(
+              visual.billboard,
+              'scale',
+              rendering.shipScale(record) * (selected ? 1.2 : 1),
+            );
             const nextIcon = rendering.shipIcon(record, selected);
             if (nextIcon !== prevIcon) visual.billboard.image = nextIcon;
           }

@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import { LOD_LEVELS, CONTEXT_TOP_N } from './policy.js';
+import { addBillboard } from '../../data/billboardMirror.js';
 
 export function createRendering({
   layerState,
@@ -237,13 +238,17 @@ export function createRendering({
       const pickId = `firms-${fire.index}`;
       layerState._pickIndexById.set(pickId, fire);
       layerState._cullPositions.push(cullPosition);
-      layerState._billboards.add({
+      const corePx = components.model.sizeBucket(coreSize);
+      addBillboard(layerState._billboards, {
         id: pickId,
         position,
         image: components.model.glowSprite(
           components.model.detectionColorStop(fire),
-          components.model.sizeBucket(coreSize),
+          corePx,
         ),
+        // The glow sprite's own size (see glowSprite), stated for Core's mirror.
+        width: corePx * 2,
+        height: corePx * 2,
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,

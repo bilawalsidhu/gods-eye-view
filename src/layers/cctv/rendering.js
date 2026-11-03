@@ -14,6 +14,7 @@ import {
   VIEW_ICON_MARGIN,
   VIEW_MIN_CELL_M,
 } from './policy.js';
+import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 
 /** FNV-1a over a camera id: a stable, well-spread order for crowded cells. */
 function idHash(id) {
@@ -110,19 +111,20 @@ export function createRendering({
     for (const record of records || []) {
       const bb = record.billboard;
       if (!bb) continue;
-      const position = bb.position;
+      const icon = billboardState(bb);
+      const position = icon.position;
       // CCTV never publishes a tracked focus target, so every icon is ambient.
       const focus = advanceSpriteFocus(bb, {
         // Keep hidden icons in the state/release pass so the active count cannot
         // drop while a stale dim alpha remains waiting to reappear.
         screenPosition:
-          bb.show === false || !position ? null : screenPositionFor(position),
+          icon.show === false || !position ? null : screenPositionFor(position),
         cameraDistance: position ? cameraDistanceFor(position) : Number.NaN,
         nowMs,
         target,
         params,
-        spriteHalfWidthPx: (bb.width || 24) * (bb.scale || 1) * 0.5,
-        spriteHalfHeightPx: (bb.height || 24) * (bb.scale || 1) * 0.5,
+        spriteHalfWidthPx: (icon.width || 24) * (icon.scale || 1) * 0.5,
+        spriteHalfHeightPx: (icon.height || 24) * (icon.scale || 1) * 0.5,
       });
       transitioning ||= focus.transitioning;
       if (focus.active) activeCount += 1;
@@ -200,7 +202,7 @@ export function createRendering({
     const shown = [];
     const cells = new Map();
     for (const record of layerState._records) {
-      const position = record.billboard?.position;
+      const position = billboardState(record.billboard)?.position;
       if (!position) continue;
       const vx = position.x * inverseRadii.x - cx;
       const vy = position.y * inverseRadii.y - cy;
@@ -245,7 +247,8 @@ export function createRendering({
       const bb = record.billboard;
       if (!bb) continue;
       const visible = record.viewPass === pass;
-      if (bb.show !== visible) bb.show = visible;
+      if (billboardState(bb).show !== visible)
+        setBillboard(bb, 'show', visible);
     }
     const previous = layerState._viewRecords;
     const changed =
@@ -397,7 +400,8 @@ export function createRendering({
         if (!Cesium.Color.equals(record.billboard.color, color))
           record.billboard.color = color;
         const scale = isActive ? 1.25 : 1.0;
-        if (record.billboard.scale !== scale) record.billboard.scale = scale;
+        if (billboardState(record.billboard).scale !== scale)
+          setBillboard(record.billboard, 'scale', scale);
         // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
         // (set at creation) — see the field-test far-zoom submerge fix there.
       }

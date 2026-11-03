@@ -16,6 +16,7 @@ import {
   poseHash,
   requiredPlaneLift,
 } from '../../data/cctvFootprint.js';
+import { setBillboard } from '../../data/billboardMirror.js';
 
 export function createGeometry({ state: layerState, services, parts, source }) {
   const { warmGroundFloor, cachedGroundFloor } = services.ground;
@@ -347,7 +348,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     record.position = positions.mount;
     record.camera.absoluteHeightM = geometry.mount.alt;
     if (record.billboard) {
-      record.billboard.position = positions.mount;
+      setBillboard(record.billboard, 'position', positions.mount);
     }
     if (record.coverageEntities?.length >= 5) {
       record.coverageEntities[0].polyline.positions = [

@@ -62,7 +62,7 @@ test('a billboard Core did not add can be mirrored from its fields', () => {
   const bb = mirrorBillboard({ show: false, scale: 2 });
   assert.equal(billboardState(bb).show, false);
   assert.equal(billboardState(bb).scale, 2);
-  assert.ok(Cesium.Cartesian3.equals(billboardState(bb).position, Cesium.Cartesian3.ZERO));
+  assert.equal(billboardState(bb).position, undefined, 'none was pushed');
   assert.equal(billboardState(null), null);
   assert.equal(mirrorBillboard(null), null);
 });

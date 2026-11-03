@@ -13,6 +13,7 @@ import {
   CULL_LIFT_M,
   LABEL_MIN_SEP_PX,
 } from './policy.js';
+import { billboardState, setBillboard } from '../../data/billboardMirror.js';
 
 export function createModel({
   layerState,
@@ -273,9 +274,9 @@ export function createModel({
    * the opposite side of the Earth shine through the planet at tilted mid-altitude
    * views. Same pattern as the flights/CCTV layers' `EllipsoidalOccluder` passes.
    *
-   * Pure and allocation-free: reads `billboard.position`, writes `billboard.show`
-   * only when it actually flips (assigning `show` dirties the collection's vertex
-   * buffer). Accepts any `{length, get(i)}` shape so it is unit-testable without
+   * Pure and allocation-free: reads the billboard's mirrored position and show,
+   * and writes `show` only when it actually flips (assigning `show` dirties the
+   * collection's vertex buffer). Accepts any `{length, get(i)}` shape so it is unit-testable without
    * a WebGL scene.
    *
    * @param {?{length: number, get: function(number): (Object|undefined)}} billboards
@@ -295,9 +296,10 @@ export function createModel({
     for (let i = 0; i < total; i += 1) {
       const billboard = billboards.get(i);
       if (!billboard) continue;
-      const point = (cullPositions && cullPositions[i]) || billboard.position;
+      const pushed = billboardState(billboard);
+      const point = (cullPositions && cullPositions[i]) || pushed.position;
       const visible = occluder.isPointVisible(point) === true;
-      if (billboard.show !== visible) billboard.show = visible;
+      if (pushed.show !== visible) setBillboard(billboard, 'show', visible);
       if (visible) visibleCount += 1;
     }
     return visibleCount;

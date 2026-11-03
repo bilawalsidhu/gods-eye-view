@@ -11,6 +11,7 @@ import {
   LIVE_CAMERA_COLOR,
 } from './policy.js';
 import { isVideoFeedType } from '../../sources/cctvTypes.js';
+import { mirrorBillboard } from '../../data/billboardMirror.js';
 
 const FOCUS_FACTOR = 0.5;
 
@@ -29,7 +30,7 @@ test('focus de-emphasis fades each icon from its own color', () => {
     camera: { id, feedType },
     // No position, so the pass skips screen projection; the focus stub below
     // decides the factor on its own.
-    billboard: { show: true },
+    billboard: mirrorBillboard({ show: true }),
   });
   const idleVideo = record('idle-hls', 'hls');
   const idleStill = record('idle-image', 'image');

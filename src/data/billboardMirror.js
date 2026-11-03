@@ -31,12 +31,10 @@ const DEFAULTS = Object.freeze({
 /** Cesium copies positions and scalers on write; the mirror keeps its own copy too. */
 function copyInto(record, field, value) {
   if (field === 'position') {
-    // Cesium keeps its old position when handed none; so does the mirror.
-    if (!value && record.position) return;
-    record.position = Cesium.Cartesian3.clone(
-      value ?? Cesium.Cartesian3.ZERO,
-      record.position,
-    );
+    // Cesium keeps its old position when handed none; so does the mirror. A
+    // billboard never given one has none here (Cesium would report the origin).
+    if (!value) return;
+    record.position = Cesium.Cartesian3.clone(value, record.position);
   } else if (field === 'scaleByDistance') {
     record.scaleByDistance = value
       ? Cesium.NearFarScalar.clone(value, record.scaleByDistance)
@@ -97,7 +95,7 @@ export function setBillboard(billboard, field, value) {
  * Core's copy of a billboard's mirrored fields, or null when it has none (or
  * there is no billboard).
  * @param {Object|null|undefined} billboard
- * @returns {{ show: boolean, position: Cesium.Cartesian3, scale: number,
+ * @returns {{ show: boolean, position?: Cesium.Cartesian3, scale: number,
  *   rotation: number, width?: number, height?: number,
  *   scaleByDistance?: Cesium.NearFarScalar }|null}
  */

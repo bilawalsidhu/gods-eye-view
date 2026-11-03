@@ -12,6 +12,7 @@ import {
   VIEW_MOTION_MIN_TURN_DEG,
   VIEW_MOTION_COST_FACTOR,
 } from './policy.js';
+import { addBillboard } from '../../data/billboardMirror.js';
 
 const MIN_TURN_COS = Math.cos((VIEW_MOTION_MIN_TURN_DEG * Math.PI) / 180);
 
@@ -237,7 +238,7 @@ export function createLifecycle({
           camera.lat,
           camera.absoluteHeightM,
         );
-        const billboard = layerState._billboards.add({
+        const billboard = addBillboard(layerState._billboards, {
           id: camera.id,
           image: CAMERA_ICON,
           position,

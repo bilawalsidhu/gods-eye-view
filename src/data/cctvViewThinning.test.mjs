@@ -10,6 +10,7 @@ import cctvLayer, {
   _viewRecordIdsForTest,
   refreshHorizonCulling,
 } from './cctv.js';
+import { mirrorBillboard } from './billboardMirror.js';
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -40,7 +41,7 @@ function recordsAt(
         mountHeightM: 8,
       },
       position,
-      billboard: { position, show: true },
+      billboard: mirrorBillboard({ position, show: true }),
       coverageEntities: [],
       projection: null,
     };
@@ -59,7 +60,11 @@ function viewerAt(heightM, screenByPosition, shiftX = 0) {
     scene: {
       canvas: { clientWidth: WIDTH, clientHeight: HEIGHT },
       cartesianToCanvasCoordinates: (position) => {
-        const screen = screenByPosition.get(position);
+        // The mirror holds its own copy of each position, so match by value.
+        const key = [...screenByPosition.keys()].find((candidate) =>
+          Cesium.Cartesian3.equals(candidate, position),
+        );
+        const screen = screenByPosition.get(key);
         return screen && { x: screen.x + shiftX, y: screen.y };
       },
     },

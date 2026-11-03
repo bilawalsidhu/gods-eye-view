@@ -21,6 +21,7 @@ import {
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
 } from './policy.js';
+import { billboardState } from '../../data/billboardMirror.js';
 
 export function createQueries({
   vesselState,
@@ -295,9 +296,7 @@ export function createQueries({
       }
       if (!record) return null;
 
-      const position =
-        components.rendering.getVisual(record).billboard?.position ||
-        components.rendering.getVisual(record).position;
+      const position = components.rendering.iconPosition(record);
       if (!position) return null;
       return {
         mmsi: record.mmsi,
@@ -328,10 +327,9 @@ export function createQueries({
 
       const entries = [];
       for (const record of records) {
-        const visual = components.rendering.getVisual(record);
         if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
           continue;
-        const position = visual.billboard?.position || visual.position;
+        const position = components.rendering.iconPosition(record);
         if (!position) continue;
         const distanceM = Cesium.Cartesian3.distance(centerCartesian, position);
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
@@ -381,9 +379,8 @@ export function createQueries({
         Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 800;
 
       for (const record of records) {
-        const visual = components.rendering.getVisual(record);
         if (result.length >= cap) break;
-        const position = visual.billboard?.position || visual.position;
+        const position = components.rendering.iconPosition(record);
         if (!position) continue;
         result.push({
           id: record.mmsi,
@@ -495,8 +492,9 @@ export function createQueries({
         if ((idx - start) % stride !== 0) continue;
         const record = records[idx];
         const visual = components.rendering.getVisual(record);
-        if (visual.billboard && !visual.billboard.show) continue;
-        const position = visual.billboard?.position || visual.position;
+        const icon = billboardState(visual.billboard);
+        if (icon && !icon.show) continue;
+        const position = icon?.position || visual.position;
         if (!position) continue;
         result.push({
           position,

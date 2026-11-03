@@ -20,6 +20,11 @@ import {
   LABEL_GRID_PX,
   CARD_MIN_SEP_PX,
 } from './policy.js';
+import {
+  addBillboard,
+  billboardState,
+  setBillboard,
+} from '../../data/billboardMirror.js';
 
 export function createRendering({
   vesselState,
@@ -34,6 +39,12 @@ export function createRendering({
   // The fallback preserves helper calls with externally supplied render records.
   function getVisual(record) {
     return visualRecords.get(record) || record;
+  }
+
+  /** Where a record's icon was drawn, from Core's mirror, else its visual position. */
+  function iconPosition(record) {
+    const visual = getVisual(record);
+    return billboardState(visual.billboard)?.position || visual.position;
   }
 
   function prepareRecordVisual(record) {
@@ -121,10 +132,13 @@ export function createRendering({
     const visible =
       state.feed.enabled &&
       isVisible(getVisual(record).surfacePosition, occluder);
-    getVisual(record).billboard = state.billboardCollection.add({
+    getVisual(record).billboard = addBillboard(state.billboardCollection, {
       position: getVisual(record).position,
       show: visible,
       image: shipIcon(record, false),
+      // The ship artwork's own size, stated so Core's mirror knows it.
+      width: 32,
+      height: 32,
       scale: shipScale(record),
       // Screen-projected rotation lands on the next visibility/rotation pass.
       rotation: 0,
@@ -286,19 +300,18 @@ export function createRendering({
         const visual = getVisual(record);
         const visible = isVisible(visual.surfacePosition, occluder);
         if (visual.billboard) {
-          visual.billboard.show = visible;
+          if (billboardState(visual.billboard).show !== visible)
+            setBillboard(visual.billboard, 'show', visible);
           if (visible && doRotations && scene) {
+            const { rotation } = billboardState(visual.billboard);
             const rot = screenProjectedRotation(
               scene,
               visual.position,
               vesselCourseDeg(record),
-              visual.billboard.rotation,
+              rotation,
             );
-            if (
-              rot !== null &&
-              Math.abs(rot - visual.billboard.rotation) > 0.002
-            ) {
-              visual.billboard.rotation = rot;
+            if (rot !== null && Math.abs(rot - rotation) > 0.002) {
+              setBillboard(visual.billboard, 'rotation', rot);
             }
           }
         }
@@ -353,14 +366,15 @@ export function createRendering({
     for (const record of records || []) {
       const visual = getVisual(record);
       const bb = visual?.billboard;
-      const position = bb?.position || visual?.position;
+      const icon = billboardState(bb);
+      const position = icon?.position || visual?.position;
       if (!bb || !position) continue;
       // Most of a worldwide feed sits behind the horizon. A hidden sprite with
       // no pending focus state and full alpha would advance to exactly what it
       // already is, so skip it instead of paying its distance and state work
       // every 80 ms while anything is tracked.
       if (
-        bb.show === false &&
+        icon.show === false &&
         spriteFocusAtRest(bb) &&
         !focusAlphaNeedsWrite(bb.color?.alpha, 1, params)
       )
@@ -368,15 +382,16 @@ export function createRendering({
       const focus = advanceSpriteFocus(bb, {
         // Hidden/far-side sprites still finish any pending release so the active
         // count remains truthful and they cannot reappear with stale dim alpha.
-        screenPosition: bb.show === false ? null : screenPositionFor(position),
+        screenPosition:
+          icon.show === false ? null : screenPositionFor(position),
         cameraDistance: cameraDistanceFor(position),
         nowMs,
         target,
         params,
         // Vessel artwork is 32 px before billboard scale. Including the
         // ambient chevron's own rendered extent prevents edge-overlap misses.
-        spriteHalfWidthPx: (bb.width || 32) * (bb.scale || 1) * 0.5,
-        spriteHalfHeightPx: (bb.height || 32) * (bb.scale || 1) * 0.5,
+        spriteHalfWidthPx: (icon.width || 32) * (icon.scale || 1) * 0.5,
+        spriteHalfHeightPx: (icon.height || 32) * (icon.scale || 1) * 0.5,
       });
       transitioning ||= focus.transitioning;
       if (focus.active) activeCount += 1;
@@ -461,7 +476,7 @@ export function createRendering({
     if (selected) {
       const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
         scene,
-        getVisual(selected).billboard?.position || getVisual(selected).position,
+        iconPosition(selected),
       );
       if (screen) accepted.push({ x: screen.x, y: screen.y });
     }
@@ -561,6 +576,7 @@ export function createRendering({
   }
   return {
     getVisual,
+    iconPosition,
     prepareRecordVisual,
     resetRecordVisuals,
     renderRowLimit,

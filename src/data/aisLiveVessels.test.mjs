@@ -39,6 +39,7 @@ import {
   presentSelectedVessel,
   subscribeSelectedVessel,
 } from '../hudReadouts.js';
+import { mirrorBillboard, setBillboard } from './billboardMirror.js';
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42), null);
@@ -659,12 +660,12 @@ test('vessel focus wire animates alpha with deadband and restores after tracking
   let writes = 0;
   const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
   let color = makeColor(1);
-  const billboard = {
+  const billboard = mirrorBillboard({
     position: { x: 1, y: 2, z: 3 },
     show: true,
     get color() { return color; },
     set color(next) { writes += 1; color = next; },
-  };
+  });
   const records = [{ position: billboard.position, billboard }];
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
@@ -713,12 +714,12 @@ test('vessel focus wire animates alpha with deadband and restores after tracking
 
 test('vessel focus wire performs no alpha writes when nothing has been tracked', () => {
   let writes = 0;
-  const billboard = {
+  const billboard = mirrorBillboard({
     position: { x: 0, y: 0, z: 0 },
     show: true,
     get color() { return { alpha: 1 }; },
     set color(_next) { writes += 1; },
-  };
+  });
   const result = applyVesselFocusDeemphasis({
     records: [{ position: billboard.position, billboard }],
     target: null,
@@ -737,11 +738,11 @@ test('vessel focus wire performs no alpha writes when nothing has been tracked',
 
 test('vessel focus wire restores a hidden sprite before releasing the active pass', () => {
   const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
-  const billboard = {
+  const billboard = mirrorBillboard({
     position: { x: 1, y: 2, z: 3 },
     show: true,
     color: makeColor(1),
-  };
+  });
   const records = [{ billboard }];
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
@@ -771,7 +772,7 @@ test('vessel focus wire restores a hidden sprite before releasing the active pas
   assert.equal(dimmed.activeCount, 1);
   assert.equal(billboard.color.alpha, params.dimFloor);
 
-  billboard.show = false;
+  setBillboard(billboard, 'show', false);
   const releaseStart = pass(params.attackMs, null, dimmed.activeCount);
   const restored = pass(params.attackMs + params.releaseMs, null, releaseStart.activeCount);
   assert.equal(restored.ran, true);
@@ -1350,9 +1351,11 @@ test('buildVesselCard: unnamed vessels title as MMSI; long names truncate', () =
 });
 
 test('buildVesselCard: anchors to the billboard position when present', () => {
-  const rendered = { x: 9, y: 9, z: 9 };
-  const card = buildVesselCard(makeRecord({ billboard: { position: rendered } }));
-  assert.equal(card.position, rendered);
+  const rendered = new Cesium.Cartesian3(9, 9, 9);
+  const card = buildVesselCard(
+    makeRecord({ billboard: mirrorBillboard({ position: rendered }) }),
+  );
+  assert.deepEqual(card.position, rendered);
 });
 
 test('buildVesselCard: tanker types carry the amber accent', () => {
@@ -1742,11 +1745,12 @@ test('vessel selection passes the opaque source reference to optional history', 
 
 test('vessel focus wire skips hidden sprites at rest while a target is tracked', () => {
   const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
-  const sprite = (show) => ({
-    position: { x: 1, y: 2, z: 3 },
-    show,
-    color: makeColor(1),
-  });
+  const sprite = (show) =>
+    mirrorBillboard({
+      position: { x: 1, y: 2, z: 3 },
+      show,
+      color: makeColor(1),
+    });
   const visible = sprite(true);
   const hidden = Array.from({ length: 50 }, () => sprite(false));
   const records = [visible, ...hidden].map((billboard) => ({

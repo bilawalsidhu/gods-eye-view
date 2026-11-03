@@ -292,7 +292,7 @@ test('refresh keeps pick identity and renderer geometry separate, and eviction r
   for (const key of ['position', 'surfacePosition', 'normal', 'billboard']) {
     assert.equal(Object.hasOwn(record, key), false);
   }
-  assert.equal(layer.findByQuery('111').position, primitive.position);
+  assert.deepEqual(layer.findByQuery('111').position, primitive.position);
   const oldPosition = primitive.position;
   current = snapshot([{ ...observation('111'), longitude: 4.06 }]);
   await layer.update();
@@ -300,7 +300,7 @@ test('refresh keeps pick identity and renderer geometry separate, and eviction r
   assert.equal([...primitives][0], primitive);
   assert.equal(primitive.id, record);
   assert.notDeepEqual(primitive.position, oldPosition);
-  assert.equal(layer.findByQuery('111').position, primitive.position);
+  assert.deepEqual(layer.findByQuery('111').position, primitive.position);
   current = snapshot([observation('222')]);
   await layer.update();
   assert.equal(primitives.has(primitive), false);
