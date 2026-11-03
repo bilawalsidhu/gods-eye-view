@@ -198,14 +198,34 @@ export function buildNavaraLook(
     }
     return changed;
   };
+  // Anime's bands turn the starfield into blotches: the stars fade with the
+  // style (Cesium fades its Milky Way), from the look's own brightness.
+  const starsMesh = mesh('stars');
+  const starsIntensity =
+    plan.meshes.find((desc) => Object.hasOwn(desc, 'stars'))?.stars
+      ?.intensity ?? NAVARA_STARS_INTENSITY;
+  let starsDimmed = 0;
   return {
     handles,
     frame,
     resetDaylight() {
       daylightTime = null;
     },
+    /** Dims the stars by `amount` (0 none, 1 hidden); true when it changed. */
+    setStarsDimmed(amount) {
+      const next = Math.min(1, Math.max(0, Number(amount) || 0));
+      if (!starsMesh || next === starsDimmed) return false;
+      starsDimmed = next;
+      starsMesh.update({
+        stars: { intensity: starsIntensity * (1 - next) },
+      });
+      return true;
+    },
   };
 }
+
+/** Navara's own stars intensity, for a look that does not set one. */
+export const NAVARA_STARS_INTENSITY = 10;
 
 const IRRADIANCE_ON = Object.freeze({
   aerialPerspective: Object.freeze({ irradiance: true }),

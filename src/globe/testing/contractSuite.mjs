@@ -10,7 +10,12 @@
 // Each check sets the view it needs; checks may leave the camera anywhere.
 
 import * as geo from '../../geo/index.js';
-import { INPUT_TYPES, MODIFIERS, assertGlobeEngine } from '../contract.js';
+import {
+  INPUT_TYPES,
+  MODIFIERS,
+  assertGlobeEngine,
+  engineCapabilities,
+} from '../contract.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
@@ -2763,7 +2768,95 @@ export function createContractSuite(
   ];
   if (mapSources?.photoreal && mapSources.imagery?.length >= 2)
     checks.push(...mapChecks(engine.maps, mapSources));
+  const capabilities = engineCapabilities(engine);
+  if (capabilities.visualStyles)
+    checks.push(...styleChecks(engine.render, settle));
   return checks.map(([name, run]) => ({ name, run }));
+}
+
+// The optional visualStyles capability (render.setStyle).
+function styleChecks(render, settle) {
+  return [
+    [
+      'render.setStyle (visualStyles): merges, copies, rejects bad values, draws',
+      async () => {
+        const names = render.visualStyles;
+        ensure(
+          names.length > 0 && new Set(names).size === names.length,
+          `visualStyles ${JSON.stringify(names)} is not a list of names`,
+        );
+        const [name] = names;
+        const previous = render.style(name);
+        ensure(
+          previous.intensity === 0,
+          `${name} starts at intensity ${previous.intensity}`,
+        );
+        const [uniform] = Object.keys(previous.uniforms);
+        try {
+          render.setStyle(name, { intensity: 1 });
+          ensure(render.style(name).intensity === 1, 'intensity not set');
+          // A frame with the style on draws without errors.
+          await settle(2);
+          if (uniform) {
+            render.setStyle(name, { uniforms: { [uniform]: 0.25 } });
+            const state = render.style(name);
+            ensure(
+              state.intensity === 1 && state.uniforms[uniform] === 0.25,
+              `after a uniform alone: ${JSON.stringify(state)}`,
+            );
+            state.uniforms[uniform] = 9;
+            ensure(
+              render.style(name).uniforms[uniform] === 0.25,
+              'style() is a copy',
+            );
+          }
+          render.setStyle(name, { intensity: 0.5 });
+          ensure(render.style(name).intensity === 0.5, 'crossfade step');
+          for (const [label, call] of [
+            ['unknown style', () => render.setStyle('no-such-style', {})],
+            ['intensity 2', () => render.setStyle(name, { intensity: 2 })],
+            [
+              'intensity -0.1',
+              () => render.setStyle(name, { intensity: -0.1 }),
+            ],
+            [
+              'unknown uniform',
+              () => render.setStyle(name, { uniforms: { noSuchUniform: 1 } }),
+            ],
+            ...(uniform
+              ? [
+                  [
+                    'NaN uniform',
+                    () =>
+                      render.setStyle(name, {
+                        uniforms: { [uniform]: Number.NaN },
+                      }),
+                  ],
+                ]
+              : []),
+          ]) {
+            let error = null;
+            try {
+              call();
+            } catch (caught) {
+              error = caught;
+            }
+            ensure(
+              error instanceof TypeError,
+              `setStyle with ${label} did not throw a TypeError`,
+            );
+          }
+          ensure(
+            render.style(name).intensity === 0.5,
+            'a rejected call changed the style',
+          );
+        } finally {
+          render.setStyle(name, previous);
+          await settle(1);
+        }
+      },
+    ],
+  ];
 }
 
 // The maps switch order, observed through maps.current().

@@ -233,6 +233,23 @@
  *   state here (src/ui/visualEffects.js).
  * @property {() => { enabled: boolean, amount: number }} sharpen
  *   The sharpening last set (a copy).
+ * @property {readonly string[]} [visualStyles] Optional, with setStyle and
+ *   style (capability `visualStyles`, see engineCapabilities): the
+ *   full-frame styles the engine draws itself, by the app's style names
+ *   (src/styles: retro, surveillance, thermal, anime, noir). Cesium has none:
+ *   in Cesium mode the app's own post stages draw the styles
+ *   (src/ui/visualEffects.js).
+ * @property {(name: string, options: { intensity?: number, uniforms?: Record<string, number> }) => void} [setStyle]
+ *   Shows one style at `intensity` (0..1, 0 draws nothing; a crossfade shows
+ *   two at once, drawn in the order of visualStyles) with its own uniforms
+ *   (the style's parameters and `time`, seconds, for an animated one).
+ *   Omitted fields keep their value; an unknown style or uniform name, an
+ *   intensity outside 0..1 or a non-finite uniform throws a TypeError.
+ *   Every style starts at intensity 0 with its shader's defaults.
+ * @property {(name: string) => StyleState} [style] The style's state last
+ *   set (a copy).
+ *
+ * @typedef {{ intensity: number, uniforms: Record<string, number> }} StyleState
  *
  * @typedef {object} PickResult
  * @property {any} id The picked entity or object id (a mover's or line's
@@ -635,6 +652,56 @@ const SHAPE = {
   },
 };
 
+const isNameList = (value) =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every((name) => typeof name === 'string' && name.length > 0);
+
+// Optional capabilities: flag → member path → predicate. An engine has each
+// group whole or not at all (assertGlobeEngine); engineCapabilities says
+// which it has.
+const OPTIONAL_SHAPE = {
+  visualStyles: {
+    'render.visualStyles': isNameList,
+    'render.setStyle': isFunction,
+    'render.style': isFunction,
+  },
+};
+
+/** The optional capability flags, e.g. 'visualStyles'. */
+export const ENGINE_CAPABILITIES = Object.freeze(Object.keys(OPTIONAL_SHAPE));
+
+/** The member paths of each optional capability. */
+export const OPTIONAL_ENGINE_MEMBERS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(OPTIONAL_SHAPE).map(([flag, members]) => [
+      flag,
+      Object.freeze(Object.keys(members)),
+    ]),
+  ),
+);
+
+const memberAt = (engine, path) =>
+  path.split('.').reduce((value, key) => value?.[key], engine);
+
+/**
+ * Which optional capabilities an engine has: { visualStyles, ... } as
+ * booleans. A caller that refuses a feature on an engine without a Cesium
+ * viewer (voice, say) asks here instead: Cesium draws these through the app's
+ * own stages and reports false.
+ */
+export function engineCapabilities(engine) {
+  return Object.fromEntries(
+    Object.entries(OPTIONAL_SHAPE).map(([flag, members]) => [
+      flag,
+      isObject(engine) &&
+        Object.entries(members).every(([path, valid]) =>
+          valid(memberAt(engine, path)),
+        ),
+    ]),
+  );
+}
+
 /** The capability paths the contract requires, e.g. 'camera.flyTo'. */
 export const GLOBE_ENGINE_MEMBERS = Object.freeze([
   'kind',
@@ -671,6 +738,13 @@ export function assertGlobeEngine(engine) {
     for (const [member, valid] of Object.entries(members))
       if (!valid(value[member])) problems.push(`${capability}.${member}`);
   }
+  // An optional capability is whole or absent.
+  for (const members of Object.values(OPTIONAL_SHAPE)) {
+    const paths = Object.keys(members);
+    if (paths.every((path) => memberAt(engine, path) === undefined)) continue;
+    for (const [path, valid] of Object.entries(members))
+      if (!valid(memberAt(engine, path))) problems.push(path);
+  }
   if (!isFunction(engine.destroy)) problems.push('destroy');
   if (!isFunction(engine.isDestroyed)) problems.push('isDestroyed');
   if (problems.length)
@@ -698,4 +772,38 @@ export function mergeSharpen(current, { enabled, amount } = {}) {
     enabled: enabled ?? current.enabled,
     amount: amount ?? current.amount,
   };
+}
+
+/** A style's state before it is first set (GlobeRender.style), less its uniforms. */
+export const STYLE_INITIAL = Object.freeze({ intensity: 0 });
+
+/**
+ * GlobeRender.setStyle's argument merged onto `current` ({ intensity,
+ * uniforms }): a new state, or a TypeError for an intensity outside 0..1, a
+ * uniform not in `names` or a non-finite uniform value.
+ */
+export function mergeStyle(current, { intensity, uniforms } = {}, names = []) {
+  if (
+    intensity !== undefined &&
+    !(isNumber(intensity) && intensity >= 0 && intensity <= 1)
+  )
+    throw new TypeError(
+      `Style intensity must be a number in 0..1: ${intensity}`,
+    );
+  if (
+    uniforms !== undefined &&
+    (uniforms === null || typeof uniforms !== 'object')
+  )
+    throw new TypeError('Style uniforms must be an object');
+  const next = { ...current.uniforms };
+  for (const [name, value] of Object.entries(uniforms ?? {})) {
+    if (!names.includes(name))
+      throw new TypeError(`Unknown style uniform: ${name}`);
+    if (!isNumber(value))
+      throw new TypeError(
+        `Style uniform ${name} must be a finite number: ${value}`,
+      );
+    next[name] = value;
+  }
+  return { intensity: intensity ?? current.intensity, uniforms: next };
 }

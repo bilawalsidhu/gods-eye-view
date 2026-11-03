@@ -5,11 +5,15 @@ import {
   GLOBE_ENGINE_MEMBERS,
   INPUT_TYPES,
   MODIFIERS,
+  ENGINE_CAPABILITIES,
+  OPTIONAL_ENGINE_MEMBERS,
   SHARPEN_INITIAL,
   assertGlobeEngine,
   createEngineEvent,
+  engineCapabilities,
   isEngineEvent,
   mergeSharpen,
+  mergeStyle,
 } from './contract.js';
 import { createFakeEngine } from './testing/fakeEngine.js';
 import {
@@ -375,4 +379,73 @@ test('the contract carries the follow camera', () => {
   const engine = createFakeEngine();
   const broken = { ...engine, camera: { ...engine.camera, followChanged: {} } };
   assert.throws(() => assertGlobeEngine(broken), /camera\.followChanged/);
+});
+
+test('engineCapabilities names the optional capabilities an engine has whole', () => {
+  assert.ok(ENGINE_CAPABILITIES.includes('visualStyles'));
+  assert.deepEqual(OPTIONAL_ENGINE_MEMBERS.visualStyles, [
+    'render.visualStyles',
+    'render.setStyle',
+    'render.style',
+  ]);
+  const plain = createFakeEngine();
+  for (const flag of ENGINE_CAPABILITIES)
+    assert.equal(engineCapabilities(plain)[flag], false, flag);
+  const styled = createFakeEngine({
+    visualStyles: { thermal: ['palette', 'time'] },
+  });
+  assert.equal(engineCapabilities(styled).visualStyles, true);
+  assert.equal(assertGlobeEngine(styled), styled);
+  assert.equal(engineCapabilities(null).visualStyles, false);
+});
+
+test('assertGlobeEngine refuses half an optional capability', () => {
+  const engine = createFakeEngine({ visualStyles: { noir: ['grainAmt'] } });
+  const half = { ...engine, render: { ...engine.render, style: undefined } };
+  assert.throws(() => assertGlobeEngine(half), /render\.style\b/);
+  const badList = {
+    ...engine,
+    render: { ...engine.render, visualStyles: [] },
+  };
+  assert.throws(() => assertGlobeEngine(badList), /render\.visualStyles/);
+});
+
+test('mergeStyle keeps omitted fields, copies uniforms and rejects bad values', () => {
+  const current = { intensity: 0, uniforms: { palette: 0, time: 0 } };
+  const names = ['palette', 'time'];
+  const next = mergeStyle(current, { intensity: 0.4 }, names);
+  assert.deepEqual(next, { intensity: 0.4, uniforms: { palette: 0, time: 0 } });
+  assert.notEqual(next.uniforms, current.uniforms);
+  assert.deepEqual(mergeStyle(next, { uniforms: { palette: 1 } }, names), {
+    intensity: 0.4,
+    uniforms: { palette: 1, time: 0 },
+  });
+  for (const bad of [
+    { intensity: 1.01 },
+    { intensity: -1 },
+    { intensity: Number.NaN },
+    { intensity: '1' },
+    { uniforms: null },
+    { uniforms: { other: 1 } },
+    { uniforms: { palette: Number.POSITIVE_INFINITY } },
+  ])
+    assert.throws(() => mergeStyle(current, bad, names), TypeError);
+});
+
+test('a fake engine with visual styles passes the optional style check', async (t) => {
+  const engine = createFakeEngine({
+    visualStyles: { retro: ['pixelation', 'time'], noir: ['grainAmt'] },
+  });
+  const checks = createContractSuite(engine, {
+    waitFrames: async (count) => engine.fake.frames(count),
+  });
+  const style = checks.filter(({ name }) => /visualStyles/.test(name));
+  assert.equal(style.length, 1);
+  for (const check of style) await t.test(check.name, () => check.run());
+  assert.equal(engine.render.style('retro').intensity, 0);
+  // Without the capability the check is not in the suite.
+  const plain = createContractSuite(createFakeEngine(), {
+    waitFrames: async () => {},
+  });
+  assert.ok(!plain.some(({ name }) => /visualStyles/.test(name)));
 });

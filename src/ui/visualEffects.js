@@ -1,4 +1,5 @@
 import { PostProcessStage } from 'cesium';
+import { engineCapabilities } from '../globe/contract.js';
 import {
   bloomStrengthFromIntensity,
   clampBloomIntensity,
@@ -10,6 +11,42 @@ import {
   TRANSITION_DURATION_MS,
   sharpenAmount,
 } from './visualPresets.js';
+
+/**
+ * A style stage drawn by the globe engine (render.setStyle) instead of a
+ * Cesium post stage: the same { uniforms, enabled } shape, so the owner of
+ * the stages writes its uniforms as it writes a Cesium stage's; each write
+ * reaches the engine. A value the engine refuses (NaN from an old link,
+ * say) stays here and is reported, as a Cesium uniform would just draw it.
+ */
+export function engineStyleStage(render, name, shader) {
+  const values = { intensity: 0 };
+  if (shader.fragmentShader.includes('uniform float time')) values.time = 0;
+  for (const [uniform, meta] of Object.entries(shader.uniforms || {}))
+    values[uniform] = meta.default;
+  const { intensity, ...uniforms } = values;
+  render.setStyle(name, { intensity, uniforms });
+  const forward = (key, value) => {
+    try {
+      if (key === 'intensity') render.setStyle(name, { intensity: value });
+      else render.setStyle(name, { uniforms: { [key]: value } });
+    } catch (error) {
+      console.warn(`The ${name} style refused ${key}=${value}:`, error);
+    }
+  };
+  return {
+    name: `godsEyeView_${name}`,
+    enabled: false,
+    uniforms: new Proxy(values, {
+      set(target, key, value) {
+        target[key] = value;
+        if (typeof key === 'string' && Object.hasOwn(values, key))
+          forward(key, value);
+        return true;
+      },
+    }),
+  };
+}
 
 /** Own the post-process stages and their animation, without DOM dependencies. */
 export class VisualEffects {
@@ -37,6 +74,10 @@ export class VisualEffects {
     // only); an engine without a viewer (Navara) sharpens in its pipeline.
     this.engineRender =
       typeof engine?.render?.setSharpen === 'function' ? engine.render : null;
+    // Without a viewer, an engine that draws the styles itself
+    // (render.setStyle) gets them through stand-in stages (initStyles).
+    this.engineStyles =
+      !viewer && engineCapabilities(engine).visualStyles ? engine.render : null;
     this.requestRender = requestRender;
     this.holdRender = holdRender;
     this.releaseRender = releaseRender;
@@ -61,11 +102,21 @@ export class VisualEffects {
     this.previousBloom = null;
   }
 
-  // Post-process stages are Cesium's: without a viewer (the Navara engine)
-  // there are none, and the style and bloom controls change nothing (the
-  // engine sharpens, see engineRender).
+  // Post-process stages are Cesium's. Without a viewer (the Navara engine)
+  // an engine that draws the styles gets stand-in stages (engineStyleStage),
+  // which start every style at 0 on it; otherwise there are none and the
+  // style controls change nothing (the engine sharpens, see engineRender).
   initStyles() {
-    if (!this.viewer || this.stopped || this.stageEntries.length) return;
+    if (this.stopped || this.stageEntries.length) return;
+    if (!this.viewer) {
+      if (!this.engineStyles) return;
+      const drawn = this.engineStyles.visualStyles;
+      for (const [name, shader] of Object.entries(STYLES))
+        if (drawn.includes(name))
+          this.stages[name] = engineStyleStage(this.engineStyles, name, shader);
+      this.stageEntries = Object.entries(this.stages);
+      return;
+    }
     for (const [name, shader] of Object.entries(STYLES)) {
       const uniforms = { intensity: 0.0 };
       if (shader.fragmentShader.includes('uniform float time'))
@@ -127,9 +178,10 @@ export class VisualEffects {
     stage.enabled = value > 0.001;
     // Anime's bands turn the faint Milky Way into blotches, and depth cannot
     // tell the sky from far geometry, so the glow fades with the style.
+    // The engine fades its own stars with Anime (render.setStyle).
     if (
       stage === this.stages.anime &&
-      this.viewer.scene.skyBox?.milkyWayVisibility !== undefined
+      this.viewer?.scene.skyBox?.milkyWayVisibility !== undefined
     )
       this.viewer.scene.skyBox.milkyWayVisibility = 1 - value;
     if (stage.enabled && stage.uniforms.time !== undefined)

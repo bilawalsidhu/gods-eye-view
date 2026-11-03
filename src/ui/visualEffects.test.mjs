@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { VisualEffects } from './visualEffects.js';
+import { STYLES } from './visualPresets.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { MILKY_WAY_INTENSITY, StarrySky } from '../sky/starrySky.js';
 import {
   GLOBAL_POST_DEFAULTS,
@@ -335,6 +337,132 @@ test('without a viewer the engine sharpens with the same amount scale', () => {
   ]);
   assert.equal(sharpen[0].amount, sharpenAmount(0.8));
   assert.deepEqual(requests, ['sharpen', 'sharpen', 'sharpen']);
+  effects.destroy();
+});
+
+// A fake engine drawing the app's styles (render.setStyle), as Navara does.
+function styledEngine() {
+  return createFakeEngine({
+    kind: 'navara',
+    visualStyles: Object.fromEntries(
+      Object.entries(STYLES).map(([name, shader]) => [
+        name,
+        [
+          ...Object.keys(shader.uniforms),
+          ...(shader.fragmentShader.includes('uniform float time')
+            ? ['time']
+            : []),
+        ],
+      ]),
+    ),
+  });
+}
+
+function engineFixture(engine = styledEngine()) {
+  let time = 0;
+  let next = 0;
+  const frames = new Map();
+  const holds = new Set();
+  const requests = [];
+  const effects = new VisualEffects({
+    viewer: null,
+    engine,
+    requestRender: (reason) => requests.push(reason),
+    holdRender: (reason) => holds.add(reason),
+    releaseRender: (reason) => holds.delete(reason),
+    requestFrame: (callback) => {
+      const id = next++;
+      frames.set(id, callback);
+      return id;
+    },
+    cancelFrame: (id) => frames.delete(id),
+    now: () => time,
+    wallNow: () => 10_000 + time,
+  });
+  const tick = (value) => {
+    time = value;
+    const pending = [...frames.values()];
+    frames.clear();
+    for (const callback of pending) callback();
+  };
+  return { engine, effects, holds, requests, tick };
+}
+
+test('without a viewer an engine that draws styles gets stand-in stages', () => {
+  const { engine, effects } = engineFixture();
+  effects.initStyles();
+  assert.deepEqual(Object.keys(effects.stages), Object.keys(STYLES));
+  // Every style starts at 0 with its defaults on the engine.
+  for (const name of Object.keys(STYLES)) {
+    assert.equal(engine.render.style(name).intensity, 0);
+    assert.equal(effects.stages[name].enabled, false);
+  }
+  assert.deepEqual(engine.render.style('thermal').uniforms, {
+    sensitivity: 0.75,
+    bloom: 0.65,
+    mode: 0,
+    pixelation: 1.5,
+    palette: 0,
+    time: 0,
+  });
+  // A uniform write reaches the engine, as a Cesium stage uniform would.
+  effects.stages.thermal.uniforms.palette = 1;
+  assert.equal(engine.render.style('thermal').uniforms.palette, 1);
+  assert.equal(effects.stages.thermal.uniforms.palette, 1);
+  // A value the engine refuses stays local and is reported, not thrown.
+  const warn = console.warn;
+  const warned = [];
+  console.warn = (...args) => warned.push(args);
+  try {
+    effects.stages.noir.uniforms.grainAmt = Number.NaN;
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(warned.length, 1);
+  assert.equal(engine.render.style('noir').uniforms.grainAmt, 0.5);
+  effects.initStyles();
+  assert.equal(Object.keys(effects.stages).length, 5, 'initialised once');
+  effects.destroy();
+});
+
+test('an engine crossfade eases both styles and animates time on the engine', () => {
+  const { engine, effects, holds, tick } = engineFixture();
+  effects.initStyles();
+  effects.startTransition('thermal', 0, 1);
+  tick(250);
+  assert.equal(engine.render.style('thermal').intensity, 0.5);
+  assert.equal(effects.stages.thermal.enabled, true);
+  assert.ok(holds.has('style-anim'));
+  tick(500);
+  assert.equal(engine.render.style('thermal').intensity, 1);
+  // The FLIR clock keeps running on the engine while the style shows.
+  tick(1500);
+  assert.equal(engine.render.style('thermal').uniforms.time, 1.5);
+  effects.startTransition('thermal', 1, 0);
+  effects.startTransition('noir', 0, 1);
+  tick(1750);
+  assert.equal(engine.render.style('thermal').intensity, 0.5);
+  assert.equal(engine.render.style('noir').intensity, 0.5);
+  tick(2000);
+  tick(2016);
+  assert.equal(engine.render.style('thermal').intensity, 0);
+  assert.equal(engine.render.style('noir').intensity, 1);
+  assert.equal(holds.has('style-anim'), false, 'noir does not animate');
+  effects.destroy();
+});
+
+test('Anime on an engine without a viewer reaches no sky box', () => {
+  const { engine, effects } = engineFixture();
+  effects.initStyles();
+  effects.setStageIntensity(effects.stages.anime, 0.7);
+  assert.equal(engine.render.style('anime').intensity, 0.7);
+  effects.destroy();
+});
+
+test('without the visualStyles capability an engine gets no stages', () => {
+  const { effects } = engineFixture(createFakeEngine({ kind: 'navara' }));
+  effects.initStyles();
+  assert.deepEqual(effects.stages, {});
   effects.destroy();
 });
 

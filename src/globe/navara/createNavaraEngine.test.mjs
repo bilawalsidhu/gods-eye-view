@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
-import { assertGlobeEngine } from '../contract.js';
+import { assertGlobeEngine, engineCapabilities } from '../contract.js';
 import { cesiumFovy, orientationVectors } from './cameraMath.js';
 import { createNavaraEngine } from './createNavaraEngine.js';
 
@@ -206,6 +206,68 @@ test('without a sharpen port setSharpen keeps the state only', () => {
   const { engine } = setup();
   engine.render.setSharpen({ enabled: true, amount: 0.5 });
   assert.deepEqual(engine.render.sharpen(), { enabled: true, amount: 0.5 });
+});
+
+// A styles port (stylePass.js createStylesPort) on two styles.
+function stylesPort() {
+  const port = {
+    shown: [],
+    destroyed: 0,
+    names: ['retro', 'noir'],
+    uniformNames: (name) =>
+      name === 'retro' ? ['pixelation', 'time'] : ['grainAmt'],
+    defaults: (name) =>
+      name === 'retro' ? { pixelation: 5, time: 0 } : { grainAmt: 0.5 },
+    set: (name, state) => port.shown.push([name, state]),
+    destroy: () => port.destroyed++,
+  };
+  return port;
+}
+
+test('setStyle hands changed style states to the styles port and draws a frame', () => {
+  const view = fakeView();
+  const port = stylesPort();
+  const engine = createNavaraEngine(view, { hooks, styles: port });
+  assertGlobeEngine(engine);
+  assert.equal(engineCapabilities(engine).visualStyles, true);
+  assert.deepEqual(engine.render.visualStyles, ['retro', 'noir']);
+  assert.deepEqual(engine.render.style('retro'), {
+    intensity: 0,
+    uniforms: { pixelation: 5, time: 0 },
+  });
+  engine.render.setStyle('retro', { intensity: 0.5 });
+  assert.deepEqual(view.calls.at(-1), ['forceUpdate']);
+  engine.render.setStyle('retro', { uniforms: { time: 2 } });
+  const calls = view.calls.length;
+  engine.render.setStyle('retro', { intensity: 0.5, uniforms: { time: 2 } });
+  assert.equal(view.calls.length, calls, 'an unchanged state draws nothing');
+  assert.throws(() => engine.render.setStyle('snow', {}), TypeError);
+  assert.throws(
+    () => engine.render.setStyle('noir', { uniforms: { time: 1 } }),
+    TypeError,
+  );
+  assert.throws(
+    () => engine.render.setStyle('noir', { intensity: 1.5 }),
+    TypeError,
+  );
+  assert.deepEqual(port.shown, [
+    ['retro', { intensity: 0.5, uniforms: { pixelation: 5, time: 0 } }],
+    ['retro', { intensity: 0.5, uniforms: { pixelation: 5, time: 2 } }],
+  ]);
+  // The port gets its own copy.
+  port.shown[1][1].uniforms.time = 99;
+  assert.equal(engine.render.style('retro').uniforms.time, 2);
+  engine.destroy();
+  engine.render.setStyle('noir', { intensity: 1 });
+  assert.equal(port.shown.length, 2, 'nothing reaches a destroyed port');
+  engine.destroy();
+  assert.equal(port.destroyed, 1);
+});
+
+test('without a styles port the engine has no visualStyles capability', () => {
+  const { engine } = setup();
+  assert.equal(engineCapabilities(engine).visualStyles, false);
+  assert.equal(engine.render.setStyle, undefined);
 });
 
 test("the camera starts from Navara's drawn camera and pushes poses with setCamera", () => {

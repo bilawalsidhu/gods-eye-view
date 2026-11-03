@@ -469,3 +469,43 @@ test('the minimal look keeps its stars and clouds whatever the sun', () => {
   look.frame(900, false, 0, { lat: 0, lng: 0 });
   assert.deepEqual(view.added[1].updates, []);
 });
+
+test('Anime fades the stars from the look own brightness and back', () => {
+  const view = fakeView(0);
+  const look = warmCinematic(view);
+  const stars = view.added.find(({ desc }) => Object.hasOwn(desc, 'stars'));
+  assert.equal(look.setStarsDimmed(0), false, 'already undimmed');
+  assert.equal(look.setStarsDimmed(0.25), true);
+  assert.equal(look.setStarsDimmed(0.25), false);
+  assert.equal(look.setStarsDimmed(1), true);
+  assert.equal(look.setStarsDimmed(0), true);
+  assert.deepEqual(
+    stars.updates.filter((update) => update.stars),
+    [
+      { stars: { intensity: 90 } },
+      { stars: { intensity: 0 } },
+      { stars: { intensity: 120 } },
+    ],
+  );
+  // The minimal look keeps Navara's own intensity as its base.
+  const minimalView = fakeView(0);
+  const minimal = buildNavaraLook(
+    minimalView,
+    plugin([]),
+    navaraScenePlan('minimal'),
+    () => 0,
+  );
+  minimal.setStarsDimmed(0.5);
+  const minimalStars = minimalView.added.find(({ desc }) =>
+    Object.hasOwn(desc, 'stars'),
+  );
+  assert.deepEqual(minimalStars.updates, [{ stars: { intensity: 5 } }]);
+  // A look without its own stars (the plugin's photoreal scene) ignores it.
+  const photoreal = buildNavaraLook(
+    fakeView(0),
+    plugin([]),
+    navaraScenePlan('photoreal'),
+    () => 0,
+  );
+  assert.equal(photoreal.setStarsDimmed(1), false);
+});
