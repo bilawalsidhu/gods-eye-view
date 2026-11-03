@@ -1747,9 +1747,11 @@ export function moveCamera(args = {}, runNavigation = null) {
     }
     if (motion === 'orbit') {
       if (_viewer.scene.tweens.length > 0) {
-        // A camera flight is in progress ("fly to X and orbit it") — ALWAYS arm
-        // and capture at the destination; a target existing right now is
-        // meaningless (the globe is always under the crosshair).
+        // A camera flight is in progress — ALWAYS arm and capture at the
+        // destination; a target existing right now is meaningless (the globe
+        // is always under the crosshair). The voice runner already holds an
+        // orbit until its own fly-to lands; this covers any other
+        // flight.
         setActiveMotion({
           kind: 'orbit',
           direction: direction || 'right',

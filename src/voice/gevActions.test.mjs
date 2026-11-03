@@ -340,6 +340,99 @@ test('a tilt with no voice flight pending runs at once', async () => {
   assert.equal(result.ok, true);
 });
 
+// Orbit, pan and rotate also act at the place the camera ends up, so "fly to
+// Paris and orbit it" holds the orbit the same way.
+for (const motion of [
+  { motion: 'orbit' },
+  { motion: 'pan', direction: 'left' },
+  { motion: 'rotate', direction: 'right' },
+]) {
+  test(`${motion.motion} in the same reply as a fly-to waits for the flight to land`, async () => {
+    const { viewer, styleManager, order, flights } = tiltAfterFlightHarness();
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: { layers: new Map(), getAll: () => [] },
+    });
+    assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+    const moved = runner('move_camera', motion);
+    const movedDone = settledYet(moved);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(movedDone(), false, `the ${motion.motion} must wait while the camera flies`);
+    assert.equal(
+      order.slice(order.indexOf('fly')).includes('cancel'),
+      false,
+      `the ${motion.motion} must not cancel the flight`,
+    );
+    flights[0].complete();
+    const result = await moved;
+    assert.equal(result.ok, true);
+    assert.equal(result.motion, motion.motion);
+    interruptCameraMotion('test-cleanup');
+  });
+
+  test(`${motion.motion} waits through a geocoded fly-to search, then for its flight`, async () => {
+    const { viewer, styleManager } = tiltAfterFlightHarness();
+    let finishSearch;
+    let landFlight;
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: { layers: new Map(), getAll: () => [] },
+      searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
+        finishSearch = () => {
+          landFlight = options.onComplete;
+          resolve({ label: query, navigationMode: 'city-overview' });
+        };
+      }),
+    });
+    const fly = runner('fly_to_location', { query: 'Somewhere Far' });
+    const moved = runner('move_camera', motion);
+    const movedDone = settledYet(moved);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(movedDone(), false, `the ${motion.motion} must wait for the place lookup`);
+    assert.equal(getActiveCameraMotion(), null, 'nothing moves before the flight');
+    finishSearch();
+    assert.equal((await fly).ok, true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(movedDone(), false, `the ${motion.motion} must wait for the flight too`);
+    landFlight();
+    assert.equal((await moved).ok, true);
+    assert.equal(getActiveCameraMotion()?.kind, motion.motion);
+    interruptCameraMotion('test-cleanup');
+  });
+
+  test(`${motion.motion} waiting on a flight that never lands is not run`, async () => {
+    const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: { layers: new Map(), getAll: () => [] },
+    });
+    await runner('fly_to_location', { locationId: 'austin' });
+    const moved = runner('move_camera', motion);
+    flights[0].cancel();
+    const result = await moved;
+    assert.equal(result.ok, false);
+    assert.equal(result.motion, motion.motion);
+    assert.match(result.error, new RegExp(`this ${motion.motion} was waiting for did not arrive`));
+    assert.equal(getActiveCameraMotion(), null);
+  });
+}
+
+test('stop does not wait for a voice flight', async () => {
+  const { viewer, styleManager } = tiltAfterFlightHarness();
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  await runner('fly_to_location', { locationId: 'austin' });
+  const result = await runner('move_camera', { motion: 'stop' });
+  assert.equal(result.ok, true);
+  assert.equal(result.motion, 'stop');
+});
+
 test('nearest-aircraft voice action serializes layer enable, arrival, refresh, airborne query, and selection', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const { viewer, styleManager } = createVoiceNavigationHarness();

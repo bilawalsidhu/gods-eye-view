@@ -1188,8 +1188,9 @@ export function createGevActionRunner({
     }
 
     if (name === 'move_camera') {
+      const motion = String(args.motion || '').toLowerCase();
       if (
-        String(args.motion || '').toLowerCase() === 'tilt' &&
+        VOICE_FLIGHT_WAITING_MOTIONS.has(motion) &&
         voiceFlight &&
         !voiceFlight.done
       ) {
@@ -1200,9 +1201,8 @@ export function createGevActionRunner({
           return {
             ok: false,
             action: 'move_camera',
-            motion: 'tilt',
-            error:
-              'Not run: the flight this tilt was waiting for did not arrive.',
+            motion,
+            error: `Not run: the flight this ${motion} was waiting for did not arrive.`,
           };
       }
       return moveCamera(args, (navigate, releaseOptions) =>
@@ -2721,7 +2721,6 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
   );
 }
 
-/** Run one validated voice camera mutation through the UI-owned authority seam. */
 /** A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once. */
 function trackVoiceFlight() {
   let resolve;
@@ -2739,8 +2738,20 @@ function trackVoiceFlight() {
   return flight;
 }
 
-/** Longest a tilt waits for a flight (geocode plus flight) before giving up. */
+/** Longest a motion waits for a flight (geocode plus flight) before giving up. */
 const VOICE_FLIGHT_WAIT_MS = 30_000;
+
+/**
+ * Motions that act on the place the camera ends up at, so one sent beside a
+ * fly-to waits for it. Stop is not one, and rotate_globe turns the
+ * whole Earth from Globe View rather than at a place.
+ */
+const VOICE_FLIGHT_WAITING_MOTIONS = new Set([
+  'tilt',
+  'orbit',
+  'pan',
+  'rotate',
+]);
 
 /** Wait for a voice flight to end; 'timeout' or 'aborted' if it does not. */
 function waitForVoiceFlight(flight, signal) {
@@ -2758,6 +2769,7 @@ function waitForVoiceFlight(flight, signal) {
   });
 }
 
+/** Run one validated voice camera mutation through the UI-owned authority seam. */
 function runManagedVoiceNavigation(
   styleManager,
   noun,
