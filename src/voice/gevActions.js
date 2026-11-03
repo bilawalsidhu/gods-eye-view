@@ -1554,10 +1554,15 @@ export function createGevActionRunner({
     conversation++;
     analystEngine?.reset();
   };
-  /** Voice was removed: nothing may run or write again. */
-  runVoiceAction.dispose = () => {
+  /**
+   * Voice was removed, or this runner's globe left (`keepMemory`: a host
+   * that shares the analyst's memory with the next runner keeps the last
+   * answer): nothing may run or write again.
+   */
+  runVoiceAction.dispose = ({ keepMemory = false } = {}) => {
     if (disposed) return;
-    runVoiceAction.resetConversation();
+    conversation++;
+    if (!keepMemory) analystEngine?.reset();
     disposed = true;
   };
   return runVoiceAction;

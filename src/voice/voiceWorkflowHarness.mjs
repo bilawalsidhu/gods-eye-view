@@ -40,6 +40,7 @@ export function harness({
   flights = null,
   pointer = null,
   on = ['flights'],
+  runnerOptions = {},
 } = {}) {
   const modules = {
     flights: flights || {
@@ -97,6 +98,7 @@ export function harness({
         return true;
       },
     },
+    ...runnerOptions,
   });
   return {
     runner,
