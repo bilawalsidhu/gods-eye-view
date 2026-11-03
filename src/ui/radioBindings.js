@@ -241,9 +241,12 @@ export function bindRadioControls() {
     const pool = this._radioTunerPool.length
       ? this._radioTunerPool
       : this._radioTunerStations;
+    // Silent unless a stream is active; an active stream follows the selection.
+    const { audioState } = this.radio.getUIState();
     const cycled = this.radio.cycleStation(direction, {
       rotate,
       stationIds: pool.map((station) => station.id),
+      autoplay: ['loading', 'buffering', 'playing'].includes(audioState),
       origin: 'user',
     });
     if (!cycled) {
@@ -380,7 +383,9 @@ export function bindRadioControls() {
     window,
     'gev:cockpit-context-expanded',
     () => {
+      // Contact takes the room the open left panel had.
       this.actions.setPanelCollapsed('data-panel', true);
+      this.actions.setPanelCollapsed('utilities-panel', true);
     },
     tunerListenerOptions,
   );
