@@ -53,3 +53,9 @@
   from PanelChrome, and defer Escape/Tab to other focused surfaces. Carry the
   attributed typed-agent core as a self-contained contribution instead of requiring
   a future #976 merge; retain the existing draft release gates (radianx, #1331).
+- Explain provider-specific command/tool-result data destinations in the Vue
+  console, including map/place context and the independent HUD summary service,
+  in all eleven locales. Document why HTTP conversations and account-bound
+  ChatGPT Responses complement typed Realtime/Live input, and exercise COMMAND
+  alongside the real shared runner during voice replacement, STOP and teardown
+  (radianx, #1331).

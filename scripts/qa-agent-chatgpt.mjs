@@ -89,6 +89,7 @@ let browser;
 try {
   browser = await puppeteer.launch({
     headless: true,
+    pipe: true,
     executablePath:
       process.env.PUPPETEER_EXECUTABLE_PATH ||
       (await puppeteer.executablePath()),
@@ -129,6 +130,15 @@ try {
       );
       await page.waitForFunction(
         () => document.getElementById('agent-model').value === 'fixture-model',
+      );
+      assert.deepEqual(
+        await page.evaluate(() => ({
+          noticeVisible:
+            document.getElementById('agent-privacy').getBoundingClientRect()
+              .height > 0,
+          inferenceRequests: window.fixture.requests.length,
+        })),
+        { noticeVisible: true, inferenceRequests: 0 },
       );
       if (locale === 'zh-Hant' || locale === 'zh-TW' || locale === 'zh-CN') {
         const traditional = locale !== 'zh-CN';

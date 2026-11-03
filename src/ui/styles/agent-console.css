@@ -90,7 +90,8 @@
   grid-template-columns: 1fr auto;
   grid-template-areas:
     'title close'
-    'selects selects';
+    'selects selects'
+    'privacy privacy';
   gap: 0.4rem 0.5rem;
   align-items: center;
 }
@@ -458,4 +459,17 @@ html[dir='rtl'] body.mobile-shell #agent-console-chip {
 .agent-console-chip-caret {
   direction: ltr;
   unicode-bidi: isolate;
+}
+
+/* Readable before submission, bounded so a small console keeps its input. */
+.agent-console-privacy {
+  grid-area: privacy;
+  min-height: 0;
+  max-height: 4.5em;
+  overflow: auto;
+  margin: 0;
+  font-size: 0.6rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
 }

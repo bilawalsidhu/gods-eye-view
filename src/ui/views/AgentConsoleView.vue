@@ -4,7 +4,7 @@ import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { useAgentConsoleStore } from '../stores/agentConsole.js';
 import UiSelect from '../kit/UiSelect.js';
-import { consoleTextParts, modelOptionLabel, providerOptionLabel } from '../../agent/consolePresentation.js';
+import { consoleTextParts, modelOptionLabel, providerOptionLabel, providerPrivacyText } from '../../agent/consolePresentation.js';
 import { formatCommandCostUsd } from '../../agent/cost.js';
 
 const { view, chatgpt } = storeToRefs(useAgentConsoleStore());
@@ -20,6 +20,7 @@ const status = computed(() => {
   return t(view.value?.status || 'READY') + (text ? ` · ${text}` : '');
 });
 const statusCode = computed(() => (view.value?.status || 'READY').toLowerCase());
+const privacy = computed(() => providerPrivacyText(view.value?.provider));
 const plan = computed(() => view.value?.provider === 'chatgpt');
 const cost = computed(() => plan.value ? t('ChatGPT plan limits') : formatCommandCostUsd(view.value?.models.find(m => m.id === view.value.model)?.costPerCommandUsd));
 // Only geometry, native dialog disclosure, focus, input editing and scrolling
@@ -53,6 +54,7 @@ const parts = entry => entry.kind === 'tool' ? [{ text: entry.text, ltr: false }
         <span id="agent-cost" class="agent-console-cost" :title="plan ? t('ChatGPT plan limits') : t('Estimated cost per command')">{{ cost }}</span>
       </div>
       <button id="agent-console-close" class="panel-surface-control agent-console-close" type="button" :aria-label="t('Close GEV Command')">×</button>
+      <p v-if="privacy" id="agent-privacy" class="agent-console-privacy">{{ privacy }} {{ t('HUD captions use the separate summary provider configured for this app.') }}</p>
     </header>
     <div id="agent-chatgpt" class="agent-chatgpt" :hidden="!chatgpt?.visible">
       <label><span>{{ t('ChatGPT account') }}</span> <UiSelect id="agent-chatgpt-account" class="panel-surface-control gev-field" :model-value="chatgpt?.selected" :options="accounts" :disabled="chatgpt?.disabled ?? true" /></label>

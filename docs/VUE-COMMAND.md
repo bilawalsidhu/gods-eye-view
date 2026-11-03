@@ -1,5 +1,81 @@
 # GEV COMMAND on Vue / Pinia
 
+## Provider disclosure and maintainer criteria — 2026-11-03
+
+Upstream: `e5d15f24d5472b75f1d378d8e52fb5cc962bd908`.
+Validated runtime tree: `cd7cdaf54d32959738cb5f50b3aece1b63215b98`.
+The following documentation/screenshot update does not change runtime source.
+Earlier validation sections retain their own revisions and scope.
+
+The follow-up addresses the product/privacy and duplication concerns in
+[the closure of #1223](https://github.com/bilawalsidhu/gods-eye-view/pull/1223#issuecomment-6587796973):
+
+- Provider-specific notices identify command/tool-result destinations, including
+  map/place context, in all eleven locales. OpenRouter's compatible-service
+  override and potentially remote Ollama servers are not described as local.
+  The existing ChatGPT plan permission, privacy notice and Settings link remain.
+- The notice shares the existing scrollable header. A first phone attempt with
+  a new sibling region failed the simulated-keyboard reachability check; the
+  final header version passes the original assertions without relaxation.
+- COMMAND continues to call the application's existing runner, server-defined
+  tools and voice-derived manual. Main's typed input remains on its connected
+  Realtime/Live session; COMMAND's HTTP conversation and account-bound Responses
+  require neither that connection nor microphone permission. The existing
+  history/content/byte limits and server-owned contract were not reimplemented.
+- Four new coexistence regressions compose the real chooser, binder, portable
+  voice session, COMMAND loop and shared runner, with scripted wire adapters.
+  They cover voice replacement/stop before dispatch, independent COMMAND STOP,
+  and application teardown. They do not certify arbitrary overlapping map writes
+  or preserve shared pointer/referent memory across voice resets.
+- Integrating #1488 activates formerly deferred HUD cases. Their fixture now
+  supplies the current HUD readout publisher, matching upstream's view ownership;
+  production HUD behavior is unchanged by this fixture correction.
+
+| Check | Result |
+| --- | --- |
+| Full ordinary suite, four workers, Node 24.22.1 | 10,369 passed; 7 explicit skips; 0 failed |
+| Production build on the final header version | Passed |
+| Final ChatGPT Vue/browser fixture | 26 combinations: en/es/ru/zh-CN/zh-Hant/zh-TW/de/fr/it/pt/uk/ja/ar × 1280×800 and 800×800 |
+| Full-application phone/desktop geometry | 10 combinations: en/ar × 844×390, 932×430, 390×844, 320×568, 1280×800; pointer targets, minimum size, safe areas and simulated keyboard passed |
+| Final console/view/ownership selection | 52 passed |
+| HUD provenance fixture after integration | 37 passed, no deferred cases |
+| Adopted formatting, imports/package ownership, catalogs, changelog, layer ledger | Passed; 2,772 messages per locale; 34 published tokens, no new allocations |
+| Allocation probes | 15 passed on pre-header tree `c4a0b03b23333994ebcb4dd85aa93ed71bca3029`; allocation runtime/tests are identical in the final header tree |
+
+### Final upstream advance: #1308
+
+During validation, main advanced to
+`3ad3cc2ab773bb2d694a1e1605cf7ffe5d0dca46` through #1308. Its fifteen-file
+Overpass admission/tracking-verifier change is included in the final candidate.
+The only merge conflict was the format-adoption list; both sets of entries are
+retained without duplicates. COMMAND's implementation and the client code
+exercised by the browser gates are unchanged by this advance.
+
+Combined runtime tree: `37750370bb238a97db4d31cee42d55ab968d57d9` (the next
+change records this validation only). The final targeted selection passed
+**561 tests, zero failures, two explicit native Windows skips**: all agent
+suites, ChatGPT auth/storage/Responses, voice/COMMAND coexistence, Overpass
+admission/proxy/source behavior, same-site gate, network keys, arrival-observer
+regressions and HUD caption feed state. Production build, package boundaries,
+formatting, catalogs, changelog and layer tokens were rerun on this combination.
+The full-suite and browser counts above remain tied to their recorded tree;
+they were not rerun solely for the independent #1308 advance.
+
+Browser fixtures use Chromium headless shell 156.0.8078.47 and scripted
+inference/account status. The full-application geometry gate mounts the shipped
+application but intercepts agent endpoints. No real OAuth, microphone or paid
+inference is used. Safe areas and keyboard viewport signals are simulated.
+
+[Final provider notice and account controls, fixture screenshot](media/command-vue/privacy-en-desktop.png)
+
+Live ChatGPT registration/returning login, model eligibility, refresh, quota,
+two-account use and revocation still need an eligible real account. Native
+Windows credential protection, hosted CI and broad external-feed/tracking gates
+are not certified by these Linux fixture checks. The PR remains draft. The
+original #976 contribution and attribution stay in the ancestry; no separate
+merge of that open PR is required.
+
+
 ## Utilities follow-up — 2026-11-02
 
 A guarded update detected the concurrent Vue/Pinia work at `a0c2998a` and

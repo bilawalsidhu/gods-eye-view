@@ -1,33 +1,76 @@
-# GEV COMMAND - the typed agent
+# GEV COMMAND - the typed conversation view
 
-GEV COMMAND is a second transport for the agent voice already drives. It takes
-typed commands, runs the same 30 app actions through the same action runner,
-and reaches any OpenAI-compatible `/v1/chat/completions` endpoint - OpenAI,
-OpenRouter, or a local Ollama. The optional [ChatGPT plan provider](CHATGPT-COMMAND.md)
-uses its own OAuth authorization and the public Responses API.
+GEV COMMAND runs typed conversations without starting a voice connection or
+requesting microphone permission. It uses the same application action runner
+as voice and views. Its server derives the operating manual from voice and
+validates tool calls against the server-owned inventory. The registered Vue
+view and Pinia store present the conversation; they do not own map mutations.
 
-Voice is untouched. The two transports run side by side and share the
-operating manual, the tool schemas and the action runner.
+## Relationship to main's typed voice commands
 
-## Why typing as well as speaking
+Main's provider chooser already accepts typed input through
+`providerCommands.sendTextCommand`. That input uses the selected provider's
+connected Realtime/Live session. COMMAND instead uses an HTTP request/tool loop
+with a transcript, model selection and STOP. The optional
+[ChatGPT plan provider](CHATGPT-COMMAND.md) adds its own account authorization,
+account-bound model catalog and Responses continuation without requiring Codex
+credentials, a voice connection or API-key billing.
 
-Voice is excellent and expensive. Audio tokens dominate the bill, an open mic
-bills for silence, and the Realtime API has no open-source equivalent speaking
-its WebRTC protocol with native speech-to-speech plus tool calling.
+COMMAND's separate view is for this conversation and account lifecycle. It does
+not introduce a second action executor or a replacement voice-provider chooser.
+`src/app/tools.js` passes `voiceCommands.runner` to the console. The tool list
+reuses Realtime's tools plus the existing catalog's HUD caption query; the
+manual adapts the shared voice directives only where channel behavior differs.
 
-Typing removes all three at once: the same agent, the same tools, roughly two
-orders of magnitude cheaper, and reachable by back ends that will never
-implement Realtime - including a model on the operator's own GPU.
+Voice and COMMAND have separate transports and transcripts, but share map state
+and runner conversation memory. A voice stop/provider change clears shared
+pointer/referent/analyst state and can invalidate writes already in flight.
+COMMAND's transcript is not a guarantee that a prior numbered referent survives
+such a transition; request a fresh observation when needed. STOP prevents future
+COMMAND dispatch and does not undo completed actions or stop a separate voice
+session. Application teardown aborts the console and disposes the shared runner.
 
-| | Per typed command |
-|---|---|
-| `gpt-5-nano` | ~$0.0002 |
-| `gpt-5-mini` | ~$0.0008 |
-| Ollama | free |
+## Provider data and privacy
 
-against roughly $0.10–$0.30 per minute of open-mic voice. The console shows the
-estimate for the selected model before you type, computed from the real prompt
-prefix (see [Cost](#cost)).
+Selecting a model provider is also a data-routing decision. The console states
+the destination before submission, including map/place context in tool results:
+
+| Selection | Destination |
+| --- | --- |
+| ChatGPT plan or OpenAI API | OpenAI, using the selected authorization mode |
+| OpenRouter | OpenRouter and the selected model's provider; an operator may configure a different compatible base URL |
+| Ollama | The operator-configured Ollama server; a custom URL can be remote |
+
+Configuration/model listing and explicit sign-in can contact their respective
+services, but opening the console does not send a typed conversation for
+inference. The browser holds the transcript in memory; provider/model/window
+preferences are separate from the protected server-side credential store.
+Changing COMMAND provider or ChatGPT account clears the conversation.
+
+HUD captions continue through the app's separately configured summary service.
+There is no fallback that silently sends the HUD request to COMMAND's provider.
+A returned caption may subsequently be included in COMMAND's tool-result history
+and sent to the chosen conversation provider.
+
+The ChatGPT transport sends `store: false`. This is not a promise of no remote
+processing or retention. ChatGPT commands are loopback-only, use explicit plan
+permission and fail without automatically switching to paid API credentials.
+Existing Codex/Realtime authentication remains a separate integration.
+
+## Server and history boundaries
+
+The server discards client `system` messages, constructs its instructions and
+tool schemas itself, and validates returned calls before browser execution.
+These controls do not make user text or external tool results immune to prompt
+injection; they prevent callers from replacing the server's privileged contract.
+
+History targets 40 messages while preserving complete tool-call/result pairs.
+Content is capped at 8,000 characters per message and app-generated tool results
+at 6,000. The browser trims oldest exchanges to a 448 KiB transcript budget; the
+server rejects request bodies above 512 KiB. A single oversized newest exchange
+can still produce a deliberate 413. This byte ceiling is not a guarantee that
+every model's token context window will fit. One command allows eight tool rounds
+and the server allows two malformed-call corrections per model turn.
 
 ## Using it
 

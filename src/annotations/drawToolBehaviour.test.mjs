@@ -96,11 +96,10 @@ function fakeDom() {
     byId.set(id, element);
     return element;
   };
-  // The control whose presence means the page has Draw, a focused button
-  // whose Enter is its own, and the tool's label field.
+  // The control whose presence means the page has Draw, and a focused button
+  // whose Enter is its own.
   make('draw-toggle', 'BUTTON');
   make('draw-clear', 'BUTTON');
-  make('draw-label-input', 'INPUT');
 
   const body = new FakeElement('BODY');
   const documentDouble = {
@@ -176,9 +175,16 @@ function fakeViewer() {
 }
 
 function fakeAnnotations() {
-  const calls = { annotate: [], clear: 0 };
+  const calls = { annotate: [], clear: 0, restyle: [], setHidden: [], frame: [], remove: [] };
+  const marks = [];
+  const listeners = new Set();
+  const changed = () => listeners.forEach((listener) => listener());
+  const find = (id) => marks.find((mark) => mark.id === id);
   return {
     calls,
+    marks,
+    listeners,
+    changed,
     async annotate(specs, options) {
       calls.annotate.push({ specs, options });
       return { drawn: specs.length };
@@ -186,11 +192,38 @@ function fakeAnnotations() {
     clear() {
       calls.clear += 1;
     },
+    list: () => marks,
+    onChange(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    restyle(id, change) {
+      calls.restyle.push([id, change]);
+      Object.assign(find(id), change);
+      changed();
+      return true;
+    },
+    setHidden(id, hidden) {
+      calls.setHidden.push([id, hidden]);
+      find(id).hidden = hidden;
+      changed();
+      return true;
+    },
+    frame(id) {
+      calls.frame.push(id);
+      return true;
+    },
+    remove(id) {
+      calls.remove.push(id);
+      marks.splice(marks.indexOf(find(id)), 1);
+      changed();
+      return true;
+    },
   };
 }
 
 /** Stand up a tool against fresh doubles, with globals restored afterwards. */
-function harness() {
+function harness({ navigation = null } = {}) {
   resetPointerOwnership();
   const { byId, documentDouble } = fakeDom();
   const viewer = fakeViewer();
@@ -205,6 +238,7 @@ function harness() {
   const tool = initDrawTool({
     viewer,
     annotations,
+    navigation,
     publish: (view) => (shown.view = view),
     connect: (actions) => {
       controls.actions = actions;
@@ -426,6 +460,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
     h.tool.addVertex(-97.75, 30.26);
     assert.equal(pointerOwner(), 'draw');
     assert.ok(h.tool.diagnostics().domListeners > 0);
+    assert.equal(h.annotations.listeners.size, 1, 'the rows follow the board');
 
     await h.tool.destroy();
     await Promise.resolve();
@@ -443,6 +478,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
       'the viewer got its selecting click back',
     );
     assert.equal(h.viewer._attached.length, 0, 'the preview data source is detached');
+    assert.equal(h.annotations.listeners.size, 0, 'and it no longer follows the board');
 
     // Idempotent: a second destroy is harmless.
     await h.tool.destroy();
@@ -467,16 +503,15 @@ test('Clear wipes the board and the shape in progress', async () => {
   }
 });
 
-test('the controls choose the shape, colour and label the next shape is drawn with', async () => {
+test('the controls choose the shape and colour the next shape is drawn with; it is named in its row', async () => {
   const h = harness();
   try {
     h.act('toggleDraw');
     h.act('setDrawShape', 'line');
     h.act('setDrawColor', 'amber');
-    h.act('setDrawLabel', 'Route A');
     assert.deepEqual(
       { ...h.shown.view, hint: undefined },
-      { active: true, shape: 'line', color: 'amber', label: 'Route A', hint: undefined },
+      { active: true, shape: 'line', color: 'amber', hint: undefined, marks: [] },
       'the view shows what the controls chose',
     );
     h.act('setDrawColor', 'purple');
@@ -494,36 +529,83 @@ test('the controls choose the shape, colour and label the next shape is drawn wi
     const spec = h.annotations.calls.annotate[0].specs[0];
     assert.equal(spec.type, 'route', 'a drawn line is a manual route');
     assert.equal(spec.color, 'cyan');
-    assert.equal(spec.label, 'Route A');
-    assert.equal(h.shown.view.label, '', 'a finished shape empties the label');
+    assert.ok(!spec.label, 'a shape is named afterwards, in its row');
   } finally {
     h.restore();
   }
 });
 
-test('keys typed in the label field: Enter finishes, Backspace edits, Escape cancels', async () => {
+test('each drawn shape is a row whose actions reach the board, and fly-to is a navigation', async () => {
+  const navigations = [];
+  const h = harness({
+    navigation: {
+      runImmediateNavigation: (noun, navigate) => {
+        navigations.push(noun);
+        return navigate();
+      },
+    },
+  });
+  try {
+    const board = h.annotations;
+    board.marks.push(
+      { id: 'a1', type: 'route', manual: true, name: null, label: '950 m', color: 'amber', hidden: false },
+      { id: 'a2', type: 'pin', manual: false, label: 'Voice pin', color: 'primary', hidden: false },
+    );
+    board.changed();
+    assert.deepEqual(
+      h.shown.view.marks.map(({ id, placeholder, hidden }) => ({ id, placeholder, hidden })),
+      [{ id: 'a1', placeholder: 'Line · 950 m', hidden: false }],
+      'only hand-drawn marks are listed, an unnamed line by its length',
+    );
+    h.act('renameDrawMark', 'a1', 'Ridge walk');
+    h.act('recolorDrawMark', 'a1', 'green');
+    h.act('toggleDrawMark', 'a1');
+    h.act('flyToDrawMark', 'a1');
+    h.act('removeDrawMark', 'a1');
+    assert.deepEqual(board.calls.restyle, [
+      ['a1', { name: 'Ridge walk' }],
+      ['a1', { color: 'green' }],
+    ]);
+    assert.deepEqual(board.calls.setHidden, [['a1', true]]);
+    assert.deepEqual(board.calls.frame, ['a1']);
+    assert.deepEqual(navigations, ['drawing'], 'fly-to goes through the navigation policy');
+    assert.deepEqual(board.calls.remove, ['a1']);
+    assert.deepEqual(h.shown.view.marks, [], 'the row goes with its mark');
+  } finally {
+    h.restore();
+  }
+});
+
+test('Backspace on the page removes the last vertex', () => {
   const h = harness();
   try {
-    const label = h.element('draw-label-input');
+    h.act('toggleDraw');
+    h.tool.addVertex(-97.75, 30.26);
+    h.tool.addVertex(-97.74, 30.26);
+    h.documentDouble.emit('keydown', { key: 'Backspace', target: h.documentDouble.body });
+    assert.equal(h.tool.session.vertices.length, 1);
+  } finally {
+    h.restore();
+  }
+});
+
+test('keys on the shape list are the list\'s, not the drawing\'s', async () => {
+  const h = harness();
+  try {
+    const listButton = new FakeElement('BUTTON');
+    listButton.closest = (selector) => (selector === '#draw-mark-list' ? {} : null);
     const elsewhere = new FakeElement('INPUT', 'location-search');
     h.act('toggleDraw');
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);
-    h.documentDouble.emit('keydown', { key: 'Backspace', target: label });
-    assert.equal(h.tool.session.vertices.length, 2, 'Backspace edits the label');
+    h.documentDouble.emit('keydown', { key: 'Escape', target: listButton });
+    assert.equal(h.tool.session.vertices.length, 2, 'Escape in the list keeps the shape');
+    assert.equal(h.tool.active, true, 'and keeps Draw on');
     h.documentDouble.emit('keydown', { key: 'Enter', target: elsewhere });
     await Promise.resolve();
     assert.equal(h.annotations.calls.annotate.length, 0, 'another field keeps its Enter');
-    h.documentDouble.emit('keydown', { key: 'Escape', target: label });
-    assert.equal(h.tool.session.vertices.length, 0, 'Escape drops the open shape');
-    assert.equal(h.tool.active, true, 'and leaves Draw on');
-    h.act('setDrawShape', 'line');
-    h.tool.addVertex(-97.75, 30.26);
-    h.tool.addVertex(-97.74, 30.26);
-    h.documentDouble.emit('keydown', { key: 'Enter', target: label });
-    await Promise.resolve();
-    await Promise.resolve();
-    assert.equal(h.annotations.calls.annotate.length, 1, 'Enter in the label finishes');
+    h.documentDouble.emit('keydown', { key: 'Escape', target: h.documentDouble.body });
+    assert.equal(h.tool.session.vertices.length, 0, 'Escape on the page drops the open shape');
   } finally {
     h.restore();
   }

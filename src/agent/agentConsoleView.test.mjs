@@ -22,7 +22,7 @@ async function flush() {
   await settle();
   await nextTick();
 }
-function fixture(t, { command } = {}) {
+function fixture(t, { command, providers } = {}) {
   document.body.innerHTML =
     '<div class="gev-view" data-gev-view="agent-console"></div>';
   setLocale('en');
@@ -35,7 +35,9 @@ function fixture(t, { command } = {}) {
     calls.push({ url, body });
     if (url === '/api/agent/config')
       return Response.json({
-        providers: [{ id: 'chatgpt', authType: 'oauth', configured: true }],
+        providers: providers ?? [
+          { id: 'chatgpt', authType: 'oauth', configured: true },
+        ],
       });
     if (url === '/api/agent/chatgpt/status')
       return Response.json({
@@ -110,6 +112,40 @@ function submit(text) {
   get('agent-input').value = text;
   get('agent-form').dispatchEvent(new Event('submit', { cancelable: true }));
 }
+
+test('provider disclosure follows the actual selection before any inference and updates with the locale', async (t) => {
+  const f = fixture(t, {
+    providers: [
+      { id: 'chatgpt', authType: 'oauth', configured: true },
+      { id: 'openai', label: 'OpenAI', configured: true },
+      { id: 'openrouter', label: 'OpenRouter', configured: true },
+      { id: 'ollama', label: 'Ollama', configured: true },
+    ],
+  });
+  f.console_.open();
+  await flush();
+  for (const [id, destination] of [
+    ['chatgpt', 'OpenAI'],
+    [
+      'openrouter',
+      'OpenRouter (or the configured compatible service) and the selected model provider',
+    ],
+    ['ollama', 'the configured Ollama server'],
+    ['openai', 'OpenAI'],
+  ]) {
+    get('agent-provider').value = id;
+    get('agent-provider').dispatchEvent(new Event('change'));
+    await flush();
+    assert.ok(get('agent-privacy').textContent.includes(destination));
+    assert.match(get('agent-privacy').textContent, /map and place context/);
+    assert.match(get('agent-privacy').textContent, /separate summary provider/);
+  }
+  setLocale('es');
+  await nextTick();
+  assert.match(get('agent-privacy').textContent, /contexto del mapa/);
+  assert.equal(f.calls.filter((c) => c.url === '/api/agent/command').length, 0);
+  assert.deepEqual(f.actions, []);
+});
 
 test('the actual registered Vue view renders the controller, tool transcript and account isolation', async (t) => {
   const f = fixture(t);

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { boundedResultJson } from './conversation.js';
+import { hudReadouts } from '../testSupport/hudReadouts.mjs';
 
 for (const state of ['nominal', 'partial', 'degraded', 'stale']) {
   test(`large view result retains canonical ${state} evidence`, () => {
@@ -272,7 +273,9 @@ for (const locale of ['en', 'es'])
         document: globalThis.document,
         window: globalThis.window,
       };
-      const element = { textContent: '' };
+      // Current HUD publishes through its view owner rather than writing DOM.
+      const { elements, publish } = hudReadouts();
+      const element = elements.get('hud-summary');
       globalThis.document = {
         hidden: false,
         visibilityState: 'visible',
@@ -313,6 +316,7 @@ for (const locale of ['en', 'es'])
         },
       };
       const hud = new IntelHUD(viewer, {
+        publish,
         summaryService: {
           configured: async () => true,
           summarize: async (context) => {

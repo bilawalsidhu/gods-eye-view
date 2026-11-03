@@ -169,12 +169,12 @@ const schemas = [
           type: 'string',
           enum: [
             'data-panel',
-            'utilities-panel',
             'location-bar',
             'control-panel',
             'cctv-panel',
             'radio-panel',
             'scene-panel',
+            'utilities-panel',
             'pp-toggles',
             'street-level-panel',
             'global-context-panel',

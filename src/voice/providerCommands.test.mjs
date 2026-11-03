@@ -8,6 +8,7 @@ import {
 import { createVoiceCommands as bindVoiceCommands } from './sessionCommands.js';
 import { createVoiceCommands as createCommands } from './commands.js';
 import { createGevActionRunner } from './gevActions.js';
+import { createAgentSession } from '../agent/agentLoop.js';
 import { createPointerTracker } from './pointerContext.js';
 import { createReferentRegistry } from './referents.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
@@ -856,3 +857,137 @@ for (const action of ['stop', 'destroy']) {
     });
   }
 }
+
+/** Actual COMMAND loop plus the real chooser/binder/session/shared runner above.
+ * Only inference and voice wire adapters are scripted; camera effects are real
+ * fixture observations. A gate holds inference before any action can dispatch.
+ */
+function pendingTypedCommand(f) {
+  const ready = deferred();
+  const reply = deferred();
+  const posts = [];
+  const agent = createAgentSession({
+    runAction: (name, args, options = {}) =>
+      f.facade.runner(name, args, {
+        ...options,
+        signal: AbortSignal.any([f.lifetime.signal, options.signal]),
+      }),
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(init.body);
+      posts.push(body);
+      if (posts.length === 1) {
+        ready.resolve();
+        // Intentionally ignores abort, to check the loop rejects late tools.
+        await reply.promise;
+        const call = {
+          id: 'zoom',
+          name: 'adjust_camera_zoom',
+          args: { direction: 'in', amount: 'little' },
+        };
+        return Response.json({
+          message: {
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              {
+                id: call.id,
+                type: 'function',
+                function: {
+                  name: call.name,
+                  arguments: JSON.stringify(call.args),
+                },
+              },
+            ],
+          },
+          toolCalls: [call],
+        });
+      }
+      return Response.json({
+        message: { role: 'assistant', content: 'Done.' },
+        toolCalls: [],
+      });
+    },
+  });
+  return { agent, posts, ready: ready.promise, release: () => reply.resolve() };
+}
+
+for (const transition of ['provider-change', 'voice-stop']) {
+  test(`COMMAND keeps its account/transcript and executes once after ${transition}`, async (t) => {
+    const f = compositionFixture(t);
+    await f.facade.start();
+    const h = pendingTypedCommand(f);
+    t.after(() => {
+      h.agent.abort();
+      h.release();
+    });
+    const pending = h.agent.send('Zoom in', {
+      provider: 'chatgpt',
+      model: 'fixture',
+      binding: 'typed-account',
+    });
+    await h.ready;
+    if (transition === 'provider-change') f.select('gemini');
+    else f.facade.stop();
+    assert.equal(f.state.zooms, 0);
+    assert.equal(f.counters.dispose, 0);
+    assert.equal(h.agent.transcript[0].content, 'Zoom in');
+    h.release();
+    assert.equal((await pending).ok, true);
+    assert.equal(f.state.zooms, 1);
+    assert.equal(h.posts.length, 2);
+    for (const post of h.posts) {
+      assert.equal(post.provider, 'chatgpt');
+      assert.equal(post.binding, 'typed-account');
+    }
+  });
+}
+
+test('COMMAND STOP rejects late tools without stopping the voice session or disposing its runner', async (t) => {
+  const f = compositionFixture(t);
+  await f.facade.start();
+  const h = pendingTypedCommand(f);
+  t.after(() => {
+    h.agent.abort();
+    h.release();
+  });
+  const pending = h.agent.send('Zoom in', {
+    provider: 'chatgpt',
+    model: 'fixture',
+    binding: 'typed-account',
+  });
+  await h.ready;
+  h.agent.abort();
+  h.release();
+  assert.equal((await pending).ok, false);
+  assert.equal(f.state.zooms, 0);
+  assert.equal(f.facade.isActive(), true);
+  assert.equal(f.counters.dispose, 0);
+  assert.equal(
+    (
+      await f.instances[0].hooks.runAction('adjust_camera_zoom', {
+        direction: 'in',
+        amount: 'little',
+      })
+    ).ok,
+    true,
+  );
+  assert.equal(f.state.zooms, 1);
+});
+
+test('application teardown rejects late COMMAND dispatch through the disposed shared runner', async (t) => {
+  const f = compositionFixture(t);
+  const h = pendingTypedCommand(f);
+  t.after(() => {
+    h.agent.abort();
+    h.release();
+  });
+  const pending = h.agent.send('Zoom in');
+  await h.ready;
+  h.agent.abort(); // Console teardown runs before the application's voice owner.
+  f.lifetime.abort();
+  h.release();
+  assert.equal((await pending).ok, false);
+  assert.equal(f.state.zooms, 0);
+  assert.equal(f.counters.dispose, 1);
+  assert.equal(h.posts.length, 1);
+});

@@ -27,6 +27,27 @@ function providerOptionLabel(provider) {
   return `${provider.label} (needs ${provider.apiKeyEnv})`;
 }
 
+/** The destination is a provider contract, never inferred from browser URLs. */
+function providerPrivacyText(providerId) {
+  switch (providerId) {
+    case 'chatgpt':
+    case 'openai':
+      return t(
+        'Commands and tool results, including map and place context, are sent to OpenAI.',
+      );
+    case 'openrouter':
+      return t(
+        'Commands and tool results, including map and place context, are sent to OpenRouter (or the configured compatible service) and the selected model provider.',
+      );
+    case 'ollama':
+      return t(
+        'Commands and tool results, including map and place context, are sent to the configured Ollama server.',
+      );
+    default:
+      return '';
+  }
+}
+
 function modelOptionLabel(model) {
   const parts = [model.label];
   const cost = formatCommandCostUsd(model.costPerCommandUsd);
@@ -37,4 +58,9 @@ function modelOptionLabel(model) {
     : parts[0];
 }
 
-export { consoleTextParts, providerOptionLabel, modelOptionLabel };
+export {
+  consoleTextParts,
+  providerOptionLabel,
+  modelOptionLabel,
+  providerPrivacyText,
+};
