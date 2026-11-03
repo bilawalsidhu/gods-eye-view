@@ -45,6 +45,28 @@ export function isEmbeddedInline() {
   return globalThis.GEV_EMBED_INLINE === true;
 }
 
+/**
+ * `doc`'s visibility for work that pauses in a hidden page. A panel's host
+ * may report it hidden while it is on screen (see keepPanelRendering), so an
+ * inline panel always reads as visible.
+ */
+export function panelAwareVisibility(doc = globalThis.document) {
+  const hidden = () =>
+    (doc.hidden === true || doc.visibilityState === 'hidden') &&
+    !isEmbeddedInline();
+  return {
+    get hidden() {
+      return hidden();
+    },
+    get visibilityState() {
+      return hidden() ? 'hidden' : 'visible';
+    },
+    addEventListener: (type, listener) => doc.addEventListener(type, listener),
+    removeEventListener: (type, listener) =>
+      doc.removeEventListener(type, listener),
+  };
+}
+
 // A panel keeps drawing at about this rate when its host stops animation
 // frames; see keepPanelRendering.
 const PANEL_FRAME_MS = 33;

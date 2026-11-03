@@ -23,7 +23,7 @@ const NEW_SINGLE_CHARACTER_TOKEN_PATTERN = /^[0-9]$/;
  * out-of-grammar ID is rejected outright, because half an address is a
  * DIFFERENT aircraft, not a shorter name for the same one.
  */
-const TRACKING_ID_GRAMMAR = /^[0-9a-z~_-]{1,16}$/;
+export const TRACKING_ID_GRAMMAR = /^[0-9a-z~_-]{1,16}$/;
 /**
  * Ceilings for the untrusted v2 layer fields. The layer ceiling covers the
  * complete reserved one-character space plus every two-character base-36
@@ -656,11 +656,18 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 's2-ghostmaps',
+    token: '5',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'satellites',
     token: 's',
     disposition: 'enabled+options',
     optionOwner: 'satellites',
   }),
+  Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'street-level',
     token: '0',

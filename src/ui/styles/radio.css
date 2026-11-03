@@ -18,8 +18,6 @@
   border-radius: 8px;
   background: rgba(2, 15, 20, 0.42);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
 }
 #radio-panel .panel-header {
   margin-bottom: 0;
@@ -51,7 +49,8 @@
 #radio-filter {
   /* Radio owns its compact density and arrow space; shared fields paint the
      palette and disabled state, including this intentional theme exception. */
-  padding: 7px 24px 7px 8px;
+  padding-block: 7px;
+  padding-inline: 8px 24px;
   border-radius: 5px;
   font: 9px/1.2 var(--font-mono);
   --gev-field-border-color: rgba(65, 220, 231, 0.28);
@@ -461,14 +460,16 @@ html:not([lang='en']) .radio-transport button {
   border-top: 1px solid rgba(98, 181, 255, 0.16);
 }
 .military-awareness-standby strong {
-  color: #79c2ff;
+  color: var(--text-primary);
   font-size: 10px;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
 }
 .military-awareness-standby span {
-  color: #8192a6;
-  font-size: 9px;
-  letter-spacing: 0.05em;
+  color: rgba(214, 236, 255, 0.72);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
 }
 .military-awareness-standby button {
   justify-self: start;
@@ -688,8 +689,14 @@ html:not([lang='en']) .data-count {
   text-wrap: balance;
 }
 
+/* The status column keeps its width, so a wide chip (WIRD AKTIVIERT) never
+   overlaps the name; the name wraps in the room left beside it. */
+html:not([lang='en']) .data-toggle-right {
+  flex: none;
+}
+
 /* Row text pieces that must not break inside: a hyphenated code (ADS-B) and
-   the space before a " · " separator (see setRowText in layerPanel.js). */
+   the space before a " · " separator (see rowTextRuns in layerRowText.js). */
 html:not([lang='en']) .data-keep {
   white-space: nowrap;
 }
@@ -1084,11 +1091,12 @@ html:not([lang='en']) .data-row-list-text {
 .sdr-radio-card select,
 .sdr-radio-card input[type='number'] {
   min-height: 28px;
-  border: 1px solid rgba(255, 183, 82, 0.28);
   border-radius: 5px;
-  color: #ffd79a;
-  background: rgba(38, 25, 8, 0.52);
   font: 8px/1 var(--font-mono);
+  /* The shared field paints the surface (and the select's chevron). */
+  --gev-field-border-color: rgba(255, 183, 82, 0.28);
+  --gev-field-color: #ffd79a;
+  --gev-field-background: rgba(38, 25, 8, 0.52);
 }
 .sdr-radio-card button {
   padding: 6px 8px;
@@ -1121,7 +1129,8 @@ html:not([lang='en']) .data-row-list-text {
 .sdr-gain-row select {
   flex: 1;
   min-width: 0;
-  padding: 5px 7px;
+  padding-block: 5px;
+  padding-inline: 7px 22px;
 }
 .sdr-adsb-stats {
   display: grid;
