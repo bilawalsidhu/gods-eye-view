@@ -12,6 +12,7 @@ import {
   isGeminiRequestOriginAllowed,
   readGeminiTokenRequest,
 } from './request.js';
+import { resolveOverpassUpstreams } from '../overpass/constants.js';
 
 const UPSTREAM_RESPONSE_BYTES = 32 * 1024;
 const MINT_FAILURE = 'Gemini voice could not connect. Try again.';
@@ -19,6 +20,8 @@ const MINT_FAILURE = 'Gemini voice could not connect. Try again.';
 export function createGeminiTokenHandler({
   annotationGuidance,
   tools,
+  // osm_query is offered only when an operator configured Overpass.
+  overpassConfigured = () => resolveOverpassUpstreams().length > 0,
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.GEMINI_API_KEY,
   resolveModel = () =>
@@ -104,6 +107,7 @@ export function createGeminiTokenHandler({
         annotationGuidance,
         inputMode,
         tools,
+        { overpass: overpassConfigured() },
       );
       const issuedAt = now();
       // REST uses bidiGenerateContentSetup. liveConnectConstraints is the SDK
