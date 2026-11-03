@@ -286,13 +286,12 @@ export class LayerPanel {
     this._releaseBindings();
     if (this._toggleContainer && this._toggleContainer !== container)
       renderVue(null, this._toggleContainer);
-    for (const element of this._groupContainers.values())
-      renderVue(null, element);
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
+    const previous = this._groupContainers;
     this._groupContainers = new Map();
     for (const { containerId } of PANEL_GROUPS) {
       const element =
@@ -301,6 +300,10 @@ export class LayerPanel {
       if (!element._vnode) element.replaceChildren();
       this._groupContainers.set(containerId, element);
     }
+    // A remount into the same lists (a globe switch) keeps their keyed rows
+    // mounted, as it does for Data Layers; a list no longer used is released.
+    for (const [id, element] of previous)
+      if (this._groupContainers.get(id) !== element) renderVue(null, element);
     this._weatherPanel?.destroy();
     this._weatherPanel = createWeatherPanel({
       clock: this.weatherClock,
