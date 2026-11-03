@@ -3232,5 +3232,7 @@
   "{source} at {place}": "{source} في {place}",
   "Street level at {place}": "مستوى الشارع في {place}",
   "Switching map": "جارٍ تبديل الخريطة",
-  "Opening imagery": "جارٍ فتح الصور"
+  "Opening imagery": "جارٍ فتح الصور",
+  "Street View is ready: press {open} to load it": "Street View جاهز: اضغط «{open}» لتحميله",
+  "Street-level photos are hidden in the current view. Leave it first.": "صور مستوى الشارع مخفية في العرض الحالي. اخرج منه أولًا."
 }

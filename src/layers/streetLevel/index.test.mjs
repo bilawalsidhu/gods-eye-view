@@ -947,6 +947,54 @@ test('the button’s “centre of the view” is the ground under the middle of 
   assert.ok(Math.abs(lookups[0].lon - -121.4937) < 1e-9);
 });
 
+test('OPEN after a link armed opens at its point only while the view centre is still near it', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const scenePick = await import('../../data/scenePick.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point, options) => {
+      lookups.push({ point, radiusM: options?.radiusM ?? null });
+      return null;
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  Object.assign(viewer.scene, {
+    pickPositionSupported: true,
+    pickPosition: (at) => (at.x === 500 && at.y === 300 ? centre : undefined),
+  });
+  viewer.scene.canvas.clientWidth = 1000;
+  viewer.scene.canvas.clientHeight = 600;
+  const layer = create({ providers: [provider], services: { scenePick } });
+  layer.init(viewer);
+  layer.enable(viewer);
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  // About 120 m from the view centre: the link's spot is still in view.
+  layer.armNearest({ lat: 38.5808, lon: -121.494 }, { radiusM: 250 });
+  await layer.openNearest(undefined, { aim: 'screen-centre' });
+  assert.deepEqual(lookups.at(-1), {
+    point: { lat: 38.5808, lon: -121.494 },
+    radiusM: 250,
+  });
+  // The user flew to Paris after the link armed in Sacramento: OPEN looks
+  // under the view centre, and the link's radius goes with its point.
+  layer.armNearest({ lat: 48.8584, lon: 2.2945 }, { radiusM: 250 });
+  await layer.openNearest(undefined, { aim: 'screen-centre' });
+  const press = lookups.at(-1);
+  assert.ok(Math.abs(press.point.lat - 38.5799) < 1e-9, 'the view centre');
+  assert.ok(Math.abs(press.point.lon - -121.4937) < 1e-9);
+  assert.equal(press.radiusM, null, 'the default radius');
+  assert.equal(layer.getUIState().street.armed, null, 'dropped');
+});
+
 test('the button aimed at the sky opens nothing, and says to aim at a street', async (t) => {
   const { createStreetLevelLayer: create } = await import('./index.js');
   const scenePick = await import('../../data/scenePick.js');
@@ -1340,6 +1388,22 @@ test('providerStatus reports a keyless source on any map', async (t) => {
   assert.equal(mapillary.configured, false);
   assert.equal(mapillary.keyRequired, true);
   assert.equal(mapillary.keyRejected, false);
+});
+
+test('providerStatus reports the key state as unknown until the status call answers', async (t) => {
+  // A freshly loaded sl= link meets its source in this state: unknown is not
+  // "needs its key", or the link would fail on a cold load.
+  const pending = fakeProvider();
+  pending.requiresKeyId = 'mapillary';
+  const create = pending.create;
+  pending.create = (context) => ({
+    ...create(context),
+    status: () => new Promise(() => {}),
+  });
+  const { layer } = await enabledLayer(t, [pending]);
+  const status = layer.providerStatus(pending.id);
+  assert.equal(status.configured, null);
+  assert.equal(status.keyRequired, false);
 });
 
 test('providerStatus reports a refused key on any map', async (t) => {

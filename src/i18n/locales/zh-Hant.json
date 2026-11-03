@@ -2882,5 +2882,7 @@
   "{source} at {place}": "{place} 的 {source}",
   "Street level at {place}": "{place} 的街景",
   "Switching map": "正在切換地圖",
-  "Opening imagery": "正在打開影像"
+  "Opening imagery": "正在打開影像",
+  "Street View is ready: press {open} to load it": "街景已就緒：按 {open} 載入",
+  "Street-level photos are hidden in the current view. Leave it first.": "目前的檢視隱藏了街景照片。請先離開此檢視。"
 }

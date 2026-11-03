@@ -3092,5 +3092,7 @@
   "Exit cockpit to fly to a drawing": "Выйдите из кабины, чтобы перелететь к рисунку",
   "Directions, drawing and your own files": "Маршруты, рисование и ваши файлы",
   "Sea Marks": "Морские знаки",
-  "Ski Pistes": "Горнолыжные трассы"
+  "Ski Pistes": "Горнолыжные трассы",
+  "Street View is ready: press {open} to load it": "Просмотр улиц готов: нажмите {open}, чтобы загрузить",
+  "Street-level photos are hidden in the current view. Leave it first.": "Уличные снимки скрыты в текущем режиме. Сначала выйдите из него."
 }

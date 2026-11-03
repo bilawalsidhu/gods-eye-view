@@ -3022,5 +3022,7 @@
   "{source} at {place}": "{source} a {place}",
   "Street level at {place}": "Vista stradale a {place}",
   "Switching map": "Cambio mappa",
-  "Opening imagery": "Apertura delle immagini"
+  "Opening imagery": "Apertura delle immagini",
+  "Street View is ready: press {open} to load it": "Street View è pronto: premi {open} per caricarlo",
+  "Street-level photos are hidden in the current view. Leave it first.": "Le foto a livello stradale sono nascoste nella vista attuale. Esci prima da questa vista."
 }

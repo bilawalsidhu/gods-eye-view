@@ -3022,5 +3022,7 @@
   "Exit cockpit to fly to a drawing": "Sal de la cabina para volar a un dibujo",
   "Directions, drawing and your own files": "Indicaciones, dibujo y tus propios archivos",
   "Sea Marks": "Señales marítimas",
-  "Ski Pistes": "Pistas de esquí"
+  "Ski Pistes": "Pistas de esquí",
+  "Street View is ready: press {open} to load it": "Street View está listo: pulsa {open} para cargarlo",
+  "Street-level photos are hidden in the current view. Leave it first.": "Las fotos a pie de calle están ocultas en la vista actual. Sal de ella primero."
 }

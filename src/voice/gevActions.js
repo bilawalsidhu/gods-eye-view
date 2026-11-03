@@ -14,6 +14,7 @@ import { applicationPinia } from '../ui/vueRuntime.js';
 import * as Cesium from 'cesium';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
+import { EXCLUSIVE_SURFACE_CLASSES } from '../exclusiveSurfaces.js';
 import {
   hudViewportSamples,
   placeLookupView,
@@ -3437,6 +3438,18 @@ export async function showStreetLevel(
       );
     point = { lat: location.latitude, lon: location.longitude };
   }
+
+  // Cockpit, clean view, recording and scene playback hide the panel the
+  // photo opens in: say so before anything loads unseen.
+  const body = globalThis.document?.body;
+  if (EXCLUSIVE_SURFACE_CLASSES.some((mode) => body?.classList?.contains(mode)))
+    return fail(
+      'view',
+      msg(
+        'Street-level photos are hidden in the current view. Leave it first.',
+      ),
+      { location },
+    );
 
   // The source's map, when it needs one (Street View: Google 3D only).
   const requiredStack = layerModule.requiredMapStack?.(provider) || null;

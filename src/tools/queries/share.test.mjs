@@ -136,6 +136,8 @@ test('links can open street-level photos at the area, on the map the source need
   assert.equal(params.get('sl'), 'google,38.57990,-121.49370');
   assert.equal(params.get('map'), 'photoreal');
   assert.deepEqual(viewFromParams(params), view);
+  // The panel opens a billed photo only for a result it gets fresh.
+  assert.ok(Math.abs(Date.now() - result.data.issued_at) < 60_000);
 
   const point = await catalog.call('show_in_gods_eye_view', {
     view,
@@ -189,6 +191,19 @@ test('a new area moves a passed-through view’s photos, and a tilted area still
     lat: 48.8584,
     lon: 2.2945,
   });
+  // A wide area frames the camera tens of km up, past where a camera's
+  // look-at point is trusted: the photos still open at the area's centre.
+  const wide = await catalog.call('show_in_gods_eye_view', {
+    area: { lat: 48.8584, lon: 2.2945, radius_km: 15 },
+    camera: { pitch_deg: -30 },
+    street_level: { provider: 'mapillary' },
+  });
+  assert.ok(wide.data.view.camera.altitude_m > 20_000);
+  assert.deepEqual(wide.data.view.street_level, {
+    provider: 'mapillary',
+    lat: 48.8584,
+    lon: 2.2945,
+  });
   await assert.rejects(
     catalog.call('show_in_gods_eye_view', {
       area: { lat: 0, lon: 0, radius_km: 1 },
@@ -197,6 +212,61 @@ test('a new area moves a passed-through view’s photos, and a tilted area still
     }),
     /cannot both follow/,
   );
+});
+
+test('a camera with no photo point opens photos where it looks, measured from its ground', async () => {
+  const { lookAtPoint } = await import('../../view/index.js');
+  const asked = [];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      app: { baseUrl: 'http://localhost:4173/' },
+      terrain: {
+        getHeights: async (points) => {
+          asked.push(points);
+          return [{ ellipsoid: 1590 }];
+        },
+      },
+    },
+  });
+  // Denver: 1,909 m above the ellipsoid is about 320 m above its streets.
+  const camera = {
+    lat: 39.7392,
+    lon: -104.9903,
+    altitude_m: 1909,
+    pitch_deg: -30,
+    heading_deg: 0,
+  };
+  const result = await catalog.call('show_in_gods_eye_view', {
+    camera,
+    street_level: { provider: 'mapillary' },
+  });
+  assert.deepEqual(asked, [[{ lat: 39.7392, lon: -104.9903 }]]);
+  const grounded = lookAtPoint({ ...camera, altitude_m: 319 });
+  const { street_level: street } = result.data.view;
+  assert.ok(Math.abs(street.lat - grounded.lat) < 1e-5, 'about 550 m ahead');
+  assert.ok(
+    street.lat - camera.lat < 0.006,
+    'not the 3.3 km a sea-level guess gives',
+  );
+  // No terrain answer: the view's own estimate, as before.
+  const offline = composeCatalog({
+    tools: coreTools,
+    services: {
+      app: { baseUrl: 'http://localhost:4173/' },
+      terrain: {
+        getHeights: async () => {
+          throw new Error('offline');
+        },
+      },
+    },
+  });
+  const fallback = await offline.call('show_in_gods_eye_view', {
+    camera,
+    street_level: { provider: 'mapillary' },
+  });
+  const guess = lookAtPoint(camera);
+  assert.ok(Math.abs(fallback.data.view.street_level.lat - guess.lat) < 1e-5);
 });
 
 test('a view passed through alone keeps its street-level photos', async () => {

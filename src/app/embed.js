@@ -13,6 +13,8 @@
 
 import * as Cesium from 'cesium';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
+import { t, translateKnown } from '../i18n/index.js';
+import { GOOGLE_LABEL } from '../layers/streetLevel/providers/google/policy.js';
 import {
   annotationsFromParams,
   createView,
@@ -49,6 +51,14 @@ export function isEmbedded(location = globalThis.location) {
 /** Whether a panel page loaded the app into itself. */
 export function isEmbeddedInline() {
   return globalThis.GEV_EMBED_INLINE === true;
+}
+
+/**
+ * Whether the panel page started the app for a tool result issued just now,
+ * not one its host handed back on mounting the panel again.
+ */
+function isFreshPanelResult() {
+  return isEmbeddedInline() && globalThis.GEV_EMBED_FRESH === true;
 }
 
 /**
@@ -188,8 +198,13 @@ function streetLevelArgs(streetLevel, { autoOpen = true } = {}) {
 }
 
 const STREET_LEVEL_PANEL_ID = 'street-level-panel';
-const ARMED_TOAST =
-  'Street View is ready: press OPEN GOOGLE STREET VIEW to load it';
+
+/** The armed link's toast, naming the OPEN button as the panel shows it. */
+function armedToast() {
+  return t('Street View is ready: press {open} to load it', {
+    open: t('OPEN {labels}', { labels: translateKnown(GOOGLE_LABEL) }),
+  });
+}
 
 /**
  * Make the app show a view: style and map, exactly the view's layers,
@@ -323,8 +338,9 @@ export function installViews({
     queue = linkStep(() => run('annotate_map', { annotations: linked }));
   // A link to street-level photos opens them once the link has restored. A
   // link anyone can publish stops short of a billed load and leaves it to a
-  // click; only the panel page's own link (inline embed) is the client's
-  // request. A link that follows an entity keeps the camera on it.
+  // click; only the panel page's own link for a result issued just now is
+  // the client's request (a host remounting the panel hands back old ones).
+  // A link that follows an entity keeps the camera on it.
   const streetLevel = followFromParams(hashParams)
     ? null
     : streetLevelFromParams(hashParams);
@@ -333,7 +349,7 @@ export function installViews({
       if (navigatedSinceRestore()) return;
       const result = await run(
         'show_street_level',
-        streetLevelArgs(streetLevel, { autoOpen: isEmbeddedInline() }),
+        streetLevelArgs(streetLevel, { autoOpen: isFreshPanelResult() }),
       );
       // The restore window keeps the panel collapsed; OPEN must be in view.
       // Embed mode hides the rail that holds it, so there the link only arms
@@ -342,7 +358,9 @@ export function installViews({
         shell.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
           explicit: true,
         });
-        shell._showToast?.(ARMED_TOAST);
+        // On a phone the panel sits in a tab sheet: open it so OPEN shows.
+        shell.revealPanel?.(STREET_LEVEL_PANEL_ID);
+        shell._showToast?.(armedToast());
       }
     });
   if (!isEmbedded(location)) return () => {};

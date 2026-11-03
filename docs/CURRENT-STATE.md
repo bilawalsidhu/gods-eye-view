@@ -4339,14 +4339,20 @@ centre), switches to the map the source needs (Google Street View: Google 3D),
 lights that source through `setLayerParams` with origin `voice` (one source at
 a time, kept in the share link like a chip click), turns the layer on and
 calls `openNearest`. `provider` is `google` for "Street View", `mapillary`,
-`kartaview` or `panoramax` by name, else the lit source. Stages fail separately (`location`, `map`,
-`provider`, `layer`, `key`, `imagery`; an empty `imagery` result names a
+`kartaview` or `panoramax` by name, else the lit source. Stages fail separately (`location`, `view`, `map`,
+`provider`, `layer`, `key`, `imagery`; `view` when cockpit, clean view,
+recording or scene playback hides the panel, checked after the flight and
+before anything switches or loads; an empty `imagery` result names a
 narrowing 360°/flat or SINCE filter the source honours, as `filter`) and a
 newer turn retires the lookup
 (`openNearest`'s `signal` option), so nothing opens after the user moved on.
 For a source without a coverage layer the lookup widens to 250 m
 (`NEAREST_RADIUS_MAX_M`; Google honours it, Mapillary's API caps at 50 m);
-clicks keep 50 m. The layer exposes `requiredMapStack(id)` and
+clicks keep 50 m. Mapillary's search asks for 100 photos, the API's most: it
+returns the radius's photos in no particular order and cuts them at the limit
+first, so the distance sort and the imagery filter run over the spot's photos.
+On a phone the panel sits in the Cameras tab sheet: a photo that opens, and a
+link that arms, open that sheet (`revealPanel`). The layer exposes `requiredMapStack(id)` and
 `providerStatus(id)` for callers that must decide before the panel lists a
 source, and `coverageLines(id)` (the lines a provider draws now, current and
 stale tiles, as `[lon, lat]` parts) for diagnostics and the browser gate,
@@ -4369,13 +4375,20 @@ link never loads a photo from a source that bills every load
 (`billedPerImage` on the provider; Google): the action runs with
 `autoOpen: false`, arms the lookup on the layer (`armNearest`: the link's
 point and radius, consumed only by the next OPEN press (`aim:
-'screen-centre'`); any other lookup, open, close, disable, its source
+'screen-centre'`), and only while the view centre is within 1 km of the point
+(`ARMED_REACH_M`; a user who moved on opens what the view shows); any other lookup, open, close, disable, its source
 switched off or its map leaving drops it), opens the panel and a toast
 points at OPEN GOOGLE STREET VIEW. Only the panel page's own link (inline
-embed) and posted views open the photo; `?embed=1` on a published link only
+embed) for a tool result issued in the last 5 minutes, and posted views, open
+the photo: `show_in_gods_eye_view` stamps a street-level result `issued_at`,
+and a host that mounts the panel again later hands back the old result, which
+only arms; `?embed=1` on a published link only
 arms, without the panel nudge or toast (the rail is hidden in a frame). A link that follows an entity ignores `sl`.
 The look-at default applies below 20 km, at a pitch steeper than -5° and
-within 10 km ahead; otherwise the camera's own point is used.
+within 10 km ahead; otherwise the camera's own point is used. A view's
+altitude is above the ellipsoid, so `show_in_gods_eye_view` measures it from
+the terrain under the camera (`services.terrain`) before taking the look-at
+point; without a terrain answer it keeps the view's own estimate.
 
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run

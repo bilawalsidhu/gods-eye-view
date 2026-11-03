@@ -4582,3 +4582,89 @@ test('a partial analyst card shows one partial chip', () => {
   const labels = card.display.chips.map((chip) => chip.label);
   assert.equal(new Set(labels).size, labels.length, JSON.stringify(labels));
 });
+
+test('show_street_level superseded during its geocode changes nothing', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const h = createStreetLevelHarness({ enabled: true });
+  let current = true;
+  const runner = createGevActionRunner({
+    viewer: createVoiceNavigationHarness().viewer,
+    styleManager: {
+      mapStackController: { getActiveId: () => 'osm' },
+      setMapStack: async (id) => {
+        h.order.push(`map:${id}`);
+        return { ok: true };
+      },
+    },
+    dataManager: h.dataManager,
+    placeSearch: {
+      geocode: async () => {
+        current = false;
+        return { place: { lat: 1, lng: 2, label: 'X' } };
+      },
+    },
+  });
+  const result = await runner('show_street_level', { query: 'X', provider: 'google', fly: false }, { isCurrent: () => current });
+  assert.deepEqual(h.order.filter((step) => /^(map|params|open|arm)/.test(step)), [], 'the stale turn switched nothing');
+  assert.deepEqual([result.ok, result.stage, result.cancelled], [false, 'location', true]);
+});
+
+test('show_street_level superseded during its flight switches nothing', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const h = createStreetLevelHarness();
+  let current = true;
+  const pending = h.runner('show_street_level', { latitude: 38.5799, longitude: -121.4937, provider: 'google' }, { isCurrent: () => current });
+  await new Promise((resolve) => setImmediate(resolve));
+  current = false;
+  h.finishFlight();
+  const result = await pending;
+  assert.deepEqual(h.order.filter((step) => /^(map|params|open|arm|enable)/.test(step)), [], 'the stale turn switched nothing');
+  assert.equal(result.cancelled, true);
+});
+
+test('show_street_level superseded during its map switch lights no source', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const h = createStreetLevelHarness({ enabled: true });
+  let current = true;
+  const runner = createGevActionRunner({
+    viewer: createVoiceNavigationHarness().viewer,
+    styleManager: {
+      mapStackController: { getActiveId: () => 'osm' },
+      setMapStack: async (id) => {
+        h.order.push(`map:${id}`);
+        current = false;
+        return { ok: true, activeStack: id };
+      },
+    },
+    dataManager: h.dataManager,
+  });
+  const result = await runner('show_street_level', { latitude: 1, longitude: 2, provider: 'google', fly: false }, { isCurrent: () => current });
+  assert.deepEqual(h.order.filter((step) => /^(params|open|arm)/.test(step)), [], 'the stale turn lit nothing');
+  assert.deepEqual([result.stage, result.cancelled], ['map', true]);
+});
+
+test('show_street_level goes ahead while a source’s key status is still unknown', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  // A freshly loaded sl= link meets the source before its status call answers.
+  const { runner, order } = createStreetLevelHarness({ enabled: true, configured: null });
+  const result = await runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+  assert.equal(result.ok, true);
+  assert.ok(order.some((step) => step.startsWith('open:mapillary')));
+});
+
+test('show_street_level in a view that hides its panel stops before anything loads unseen', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const saved = globalThis.document;
+  for (const mode of ['cockpit-mode', 'ui-clean-view', 'recording-mode', 'scene-playback-mode']) {
+    globalThis.document = { body: { classList: { contains: (name) => name === mode } } };
+    try {
+      const { runner, order } = createStreetLevelHarness({ enabled: true });
+      const result = await runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
+      assert.deepEqual([result.ok, result.stage], [false, 'view'], mode);
+      assert.match(result.error, /hidden in the current view/);
+      assert.deepEqual(order.filter((step) => /^(map|params|open|arm|enable)/.test(step)), [], `${mode}: nothing switched`);
+    } finally {
+      globalThis.document = saved;
+    }
+  }
+});

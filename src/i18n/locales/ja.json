@@ -2882,5 +2882,7 @@
   "{source} at {place}": "{place}の{source}",
   "Street level at {place}": "{place}のストリートレベル",
   "Switching map": "地図を切り替え中",
-  "Opening imagery": "画像を開いています"
+  "Opening imagery": "画像を開いています",
+  "Street View is ready: press {open} to load it": "ストリートビューの準備ができました：{open} を押して読み込みます",
+  "Street-level photos are hidden in the current view. Leave it first.": "現在の表示ではストリートレベルの写真は非表示です。先にこの表示を終了してください。"
 }

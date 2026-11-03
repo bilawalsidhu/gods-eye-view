@@ -608,6 +608,8 @@ function showStreetLevel(result) {
         ? `${source} refused its key.`
         : `${source} needs its key.`;
     else if (result?.stage === 'layer') say = "Couldn't turn on Street Level.";
+    else if (result?.stage === 'view')
+      say = 'Street-level photos are hidden in this view. Leave it first.';
     else if (result?.stage === 'imagery')
       say = result?.filter?.label
         ? `No ${source} imagery near ${place} with the ${result.filter.label} on.`

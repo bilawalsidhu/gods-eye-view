@@ -6,7 +6,14 @@
   `show_in_gods_eye_view` and a link can open a panorama at a place. Street
   View lookups from a geocoded place search up to 250 m; clicks keep 50 m. A
   plain link with `sl=google` arms Street View and leaves the billed load to a
-  press of OPEN GOOGLE STREET VIEW; embedded views open it. The source the
+  press of OPEN GOOGLE STREET VIEW, which aims at the view centre again once
+  the visitor has moved more than 1 km away; embedded views open it, and the
+  God's Eye View panel only for a result issued in the last five minutes. On
+  a phone, a photo that opens or a link that arms opens the Cameras sheet;
+  in cockpit, clean view, recording or scene playback the action says the
+  panel is hidden instead of loading a photo nobody sees. Mapillary's
+  nearest-photo search asks for 100 photos, so the nearest and the filter's
+  pick come from the spot's photos rather than an arbitrary eight. The source the
   action lights stays lit like a chip click. An unavailable map stack now
   reports the controller's own reason instead of always asking for a Cesium
   ion token. When nothing is found and a 360°, flat or SINCE filter the source

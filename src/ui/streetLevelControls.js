@@ -388,7 +388,12 @@ export class StreetLevelControls {
     // Other size changes reach the viewer through the ResizeObserver; opening
     // asks for one resize because the element may not have a size yet.
     const open = view.viewer.open;
-    if (open && !this._wasOpen) this.setCollapsed(false, { persist: false });
+    if (open && !this._wasOpen) {
+      this.setCollapsed(false, { persist: false });
+      // A phone shows the rail only as a tab sheet: open it, or the photo
+      // loads where nobody sees it. Embed mode lifts the photo instead.
+      if (!isEmbedPage()) this.actions.revealPanel?.();
+    }
     this._wasOpen = open;
     // Embed mode hides the rail the panel sits in: an open photo is shown over
     // the globe instead, and goes back into the panel when it closes.

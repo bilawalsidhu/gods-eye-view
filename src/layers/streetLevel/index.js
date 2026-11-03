@@ -14,7 +14,7 @@ import {
   keyAlternatives,
   summarizeCoverage,
 } from './uiState.js';
-import { groundUnderCamera, viewCentre } from './view.js';
+import { groundUnderCamera, metresBetween, viewCentre } from './view.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import { msg, t, translateKnown } from '../../i18n/index.js';
 import {
@@ -33,6 +33,11 @@ const KEY_STATUS_TIMEOUT_MS = 10_000;
 /** Re-measures of a ground not loaded yet (Google 3D), a second apart. */
 const GROUND_RETRY_LIMIT = 5;
 const GROUND_RETRY_MS = 1000;
+/**
+ * An armed point stays the OPEN button's target while the view centre is
+ * this close to it (m); a user who moved on opens what the view shows now.
+ */
+const ARMED_REACH_M = 1000;
 
 /**
  * The Street Level layer over imagery providers (contract in registry.js).
@@ -681,8 +686,13 @@ export function createStreetLevelLayer({
       const armed = state.street.armed;
       state.street.armed = null;
       if (!point && aim === 'screen-centre' && armed) {
-        point = armed.point;
-        radiusM ??= armed.radiusM;
+        // The button promises the centre of the view: the link's spot only
+        // while the view still shows it.
+        const centre = armed.point ? screenCentreGround() : null;
+        if (!centre || metresBetween(centre, armed.point) <= ARMED_REACH_M) {
+          point = armed.point;
+          radiusM ??= armed.radiusM;
+        }
       }
       const radius = Number.isFinite(radiusM)
         ? Math.min(NEAREST_RADIUS_MAX_M, Math.max(1, radiusM))

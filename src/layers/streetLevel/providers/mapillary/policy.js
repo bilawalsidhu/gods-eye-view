@@ -77,8 +77,11 @@ export const SEQUENCE_IMAGE_FIELDS =
 /**
  * Images asked for in a nearest-image search (show_street_level and links
  * open the photo nearest a point; the graph API caps the radius at 50 m).
+ * The API returns the radius's images in no particular order and cuts them
+ * at the limit first, so this asks for its most (100): the distance sort and
+ * the imagery filter then choose among the spot's photos, not a few of them.
  */
-export const NEAREST_LIMIT = 8;
+export const NEAREST_LIMIT = 100;
 /** Fields a nearest-image search needs: where each is, and the filter's. */
 export const NEAREST_IMAGE_FIELDS =
   'id,captured_at,geometry,computed_geometry,is_pano';

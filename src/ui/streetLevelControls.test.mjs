@@ -967,6 +967,23 @@ test('outside embed mode a photo stays in the panel', () =>
     controls.destroy();
   }));
 
+test('an opening photo brings its panel into view (a phone’s tab sheet); embed mode lifts it instead', () =>
+  withDom(async (dom) => {
+    const revealed = [];
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }), {
+      revealPanel: () => revealed.push('street-level'),
+    });
+    await layer.publish(uiState({ open: true }));
+    assert.deepEqual(revealed, ['street-level'], 'once, as it opens');
+    await layer.publish(uiState({ open: true, renderMode: 'fill' }));
+    assert.equal(revealed.length, 1, 'not on every update');
+    await layer.publish(uiState({ open: false }));
+    dom.document.body.classList.add('ui-embed');
+    await layer.publish(uiState({ open: true }));
+    assert.equal(revealed.length, 1, 'embed mode shows it over the globe');
+    controls.destroy();
+  }));
+
 test('in embed mode Esc closes the photo, and the next photo is shown over the globe again', () =>
   withDom(async (dom) => {
     dom.document.body.classList.add('ui-embed');

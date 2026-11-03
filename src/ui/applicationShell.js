@@ -4,7 +4,7 @@ import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
-import { initMobileShell } from './mobileShell.js';
+import { initMobileShell, sheetForPanelId } from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -1098,6 +1098,7 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
+        revealPanel: () => this.revealPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1210,6 +1211,17 @@ export class StyleManager extends ShellFacade {
     } = {},
   ) {
     return this._panelChrome.setPanelCollapsed(...arguments);
+  }
+
+  /**
+   * Bring a panel into view on a phone, where the rails show only as tab
+   * sheets: opens the sheet that holds it. Does nothing above 720px.
+   * @param {string} panelId - DOM id of the panel.
+   * @returns {void}
+   */
+  revealPanel(panelId) {
+    const sheet = sheetForPanelId(panelId);
+    if (sheet) this._mobileShell?.setSheet(sheet);
   }
 
   /**

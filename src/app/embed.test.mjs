@@ -540,6 +540,7 @@ test('a failing link step does not take the next one with it', async () => {
 test('a plain link never auto-loads a billed photo: it arms the panel and says so; an embedded view opens', async () => {
   const toasts = [];
   const panels = [];
+  const revealed = [];
   const { calls, run } = recorder({
     show_street_level: () => ({ ok: true, armed: true }),
   });
@@ -549,6 +550,7 @@ test('a plain link never auto-loads a billed photo: it arms the panel and says s
       _showToast: (text) => toasts.push(text),
       setPanelCollapsed: (id, collapsed, options) =>
         panels.push([id, collapsed, options]),
+      revealPanel: (id) => revealed.push(id),
     },
     viewer: fakeViewer(),
     dataManager: fakeLayers(new Set()),
@@ -569,6 +571,7 @@ test('a plain link never auto-loads a billed photo: it arms the panel and says s
     [['street-level-panel', false, { explicit: true }]],
     'the panel opens so OPEN is in view',
   );
+  assert.deepEqual(revealed, ['street-level-panel'], 'its phone sheet too');
   // Adding ?embed=1 to a published link does not lift the gate: the page is
   // still a plain top-level load.
   const framedToasts = [];
@@ -599,38 +602,45 @@ test('a plain link never auto-loads a billed photo: it arms the panel and says s
   assert.equal(framed.calls[0][1].autoOpen, false);
   // In a frame the rail that holds OPEN is hidden: no nudge, no toast.
   assert.deepEqual([framedToasts, framedPanels], [[], []]);
-  // Only the panel page's own link (inline embed) is the client's request.
+  // Only the panel page's own link for a result issued just now is the
+  // client's request: a host that mounts the panel again hands back an old
+  // result, and that one only arms, like any link.
   globalThis.GEV_EMBED_INLINE = true;
   try {
-    const inline = recorder({ show_street_level: () => ({ ok: true }) });
-    const inlineWindow = new EventTarget();
-    inlineWindow.document = { body: { classList: { add() {} } } };
-    inlineWindow.postMessage = () => {};
-    // The inline panel keeps rendering from a timer; give it inert clocks.
-    Object.assign(inlineWindow, {
-      requestAnimationFrame: () => 1,
-      cancelAnimationFrame() {},
-      setTimeout: () => 1,
-      clearTimeout() {},
-      setInterval: () => 1,
-      clearInterval() {},
-    });
-    const stop = installViews({
-      shell: { initialRestorePromise: Promise.resolve(), setCleanView() {} },
-      viewer: fakeViewer(),
-      dataManager: fakeLayers(new Set()),
-      run: inline.run,
-      location: {
-        search: '',
-        hash: '#v=2&lat=1&lon=2&map=photoreal&sl=google,38.57986,-121.49372',
-      },
-      windowRef: inlineWindow,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal('autoOpen' in inline.calls[0][1], false);
-    stop();
+    for (const fresh of [true, false]) {
+      globalThis.GEV_EMBED_FRESH = fresh;
+      const inline = recorder({ show_street_level: () => ({ ok: true }) });
+      const inlineWindow = new EventTarget();
+      inlineWindow.document = { body: { classList: { add() {} } } };
+      inlineWindow.postMessage = () => {};
+      // The inline panel keeps rendering from a timer; give it inert clocks.
+      Object.assign(inlineWindow, {
+        requestAnimationFrame: () => 1,
+        cancelAnimationFrame() {},
+        setTimeout: () => 1,
+        clearTimeout() {},
+        setInterval: () => 1,
+        clearInterval() {},
+      });
+      const stop = installViews({
+        shell: { initialRestorePromise: Promise.resolve(), setCleanView() {} },
+        viewer: fakeViewer(),
+        dataManager: fakeLayers(new Set()),
+        run: inline.run,
+        location: {
+          search: '',
+          hash: '#v=2&lat=1&lon=2&map=photoreal&sl=google,38.57986,-121.49372',
+        },
+        windowRef: inlineWindow,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (fresh) assert.equal('autoOpen' in inline.calls[0][1], false);
+      else assert.equal(inline.calls[0][1].autoOpen, false, 'a remount arms');
+      stop();
+    }
   } finally {
     delete globalThis.GEV_EMBED_INLINE;
+    delete globalThis.GEV_EMBED_FRESH;
   }
   // applyView (a posted view) opens too.
   const posted = recorder();

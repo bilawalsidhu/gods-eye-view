@@ -96,7 +96,7 @@ const LOOK_AT_MAX_DISTANCE_M = 10_000;
  * further than 10 km ahead gives its own point. Longitude wraps at the
  * antimeridian.
  */
-function lookAtPoint(camera) {
+export function lookAtPoint(camera) {
   const pitch = Number(camera.pitch_deg ?? -90);
   const altitude = Number(camera.altitude_m);
   if (
