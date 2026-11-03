@@ -556,6 +556,36 @@ test('distinct area lookups are hard-bounded while same-key callers still coales
   assert.equal(b.ok, true);
 });
 
+test('settled lookups leave no listener on the caller\'s signal', async () => {
+  const { resolver } = makeResolver();
+  const controller = new AbortController();
+  let added = 0;
+  let removed = 0;
+  const add = controller.signal.addEventListener.bind(controller.signal);
+  const remove = controller.signal.removeEventListener.bind(controller.signal);
+  controller.signal.addEventListener = (...args) => {
+    if (args[0] === 'abort') added += 1;
+    return add(...args);
+  };
+  controller.signal.removeEventListener = (...args) => {
+    if (args[0] === 'abort') removed += 1;
+    return remove(...args);
+  };
+  for (const query of ['Texas', 'Bagmati', 'Nowhere at all'])
+    await resolver.resolve({ query }, { signal: controller.signal });
+  assert.ok(added > 0, 'the lookups listened while running');
+  assert.equal(removed, added, 'every listener is detached once settled');
+
+  const aborted = AbortSignal.abort();
+  let attached = 0;
+  aborted.addEventListener = () => {
+    attached += 1;
+  };
+  const late = await resolver.resolve({ query: 'Punjab, Pakistan' }, { signal: aborted });
+  assert.equal(late.code, 'CANCELLED');
+  assert.equal(attached, 0, 'an aborted signal gets no listener');
+});
+
 test('resolver disposal aborts provider lifetime and prevents late store/cache writes', async () => {
   let release;
   let providerSignal;

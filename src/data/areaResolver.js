@@ -626,24 +626,29 @@ export function createAreaResolver({
           );
         }),
       );
+    // Detached once this call settles: a caller's long-lived signal must not
+    // collect one listener per completed lookup.
+    let cancelled = null;
     if (signal)
       racers.push(
         new Promise((resolveAbort) => {
-          const cancelled = () =>
-            resolveAbort({
-              ok: false,
-              code: 'CANCELLED',
-              cancelled: true,
-              error: 'Superseded.',
-            });
-          if (signal.aborted) cancelled();
+          const superseded = {
+            ok: false,
+            code: 'CANCELLED',
+            cancelled: true,
+            error: 'Superseded.',
+          };
+          if (signal.aborted) return resolveAbort(superseded);
+          cancelled = () => resolveAbort(superseded);
           signal.addEventListener?.('abort', cancelled, { once: true });
+          return undefined;
         }),
       );
     try {
       return finish(await Promise.race(racers));
     } finally {
       clearTimeout(timer);
+      if (cancelled) signal.removeEventListener?.('abort', cancelled);
     }
   }
 
