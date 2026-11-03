@@ -52,11 +52,11 @@ function toHudSummary(value, requested) {
     .split(/\s+/)
     .map((word) => word.replace(/^['’·・-]+|['’·・-]+$/gu, ''))
     .filter(Boolean);
-  // Japanese and Chinese have no spaces to count words by: cap characters.
-  if (hudSummaryIsUnspaced(locale))
-    return capAtWord(words.join(' '), HUD_SUMMARY_MAX_UNSPACED_CHARS, locale);
-  // No word count: the model counts Rue de Rivoli as one word.
-  return capAtWord(words.join(' '), HUD_SUMMARY_MAX_CHARS, locale);
+  // Characters, not words: the model counts Rue de Rivoli as one word.
+  const max = hudSummaryIsUnspaced(locale)
+    ? HUD_SUMMARY_MAX_UNSPACED_CHARS
+    : HUD_SUMMARY_MAX_CHARS;
+  return capAtWord(words.join(' '), max, locale);
 }
 
 /**

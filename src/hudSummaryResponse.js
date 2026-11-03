@@ -78,7 +78,7 @@ export const HUD_SUMMARY_MAX_CHARS = 80;
 /** feedState values the model may return besides null. */
 export const HUD_SUMMARY_FEED_STATES = SNAPSHOT_FEED_STATES;
 
-/** Responses API structured output: the five words plus the canonical state. */
+/** Responses API structured output: the summary plus the canonical state. */
 export const HUD_SUMMARY_RESPONSE_FORMAT = Object.freeze({
   type: 'json_schema',
   name: 'hud_summary',
@@ -114,7 +114,7 @@ const SUMMARY_LANGUAGES = Object.freeze({
   'zh-Hant': 'Chinese in Traditional characters (mainland wording)',
 });
 
-/** Scripts written without spaces, where five words do not apply. */
+/** Scripts written without spaces, capped in characters instead of words. */
 const UNSPACED_LOCALES = /^(?:ja|zh)(?:-|$)/;
 
 /** Shipped locales not written in Latin letters. */

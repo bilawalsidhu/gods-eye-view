@@ -120,11 +120,9 @@ const FEED_STATE_LABELS = Object.freeze({
 });
 
 /**
- * A summary line with its feed-state warning in the active language, e.g.
- * `UNAVAILABLE | <text> | LIVE AIS VESSELS`. The state word leads so the
- * one-line readout never clips it; the layer names trail so they never push
- * the text out. State ids and layer names stay English in layer data; only
- * this line translates them.
+ * A summary line with its translated warning:
+ * `UNAVAILABLE | <text> | LIVE AIS VESSELS`. The state leads so a narrow
+ * readout never clips it; the layer names trail so they never push out the text.
  */
 function withProvenance(text, provenance) {
   if (!provenance) return text;
