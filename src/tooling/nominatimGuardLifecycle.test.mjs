@@ -853,6 +853,34 @@ test('admin identity comes only from unambiguous evidence on the selected row', 
   assert.equal('adminLevel' in retiredPrefix, false);
 });
 
+test('a Zone is retired only in Nepal, where zones were replaced', () => {
+  const current = selectOutlineResult(
+    [
+      boundary({
+        name: 'Gamo Zone',
+        addresstype: 'county',
+        display_name: 'Gamo Zone, South Ethiopia Regional State, Ethiopia',
+      }),
+    ],
+    { kind: 'admin', query: 'Gamo Zone' },
+  ).outline;
+  assert.equal(current.adminArea, 'Gamo Zone');
+  assert.equal(current.adminLevel, 'admin2');
+
+  const retired = selectOutlineResult(
+    [
+      boundary({
+        name: 'Bagmati Zone',
+        addresstype: 'state',
+        display_name: 'Bagmati Zone, Nepal',
+      }),
+    ],
+    { kind: 'admin', query: 'Bagmati Zone' },
+  ).outline;
+  assert.equal(retired.adminArea, 'Bagmati Zone');
+  assert.equal('adminLevel' in retired, false);
+});
+
 test('admin identity validates the full name before display truncation', () => {
   const longValidName = `Province of ${'Example '.repeat(24)}`.trim();
   const valid = selectOutlineResult(

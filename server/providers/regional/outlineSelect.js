@@ -274,9 +274,25 @@ function selectedAdminIdentity(kind, row) {
   );
   if (contradictory) return null;
   const adminArea = authoritativeAdminArea.slice(0, 160);
-  if (nameLevel === 'retired') return { adminArea };
+  if (nameLevel === 'retired') {
+    // Nepal replaced its zones in 2015, but zones are current units elsewhere
+    // (Ethiopia). Without a country the name stays retired.
+    if (!zoneIsCurrentIn(row)) return { adminArea };
+    return { adminArea, adminLevel };
+  }
   if (nameLevel && nameLevel !== adminLevel) return null;
   return { adminArea, adminLevel };
+}
+
+/** Whether the row names a country (last display_name part) other than Nepal. */
+function zoneIsCurrentIn(row) {
+  const country = String(row?.display_name || '')
+    .split(',')
+    .slice(1)
+    .pop()
+    ?.trim()
+    .toLocaleLowerCase();
+  return Boolean(country) && country !== 'nepal';
 }
 
 /** Whether supplied administrative evidence contradicts the accepted identity. */

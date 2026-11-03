@@ -270,6 +270,12 @@ export function createVoiceAreas({
     const sourceAdmin = administrativeIdentity(sourceIdentity);
     const primaryAdmin = administrativeIdentity(primaryLabel);
     const requestedAdmin = administrativeIdentity(requestedLabel);
+    // The server leaves a Zone without a level only where zones were retired
+    // (Nepal). A verified level means a current zone, so "Zone" claims no level.
+    if (sourceLevel && sourceAdmin.level === 'retired') {
+      for (const admin of [sourceAdmin, primaryAdmin, requestedAdmin])
+        if (admin.level === 'retired') admin.level = null;
+    }
     const sourceClaimsAdministrative = Boolean(
       administrativeRequest ||
       administrativeLabel ||

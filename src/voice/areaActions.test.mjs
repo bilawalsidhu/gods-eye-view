@@ -30,12 +30,13 @@ function fakeLadder({
   calls = [],
   delay = null,
   label = 'Bagmati Province',
+  match = /bagmati/i,
 } = {}) {
   return {
     calls,
     async resolveAnnotationTarget(request) {
       calls.push(request);
-      if (!/bagmati/i.test(request.target)) return null;
+      if (!match.test(request.target)) return null;
       return {
         lat: 27.7,
         lon: 85.3,
@@ -389,6 +390,26 @@ test('a verified province accepts a bare query with a separate level', async () 
   assert.equal(retiredRefusal.ok, false);
   assert.equal(retiredRefusal.code, 'AREA_IDENTITY_MISMATCH');
   assert.equal(retired.areas.store.size, 0);
+});
+
+test('a current Zone the source verified is not refused as retired', async () => {
+  const gamo = makeAreas({
+    annotationResolver: fakeLadder({
+      label: 'Gamo Zone',
+      match: /gamo/i,
+      outline: {
+        ring: BAGMATI_POLYGONS[0][0],
+        polygons: BAGMATI_POLYGONS,
+        adminArea: 'Gamo Zone',
+        adminLevel: 'admin2',
+        synthesized: false,
+        outlineSource: 'nominatim',
+      },
+    }),
+  });
+  const result = await gamo.areas.resolveAreaAction({ query: 'Gamo Zone' });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(gamo.areas.store.size, 1);
 });
 
 test('a place no outline source can trace is refused, not guessed', async () => {
