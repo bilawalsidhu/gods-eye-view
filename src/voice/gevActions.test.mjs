@@ -420,6 +420,75 @@ for (const motion of [
   });
 }
 
+// Cesium lands a flight even when the user grabs the globe mid-flight, so the
+// motion queued behind it must not then take the camera back.
+for (const motion of [
+  { motion: 'orbit' },
+  { motion: 'tilt', pitchDeg: -45 },
+]) {
+  test(`${motion.motion} queued behind a fly-to is dropped when the user drags mid-flight`, async () => {
+    const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+    const canvasListeners = new Map();
+    viewer.scene.canvas.addEventListener = (type, listener) => {
+      canvasListeners.set(type, listener);
+    };
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: { layers: new Map(), getAll: () => [] },
+    });
+    assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+    const moved = runner('move_camera', motion);
+    canvasListeners.get('pointerdown')();
+    flights[0].complete();
+    const result = await moved;
+    assert.equal(result.ok, false);
+    assert.equal(result.motion, motion.motion);
+    assert.match(result.error, /moved the camera during the flight/);
+    assert.equal(getActiveCameraMotion(), null);
+  });
+}
+
+test('a drag during the first of two chained fly-tos still drops the queued motion', async () => {
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const canvasListeners = new Map();
+  viewer.scene.canvas.addEventListener = (type, listener) => {
+    canvasListeners.set(type, listener);
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  canvasListeners.get('touchstart')();
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  const moved = runner('move_camera', { motion: 'orbit' });
+  flights.at(-1).complete();
+  const result = await moved;
+  assert.equal(result.ok, false);
+  assert.match(result.error, /moved the camera during the flight/);
+});
+
+test('input before a fly-to does not drop the motion queued behind it', async () => {
+  const { viewer, styleManager, flights } = tiltAfterFlightHarness();
+  const canvasListeners = new Map();
+  viewer.scene.canvas.addEventListener = (type, listener) => {
+    canvasListeners.set(type, listener);
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  canvasListeners.get('wheel')();
+  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  const moved = runner('move_camera', { motion: 'orbit' });
+  flights[0].complete();
+  assert.equal((await moved).ok, true);
+  interruptCameraMotion('test-cleanup');
+});
+
 test('stop does not wait for a voice flight', async () => {
   const { viewer, styleManager } = tiltAfterFlightHarness();
   const runner = createGevActionRunner({

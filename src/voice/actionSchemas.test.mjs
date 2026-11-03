@@ -49,8 +49,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Snow leaves the set_visual_style enum.
     // The Operator HUD layout leaves set_hud's layout enum.
     // The layer alias hint leaves out aliases the layer id already spells.
-    // move_camera tilt takes an optional pitchDeg angle.
-    '35261624ef8596608b80e2876f83760723ecf6592acc43fd77691cdb0a972608',
+    // move_camera tilt takes an optional pitchDeg angle, described as
+    // absolute rather than a step.
+    '7258f48a19dead97d1a52cd897355ac84cb1f9077f1e8573fd64e3937660f5d0',
   );
 });
 

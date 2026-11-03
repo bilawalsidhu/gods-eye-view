@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
+  adjustOrbitRange,
   getActiveCameraMotion,
   initCameraVerbs,
   interruptCameraMotion,
@@ -221,4 +222,149 @@ test('a pivoting tilt yields when tracking takes the camera', (t) => {
   h.viewer.trackedEntity = entity;
   h.viewer.trackedEntityChanged.raiseEvent(entity);
   assert.equal(getActiveCameraMotion(), null);
+});
+
+/** Metres between the camera and the point it pivots about. */
+const pivotRange = (h) =>
+  Cesium.Cartesian3.distance(h.camera.positionWC, h.target);
+const heightM = (camera) =>
+  Cesium.Cartographic.fromCartesian(camera.positionWC).height;
+
+test('a zoom during a pivoting tilt changes the range it holds', (t) => {
+  const h = harness(t);
+  assert.equal(
+    moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' }).ok,
+    true,
+  );
+  h.tick();
+  const before = pivotRange(h);
+  assert.equal(adjustOrbitRange(0.5), true, 'the tilt must take the zoom');
+  for (let i = 0; i < 5; i += 1) h.tick();
+  // The next frame's lookAt must not put the old range back.
+  assert.ok(
+    Math.abs(pivotRange(h) - before / 2) < 1,
+    `range ${pivotRange(h)} m, wanted ${before / 2} m`,
+  );
+});
+
+test('a zoom with no pivot to hold is left to the camera', (t) => {
+  harness(t, { pivot: false });
+  moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
+  assert.equal(adjustOrbitRange(0.5), false);
+});
+
+test('a pivot tilt toward the horizon keeps its clearance above the ground', (t) => {
+  // A close top-down view: swinging 250 m of range to -5° would end ~22 m up.
+  const h = harness(t, { height: 250 });
+  assert.equal(moveCamera({ motion: 'tilt', pitchDeg: -5 }).ok, true);
+  let lowest = Infinity;
+  for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) {
+    h.tick();
+    lowest = Math.min(lowest, heightM(h.camera));
+  }
+  assert.equal(getActiveCameraMotion(), null, 'tilt must finish');
+  assert.ok(lowest > 149, `camera dropped to ${lowest} m`);
+  assert.ok(
+    Math.abs(pitchDeg(h.camera) - -5) < 0.5,
+    `pitch ${pitchDeg(h.camera)}`,
+  );
+  assert.ok(Cesium.Matrix4.equals(h.camera.transform, Cesium.Matrix4.IDENTITY));
+});
+
+test('a continuous tilt up from close in keeps its clearance', (t) => {
+  const h = harness(t, { height: 250 });
+  moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
+  for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) {
+    h.tick();
+    assert.ok(heightM(h.camera) > 149, `camera at ${heightM(h.camera)} m`);
+  }
+  assert.ok(Math.abs(pitchDeg(h.camera) - -5) < 0.5);
+});
+
+test('a city-scale pivot tilt keeps the place centred to the horizon limit', (t) => {
+  const h = harness(t);
+  moveCamera({ motion: 'tilt', pitchDeg: -5 });
+  h.finish();
+  // 4 km of range clears the floor at every pitch: all pivot, no drift.
+  assert.ok(centreDrift(h) < 5, `centre drifted ${centreDrift(h)} m`);
+});
+
+test('pitchDeg against a contradicting direction is refused', (t) => {
+  harness(t, { pitch: -45 });
+  // "tilt down 10 degrees": -10° is an absolute angle, which is up from -45°.
+  const result = moveCamera({
+    motion: 'tilt',
+    direction: 'down',
+    pitchDeg: 10,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /absolute angle/);
+  assert.equal(getActiveCameraMotion(), null);
+});
+
+test('pitchDeg with a direction that agrees still tilts', (t) => {
+  const h = harness(t, { pitch: -45 });
+  const result = moveCamera({
+    motion: 'tilt',
+    direction: 'down',
+    pitchDeg: -80,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.direction, 'down');
+  h.finish();
+  assert.ok(Math.abs(pitchDeg(h.camera) - -80) < 0.5);
+});
+
+test('the pitchDeg and direction check uses the pitch the swing starts from', (t) => {
+  // At regional range the Earth curves away: the pivot pitch is a degree or
+  // two shallower than the camera's (-30°), so -29° is still down from it.
+  harness(t, { height: 150000, pitch: -30 });
+  const up = moveCamera({ motion: 'tilt', direction: 'up', pitchDeg: -29 });
+  assert.equal(up.ok, false);
+  assert.match(up.error, /tilts down, not up/);
+  const down = moveCamera({ motion: 'tilt', direction: 'down', pitchDeg: -29 });
+  assert.equal(down.ok, true);
+  assert.equal(down.direction, 'down');
+});
+
+test('after a zoom in, a pivoting tilt never lowers the camera further', (t) => {
+  const h = harness(t, { height: 1000 });
+  moveCamera({ motion: 'tilt', direction: 'up', mode: 'continuous' });
+  while (pitchDeg(h.camera) < -30) h.tick();
+  adjustOrbitRange(1 / 2.4);
+  adjustOrbitRange(1 / 2.4);
+  h.tick();
+  const afterZoom = heightM(h.camera);
+  for (let i = 0; i < 600 && getActiveCameraMotion(); i += 1) {
+    h.tick();
+    assert.ok(
+      heightM(h.camera) > afterZoom - 1,
+      `camera fell from ${afterZoom} m to ${heightM(h.camera)} m`,
+    );
+  }
+  assert.ok(Math.abs(pitchDeg(h.camera) - -5) < 0.5);
+});
+
+test('a zoom in during a close pivot tilt never pushes the camera out', (t) => {
+  // 62 m of range, under the 80 m zoom floor.
+  const h = harness(t, { height: 40, pitch: -40 });
+  moveCamera({ motion: 'tilt', direction: 'down', mode: 'continuous' });
+  h.tick();
+  const before = pivotRange(h);
+  assert.ok(before < 80, `range ${before} m`);
+  adjustOrbitRange(1 / 1.6);
+  h.tick();
+  assert.ok(pivotRange(h) <= before + 0.01, `range grew to ${pivotRange(h)} m`);
+});
+
+test('a zoom out during a far orbit never pulls the camera in', (t) => {
+  // 15,000 km up, beyond the 5,000 km zoom cap.
+  const h = harness(t, { height: 15_000_000 });
+  assert.equal(moveCamera({ motion: 'orbit', mode: 'continuous' }).ok, true);
+  h.tick();
+  const before = pivotRange(h);
+  assert.ok(before > 5_000_000, `range ${before} m`);
+  assert.equal(adjustOrbitRange(2.4), true);
+  h.tick();
+  assert.ok(pivotRange(h) >= before - 1, `range fell to ${pivotRange(h)} m`);
 });

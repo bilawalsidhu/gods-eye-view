@@ -533,7 +533,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         pitchDeg: {
           description:
-            'Tilt to this angle below the horizon (-45 oblique, -89 top-down). Bare tilt: -45.',
+            'Absolute angle below the horizon, not a step (-45 oblique, -89 top-down). Bare tilt: -45.',
           $position: 2,
         },
       },

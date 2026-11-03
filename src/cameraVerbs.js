@@ -52,6 +52,11 @@ const PITCH_MAX = Cesium.Math.toRadians(-5);
 const TILT_DEFAULT_PITCH_DEG = -45;
 /** °/s for a tilt to a requested angle; short ones keep the once duration. */
 const TILT_TO_DEG_S = 30;
+/**
+ * A pivoting tilt keeps the range, so its height above the pivot is
+ * range × sin|pitch|. It swings no lower than this; the rest tilts in place.
+ */
+const TILT_MIN_CLEARANCE_M = 150;
 
 /* ── Route dolly: cinematic tuning ──────────────────────────────────────────
  * Every knob an owner may want to retune lives in this block. The shaping is
@@ -970,6 +975,17 @@ let _trackingRemover = null;
 let _inputRemovers = [];
 /** Monotonic id for the motion currently running; 0 means "no motion". */
 let _motionSeq = 0;
+/** Canvas grabs, touches and wheel turns since load. */
+let _manualInputCount = 0;
+
+/**
+ * Lets a caller holding a motion back (behind a fly-to) see whether the user
+ * took the camera meanwhile; Cesium does not cancel a flight on input.
+ * @returns {number} Manual camera inputs so far.
+ */
+export function manualCameraInputCount() {
+  return _manualInputCount;
+}
 
 /**
  * Install a motion and stamp it with a fresh id. The id is what lets a caller
@@ -1248,7 +1264,8 @@ function onTick() {
  * so the place under the crosshair stays centred; without one it looks up or
  * down in place. Pitch is clamped to [-89°, -5°] only in the direction of
  * travel: a top-down view sits at -90°, below the limit, and must still be
- * able to tilt up out of it.
+ * able to tilt up out of it. A pivot swing toward the horizon lowers the
+ * camera, so it stops at TILT_MIN_CLEARANCE_M and the rest tilts in place.
  */
 function tickTilt(cam, m, scale, dt) {
   let step;
@@ -1261,22 +1278,56 @@ function tickTilt(cam, m, scale, dt) {
       dt *
       (m.direction === 'up' ? 1 : -1);
   }
-  const from = m.hpr ? m.hpr.pitch : cam.pitch;
-  const next = from + step;
-  const limited =
-    step > 0
-      ? Math.min(next, Math.max(from, PITCH_MAX))
-      : Math.max(next, Math.min(from, PITCH_MIN));
   if (m.hpr) {
+    const from = m.hpr.pitch;
+    const next = from + step;
+    const limited =
+      step > 0
+        ? Math.min(next, Math.max(from, tiltPivotPitchMax(m.hpr.range)))
+        : Math.max(next, Math.min(from, PITCH_MIN));
     m.hpr.pitch = limited;
     cam.lookAt(m.target, m.hpr);
     // A once motion that just completed released the lookAt frame before
     // this last step re-took it.
     if (_active !== m) clearLookAt();
-  } else {
-    cam.lookUp(limited - from);
+    if (limited === next) return;
+    if (step < 0 || limited >= PITCH_MAX) {
+      interruptCameraMotion('tilt-clamp');
+      return;
+    }
+    // Down to its clearance: let go of the pivot and tilt the rest in place,
+    // which keeps the height.
+    if (_active === m) clearLookAt();
+    m.hpr = null;
+    m.target = null;
+    step = next - limited;
   }
+  const from = cam.pitch;
+  const next = from + step;
+  const limited =
+    step > 0
+      ? Math.min(next, Math.max(from, PITCH_MAX))
+      : Math.max(next, Math.min(from, PITCH_MIN));
+  cam.lookUp(limited - from);
   if (limited !== next) interruptCameraMotion('tilt-clamp');
+}
+
+/** Shallowest pivot pitch that keeps the clearance at this range. */
+function tiltPivotPitchMax(range) {
+  return Math.min(
+    PITCH_MAX,
+    -Math.asin(Math.min(1, TILT_MIN_CLEARANCE_M / range)),
+  );
+}
+
+/**
+ * Where a tilt starts. It swings about the ground under the crosshair so the
+ * place stays centred; the follow camera owns a tracked view's frame.
+ */
+function tiltStartFrame(cam) {
+  const target = _viewer.trackedEntity ? null : _getTarget?.(_viewer);
+  const pivot = target ? tiltPivot(cam, target) : null;
+  return { target, pivot, from: pivot ? pivot.pitch : cam.pitch };
 }
 
 /** Ground pivot for a tilt: heading, pitch and range in the target's own frame. */
@@ -1482,7 +1533,10 @@ export function initCameraVerbs(
   const canvas = viewer.scene.canvas;
   // ANY manual camera input reclaims control — the cancelFlight reflex.
   for (const evt of ['pointerdown', 'touchstart', 'wheel']) {
-    const h = () => interruptCameraMotion('manual-input');
+    const h = () => {
+      _manualInputCount += 1;
+      interruptCameraMotion('manual-input');
+    };
     canvas.addEventListener(evt, h, { passive: true });
     _inputRemovers.push(() => canvas.removeEventListener(evt, h));
   }
@@ -1580,15 +1634,28 @@ export function moveCamera(args = {}, runNavigation = null) {
     };
   }
   if (motion === 'tilt' && tiltToPitch !== null) {
-    if (
-      Math.abs(tiltToPitch - _viewer.camera.pitch) < Cesium.Math.toRadians(0.5)
-    ) {
+    // Judge from the pitch the motion will start at: the pivot's, which at
+    // regional range is a degree or two shallower than the camera's.
+    const { from } = tiltStartFrame(_viewer.camera);
+    if (Math.abs(tiltToPitch - from) < Cesium.Math.toRadians(0.5)) {
       return {
         ok: true,
         action: 'move_camera',
         motion,
         pitchDeg: Math.round(Cesium.Math.toDegrees(tiltToPitch)),
         unchanged: true,
+      };
+    }
+    // pitchDeg is an absolute angle, not a step: "tilt down 10 degrees" sent
+    // as {direction:'down', pitchDeg:10} would tilt up from -45°.
+    const towards = tiltToPitch > from ? 'up' : 'down';
+    if ((direction === 'up' || direction === 'down') && direction !== towards) {
+      const target = Math.round(Cesium.Math.toDegrees(tiltToPitch));
+      const now = Math.round(Cesium.Math.toDegrees(from));
+      return {
+        ok: false,
+        action: 'move_camera',
+        error: `pitchDeg is an absolute angle, not a step: ${target}° from ${now}° tilts ${towards}, not ${direction}. Send direction alone for a nudge, or pitchDeg alone for an angle.`,
       };
     }
   } else if (motion === 'tilt') {
@@ -1706,16 +1773,11 @@ export function moveCamera(args = {}, runNavigation = null) {
       mode,
     };
     if (motion === 'tilt') {
-      const cam = _viewer.camera;
-      // Swing about the ground under the crosshair so the place stays
-      // centred. The follow camera owns a tracked view's frame.
-      const target = _viewer.trackedEntity ? null : _getTarget?.(_viewer);
-      const pivot = target ? tiltPivot(cam, target) : null;
+      const { target, pivot, from } = tiltStartFrame(_viewer.camera);
       if (pivot) {
         state.target = target;
         state.hpr = pivot;
       }
-      const from = pivot ? pivot.pitch : cam.pitch;
       if (tiltToPitch !== null) {
         state.mode = 'once';
         state.direction = tiltToPitch > from ? 'up' : 'down';
@@ -1833,14 +1895,19 @@ export function moveCamera(args = {}, runNavigation = null) {
 /**
  * Zoom while orbiting: scale the orbit RADIUS instead of letting the zoom
  * fight the per-frame lookAt (field test: "zoom out did literally nothing").
+ * A tilt swinging about its pivot holds a range the same way.
  * @param {number} factor  >1 zooms out (radius grows), <1 zooms in.
- * @returns {boolean} true when an orbit consumed the zoom.
+ * @returns {boolean} true when an orbit or pivoting tilt consumed the zoom.
  */
 export function adjustOrbitRange(factor) {
-  if (!_active || _active.kind !== 'orbit' || !_active.hpr) return false;
+  if (!_active || !['orbit', 'tilt'].includes(_active.kind) || !_active.hpr)
+    return false;
+  // The limits never move a view the wrong way: a zoom in leaves a closer
+  // view in place, and a zoom out leaves a farther one.
+  const range = _active.hpr.range;
   _active.hpr.range = Math.max(
-    80,
-    Math.min(5_000_000, _active.hpr.range * factor),
+    Math.min(80, range),
+    Math.min(Math.max(5_000_000, range), range * factor),
   );
   return true;
 }

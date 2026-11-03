@@ -47,6 +47,7 @@ import {
   flyRoute,
   interruptCameraMotion,
   adjustOrbitRange,
+  manualCameraInputCount,
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
@@ -1107,7 +1108,10 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      const flight = trackVoiceFlight();
+      // Chained fly-tos in one reply: a grab during the earlier one counts.
+      const flight = trackVoiceFlight(
+        voiceFlight && !voiceFlight.done ? voiceFlight.inputCount : undefined,
+      );
       voiceFlight = flight;
       const flown = flyToRequestedLocation(viewer, args, {
         onFlightEnd: flight.settle,
@@ -1194,7 +1198,8 @@ export function createGevActionRunner({
         voiceFlight &&
         !voiceFlight.done
       ) {
-        const status = await waitForVoiceFlight(voiceFlight, runOptions.signal);
+        const flight = voiceFlight;
+        const status = await waitForVoiceFlight(flight, runOptions.signal);
         if (!current())
           return { ok: false, action: 'move_camera', cancelled: true };
         if (status !== 'arrived')
@@ -1203,6 +1208,15 @@ export function createGevActionRunner({
             action: 'move_camera',
             motion,
             error: `Not run: the flight this ${motion} was waiting for did not arrive.`,
+          };
+        // The flight lands even when the user grabs the globe mid-flight;
+        // the queued motion must not take the camera back from them.
+        if (manualCameraInputCount() !== flight.inputCount)
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion,
+            error: `Not run: the user moved the camera during the flight, so the ${motion} was dropped.`,
           };
       }
       return moveCamera(args, (navigate, releaseOptions) =>
@@ -2722,10 +2736,12 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
 }
 
 /** A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once. */
-function trackVoiceFlight() {
+function trackVoiceFlight(inputCount = manualCameraInputCount()) {
   let resolve;
   const flight = {
     done: false,
+    // Manual input after this means the user took the camera mid-flight.
+    inputCount,
     ended: new Promise((settle) => {
       resolve = settle;
     }),
