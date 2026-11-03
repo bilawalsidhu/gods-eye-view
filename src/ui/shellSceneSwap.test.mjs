@@ -216,3 +216,30 @@ test('an attachment that throws part-way leaves the shell detached and attachabl
   assert.equal(shell.engine, engine);
   assert.ok(log.includes('shareRestoration.start'));
 });
+
+test('between engines a style key waits for the next engine instead of the released settings', async () => {
+  const { shell } = fakeShell();
+  const released = [];
+  shell._visualSettings = {
+    stop() {},
+    releaseIrBoost() {},
+    destroy() {},
+    setStyle: (name) => released.push(name),
+  };
+  Object.defineProperty(shell, 'initialRestorePromise', {
+    value: Promise.resolve(),
+  });
+  await shell.detachScene({ handoff: true });
+  shell.setStyle('crt');
+  assert.deepEqual(released, [], 'the released settings do not change');
+  const applied = [];
+  shell._buildSceneControls = () => {
+    shell._shareRestoration = { attachLinks() {}, start() {}, destroy() {} };
+    shell._layerBindings = { observeCamera() {}, stop() {}, disconnect() {} };
+    shell._visualSettings = { setStyle: (name) => applied.push(name) };
+  };
+  shell.attachScene({ engine: { kind: 'cesium' } });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(applied, ['crt']);
+});

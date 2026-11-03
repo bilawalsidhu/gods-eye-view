@@ -9,6 +9,10 @@ import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
 import { DisplayBindings } from './displayBindings.js';
+import {
+  applyPendingVisualChoices,
+  pendingVisualSettings,
+} from './pendingVisualSettings.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { UiLifetime } from './uiLifetime.js';
 import { RecordingControls } from './recordingControls.js';
@@ -754,6 +758,17 @@ export class StyleManager extends ShellFacade {
       this._layerBindings.observeCamera();
       this._layoutRightPanels();
       this._syncCctvPanelViewport();
+      // Choices made between the engines apply once this engine restored
+      // the address's view: the person's choice wins over the link.
+      const pending = this._pendingVisual?.queue;
+      this._pendingVisual = null;
+      if (pending?.length) {
+        const settings = this._visualSettings;
+        void this.initialRestorePromise.then(() => {
+          if (!this._disposed && this._visualSettings === settings)
+            applyPendingVisualChoices(settings, pending);
+        });
+      }
     } catch (error) {
       void this.detachScene().catch((cleanupError) =>
         console.error(
@@ -809,10 +824,18 @@ export class StyleManager extends ShellFacade {
     this.celestialRing?.destroy();
     this.celestialRing = null;
     this._visualSettings.destroy();
+    // Until the next globe: choices wait for it (pendingVisualSettings.js),
+    // and the map-source chips and camera buttons answer nothing.
+    this._pendingVisual = pendingVisualSettings(this._visualSettings);
+    this._visualSettings = this._pendingVisual.settings;
     this._mapSourceControls?.destroy();
     this._mapSourceControls = null;
+    useDisplayStore(applicationPinia()).connectMapSource(null);
     this._cameraOrientationControls?.destroy();
     this._cameraOrientationControls = null;
+    if (this._orientationToken)
+      useGlobeActionsStore(applicationPinia()).detach(this._orientationToken);
+    this._orientationToken = null;
     this._displayBindings.attachViewer(null);
     this._locationNavigation.detachScene();
     this.hud.attachEngine(null);

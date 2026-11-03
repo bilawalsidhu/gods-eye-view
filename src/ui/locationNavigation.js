@@ -135,11 +135,16 @@ export class LocationNavigation {
       isCurrent: (generation) =>
         !this._disposed && generation === this._navigationGeneration,
       beforeFly: (generation) => this._reassertNavigationHandoff(generation),
+      // The engine the lookup ends on: an answer that lands after a switch
+      // flies the globe shown then; one started with none attached is
+      // cancelled.
       search: (query, options) =>
-        searchAndFlyTo(this.engine, query, {
-          placeSearch: this.placeSearch,
-          ...options,
-        }),
+        this.engine
+          ? searchAndFlyTo(this.engine, query, {
+              placeSearch: this.placeSearch,
+              ...options,
+            })
+          : Promise.resolve({ cancelled: true }),
       onResult: (destination) => {
         if (destination.outlineUnavailable)
           this._showToast(t('Detailed outline unavailable'));
@@ -334,7 +339,9 @@ export class LocationNavigation {
       militaryAwarenessLayer,
       rocketLaunchesLayer,
     } = this.services;
-    if (this._disposed)
+    // Between two globe engines there is no camera to reset: nothing moves
+    // and no navigation is stamped.
+    if (this._disposed || !this.engine)
       return Promise.resolve({
         ok: false,
         action: 'zoom_to_globe',

@@ -86,3 +86,19 @@ test('navigation authority retires deferred flights when the globe changes', () 
   const next = navigation._beginDeferredNavigation('location');
   assert.equal(navigation._reassertNavigationHandoff(next), true);
 });
+
+test('between engines the globe reset neither stamps navigation nor reads a camera', async () => {
+  const { LocationNavigation } = await import('./ui/locationNavigation.js');
+  const location = Object.create(LocationNavigation.prototype);
+  let stamped = 0;
+  Object.assign(location, {
+    services: { interruptCameraMotion() {} },
+    engine: null,
+    _disposed: false,
+    _stampNavigation: () => stamped++,
+  });
+  const result = await location.resetToGlobeView();
+  assert.equal(result.ok, false);
+  assert.equal(result.cancelled, true);
+  assert.equal(stamped, 0);
+});
