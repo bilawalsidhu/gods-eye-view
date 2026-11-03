@@ -169,7 +169,11 @@ test('draw failures stay honest in the result, spoken line, and card', async (t)
       },
       reason: /renderer unavailable/,
     },
-    { name: 'missing annotation engine', annotations: null, reason: /unavailable/ },
+    {
+      name: 'missing annotation engine',
+      annotations: null,
+      reason: /unavailable/,
+    },
   ];
 
   for (const entry of cases) {

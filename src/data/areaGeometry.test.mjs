@@ -85,10 +85,7 @@ test('a crossing part and a separate island share one tight longitude frame', ()
     [175, -15],
     [175, -20],
   ];
-  const area = prepareArea([
-    [crossing],
-    [square(-170, -19, -160, -16)],
-  ]);
+  const area = prepareArea([[crossing], [square(-170, -19, -160, -16)]]);
   assert.equal(area.crossesAntimeridian, true);
   assert.deepEqual(area.bbox, [175, -20, -160, -15]);
   assert.equal(pointInPreparedArea(area, -17, 178), true);

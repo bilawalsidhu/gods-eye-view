@@ -17,14 +17,24 @@ function fakeOverlayHost() {
 }
 
 const RECORDS = [
-  { id: 'node/1', lat: 27.7, lon: 85.3, name: 'Bir Hospital', kind: 'hospital' },
+  {
+    id: 'node/1',
+    lat: 27.7,
+    lon: 85.3,
+    name: 'Bir Hospital',
+    kind: 'hospital',
+  },
   { id: 'node/2', lat: 27.71, lon: 85.31, name: null, kind: 'hospital' },
 ];
 
 test('results are queryable only while the layer is on, and labels follow names', () => {
   const host = fakeOverlayHost();
   const layer = createOsmPlacesLayer({ overlayHost: host });
-  layer.setResults(RECORDS, { kind: 'hospital', label: 'hospitals', area: 'Kathmandu' });
+  layer.setResults(RECORDS, {
+    kind: 'hospital',
+    label: 'hospitals',
+    area: 'Kathmandu',
+  });
   assert.deepEqual(layer.getAnalystRecords(), [], 'off: nothing to count');
   assert.equal(layer.getStats().count, 2);
   assert.equal(layer.getStats().statusMessage, 'hospitals · Kathmandu');
@@ -32,10 +42,23 @@ test('results are queryable only while the layer is on, and labels follow names'
   const records = layer.getAnalystRecords();
   assert.equal(records.length, 2);
   records[0].name = 'changed';
-  assert.equal(layer.getAnalystRecords()[0].name, 'Bir Hospital', 'callers get copies');
-  assert.deepEqual(layer.getResultsMeta(), { kind: 'hospital', label: 'hospitals', area: 'Kathmandu', count: 2 });
+  assert.equal(
+    layer.getAnalystRecords()[0].name,
+    'Bir Hospital',
+    'callers get copies',
+  );
+  assert.deepEqual(layer.getResultsMeta(), {
+    kind: 'hospital',
+    label: 'hospitals',
+    area: 'Kathmandu',
+    count: 2,
+  });
   layer.disable();
-  assert.ok(host.calls.some(([name, id]) => name === 'clearSource' && id === 'osm-places'));
+  assert.ok(
+    host.calls.some(
+      ([name, id]) => name === 'clearSource' && id === 'osm-places',
+    ),
+  );
 });
 
 test('an empty layer tells the operator how to fill it', () => {

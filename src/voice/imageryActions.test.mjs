@@ -254,10 +254,9 @@ test('a mixed antimeridian area gets the deliberate imagery date-line refusal', 
     source: 'osm',
   });
   assert.deepEqual(area.bbox, [178, 0, -174, 1]);
-  const result = await findImagery(
-    deps(fakeLayer(), { area }).value,
-    { areaId: area.areaId },
-  );
+  const result = await findImagery(deps(fakeLayer(), { area }).value, {
+    areaId: area.areaId,
+  });
   assert.equal(result.ok, false);
   assert.equal(result.code, 'DATELINE');
 });

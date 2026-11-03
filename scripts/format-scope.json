@@ -1205,5 +1205,14 @@
   "src/standalone/layerSources.test.mjs",
   "src/tooling/nominatimGuardLifecycle.test.mjs",
   "src/tooling/nominatimLockOwnership.test.mjs",
-  "src/tooling/nominatimOutlineRoute.test.mjs"
+  "src/tooling/nominatimOutlineRoute.test.mjs",
+  "src/data/areaGeometry.test.mjs",
+  "src/data/areaResolver.test.mjs",
+  "src/layers/osmPlaces/index.test.mjs",
+  "src/tooling/boundedCache.test.mjs",
+  "src/tooling/osmFeaturesRoute.test.mjs",
+  "src/voice/areaActions.test.mjs",
+  "src/voice/imageryActions.test.mjs",
+  "src/voice/osmActions.test.mjs",
+  "src/voice/realtimeProtocol.test.mjs"
 ]

@@ -8,8 +8,33 @@ export const OSM_PLACES_LAYER_ID = 'osm-places';
 /** A node and a way/relation of the same name this close are one site mapped twice. */
 const SAME_SITE_M = 75;
 
-const text = (value) =>
-  typeof value === 'string' && value.trim() ? value.trim() : null;
+/** Longest tag value kept; OSM names are open text that reaches the model. */
+const MAX_TEXT = 120;
+
+/**
+ * A tag value as plain bounded text: control characters (newlines, tabs)
+ * become spaces; format characters (bidi overrides, zero-width spaces) are
+ * dropped, except the zero-width (non-)joiners Persian and Indic names spell
+ * with; runs of whitespace collapse, and long values are cut with an
+ * ellipsis.
+ */
+function text(value) {
+  if (typeof value !== 'string') return null;
+  const clean = value
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/(?![\u200c\u200d])\p{Cf}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) return null;
+  // Cut on code points so an emoji's surrogate pair is never split.
+  const chars = Array.from(clean);
+  return chars.length <= MAX_TEXT
+    ? clean
+    : `${chars
+        .slice(0, MAX_TEXT - 1)
+        .join('')
+        .trimEnd()}…`;
+}
 
 function distanceM(a, b) {
   const toRad = Math.PI / 180;
