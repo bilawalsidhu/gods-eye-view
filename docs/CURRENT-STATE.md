@@ -45,8 +45,10 @@ its distance-aware zoom, collision handling and minimum/maximum distance limits.
 Fine-pointer desktop mouse and trackpad sensitivity is unchanged.
 
 User zoom is capped at 40,000 km (or a stricter host limit). Explicit camera
-flight, share-link and story destinations can go farther; Cesium can still use
-the limit when it computes an automatic bounding-sphere framing distance.
+flight, share-link and story destinations can go farther; from there, user zoom
+can't climb any higher and zooms in gradually from the current height, with no
+jump to the cap. Cesium can still use the limit when it computes an automatic
+bounding-sphere framing distance.
 Above 300 km, outward movement from the controller's configured zoom bindings
 (wheel, pinch distance and unmodified right-drag by default) pitches the camera
 down towards 8° below the Earth's limb. Large steps reach the limb immediately;

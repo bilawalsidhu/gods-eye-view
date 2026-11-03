@@ -35,6 +35,7 @@ test('maxPitchForHeight steepens monotonically with height', () => {
 
 function guardFixture({ maximumZoomDistance = Infinity } = {}) {
   const preRender = new Set();
+  const postUpdate = new Set();
   const handoffs = new Set();
   const container = new EventTarget();
   const canvas = new EventTarget();
@@ -107,6 +108,12 @@ function guardFixture({ maximumZoomDistance = Infinity } = {}) {
         return () => preRender.delete(handler);
       },
     },
+    postUpdate: {
+      addEventListener(handler) {
+        postUpdate.add(handler);
+        return () => postUpdate.delete(handler);
+      },
+    },
   };
   const renders = [];
   const dispose = installZoomOutGuard(
@@ -125,6 +132,7 @@ function guardFixture({ maximumZoomDistance = Infinity } = {}) {
   );
   const frame = (height = camera.height) => {
     camera.height = height;
+    for (const handler of postUpdate) handler();
     for (const handler of preRender) handler();
   };
   const movement = (type, deltaY, { modifier, tiltDeltaY = 0 } = {}) => {
@@ -163,6 +171,7 @@ function guardFixture({ maximumZoomDistance = Infinity } = {}) {
     scene,
     aggregator,
     preRender,
+    postUpdate,
     handoffs,
     handoff: () => {
       for (const listener of handoffs) listener();
@@ -402,6 +411,7 @@ test('installer sets the ceiling and disposer releases aggregator and frame list
   const f = guardFixture();
   assert.equal(f.controller.maximumZoomDistance, MAXIMUM_ZOOM_DISTANCE_M);
   assert.equal(f.preRender.size, 1);
+  assert.equal(f.postUpdate.size, 1);
   f.frame();
   assert.ok(f.aggregator.resets > 0);
   f.dispose();
@@ -409,6 +419,7 @@ test('installer sets the ceiling and disposer releases aggregator and frame list
   assert.equal(f.controller.maximumZoomDistance, Infinity);
   assert.equal(f.aggregator.destroys, 1);
   assert.equal(f.preRender.size, 0);
+  assert.equal(f.postUpdate.size, 0);
   assert.equal(f.handoffs.size, 0);
 });
 
@@ -466,6 +477,7 @@ test('a real Cesium camera settles across the north heading wrap at Istanbul', (
     mode: Cesium.SceneMode.SCENE3D,
     pixelRatio: 1,
     preRender: new Cesium.Event(),
+    postUpdate: new Cesium.Event(),
     screenSpaceCameraController: {
       maximumZoomDistance: Infinity,
       enableInputs: true,
@@ -559,4 +571,127 @@ test('explicit navigation cancels outward inertia before a climbing UI tilt', ()
   f.frame(1_300_000);
   assert.ok(f.camera.views.length > writes);
   f.dispose();
+});
+
+// A real Cesium camera and controller, fed by DOM wheel events on the canvas.
+function realControllerScene(startHeight) {
+  const canvas = Object.assign(new EventTarget(), {
+    clientWidth: 1200,
+    clientHeight: 800,
+    width: 1200,
+    height: 800,
+    style: {},
+    // Keep Cesium's input handler off the missing `document`.
+    disableRootEvents: true,
+    onwheel: null,
+    getBoundingClientRect: () => ({
+      left: 0,
+      top: 0,
+      width: 1200,
+      height: 800,
+    }),
+  });
+  const scene = {
+    canvas,
+    drawingBufferWidth: 1200,
+    drawingBufferHeight: 800,
+    mapProjection: new Cesium.GeographicProjection(),
+    ellipsoid: Cesium.Ellipsoid.WGS84,
+    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
+    mode: Cesium.SceneMode.SCENE3D,
+    pixelRatio: 1,
+    verticalExaggeration: 1,
+    verticalExaggerationRelativeHeight: 0,
+    preRender: new Cesium.Event(),
+    postUpdate: new Cesium.Event(),
+  };
+  const camera = new Cesium.Camera(scene);
+  scene.camera = camera;
+  const controller = new Cesium.ScreenSpaceCameraController(scene);
+  controller.inertiaZoom = 0;
+  scene.screenSpaceCameraController = controller;
+  const setHeight = (h) =>
+    camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(28.9784, 41.0082, h),
+      orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+    });
+  setHeight(startHeight);
+  const dispose = installZoomOutGuard(
+    { scene, camera, canvas },
+    { requestRender() {} },
+  );
+  // Scene.render order: the controller applies input, then postUpdate, then
+  // preRender on frames that draw.
+  const frame = () => {
+    controller.update();
+    scene.postUpdate.raiseEvent(scene);
+    scene.preRender.raiseEvent(scene);
+  };
+  const wheel = (deltaY) =>
+    canvas.dispatchEvent(
+      Object.assign(new Event('wheel'), {
+        deltaY,
+        deltaMode: 0,
+        clientX: 600,
+        clientY: 400,
+      }),
+    );
+  const height = () => camera.positionCartographic.height;
+  return {
+    scene,
+    camera,
+    controller,
+    setHeight,
+    frame,
+    wheel,
+    height,
+    dispose,
+  };
+}
+
+test('a camera placed above the ceiling cannot zoom out and zooms in without a jump', () => {
+  const s = realControllerScene(60_000_000);
+  try {
+    s.frame();
+    s.wheel(1);
+    s.frame();
+    assert.ok(Math.abs(s.height() - 60_000_000) < 1, `${s.height()} m`);
+    s.wheel(-1);
+    s.frame();
+    const firstStep = s.height();
+    assert.ok(firstStep < 60_000_000, 'zooms in');
+    assert.ok(firstStep > 50_000_000, `${firstStep} m is gradual`);
+    // The camera can no longer climb back above where it has descended to.
+    s.wheel(1);
+    s.frame();
+    assert.ok(Math.abs(s.height() - firstStep) < 1, `${s.height()} m`);
+    for (let i = 0; i < 40; i++) {
+      s.wheel(-100);
+      s.frame();
+    }
+    assert.ok(s.height() < MAXIMUM_ZOOM_DISTANCE_M);
+    assert.equal(s.controller.maximumZoomDistance, MAXIMUM_ZOOM_DISTANCE_M);
+    for (let i = 0; i < 80; i++) {
+      s.wheel(100);
+      s.frame();
+    }
+    assert.ok(Math.abs(s.height() - MAXIMUM_ZOOM_DISTANCE_M) < 1_000);
+  } finally {
+    s.dispose();
+  }
+  assert.equal(s.controller.maximumZoomDistance, Infinity);
+});
+
+test('a share-link view restored above the ceiling is honoured by later frames', () => {
+  const s = realControllerScene(1_000_000);
+  try {
+    s.frame();
+    s.setHeight(97_679_259);
+    s.frame();
+    s.wheel(100);
+    s.frame();
+    assert.ok(Math.abs(s.height() - 97_679_259) < 1, `${s.height()} m`);
+  } finally {
+    s.dispose();
+  }
 });

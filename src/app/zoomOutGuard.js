@@ -78,16 +78,35 @@ export function installZoomOutGuard(
   const controller = scene?.screenSpaceCameraController;
   const camera = viewer?.camera;
   const canvas = viewer?.canvas;
-  if (!controller || !camera || !canvas || !scene.preRender)
+  if (
+    !controller ||
+    !camera ||
+    !canvas ||
+    !scene.preRender ||
+    !scene.postUpdate
+  )
     throw new TypeError('A complete Cesium viewer is required');
 
   const aggregator = createAggregator(canvas);
   const originalMaximumZoomDistance = controller.maximumZoomDistance;
-  const maximumZoomDistance = Math.min(
+  const ownsCeiling = originalMaximumZoomDistance > MAXIMUM_ZOOM_DISTANCE_M;
+  let maximumZoomDistance = Math.min(
     originalMaximumZoomDistance,
     MAXIMUM_ZOOM_DISTANCE_M,
   );
   controller.maximumZoomDistance = maximumZoomDistance;
+  // Cesium clamps any zoom that starts above the limit to the limit, in either
+  // direction. A camera placed higher by a flight or share link keeps its own
+  // height as the limit, so it zooms in gradually and can't climb further.
+  const followCeiling = () => {
+    if (!ownsCeiling || controller.maximumZoomDistance !== maximumZoomDistance)
+      return;
+    const height = camera.positionCartographic?.height;
+    maximumZoomDistance =
+      height > MAXIMUM_ZOOM_DISTANCE_M ? height : MAXIMUM_ZOOM_DISTANCE_M;
+    controller.maximumZoomDistance = maximumZoomDistance;
+  };
+  followCeiling();
 
   let lastHeight = camera.positionCartographic?.height;
   let lastPosition = Cesium.Cartesian3.clone(camera.position);
@@ -175,6 +194,8 @@ export function installZoomOutGuard(
     }
   };
   const removePreRender = scene.preRender.addEventListener(guard);
+  // Fires every frame, after Cesium has applied this frame's input.
+  const removePostUpdate = scene.postUpdate.addEventListener(followCeiling);
   const removeCameraHandoff = subscribeCameraHandoff?.(() => {
     cancel();
     // Discard input queued before an explicit navigation action took ownership.
@@ -187,6 +208,7 @@ export function installZoomOutGuard(
     active = false;
     removeCameraHandoff?.();
     removePreRender?.();
+    removePostUpdate?.();
     aggregator.destroy();
     if (controller.maximumZoomDistance === maximumZoomDistance)
       controller.maximumZoomDistance = originalMaximumZoomDistance;
