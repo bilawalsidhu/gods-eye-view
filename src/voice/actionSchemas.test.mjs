@@ -51,7 +51,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The layer alias hint leaves out aliases the layer id already spells.
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute rather than a step.
-    '7258f48a19dead97d1a52cd897355ac84cb1f9077f1e8573fd64e3937660f5d0',
+    '6af49c2200f8e21ba8727baf51929397f5765e3703e2eda84d4231fb538df09b',
   );
 });
 
