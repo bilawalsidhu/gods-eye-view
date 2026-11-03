@@ -20,7 +20,7 @@
 // has no public call to merge effects. A disabled pass is skipped: off costs
 // nothing.
 
-import { withFrameUpdates } from './frameDescriptor.js';
+import { withFrameUpdates, withPassDisposal } from './frameDescriptor.js';
 import { Effect as NavaraEffect, EffectDesc } from '@navaramap/three';
 import { Effect, EffectAttribute } from 'postprocessing';
 import { RGBADepthPacking, Uniform } from 'three';
@@ -87,7 +87,9 @@ class UnsharpMaskEffect extends Effect {
 }
 
 /** config.gevSharpen: { amount } (Cesium's `amount` uniform). */
-export class SharpenEffectDesc extends withFrameUpdates(EffectDesc) {
+export class SharpenEffectDesc extends withPassDisposal(
+  withFrameUpdates(EffectDesc),
+) {
   static key = SHARPEN_EFFECT_KEY;
   static insertAfter = ['toneMapping'];
   static insertBefore = ['smaa', 'fxaa', 'gevOverlay', 'final'];

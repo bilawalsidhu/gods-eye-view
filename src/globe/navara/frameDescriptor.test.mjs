@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { withFrameUpdates } from './frameDescriptor.js';
+import { withFrameUpdates, withPassDisposal } from './frameDescriptor.js';
 
 test('deleting a descriptor unsubscribes only that renderer from the warm view', () => {
   const frames = new Set();
@@ -40,4 +40,40 @@ test('deleting a descriptor unsubscribes only that renderer from the warm view',
   assert.equal(a.destroyed, true);
   b.onDestroy();
   assert.equal(frames.size, 0);
+});
+
+test('a deleted effect disposes the pass the composer no longer holds', () => {
+  const events = [];
+  const pass = { dispose: () => events.push('dispose') };
+  class Base {
+    _instance = { rawPass: pass };
+    get raw() {
+      return this._instance;
+    }
+    onDestroy() {
+      events.push('remove');
+      this._instance = undefined;
+    }
+  }
+  const effect = new (withPassDisposal(Base))();
+  effect.onDestroy();
+  assert.deepEqual(events, ['remove', 'dispose']);
+
+  // A pass that was never created: nothing to dispose.
+  const empty = new (withPassDisposal(
+    class {
+      onDestroy() {}
+    },
+  ))();
+  assert.doesNotThrow(() => empty.onDestroy());
+
+  // The pass is disposed even when Navara's removal throws.
+  class Failing extends Base {
+    onDestroy() {
+      throw Error('removal failed');
+    }
+  }
+  events.length = 0;
+  assert.throws(() => new (withPassDisposal(Failing))().onDestroy(), /removal/);
+  assert.deepEqual(events, ['dispose']);
 });
