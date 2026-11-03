@@ -448,12 +448,14 @@ export class LocationNavigation {
    * transition and orbit end; the search, its text and the readout stay.
    */
   detachScene() {
-    this._cancelGlobeReset?.();
-    this._cancelGlobeReset = null;
-    if (this._worldJumpActive) this._endWorldJumpTransition();
-    clearTimeout(this._trafficTransitionTimer);
-    this._trafficTransitionTimer = null;
-    this._stopOrbit();
+    if (!this._disposed) {
+      this._cancelGlobeReset?.();
+      this._cancelGlobeReset = null;
+      if (this._worldJumpActive) this._endWorldJumpTransition();
+      clearTimeout(this._trafficTransitionTimer);
+      this._trafficTransitionTimer = null;
+      this._stopOrbit();
+    }
     this.orbitController?.attachEngine(null);
     this.viewer = null;
     this.engine = null;

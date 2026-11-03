@@ -302,10 +302,16 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
-    'this._layerBindings.stop();',
-    'this._navigation.destroy(',
-    'await this._contextControls.restoreForDisposal();',
+    'await this.detachScene(',
+    'this._navigation.stop();',
   ], 'dispose invalidation');
+  // An engine switch retires the outgoing globe's navigation the same way.
+  const detach = body(ui, /async detachScene\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/, 'detach');
+  ordered(detach, [
+    'this._navigation.setScene(',
+    'this._layerBindings.stop();',
+    'await this._contextControls.restoreForDisposal();',
+  ], 'detach invalidation');
   assert.match(shellMethod('destroy').toString(), /this\._stampNavigation\(\{\s*cancelPendingSelection: !retainScene\s*\}\)/);
 });
 
@@ -313,9 +319,13 @@ test('teardown synchronously closes immediate camera entry points', () => {
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
+    'await this.detachScene(',
+  ], 'synchronous teardown barrier');
+  const detach = body(ui, /async detachScene\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/, 'detach');
+  ordered(detach, [
     'this._layerBindings.stop();',
     'await this._contextControls.restoreForDisposal();',
-  ], 'synchronous teardown barrier');
+  ], 'synchronous detach barrier');
   ordered(LayerBindings.prototype.stop.toString(), [
     'this._disposed = true;',
     'this._removeCctvRequestFocusListener?.();',

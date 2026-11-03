@@ -196,6 +196,256 @@ export class StyleManager extends ShellFacade {
       cancelOrientation: () => this._cameraOrientationControls?.cancel(),
       showToast: (text) => this._showToast(text),
     });
+    this._buildSceneControls();
+
+    this._windowResizeHandler = null;
+    this._disposed = false;
+
+    this._mapStackChangeHandler = null;
+
+    this._cockpitDisplayModeHandler = null;
+
+    this._locationNavigation = new LocationNavigation({
+      viewer,
+      engine,
+      placeSearch,
+      navigation: this._navigation,
+      readCockpit: () => this.cockpitView,
+      services: {
+        CITY_POIS: services.CITY_POIS,
+        searchAndFlyTo: services.searchAndFlyTo,
+        LocationSearch: services.LocationSearch,
+        OrbitController: services.OrbitController,
+        suspendDetection: services.suspendDetection,
+        resumeDetection: services.resumeDetection,
+        trafficLayer: services.trafficLayer,
+        flyToPresetLocation: services.flyToPresetLocation,
+        flyToPOI: services.flyToPOI,
+        GLOBE_VIEW: services.GLOBE_VIEW,
+        flyToGlobeView: services.flyToGlobeView,
+        interruptCameraMotion: services.interruptCameraMotion,
+        interruptGlobeRotation: services.interruptGlobeRotation,
+        flightsLayer: services.flightsLayer,
+        militaryFlightsLayer: services.militaryFlightsLayer,
+        satellitesLayer: services.satellitesLayer,
+        aisLiveVesselsLayer: services.aisLiveVesselsLayer,
+        militaryAwarenessLayer: services.militaryAwarenessLayer,
+        rocketLaunchesLayer: services.rocketLaunchesLayer,
+      },
+      elements: {
+        _locationSearch: this._locationSearch,
+      },
+      operations: {
+        _publishLocation: (view) =>
+          useLocationStore(applicationPinia()).publish(view),
+        _connectLocation: (controls) =>
+          useLocationStore(applicationPinia()).connect(controls),
+        _connectGlobeReset: (controls) => this._connectGlobeReset(controls),
+        _publishGlobeResetting: (busy) => this._publishGlobeResetting(busy),
+        _beginDeferredNavigation: (...args) =>
+          this._beginDeferredNavigation(...args),
+        _reassertNavigationHandoff: (...args) =>
+          this._reassertNavigationHandoff(...args),
+        _settleLocationSearchUi: (...args) =>
+          this._settleLocationSearchUi(...args),
+        _runExplicitNavigation: (...args) =>
+          this._runExplicitNavigation(...args),
+        _stampNavigation: (...args) => this._stampNavigation(...args),
+        _updateTrafficSyncChip: (...args) =>
+          this._updateTrafficSyncChip(...args),
+        _showToast: (...args) => this._showToast(...args),
+      },
+    });
+    this._lastTrafficChipUpdateAt = 0;
+
+    // Intel HUD
+    const hudStore = useHudStore(applicationPinia());
+    this.hud = new IntelHUD(engine, {
+      viewer,
+      placeSearch,
+      summaryService: requestServices?.summary,
+      publish: (view) => hudStore.publish(view),
+    });
+    this._recording.hud = this.hud;
+    this._buildSceneCockpit();
+
+    // Share Link Manager
+    this.shareLinkManager = new ShareLinkManager(engine, {
+      onRestore: async (state) => {
+        return this._visualSettings.restoreShareState(state);
+      },
+      isNavigationCurrent: (generation) =>
+        generation === this._navigationGeneration,
+      cancelOwnedNavigation: () => this.engine?.camera.cancelFlight(),
+      // A host may open a share code without a `/share/<code>` address.
+      initialShareCode,
+    });
+    this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
+      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+    );
+    this.shareLinkManager.setPanelStateProvider(() =>
+      this._buildSharePanelState(),
+    );
+    this.shareLinkManager.setStyleParamStateProvider((styleName) => {
+      const shader = STYLES[styleName];
+      const stage = this.stages[styleName];
+      if (!shader?.uniforms || !stage) return null;
+      return Object.fromEntries(
+        Object.keys(shader.uniforms).map((uniformName) => [
+          uniformName,
+          stage.uniforms[uniformName],
+        ]),
+      );
+    });
+    this._shareState = createStateChannel(() => this._readShareState());
+    this._shareState.subscribe(
+      ({ state }) => {
+        this.shareLinkManager.onToggleChange(
+          state.bloomEnabled,
+          state.sharpenEnabled,
+          state.options,
+        );
+      },
+      { emitCurrent: false },
+    );
+    // Parse before panel chrome initializes so every valid share URL starts
+    // from deterministic markup defaults instead of recipient-local panel
+    // preferences. Encoded panel fields are applied after all panels exist.
+    this._shareRestoration.attachLinks(this.shareLinkManager);
+
+    this._aircraftDisplay = new AircraftDisplay({
+      elements: {
+        _models3dBtn: this._models3dBtn,
+      },
+      readDataManager: () => this._dataManager,
+      layout: () => this._layoutRightPanels(),
+    });
+
+    this._initSceneOverlays();
+    // Its focusable mirror of the painted cards, which the scene chrome
+    // renders.
+    const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
+    overlayActionsStore.connect({ activate: activateWorldOverlayAction });
+    this._overlayActionsUnsubscribe = subscribeWorldOverlayActions((view) =>
+      overlayActionsStore.publish(view),
+    );
+
+    this._displayBindings = new DisplayBindings({
+      viewer,
+      services: {
+        cycleDetectionMode: services.cycleDetectionMode,
+        isScopeMaskEnabled: services.isScopeMaskEnabled,
+      },
+      elements: {
+        _locationSearch: this._locationSearch,
+      },
+      operations: {
+        _closeLocationSearch: (options) =>
+          this._locationNavigation?.closeSearch(options),
+        setStyle: (...args) => this.setStyle(...args),
+        _updateHudButtonState: (...args) => this._updateHudButtonState(...args),
+        _syncShareState: (...args) => this._syncShareState(...args),
+        _toggleOrbit: (...args) => this._toggleOrbit(...args),
+        toggleCleanView: (...args) => this.toggleCleanView(...args),
+        _toggleCctvEnabled: (...args) => this._toggleCctvEnabled(...args),
+        _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
+        _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
+        _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
+        _setSharpenIntensity: (...args) => this._setSharpenIntensity(...args),
+        _setHudVariant: (...args) => this._setHudVariant(...args),
+        _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
+        _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
+        _setDetectionDensity: (...args) => this._setDetectionDensity(...args),
+        _setDetectionAllocation: (...args) =>
+          this._setDetectionAllocation(...args),
+        _setDetectionFade: (...args) => this._setDetectionFade(...args),
+        _setScope: (...args) => this._visualSettings._setScope(...args),
+        setCelestialRingEnabled: (...args) =>
+          this.setCelestialRingEnabled(...args),
+        _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
+        _syncModels3dModeRow: (...args) => this._syncModels3dModeRow(...args),
+        _setModels3dMode: (...args) => this._setModels3dMode(...args),
+      },
+      readState: () => ({
+        shareLinkManager: this.shareLinkManager,
+        hud: this.hud,
+        bloomEnabled: this.bloomEnabled,
+        sharpenEnabled: this.sharpenEnabled,
+        celestialRing: this.celestialRing,
+        celestialRingEnabled: this.celestialRingEnabled,
+        _models3dEnabled: this._models3dEnabled,
+      }),
+      claimDetection: () => {
+        this._visualSettings._detectionUserOverridden = true;
+      },
+    });
+    this._initUI();
+    this._initMapStackControl();
+    this._initPanelChrome();
+    this._panelNavigation = new PanelNavigation({
+      ui: this._ui,
+      stacks: { left: this._leftPanelStack, right: this._rightPanelStack },
+      setPanelCollapsed: (...args) =>
+        this._panelChrome.setPanelCollapsed(...args),
+    });
+    this._panelNavigation.init();
+    this._initLocaleSelector();
+    this._sizeDisplayLabelColumn();
+    this._initLeftPanelAdaptiveLayout();
+    this._initRightPanelAdaptiveLayout();
+    this._initRadioPanel();
+    this._initCctvPanel();
+    this._initStreetLevelPanel();
+    this._initGlobalContextPanel();
+    this._initLocationBar();
+    this._initMobileShell();
+    this._initShareButton();
+    this._initCameraOrientationControls();
+    this._initClearSelectedLayersButton();
+    this._initHUDToggle();
+    this._initModels3dToggle();
+    this._applyGlobalPostDefaults();
+    this._initOrbit();
+    this._initRecordingOverlay();
+    this._startAnimationLoop();
+    this._startTrafficChipTicker();
+    this._publishActiveStyle();
+    this._updateLocationMiniStatus();
+
+    this._shareRestoration.start({
+      engineSwitch,
+      retainScene: Boolean(this._layerSession?.handoffLayers),
+    });
+
+    // Keep the parameter panel from overlapping toggle controls.
+    this._layoutRightPanels();
+    this._syncCctvPanelViewport();
+    this._windowResizeHandler = () => {
+      this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
+      this._syncCctvPanelViewport();
+      this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
+    };
+    window.addEventListener('resize', this._windowResizeHandler);
+    // The loading-chip ticker is stopped while the tab is hidden (it can do no
+    // useful work off-screen and must not hold a 60ms timer there). Resample on
+    // return so the time-driven reducer catches up on real elapsed time — and
+    // re-arms its own ticker if the batch is still running.
+    this._feedback.observeVisibility();
+    this._layerBindings.observeCamera();
+  }
+
+  // ── Scene attachment ──────────────────────────────────────────────────
+  // The shell lives for the page; an engine switch only rebuilds the parts
+  // bound to one globe (share restoration, visual effects, layer bindings,
+  // Cockpit, the celestial ring, the overlay host, detection, the map-source
+  // and camera-orientation controls) and points the kept ones (navigation,
+  // location search, HUD, share link, display bindings) at the next globe.
+
+  /** Share restoration, visual settings and layer bindings of this globe. */
+  _buildSceneControls() {
+    const { viewer, engine, mapStackController } = this._scene;
+    const services = this.services;
+    const layerSession = this._layerSession;
     this._shareRestoration = new ShareRestoration({
       viewer,
       canvas: engine?.host.canvas ?? viewer?.canvas,
@@ -302,76 +552,13 @@ export class StyleManager extends ShellFacade {
       feedback: this._feedback,
       shareRestoration: this._shareRestoration,
     });
+  }
 
-    this._windowResizeHandler = null;
-    this._disposed = false;
-
-    this._mapStackChangeHandler = null;
-
-    this._cockpitDisplayModeHandler = null;
-
-    this._locationNavigation = new LocationNavigation({
-      viewer,
-      engine,
-      placeSearch,
-      navigation: this._navigation,
-      readCockpit: () => this.cockpitView,
-      services: {
-        CITY_POIS: services.CITY_POIS,
-        searchAndFlyTo: services.searchAndFlyTo,
-        LocationSearch: services.LocationSearch,
-        OrbitController: services.OrbitController,
-        suspendDetection: services.suspendDetection,
-        resumeDetection: services.resumeDetection,
-        trafficLayer: services.trafficLayer,
-        flyToPresetLocation: services.flyToPresetLocation,
-        flyToPOI: services.flyToPOI,
-        GLOBE_VIEW: services.GLOBE_VIEW,
-        flyToGlobeView: services.flyToGlobeView,
-        interruptCameraMotion: services.interruptCameraMotion,
-        interruptGlobeRotation: services.interruptGlobeRotation,
-        flightsLayer: services.flightsLayer,
-        militaryFlightsLayer: services.militaryFlightsLayer,
-        satellitesLayer: services.satellitesLayer,
-        aisLiveVesselsLayer: services.aisLiveVesselsLayer,
-        militaryAwarenessLayer: services.militaryAwarenessLayer,
-        rocketLaunchesLayer: services.rocketLaunchesLayer,
-      },
-      elements: {
-        _locationSearch: this._locationSearch,
-      },
-      operations: {
-        _publishLocation: (view) =>
-          useLocationStore(applicationPinia()).publish(view),
-        _connectLocation: (controls) =>
-          useLocationStore(applicationPinia()).connect(controls),
-        _connectGlobeReset: (controls) => this._connectGlobeReset(controls),
-        _publishGlobeResetting: (busy) => this._publishGlobeResetting(busy),
-        _beginDeferredNavigation: (...args) =>
-          this._beginDeferredNavigation(...args),
-        _reassertNavigationHandoff: (...args) =>
-          this._reassertNavigationHandoff(...args),
-        _settleLocationSearchUi: (...args) =>
-          this._settleLocationSearchUi(...args),
-        _runExplicitNavigation: (...args) =>
-          this._runExplicitNavigation(...args),
-        _stampNavigation: (...args) => this._stampNavigation(...args),
-        _updateTrafficSyncChip: (...args) =>
-          this._updateTrafficSyncChip(...args),
-        _showToast: (...args) => this._showToast(...args),
-      },
-    });
-    this._lastTrafficChipUpdateAt = 0;
-
-    // Intel HUD
-    const hudStore = useHudStore(applicationPinia());
-    this.hud = new IntelHUD(engine, {
-      viewer,
-      placeSearch,
-      summaryService: requestServices?.summary,
-      publish: (view) => hudStore.publish(view),
-    });
-    this._recording.hud = this.hud;
+  /** Cockpit and the celestial ring of this globe. */
+  _buildSceneCockpit() {
+    const { viewer, engine } = this._scene;
+    const services = this.services;
+    const { CelestialRing } = services;
     this._cockpitCoordinator = new CockpitCoordinator({
       viewer,
       engine,
@@ -450,71 +637,30 @@ export class StyleManager extends ShellFacade {
           focus: false,
         }),
     });
+  }
 
-    // Share Link Manager
-    this.shareLinkManager = new ShareLinkManager(engine, {
-      onRestore: async (state) => {
-        return this._visualSettings.restoreShareState(state);
-      },
-      isNavigationCurrent: (generation) =>
-        generation === this._navigationGeneration,
-      cancelOwnedNavigation: () => this.engine?.camera.cancelFlight(),
-      // A host may open a share code without a `/share/<code>` address.
-      initialShareCode,
-    });
-    this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
-      readShareFollowSubject({ viewer: this.viewer, nowMs }),
-    );
-    this.shareLinkManager.setPanelStateProvider(() =>
-      this._buildSharePanelState(),
-    );
-    this.shareLinkManager.setStyleParamStateProvider((styleName) => {
-      const shader = STYLES[styleName];
-      const stage = this.stages[styleName];
-      if (!shader?.uniforms || !stage) return null;
-      return Object.fromEntries(
-        Object.keys(shader.uniforms).map((uniformName) => [
-          uniformName,
-          stage.uniforms[uniformName],
-        ]),
-      );
-    });
-    this._shareState = createStateChannel(() => this._readShareState());
-    this._shareState.subscribe(
-      ({ state }) => {
-        this.shareLinkManager.onToggleChange(
-          state.bloomEnabled,
-          state.sharpenEnabled,
-          state.options,
-        );
-      },
-      { emitCurrent: false },
-    );
-    // Parse before panel chrome initializes so every valid share URL starts
-    // from deterministic markup defaults instead of recipient-local panel
-    // preferences. Encoded panel fields are applied after all panels exist.
-    this._shareRestoration.attachLinks(this.shareLinkManager);
-
-    this._aircraftDisplay = new AircraftDisplay({
-      elements: {
-        _models3dBtn: this._models3dBtn,
-      },
-      readDataManager: () => this._dataManager,
-      layout: () => this._layoutRightPanels(),
-    });
-
+  /** The world-overlay host, detection and post-process stages of this globe. */
+  _initSceneOverlays() {
+    const { engine } = this._scene;
+    const {
+      initWorldOverlay,
+      initDetection,
+      initTrackedReadout,
+      setDetectionStyle,
+      trafficLayer,
+      flightsLayer,
+      militaryFlightsLayer,
+      localAdsbLayer,
+      satellitesLayer,
+      cctvLayer,
+      bikeshareLayer,
+      transitLayer,
+      aisLiveVesselsLayer,
+    } = this.services;
     // The shared world-overlay host must own its one postRender lane before
     // detection and tracked-readout initialize. It stays transparent until a
     // production source explicitly registers entries.
     initWorldOverlay(engine);
-    // Its focusable mirror of the painted cards, which the scene chrome
-    // renders.
-    const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
-    overlayActionsStore.connect({ activate: activateWorldOverlayAction });
-    this._overlayActionsUnsubscribe = subscribeWorldOverlayActions((view) =>
-      overlayActionsStore.publish(view),
-    );
-
     // Initialize detection overlay BEFORE style stages so the composite
     // stage is first in the post-process pipeline. Both run on the engine
     // (the Navara mode too: its layers arrive with Tasks 10a-13a).
@@ -543,108 +689,140 @@ export class StyleManager extends ShellFacade {
 
     this._initStages();
     this._initBloomSharpen();
-    this._displayBindings = new DisplayBindings({
-      viewer,
-      services: {
-        cycleDetectionMode: services.cycleDetectionMode,
-        isScopeMaskEnabled: services.isScopeMaskEnabled,
-      },
-      elements: {
-        _locationSearch: this._locationSearch,
-      },
-      operations: {
-        _closeLocationSearch: (options) =>
-          this._locationNavigation?.closeSearch(options),
-        setStyle: (...args) => this.setStyle(...args),
-        _updateHudButtonState: (...args) => this._updateHudButtonState(...args),
-        _syncShareState: (...args) => this._syncShareState(...args),
-        _toggleOrbit: (...args) => this._toggleOrbit(...args),
-        toggleCleanView: (...args) => this.toggleCleanView(...args),
-        _toggleCctvEnabled: (...args) => this._toggleCctvEnabled(...args),
-        _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
-        _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
-        _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
-        _setSharpenIntensity: (...args) => this._setSharpenIntensity(...args),
-        _setHudVariant: (...args) => this._setHudVariant(...args),
-        _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
-        _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
-        _setDetectionDensity: (...args) => this._setDetectionDensity(...args),
-        _setDetectionAllocation: (...args) =>
-          this._setDetectionAllocation(...args),
-        _setDetectionFade: (...args) => this._setDetectionFade(...args),
-        _setScope: (...args) => this._visualSettings._setScope(...args),
-        setCelestialRingEnabled: (...args) =>
-          this.setCelestialRingEnabled(...args),
-        _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
-        _syncModels3dModeRow: (...args) => this._syncModels3dModeRow(...args),
-        _setModels3dMode: (...args) => this._setModels3dMode(...args),
-      },
-      readState: () => ({
-        shareLinkManager: this.shareLinkManager,
-        hud: this.hud,
-        bloomEnabled: this.bloomEnabled,
-        sharpenEnabled: this.sharpenEnabled,
-        celestialRing: this.celestialRing,
-        celestialRingEnabled: this.celestialRingEnabled,
-        _models3dEnabled: this._models3dEnabled,
-      }),
-      claimDetection: () => {
-        this._visualSettings._detectionUserOverridden = true;
-      },
-    });
-    this._initUI();
-    this._initMapStackControl();
-    this._initPanelChrome();
-    this._panelNavigation = new PanelNavigation({
-      ui: this._ui,
-      stacks: { left: this._leftPanelStack, right: this._rightPanelStack },
-      setPanelCollapsed: (...args) =>
-        this._panelChrome.setPanelCollapsed(...args),
-    });
-    this._panelNavigation.init();
-    this._initLocaleSelector();
-    this._sizeDisplayLabelColumn();
-    this._initLeftPanelAdaptiveLayout();
-    this._initRightPanelAdaptiveLayout();
-    this._initRadioPanel();
-    this._initCctvPanel();
-    this._initStreetLevelPanel();
-    this._initGlobalContextPanel();
-    this._initLocationBar();
-    this._initMobileShell();
-    this._initShareButton();
-    this._initCameraOrientationControls();
-    this._initClearSelectedLayersButton();
-    this._initHUDToggle();
-    this._initModels3dToggle();
-    this._applyGlobalPostDefaults();
-    this._initOrbit();
-    this._initRecordingOverlay();
-    this._startAnimationLoop();
-    this._startTrafficChipTicker();
-    this._publishActiveStyle();
-    this._updateLocationMiniStatus();
+  }
 
+  /**
+   * Attach the shell to another globe (an engine switch): `{ viewer, engine,
+   * mapStackController, services }`, where `services` are that catalog's
+   * layer roles. The shell, its stores, open panels, typed text and focus
+   * stay; the parts bound to a globe are built for this one and the
+   * address's view is restored on it.
+   */
+  attachScene({
+    viewer = null,
+    engine = engineFromViewer(viewer),
+    mapStackController = null,
+    services = {},
+    engineSwitch = true,
+  } = {}) {
+    if (this._disposed) return;
+    if (this._scene.engine)
+      throw new Error('The shell is attached to a globe already');
+    const previousServices = this.services;
+    this.services = { ...this.services, ...services };
+    this._scene = { viewer, engine, mapStackController };
+    const {
+      flightsLayer,
+      militaryFlightsLayer,
+      satellitesLayer,
+      aisLiveVesselsLayer,
+      militaryAwarenessLayer,
+      rocketLaunchesLayer,
+    } = this.services;
+    this._navigation.tracking = {
+      flightsLayer,
+      militaryFlightsLayer,
+      satellitesLayer,
+      aisLiveVesselsLayer,
+      militaryAwarenessLayer,
+      rocketLaunchesLayer,
+    };
+    this._navigation.setScene({ viewer, engine });
+    this._locationNavigation.attachScene({ viewer, engine });
+    this.hud.attachEngine(engine, { viewer });
+    this.shareLinkManager.attachEngine(engine);
+    this._displayBindings.attachViewer(viewer);
+    this._buildSceneControls();
+    this._buildSceneCockpit();
+    this._shareRestoration.attachLinks(this.shareLinkManager);
+    this._initSceneOverlays();
+    this._initMapStackControl();
+    this._refreshLayerControls(previousServices);
+    this._initCameraOrientationControls();
+    this._initHudScene();
+    this._initCockpitDisplayPortal();
+    this._applyGlobalPostDefaults();
+    this._startAnimationLoop();
+    this._publishActiveStyle();
     this._shareRestoration.start({
       engineSwitch,
       retainScene: Boolean(this._layerSession?.handoffLayers),
     });
-
-    // Keep the parameter panel from overlapping toggle controls.
+    this._layerBindings.observeCamera();
     this._layoutRightPanels();
     this._syncCctvPanelViewport();
-    this._windowResizeHandler = () => {
-      this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
-      this._syncCctvPanelViewport();
-      this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
-    };
-    window.addEventListener('resize', this._windowResizeHandler);
-    // The loading-chip ticker is stopped while the tab is hidden (it can do no
-    // useful work off-screen and must not hold a 60ms timer there). Resample on
-    // return so the time-driven reducer catches up on real elapsed time — and
-    // re-arms its own ticker if the batch is still running.
-    this._feedback.observeVisibility();
-    this._layerBindings.observeCamera();
+  }
+
+  /**
+   * Detach the shell from its globe (an engine switch, or the page going).
+   * The parts bound to that globe are released; the shell, its stores and
+   * the open panels stay. `handoff` keeps the selection and a retainable
+   * Context mode for the next globe.
+   */
+  async detachScene({
+    handoff = Boolean(this._layerSession?.handoffLayers),
+  } = {}) {
+    if (!this._scene.engine && !this._scene.viewer) return;
+    const { destroyTrackedReadout, destroyWorldOverlay, destroyDetection } =
+      this.services;
+    this._shareRestoration.destroy();
+    this._navigation.setScene({}, { retainScene: handoff });
+    this._layerBindings.stop();
+    this._cockpitCoordinator.stop();
+    this._visualSettings.stop();
+    // A Context mode that cannot be carried to the next globe (a transition
+    // in flight) restores the layers it changed, as a teardown does.
+    if (!this._contextControls.canRetainScene()) {
+      this._contextControls._contextModeGeneration++;
+      await this._contextControls.restoreForDisposal();
+      this._contextControls._contextModeChanging = false;
+    }
+    // IR boost teardown BEFORE detaching the data manager: restore fog and
+    // un-boost both aircraft layers so the next globe does not inherit
+    // sensor state (review P2, 2026-08-16).
+    this._visualSettings.releaseIrBoost();
+    this._cockpitCoordinator.destroy();
+    this._layerBindings.disconnect();
+    destroyTrackedReadout();
+    destroyDetection();
+    destroyWorldOverlay();
+    this.celestialRing?.destroy();
+    this.celestialRing = null;
+    this._visualSettings.destroy();
+    this._mapSourceControls?.destroy();
+    this._mapSourceControls = null;
+    this._cameraOrientationControls?.destroy();
+    this._cameraOrientationControls = null;
+    this._displayBindings.attachViewer(null);
+    this._locationNavigation.detachScene();
+    this.hud.attachEngine(null);
+    this.shareLinkManager.attachEngine(null);
+    this._scene = { viewer: null, engine: null, mapStackController: null };
+  }
+
+  /**
+   * Rebuild a panel's controls whose layer is another instance in the new
+   * catalog (a layer this engine left out, then shows). Layers the session
+   * keeps are the same instances, so their controls stay.
+   */
+  _refreshLayerControls(previous) {
+    const changed = (...roles) =>
+      roles.some((role) => previous?.[role] !== this.services[role]);
+    if (changed('cctvLayer')) this._initCctvPanel();
+    if (changed('radioLayer', 'localAdsbLayer')) this._initRadioPanel();
+    if (changed('streetLevelLayer')) this._initStreetLevelPanel();
+    if (
+      changed(
+        'radioLayer',
+        'militaryInstallationsLayer',
+        'militaryAwarenessLayer',
+        'rocketLaunchesLayer',
+      )
+    ) {
+      this._contextControls.stop();
+      this._contextControls.disconnect();
+      this._initGlobalContextPanel();
+    }
   }
 
   /** The attached globe's Cesium viewer; null on Navara or between engines. */
@@ -883,7 +1061,7 @@ export class StyleManager extends ShellFacade {
 
     const displayStore = useDisplayStore(applicationPinia());
     this._mapSourceControls?.destroy();
-    displayStore.publishMapSource(null);
+    // The new controls publish their chips at once; the row stays mounted.
     this._mapSourceControls = createMapSourceControls({
       controller: this.mapStackController,
       publish: (view) => displayStore.publishMapSource(view),
@@ -1052,7 +1230,10 @@ export class StyleManager extends ShellFacade {
         _radioVolumeValue: this._radioVolumeValue,
       },
       radio: radioLayer,
-      canvas: this.viewer?.canvas,
+      // A gesture on the globe, whichever engine draws it.
+      canvas:
+        globalThis.document?.getElementById?.('cesiumContainer') ??
+        this.viewer?.canvas,
       actions: {
         isRegistered: () => this._dataManager?.layers?.has('radio'),
         isEnabled: () => this._dataManager?.isEnabled('radio'),
@@ -1765,9 +1946,7 @@ export class StyleManager extends ShellFacade {
    */
 
   _initHUDToggle() {
-    this._setHudVariant('tactical');
-    this.hud.setMode('on');
-    this._updateHudButtonState();
+    this._initHudScene();
 
     this._lifetime.listen(this._cockpitDisplayToggleBtn, 'click', () => {
       this._setCockpitDisclosure?.(
@@ -1776,6 +1955,13 @@ export class StyleManager extends ShellFacade {
       );
     });
     this._initCockpitDisplayPortal();
+  }
+
+  /** The HUD's start on a globe: the tactical layout, shown. */
+  _initHudScene() {
+    this._setHudVariant('tactical');
+    this.hud.setMode('on');
+    this._updateHudButtonState();
   }
 
   /**
@@ -1820,15 +2006,29 @@ export class StyleManager extends ShellFacade {
    * @returns {Promise<void>} Resolves after focused-session state restoration.
    */
   async dispose() {
-    const { destroyTrackedReadout, destroyWorldOverlay, destroyDetection } =
-      this.services;
     if (this._disposed) return;
-    this._shareRestoration.destroy();
+    const layerSession = this._layerSession;
+    const handoff =
+      Boolean(layerSession?.handoffLayers) &&
+      !layerSession.lifetime.signal.aborted;
+    // A Context mode the next shell can resume (the legacy engine route,
+    // ?switch=legacy, still builds a shell per engine).
+    const retainContext = handoff && this._contextControls.canRetainScene();
     this._feedback.clearLoadingStatus();
     this._disposed = true;
-    this._navigation.stop();
-    this._shareState.destroy();
+    // Revoke every input entry point synchronously, before the first await:
+    // keyboard shortcuts, the Display and map-source controls, the globe
+    // actions, the location search and the style animation.
+    this._displayBindings.destroy();
+    this._visualSettings.stop();
+    this._mapSourceControls?.destroy();
+    this._mapSourceControls = null;
+    this._releaseGlobeActions();
     this._locationNavigation.destroy();
+    this._shareState.destroy();
+    // The globe-bound parts go before the session's controls and stores.
+    await this.detachScene({ handoff });
+    this._navigation.stop();
     this._lifetime.destroy();
     useLocaleStore(applicationPinia()).publishPicker(null);
     this._recording.destroy();
@@ -1838,12 +2038,8 @@ export class StyleManager extends ShellFacade {
     this._panelChrome.destroy();
     this._feedback.destroy();
 
-    this._displayBindings.destroy();
-    this._mapSourceControls?.destroy();
     useDisplayStore(applicationPinia()).connectMapSource(null);
     useDisplayStore(applicationPinia()).publishMapSource(null);
-    this._cameraOrientationControls?.destroy();
-    this._releaseGlobeActions();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();
@@ -1864,53 +2060,26 @@ export class StyleManager extends ShellFacade {
     contextStore.publishAwareness(null);
     contextStore.connectMissions(null);
     contextStore.publishMissions(null);
-    this._cockpitCoordinator.stop();
-    this._visualSettings.stop();
     this.shareLinkManager?.destroy();
-    this._layerBindings.stop();
-
-    // Invalidate any in-flight Context transaction the same way a newer request
-    // would. Without this, a reinstatement already past its awaits could
-    // re-enable a mode's entry layer and republish `_contextMode` while the
-    // rest of teardown is tearing those very layers down.
+    // Invalidate any in-flight Context transaction the same way a newer
+    // request would.
     this._contextControls.stop();
-    this._navigation.destroy({
-      retainScene: Boolean(this._layerSession?.handoffLayers),
-    });
-    // Close camera-entry seams synchronously. Context restoration may await
-    // layer work, so leaving these listeners attached until afterward lets a
-    // focus event release tracking or start a flight during teardown.
-    if (
-      this._layerSession &&
-      !this._layerSession.lifetime.signal.aborted &&
-      this._contextControls.canRetainScene()
-    ) {
-      this._layerSession.contextScene = this._contextControls.captureScene();
-    } else {
-      if (this._layerSession) this._layerSession.contextScene = null;
+    if (layerSession)
+      layerSession.contextScene = retainContext
+        ? this._contextControls.captureScene()
+        : null;
+    if (!handoff && this._contextControls._contextMode)
       await this._contextControls.restoreForDisposal();
-    }
-    // IR boost teardown BEFORE detaching the data manager: restore fog and
-    // un-boost both aircraft layers so a surviving viewer or replacement
-    // manager doesn't inherit sensor state (review P2, 2026-08-16).
-    this._visualSettings.releaseIrBoost();
-    this._cockpitCoordinator.destroy();
     this._contextControls.disconnect();
-    this._layerBindings.disconnect();
 
     if (this._windowResizeHandler) {
       window.removeEventListener('resize', this._windowResizeHandler);
       this._windowResizeHandler = null;
     }
-    destroyTrackedReadout();
-    destroyDetection();
     this._overlayActionsUnsubscribe?.();
     this._overlayActionsUnsubscribe = null;
-    destroyWorldOverlay();
     const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
     overlayActionsStore.connect(null);
     overlayActionsStore.publish(null);
-    this.celestialRing?.destroy();
-    this._visualSettings.destroy();
   }
 }
