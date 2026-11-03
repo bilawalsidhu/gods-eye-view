@@ -28,6 +28,8 @@
  *   (vii) FAR SIDE — pins skip the depth test, so they are horizon-culled:
  *         seen from over the Indian Ocean no pin clearly behind the planet is
  *         shown; back over North America the near-side pins show again.
+ *   (viii) AGE — seven days is the default; shorter/longer windows and All
+ *         markers update the globe, and the age choice survives a reload.
  *
  * Screenshots go to qa-shots/ghostmaps-*.png (gitignored).
  *
@@ -201,12 +203,15 @@ async function main() {
     );
     record(
       'LIVE: one chip per product, defaults pressed',
-      chips.length === catalog.products.length &&
-        chips.every(
-          (chip) =>
-            chip.active ===
-            catalog.products.find((p) => p.id === chip.id)?.defaultOn,
-        ),
+      chips.filter((chip) => !chip.id.startsWith('age-')).length ===
+        catalog.products.length &&
+        chips
+          .filter((chip) => !chip.id.startsWith('age-'))
+          .every(
+            (chip) =>
+              chip.active ===
+              catalog.products.find((p) => p.id === chip.id)?.defaultOn,
+          ),
       chips.map((c) => `${c.id}${c.active ? '*' : ''}`).join(' '),
     );
     const stream = await page
@@ -223,6 +228,65 @@ async function main() {
       );
     record('LIVE: the /api/ghostmaps/events stream is open', stream);
     await page.screenshot({ path: path.join(SHOTS_DIR, 'ghostmaps-live.png') });
+
+    const ageChips = chips.filter((chip) => chip.id.startsWith('age-'));
+    record(
+      'AGE: seven days is the default with an All markers option',
+      live.ageDays === 7 &&
+        ageChips.length === 6 &&
+        ageChips
+          .filter((chip) => chip.active)
+          .map((chip) => chip.id)
+          .join() === 'age-7' &&
+        ageChips.some((chip) => chip.id === 'age-all'),
+    );
+    const selectAge = async (days) => {
+      await showRow(page);
+      const selector = `[data-layer-id="${LAYER_ID}"] [data-chip-id="age-${days ?? 'all'}"]`;
+      await page.waitForSelector(selector, { timeout: 15000 });
+      // Dispatch through the rendered button, matching the product-chip gate.
+      await page.$eval(selector, (button) => button.click());
+      await page.waitForFunction(
+        (id, age) => {
+          const s = window.__godsEyeView.dataManager.layers
+            .get(id)
+            .module.getStats();
+          return s.ageDays === age && !s.loading;
+        },
+        { timeout: TIMEOUT_MS },
+        LAYER_ID,
+        days,
+      );
+      return stats(page);
+    };
+    const all = await selectAge(null);
+    record(
+      'AGE: All markers restores old events without duplicate data sources',
+      all.count > live.count && (await sources(page)).length === 2,
+      `${live.count} → ${all.count}`,
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+      timeout: TIMEOUT_MS,
+    });
+    await enableAndSettle(page);
+    const persistedAge = await stats(page);
+    record(
+      'AGE: All markers survives a reload',
+      persistedAge.ageDays === null && persistedAge.count === all.count,
+    );
+    const thirty = await selectAge(30);
+    const one = await selectAge(1);
+    const seven = await selectAge(7);
+    record(
+      'AGE: shorter and longer windows change the count and seven days restores the default',
+      one.count <= live.count &&
+        thirty.count >= live.count &&
+        thirty.count <= all.count &&
+        seven.count === live.count &&
+        seven.ageDays === 7,
+      `1d=${one.count}, 7d=${seven.count}, 30d=${thirty.count}, all=${all.count}`,
+    );
 
     // ---- (ii) PICK ----------------------------------------------------------
     const target = await page.evaluate((id) => {
