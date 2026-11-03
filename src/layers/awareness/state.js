@@ -59,6 +59,10 @@ export function createState({ services }) {
     lastCameraPoseSig: '',
     /** When the pose signature last changed bins (hysteresis anchor). */
     lastCameraPoseChangeMs: 0,
+    /** When the viewer last handled the camera (pointer, wheel, touch, key). */
+    lastCameraInputMs: Number.NEGATIVE_INFINITY,
+    /** Element the camera-input listeners are attached to. */
+    cameraInputTarget: null,
     /** Whether the view currently counts as moving (hysteretic, not per-frame). */
     cameraMoving: false,
     lastEvaluatedPosition: null,
