@@ -118,8 +118,8 @@ export function signedAngleDelta(fromRad, toRad) {
 // ---------------------------------------------------------------------------
 
 /** Entity id prefix for every gizmo part — the layer's pick-owner regex and
- * click-to-select guard key off this. Gizmo entities NEVER carry a
- * `cctvCameraId` property, so the layer's selection path ignores them. */
+ * click-to-select guard key off this. Gizmo entities NEVER get a camera id in
+ * the layer's pick store, so the layer's selection path ignores them. */
 export const GIZMO_ID_PREFIX = 'cctv-gizmo-';
 
 const RING_SEGMENTS = 96;

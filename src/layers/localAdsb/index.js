@@ -45,6 +45,12 @@ const FEET_TO_METERS = 0.3048;
 const RENDER_HOLD_ID = 'local-adsb';
 /** Picks looked through under a click for a local aircraft. */
 const CLICK_DRILL_LIMIT = 8;
+/** Marker billboard size and distance scaling, as pushed and as recorded. */
+const MARKER_SPRITE = Object.freeze({
+  width: 20,
+  height: 20,
+  scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8_000_000, 0.5),
+});
 /** Trail lines pass through their aircraft; a click never stops on one. */
 const TRAIL_PICK_PREFIX = 'gev-trail:';
 /** The DISPLAY rail's first-run 3D preference, used when no reader is wired. */
@@ -265,6 +271,7 @@ export function createLocalAdsbLayer({
     if (marker.iconScale !== scale) {
       marker.iconScale = scale;
       billboard.scale = scale;
+      entityRecord(marker.entity).sprite.scale = scale;
     }
   }
 
@@ -437,12 +444,12 @@ export function createLocalAdsbLayer({
         position: new Cesium.CallbackProperty(() => marker.position, false),
         billboard: {
           image: aircraftIcon('airliner'),
-          width: 20,
-          height: 20,
+          width: MARKER_SPRITE.width,
+          height: MARKER_SPRITE.height,
           scale: 1,
           color,
           sizeInMeters: false,
-          scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8_000_000, 0.5),
+          scaleByDistance: MARKER_SPRITE.scaleByDistance,
           alignedAxis: Cesium.Cartesian3.ZERO,
           rotation: new Cesium.CallbackProperty(
             () => markerRotation(marker),
@@ -460,6 +467,8 @@ export function createLocalAdsbLayer({
         },
       });
       entityRecord(marker.entity).trackedId = id;
+      // Sized from Core when Cesium tracks the marker (screen annotations).
+      entityRecord(marker.entity).sprite = { ...MARKER_SPRITE, scale: 1 };
       entityRecord(marker.entity).displayPosition = () => marker.position;
     }
     refreshClass(marker);

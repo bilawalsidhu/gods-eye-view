@@ -424,7 +424,6 @@ export function createScreenAnnotationRenderer(
     let bottom = painted ? painted.y + painted.h : undefined;
 
     const ent = viewer.trackedEntity;
-    const now = Cesium.JulianDate.now();
     const displayPosition = readEntityRecord(ent)?.displayPosition;
     const world =
       typeof displayPosition === 'function' ? displayPosition() : null;
@@ -436,13 +435,14 @@ export function createScreenAnnotationRenderer(
         )
       : null;
 
-    // Billboard box — centered on the anchor, magnified by scaleByDistance.
-    const bb = ent?.billboard;
-    if (bb && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
-      const baseW = bb.width?.getValue?.(now) ?? 28;
-      const baseH = bb.height?.getValue?.(now) ?? 28;
+    // Billboard box — centered on the anchor, magnified by scaleByDistance, from
+    // the size the tracking layer recorded for its sprite.
+    const sprite = readEntityRecord(ent)?.sprite;
+    if (sprite && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
+      const baseW = sprite.width ?? 28;
+      const baseH = sprite.height ?? 28;
       let scale = 1;
-      const sbd = bb.scaleByDistance?.getValue?.(now);
+      const sbd = sprite.scaleByDistance;
       if (sbd)
         scale = nearFarValue(
           sbd,

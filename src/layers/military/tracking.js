@@ -24,6 +24,7 @@ import {
   GROUND_SCALE,
   AMBER_TRANSPARENT,
   TRACKED_ICON_COLOR,
+  TRACKED_BILLBOARD_SCALE_BY_DISTANCE,
 } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
@@ -915,6 +916,18 @@ export function createTracking({
     // The tracked entity is a PURE BILLBOARD — no label or model graphic. The tracked plane's 3D
     // model is the standalone primitive driven by _updateTrackedModel(); keeping it off the entity is
     // what makes the follow-camera's bounding sphere always ready (see _trackedModel).
+    // What the tracked billboard is drawn at, kept in its entity record so the
+    // camera guard and screen annotations size it from Core.
+    const sprite = {
+      width: 28,
+      height: 28,
+      scale:
+        BILLBOARD_SCALE *
+        (CLASS_SCALE_2D[
+          flightState.records.data.get(flightState._trackedIcao)?.klass
+        ] || 1),
+      scaleByDistance: TRACKED_BILLBOARD_SCALE_BY_DISTANCE,
+    };
     flightState._trackedEntity = flightState._viewer.entities.add({
       position: positionProperty,
       // Keep Cesium's EntityView in the same ENU frame as the close-range
@@ -928,13 +941,9 @@ export function createTracking({
           ),
           TRACKED_ICON_PX,
         ),
-        width: 28,
-        height: 28,
-        scale:
-          BILLBOARD_SCALE *
-          (CLASS_SCALE_2D[
-            flightState.records.data.get(flightState._trackedIcao)?.klass
-          ] || 1),
+        width: sprite.width,
+        height: sprite.height,
+        scale: sprite.scale,
         // Solid amber when the billboard is the visual (zoomed out, 3D off, or model still loading);
         // transparent once the STANDALONE tracked model is actually up (ready + shown).
         color: new Cesium.CallbackProperty(
@@ -945,7 +954,7 @@ export function createTracking({
           false,
         ),
         sizeInMeters: false,
-        scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8000000, 0.5),
+        scaleByDistance: sprite.scaleByDistance,
         alignedAxis: Cesium.Cartesian3.ZERO,
         // The tracked target must never vanish into tile geometry — tracking a
         // taxiing plane at street level would otherwise bury the amber icon inside
@@ -978,6 +987,7 @@ export function createTracking({
     });
     entityRecord(flightState._trackedEntity).selectionOrigin = origin;
     entityRecord(flightState._trackedEntity).trackedId = `military:${icao24}`;
+    entityRecord(flightState._trackedEntity).sprite = sprite;
     entityRecord(flightState._trackedEntity).labelModel =
       trackedLabelModelFromText(_buildTrackedLabel(info, icao24), '#ffd166');
 

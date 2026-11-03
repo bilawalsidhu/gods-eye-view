@@ -23,6 +23,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   let _viewer = null;
   let _request = null;
   let _dataSource = null;
+  // What the discs were drawn from, so analyst reads come from Core, not the entities.
+  let _events = [];
   let _count = 0;
   let _lastUpdate = null;
   let _lastError = null;
@@ -77,6 +79,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           return false;
 
         const nextEntities = [];
+        const nextEvents = [];
         let count = 0;
         const overlayEntries = [];
 
@@ -98,6 +101,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           const outlineAlpha = isSignificant ? 1.0 : 0.8;
 
           const position = Cesium.Cartesian3.fromDegrees(lon, lat);
+          nextEvents.push({ usgsId, mag, place, time, depthKm, lon, lat });
           nextEntities.push(
             new Cesium.Entity({
               id: `earthquake:${stableId}`,
@@ -115,14 +119,6 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
                 outlineWidth: isSignificant ? 3 : 2,
                 heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
               },
-              properties: {
-                // Analyst seam (additive): the USGS event id (e.g. "us7000abcd").
-                usgsId,
-                mag,
-                place,
-                time,
-                depth: depthKm,
-              },
             }),
           );
           overlayEntries.push(
@@ -137,6 +133,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
 
         _dataSource.entities.removeAll();
         for (const entity of nextEntities) _dataSource.entities.add(entity);
+        _events = nextEvents;
         if (_enabled) {
           overlayHost.setEntries(
             EARTHQUAKE_OVERLAY_SOURCE_ID,
@@ -176,6 +173,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         viewer.dataSources.remove(_dataSource, true);
         _dataSource = null;
       }
+      _events = [];
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
@@ -190,39 +188,24 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (!_dataSource || !_dataSource.show) return [];
-      const entities = _dataSource.entities.values;
-      if (!entities.length) return [];
+      if (!_dataSource || !_enabled || !_events.length) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
-      const now = Cesium.JulianDate.now();
-      const result = [];
-      for (const entity of entities) {
-        if (result.length >= limit) break;
-        const cartesian = entity.position
-          ? entity.position.getValue(now)
-          : null;
-        const carto = cartesian
-          ? Cesium.Cartographic.fromCartesian(cartesian)
-          : null;
-        const p = entity.properties;
-        result.push(
-          mapAnalystRecord(
-            {
-              id: p?.usgsId?.getValue(now) ?? null,
-              mag: p?.mag?.getValue(now),
-              place: p?.place?.getValue(now),
-              time: p?.time?.getValue(now),
-              depth: p?.depth?.getValue(now),
-              lat: carto ? Cesium.Math.toDegrees(carto.latitude) : null,
-              lon: carto ? Cesium.Math.toDegrees(carto.longitude) : null,
-            },
-            result.length,
-          ),
-        );
-      }
-      return result;
+      return _events.slice(0, limit).map((event, index) =>
+        mapAnalystRecord(
+          {
+            id: event.usgsId ?? null,
+            mag: event.mag,
+            place: event.place,
+            time: event.time,
+            depth: event.depthKm,
+            lat: event.lat,
+            lon: event.lon,
+          },
+          index,
+        ),
+      );
     },
 
     getStats() {

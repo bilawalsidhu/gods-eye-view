@@ -7,6 +7,7 @@ import {
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
 } from './policy.js';
+import { cctvPicks } from './pickState.js';
 
 export function createProjection({
   state: layerState,
@@ -134,7 +135,6 @@ export function createProjection({
     });
     runtime.planeEntity = layerState._viewer.entities.add({
       id: `cctv-${record.camera.id}-plane`,
-      properties: { cctvCameraId: record.camera.id },
       show: false,
       position: positions.capCenter,
       orientation: parts.model.planeOrientationFor(
@@ -152,6 +152,7 @@ export function createProjection({
         outlineColor: PLANE_OUTLINE_COLOR,
       },
     });
+    cctvPicks.write(runtime.planeEntity).cameraId = record.camera.id;
     return runtime.planeEntity;
   }
 
