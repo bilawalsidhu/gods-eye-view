@@ -24,15 +24,36 @@ const LOCALIZED_CONTEXT_SCOPE = Object.freeze({
     t('{scope} · INSTALLATIONS {coverage}', { scope, coverage }),
 });
 
+/** Hand a fresh copy of the Contact card to the view. */
+export function publishContextView() {
+  const view = this.contextView;
+  this.publishContext({
+    ...view,
+    cohorts: Object.fromEntries(
+      Object.entries(view.cohorts).map(([id, cohort]) => [id, { ...cohort }]),
+    ),
+    nearest: { ...view.nearest },
+    distance: { ...view.distance },
+    direction: { ...view.direction },
+  });
+}
+
+/** Show or hide the Contact card; the HUD marks it with `context-active`. */
+export function showContextCard(visible) {
+  if (this.presence.context === visible) return;
+  this.presence.context = visible;
+  this.publishPresenceView();
+}
+
 export function updateContext(info, heading) {
   if (!this.context) return;
+  const view = this.contextView;
   const snapshot =
     this.services.militaryAwarenessLayer.getContextSnapshot?.() || null;
   const trackedId = info.icao24 || info.id;
   const readout = resolveCockpitContextReadout({ snapshot, info });
   if (!readout.visible) {
-    this.context.hidden = true;
-    this.hud?.classList.remove('context-active');
+    this.showContextCard(false);
     this.contextLayoutStamp = null;
     this.pushCockpitSignal(
       'context-status',
@@ -43,37 +64,31 @@ export function updateContext(info, heading) {
     return;
   }
 
-  this.context.hidden = false;
-  this.hud?.classList.add('context-active');
-  if (this.contextSubject) {
-    const installationCoverage = snapshot.cohorts.find(
-      (cohort) => cohort.id === 'military-installations',
-    )?.coverage;
-    this.contextSubject.textContent = formatCockpitContextScope(
-      snapshot.subject.label || trackedId,
-      snapshot.radiusM,
-      installationCoverage,
-      LOCALIZED_CONTEXT_SCOPE,
-    );
-  }
+  this.showContextCard(true);
+  const installationCoverage = snapshot.cohorts.find(
+    (cohort) => cohort.id === 'military-installations',
+  )?.coverage;
+  view.subject = formatCockpitContextScope(
+    snapshot.subject.label || trackedId,
+    snapshot.radiusM,
+    installationCoverage,
+    LOCALIZED_CONTEXT_SCOPE,
+  );
   // Navigation stays wired in every state — the operator must always be able
   // to step off the current contact from the panel that hosts the controls.
-  if (this.contextPrevious)
-    this.contextPrevious.disabled = !snapshot.navigation?.canPrevious;
-  if (this.contextNext)
-    this.contextNext.disabled = !snapshot.navigation?.canNext;
+  view.canPrevious = Boolean(snapshot.navigation?.canPrevious);
+  view.canNext = Boolean(snapshot.navigation?.canNext);
 
   if (readout.contactLost) {
     // The subject left its source. Every number below is measured against a
     // position that stopped updating, so hold the last rendered readout and
     // say so instead of re-deriving stale geometry as if it were live.
-    const enteringLost = this.context.dataset.state !== 'lost';
-    this.context.dataset.state = 'lost';
-    if (this.contextUncertainty) {
-      this.contextUncertainty.textContent = t(
-        'CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR',
-      );
-    }
+    const enteringLost = view.state !== 'lost';
+    view.state = 'lost';
+    view.uncertainty = t(
+      'CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR',
+    );
+    this.publishContextView();
     // The cue changes the footer's height; re-run layout once on the way in
     // rather than every frame the contact stays lost.
     if (enteringLost) this.scheduleContextLayout();
@@ -91,45 +106,38 @@ export function updateContext(info, heading) {
   let unknownCount = 0;
   const nearest = [];
   for (const cohort of snapshot.cohorts) {
-    const element = this.contextCohorts.get(cohort.id);
-    const value = element?.querySelector('strong');
-    if (value)
-      value.textContent = cohort.count === null ? '?' : String(cohort.count);
-    element?.classList.toggle('unknown', cohort.relationship === 'UNKNOWN');
+    const shown = view.cohorts[cohort.id];
+    if (shown) {
+      shown.count = cohort.count === null ? '?' : String(cohort.count);
+      shown.unknown = cohort.relationship === 'UNKNOWN';
+    }
     if (cohort.count === null) unknownCount += 1;
     for (const item of cohort.nearest) nearest.push({ ...item, cohort });
   }
   nearest.sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity));
   const closest = nearest[0] || null;
   const closestLabel = this.services.formatAwarenessLabel(closest);
-  if (this.contextNearestLabel) {
-    this.contextNearestLabel.textContent = closest
-      ? t('{cohort} · {contact}', {
-          cohort: closest.cohort.label.toUpperCase(),
-          contact: closestLabel,
-        })
-      : t('NO AVAILABLE EXAMPLE');
-    this.contextNearestLabel.setAttribute(
-      'aria-label',
+  const nearestLabel = closest
+    ? t('{cohort} · {contact}', {
+        cohort: closest.cohort.label.toUpperCase(),
+        contact: closestLabel,
+      })
+    : t('NO AVAILABLE EXAMPLE');
+  view.nearest = {
+    label: nearestLabel,
+    ariaLabel:
       closest && closestLabel === '—'
-        ? t('{cohort}, Unavailable', {
-            cohort: closest.cohort.label,
-          })
-        : this.contextNearestLabel.textContent,
-    );
-  }
-  if (this.contextDistance) {
-    const distanceM = closest?.distanceM;
-    this.contextDistance.textContent = Number.isFinite(distanceM)
-      ? formatCockpitDistance(distanceM)
-      : '—';
-    this.contextDistance.setAttribute(
-      'aria-label',
-      Number.isFinite(distanceM)
-        ? this.contextDistance.textContent
-        : t('Unavailable'),
-    );
-  }
+        ? t('{cohort}, Unavailable', { cohort: closest.cohort.label })
+        : nearestLabel,
+  };
+  const distanceM = closest?.distanceM;
+  const distance = Number.isFinite(distanceM)
+    ? formatCockpitDistance(distanceM)
+    : '—';
+  view.distance = {
+    text: distance,
+    ariaLabel: Number.isFinite(distanceM) ? distance : t('Unavailable'),
+  };
 
   // The arrow and BRG are nose-relative to the tracked aircraft. When the
   // subject is a vessel, an installation, or another aircraft, the rest of
@@ -154,36 +162,27 @@ export function updateContext(info, heading) {
       : null;
     relative = relativeBearing(bearing, heading);
   }
-  if (this.contextDirection) {
-    this.contextDirection.style.transform = `rotate(${relative ?? 0}deg)`;
-    this.contextDirection.classList.toggle('unknown', relative === null);
+  view.direction = { angle: relative ?? 0, unknown: relative === null };
+  if (relative === null) view.bearing = t('BRG —');
+  else if (Math.abs(relative) < 8) view.bearing = t('AHEAD');
+  else {
+    view.bearing = t('{side} {angle}', {
+      side: relative < 0 ? t('L') : t('R'),
+      angle: `${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`,
+    });
   }
-  if (this.contextBearing) {
-    if (relative === null) this.contextBearing.textContent = t('BRG —');
-    else if (Math.abs(relative) < 8)
-      this.contextBearing.textContent = t('AHEAD');
-    else {
-      this.contextBearing.textContent = t('{side} {angle}', {
-        side: relative < 0 ? t('L') : t('R'),
-        angle: `${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`,
-      });
-    }
-  }
-  if (this.contextUncertainty) {
-    this.contextUncertainty.textContent = unknownCount
-      ? tn(
-          unknownCount,
-          '{count} INPUT UNKNOWN · NOT AN ALL-CLEAR',
-          '{count} INPUTS UNKNOWN · NOT AN ALL-CLEAR',
-        )
-      : t('AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR');
-  }
-  if (this.contextUpdated) {
-    this.contextUpdated.textContent = Number.isFinite(snapshot.evaluatedAt)
-      ? new Date(snapshot.evaluatedAt).toISOString().slice(11, 19) + 'Z'
-      : '--:--:--Z';
-  }
-  this.context.dataset.state = unknownCount ? 'uncertain' : 'current';
+  view.uncertainty = unknownCount
+    ? tn(
+        unknownCount,
+        '{count} INPUT UNKNOWN · NOT AN ALL-CLEAR',
+        '{count} INPUTS UNKNOWN · NOT AN ALL-CLEAR',
+      )
+    : t('AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR');
+  view.updated = Number.isFinite(snapshot.evaluatedAt)
+    ? new Date(snapshot.evaluatedAt).toISOString().slice(11, 19) + 'Z'
+    : '--:--:--Z';
+  view.state = unknownCount ? 'uncertain' : 'current';
+  this.publishContextView();
   this.updateCockpitSignals(snapshot, unknownCount);
   if (this.contextLayoutStamp !== snapshot.evaluatedAt) {
     this.contextLayoutStamp = snapshot.evaluatedAt;
