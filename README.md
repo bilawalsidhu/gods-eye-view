@@ -89,7 +89,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## ⚡ Quick Start
 
-**Start without an account or API keys.** Every path opens the same app with
+**Local setup needs no account or API keys.** The app opens with
 Esri satellite imagery and keyless terrain. OSM is the fallback if Esri is
 unreachable. Flights, military traffic, satellites, earthquakes, public
 cameras, radio, and launches are available without keys.
@@ -236,7 +236,14 @@ the container.
 
 ### Path 4 — GitHub Codespaces (cloud, no local install)
 
-Runs the same dev server in a cloud workspace, so Node and the dependencies
+Codespaces requires a GitHub account. Its forwarded HTTPS URL supports viewing
+the globe, but some features are unavailable through that URL. Overpass-backed
+queries and OpenAI voice token requests return HTTP 403 because the local
+request gate rejects their tunneled request origin. Adding API keys to `.env`
+or setting `GEV_ALLOWED_HOSTS` does not remove that restriction. Use one of the
+local setup paths above for those features.
+
+The codespace runs the dev server in a cloud workspace, so Node and the dependencies
 never touch your machine. The globe still renders in your own browser, so it
 needs the same graphics there as any other path. GitHub Free includes 120
 core-hours a month with no card on file — about 60 hours on the default 2-core
@@ -265,14 +272,14 @@ ignored on purpose, so pass that exact name.
 
 ⚠️ **A codespace is reachable from the internet.** Treat it as the
 wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
-Settings does not open on the forwarded URL, so put keys in the workspace
-`.env` by hand. `.env` is gitignored — never commit it. [SECURITY.md](SECURITY.md) has the
-threat model.
+Settings also does not open on the forwarded URL. If you configure keys in the
+workspace `.env`, the request restrictions above still apply. `.env` is
+gitignored — never commit it. [SECURITY.md](SECURITY.md) has the threat model.
 
 ### Then power it up — in the app, not in a file
 
-Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**
-chip in the bottom-right corner: Provider Settings lists every supported key,
+For a local setup, keys are upgrades, not prerequisites. When you want one,
+click the **POWER UP** chip in the bottom-right corner: Provider Settings lists every supported key,
 what it switches on, and where to get it. Paste, hit **SAVE KEYS**, and the app
 restarts itself with the new capability on. Once everything is configured the
 chip reads **POWERED UP** — and if a compact layout hides it, `?setup=1`
