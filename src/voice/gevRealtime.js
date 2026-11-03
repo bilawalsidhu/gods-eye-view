@@ -169,8 +169,8 @@ export function createSceneVoice(options) {
 
 /**
  * Compose the standalone action runner with the voice controls, on the globe
- * `engine` (by default the one registered for `options.viewer`). Without a
- * viewer (the Navara engine) the runner refuses the viewer-only tools.
+ * `engine` (by default the one registered for `options.viewer`). The runner
+ * checks each action against the capabilities of the attached scene.
  */
 export function initGevVoiceCommands(options) {
   const voice = createSceneVoice(options);
