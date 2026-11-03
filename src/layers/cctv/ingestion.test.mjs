@@ -12,6 +12,7 @@ function setup() {
   };
   const calls = { health: 0, notify: 0, queues: [] };
   const parts = {
+    renderer: {},
     rendering: { refreshHorizonCulling: () => false },
     model: { projectionTilesReady: () => true },
     ground: { isGroundResolved: () => false },
@@ -75,4 +76,27 @@ test('disabled CCTV does no polling or presentation work', async () => {
   h.state._enabled = false;
   await h.layer.update();
   assert.equal(h.calls.health + h.calls.notify + h.calls.queues.length, 0);
+});
+
+test('a tick resuming after an engine switch released the renderer does no scene work', async () => {
+  const h = setup();
+  let release;
+  h.parts.health.syncHealthState = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  let sceneWork = 0;
+  h.parts.rendering.refreshHorizonCulling = () => {
+    sceneWork++;
+    return true;
+  };
+  h.parts.navigation.maybeAutoHop = () => {
+    sceneWork++;
+  };
+  const tick = h.layer.update();
+  h.parts.renderer = null;
+  release();
+  assert.deepEqual(await tick, { changed: false });
+  assert.equal(sceneWork, 0);
+  assert.equal(h.calls.notify, 1);
 });

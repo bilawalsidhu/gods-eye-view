@@ -43,12 +43,16 @@ export function createIngestion({
         }
       }
       await parts.health.syncHealthState();
-      // New health can change which camera wins a crowded cell.
-      if (layerState._enabled && parts.rendering.refreshHorizonCulling()) {
-        parts.geometryQueue.enqueueViewGeometry();
-        parts.cards.refreshAmbientCards();
+      // An engine switch can release the renderer while health loads. The
+      // scene work waits for the next renderer; health itself is kept.
+      if (parts.renderer) {
+        // New health can change which camera wins a crowded cell.
+        if (layerState._enabled && parts.rendering.refreshHorizonCulling()) {
+          parts.geometryQueue.enqueueViewGeometry();
+          parts.cards.refreshAmbientCards();
+        }
+        parts.navigation.maybeAutoHop(now);
       }
-      parts.navigation.maybeAutoHop(now);
       parts.presentation.notifyListeners();
       // Health and frame URL notifications update the panel directly. Media
       // requests its own frames; only actual scene changes need a tick frame.
