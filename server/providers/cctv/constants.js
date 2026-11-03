@@ -18,7 +18,7 @@ export const CCTV_MAX_SOURCES_CEILING = 5000;
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
 /** TxDOT ITS: one keyless JSON catalog per district (25 districts statewide). */
-export const TXDOT_ORIGIN = 'https://its.txdot.gov';
+const TXDOT_ORIGIN = 'https://its.txdot.gov';
 export const TXDOT_CCTV_STATUS_URL = (district) =>
   `${TXDOT_ORIGIN}/its/DistrictIts/GetCctvStatusListByDistrict?districtCode=${encodeURIComponent(district)}`;
 /** Per-camera frame. Returns JSON `{snippet:<base64 jpeg>}`, not an image body;
@@ -309,6 +309,36 @@ export const CATALONIA_ANCHORS = [
   { lat: 41.5636, lon: 2.0111 }, // Terrassa
 ];
 
+/** Hong Kong Transport Department traffic snapshot cameras: keyless English
+ * locations XML on DATA.GOV.HK; frames are stills on the TD CCTV host. */
+export const DEFAULT_HK_CAMERAS_URL =
+  'https://static.data.gov.hk/td/traffic-snapshot-images/code/Traffic_Camera_Locations_En.xml';
+/** The only origin HK camera frames may come from. Verified 2026-10-11: still
+ * URLs answer 200 on this host with no redirect hop. */
+export const HK_IMAGE_ORIGIN = 'https://tdcctv.data.one.gov.hk/';
+/** Above the full TD English catalog (~1,013 cameras) so a default install
+ * keeps nearly all of them. Catalog-wide round-robin still applies when the
+ * sum of packs exceeds DEFAULT_CCTV_MAX_SOURCES (Norway-style). */
+export const DEFAULT_HK_MAX_SOURCES = 1100;
+/** Prioritization anchors across Hong Kong Island, Kowloon and the New
+ * Territories so a lowered cap keeps territory-wide coverage rather than
+ * only the harbour corridor. */
+export const HK_ANCHORS = [
+  { lat: 22.2819, lon: 114.158 }, // Central
+  { lat: 22.2976, lon: 114.1722 }, // Tsim Sha Tsui
+  { lat: 22.3827, lon: 114.19 }, // Sha Tin
+  { lat: 22.3701, lon: 114.114 }, // Tsuen Wan
+  { lat: 22.4503, lon: 114.1688 }, // Tai Po
+  { lat: 22.493, lon: 114.139 }, // Fanling
+  { lat: 22.391, lon: 113.977 }, // Tuen Mun
+  { lat: 22.4445, lon: 114.022 }, // Yuen Long
+  { lat: 22.307, lon: 114.26 }, // Tseung Kwan O
+];
+/** Hard ceiling on the locations XML body. The live English list is ~400 KB
+ * for ~1,000 cameras; this only exists so an unbounded upstream cannot be
+ * buffered without limit. */
+export const HK_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+
 /** Statens vegvesen (Norway) road cameras: the keyless OGC API Features view
  * of the official DATEX 3.1 CCTV site table, one GeoJSON request for the whole
  * country (~900 cameras). The raw DATEX node needs an account; this view does
@@ -412,6 +442,39 @@ export const NYC_ANCHORS = [
   { lat: 40.8448, lon: -73.8648 }, // Bronx
   { lat: 40.5795, lon: -74.1502 }, // Staten Island
 ];
+
+/** Autostrada del Brennero (A22, Brenner–Modena) webcams: the keyless Open
+ * Data Hub (NOI Techpark, South Tyrol) tourism API republishes Autobrennero's
+ * own camera list with coordinates, one request for the whole motorway
+ * (13 cameras). Frames are stills on the operator's host, refreshed about
+ * once a minute. */
+export const DEFAULT_A22_CCTV_URL =
+  'https://tourism.api.opendatahub.com/v1/WebcamInfo?source=a22&pagesize=200&removenullvalues=true';
+/** The only origin A22 camera frames may come from: `km<N>.jpg` per camera. */
+export const A22_IMAGE_ORIGIN = 'https://www.autobrennero.it/WebCamImg/';
+/** Hard ceiling on the catalog body. The whole motorway is ~45 KB. */
+export const A22_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Orthometric ground elevation (m) at each camera, keyed by its motorway
+ * kilometre, from the Copernicus GLO-90 DEM via Open-Meteo's elevation API.
+ * The feed's coordinates are 2D and the road climbs from the Po valley (~20 m)
+ * to the Brenner Pass (~1,370 m), so one flat prior would bury the Alpine
+ * cameras. A camera not listed here uses A22_DEFAULT_GROUND_ELEVATION_M. */
+export const A22_GROUND_ELEVATION_BY_KM = Object.freeze({
+  1: 1365,
+  68: 375,
+  77: 301,
+  100: 219,
+  129: 206,
+  138: 204,
+  159: 175,
+  205: 188,
+  228: 72,
+  240: 38,
+  272: 16,
+  285: 19,
+  313: 40,
+});
+export const A22_DEFAULT_GROUND_ELEVATION_M = 200;
 
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';

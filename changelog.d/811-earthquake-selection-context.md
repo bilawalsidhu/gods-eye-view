@@ -9,3 +9,5 @@
   Foreground overlay cards take precedence over earthquake discs in either
   click-listener order. Failed snapshot staging preserves both the displayed
   events and their selection metadata.
+  EMSC event identity and attribution are preserved for combined-feed records;
+  records with a USGS ID retain USGS source priority.

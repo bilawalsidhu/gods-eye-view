@@ -61,7 +61,7 @@ export function createEarthquakesLayer({
       id: `earthquake:${row.stableId}`,
       layerId: 'earthquakes',
       layerName: 'Earthquakes (24h)',
-      source: 'USGS',
+      source: row.usgsId || !row.emscId ? 'USGS' : 'EMSC',
       dataSource: _dataSource,
       label: `M${Number(row.mag).toFixed(1)}${
         row.place ? ` · ${row.place}` : ''
@@ -74,6 +74,7 @@ export function createEarthquakesLayer({
         place: row.place ?? null,
         time: row.time ?? null,
         usgsId: row.usgsId ?? null,
+        emscId: row.emscId ?? null,
       },
     });
     if (announce && record)
@@ -239,6 +240,7 @@ export function createEarthquakesLayer({
         for (const {
           stableId,
           usgsId,
+          emscId,
           lon,
           lat,
           depthKm,
@@ -249,6 +251,7 @@ export function createEarthquakesLayer({
           nextRowById.set(String(stableId), {
             stableId: String(stableId),
             usgsId,
+            emscId,
             lon,
             lat,
             depthKm,

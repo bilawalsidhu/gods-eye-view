@@ -176,6 +176,34 @@ test('clicking an earthquake publishes one shared USGS context record', async ()
   h.layer.destroy(h.viewer);
 });
 
+for (const usgsId of [null, 'usgs-priority']) {
+  test(`earthquake selection preserves EMSC identity${usgsId ? ' with USGS source priority' : ''}`, async (t) => {
+    const emscRow = {
+      ...row,
+      stableId: 'emsc:event-b',
+      usgsId,
+      emscId: 'event-b',
+    };
+    const h = harness(
+      { getSnapshot: async () => [emscRow] },
+      { pick: () => ({ id: 'earthquake:emsc:event-b' }) },
+    );
+    t.after(() => h.layer.destroy(h.viewer));
+    assert.equal(await h.layer.update(h.viewer), true);
+
+    h.clicks.handler({ position: { x: 10, y: 10 } });
+    assert.equal(h.contexts.selected?.id, 'earthquake:emsc:event-b');
+    assert.equal(h.contexts.selected?.source, usgsId ? 'USGS' : 'EMSC');
+    assert.equal(h.contexts.selected?.properties.usgsId, usgsId);
+    assert.equal(h.contexts.selected?.properties.emscId, 'event-b');
+    assert.equal(h.contexts.selectedEvents, 1);
+
+    assert.equal(await h.layer.update(h.viewer), true);
+    assert.equal(h.contexts.selected?.properties.emscId, 'event-b');
+    assert.equal(h.contexts.selectedEvents, 1);
+  });
+}
+
 test('switching earthquake A to B keeps one live source record without false eviction', async () => {
   let picked = { id: 'earthquake:event-a' };
   const next = { ...row, stableId: 'event-b', usgsId: 'event-b', lat: 21 };

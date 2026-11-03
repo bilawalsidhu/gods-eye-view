@@ -236,13 +236,26 @@ export function gbfsProxy({ ratePerMinute = GBFS_RATE_PER_MIN } = {}) {
         }
 
         const upstream = await fetchGbfsUpstream(upstreamUrl.toString());
+        // Only JSON is relayed, re-serialized under a fixed type: neither the
+        // upstream's text nor its declared type reaches the browser.
+        let payload;
+        try {
+          payload = JSON.parse(upstream.body);
+        } catch {
+          res.writeHead(502, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(JSON.stringify({ error: 'GBFS upstream returned non-JSON' }));
+          return;
+        }
         res.writeHead(upstream.status, {
-          'Content-Type': upstream.contentType,
+          'Content-Type': 'application/json; charset=utf-8',
           'Cache-Control': gbfsCacheControl(upstreamUrl.pathname),
           'X-GBFS-Upstream': upstreamUrl.hostname,
           'X-GBFS-Cache': 'MISS',
         });
-        res.end(upstream.body);
+        res.end(JSON.stringify(payload));
       } catch (error) {
         if (error?.name === 'AbortError') {
           res.writeHead(504, {

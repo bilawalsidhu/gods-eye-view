@@ -24,7 +24,7 @@ function plural(count, one, many) {
  * @param {object[]} feeds Feed statuses from the route.
  * @returns {string}
  */
-export function describeFeedProblems(feeds) {
+function describeFeedProblems(feeds) {
   const byStatus = new Map();
   for (const feed of feeds) {
     if (feed?.status === 'live') continue;
@@ -41,7 +41,7 @@ export function describeFeedProblems(feeds) {
 }
 
 /** Whether the server reported at least one configured feed. */
-export function feedsConfigured(feedState) {
+function feedsConfigured(feedState) {
   return Boolean(
     feedState?.configured === true &&
     Array.isArray(feedState.feeds) &&
@@ -51,7 +51,7 @@ export function feedsConfigured(feedState) {
 
 function webUsbStatus(receiver, heard, feedState) {
   if (receiver.status === 'error')
-    return { status: 'error', error: receiver.message };
+    return { status: 'error', error: receiver.errorText ?? receiver.message };
   if (receiver.status === 'connecting' || receiver.status === 'tuning')
     return { loading: true, loadingLabel: msg('opening receiver') };
   if (

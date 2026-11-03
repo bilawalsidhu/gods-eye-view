@@ -365,8 +365,9 @@ export function createStreetLevelLayer({
   /** The hint a ground-click provider shows, or the provider's own. */
   function hintFor(entry, stats) {
     if (entry.def.groundClick && stats.hint && !state.groundClickReady)
+      // No-break spaces keep a provider name (Google Street View) on one line.
       return t('zoom in to a street to open {name}', {
-        name: translateKnown(entry.def.name),
+        name: translateKnown(entry.def.name).replace(/ /g, '\u00a0'),
       });
     return stats.hint || '';
   }

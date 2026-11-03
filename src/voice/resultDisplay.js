@@ -59,7 +59,7 @@ function notesOf(...values) {
   ];
 }
 
-export function analystNounFor(layerKeys) {
+function analystNounFor(layerKeys) {
   const keys = [...new Set(layerKeys.filter(Boolean))];
   if (keys.length !== 1) return 'results';
   const key = keys[0];
@@ -422,7 +422,10 @@ function analystCard(result) {
         ...(result.feedState && result.feedState !== 'nominal'
           ? [{ label: shownFeedState(result.feedState) }]
           : []),
-        ...(result.partial ? [{ label: t('partial') }] : []),
+        // A partial feed state already says it.
+        ...(result.partial && result.feedState !== 'partial'
+          ? [{ label: t('partial') }]
+          : []),
       ],
       // Coverage qualifications lead the feed detail. The bounded card groups
       // overflow in its existing Notes disclosure rather than dropping them.
