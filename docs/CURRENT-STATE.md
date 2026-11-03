@@ -267,7 +267,9 @@ Minimal no longer shows the centred MGRS / LAT / LON bar near the bottom of the
 globe (November 3, 2026, #1523): the bottom-left readout already carries the
 same position, and the bar sat across the globe. That readout now sits 7.25rem
 (plus 2vh) up, clear of the Cesium / Esri attribution row it used to overlap,
-with Scope on or off.
+with Scope on or off. `scripts/qa-scope-hud.mjs` checks the hidden banner and
+clearance above the rendered attribution row at desktop and intermediate
+widths in both Scope modes, plus the existing compact phone treatment.
 
 ## Cyber HUD — September 30, 2026
 

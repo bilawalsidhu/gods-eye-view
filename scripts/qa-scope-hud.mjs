@@ -5,7 +5,8 @@
  * Optional: QA_BASE_URL, QA_SCREENSHOT_DIR (screenshots stay outside the repo).
  * Proves a fresh boot defaults to Scope ON at 100%, native checkbox click/Space,
  * feather 0/11/100/200, layout independence,
- * share/scene restore, and visible text backing including rotated metadata.
+ * share/scene restore, visible text backing including rotated metadata,
+ * and Minimal's banner removal and coordinate/attribution clearance.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -665,6 +666,79 @@ try {
     );
     await settleTextBackings(false);
     checkSceneChrome(`narrow ${layout}`, before, await readSceneChrome());
+  }
+  await page.select('#hud-layout-select', 'minimal');
+  for (const viewport of [
+    { width: 1600, height: 900 },
+    { width: 1024, height: 700 },
+    { width: 820, height: 700 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewport(viewport);
+    for (const enabled of [true, false]) {
+      await page.evaluate(
+        (enabled) =>
+          window.__godsEyeView.styleManager.applyVisualState({
+            scope: { enabled },
+          }),
+        enabled,
+      );
+      await settleTextBackings(enabled);
+      // Wait for the responsive shell and the real attribution logo to settle.
+      await page.waitForFunction(
+        (mobile) =>
+          document.body.classList.contains('mobile-shell') === mobile &&
+          [...document.querySelectorAll('#cesium-credits img')].some(
+            (img) => img.complete && img.naturalWidth > 0,
+          ),
+        {},
+        viewport.width <= 720,
+      );
+      const geometry = await page.evaluate(() => {
+        const banner = document.querySelector('#intel-hud .hud-bottom-bar');
+        const coordinates = document.querySelector(
+          '#intel-hud .hud-bottom-left',
+        );
+        // The fixed host has zero size; Cesium positions its actual row inside it.
+        const credits = document.querySelector(
+          '#cesium-credits .cesium-widget-credits',
+        );
+        const coordinateBox = coordinates.getBoundingClientRect();
+        const creditBox = credits.getBoundingClientRect();
+        return {
+          bannerHidden: getComputedStyle(banner).display === 'none',
+          coordinatesVisible:
+            coordinateBox.width > 0 && coordinateBox.height > 0,
+          coordinatesHidden: getComputedStyle(coordinates).display === 'none',
+          creditsVisible: creditBox.width > 0 && creditBox.height > 0,
+          gap: creditBox.top - coordinateBox.bottom,
+          bottom: getComputedStyle(coordinates).bottom,
+        };
+      });
+      const name = `Minimal ${viewport.width}px Scope ${enabled ? 'ON' : 'OFF'}`;
+      check(
+        `${name}: centred coordinate banner stays hidden`,
+        geometry.bannerHidden,
+        geometry,
+      );
+      if (viewport.width <= 720) {
+        check(
+          `${name}: phone keeps its compact HUD treatment`,
+          geometry.coordinatesHidden &&
+            geometry.creditsVisible &&
+            geometry.bottom === 'auto',
+          geometry,
+        );
+      } else {
+        check(
+          `${name}: coordinate block clears the full attribution row`,
+          geometry.coordinatesVisible &&
+            geometry.creditsVisible &&
+            geometry.gap >= 7.5,
+          geometry,
+        );
+      }
+    }
   }
   check('runtime has no uncaught browser errors', errors.length === 0, errors);
 } finally {
